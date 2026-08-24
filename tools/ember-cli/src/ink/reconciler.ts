@@ -13,6 +13,7 @@ import {
   type RenderNode,
   type RenderNodeKind,
   type Renderer,
+  type RendererStream,
   type TextWrapMode,
   type StylePool,
   type HyperlinkPool,
@@ -57,7 +58,7 @@ interface RootNode {
 interface InkContainer {
   rootNode: RootNode;
   renderer: Renderer;
-  stream:   { write(s: string): void };
+  stream:   RendererStream;
   stdout:   { columns: number; rows: number };
   hoverTarget: HitTarget | null;
   leftPressSeen: boolean;
@@ -422,7 +423,7 @@ function dispatchClick(target: HitTarget, input: SgrMouseEvent): void {
     input.col - target.left,
     input.row - target.top,
     false,
-    input.button,
+    input.button!,
     input.modifiers as MouseModifiers,
     1,
   );
@@ -686,7 +687,7 @@ export interface MountHandle {
 }
 
 export interface MountOptions {
-  stream: { write(s: string): void };
+  stream: RendererStream;
   stdout: { columns: number; rows: number };
   debug?: boolean;
   onFirstFrameFlushed?: () => void;
@@ -712,11 +713,21 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
   rootNode.layout.height        = options.stdout.rows;
   rootNode.layout.flexDirection = "column";
 
+  let renderError: Error | null = null;
+  const reportRenderError = (error: unknown): void => {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    if (renderError === null) {
+      renderError = normalized;
+      options.onError?.(normalized);
+    }
+  };
+
   const renderer = createRenderer({
     stream: options.stream,
     stdout: options.stdout,
     debug:  options.debug,
     onFirstFrameFlushed: options.onFirstFrameFlushed,
+    onError: reportRenderError,
     stylePool: options.stylePool,
     hyperlinkPool: options.hyperlinkPool,
   });
@@ -728,15 +739,6 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     stdout: options.stdout,
     hoverTarget: null,
     leftPressSeen: false,
-  };
-
-  let renderError: Error | null = null;
-  const reportRenderError = (error: unknown): void => {
-    const normalized = error instanceof Error ? error : new Error(String(error));
-    if (renderError === null) {
-      renderError = normalized;
-      options.onError?.(normalized);
-    }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

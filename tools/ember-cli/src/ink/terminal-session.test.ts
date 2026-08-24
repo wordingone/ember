@@ -70,7 +70,7 @@ describe("terminal session ownership", () => {
           React.createElement(React.Fragment, null),
         ),
         {
-          stream: { write: (value: string) => renderWrites.push(value) },
+          stream: { write: (value: string) => { renderWrites.push(value); } },
           stdout: { columns: 80, rows: 24 },
         },
       );
@@ -89,7 +89,7 @@ describe("terminal session ownership", () => {
 
   it("restores terminal modes when the mounted application throws during render", () => {
     const writes: string[] = [];
-    const stream = { write: (value: string) => writes.push(value) };
+    const stream = { write: (value: string) => { writes.push(value); } };
     const session = createTerminalSessionController(stream);
     const RenderCrash = (): React.ReactElement => { throw new Error("render-crash"); };
 
