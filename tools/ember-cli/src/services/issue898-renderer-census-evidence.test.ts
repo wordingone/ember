@@ -483,6 +483,53 @@ test("nulls ratio when denominator slope is within its standard error", () => {
 });
 
 test.each([
+  ["renderer extra property", (fixture: EvidenceFixture) => {
+    mutateRendererFixture(fixture, 1, (row) => { row.unexpected = true; });
+  }, "ISSUE898_RENDERER_CENSUS_RENDERER_PROPERTIES_INVALID"],
+  ["renderer missing property", (fixture: EvidenceFixture) => {
+    mutateRendererFixture(fixture, 1, (row) => { delete row.style_pool_size; });
+  }, "ISSUE898_RENDERER_CENSUS_RENDERER_PROPERTIES_INVALID"],
+] as const)("family B exactness refuses %s", (_name, mutate, error) => {
+  const fixture = createEvidenceFixture();
+  mutate(fixture);
+  expect(() => sealIssue898RendererCensusEvidence(fixture.input)).toThrow(error);
+  expect(existsSync(fixture.input.outputPath)).toBe(false);
+});
+
+test.each([
+  ["poll extra property", (fixture: EvidenceFixture) => {
+    mutatePollFixture(fixture, 1, (row) => {
+      (row as unknown as Record<string, unknown>).unexpected = true;
+    });
+  }, "ISSUE898_RENDERER_CENSUS_POLL_PROPERTIES_INVALID"],
+  ["census extra property", (fixture: EvidenceFixture) => {
+    mutatePollFixture(fixture, 1, (row) => {
+      (row.census as unknown as Record<string, unknown>).unexpected = true;
+    });
+  }, "ISSUE898_RENDERER_CENSUS_CENSUS_PROPERTIES_INVALID"],
+  ["sample extra property", (fixture: EvidenceFixture) => {
+    mutatePollFixture(fixture, 1, (row) => {
+      (row.census.samples[0] as unknown as Record<string, unknown>).unexpected = true;
+    });
+  }, "ISSUE898_RENDERER_CENSUS_SAMPLE_PROPERTIES_INVALID"],
+  ["class cardinality extra property", (fixture: EvidenceFixture) => {
+    mutatePollFixture(fixture, 1, (row) => {
+      (row.census.class_cardinality as unknown as Record<string, unknown>).unexpected = true;
+    });
+  }, "ISSUE898_RENDERER_CENSUS_CARDINALITY_PROPERTIES_INVALID"],
+  ["ownership overlap extra property", (fixture: EvidenceFixture) => {
+    mutatePollFixture(fixture, 1, (row) => {
+      (row.census.ownership_overlap as unknown as Record<string, unknown>).unexpected = true;
+    });
+  }, "ISSUE898_RENDERER_CENSUS_OVERLAP_PROPERTIES_INVALID"],
+] as const)("family C exactness refuses %s", (_name, mutate, error) => {
+  const fixture = createEvidenceFixture();
+  mutate(fixture);
+  expect(() => sealIssue898RendererCensusEvidence(fixture.input)).toThrow(error);
+  expect(existsSync(fixture.input.outputPath)).toBe(false);
+});
+
+test.each([
   ["relative input path", (fixture: EvidenceFixture) => {
     fixture.input.soakReceiptPath = "soak-receipt.json";
   }, "ISSUE898_RENDERER_CENSUS_PATH_NOT_ABSOLUTE"],

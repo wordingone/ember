@@ -25,6 +25,26 @@ export const ISSUE898_WINDOW_MS = 300_000;
 const SOURCE_COMMIT = /^[0-9a-f]{40}$/;
 const POSITIVE_DECIMAL = /^[1-9][0-9]*$/;
 
+const RENDERER_ROW_KEYS = [
+  "schema_version", "sequence", "captured_at", "captured_at_ms", "source_commit", "pid",
+  "runtime_origin_token", "render_calls", "render_passes", "backpressured_coalesces",
+  "full_repaints", "rendered_frame_utf8_bytes", "diff_cells", "optimized_runs",
+  "stream_write_calls", "submitted_utf8_bytes", "write_false_events", "drain_repaints",
+  "style_pool_size", "hyperlink_pool_size",
+] as const;
+
+const POLL_ROW_KEYS = ["schema_version", "sequence", "census", "walls"] as const;
+const CENSUS_KEYS = [
+  "schema_version", "observed_at", "provider", "candidate_process_count",
+  "admitted_process_count", "class_cardinality", "ownership_overlap", "samples",
+] as const;
+const CENSUS_SAMPLE_KEYS = [
+  "process_class", "pid", "parent_pid", "process_name", "process_start_token",
+  "provider", "commit_bytes", "ownership_basis",
+] as const;
+const CLASS_CARDINALITY_KEYS = ["cockpit", "brain_server"] as const;
+const OWNERSHIP_OVERLAP_KEYS = ["count", "pids"] as const;
+
 const RENDERER_COUNTERS = [
   "render_calls",
   "render_passes",
@@ -217,6 +237,13 @@ function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function exactKeys(value: unknown, keys: readonly string[], error: string): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).sort().join(",") !== [...keys].sort().join(",")) {
+    throw new Error(error);
+  }
+}
+
 function requireCanonicalTimestamp(value: unknown, error: string): number {
   if (typeof value !== "string") throw new Error(error);
   const parsed = Date.parse(value);
@@ -271,6 +298,11 @@ function parseRendererRows(text: string, input: Issue898RendererCensusEvidenceIn
   let previous: RendererRow | undefined;
   let runtimeToken: string | undefined;
   for (const [index, row] of rows.entries()) {
+    exactKeys(
+      row,
+      RENDERER_ROW_KEYS,
+      "ISSUE898_RENDERER_CENSUS_RENDERER_PROPERTIES_INVALID",
+    );
     if (!row || row.schema_version !== "ember-renderer-diagnostic-v1" || row.sequence !== index) {
       throw new Error("ISSUE898_RENDERER_CENSUS_RENDERER_SEQUENCE_INVALID");
     }
@@ -323,6 +355,25 @@ function parsePollRows(text: string, input: Issue898RendererCensusEvidenceInput)
   );
   let previousTime = -1;
   for (const [index, row] of rows.entries()) {
+    exactKeys(row, POLL_ROW_KEYS, "ISSUE898_RENDERER_CENSUS_POLL_PROPERTIES_INVALID");
+    exactKeys(row.census, CENSUS_KEYS, "ISSUE898_RENDERER_CENSUS_CENSUS_PROPERTIES_INVALID");
+    exactKeys(
+      row.census.class_cardinality,
+      CLASS_CARDINALITY_KEYS,
+      "ISSUE898_RENDERER_CENSUS_CARDINALITY_PROPERTIES_INVALID",
+    );
+    exactKeys(
+      row.census.ownership_overlap,
+      OWNERSHIP_OVERLAP_KEYS,
+      "ISSUE898_RENDERER_CENSUS_OVERLAP_PROPERTIES_INVALID",
+    );
+    for (const sample of row.census.samples) {
+      exactKeys(
+        sample,
+        CENSUS_SAMPLE_KEYS,
+        "ISSUE898_RENDERER_CENSUS_SAMPLE_PROPERTIES_INVALID",
+      );
+    }
     if (!row || row.schema_version !== "ember-issue898-installed-cockpit-soak-poll-v1" || row.sequence !== index) {
       throw new Error("ISSUE898_RENDERER_CENSUS_POLL_SEQUENCE_INVALID");
     }
