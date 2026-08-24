@@ -16,12 +16,17 @@ const originalAnimationEnv = {
   EMBER_REDUCED_MOTION: process.env["EMBER_REDUCED_MOTION"],
   EMBER_ASCII: process.env["EMBER_ASCII"],
   NO_COLOR: process.env["NO_COLOR"],
+  EMBER_DIAGNOSTIC_DISABLE_ACTIVITY_FEED: process.env["EMBER_DIAGNOSTIC_DISABLE_ACTIVITY_FEED"],
 };
 
 beforeEach(() => {
   delete process.env["EMBER_REDUCED_MOTION"];
   delete process.env["EMBER_ASCII"];
   delete process.env["NO_COLOR"];
+  // Keep this production-path clock test in the empty-idle state it names. Ambient shared-repo
+  // activity receipts can otherwise append a transcript line before the one-second boundary,
+  // intentionally disabling the fireball gate and selecting the fixed idle pose.
+  process.env["EMBER_DIAGNOSTIC_DISABLE_ACTIVITY_FEED"] = "1";
 });
 
 afterEach(() => {
@@ -81,7 +86,7 @@ function detectedIdleStyleSignature(raw: string, columns: number, rows: number):
 }
 
 describe("issue #46 production homescreen fireball binding", () => {
-  test("the real idle ReplScreen advances through at least two welcome-fireball rasters", async () => {
+  test("the real idle ReplScreen advances the fireball on the existing one-second liveness cadence", async () => {
     const columns = 120;
     const rows = 36;
     let raw = "";
@@ -103,21 +108,30 @@ describe("issue #46 production homescreen fireball binding", () => {
       stdout: { columns, rows },
     });
 
-    // Let async command discovery and the first telemetry/activity pickup settle. The next
-    // liveness/telemetry cadence is 500-1000 ms away; only the 140 ms welcome fireball should
-    // change across the bounded samples below.
-    await Bun.sleep(700);
+    // The fireball must not own a sub-second repaint clock. During the first 400 ms after mount,
+    // the mandatory one-second liveness heartbeat has not fired, so every observed raster must
+    // remain identical even if unrelated async setup commits settle around it.
     await flushRepl();
-    const observed = new Set<string>();
-    for (let sample = 0; sample < 4; sample++) {
+    const subsecond = new Set<string>();
+    for (let sample = 0; sample < 5; sample++) {
       const signature = detectedIdleStyleSignature(raw, columns, rows);
       expect(signature).toBeDefined();
-      observed.add(signature!);
-      await Bun.sleep(150);
+      subsecond.add(signature!);
+      if (sample < 4) await Bun.sleep(100);
       await flushRepl();
     }
+    expect(subsecond.size).toBe(1);
 
-    expect(observed.size).toBeGreaterThanOrEqual(2);
+    // Cross the first liveness boundary. Reusing that existing clock must still produce real
+    // animation, just without animation-only commits between heartbeat frames.
+    const beforeLiveness = [...subsecond][0]!;
+    // Leave scheduler headroom after the interval's effect-registration point; the assertion is
+    // about crossing at least one one-second liveness boundary, not about a 150 ms deadline.
+    await Bun.sleep(1250);
+    await flushRepl();
+    const afterLiveness = detectedIdleStyleSignature(raw, columns, rows);
+    expect(afterLiveness).toBeDefined();
+    expect(afterLiveness).not.toBe(beforeLiveness);
   });
 
   test("the welcome fireball stops repainting after a real command leaves the empty idle state", async () => {
