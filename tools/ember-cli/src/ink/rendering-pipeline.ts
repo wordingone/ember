@@ -222,14 +222,23 @@ export class Screen {
 
 /** Accumulates terminal output sequences for one frame. */
 export class Output {
-  private _buf = "";
+  /** Reused across flushes so full-frame rendering does not build a fresh chain of rope
+   * intermediates for every pass. The joined string remains the only per-frame aggregate. */
+  private readonly _chunks: string[] = [];
 
   constructor(
     private _stylePool: StylePool,
     private _hyperlinkPool: HyperlinkPool,
   ) {}
 
-  write(text: string): void { this._buf += text; }
+  write(text: string): void {
+    if (text.length > 0) this._chunks.push(text);
+  }
+
+  /** Discard a partial frame after a prior render exception without replacing chunk storage. */
+  reset(): void {
+    this._chunks.length = 0;
+  }
 
   /** Emit minimal SGR transition from previousStyle → style. */
   writeSGR(style: Style, previousStyle: Style): void {
@@ -251,7 +260,7 @@ export class Output {
     if (previousStyle.bg && !style.bg) needsReset = true;
 
     if (needsReset) {
-      this._buf += "\x1b[m";
+      this._chunks.push("\x1b[m");
       // Re-apply all attributes in new style
       if (style.bold)          changes.push("1");
       if (style.dim)           changes.push("2");
@@ -261,7 +270,7 @@ export class Output {
       if (style.strikethrough) changes.push("9");
       if (style.fg) changes.push(this._fgCode(style.fg));
       if (style.bg) changes.push(this._bgCode(style.bg));
-      if (changes.length > 0) this._buf += `\x1b[${changes.join(";")}m`;
+      if (changes.length > 0) this._chunks.push(`\x1b[${changes.join(";")}m`);
       return;
     }
 
@@ -279,7 +288,7 @@ export class Output {
     if (style.bg && JSON.stringify(style.bg) !== JSON.stringify(previousStyle.bg))
       changes.push(this._bgCode(style.bg));
 
-    if (changes.length > 0) this._buf += `\x1b[${changes.join(";")}m`;
+    if (changes.length > 0) this._chunks.push(`\x1b[${changes.join(";")}m`);
   }
 
   private _fgCode(c: ColorValue): string {
@@ -296,17 +305,21 @@ export class Output {
 
   writeHyperlinkOpen(id: string | null, uri: string): void {
     const params = id ? `id=${id}` : "";
-    this._buf += `\x1b]8;${params};${uri}\x1b\\`;
+    this._chunks.push(`\x1b]8;${params};${uri}\x1b\\`);
   }
 
   writeHyperlinkClose(): void {
-    this._buf += "\x1b]8;;\x1b\\";
+    this._chunks.push("\x1b]8;;\x1b\\");
   }
 
   /** Return accumulated string and reset. */
   flush(): string {
-    const s = this._buf;
-    this._buf = "";
+    const s = this._chunks.length === 0
+      ? ""
+      : this._chunks.length === 1
+        ? this._chunks[0]!
+        : this._chunks.join("");
+    this.reset();
     return s;
   }
 }
@@ -1052,6 +1065,11 @@ export function createRenderer(options: RendererOptions): Renderer {
   const hyperlinkPool = options.hyperlinkPool ?? new HyperlinkPool();
   const diagnostic = options.diagnostic;
   const heapAttributionDiagnostic = options.heapAttributionDiagnostic;
+  // issue #898: full-frame rendering is the hot path (~21 KiB/pass in the measured cockpit).
+  // Retain one Output and its chunk storage for the renderer lifetime instead of constructing a
+  // new accumulator on every React commit.
+  const frameOutput = new Output(stylePool, hyperlinkPool);
+  const frameParseScratch = createFrameParseScratch();
 
   let prevFrame: Frame | null = null;
   let spareFrame: Frame | null = null;
@@ -1108,7 +1126,6 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
 
       // Build output for the whole frame
-      const output = new Output(stylePool, hyperlinkPool);
       const clipRect: ClipRect = { x: 0, y: 0, width: w, height: h };
 
       // Run layout
@@ -1117,14 +1134,15 @@ export function createRenderer(options: RendererOptions): Renderer {
       // #343: one fresh tracker per render() pass -- the real terminal is back to default at
       // the START of every render (guaranteed by #325's own unconditional trailing reset below),
       // so {} is the correct starting point; it then threads through the WHOLE tree walk.
-      renderNodeToOutput(rootNode, output, 0, 0, clipRect, stylePool, hyperlinkPool, { current: {} });
-      const rendered = output.flush();
+      frameOutput.reset();
+      renderNodeToOutput(rootNode, frameOutput, 0, 0, clipRect, stylePool, hyperlinkPool, { current: {} });
+      const rendered = frameOutput.flush();
 
       // Build current frame from rendered output by re-parsing
       const frame = prepareFrame(spareFrame, w, h);
 
       // Simple parse: extract cursorPosition + text sequences from rendered output
-      parseRenderedIntoFrame(rendered, frame, stylePool);
+      parseRenderedIntoFrame(rendered, frame, stylePool, frameParseScratch);
 
       // Diff -- force a full repaint (nothing carried from prevFrame) on any geometry change,
       // so a shrink never leaves stale off-frame content unaddressed.
@@ -1227,7 +1245,71 @@ export function createRenderer(options: RendererOptions): Renderer {
 // parseRenderedIntoFrame — extract cells from a rendered terminal sequence
 // ---------------------------------------------------------------------------
 
-export function parseRenderedIntoFrame(rendered: string, frame: Frame, stylePool: StylePool): void {
+/** Renderer-lifetime scratch for CSI numeric parameters. */
+export interface FrameParseScratch {
+  readonly codes: number[];
+}
+
+export function createFrameParseScratch(): FrameParseScratch {
+  return { codes: [] };
+}
+
+function csiParam(
+  rendered: string,
+  start: number,
+  end: number,
+  ordinal: number,
+  fallback: number,
+): number {
+  let currentOrdinal = 0;
+  let value = 0;
+  let hasDigit = false;
+  let stopped = false;
+  for (let i = start; i <= end; i += 1) {
+    const code = i < end ? rendered.charCodeAt(i) : 59;
+    if (code === 59) {
+      if (currentOrdinal === ordinal) return hasDigit ? value : fallback;
+      currentOrdinal += 1;
+      value = 0;
+      hasDigit = false;
+      stopped = false;
+    } else if (!stopped && code >= 48 && code <= 57) {
+      value = value * 10 + code - 48;
+      hasDigit = true;
+    } else {
+      stopped = true;
+    }
+  }
+  return fallback;
+}
+
+function fillCsiCodes(rendered: string, start: number, end: number, codes: number[]): void {
+  codes.length = 0;
+  let value = 0;
+  let hasDigit = false;
+  let stopped = false;
+  for (let i = start; i <= end; i += 1) {
+    const code = i < end ? rendered.charCodeAt(i) : 59;
+    if (code === 59) {
+      codes.push(hasDigit ? value : Number.NaN);
+      value = 0;
+      hasDigit = false;
+      stopped = false;
+    } else if (!stopped && code >= 48 && code <= 57) {
+      value = value * 10 + code - 48;
+      hasDigit = true;
+    } else {
+      stopped = true;
+    }
+  }
+}
+
+export function parseRenderedIntoFrame(
+  rendered: string,
+  frame: Frame,
+  stylePool: StylePool,
+  scratch: FrameParseScratch = createFrameParseScratch(),
+): void {
   // Parse cursor-position + SGR + text sequences
   let pos = 0;
   let curRow = 0;
@@ -1237,33 +1319,33 @@ export function parseRenderedIntoFrame(rendered: string, frame: Frame, stylePool
   while (pos < rendered.length) {
     if (rendered[pos] === "\x1b" && rendered[pos + 1] === "[") {
       // CSI sequence
-      const start = pos;
       pos += 2;
-      let params = "";
-      while (pos < rendered.length && !/[A-Za-z@\[\\\]^_`]/.test(rendered[pos] ?? "")) {
-        params += rendered[pos] ?? "";
-        pos++;
+      const paramsStart = pos;
+      while (pos < rendered.length) {
+        const code = rendered.charCodeAt(pos);
+        if (code >= 0x40 && code <= 0x7e) break;
+        pos += 1;
       }
+      const paramsEnd = pos;
       const final = rendered[pos] ?? "";
       pos++;
 
       if (final === "H") {
         // cursorPosition
-        const parts = params.split(";");
-        curRow = Math.max(0, (parseInt(parts[0] ?? "1", 10) || 1) - 1);
-        curCol = Math.max(0, (parseInt(parts[1] ?? "1", 10) || 1) - 1);
+        curRow = Math.max(0, (csiParam(rendered, paramsStart, paramsEnd, 0, 1) || 1) - 1);
+        curCol = Math.max(0, (csiParam(rendered, paramsStart, paramsEnd, 1, 1) || 1) - 1);
       } else if (final === "m") {
         // SGR
-        if (params === "" || params === "0") {
+        if (paramsStart === paramsEnd
+            || (paramsEnd === paramsStart + 1 && rendered.charCodeAt(paramsStart) === 48)) {
           currentStyleRef = 0;
         } else {
           // Parse SGR codes back to style
-          const codes = params.split(";").map(s => parseInt(s, 10));
-            const style = applyAnsiCodes(codes, stylePool.lookup(currentStyleRef));
+          fillCsiCodes(rendered, paramsStart, paramsEnd, scratch.codes);
+          const style = applyAnsiCodes(scratch.codes, stylePool.lookup(currentStyleRef));
           currentStyleRef = stylePool.intern(style);
         }
       }
-      void start;
     } else if (rendered[pos] === "\x1b" && rendered[pos + 1] === "]") {
       // OSC — skip to ST or BEL
       pos += 2;
