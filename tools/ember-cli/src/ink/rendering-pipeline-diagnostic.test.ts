@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // issue #898: discriminate elapsed-time, renderer-work, and stdout-byte growth.
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -101,6 +101,46 @@ describe("renderer byte diagnostic (issue #898)", () => {
     }
   });
 
+  test("reports one named sink write failure without stopping renderer output", () => {
+    const filePath = path.join(scratch(), "renderer.jsonl");
+    const previousPath = process.env[RENDER_DIAGNOSTIC_ENV];
+    const previousSource = process.env[RENDER_DIAGNOSTIC_SOURCE_ENV];
+    let now = 1_000;
+    const nowSpy = spyOn(Date, "now").mockImplementation(() => now);
+    const writeSpy = spyOn(fs, "writeSync").mockImplementation(() => {
+      throw new Error("RENDER_DIAGNOSTIC_WRITE_TEST_FAILURE");
+    });
+    const errors: string[] = [];
+    let raw = "";
+    let handle: ReturnType<typeof mountInk> | undefined;
+    try {
+      process.env[RENDER_DIAGNOSTIC_ENV] = filePath;
+      process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = "d76e9bfd285f30536ef6922ea03c6b89c82ae47a";
+      handle = mountInk(React.createElement(Text, null, "frame-0"), {
+        stream: { write(chunk: string) { raw += chunk; return true; } },
+        stdout: { columns: 20, rows: 2 },
+        onDiagnosticError(error) { errors.push(error.message); },
+      });
+
+      now += 30_000;
+      handle.update(React.createElement(Text, null, "frame-1"));
+      const bytesAfterFailure = Buffer.byteLength(raw);
+      now += 30_000;
+      handle.update(React.createElement(Text, null, "frame-2"));
+
+      expect(errors).toEqual(["RENDER_DIAGNOSTIC_WRITE_TEST_FAILURE"]);
+      expect(Buffer.byteLength(raw)).toBeGreaterThan(bytesAfterFailure);
+    } finally {
+      handle?.unmount();
+      writeSpy.mockRestore();
+      nowSpy.mockRestore();
+      if (previousPath === undefined) delete process.env[RENDER_DIAGNOSTIC_ENV];
+      else process.env[RENDER_DIAGNOSTIC_ENV] = previousPath;
+      if (previousSource === undefined) delete process.env[RENDER_DIAGNOSTIC_SOURCE_ENV];
+      else process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = previousSource;
+    }
+  });
+
   test("exclusive-creates its path and refuses overwrite", () => {
     const filePath = path.join(scratch(), "renderer.jsonl");
     fs.writeFileSync(filePath, "custody\n", "utf8");
@@ -168,5 +208,70 @@ describe("renderer byte diagnostic (issue #898)", () => {
     expect(row.stream_write_calls).toBe(writes.length);
     expect(row.submitted_utf8_bytes).toBe(writes.reduce((sum, chunk) => sum + Buffer.byteLength(chunk), 0));
     handle.unmount();
+  });
+
+  test("counts static-frame commits without inventing submitted stdout bytes", () => {
+    const filePath = path.join(scratch(), "renderer.jsonl");
+    let now = 1_000;
+    const diagnostic = createRendererDiagnostic({
+      filePath,
+      sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+      now: () => now,
+      emitEveryMs: 30_000,
+    });
+    const handle = mountInk(React.createElement(Text, { key: "initial" }, "static"), {
+      stream: { write() { return true; } },
+      stdout: { columns: 20, rows: 2 },
+      diagnostic,
+    });
+
+    now += 30_000;
+    handle.update(React.createElement(Text, { key: "static-1" }, "static"));
+    now += 30_000;
+    handle.update(React.createElement(Text, { key: "static-2" }, "static"));
+
+    const rows = readRows(filePath);
+    expect(rows).toHaveLength(2);
+    expect(rows[1]!.render_calls - rows[0]!.render_calls).toBe(1);
+    expect(rows[1]!.render_passes - rows[0]!.render_passes).toBe(1);
+    expect(rows[1]!.rendered_frame_utf8_bytes).toBeGreaterThan(rows[0]!.rendered_frame_utf8_bytes);
+    expect(rows[1]!.diff_cells).toBe(rows[0]!.diff_cells);
+    expect(rows[1]!.optimized_runs).toBe(rows[0]!.optimized_runs);
+    expect(rows[1]!.submitted_utf8_bytes).toBe(rows[0]!.submitted_utf8_bytes);
+    handle.unmount();
+  });
+
+  test("separates changing truecolor frames from static frames at equal commit counts", () => {
+    const runArm = (colors: string[]): RendererDiagnosticRow => {
+      const filePath = path.join(scratch(), "renderer.jsonl");
+      let now = 1_000;
+      const diagnostic = createRendererDiagnostic({
+        filePath,
+        sourceCommit: "d76e9bfd285f30536ef6922ea03c6b89c82ae47a",
+        now: () => now,
+        emitEveryMs: 30_000,
+      });
+      const handle = mountInk(React.createElement(Text, { color: colors[0], key: "frame-0" }, "color"), {
+        stream: { write() { return true; } },
+        stdout: { columns: 20, rows: 2 },
+        diagnostic,
+      });
+      for (let index = 1; index < colors.length; index += 1) {
+        now += 30_000;
+        handle.update(React.createElement(Text, { color: colors[index], key: `frame-${index}` }, "color"));
+      }
+      const row = readRows(filePath).at(-1)!;
+      handle.unmount();
+      return row;
+    };
+
+    const staticRow = runArm(["#010101", "#010101", "#010101"]);
+    const changingRow = runArm(["#010101", "#fefefe", "#020202"]);
+    expect(changingRow.render_calls).toBe(staticRow.render_calls);
+    expect(changingRow.render_passes).toBe(staticRow.render_passes);
+    expect(changingRow.rendered_frame_utf8_bytes).toBeGreaterThan(staticRow.rendered_frame_utf8_bytes);
+    expect(changingRow.diff_cells).toBeGreaterThan(staticRow.diff_cells);
+    expect(changingRow.optimized_runs).toBeGreaterThan(staticRow.optimized_runs);
+    expect(changingRow.submitted_utf8_bytes).toBeGreaterThan(staticRow.submitted_utf8_bytes);
   });
 });

@@ -697,6 +697,8 @@ export interface MountOptions {
   onFirstFrameFlushed?: () => void;
   /** Fatal render/reconciliation error. Callers owning terminal modes must tear them down here. */
   onError?: (error: Error) => void;
+  /** Nonfatal renderer-diagnostic sink error. Rendering continues after the sink disables itself. */
+  onDiagnosticError?: (error: Error) => void;
   /** Test-only: forwarded verbatim to createRenderer -- see RendererOptions' own comment.
    *  Production callers never pass these. */
   stylePool?: StylePool;
@@ -728,7 +730,8 @@ export function mountInk(element: ReactElement, options: MountOptions): MountHan
     }
   };
 
-  const diagnostic = options.diagnostic ?? createRendererDiagnosticFromEnv();
+  const diagnostic = options.diagnostic
+    ?? createRendererDiagnosticFromEnv(process.env, options.onDiagnosticError);
 
   const renderer = createRenderer({
     stream: options.stream,
