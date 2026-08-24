@@ -20,7 +20,8 @@ export interface RendererDiagnosticRow {
   captured_at_ms: number;
   source_commit: string;
   pid: number;
-  process_start_token: string;
+  /** Runtime initialization time in DateTime ticks; sanity-band only, never kernel identity authority. */
+  runtime_origin_token: string;
   render_calls: number;
   render_passes: number;
   backpressured_coalesces: number;
@@ -42,7 +43,7 @@ export interface RendererDiagnosticOptions {
   now?: () => number;
   emitEveryMs?: number;
   onError?: (error: Error) => void;
-  processStartTimeOriginMs?: number;
+  runtimeTimeOriginMs?: number;
 }
 
 export interface RendererDiagnostic {
@@ -60,8 +61,8 @@ export interface RendererDiagnostic {
   close(): void;
 }
 
-/** Converts the runtime's process time origin to the same UTC DateTime-ticks shape Get-Process uses. */
-export function processStartToken(timeOriginMs: number = performance.timeOrigin): string {
+/** Converts runtime initialization time to DateTime ticks; it is later than kernel process start. */
+export function runtimeOriginToken(timeOriginMs: number = performance.timeOrigin): string {
   const finite = Number.isFinite(timeOriginMs)
     ? timeOriginMs
     : Date.now() - process.uptime() * 1000;
@@ -103,7 +104,7 @@ export function createRendererDiagnostic(options: RendererDiagnosticOptions): Re
 
   const now = options.now ?? Date.now;
   const emitEveryMs = Math.max(1, options.emitEveryMs ?? DEFAULT_RENDER_DIAGNOSTIC_EMIT_MS);
-  const startToken = processStartToken(options.processStartTimeOriginMs);
+  const originToken = runtimeOriginToken(options.runtimeTimeOriginMs);
   let lastEmitMs = now();
   let sequence = 0;
   let disabled = false;
@@ -160,7 +161,7 @@ export function createRendererDiagnostic(options: RendererDiagnosticOptions): Re
         captured_at_ms: capturedAtMs,
         source_commit: options.sourceCommit.toLowerCase(),
         pid: process.pid,
-        process_start_token: startToken,
+        runtime_origin_token: originToken,
         render_calls: counters.renderCalls,
         render_passes: counters.renderPasses,
         backpressured_coalesces: counters.backpressuredCoalesces,

@@ -12,7 +12,7 @@ import { Text } from "./components.ts";
 import { mountInk } from "./reconciler.ts";
 import {
   createRendererDiagnostic,
-  processStartToken,
+  runtimeOriginToken,
   type RendererDiagnosticRow,
 } from "./renderer-diagnostic.ts";
 
@@ -33,7 +33,7 @@ function readRows(filePath: string): RendererDiagnosticRow[] {
 }
 
 describe("renderer byte diagnostic (issue #898)", () => {
-  test("binds the process-start token to the Windows host's exact UTC DateTime ticks", () => {
+  test("binds runtime origin to a narrow band after the Windows kernel process start", () => {
     if (process.platform !== "win32") return;
     const observed = execFileSync(
       "powershell.exe",
@@ -43,7 +43,10 @@ describe("renderer byte diagnostic (issue #898)", () => {
       ],
       { encoding: "utf8", windowsHide: true },
     ).trim();
-    expect(processStartToken()).toBe(observed);
+    const hostStartTicks = BigInt(observed);
+    const runtimeOriginTicks = BigInt(runtimeOriginToken());
+    expect(runtimeOriginTicks).toBeGreaterThanOrEqual(hostStartTicks);
+    expect(runtimeOriginTicks - hostStartTicks).toBeLessThanOrEqual(50_000_000n); // 5 seconds
   });
 
   test("is absent by default and cannot change stdout bytes", () => {
@@ -129,7 +132,7 @@ describe("renderer byte diagnostic (issue #898)", () => {
     expect(row.sequence).toBe(1);
     expect(row.source_commit).toBe("d76e9bfd285f30536ef6922ea03c6b89c82ae47a");
     expect(row.pid).toBe(process.pid);
-    expect(row.process_start_token).toMatch(/^\d+$/);
+    expect(row.runtime_origin_token).toMatch(/^\d+$/);
     expect(row.render_calls).toBeGreaterThanOrEqual(5);
     expect(row.render_passes).toBeGreaterThanOrEqual(4);
     expect(row.backpressured_coalesces).toBe(1);
