@@ -38,11 +38,11 @@
 // doubles vertical density versus one-cell-per-pixel rendering, while staying BMP-safe (U+2580/
 // U+2584 are ordinary codepoints, not surrogate-pair emoji).
 //
-// Animation is frame-swap, not per-cell relayout: a tick counter selects among FIREBALL_FRAME_COUNT
-// baked raster variants (pure, deterministic) -- cheap, frame-budgeted, and testable without a
-// timer. The caller (screens/repl.ts) owns the actual interval driving the tick (FIREBALL_TICK_MS
-// = 140, unchanged by this redesign) and freezes it under EMBER_REDUCED_MOTION / non-color / ascii,
-// per the spec's degradation floor.
+// Animation is frame-swap, not per-cell relayout: a caller-supplied tick selects among
+// FIREBALL_FRAME_COUNT baked raster variants (pure, deterministic) -- cheap, frame-budgeted, and
+// testable without a timer. The production caller (screens/repl.ts) reuses its mandatory one-second
+// liveness cadence and selects FIREBALL_IDLE_POSE_FRAME under EMBER_REDUCED_MOTION / non-color /
+// ascii, per the spec's degradation floor.
 
 import React from "react";
 import type { CognitiveMode } from "../cognitive-mode.ts";
@@ -109,8 +109,6 @@ export const FIREBALL_DIMS: Record<FireballSize, { cols: number; rows: number }>
 };
 
 export const FIREBALL_FRAME_COUNT = 3;
-/** Production idle-frame cadence; the REPL owns the timer and passes its tick into Homescreen. */
-export const FIREBALL_TICK_MS = 140;
 /** Reduced-motion / frozen-tick pose (team-lead, 2026-07-03 approval note on candidate B): the
  * fixed reference silhouette -- tallest, most symmetric, and brightest at the belly --
  * "the most balanced silhouette." */

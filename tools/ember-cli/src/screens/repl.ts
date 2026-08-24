@@ -37,7 +37,7 @@ import {
 } from "../components/prompt-input.ts";
 import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
 import { Homescreen, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
-import { FIREBALL_TICK_MS } from "../components/fireball.ts";
+import { FIREBALL_IDLE_POSE_FRAME } from "../components/fireball.ts";
 import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
@@ -1068,20 +1068,27 @@ export function ReplScreen({
   // boardSummary populates the recent-activity feed; dataRoot shows which tree's data we're reading.
   const [boardSummary, setBoardSummary] = useState<BoardSummary | undefined>(undefined);
   const [dataRoot, setDataRoot] = useState<string | undefined>(undefined);
-  // #46 B9: the production welcome screen owns the idle-fireball clock. Component-only
-  // tick tests cannot prove that the real REPL passes a changing frame into Homescreen.
-  // Pause the clock when animation cannot or must not render; this prevents pointless
-  // whole-screen rerenders in the required reduced-motion/ascii/non-color fallbacks.
-  const [fireballTick, setFireballTick] = useState(0);
+  // #413: cockpit liveness -- an UNCONDITIONAL per-second re-render, never gated on busy state.
+  // A dead process (only the terminal pane surviving on a frozen last frame) freezes both the
+  // welcome-screen wall clock and heartbeat file, which is exactly the detector this issue needs.
+  const [livenessTick, setLivenessTick] = useState(0);
+  useInterval(() => {
+    setLivenessTick((tick) => tick + 1);
+    livenessHeartbeatRef.current?.write();
+  }, 1000);
+
+  // #46 B9 / #898: reuse the mandatory liveness repaint as the idle-fireball clock. The previous
+  // dedicated 140 ms interval forced a full layout/tree render/frame parse 7.14 times per second;
+  // reduced-motion disabled only that clock, matching #898's strongest bisection delta. Animation
+  // is deliberately priced down from about 7 fps to 1 fps so it adds zero animation-only commits.
+  // Every existing freeze condition remains fail-closed on the fixed reduced-motion pose.
   const fireballAnimationEnabled =
     messages.length === 0
     && !busy
     && process.env["EMBER_REDUCED_MOTION"] !== "1"
     && process.env["EMBER_ASCII"] !== "1"
     && process.env["NO_COLOR"] === undefined;
-  useInterval(() => {
-    setFireballTick((tick) => tick + 1);
-  }, fireballAnimationEnabled ? FIREBALL_TICK_MS : null);
+  const fireballTick = fireballAnimationEnabled ? livenessTick : FIREBALL_IDLE_POSE_FRAME;
 
   // Animate spinner at ANIMATION_LOOP_MS cadence
   useInterval(() => {
@@ -1089,18 +1096,6 @@ export function ReplScreen({
       setSpinnerElapsed(Date.now() - spinnerStartRef.current);
     }
   }, spinnerCadenceForBusy(busy));
-
-  // #413: cockpit liveness -- an UNCONDITIONAL per-second re-render, never gated on busy state
-  // (unlike the spinner above) or on a change comparison (unlike the telemetry poll below). This
-  // is what makes the welcome screen's wall-clock badge (logo-homescreen.ts's recentFeedEntries)
-  // and the heartbeat file both advance every second the process is genuinely alive -- a dead
-  // process (only the terminal pane surviving on a frozen last frame) freezes both, which is
-  // exactly the detector this issue asked for.
-  const [, setLivenessTick] = useState(0);
-  useInterval(() => {
-    setLivenessTick((t) => t + 1);
-    livenessHeartbeatRef.current?.write();
-  }, 1000);
 
   // Telemetry state (polled every 500ms; deduped by memo key)
   const [telemetry, setTelemetry] = useState<TelemetryState>(() => getState());
