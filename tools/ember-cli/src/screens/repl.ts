@@ -710,6 +710,10 @@ export function adaptSessionMessagesForSuggestion(
 // ReplScreen — full-screen interactive REPL
 // ---------------------------------------------------------------------------
 
+export function spinnerCadenceForBusy(busy: boolean): number | null {
+  return busy ? ANIMATION_LOOP_MS : null;
+}
+
 export function ReplScreen({
   config,
   cwd,
@@ -1084,7 +1088,7 @@ export function ReplScreen({
     if (busyRef.current) {
       setSpinnerElapsed(Date.now() - spinnerStartRef.current);
     }
-  }, ANIMATION_LOOP_MS);
+  }, spinnerCadenceForBusy(busy));
 
   // #413: cockpit liveness -- an UNCONDITIONAL per-second re-render, never gated on busy state
   // (unlike the spinner above) or on a change comparison (unlike the telemetry poll below). This
