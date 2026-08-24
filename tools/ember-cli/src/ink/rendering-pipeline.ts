@@ -976,12 +976,19 @@ export const nodeCache = new WeakMap<RenderNode, CachedNodeLayout>();
 // Renderer
 // ---------------------------------------------------------------------------
 
+export interface RendererStream {
+  write(s: string): boolean | void;
+  once?(event: "drain", listener: () => void): unknown;
+}
+
 export interface RendererOptions {
-  stream: { write(s: string): void };
+  stream: RendererStream;
   stdout: { columns: number; rows: number };
   debug?: boolean;
   /** Called exactly once, after this renderer writes its first non-empty frame. */
   onFirstFrameFlushed?: () => void;
+  /** Receives failures from the drain-triggered repaint, which runs outside React's commit. */
+  onError?: (error: unknown) => void;
   /** Test-only injection point: supply the same pool instance a test already holds a reference
    *  to, so it can observe .size()/call .reset() directly instead of inferring pool state from
    *  rendered bytes. Production callers never pass these -- omitting them preserves the exact
@@ -1013,6 +1020,14 @@ export function createRenderer(options: RendererOptions): Renderer {
   let prevFrame: Frame | null = null;
   let spareFrame: Frame | null = null;
   let firstFrameFlushed = false;
+  // issue #898: Node accepts the chunk that makes write() return false, but callers must not
+  // enqueue another chunk until "drain". While that chunk owns the native queue, coalesce all
+  // later React commits by doing no rendering work. The drain callback bypasses the stale diff
+  // and repaints the full latest tree, because the terminal never observed any of those
+  // suppressed intermediate frames.
+  let backpressured = false;
+  let forceFullRepaintAfterDrain = false;
+  let pendingRootNode: RenderNode | null = null;
   // issue #286: the diff in diffFrames() only ever iterates curr's own width/height, so on a
   // resize to SMALLER dimensions, cells the previous (larger) frame held outside the new bounds
   // are never targeted by any patch -- they're simply never mentioned again. That's fine on a
@@ -1025,11 +1040,16 @@ export function createRenderer(options: RendererOptions): Renderer {
   let prevW = -1;
   let prevH = -1;
 
-  return {
+  const renderer: Renderer = {
     render(rootNode: RenderNode): void {
+      if (backpressured) {
+        pendingRootNode = rootNode;
+        return;
+      }
+
       const w = stdout.columns;
       const h = stdout.rows;
-      let geometryChanged = w !== prevW || h !== prevH;
+      let geometryChanged = forceFullRepaintAfterDrain || w !== prevW || h !== prevH;
       prevW = w;
       prevH = h;
 
@@ -1099,7 +1119,34 @@ export function createRenderer(options: RendererOptions): Renderer {
       // stale inverse. The reset makes each patch self-terminating, breaking the cross-patch leak.
       if (runs.length > 0) buf += "\x1b[m";
       if (buf) {
-        stream.write(buf);
+        const accepted = stream.write(buf);
+        forceFullRepaintAfterDrain = false;
+        if (accepted === false) {
+          if (typeof stream.once !== "function") {
+            throw new Error("renderer stream returned false without a drain listener");
+          }
+          backpressured = true;
+          pendingRootNode = rootNode;
+          try {
+            stream.once("drain", () => {
+              const latestRootNode = pendingRootNode;
+              pendingRootNode = null;
+              backpressured = false;
+              forceFullRepaintAfterDrain = true;
+              if (latestRootNode !== null) {
+                try {
+                  renderer.render(latestRootNode);
+                } catch (error) {
+                  if (options.onError === undefined) throw error;
+                  options.onError(error);
+                }
+              }
+            });
+          } catch (error) {
+            backpressured = false;
+            throw error;
+          }
+        }
         if (!firstFrameFlushed) {
           firstFrameFlushed = true;
           options.onFirstFrameFlushed?.();
@@ -1113,6 +1160,9 @@ export function createRenderer(options: RendererOptions): Renderer {
     },
 
     unmount(): void {
+      backpressured = false;
+      forceFullRepaintAfterDrain = false;
+      pendingRootNode = null;
       prevFrame = null;
       spareFrame = null;
     },
@@ -1122,6 +1172,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       spareFrame = null;
     },
   };
+  return renderer;
 }
 
 // ---------------------------------------------------------------------------
