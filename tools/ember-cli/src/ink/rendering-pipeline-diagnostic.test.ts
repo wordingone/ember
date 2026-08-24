@@ -12,6 +12,8 @@ import { Text } from "./components.ts";
 import { mountInk } from "./reconciler.ts";
 import {
   createRendererDiagnostic,
+  RENDER_DIAGNOSTIC_ENV,
+  RENDER_DIAGNOSTIC_SOURCE_ENV,
   runtimeOriginToken,
   type RendererDiagnosticRow,
 } from "./renderer-diagnostic.ts";
@@ -75,6 +77,28 @@ describe("renderer byte diagnostic (issue #898)", () => {
     }));
     now += 30_000;
     expect(withDiagnostic.raw).toBe(without.raw);
+  });
+
+  test("the installed mount path activates from the exact environment pair", () => {
+    const filePath = path.join(scratch(), "renderer.jsonl");
+    const previousPath = process.env[RENDER_DIAGNOSTIC_ENV];
+    const previousSource = process.env[RENDER_DIAGNOSTIC_SOURCE_ENV];
+    let handle: ReturnType<typeof mountInk> | undefined;
+    try {
+      process.env[RENDER_DIAGNOSTIC_ENV] = filePath;
+      process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = "d76e9bfd285f30536ef6922ea03c6b89c82ae47a";
+      handle = mountInk(React.createElement(Text, null, "env-wired"), {
+        stream: { write() { return true; } },
+        stdout: { columns: 20, rows: 2 },
+      });
+      expect(fs.existsSync(filePath)).toBe(true);
+    } finally {
+      handle?.unmount();
+      if (previousPath === undefined) delete process.env[RENDER_DIAGNOSTIC_ENV];
+      else process.env[RENDER_DIAGNOSTIC_ENV] = previousPath;
+      if (previousSource === undefined) delete process.env[RENDER_DIAGNOSTIC_SOURCE_ENV];
+      else process.env[RENDER_DIAGNOSTIC_SOURCE_ENV] = previousSource;
+    }
   });
 
   test("exclusive-creates its path and refuses overwrite", () => {
