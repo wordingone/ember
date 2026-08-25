@@ -60,6 +60,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from pathlib import Path
 
 _REQUIRED_ENV: tuple[str, ...] = (
@@ -81,6 +82,8 @@ _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
 _MAX_RPC_FRAME_BYTES = 64 * 1024
 _RPC_DEADLINE_SECONDS = 10
+_PIPE_CONNECT_RETRY_MILLISECONDS = 100
+_PIPE_CONNECT_RETRY_SECONDS = 2
 
 # Mirrors `ember_lab_source_hash()` in runtime/ember-lab/src/lib.rs byte-for-byte:
 # same 7 relative files, same order, same length-prefixed sha256 digest.
@@ -219,6 +222,31 @@ def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int, int
     return pipe, job_id, token, daemon_pid, maximum_job_memory_bytes
 
 
+def _open_pipe_with_bounded_retry(
+    pipe_name: str,
+    create_file,
+    wait_named_pipe,
+    invalid_handle: int,
+    get_last_error,
+):
+    """Open across transient listener/busy states only; refuse every other error."""
+    transient_errors = {2, 231}  # ERROR_FILE_NOT_FOUND, ERROR_PIPE_BUSY
+    wait_transient_errors = transient_errors | {121}  # ERROR_SEM_TIMEOUT
+    deadline = time.monotonic() + _PIPE_CONNECT_RETRY_SECONDS
+    while True:
+        handle = create_file(pipe_name, 0xC0000000, 0, None, 3, 0, None)
+        if handle != invalid_handle:
+            return handle
+        error = get_last_error()
+        if error not in transient_errors or time.monotonic() >= deadline:
+            raise OSError(error, "ember-lab named-pipe connect failed")
+        if not wait_named_pipe(pipe_name, _PIPE_CONNECT_RETRY_MILLISECONDS):
+            wait_error = get_last_error()
+            if wait_error not in wait_transient_errors:
+                raise OSError(wait_error, "ember-lab named-pipe wait failed")
+            time.sleep(0.01)
+
+
 def _open_and_consume_direct(pipe_name: str, job_id: str, token: str, expected_server_pid: int) -> dict:
     """Blocking Win32 pipe I/O. Runs on the watchdog thread started by `_call_consume_rpc`,
     inside this process -- never a subprocess (see module docstring for why)."""
@@ -231,6 +259,9 @@ def _open_and_consume_direct(pipe_name: str, job_id: str, token: str, expected_s
     create_file = kernel32.CreateFileW
     create_file.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
     create_file.restype = wintypes.HANDLE
+    wait_named_pipe = kernel32.WaitNamedPipeW
+    wait_named_pipe.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
+    wait_named_pipe.restype = wintypes.BOOL
     get_server_pid = kernel32.GetNamedPipeServerProcessId
     get_server_pid.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.ULONG)]
     get_server_pid.restype = wintypes.BOOL
@@ -250,10 +281,14 @@ def _open_and_consume_direct(pipe_name: str, job_id: str, token: str, expected_s
     close_handle.argtypes = [wintypes.HANDLE]
     close_handle.restype = wintypes.BOOL
 
-    handle = create_file(pipe_name, 0xC0000000, 0, None, 3, 0, None)
     invalid_handle = ctypes.c_void_p(-1).value
-    if handle == invalid_handle:
-        raise ctypes.WinError(ctypes.get_last_error())
+    handle = _open_pipe_with_bounded_retry(
+        pipe_name,
+        create_file,
+        wait_named_pipe,
+        invalid_handle,
+        ctypes.get_last_error,
+    )
     try:
         server_pid = wintypes.ULONG()
         if not get_server_pid(handle, ctypes.byref(server_pid)):
