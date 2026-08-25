@@ -8533,6 +8533,145 @@ struct HostSurvivalHeadroom {
     commit_remaining_bytes: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ForeignProcessIdentity {
+    pid: u32,
+    process_start_token: String,
+    private_commit_bytes: u64,
+    gpu_bytes: Option<u64>,
+    provider: Option<String>,
+    candidate_classes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ForeignProcessCensus {
+    host_commit_total_bytes: u64,
+    host_commit_limit_bytes: u64,
+    host_commit_remaining_bytes: u64,
+    total_foreign_private_commit_bytes: u64,
+    named_foreign_processes: Vec<ForeignProcessIdentity>,
+    excluded_kernel_pids: Vec<u32>,
+    enumerated_process_count: u64,
+    owned_process_count: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ForeignPressureState {
+    Clear,
+    Observed,
+    Fenced,
+    ProbeFailed,
+}
+
+fn foreign_pressure_transition(census: &ForeignProcessCensus) -> ForeignPressureState {
+    if census.host_commit_remaining_bytes < RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES {
+        ForeignPressureState::Fenced
+    } else if census.named_foreign_processes.is_empty() {
+        ForeignPressureState::Clear
+    } else {
+        ForeignPressureState::Observed
+    }
+}
+
+fn foreign_pressure_state_from_sample(
+    sample: Result<ForeignProcessCensus>,
+) -> ForeignPressureState {
+    match sample {
+        Ok(census) => foreign_pressure_transition(&census),
+        Err(_) => ForeignPressureState::ProbeFailed,
+    }
+}
+
+#[cfg(test)]
+mod foreign_pressure_policy_tests {
+    use super::*;
+
+    #[test]
+    fn healthy_host_with_five_gib_foreign_process_is_observed_without_fence() {
+        let five_gib = 5 * 1024 * 1024 * 1024;
+        let census = ForeignProcessCensus {
+            host_commit_total_bytes: 44 * 1024 * 1024 * 1024,
+            host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
+            host_commit_remaining_bytes: 20 * 1024 * 1024 * 1024,
+            total_foreign_private_commit_bytes: five_gib,
+            named_foreign_processes: vec![ForeignProcessIdentity {
+                pid: 500,
+                process_start_token: "00000000000001f4".into(),
+                private_commit_bytes: five_gib,
+                gpu_bytes: None,
+                provider: None,
+                candidate_classes: vec!["private_commit_attribution".into()],
+            }],
+            excluded_kernel_pids: vec![0, 4],
+            enumerated_process_count: 3,
+            owned_process_count: 0,
+        };
+
+        assert_eq!(
+            foreign_pressure_transition(&census),
+            ForeignPressureState::Observed
+        );
+    }
+
+    #[test]
+    fn host_floor_breach_fences_when_all_foreign_processes_are_below_attribution_cutoff() {
+        let census = ForeignProcessCensus {
+            host_commit_total_bytes: 55 * 1024 * 1024 * 1024,
+            host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
+            host_commit_remaining_bytes: 9 * 1024 * 1024 * 1024,
+            total_foreign_private_commit_bytes: 42 * 1024 * 1024 * 1024,
+            named_foreign_processes: vec![],
+            excluded_kernel_pids: vec![0, 4],
+            enumerated_process_count: 14,
+            owned_process_count: 0,
+        };
+
+        assert_eq!(
+            foreign_pressure_transition(&census),
+            ForeignPressureState::Fenced
+        );
+    }
+
+    #[test]
+    fn host_commit_floor_is_inclusive_for_open_pressure_state() {
+        let at_floor = ForeignProcessCensus {
+            host_commit_total_bytes: 54 * 1024 * 1024 * 1024,
+            host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
+            host_commit_remaining_bytes: 10 * 1024 * 1024 * 1024,
+            total_foreign_private_commit_bytes: 0,
+            named_foreign_processes: vec![],
+            excluded_kernel_pids: vec![0, 4],
+            enumerated_process_count: 2,
+            owned_process_count: 0,
+        };
+        let below_floor = ForeignProcessCensus {
+            host_commit_remaining_bytes: at_floor.host_commit_remaining_bytes - 1,
+            ..at_floor.clone()
+        };
+
+        assert_eq!(
+            foreign_pressure_transition(&at_floor),
+            ForeignPressureState::Clear
+        );
+        assert_eq!(
+            foreign_pressure_transition(&below_floor),
+            ForeignPressureState::Fenced
+        );
+    }
+
+    #[test]
+    fn census_probe_failure_maps_to_fail_closed_pressure_state() {
+        let sample = Err(EmberLabError::InvalidDispatchManifest {
+            detail: "process census incomplete".into(),
+        });
+
+        assert_eq!(
+            foreign_pressure_state_from_sample(sample),
+            ForeignPressureState::ProbeFailed
+        );
+    }
+}
+
 fn resource_guard_status_from_connection(conn: &Connection) -> Result<Value> {
     let (state, reason, observed_at_ms, oracle_required, observation_json): (
         String,
