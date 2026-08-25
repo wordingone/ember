@@ -4999,6 +4999,34 @@ impl Daemon {
         Ok((exit_code, stderr))
     }
 
+    pub fn record_launch_context(
+        &self,
+        job_id: &str,
+        daemon_mode: &str,
+        daemon_pid: u32,
+    ) -> Result<()> {
+        if !matches!(daemon_mode, "existing" | "owned_started") || daemon_pid == 0 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "certified launch daemon context is invalid".into(),
+            });
+        }
+        let changed = self.conn()?.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) SELECT job_id,?2,'certified_launch_daemon_context',?3 FROM jobs WHERE job_id=?1",
+            params![
+                job_id,
+                now_ms(),
+                json!({"daemon_mode":daemon_mode,"daemon_pid":daemon_pid}).to_string()
+            ],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::JobNotFound {
+                job_id: job_id.into(),
+            });
+        }
+        Ok(())
+    }
+
     pub fn adopt_job(&self, job_id: &str) -> Result<JobHandle> {
         let pending_receipt_path: Option<String> = self
             .conn()?
@@ -9461,18 +9489,6 @@ fn verify_foreign_process_pressure_probe_receipt(bytes: &[u8]) -> Result<Value> 
 }
 
 #[cfg(windows)]
-fn process_start_token(pid: u32) -> Result<String> {
-    use windows_sys::Win32::System::Threading::OpenProcess;
-
-    let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
-    if process.is_null() {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    let process = OwnedHandle(process);
-    windows_process_time_identity(process.raw()).map(|(token, _)| token)
-}
-
-#[cfg(windows)]
 fn windows_process_time_identity(
     handle: windows_sys::Win32::Foundation::HANDLE,
 ) -> Result<(String, bool)> {
@@ -9655,14 +9671,17 @@ fn nvidia_compute_bytes_by_pid() -> Result<BTreeMap<u32, GpuComputeSample>> {
 }
 
 #[cfg(windows)]
-fn probe_windows_process_observations_with_owned(
-    owned_jobs: &[OwnedJobIdentity],
-) -> Result<(
+type WindowsProcessObservationSnapshot = (
     HostCommitSample,
     Vec<ProcessCensusObservation>,
     BTreeMap<u32, GpuComputeSample>,
     std::collections::BTreeSet<(u32, String)>,
-)> {
+);
+
+#[cfg(windows)]
+fn probe_windows_process_observations_with_owned(
+    owned_jobs: &[OwnedJobIdentity],
+) -> Result<WindowsProcessObservationSnapshot> {
     use std::mem::{size_of, zeroed};
     use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
     use windows_sys::Win32::System::JobObjects::{IsProcessInJob, OpenJobObjectW};
@@ -9804,19 +9823,6 @@ fn probe_windows_process_observations_with_owned(
 }
 
 #[cfg(windows)]
-fn probe_windows_process_observations(
-    owned_jobs: &[OwnedJobIdentity],
-) -> Result<(
-    HostCommitSample,
-    Vec<ProcessCensusObservation>,
-    BTreeMap<u32, GpuComputeSample>,
-)> {
-    let (host, observations, gpu_bytes_by_pid, _) =
-        probe_windows_process_observations_with_owned(owned_jobs)?;
-    Ok((host, observations, gpu_bytes_by_pid))
-}
-
-#[cfg(windows)]
 fn sample_windows_foreign_process_census(
     owned_jobs: &[OwnedJobIdentity],
 ) -> Result<ForeignProcessCensus> {
@@ -9918,15 +9924,6 @@ fn sample_windows_foreign_process_census(
             survived.contains(&(process.pid, process.process_start_token.clone()));
     }
     Ok(census)
-}
-
-fn foreign_pressure_state_from_sample(
-    sample: Result<ForeignProcessCensus>,
-) -> ForeignPressureState {
-    match sample {
-        Ok(census) => foreign_pressure_transition(&census),
-        Err(_) => ForeignPressureState::ProbeFailed,
-    }
 }
 
 #[cfg(test)]
@@ -10070,14 +10067,15 @@ mod foreign_pressure_policy_tests {
 
     #[test]
     fn census_probe_failure_maps_to_fail_closed_pressure_state() {
-        let sample = Err(EmberLabError::InvalidDispatchManifest {
+        let sample: Result<ForeignProcessCensus> = Err(EmberLabError::InvalidDispatchManifest {
             detail: "process census incomplete".into(),
         });
 
-        assert_eq!(
-            foreign_pressure_state_from_sample(sample),
-            ForeignPressureState::ProbeFailed
-        );
+        let state = match sample {
+            Ok(census) => foreign_pressure_transition(&census),
+            Err(_) => ForeignPressureState::ProbeFailed,
+        };
+        assert_eq!(state, ForeignPressureState::ProbeFailed);
     }
 
     #[test]
@@ -10275,10 +10273,11 @@ mod foreign_process_census_tests {
             &BTreeSet::new(),
         );
 
-        assert!(matches!(
-            foreign_pressure_state_from_sample(result),
-            ForeignPressureState::ProbeFailed
-        ));
+        let state = match result {
+            Ok(census) => foreign_pressure_transition(&census),
+            Err(_) => ForeignPressureState::ProbeFailed,
+        };
+        assert_eq!(state, ForeignPressureState::ProbeFailed);
     }
 
     #[test]
@@ -10407,8 +10406,14 @@ mod foreign_process_provider_integration_tests {
         let pid = child.id();
 
         let result = (|| -> Result<()> {
-            let start_token = process_start_token(pid)?;
-            let (_, observations, _) = probe_windows_process_observations(&[])?;
+            use windows_sys::Win32::System::Threading::OpenProcess;
+            let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
+            if process.is_null() {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            let process = OwnedHandle(process);
+            let start_token = windows_process_time_identity(process.raw())?.0;
+            let (_, observations, _, _) = probe_windows_process_observations_with_owned(&[])?;
             assert!(observations.iter().any(|observation| matches!(
                 observation,
                 ProcessCensusObservation::Live(sample)
@@ -10416,7 +10421,7 @@ mod foreign_process_provider_integration_tests {
             )));
 
             let _census = sample_windows_foreign_process_census(&[])?;
-            assert_eq!(process_start_token(pid)?, start_token);
+            assert_eq!(windows_process_time_identity(process.raw())?.0, start_token);
             assert!(child.try_wait()?.is_none());
             Ok(())
         })();

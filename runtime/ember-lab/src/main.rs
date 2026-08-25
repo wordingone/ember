@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command as ProcessCommand, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -28,10 +29,110 @@ const CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES: u64 = 2 * GIB;
 const HOST_COMMIT_SURVIVAL_RESERVE_BYTES: u64 = 10 * GIB;
 
 struct PreparedCertifiedLaunch {
-    manifest: Value,
     manifest_path: PathBuf,
     job_id: String,
     receipt_path: PathBuf,
+    run_custody_root: PathBuf,
+}
+
+struct CertifiedLaunchRequest {
+    root: PathBuf,
+    certificate: PathBuf,
+    declaration_ledger: PathBuf,
+    run_spec: PathBuf,
+    custody_receipt_sha256: String,
+    pipe: String,
+    receipt: PathBuf,
+    python_executable: PathBuf,
+    now_ms: i64,
+}
+
+struct CertifiedLaunchCliArgs {
+    root: PathBuf,
+    certificate: PathBuf,
+    declaration_ledger: PathBuf,
+    run_spec: PathBuf,
+    custody_receipt_sha256: String,
+    db: Option<PathBuf>,
+    pipe: Option<String>,
+    receipt: PathBuf,
+}
+
+struct CertifiedLaunchDaemonDefaults {
+    db: PathBuf,
+    pipe: String,
+}
+
+struct LaunchDaemon {
+    child: Option<Child>,
+    mode: &'static str,
+    pid: u32,
+}
+
+fn certified_launch_run_custody_root(
+    run_spec_path: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let run_spec: Value = serde_json::from_slice(&std::fs::read(run_spec_path)?)?;
+    let object = run_spec.as_object().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch run spec must be an object",
+        )
+    })?;
+    let run_id = required_string(object, "run_id")?;
+    let requested_scope = required_object(&run_spec, "requested_scope")?;
+    let custody_root = PathBuf::from(required_string(requested_scope, "custody_root")?);
+    Ok(std::fs::canonicalize(custody_root.join(run_id))?)
+}
+
+fn certified_launch_daemon_defaults(
+    run_custody_root: &Path,
+    db: Option<PathBuf>,
+    pipe: Option<String>,
+) -> Result<CertifiedLaunchDaemonDefaults, Box<dyn std::error::Error>> {
+    let canonical_root = std::fs::canonicalize(run_custody_root)?;
+    let identity = format!(
+        "{:x}",
+        Sha256::digest(canonical_root.to_string_lossy().as_bytes())
+    );
+    let db = db.unwrap_or_else(|| canonical_root.join("ember-lab.sqlite3"));
+    if !db.is_absolute() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch daemon database path must be absolute",
+        )
+        .into());
+    }
+    let pipe = pipe.unwrap_or_else(|| format!(r"\\.\pipe\ember-lab-certified-{}", &identity[..16]));
+    if !pipe.starts_with(r"\\.\pipe\") || pipe.len() <= r"\\.\pipe\".len() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch daemon pipe must be a non-empty Windows named-pipe path",
+        )
+        .into());
+    }
+    Ok(CertifiedLaunchDaemonDefaults { db, pipe })
+}
+
+fn resolve_certified_launch_request(
+    cli: CertifiedLaunchCliArgs,
+    python_executable: PathBuf,
+    now_ms: i64,
+) -> Result<(CertifiedLaunchRequest, CertifiedLaunchDaemonDefaults), Box<dyn std::error::Error>> {
+    let run_custody_root = certified_launch_run_custody_root(&cli.run_spec)?;
+    let daemon = certified_launch_daemon_defaults(&run_custody_root, cli.db, cli.pipe)?;
+    let request = CertifiedLaunchRequest {
+        root: cli.root,
+        certificate: cli.certificate,
+        declaration_ledger: cli.declaration_ledger,
+        run_spec: cli.run_spec,
+        custody_receipt_sha256: cli.custody_receipt_sha256,
+        pipe: daemon.pipe.clone(),
+        receipt: cli.receipt,
+        python_executable,
+        now_ms,
+    };
+    Ok((request, daemon))
 }
 
 #[derive(Debug)]
@@ -40,17 +141,24 @@ struct CertifiedLaunchCompletion {
     stderr: String,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 fn launch_certified_with<F, S>(
-    root: &Path,
-    certificate_path: &Path,
-    declaration_ledger_path: &Path,
-    run_spec_path: &Path,
-    custody_receipt_sha256: &str,
-    pipe: &str,
-    receipt_path: &Path,
-    python_executable: &Path,
-    now_ms: i64,
+    request: &CertifiedLaunchRequest,
+    rpc: F,
+    wait: S,
+) -> Result<CertifiedLaunchCompletion, Box<dyn std::error::Error>>
+where
+    F: FnMut(&Value) -> Result<Value, Box<dyn std::error::Error>>,
+    S: FnMut(),
+{
+    let prepared = prepare_certified_launch(request)?;
+    launch_prepared_certified_with(&prepared, "existing", 0, rpc, wait)
+}
+
+fn launch_prepared_certified_with<F, S>(
+    prepared: &PreparedCertifiedLaunch,
+    daemon_mode: &str,
+    daemon_pid: u32,
     mut rpc: F,
     wait: S,
 ) -> Result<CertifiedLaunchCompletion, Box<dyn std::error::Error>>
@@ -58,17 +166,6 @@ where
     F: FnMut(&Value) -> Result<Value, Box<dyn std::error::Error>>,
     S: FnMut(),
 {
-    let prepared = prepare_certified_launch(
-        root,
-        certificate_path,
-        declaration_ledger_path,
-        run_spec_path,
-        custody_receipt_sha256,
-        pipe,
-        receipt_path,
-        python_executable,
-        now_ms,
-    )?;
     let manifest_bytes = std::fs::read(&prepared.manifest_path)?;
     let manifest_utf8 = String::from_utf8(manifest_bytes.clone())?;
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
@@ -89,6 +186,22 @@ where
     {
         return Err(std::io::Error::other(
             "certified launch dispatch response lacks owned child evidence",
+        )
+        .into());
+    }
+    let recorded = rpc(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "record_launch_context",
+        "params": {
+            "job_id": prepared.job_id,
+            "daemon_mode": daemon_mode,
+            "daemon_pid": daemon_pid
+        }
+    }))?;
+    if recorded.get("recorded") != Some(&Value::Bool(true)) {
+        return Err(std::io::Error::other(
+            "certified launch daemon ownership context was not recorded",
         )
         .into());
     }
@@ -224,16 +337,17 @@ fn required_gib(
 }
 
 fn prepare_certified_launch(
-    root: &Path,
-    certificate_path: &Path,
-    declaration_ledger_path: &Path,
-    run_spec_path: &Path,
-    custody_receipt_sha256: &str,
-    pipe: &str,
-    receipt_path: &Path,
-    python_executable: &Path,
-    now_ms: i64,
+    request: &CertifiedLaunchRequest,
 ) -> Result<PreparedCertifiedLaunch, Box<dyn std::error::Error>> {
+    let root = &request.root;
+    let certificate_path = &request.certificate;
+    let declaration_ledger_path = &request.declaration_ledger;
+    let run_spec_path = &request.run_spec;
+    let custody_receipt_sha256 = &request.custody_receipt_sha256;
+    let pipe = &request.pipe;
+    let receipt_path = &request.receipt;
+    let python_executable = &request.python_executable;
+    let now_ms = request.now_ms;
     let certificate: Value = serde_json::from_slice(&std::fs::read(certificate_path)?)?;
     let run_spec: Value = serde_json::from_slice(&std::fs::read(run_spec_path)?)?;
     let certificate_object = certificate.as_object().ok_or_else(|| {
@@ -320,15 +434,16 @@ fn prepare_certified_launch(
             )
         })?
         .join("launch-authority-custody.json");
-    for (label, path) in [
-        ("python executable", python_executable),
+    let required_files: [(&str, &Path); 7] = [
+        ("python executable", python_executable.as_path()),
         ("certified validator", validator.as_path()),
         ("repository root binding", readme.as_path()),
-        ("certificate", certificate_path),
-        ("declaration ledger", declaration_ledger_path),
-        ("run spec", run_spec_path),
+        ("certificate", certificate_path.as_path()),
+        ("declaration ledger", declaration_ledger_path.as_path()),
+        ("run spec", run_spec_path.as_path()),
         ("custody receipt", custody_receipt.as_path()),
-    ] {
+    ];
+    for (label, path) in required_files {
         if !path.is_file() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -345,7 +460,7 @@ fn prepare_certified_launch(
         || !custody_receipt_sha256
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit())
-        || actual_custody_sha256 != custody_receipt_sha256
+        || actual_custody_sha256 != custody_receipt_sha256.as_str()
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -473,7 +588,7 @@ fn prepare_certified_launch(
         "window_contract": "headless_no_windows",
         "env": env,
         "bindings": bindings,
-        "custody_root": canonical_run_custody_root,
+        "custody_root": &canonical_run_custody_root,
         "storage_reserves": [{"root": requested_custody_root, "minimum_free_bytes": storage_floor_bytes}],
         "minimum_free_vram_bytes": gpu_vram_bytes,
         "required_available_maximum_commit_bytes": required_available_maximum_commit_bytes,
@@ -489,15 +604,15 @@ fn prepare_certified_launch(
     manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
     manifest_file.sync_all()?;
     Ok(PreparedCertifiedLaunch {
-        manifest,
         manifest_path,
         job_id,
         receipt_path: receipt_path.to_path_buf(),
+        run_custody_root: canonical_run_custody_root,
     })
 }
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> --pipe <\\\\.\\pipe\\name> --receipt <path>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> --receipt <path> [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -509,15 +624,7 @@ enum Command {
         pipe: String,
         manifest: PathBuf,
     },
-    Launch {
-        root: PathBuf,
-        certificate: PathBuf,
-        declaration_ledger: PathBuf,
-        run_spec: PathBuf,
-        custody_receipt_sha256: String,
-        pipe: String,
-        receipt: PathBuf,
-    },
+    Launch(CertifiedLaunchCliArgs),
     ResourceGuardRearm {
         pipe: String,
         frozen_observation_sha256: String,
@@ -647,45 +754,54 @@ impl RehearsalRunner for CurrentAuthorityRunner {
     }
 }
 
+fn parse_launch_arguments<I>(mut args: I) -> Result<Command, String>
+where
+    I: Iterator<Item = String>,
+{
+    let mut root = None;
+    let mut certificate = None;
+    let mut declaration_ledger = None;
+    let mut run_spec = None;
+    let mut custody_receipt_sha256 = None;
+    let mut db = None;
+    let mut pipe = None;
+    let mut receipt = None;
+    while let Some(flag) = args.next() {
+        let value = args
+            .next()
+            .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+        match flag.as_str() {
+            "--root" => root = Some(PathBuf::from(value)),
+            "--certificate" => certificate = Some(PathBuf::from(value)),
+            "--declaration-ledger" => declaration_ledger = Some(PathBuf::from(value)),
+            "--run-spec" => run_spec = Some(PathBuf::from(value)),
+            "--custody-receipt-sha256" => custody_receipt_sha256 = Some(value),
+            "--db" => db = Some(PathBuf::from(value)),
+            "--pipe" => pipe = Some(value),
+            "--receipt" => receipt = Some(PathBuf::from(value)),
+            _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+        }
+    }
+    Ok(Command::Launch(CertifiedLaunchCliArgs {
+        root: root.ok_or_else(|| format!("missing --root\n{}", usage()))?,
+        certificate: certificate.ok_or_else(|| format!("missing --certificate\n{}", usage()))?,
+        declaration_ledger: declaration_ledger
+            .ok_or_else(|| format!("missing --declaration-ledger\n{}", usage()))?,
+        run_spec: run_spec.ok_or_else(|| format!("missing --run-spec\n{}", usage()))?,
+        custody_receipt_sha256: custody_receipt_sha256
+            .ok_or_else(|| format!("missing --custody-receipt-sha256\n{}", usage()))?,
+        db,
+        pipe,
+        receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
+    }))
+}
+
 fn parse_args() -> Result<Command, String> {
     let mut args = std::env::args().skip(1);
     let command = args.next().ok_or_else(|| usage().to_string())?;
 
     if command == "launch" {
-        let mut root = None;
-        let mut certificate = None;
-        let mut declaration_ledger = None;
-        let mut run_spec = None;
-        let mut custody_receipt_sha256 = None;
-        let mut pipe = None;
-        let mut receipt = None;
-        while let Some(flag) = args.next() {
-            let value = args
-                .next()
-                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
-            match flag.as_str() {
-                "--root" => root = Some(PathBuf::from(value)),
-                "--certificate" => certificate = Some(PathBuf::from(value)),
-                "--declaration-ledger" => declaration_ledger = Some(PathBuf::from(value)),
-                "--run-spec" => run_spec = Some(PathBuf::from(value)),
-                "--custody-receipt-sha256" => custody_receipt_sha256 = Some(value),
-                "--pipe" => pipe = Some(value),
-                "--receipt" => receipt = Some(PathBuf::from(value)),
-                _ => return Err(format!("unknown argument {flag}\n{}", usage())),
-            }
-        }
-        return Ok(Command::Launch {
-            root: root.ok_or_else(|| format!("missing --root\n{}", usage()))?,
-            certificate: certificate
-                .ok_or_else(|| format!("missing --certificate\n{}", usage()))?,
-            declaration_ledger: declaration_ledger
-                .ok_or_else(|| format!("missing --declaration-ledger\n{}", usage()))?,
-            run_spec: run_spec.ok_or_else(|| format!("missing --run-spec\n{}", usage()))?,
-            custody_receipt_sha256: custody_receipt_sha256
-                .ok_or_else(|| format!("missing --custody-receipt-sha256\n{}", usage()))?,
-            pipe: pipe.ok_or_else(|| format!("missing --pipe\n{}", usage()))?,
-            receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
-        });
+        return parse_launch_arguments(args);
     }
 
     if command == "verify-training" {
@@ -1395,6 +1511,146 @@ fn resolve_python_executable() -> Result<PathBuf, Box<dyn std::error::Error>> {
     .into())
 }
 
+fn probe_launch_daemon(pipe: &str) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        match OpenOptions::new().read(true).write(true).open(pipe) {
+            Ok(mut stream) => {
+                let request = serde_json::to_string(&json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "runtime_identity",
+                    "params": {}
+                }))?;
+                writeln!(stream, "{request}")?;
+                stream.flush()?;
+                let mut line = String::new();
+                BufReader::new(stream).read_line(&mut line)?;
+                let response: Value = serde_json::from_str(&line)?;
+                let pid = response
+                    .get("result")
+                    .and_then(|result| result.get("pid"))
+                    .and_then(Value::as_u64)
+                    .and_then(|pid| u32::try_from(pid).ok())
+                    .filter(|pid| *pid != 0)
+                    .ok_or_else(|| {
+                        std::io::Error::other(
+                            "certified launch named pipe is not an Ember Lab daemon",
+                        )
+                    })?;
+                return Ok(Some(pid));
+            }
+            Err(error)
+                if matches!(error.raw_os_error(), Some(2 | 3 | 231))
+                    && Instant::now() < deadline =>
+            {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) if matches!(error.raw_os_error(), Some(2 | 3 | 231)) => return Ok(None),
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+fn ensure_launch_daemon(
+    defaults: &CertifiedLaunchDaemonDefaults,
+    log_root: &Path,
+) -> Result<LaunchDaemon, Box<dyn std::error::Error>> {
+    if let Some(pid) = probe_launch_daemon(&defaults.pipe)? {
+        return Ok(LaunchDaemon {
+            child: None,
+            mode: "existing",
+            pid,
+        });
+    }
+    let stdout_path = log_root.join("daemon.stdout.log");
+    let stderr_path = log_root.join("daemon.stderr.log");
+    let stdout = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stdout_path)?;
+    let stderr = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&stderr_path)?;
+    let mut command = ProcessCommand::new(std::env::current_exe()?);
+    command
+        .arg("serve")
+        .arg("--db")
+        .arg(&defaults.db)
+        .arg("--pipe")
+        .arg(&defaults.pipe)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(stderr));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let mut child = command.spawn()?;
+    let expected_pid = child.id();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Err(std::io::Error::other(format!(
+                "certified launch owned daemon exited before readiness with {status}; inspect {} and {}",
+                stdout_path.display(),
+                stderr_path.display()
+            ))
+            .into());
+        }
+        if let Some(observed_pid) = probe_launch_daemon(&defaults.pipe)? {
+            if observed_pid != expected_pid {
+                return Err(std::io::Error::other(format!(
+                    "certified launch pipe became owned by unexpected daemon PID {observed_pid}, expected {expected_pid}"
+                ))
+                .into());
+            }
+            return Ok(LaunchDaemon {
+                child: Some(child),
+                mode: "owned_started",
+                pid: expected_pid,
+            });
+        }
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::other(format!(
+                "certified launch owned daemon did not become ready; inspect {} and {}",
+                stdout_path.display(),
+                stderr_path.display()
+            ))
+            .into());
+        }
+    }
+}
+
+fn shutdown_owned_launch_daemon(
+    pipe: &str,
+    daemon: &mut LaunchDaemon,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(child) = daemon.child.as_mut() else {
+        return Ok(());
+    };
+    call_rpc(
+        pipe,
+        &json!({"jsonrpc":"2.0","id":1,"method":"shutdown","params":{}}),
+        "launch-owned-daemon-shutdown",
+    )?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if child.try_wait()?.is_some() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::other(
+                "certified launch owned daemon did not exit after shutdown",
+            )
+            .into());
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     match parse_args().map_err(std::io::Error::other)? {
         Command::Serve { db, pipe } => {
@@ -1405,30 +1661,42 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);
         }
-        Command::Launch {
-            root,
-            certificate,
-            declaration_ledger,
-            run_spec,
-            custody_receipt_sha256,
-            pipe,
-            receipt,
-        } => {
+        Command::Launch(cli) => {
             let python = resolve_python_executable()?;
             let now_ms = i64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())?;
-            let completion = launch_certified_with(
-                &root,
-                &certificate,
-                &declaration_ledger,
-                &run_spec,
-                &custody_receipt_sha256,
-                &pipe,
-                &receipt,
-                &python,
-                now_ms,
-                |request| call_rpc(&pipe, request, "launch"),
+            let (request, daemon_defaults) = resolve_certified_launch_request(cli, python, now_ms)?;
+            let receipt = request.receipt.clone();
+            let run_custody_root = certified_launch_run_custody_root(&request.run_spec)?;
+            let prepared = prepare_certified_launch(&request)?;
+            if prepared.run_custody_root != run_custody_root {
+                return Err(std::io::Error::other(
+                    "certified launch run custody changed between daemon resolution and dispatch",
+                )
+                .into());
+            }
+            let log_root = prepared.manifest_path.parent().ok_or_else(|| {
+                std::io::Error::other("certified launch manifest lacks a custody parent")
+            })?;
+            let mut daemon = ensure_launch_daemon(&daemon_defaults, log_root)?;
+            let attempt = launch_prepared_certified_with(
+                &prepared,
+                daemon.mode,
+                daemon.pid,
+                |rpc_request| call_rpc(&daemon_defaults.pipe, rpc_request, "launch"),
                 || std::thread::sleep(Duration::from_millis(100)),
-            )?;
+            );
+            let shutdown = shutdown_owned_launch_daemon(&daemon_defaults.pipe, &mut daemon);
+            let completion = match (attempt, shutdown) {
+                (Ok(completion), Ok(())) => completion,
+                (Err(error), Ok(())) => return Err(error),
+                (Ok(_), Err(error)) => return Err(error),
+                (Err(operation), Err(cleanup)) => {
+                    return Err(std::io::Error::other(format!(
+                        "certified launch failed: {operation}; owned daemon cleanup also failed: {cleanup}"
+                    ))
+                    .into())
+                }
+            };
             if !completion.stderr.is_empty() {
                 eprint!("{}", completion.stderr);
                 std::io::stderr().flush()?;
@@ -1642,18 +1910,80 @@ mod tests {
         std::fs::write(&custody, b"custody receipt").unwrap();
         let custody_sha256 = hash_file(&custody).unwrap();
         let receipt = root.join("custody/run-1/certified-launch.json");
+        let daemon_defaults =
+            certified_launch_daemon_defaults(&root.join("custody/run-1"), None, None).unwrap();
+        assert_eq!(daemon_defaults.db.file_name().unwrap(), "ember-lab.sqlite3");
+        assert_eq!(
+            std::fs::canonicalize(daemon_defaults.db.parent().unwrap()).unwrap(),
+            std::fs::canonicalize(root.join("custody/run-1")).unwrap()
+        );
+        assert!(daemon_defaults
+            .pipe
+            .starts_with(r"\\.\pipe\ember-lab-certified-"));
+        let alternate_defaults = certified_launch_daemon_defaults(
+            &root.join("custody").join(".").join("run-1").join("."),
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(alternate_defaults.db, daemon_defaults.db);
+        assert_eq!(alternate_defaults.pipe, daemon_defaults.pipe);
+        let daemon_db = rusqlite::Connection::open(&daemon_defaults.db).unwrap();
+        daemon_db.execute_batch("PRAGMA user_version=0;").unwrap();
+        drop(daemon_db);
+        let (resolved_request, resolved_defaults) = resolve_certified_launch_request(
+            CertifiedLaunchCliArgs {
+                root: repo.clone(),
+                certificate: certificate.clone(),
+                declaration_ledger: ledger.clone(),
+                run_spec: run_spec.clone(),
+                custody_receipt_sha256: custody_sha256.clone(),
+                db: None,
+                pipe: None,
+                receipt: receipt.clone(),
+            },
+            python.clone(),
+            1_800_000_000_000,
+        )
+        .unwrap();
+        assert_eq!(resolved_defaults.db, daemon_defaults.db);
+        assert_eq!(resolved_defaults.pipe, daemon_defaults.pipe);
+        assert_eq!(resolved_request.pipe, daemon_defaults.pipe);
+        let explicit_db = root.join("explicit.sqlite3");
+        let explicit_pipe = r"\\.\pipe\explicit-launch-test".to_string();
+        let (resolved_override_request, resolved_overrides) = resolve_certified_launch_request(
+            CertifiedLaunchCliArgs {
+                root: repo.clone(),
+                certificate: certificate.clone(),
+                declaration_ledger: ledger.clone(),
+                run_spec: run_spec.clone(),
+                custody_receipt_sha256: custody_sha256.clone(),
+                db: Some(explicit_db.clone()),
+                pipe: Some(explicit_pipe.clone()),
+                receipt: receipt.clone(),
+            },
+            python.clone(),
+            1_800_000_000_000,
+        )
+        .unwrap();
+        assert_eq!(resolved_overrides.db, explicit_db);
+        assert_eq!(resolved_overrides.pipe, explicit_pipe);
+        assert_eq!(resolved_override_request.pipe, explicit_pipe);
 
         let mut refused_rpc_calls = 0;
+        let refused_request = CertifiedLaunchRequest {
+            root: repo.clone(),
+            certificate: certificate.clone(),
+            declaration_ledger: ledger.clone(),
+            run_spec: run_spec.clone(),
+            custody_receipt_sha256: "0".repeat(64),
+            pipe: r"\\.\pipe\ember-lab-test".into(),
+            receipt: receipt.clone(),
+            python_executable: python.clone(),
+            now_ms: 1_800_000_000_000,
+        };
         let refusal = launch_certified_with(
-            &repo,
-            &certificate,
-            &ledger,
-            &run_spec,
-            &"0".repeat(64),
-            r"\\.\pipe\ember-lab-test",
-            &receipt,
-            &python,
-            1_800_000_000_000,
+            &refused_request,
             |_request| {
                 refused_rpc_calls += 1;
                 Ok(Value::Null)
@@ -1669,19 +1999,20 @@ mod tests {
             "no dispatch RPC means no child and no job row"
         );
 
-        let prepared = prepare_certified_launch(
-            &repo,
-            &certificate,
-            &ledger,
-            &run_spec,
-            &custody_sha256,
-            r"\\.\pipe\ember-lab-test",
-            &receipt,
-            &python,
-            1_800_000_000_000,
-        )
-        .unwrap();
-        let manifest = prepared.manifest;
+        let request = CertifiedLaunchRequest {
+            root: repo.clone(),
+            certificate: certificate.clone(),
+            declaration_ledger: ledger.clone(),
+            run_spec: run_spec.clone(),
+            custody_receipt_sha256: custody_sha256.clone(),
+            pipe: r"\\.\pipe\ember-lab-test".into(),
+            receipt: receipt.clone(),
+            python_executable: python.clone(),
+            now_ms: 1_800_000_000_000,
+        };
+        let prepared = prepare_certified_launch(&request).unwrap();
+        let manifest: Value =
+            serde_json::from_slice(&std::fs::read(&prepared.manifest_path).unwrap()).unwrap();
         assert_eq!(manifest["schema_version"], "ember-lab-dispatch-manifest-v3");
         assert_eq!(
             manifest["source_commit"],
@@ -1767,6 +2098,63 @@ mod tests {
             methods,
             ["job_state", "job_state", "job_result", "export_receipt"]
         );
+    }
+
+    #[test]
+    fn certified_launch_cli_accepts_zero_daemon_arguments() {
+        let command = parse_launch_arguments(
+            [
+                "--root",
+                "C:\\repo",
+                "--certificate",
+                "B:\\run\\certificate.json",
+                "--declaration-ledger",
+                "B:\\run\\declaration-ledger.jsonl",
+                "--run-spec",
+                "B:\\run\\run-spec.json",
+                "--custody-receipt-sha256",
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "--receipt",
+                "B:\\run\\launch.json",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .unwrap();
+        let Command::Launch(cli) = command else {
+            panic!("launch parser returned another command");
+        };
+        assert!(cli.db.is_none());
+        assert!(cli.pipe.is_none());
+
+        let command = parse_launch_arguments(
+            [
+                "--root",
+                "C:\\repo",
+                "--certificate",
+                "B:\\run\\certificate.json",
+                "--declaration-ledger",
+                "B:\\run\\declaration-ledger.jsonl",
+                "--run-spec",
+                "B:\\run\\run-spec.json",
+                "--custody-receipt-sha256",
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "--receipt",
+                "B:\\run\\launch.json",
+                "--db",
+                "B:\\run\\explicit.sqlite3",
+                "--pipe",
+                r"\\.\pipe\explicit",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .unwrap();
+        let Command::Launch(cli) = command else {
+            panic!("launch parser returned another command");
+        };
+        assert_eq!(cli.db.unwrap(), PathBuf::from(r"B:\run\explicit.sqlite3"));
+        assert_eq!(cli.pipe.as_deref(), Some(r"\\.\pipe\explicit"));
     }
 
     #[test]
