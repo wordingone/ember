@@ -7294,6 +7294,7 @@ impl Daemon {
         finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs)
     }
 
+    #[cfg(windows)]
     fn reclaim_starting_job(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
         let mut conn = self.conn()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -7307,7 +7308,161 @@ impl Daemon {
                 detail: "starting reconciliation lost its state or lease epoch fence".into(),
             });
         }
-        terminate_job_object_by_name(&row.job_object_name)?;
+        let first_verification = open_verified_owned_job(job_id, row, OwnedJobRights::QueryOnly)?;
+        let receipt = json!({
+            "schema_version": "ember-lab-owned-orphan-termination-v1",
+            "result": "OWNED_ORPHAN_TERMINATION_AUTHORIZED",
+            "reason": "persisted_starting_process_requires_exact_owned_reclamation",
+            "authorized_at_ms": now_ms(),
+            "job_id": job_id,
+            "state": "starting",
+            "lease": {
+                "resource": row.resource,
+                "owner_job_id": job_id,
+                "lease_epoch": row.lease_epoch,
+            },
+            "job_object": {
+                "name": row.job_object_name,
+                "exact_persisted_name": true,
+            },
+            "process": {
+                "pid": row.pid,
+                "start_token": row.start_token,
+                "executable_identity_sha256": hash_bytes(row.executable.as_bytes()),
+                "identity_verified": true,
+                "job_object_membership_verified": true,
+            },
+            "verification": {
+                "query_only_completed": true,
+                "query_only_at_ms": first_verification.verified_at_ms,
+            },
+            "intended_action": "terminate_exact_verified_job_object_through_retained_handle",
+            "termination": {
+                "query_and_terminate_reverification_required": true,
+                "decision_receipt_persisted_before_termination": true,
+                "foreign_process_control": false,
+            },
+        });
+        let artifact = write_content_addressed_receipt(
+            &self.log_dir.join("owned-orphan-terminations"),
+            &serde_json::to_vec_pretty(&receipt)?,
+        )?;
+        let receipt_locator = artifact
+            .path
+            .strip_prefix(&self.log_dir)
+            .map_err(|error| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: format!("owned-orphan receipt escaped the daemon log root: {error}"),
+            })?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let authorization_payload = json!({
+            "receipt_locator": receipt_locator,
+            "receipt_sha256": artifact.sha256,
+            "query_only_verified_at_ms": first_verification.verified_at_ms,
+            "decision_receipt_persisted_before_termination": true,
+        });
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'owned_orphan_termination_authorized',?3)",
+            params![job_id, now_ms(), authorization_payload.to_string()],
+        )?;
+        tx.commit()?;
+        let first_identity = first_verification.identity.clone();
+        let first_verified_at_ms = first_verification.verified_at_ms;
+        drop(first_verification);
+
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let fenced = tx.execute(
+            "UPDATE jobs SET updated_at_ms=?2 WHERE job_id=?1 AND state='starting' AND lease_epoch=?3 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, now_ms(), row.lease_epoch],
+        )?;
+        if fenced != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "starting reconciliation lost its state or lease epoch fence after durable authorization"
+                    .into(),
+            });
+        }
+        let second_verification = match open_verified_owned_job(
+            job_id,
+            row,
+            OwnedJobRights::QueryAndTerminate,
+        ) {
+            Ok(verified) => verified,
+            Err(error) => {
+                tx.execute(
+                    "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'owned_orphan_termination_refused',?3)",
+                    params![
+                        job_id,
+                        now_ms(),
+                        json!({
+                            "receipt_locator": receipt_locator,
+                            "receipt_sha256": artifact.sha256,
+                            "detail": format!("{error:?}"),
+                            "process_preserved": true,
+                            "lease_preserved": true,
+                        })
+                        .to_string()
+                    ],
+                )?;
+                tx.commit()?;
+                return Err(error);
+            }
+        };
+        if second_verification.identity.start_token != first_identity.start_token
+            || !same_executable(
+                &second_verification.identity.executable,
+                &first_identity.executable,
+            )
+        {
+            let error = EmberLabError::ProcessControlUncertain {
+                job_id: job_id.into(),
+                pid: row.pid,
+                detail: "owned process identity changed between authorization and action".into(),
+            };
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'owned_orphan_termination_refused',?3)",
+                params![
+                    job_id,
+                    now_ms(),
+                    json!({
+                        "receipt_locator": receipt_locator,
+                        "receipt_sha256": artifact.sha256,
+                        "detail": format!("{error:?}"),
+                        "process_preserved": true,
+                        "lease_preserved": true,
+                    })
+                    .to_string()
+                ],
+            )?;
+            tx.commit()?;
+            return Err(error);
+        }
+        let second_verified_at_ms = second_verification.verified_at_ms;
+        if let Err(error) = terminate_handles(
+            second_verification.job.raw(),
+            second_verification.process.raw(),
+            row.pid,
+        ) {
+            tx.execute(
+                "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'owned_orphan_termination_uncertain',?3)",
+                params![
+                    job_id,
+                    now_ms(),
+                    json!({
+                        "receipt_locator": receipt_locator,
+                        "receipt_sha256": artifact.sha256,
+                        "query_and_terminate_verified_at_ms": second_verified_at_ms,
+                        "detail": format!("{error:?}"),
+                        "terminal_state_uncertain": true,
+                        "lease_preserved": true,
+                    })
+                    .to_string()
+                ],
+            )?;
+            tx.commit()?;
+            return Err(error);
+        }
         let failed = tx.execute(
             "UPDATE jobs SET state='failed',outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state='starting' AND lease_epoch=?3",
             params![job_id, now_ms(), row.lease_epoch],
@@ -7329,10 +7484,26 @@ impl Daemon {
             });
         }
         tx.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,'{}')",
-            params![job_id, now_ms(), kind],
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                now_ms(),
+                kind,
+                json!({
+                    "receipt_locator": receipt_locator,
+                    "receipt_sha256": artifact.sha256,
+                    "query_only_verified_at_ms": first_verified_at_ms,
+                    "query_and_terminate_verified_at_ms": second_verified_at_ms,
+                    "terminated_through_retained_verified_handle": true,
+                })
+                .to_string()
+            ],
         )?;
         tx.commit()?;
+        self.live
+            .lock()
+            .map_err(|_| EmberLabError::Poisoned)?
+            .remove(job_id);
         Ok(())
     }
 
@@ -7684,6 +7855,97 @@ struct ReceiptRow {
 struct ProcessIdentity {
     start_token: String,
     executable: String,
+}
+
+#[cfg(any(windows, test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OwnedJobRights {
+    QueryOnly,
+    QueryAndTerminate,
+}
+
+#[cfg(any(windows, test))]
+fn owned_job_access_mask(rights: OwnedJobRights) -> u32 {
+    const JOB_OBJECT_QUERY_RIGHT: u32 = 0x0004;
+    const JOB_OBJECT_TERMINATE_RIGHT: u32 = 0x0008;
+    match rights {
+        OwnedJobRights::QueryOnly => JOB_OBJECT_QUERY_RIGHT,
+        OwnedJobRights::QueryAndTerminate => JOB_OBJECT_QUERY_RIGHT | JOB_OBJECT_TERMINATE_RIGHT,
+    }
+}
+
+#[cfg(any(windows, test))]
+fn owned_identity_matches(
+    row: &JobProcessRow,
+    observed: &ProcessIdentity,
+    job_object_member: bool,
+) -> bool {
+    job_object_member
+        && observed.start_token == row.start_token
+        && same_executable(&observed.executable, &row.executable)
+}
+
+#[cfg(windows)]
+struct VerifiedOwnedJob {
+    job: OwnedHandle,
+    process: OwnedHandle,
+    identity: ProcessIdentity,
+    verified_at_ms: i64,
+}
+
+#[cfg(test)]
+mod owned_orphan_identity_tests {
+    use super::*;
+
+    fn persisted_row() -> JobProcessRow {
+        JobProcessRow {
+            pid: 17,
+            start_token: "creation-token".into(),
+            executable: r"C:\ember\worker.exe".into(),
+            resource: "gpu".into(),
+            state: JobState::Starting,
+            job_object_name: "ember-lab-job-17".into(),
+            main_thread_id: 19,
+            lease_epoch: 23,
+            stdout_log_path: PathBuf::from("stdout.log"),
+            stderr_log_path: PathBuf::from("stderr.log"),
+            stdout_child_handle: 29,
+            stderr_child_handle: 31,
+            started_at_ms: 37,
+        }
+    }
+
+    #[test]
+    fn owned_orphan_identity_access_masks_separate_query_from_termination() {
+        assert_eq!(owned_job_access_mask(OwnedJobRights::QueryOnly), 0x0004);
+        assert_eq!(
+            owned_job_access_mask(OwnedJobRights::QueryAndTerminate),
+            0x0004 | 0x0008
+        );
+    }
+
+    #[test]
+    fn owned_orphan_identity_requires_exact_token_executable_and_membership() {
+        let row = persisted_row();
+        let exact = ProcessIdentity {
+            start_token: row.start_token.clone(),
+            executable: row.executable.clone(),
+        };
+        assert!(owned_identity_matches(&row, &exact, true));
+        assert!(!owned_identity_matches(&row, &exact, false));
+
+        let wrong_token = ProcessIdentity {
+            start_token: "reused-pid-token".into(),
+            executable: row.executable.clone(),
+        };
+        assert!(!owned_identity_matches(&row, &wrong_token, true));
+
+        let wrong_executable = ProcessIdentity {
+            start_token: row.start_token.clone(),
+            executable: r"C:\foreign\worker.exe".into(),
+        };
+        assert!(!owned_identity_matches(&row, &wrong_executable, true));
+    }
 }
 
 fn validate_hash(value: &str) -> Result<()> {
@@ -13706,6 +13968,92 @@ fn spawn_exit_monitor(registration: ExitMonitorRegistration) {
     });
 }
 #[cfg(windows)]
+fn open_verified_owned_job(
+    job_id: &str,
+    row: &JobProcessRow,
+    rights: OwnedJobRights,
+) -> Result<VerifiedOwnedJob> {
+    use windows_sys::Win32::Foundation::WAIT_TIMEOUT;
+    use windows_sys::Win32::System::JobObjects::{IsProcessInJob, OpenJobObjectW};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const SYNCHRONIZE_RIGHT: u32 = 0x0010_0000;
+
+    let name = wide(&row.job_object_name);
+    let job = unsafe { OpenJobObjectW(owned_job_access_mask(rights), 0, name.as_ptr()) };
+    if job.is_null() {
+        return Err(EmberLabError::ProcessControlUncertain {
+            job_id: job_id.into(),
+            pid: row.pid,
+            detail: format!(
+                "persisted Job Object cannot be opened with {rights:?}: {}",
+                std::io::Error::last_os_error()
+            ),
+        });
+    }
+    let job = OwnedHandle(job);
+    let process = unsafe {
+        OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT,
+            0,
+            row.pid,
+        )
+    };
+    if process.is_null() {
+        return Err(EmberLabError::ProcessControlUncertain {
+            job_id: job_id.into(),
+            pid: row.pid,
+            detail: format!(
+                "persisted root process cannot be opened for exact verification: {}",
+                std::io::Error::last_os_error()
+            ),
+        });
+    }
+    let process = OwnedHandle(process);
+    if unsafe { WaitForSingleObject(process.raw(), 0) } != WAIT_TIMEOUT {
+        return Err(EmberLabError::ProcessControlUncertain {
+            job_id: job_id.into(),
+            pid: row.pid,
+            detail: "persisted root process is not running at verification".into(),
+        });
+    }
+    let identity = inspect_handle(process.raw(), row.pid).map_err(|error| {
+        EmberLabError::ProcessControlUncertain {
+            job_id: job_id.into(),
+            pid: row.pid,
+            detail: format!("persisted root process identity is unreadable: {error:?}"),
+        }
+    })?;
+    let mut member = 0;
+    if unsafe { IsProcessInJob(process.raw(), job.raw(), &mut member) } == 0 {
+        return Err(EmberLabError::ProcessControlUncertain {
+            job_id: job_id.into(),
+            pid: row.pid,
+            detail: format!(
+                "Job Object membership cannot be queried: {}",
+                std::io::Error::last_os_error()
+            ),
+        });
+    }
+    if !owned_identity_matches(row, &identity, member != 0) {
+        return Err(EmberLabError::ProcessControlUncertain {
+            job_id: job_id.into(),
+            pid: row.pid,
+            detail:
+                "persisted PID, creation token, executable, or Job Object membership does not match"
+                    .into(),
+        });
+    }
+    Ok(VerifiedOwnedJob {
+        job,
+        process,
+        identity,
+        verified_at_ms: now_ms(),
+    })
+}
+
+#[cfg(windows)]
 fn open_live_status(row: &JobProcessRow) -> LiveStatus {
     use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
     use windows_sys::Win32::System::JobObjects::{
@@ -13918,30 +14266,6 @@ fn open_live_status(row: &JobProcessRow) -> LiveStatus {
             kernel_limit_signal_observation_available: false,
         },
     })
-}
-
-#[cfg(not(windows))]
-fn terminate_job_object_by_name(_name: &str) -> Result<()> {
-    Err(EmberLabError::Io(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "Windows Job Object termination is unavailable on this host",
-    )))
-}
-
-#[cfg(windows)]
-fn terminate_job_object_by_name(name: &str) -> Result<()> {
-    use windows_sys::Win32::System::JobObjects::{OpenJobObjectW, TerminateJobObject};
-    const JOB_OBJECT_TERMINATE_RIGHT: u32 = 0x0008;
-    let name = wide(name);
-    let job = unsafe { OpenJobObjectW(JOB_OBJECT_TERMINATE_RIGHT, 0, name.as_ptr()) };
-    if job.is_null() {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    let job = OwnedHandle(job);
-    if unsafe { TerminateJobObject(job.0, 0xE0D00001) } == 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
-    Ok(())
 }
 
 #[cfg(windows)]
