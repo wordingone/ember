@@ -338,8 +338,12 @@ jobs:
             [string]$after.runtime.runtime_probe.detail
           } else { $null }
           $rawPagingFilesAfter = $null
+          $pagefileSettingsAfter = $null
+          $pagefileUsageAfter = $null
           if ($null -ne $after) {
             $rawPagingFilesAfter = [string[]]@($after.raw_paging_files)
+            $pagefileSettingsAfter = [object[]]@($after.pagefile_settings)
+            $pagefileUsageAfter = [object[]]@($after.pagefile_usage)
           }
           $record = [ordered]@{
             schema_version = 'ember-issue898-pagefile-boundary-census-v1'
@@ -365,9 +369,9 @@ jobs:
             before_runtime = $before.runtime
             raw_paging_files_after = $rawPagingFilesAfter
             automatic_managed_after = if ($null -ne $after) { $after.automatic_managed_pagefile } else { $null }
-            pagefile_settings_after = if ($null -ne $after) { $after.pagefile_settings } else { $null }
+            pagefile_settings_after = $pagefileSettingsAfter
             pagefile_setting_count_after = if ($null -ne $after) { $after.pagefile_setting_count } else { $null }
-            pagefile_usage_after = if ($null -ne $after) { $after.pagefile_usage } else { $null }
+            pagefile_usage_after = $pagefileUsageAfter
             pagefile_usage_count_after = if ($null -ne $after) { $after.pagefile_usage_count } else { $null }
             pagefile_usage_allocated_bytes_after = if ($null -ne $after) { $after.pagefile_usage_allocated_bytes } else { $null }
             pagefile_usage_expected_commit_limit_bytes_after = if ($null -ne $after) { $after.pagefile_usage_expected_commit_limit_bytes } else { $null }
