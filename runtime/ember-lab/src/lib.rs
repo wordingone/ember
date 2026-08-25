@@ -10429,6 +10429,90 @@ fn record_named_process_end_probe_failure(
     observations.push(replacement);
 }
 
+#[cfg(all(windows, debug_assertions))]
+#[derive(Default)]
+struct NamedEndProbePauseState {
+    target: Option<(u32, String)>,
+    paused_at_probe: bool,
+    released: bool,
+}
+
+#[cfg(all(windows, debug_assertions))]
+fn named_end_probe_pause() -> &'static (
+    std::sync::Mutex<NamedEndProbePauseState>,
+    std::sync::Condvar,
+) {
+    static PAUSE: std::sync::OnceLock<(
+        std::sync::Mutex<NamedEndProbePauseState>,
+        std::sync::Condvar,
+    )> = std::sync::OnceLock::new();
+    PAUSE.get_or_init(|| {
+        (
+            std::sync::Mutex::new(NamedEndProbePauseState::default()),
+            std::sync::Condvar::new(),
+        )
+    })
+}
+
+/// Arms the debug-only survival-red seam for one exact process identity.
+/// The observable paused flag is set only by the census thread at the point
+/// immediately before the named identity's production end probe.
+#[cfg(all(windows, debug_assertions))]
+#[doc(hidden)]
+pub fn arm_named_end_probe_pause_for_test(pid: u32, process_start_token: String) {
+    let (lock, _) = named_end_probe_pause();
+    let mut state = lock.lock().expect("named end-probe pause lock poisoned");
+    *state = NamedEndProbePauseState {
+        target: Some((pid, process_start_token)),
+        paused_at_probe: false,
+        released: false,
+    };
+}
+
+#[cfg(all(windows, debug_assertions))]
+#[doc(hidden)]
+pub fn wait_for_named_end_probe_pause_for_test(timeout: std::time::Duration) -> bool {
+    let (lock, condition) = named_end_probe_pause();
+    let state = lock.lock().expect("named end-probe pause lock poisoned");
+    let (state, _) = condition
+        .wait_timeout_while(state, timeout, |state| !state.paused_at_probe)
+        .expect("named end-probe pause wait poisoned");
+    state.paused_at_probe
+}
+
+#[cfg(all(windows, debug_assertions))]
+#[doc(hidden)]
+pub fn release_named_end_probe_pause_for_test() {
+    let (lock, condition) = named_end_probe_pause();
+    let mut state = lock.lock().expect("named end-probe pause lock poisoned");
+    state.released = true;
+    condition.notify_all();
+}
+
+#[cfg(all(windows, debug_assertions))]
+fn pause_before_named_end_probe_if_armed(pid: u32, process_start_token: &str) {
+    let (lock, condition) = named_end_probe_pause();
+    let mut state = lock.lock().expect("named end-probe pause lock poisoned");
+    if state
+        .target
+        .as_ref()
+        .is_none_or(|(target_pid, target_token)| {
+            *target_pid != pid || target_token != process_start_token
+        })
+    {
+        return;
+    }
+    state.paused_at_probe = true;
+    condition.notify_all();
+    let (mut state, _) = condition
+        .wait_timeout_while(state, std::time::Duration::from_secs(15), |state| {
+            !state.released
+        })
+        .expect("named end-probe pause wait poisoned");
+    state.paused_at_probe = false;
+    state.target = None;
+}
+
 #[cfg(windows)]
 fn sample_windows_foreign_process_census(
     owned_jobs: &[OwnedJobIdentity],
@@ -10452,6 +10536,8 @@ fn sample_windows_foreign_process_census(
     let mut survived = std::collections::BTreeSet::new();
 
     for (pid, expected_start_token) in expected {
+        #[cfg(debug_assertions)]
+        pause_before_named_end_probe_if_armed(pid, &expected_start_token);
         let replacement = {
             let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
             if process.is_null() {
