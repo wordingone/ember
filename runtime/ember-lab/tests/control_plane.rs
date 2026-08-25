@@ -829,6 +829,7 @@ fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_bot
     );
 }
 
+#[cfg(windows)]
 fn set_foreign_pressure_state(db: &Path, state: &str, result: &str) {
     let mut observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
@@ -848,6 +849,7 @@ fn set_foreign_pressure_state(db: &Path, state: &str, result: &str) {
         .unwrap();
 }
 
+#[cfg(windows)]
 fn dispatch_pressure_fixture(
     root: &Path,
     daemon: &Daemon,
