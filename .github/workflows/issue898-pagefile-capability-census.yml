@@ -472,6 +472,12 @@ jobs:
               if ($remainingTargetSettings.Count -ne 0) {
                 throw "target setting remained after target-only delete: $($remainingTargetSettings.Count)"
               }
+              $remainingTargetLiveSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+                Where-Object { $_.Name -ieq $pagefileName })
+              if ($remainingTargetSettings.Count -ne $remainingTargetLiveSettings.Count -or
+                  $remainingTargetLiveSettings.Count -ne 0) {
+                throw "target setting changed before target-only recreate: snapshot=$($remainingTargetSettings.Count) live=$($remainingTargetLiveSettings.Count)"
+              }
               New-CimInstance -ClassName Win32_PageFileSetting -Property @{
                 Name = $pagefileName
                 InitialSize = $fixedMiB
