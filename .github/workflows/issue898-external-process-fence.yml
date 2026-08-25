@@ -1,0 +1,691 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "Issue 898: census-bound external process fence probe"
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_setup_fault:
+        description: "Claim-free durability red: force setup REFUSE before host mutation"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue898-external-process-fence
+  cancel-in-progress: false
+
+jobs:
+  external-fence:
+    runs-on: windows-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Run exact survival representation and verifier reds
+        shell: pwsh
+        working-directory: runtime/ember-lab
+        run: |
+          cargo test --locked -p ember-lab --lib foreign_process_provider_integration_tests::named_identity_exit_is_receipted_without_phantom_commit_attribution -- --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked -p ember-lab --lib foreign_pressure_probe_receipt_tests::exact_verifier_rejects_a_named_identity_that_did_not_survive_the_end_probe -- --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Pin the census-selected host envelope and derive the fixture cap
+        working-directory: runtime/ember-lab
+        shell: pwsh
+        env:
+          FIXED_MIB: 20480
+          MUTATION_SHAPE: pin_all_fixed
+          EMBER_ISSUE898_FORCE_SETUP_FAULT: ${{ inputs.force_setup_fault }}
+          CENSUS_ROOT: ${{ runner.temp }}\issue898-external-fence-${{ github.run_id }}\setup
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath $env:CENSUS_ROOT) {
+            throw "no-overwrite census root already exists: $env:CENSUS_ROOT"
+          }
+          [System.IO.Directory]::CreateDirectory($env:CENSUS_ROOT) | Out-Null
+          $resultPath = Join-Path $env:CENSUS_ROOT 'result.json'
+          trap {
+            $setupError = $_.Exception.ToString()
+            if (-not (Test-Path -LiteralPath $resultPath)) {
+              $fallback = [ordered]@{
+                schema_version = 'ember-issue898-external-fence-setup-v2'
+                recorded_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+                result = 'REFUSE'
+                census_result = 'SETUP_EXCEPTION'
+                detail = $setupError
+                selected_census_run_id = 32899368420
+                selected_census_head_sha = '16dcb90a1c0be55debae6ca1b18b50ef8dde806d'
+                selected_census_raw_sha256 = '9ff772c8e7cb92de052067a943f967d6c30c09e35a5eda29c6b342c35d7feb5c'
+                selected_rung_mib = 20480
+                reroll_authorized = $false
+              }
+              $fallbackBytes = [System.Text.UTF8Encoding]::new($false).GetBytes(
+                (($fallback | ConvertTo-Json -Depth 6) + "`n")
+              )
+              $fallbackStream = [System.IO.File]::Open(
+                $resultPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::Read
+              )
+              try {
+                $fallbackStream.Write($fallbackBytes, 0, $fallbackBytes.Length)
+                $fallbackStream.Flush($true)
+              } finally {
+                $fallbackStream.Dispose()
+              }
+            }
+            if ($null -ne $example -and (Test-Path -LiteralPath $example)) {
+              Remove-Item -LiteralPath $example -Force
+            }
+            Write-Error $setupError
+            exit 1
+          }
+          $example = Join-Path $PWD 'examples\issue898_pagefile_capability_probe.rs'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $example) | Out-Null
+          @'
+          #[cfg(not(windows))]
+          compile_error!("issue898 pagefile capability probe is Windows-only");
+
+          use ember_lab::probe_host_commit_capacity;
+          use serde_json::json;
+          use windows_sys::Win32::System::ProcessStatus::{
+              GetPerformanceInfo, PERFORMANCE_INFORMATION,
+          };
+
+          fn checked_bytes(pages: usize, page_size: u64, label: &str) -> u64 {
+              (pages as u64)
+                  .checked_mul(page_size)
+                  .unwrap_or_else(|| panic!("live GetPerformanceInfo overflowed {label}"))
+          }
+
+          fn main() {
+              let mut info: PERFORMANCE_INFORMATION = unsafe { std::mem::zeroed() };
+              info.cb = std::mem::size_of::<PERFORMANCE_INFORMATION>() as u32;
+              assert_ne!(
+                  unsafe { GetPerformanceInfo(&mut info, info.cb) },
+                  0,
+                  "GetPerformanceInfo failed: {}",
+                  std::io::Error::last_os_error()
+              );
+              let page_size = info.PageSize as u64;
+              let physical_ram_bytes =
+                  checked_bytes(info.PhysicalTotal, page_size, "physical RAM bytes");
+              let commit_total_bytes =
+                  checked_bytes(info.CommitTotal, page_size, "committed bytes");
+              let commit_limit_bytes =
+                  checked_bytes(info.CommitLimit, page_size, "commit limit bytes");
+              let commit_remaining_bytes = commit_limit_bytes
+                  .checked_sub(commit_total_bytes)
+                  .expect("live committed bytes exceed live commit limit");
+              let runtime_probe = match probe_host_commit_capacity() {
+                  Ok(capacity) => json!({
+                      "verdict": "ACCEPT",
+                      "pagefile_maximum_bytes": capacity.pagefile_maximum_bytes,
+                      "pagefile_configuration_sha256": capacity.pagefile_configuration_sha256,
+                      "maximum_commit_capacity_bytes": capacity.maximum_commit_capacity_bytes,
+                      "available_maximum_commit_bytes": capacity.available_maximum_commit_bytes,
+                  }),
+                  Err(error) => json!({
+                      "verdict": "REFUSE",
+                      "detail": error.to_string(),
+                  }),
+              };
+              println!(
+                  "{}",
+                  serde_json::to_string(&json!({
+                      "schema_version": "ember-issue898-pagefile-capability-runtime-v1",
+                      "live": {
+                          "page_size_bytes": page_size,
+                          "physical_ram_bytes": physical_ram_bytes,
+                          "commit_total_bytes": commit_total_bytes,
+                          "commit_limit_bytes": commit_limit_bytes,
+                          "commit_remaining_bytes": commit_remaining_bytes,
+                      },
+                      "runtime_probe": runtime_probe,
+                  }))
+                  .expect("serialize runtime capability")
+              );
+          }
+          '@ | Set-Content -LiteralPath $example -Encoding utf8NoBOM
+
+          function Get-CapabilitySnapshot([string] $Phase) {
+            $registryPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+            $raw = [string[]]@((Get-ItemPropertyValue -LiteralPath $registryPath -Name PagingFiles))
+            $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+            $settings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+              Select-Object Name, InitialSize, MaximumSize)
+            $usage = @(Get-CimInstance -ClassName Win32_PageFileUsage |
+              Sort-Object Name |
+              Select-Object Name, AllocatedBaseSize, CurrentUsage, PeakUsage, TempPageFile)
+            $usageAllocatedBytes = [uint64]0
+            foreach ($row in $usage) {
+              $allocatedBytes = [uint64]$row.AllocatedBaseSize * [uint64]1MB
+              if ($usageAllocatedBytes -gt [uint64]::MaxValue - $allocatedBytes) {
+                throw 'Win32_PageFileUsage allocated size sum overflowed'
+              }
+              $usageAllocatedBytes += $allocatedBytes
+            }
+            $runtimeText = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
+            if ($LASTEXITCODE -ne 0) {
+              throw "pagefile capability helper exited $LASTEXITCODE"
+            }
+            $runtime = $runtimeText | ConvertFrom-Json
+            $physicalRamBytes = [uint64]$runtime.live.physical_ram_bytes
+            $commitLimitBytes = [uint64]$runtime.live.commit_limit_bytes
+            if ($physicalRamBytes -gt [uint64]::MaxValue - $usageAllocatedBytes) {
+              throw 'RAM plus Win32_PageFileUsage allocated size overflowed'
+            }
+            $usageExpectedCommitLimitBytes = $physicalRamBytes + $usageAllocatedBytes
+            $usageCommitLimitDeltaBytes = [int64]$commitLimitBytes -
+              [int64]$usageExpectedCommitLimitBytes
+            [pscustomobject]@{
+              schema_version = 'ember-issue898-pagefile-capability-snapshot-v1'
+              phase = $Phase
+              raw_paging_files = $raw
+              automatic_managed_pagefile = [bool]$computer.AutomaticManagedPagefile
+              pagefile_settings = $settings
+              pagefile_setting_count = $settings.Count
+              pagefile_usage = $usage
+              pagefile_usage_count = $usage.Count
+              pagefile_usage_allocated_bytes = $usageAllocatedBytes
+              pagefile_usage_expected_commit_limit_bytes = $usageExpectedCommitLimitBytes
+              pagefile_usage_commit_limit_delta_bytes = $usageCommitLimitDeltaBytes
+              runtime = $runtime
+            }
+          }
+
+          function Get-FixtureConsistencyDecision(
+              [uint64] $FixtureBytes,
+              [uint64] $CeilingConsistencyLimitBytes) {
+            if ($FixtureBytes -gt $CeilingConsistencyLimitBytes) {
+              return [pscustomobject]@{
+                result = 'REFUSED_BY_BOUND'
+                detail = 'actual fixture allocation exceeds the pinned-ceiling arithmetic consistency limit'
+              }
+            }
+            [pscustomobject]@{ result = 'PASS'; detail = $null }
+          }
+
+          $consistencyRefusalProof = Get-FixtureConsistencyDecision 11 10
+          if ($consistencyRefusalProof.result -ne 'REFUSED_BY_BOUND' -or
+              $consistencyRefusalProof.detail -ne
+                'actual fixture allocation exceeds the pinned-ceiling arithmetic consistency limit') {
+            throw 'fixture consistency refusal proof did not fail closed with its exact class'
+          }
+
+          function Get-UsageRow([object] $Snapshot, [string] $Name) {
+            $rows = @($Snapshot.pagefile_usage | Where-Object { $_.Name -ieq $Name })
+            if ($rows.Count -ne 1) {
+              throw "expected exactly one active usage row for $Name; observed $($rows.Count)"
+            }
+            $rows[0]
+          }
+
+          function Get-SettingRows([object] $Snapshot, [string] $Name) {
+            @($Snapshot.pagefile_settings | Where-Object { $_.Name -ieq $Name })
+          }
+
+          function Assert-PinApplied([object] $Snapshot, [string] $Name, [uint32] $ExpectedMiB) {
+            $usageRow = Get-UsageRow $Snapshot $Name
+            $settingRows = @(Get-SettingRows $Snapshot $Name)
+            if ($settingRows.Count -ne 1) {
+              throw "pin verification requires exactly one setting for $Name; observed $($settingRows.Count)"
+            }
+            $setting = $settingRows[0]
+            if ([uint32]$setting.InitialSize -ne $ExpectedMiB -or
+                [uint32]$setting.MaximumSize -ne $ExpectedMiB -or
+                $ExpectedMiB -eq 0) {
+              throw "pin verification did not read back fixed positive $ExpectedMiB MiB for $Name"
+            }
+            if ([uint32]$usageRow.AllocatedBaseSize -ne $ExpectedMiB) {
+              throw "active allocation for $Name is $($usageRow.AllocatedBaseSize) MiB, expected $ExpectedMiB MiB"
+            }
+            if ([bool]$usageRow.TempPageFile) {
+              throw "active contributor remains a temporary pagefile after pin: $Name"
+            }
+          }
+
+          function Assert-UsageNames([object] $Snapshot, [string[]] $ExpectedNames) {
+            $actual = [string[]]@($Snapshot.pagefile_usage | ForEach-Object {
+              ([string]$_.Name).ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $expected = [string[]]@($ExpectedNames | ForEach-Object {
+              $_.ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $difference = @(Compare-Object -ReferenceObject $expected -DifferenceObject $actual)
+            if ($difference.Count -ne 0) {
+              throw "active pagefile topology changed unexpectedly: $($difference | ConvertTo-Json -Compress)"
+            }
+          }
+
+          function Assert-UsageNamesDuringTargetRecreate(
+              [object] $Snapshot,
+              [string[]] $ExpectedNames,
+              [string] $TargetName) {
+            $targetRows = @($Snapshot.pagefile_usage | Where-Object {
+              $_.Name -ieq $TargetName
+            })
+            if ($targetRows.Count -gt 1) {
+              throw "target recreation observed duplicate active rows for ${TargetName}: $($targetRows.Count)"
+            }
+            $actualNonTarget = [string[]]@($Snapshot.pagefile_usage | Where-Object {
+              $_.Name -ine $TargetName
+            } | ForEach-Object {
+              ([string]$_.Name).ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $expectedNonTarget = [string[]]@($ExpectedNames | Where-Object {
+              $_ -ine $TargetName
+            } | ForEach-Object {
+              $_.ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $difference = @(
+              Compare-Object -ReferenceObject $expectedNonTarget -DifferenceObject $actualNonTarget
+            )
+            if ($difference.Count -ne 0) {
+              throw "non-target pagefile topology changed during target recreation: $($difference | ConvertTo-Json -Compress)"
+            }
+          }
+
+          function Assert-FinalPinnedTopology([object] $Snapshot) {
+            $usageRows = @($Snapshot.pagefile_usage)
+            $settingRows = @($Snapshot.pagefile_settings)
+            if ([bool]$Snapshot.automatic_managed_pagefile) {
+              throw 'final topology still has automatic pagefile management enabled'
+            }
+            if ($usageRows.Count -eq 0) { throw 'final active pagefile census is empty' }
+            if ($usageRows.Count -ne $settingRows.Count) {
+              throw "final usage/setting count mismatch: usage=$($usageRows.Count) settings=$($settingRows.Count)"
+            }
+            if ([int64]$Snapshot.pagefile_usage_commit_limit_delta_bytes -ne 0) {
+              throw "final RAM-plus-allocation commit residual is not zero: $($Snapshot.pagefile_usage_commit_limit_delta_bytes)"
+            }
+            foreach ($usageRow in $usageRows) {
+              $settings = @(Get-SettingRows $Snapshot ([string]$usageRow.Name))
+              if ($settings.Count -ne 1) {
+                throw "final active contributor lacks one setting: $($usageRow.Name)"
+              }
+              Assert-PinApplied $Snapshot ([string]$usageRow.Name) ([uint32]$settings[0].MaximumSize)
+            }
+            foreach ($setting in $settingRows) {
+              [void](Get-UsageRow $Snapshot ([string]$setting.Name))
+            }
+            $expectedRegistry = [string[]]@($settingRows | ForEach-Object {
+              ("{0} {1} {2}" -f $_.Name, $_.InitialSize, $_.MaximumSize).ToLowerInvariant()
+            } | Sort-Object)
+            $actualRegistry = [string[]]@($Snapshot.raw_paging_files | ForEach-Object {
+              ([string]$_).Trim().ToLowerInvariant()
+            } | Sort-Object)
+            $registryDifference = @(
+              Compare-Object -ReferenceObject $expectedRegistry -DifferenceObject $actualRegistry
+            )
+            if ($registryDifference.Count -ne 0) {
+              throw "registry/settings fixed pagefile sets disagree: $($registryDifference | ConvertTo-Json -Compress)"
+            }
+          }
+
+          $censusWorkflowPath = Join-Path (Resolve-Path '..\..').Path '.github\workflows\issue898-pagefile-capability-census.yml'
+          $censusWorkflowSha256 = (Get-FileHash -LiteralPath $censusWorkflowPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expectedCensusWorkflowSha256 = 'ca276da44bd1419ee7e4bf2c867c03988bed4c35af790d227d3ecc72e8caa0a4'
+          if ($censusWorkflowSha256 -ne $expectedCensusWorkflowSha256) {
+            throw "census workflow SHA-256 mismatch: $censusWorkflowSha256"
+          }
+          $censusWorkflowText = Get-Content -LiteralPath $censusWorkflowPath -Raw
+          $ladderBlock = [regex]::Match(
+            $censusWorkflowText,
+            '(?ms)^\s{8}fixed_mib:\s*\r?\n(?<rows>(?:\s{10}-\s+[1-9][0-9]*\s*\r?\n)+)'
+          )
+          if (-not $ladderBlock.Success) { throw 'could not parse the census fixed_mib ladder' }
+          $censusLadderMiB = [uint32[]]@(
+            [regex]::Matches($ladderBlock.Groups['rows'].Value, '(?m)^\s+-\s+([1-9][0-9]*)\s*$') |
+              ForEach-Object { [uint32]$_.Groups[1].Value }
+          )
+          $expectedLadderMiB = [uint32[]]@(24576, 20480, 18432, 16384, 14336, 12288)
+          if (($censusLadderMiB -join ',') -ne ($expectedLadderMiB -join ',')) {
+            throw "parsed census ladder differs from the reviewed ladder: $($censusLadderMiB -join ',')"
+          }
+          if (@($censusLadderMiB | Where-Object { $_ -eq 20480 }).Count -ne 1) {
+            throw 'selected 20480 MiB rung must occur exactly once in the census ladder'
+          }
+          $censusMaximumRungMiB = [uint32]($censusLadderMiB | Measure-Object -Maximum).Maximum
+
+          $before = Get-CapabilitySnapshot 'BEFORE'
+          $tempDrive = (Get-Item -LiteralPath $env:RUNNER_TEMP).PSDrive.Root.TrimEnd('\')
+          $driveId = $tempDrive.TrimEnd(':') + ':'
+          $logicalDisk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$driveId'"
+          if ($null -eq $logicalDisk) { throw "no logical disk for RUNNER_TEMP drive $driveId" }
+          $reserveBytes = [uint64]4GB
+          $fixedMiB = [uint32]$env:FIXED_MIB
+          $fixedBytes = [uint64]$fixedMiB * [uint64]1MB
+          if ([uint64]$logicalDisk.FreeSpace -lt $reserveBytes + $fixedBytes) {
+            throw "RUNNER_TEMP drive cannot preserve the fixed 4 GiB reserve at $fixedMiB MiB"
+          }
+          $pagefileName = "$driveId\pagefile.sys"
+
+          $mutationFault = $null
+          $mutationSnapshots = @()
+          try {
+            if ($env:EMBER_ISSUE898_FORCE_SETUP_FAULT -eq 'true') {
+              throw 'deliberate issue898 external-fence setup fault'
+            }
+            $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+            $current = $before
+            if ([bool]$computer.AutomaticManagedPagefile) {
+              Set-CimInstance -InputObject $computer -Property @{
+                AutomaticManagedPagefile = $false
+              } | Out-Null
+              $current = Get-CapabilitySnapshot 'AFTER_AUTOMATIC_MANAGEMENT_DISABLED'
+              $mutationSnapshots += $current
+            }
+            if ($env:MUTATION_SHAPE -ne 'pin_all_fixed') {
+              throw "unknown mutation shape: $env:MUTATION_SHAPE"
+            }
+
+            $initialUsage = @($current.pagefile_usage)
+            if ($initialUsage.Count -eq 0) { throw 'pin-all requires at least one active pagefile' }
+            $expectedNames = [string[]]@($initialUsage | ForEach-Object { [string]$_.Name })
+
+            foreach ($usageRow in $initialUsage) {
+              $name = [string]$usageRow.Name
+              if ($name -ieq $pagefileName) { continue }
+              $desiredMiB = [uint32]$usageRow.AllocatedBaseSize
+              if ($desiredMiB -eq 0) { throw "cannot pin zero-sized active pagefile: $name" }
+              $snapshotSettings = @(Get-SettingRows $current $name)
+              $liveSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+                Where-Object { $_.Name -ieq $name })
+              if ($snapshotSettings.Count -ne $liveSettings.Count -or $liveSettings.Count -gt 1) {
+                throw "setting census changed before pinning ${name}: snapshot=$($snapshotSettings.Count) live=$($liveSettings.Count)"
+              }
+              if ($liveSettings.Count -eq 1 -and
+                  ([uint32]$snapshotSettings[0].InitialSize -ne [uint32]$liveSettings[0].InitialSize -or
+                   [uint32]$snapshotSettings[0].MaximumSize -ne [uint32]$liveSettings[0].MaximumSize)) {
+                throw "setting values changed before pinning $name"
+              }
+              $wrotePin = $false
+              if ($liveSettings.Count -eq 0) {
+                New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                  Name = $name
+                  InitialSize = $desiredMiB
+                  MaximumSize = $desiredMiB
+                } | Out-Null
+                $wrotePin = $true
+              } elseif ([uint32]$liveSettings[0].InitialSize -ne $desiredMiB -or
+                  [uint32]$liveSettings[0].MaximumSize -ne $desiredMiB) {
+                Set-CimInstance -InputObject $liveSettings[0] -Property @{
+                  InitialSize = $desiredMiB
+                  MaximumSize = $desiredMiB
+                } | Out-Null
+                $wrotePin = $true
+              }
+              if ($wrotePin) {
+                $current = Get-CapabilitySnapshot "AFTER_PIN_$($mutationSnapshots.Count)"
+                $mutationSnapshots += $current
+                Assert-UsageNames $current $expectedNames
+              }
+              Assert-PinApplied $current $name $desiredMiB
+            }
+
+            $targetSnapshotSettings = @(Get-SettingRows $current $pagefileName)
+            $targetLiveSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+              Where-Object { $_.Name -ieq $pagefileName })
+            if ($targetSnapshotSettings.Count -ne $targetLiveSettings.Count -or
+                $targetLiveSettings.Count -gt 1) {
+              throw "target setting census changed before pinning ${pagefileName}: snapshot=$($targetSnapshotSettings.Count) live=$($targetLiveSettings.Count)"
+            }
+            if ($targetLiveSettings.Count -eq 1 -and
+                ([uint32]$targetSnapshotSettings[0].InitialSize -ne [uint32]$targetLiveSettings[0].InitialSize -or
+                 [uint32]$targetSnapshotSettings[0].MaximumSize -ne [uint32]$targetLiveSettings[0].MaximumSize)) {
+              throw "target setting values changed before pinning $pagefileName"
+            }
+            $createdTargetPin = $false
+            $recreateTargetPin = $targetLiveSettings.Count -eq 1 -and
+              ([uint32]$targetLiveSettings[0].InitialSize -ne $fixedMiB -or
+               [uint32]$targetLiveSettings[0].MaximumSize -ne $fixedMiB)
+            if ($recreateTargetPin) {
+              Remove-CimInstance -InputObject $targetLiveSettings[0]
+              $current = Get-CapabilitySnapshot 'AFTER_TARGET_DELETE'
+              $mutationSnapshots += $current
+              Assert-UsageNamesDuringTargetRecreate $current $expectedNames $pagefileName
+              $remainingTargetSettings = @(Get-SettingRows $current $pagefileName)
+              if ($remainingTargetSettings.Count -ne 0) {
+                throw "target setting remained after target-only delete: $($remainingTargetSettings.Count)"
+              }
+              $remainingTargetLiveSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+                Where-Object { $_.Name -ieq $pagefileName })
+              if ($remainingTargetSettings.Count -ne $remainingTargetLiveSettings.Count -or
+                  $remainingTargetLiveSettings.Count -ne 0) {
+                throw "target setting changed before target-only recreate: snapshot=$($remainingTargetSettings.Count) live=$($remainingTargetLiveSettings.Count)"
+              }
+              New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                Name = $pagefileName
+                InitialSize = $fixedMiB
+                MaximumSize = $fixedMiB
+              } | Out-Null
+              $createdTargetPin = $true
+            } elseif ($targetLiveSettings.Count -eq 0) {
+              New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                Name = $pagefileName
+                InitialSize = $fixedMiB
+                MaximumSize = $fixedMiB
+              } | Out-Null
+              $createdTargetPin = $true
+            }
+            if ($createdTargetPin) {
+              $expectedNames = [string[]]@($expectedNames + $pagefileName | Sort-Object -Unique)
+              $current = Get-CapabilitySnapshot 'AFTER_TARGET_CREATE'
+              $mutationSnapshots += $current
+              Assert-UsageNames $current $expectedNames
+            }
+            Assert-PinApplied $current $pagefileName $fixedMiB
+            Assert-FinalPinnedTopology $current
+          } catch {
+            $mutationFault = $_.Exception.ToString()
+          }
+
+          $after = $null
+          $snapshotFault = $null
+          try {
+            $after = Get-CapabilitySnapshot 'AFTER'
+          } catch {
+            $snapshotFault = $_.Exception.ToString()
+          }
+          if ($null -ne $after -and $null -eq $mutationFault) {
+            try {
+              Assert-UsageNames $after $expectedNames
+              Assert-PinApplied $after $pagefileName $fixedMiB
+              Assert-FinalPinnedTopology $after
+            } catch {
+              $mutationFault = "final pin verification failed: $($_.Exception.ToString())"
+            }
+          }
+          $runtimeAccepted = $null -ne $after -and
+            $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
+          $measurementComplete = $null -ne $after -and
+            $null -eq $snapshotFault
+          $result = if ($null -ne $mutationFault) {
+            'REFUSED_BY_HOST'
+          } elseif (-not $measurementComplete) {
+            'MEASUREMENT_FAILED'
+          } elseif ($runtimeAccepted) {
+            'ACCEPTED'
+          } else {
+            'FALSE_ACCEPT'
+          }
+          $faultText = if ($null -ne $mutationFault) {
+            $mutationFault
+          } elseif ($null -ne $snapshotFault) {
+            $snapshotFault
+          } elseif (-not $runtimeAccepted) {
+            [string]$after.runtime.runtime_probe.detail
+          } else { $null }
+          $targetBytes = [uint64]6GB
+          $physicalRamBytes = if ($null -ne $after) {
+            [uint64]$after.runtime.live.physical_ram_bytes
+          } else { $null }
+          $maximumLadderBytes = [uint64]$censusMaximumRungMiB * [uint64]1MB
+          $ceilingConsistencyLimitBytes = $null
+          $fixtureAllocationBytes = $null
+          $fixtureWithinCeilingConsistencyLimit = $false
+          if ($null -ne $physicalRamBytes) {
+            if ($physicalRamBytes -gt [uint64]::MaxValue - $maximumLadderBytes) {
+              $faultText = 'physical RAM plus maximum census rung overflowed'
+              $result = 'REFUSED_BY_BOUND'
+            } else {
+              $ceilingBeforeTarget = $physicalRamBytes + $maximumLadderBytes
+              if ($ceilingBeforeTarget -lt $targetBytes) {
+                $faultText = 'ceiling consistency limit underflowed TARGET'
+                $result = 'REFUSED_BY_BOUND'
+              } else {
+                $ceilingConsistencyLimitBytes = $ceilingBeforeTarget - $targetBytes
+              }
+            }
+          }
+          if ($null -ne $after -and
+              [uint64]$after.runtime.live.commit_remaining_bytes -ge $targetBytes) {
+            $fixtureAllocationBytes =
+              [uint64]$after.runtime.live.commit_remaining_bytes - $targetBytes
+          }
+          if ($null -ne $fixtureAllocationBytes -and
+              $null -ne $ceilingConsistencyLimitBytes) {
+            $fixtureConsistencyDecision = Get-FixtureConsistencyDecision `
+              $fixtureAllocationBytes $ceilingConsistencyLimitBytes
+            $fixtureWithinCeilingConsistencyLimit =
+              $fixtureConsistencyDecision.result -eq 'PASS'
+            if ($result -eq 'ACCEPTED' -and
+                $fixtureConsistencyDecision.result -ne 'PASS') {
+              $result = $fixtureConsistencyDecision.result
+              $faultText = $fixtureConsistencyDecision.detail
+            }
+          }
+          $setupResult = if ($result -eq 'ACCEPTED') { 'PASS' } else { 'REFUSE' }
+          $ceilingConsistencyComparison = if ($null -ne $fixtureAllocationBytes -and
+              $null -ne $ceilingConsistencyLimitBytes) {
+            "$fixtureAllocationBytes <= $ceilingConsistencyLimitBytes"
+          } else { $null }
+
+          $rawPagingFilesAfter = $null
+          $pagefileSettingsAfter = $null
+          $pagefileUsageAfter = $null
+          $mutationSnapshotsRecord = [object[]]@($mutationSnapshots)
+          if ($null -ne $after) {
+            $rawPagingFilesAfter = [string[]]@($after.raw_paging_files)
+            $pagefileSettingsAfter = [object[]]@($after.pagefile_settings)
+            $pagefileUsageAfter = [object[]]@($after.pagefile_usage)
+          }
+          $record = [ordered]@{
+            schema_version = 'ember-issue898-external-fence-setup-v2'
+            result = $setupResult
+            census_result = $result
+            detail = $faultText
+            selected_census_run_id = 32899368420
+            selected_census_head_sha = '16dcb90a1c0be55debae6ca1b18b50ef8dde806d'
+            selected_census_raw_sha256 = '9ff772c8e7cb92de052067a943f967d6c30c09e35a5eda29c6b342c35d7feb5c'
+            selected_rung_mib = $fixedMiB
+            census_workflow_sha256 = $censusWorkflowSha256
+            census_ladder_mib = $censusLadderMiB
+            census_maximum_rung_mib = $censusMaximumRungMiB
+            maximum_ladder_bytes = $maximumLadderBytes
+            target_remaining_bytes = $targetBytes
+            physical_ram_bytes = $physicalRamBytes
+            pagefile_configuration_sha256 = if ($runtimeAccepted) {
+              [string]$after.runtime.runtime_probe.pagefile_configuration_sha256
+            } else { $null }
+            ceiling_consistency_limit_bytes = $ceilingConsistencyLimitBytes
+            fixture_allocation_bytes = $fixtureAllocationBytes
+            fixture_within_ceiling_consistency_limit = $fixtureWithinCeilingConsistencyLimit
+            ceiling_consistency_comparison = $ceilingConsistencyComparison
+            ceiling_consistency_formula = 'physical_ram_bytes + maximum_ladder_bytes - target_remaining_bytes'
+            safety_bound = 'fixture_allocation_bytes = commit_remaining_bytes - target_remaining_bytes'
+            consistency_refusal_proof = $consistencyRefusalProof.result
+            reroll_authorized = $false
+            recorded_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            fault_text = $faultText
+            mutation_accepted = $null -eq $mutationFault
+            measurement_obtained = $measurementComplete
+            mutation_shape = $env:MUTATION_SHAPE
+            requested_pagefile_mib = $fixedMiB
+            requested_pagefile_bytes = $fixedBytes
+            disk_reserve_bytes = $reserveBytes
+            runner_temp_drive = $driveId
+            mutation_snapshots = $mutationSnapshotsRecord
+            raw_paging_files_before = $before.raw_paging_files
+            automatic_managed_before = $before.automatic_managed_pagefile
+            pagefile_settings_before = $before.pagefile_settings
+            pagefile_setting_count_before = $before.pagefile_setting_count
+            pagefile_usage_before = $before.pagefile_usage
+            pagefile_usage_count_before = $before.pagefile_usage_count
+            pagefile_usage_allocated_bytes_before = $before.pagefile_usage_allocated_bytes
+            pagefile_usage_expected_commit_limit_bytes_before = $before.pagefile_usage_expected_commit_limit_bytes
+            pagefile_usage_commit_limit_delta_bytes_before = $before.pagefile_usage_commit_limit_delta_bytes
+            before_runtime = $before.runtime
+            raw_paging_files_after = $rawPagingFilesAfter
+            automatic_managed_after = if ($null -ne $after) { $after.automatic_managed_pagefile } else { $null }
+            pagefile_settings_after = $pagefileSettingsAfter
+            pagefile_setting_count_after = if ($null -ne $after) { $after.pagefile_setting_count } else { $null }
+            pagefile_usage_after = $pagefileUsageAfter
+            pagefile_usage_count_after = if ($null -ne $after) { $after.pagefile_usage_count } else { $null }
+            pagefile_usage_allocated_bytes_after = if ($null -ne $after) { $after.pagefile_usage_allocated_bytes } else { $null }
+            pagefile_usage_expected_commit_limit_bytes_after = if ($null -ne $after) { $after.pagefile_usage_expected_commit_limit_bytes } else { $null }
+            pagefile_usage_commit_limit_delta_bytes_after = if ($null -ne $after) { $after.pagefile_usage_commit_limit_delta_bytes } else { $null }
+            after_runtime = if ($null -ne $after) { $after.runtime } else { $null }
+            measured_commit_limit_bytes = if ($null -ne $after) {
+              [uint64]$after.runtime.live.commit_limit_bytes
+            } else { $null }
+            measured_commit_total_bytes = if ($null -ne $after) {
+              [uint64]$after.runtime.live.commit_total_bytes
+            } else { $null }
+            measured_commit_remaining_bytes = if ($null -ne $after) {
+              [uint64]$after.runtime.live.commit_remaining_bytes
+            } else { $null }
+            runtime_declared_maximum_commit_capacity_bytes = if ($runtimeAccepted) {
+              [uint64]$after.runtime.runtime_probe.maximum_commit_capacity_bytes
+            } else { $null }
+          }
+          $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes(
+            (($record | ConvertTo-Json -Depth 10) + "`n")
+          )
+          $stream = [System.IO.File]::Open($resultPath, [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+          try {
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Flush($true)
+          } finally {
+            $stream.Dispose()
+          }
+          Write-Output ('EXTERNAL_FENCE_SETUP=' + ($record | ConvertTo-Json -Compress -Depth 10))
+          Remove-Item -LiteralPath $example -Force
+          if ($setupResult -ne 'PASS') {
+            throw "external-fence setup refused without reroll: $faultText"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
+            throw 'GITHUB_ENV is required to bind the ceiling consistency assertion into the probe'
+          }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8NoBOM -Value (
+            "EMBER_ISSUE898_FIXTURE_CEILING_ASSERTION_BYTES=$ceilingConsistencyLimitBytes"
+          )
+      - name: Run governed external fence probe
+        shell: pwsh
+        working-directory: runtime/ember-lab
+        env:
+          EMBER_ISSUE898_EXTERNAL_OUTPUT: ${{ runner.temp }}\issue898-external-fence-${{ github.run_id }}\probe
+        run: |
+          if (Test-Path -LiteralPath $env:EMBER_ISSUE898_EXTERNAL_OUTPUT) {
+            throw "no-overwrite output root already exists: $env:EMBER_ISSUE898_EXTERNAL_OUTPUT"
+          }
+          cargo test --locked -p ember-lab --test issue898_external_fence_probe issue898_external_fence_live_probe -- --ignored --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload immutable probe receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue898-external-fence-${{ github.run_id }}
+          path: ${{ runner.temp }}/issue898-external-fence-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
