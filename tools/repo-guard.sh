@@ -440,6 +440,86 @@ else
   printf '%s\n' "$GOVERNED_ENTRY_OUT" | sed 's/^/      /'
 fi
 
+# ---- 3d. launcher-shape: nothing outside the daemon starts a run ---------
+# The check above is about NAMING the training entry, which is deliberately
+# broad and catches prose and manifests as well as code. This one is about
+# BEING a launcher: a tracked script outside runtime/ember-lab and
+# tools/ember-cli that is directly runnable AND creates a child process for a
+# run. That conjunction is the standalone dispatcher issue 898 removes -- the
+# thing a person runs by hand instead of running the daemon.
+#
+# Sanctioned homes are narrower here than for governed-entry, and deliberately
+# so. governed-entry admits tools/ember-restart-3b because analysis code there
+# legitimately refers to the training entry; launcher-shape does not, because a
+# hand-runnable launcher living in the toolkit is precisely the offence. The run
+# bodies the daemon dispatches DO match the shape (they re-exec their own
+# workers) and are enumerated by digest rather than exempted by prefix, so a
+# change to how they create children is re-adjudicated.
+#
+# Two arms, unioned:
+#   A. directly runnable AND spawns a training entrypoint by name. This is the
+#      precise arm; it is what catches the certified-launch dispatcher.
+#   B. named as a launcher AND directly runnable AND creates any child. A name
+#      alone proves nothing, which is why both other conditions are required --
+#      without them the arm matches every analysis script under a directory
+#      that happens to be called prelaunch.
+# Arm B can only ADD coverage; it can never exempt anything arm A matched.
+#
+# Byte source follows REPO_GUARD_SCOPE, same as every check above.
+LAUNCHER_MAIN_RE='^if __name__ == .__main__.:'
+LAUNCHER_TRAINER_RE='(Popen|subprocess\.(run|check_call|check_output)|exec[vl]p?)\('
+LAUNCHER_TRAINER_CHILD_RE='run_vertical_slice|certified_train|run_pretraining|torchrun|train\.py|pretrain\.py'
+LAUNCHER_CHILD_RE='(subprocess\.(Popen|run|check_call)|os\.exec[vl]p?|Command::new)'
+LAUNCHER_SHAPE_PATHSPEC=(
+  -- '*.py' '*.sh'
+  ':(exclude)runtime/ember-lab'
+  ':(exclude)tools/ember-cli'
+  ':(exclude)tools/check_governed_entry_exceptions.py'
+  ':(exclude)tools/repo-guard.sh'
+  ':(exclude)tests'
+  ':(exclude)scripts/tests'
+  ':(exclude)*/tests/*'
+  ':(exclude)*test_*'
+)
+LAUNCHER_NAMED_PATHSPEC=(
+  -- '*launch*.py' '*launch*.sh' '*launcher*'
+  ':(exclude)runtime/ember-lab'
+  ':(exclude)tools/ember-cli'
+  ':(exclude)tests'
+  ':(exclude)scripts/tests'
+  ':(exclude)*/tests/*'
+  ':(exclude)*test_*'
+)
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  LAUNCHER_GREP=(git grep --cached)
+else
+  LAUNCHER_GREP=(git grep)
+fi
+# Arm A: the spawn call and its child name may sit on different lines, so the
+# child name is matched inside a two-line window after the call and the path is
+# recovered from grep's own prefix (which uses '-' as the separator on context
+# lines and ':' on match lines).
+LAUNCHER_SPAWN_PATHS="$(
+  "${LAUNCHER_GREP[@]}" -nIE "$LAUNCHER_TRAINER_RE" "${LAUNCHER_SHAPE_PATHSPEC[@]}" -A2 2>/dev/null \
+    | grep -iE "$LAUNCHER_TRAINER_CHILD_RE" \
+    | sed -E 's/^(.*\.(py|sh))[-:][0-9]+[-:].*/\1/' | sort -u || true
+)"
+LAUNCHER_MAIN_PATHS="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_MAIN_RE" "${LAUNCHER_SHAPE_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
+LAUNCHER_ARM_A="$(comm -12 <(printf '%s\n' "$LAUNCHER_SPAWN_PATHS") <(printf '%s\n' "$LAUNCHER_MAIN_PATHS"))"
+# Arm B: named as a launcher, directly runnable, and creates a child.
+LAUNCHER_NAMED_MAIN="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_MAIN_RE" "${LAUNCHER_NAMED_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
+LAUNCHER_NAMED_CHILD="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_CHILD_RE" "${LAUNCHER_NAMED_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
+LAUNCHER_ARM_B="$(comm -12 <(printf '%s\n' "$LAUNCHER_NAMED_MAIN") <(printf '%s\n' "$LAUNCHER_NAMED_CHILD"))"
+LAUNCHER_SHAPE_PATHS="$(printf '%s\n%s\n' "$LAUNCHER_ARM_A" "$LAUNCHER_ARM_B" | sed '/^$/d' | sort -u)"
+LAUNCHER_SHAPE_OUT="$(LAUNCHER_SHAPE_PATHS="$LAUNCHER_SHAPE_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_governed_entry_exceptions.py" launcher-shape 2>&1)"
+LAUNCHER_SHAPE_RC=$?
+if [ "$LAUNCHER_SHAPE_RC" -eq 0 ]; then
+  ok "launcher-shape" "$(printf '%s' "$LAUNCHER_SHAPE_OUT" | head -1)"
+else
+  fail "launcher-shape" "a script outside the daemon can be run by hand to start a run"
+  printf '%s\n' "$LAUNCHER_SHAPE_OUT" | sed 's/^/      /'
+fi
+
 # ---- 4. exactly one old-or-new authority document ------------------------
 AUTHORITY_PATHS_OK=1
 GOAL_REL=""

@@ -3,12 +3,34 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_governed_entry_exceptions.py — content-addressed adjudication for the
-governed-entry check in tools/repo-guard.sh.
+launcher checks in tools/repo-guard.sh.
 
 Purpose: a governed training run is born through the sanctioned entry homes and
 nowhere else. A tracked script outside those homes that reaches for the
 training-segment API is launcher-shaped, and a launcher outside the sanctioned
 path is the class this check exists to keep out of the tree.
+
+Two rules share this adjudicator, selected by a single positional argument:
+
+  governed-entry   a script outside the sanctioned homes NAMES the
+                   training-segment API. Broad by construction: it catches
+                   references in prose, manifests, and analysis code as well as
+                   in executable paths, so every one of them is enumerated with
+                   its bytes and re-adjudicated whenever it changes.
+
+  launcher-shape   a script outside runtime/ember-lab and tools/ember-cli is
+                   both directly runnable (`__main__`) AND creates a child
+                   process running a training entrypoint. That conjunction is
+                   the launcher itself, not a mention of one: it is the thing a
+                   person runs by hand instead of running the daemon.
+
+The two rules have deliberately different sanctioned homes. governed-entry
+admits the 3B toolkit because analysis code there legitimately refers to the
+training entry; launcher-shape does not, because a hand-runnable launcher in
+the toolkit is exactly the standalone dispatcher issue 898 exists to remove.
+The run bodies the daemon dispatches — which do re-exec worker children and so
+match the shape — are enumerated with their digests rather than exempted by
+prefix.
 
 Adjudication is by (path, sha256) PAIR, never by path alone. Path-only
 exemption is a hole: a file can be created or renamed into an exempted prefix,
@@ -17,12 +39,13 @@ digest and un-exempts it automatically, which is the intended behaviour — a
 file that starts consuming the training API differently must be re-adjudicated.
 
 Reads:
-  - the exceptions file, ALWAYS the hardcoded relative path
-    "tools/governed-entry-exceptions.json". It is deliberately NOT taken from
-    an environment variable: fail-closed validation is worthless if the policy
-    it validates against can be pointed at bytes the subject under test chose.
+  - the exceptions file, ALWAYS a hardcoded relative path selected by the rule
+    name from the RULES table below. It is deliberately NOT taken from an
+    environment variable: fail-closed validation is worthless if the policy it
+    validates against can be pointed at bytes the subject under test chose. The
+    rule name selects among fixed entries and cannot introduce a new path.
   - the newline-separated list of tracked paths the caller matched, via the
-    GOVERNED_ENTRY_PATHS environment variable.
+    environment variable named by the rule.
 
 Byte source follows REPO_GUARD_SCOPE, mirroring repo-guard.sh:
   - REPO_GUARD_SCOPE=staged: every byte from the git INDEX (`git show :path`),
@@ -51,8 +74,24 @@ import os
 import subprocess
 import sys
 
-EXCEPTIONS_PATH = "tools/governed-entry-exceptions.json"
-SCHEMA_VERSION = "ember-governed-entry-exceptions-v1"
+RULES = {
+    "governed-entry": {
+        "policy": "tools/governed-entry-exceptions.json",
+        "schema": "ember-governed-entry-exceptions-v1",
+        "paths_env": "GOVERNED_ENTRY_PATHS",
+        "uncovered": "references the governed training entry and is not enumerated",
+    },
+    "launcher-shape": {
+        "policy": "tools/launcher-shape-exceptions.json",
+        "schema": "ember-launcher-shape-exceptions-v1",
+        "paths_env": "LAUNCHER_SHAPE_PATHS",
+        "uncovered": (
+            "is directly runnable and starts a training child outside the daemon, "
+            "and is not enumerated"
+        ),
+    },
+}
+DEFAULT_RULE = "governed-entry"
 
 
 def _staged() -> bool:
@@ -84,6 +123,16 @@ def _fail(message: str) -> int:
 
 
 def main() -> int:
+    argv = sys.argv[1:]
+    if len(argv) > 1:
+        return _fail(f"usage: {sys.argv[0]} [{'|'.join(sorted(RULES))}]")
+    rule_name = argv[0] if argv else DEFAULT_RULE
+    rule = RULES.get(rule_name)
+    if rule is None:
+        return _fail(f"unknown rule {rule_name!r}; known: {', '.join(sorted(RULES))}")
+    EXCEPTIONS_PATH = rule["policy"]
+    SCHEMA_VERSION = rule["schema"]
+
     raw = _read_bytes(EXCEPTIONS_PATH)
     if raw is None:
         return _fail(f"{EXCEPTIONS_PATH}: missing or unreadable; policy required")
@@ -124,12 +173,12 @@ def main() -> int:
 
     matched = [
         line.strip()
-        for line in os.environ.get("GOVERNED_ENTRY_PATHS", "").splitlines()
+        for line in os.environ.get(rule["paths_env"], "").splitlines()
         if line.strip()
     ]
     if not matched:
         print(
-            f"governed-entry policy validated ({len(enumerated)} enumerated); "
+            f"{rule_name} policy validated ({len(enumerated)} enumerated); "
             "nothing to adjudicate"
         )
         return 0
@@ -138,7 +187,7 @@ def main() -> int:
     for path in sorted(set(matched)):
         expected = enumerated.get(path)
         if expected is None:
-            uncovered.append(f"{path}: references the governed training entry and is not enumerated")
+            uncovered.append(f"{path}: {rule['uncovered']}")
             continue
         content = _read_bytes(path)
         if content is None:
@@ -156,7 +205,7 @@ def main() -> int:
         return 1
 
     print(
-        f"governed-entry: {len(set(matched))} matched path(s) covered by an exact "
+        f"{rule_name}: {len(set(matched))} matched path(s) covered by an exact "
         "(path, sha256) exception"
     )
     return 0

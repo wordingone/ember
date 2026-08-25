@@ -33,6 +33,9 @@ READY_CLAIM_BOUNDARY = {
     "benchmark": False,
 }
 TEXT_AUTHORITY_INDEX = "data/ember-restart-3b/text-lab-authority-index-v1.json"
+# The daemon's default named pipe. The one launch command needs a pipe, and a
+# contributor should not have to invent one to start a governed run.
+EMBER_LAB_PIPE = r"\\.\pipe\ember-lab"
 
 EXIT_SOURCE_PATHS = {
     "E1": (
@@ -375,6 +378,35 @@ def build_ready_for_compute_packet(
         final_certificate = final_packet_directory / "certificate.json"
         final_ledger = final_packet_directory / "declaration-ledger.jsonl"
         final_run_spec = final_packet_directory / "run-spec.json"
+        # The ONE command a contributor runs (issue 898, clause 4). The daemon
+        # hash-pins the validator, builds and snapshots the dispatch manifest
+        # itself, and dispatches the validator as a caged child, so there is no
+        # human-authored manifest and no manual step between this command and a
+        # governed run. --declaration-ledger and --custody-receipt-sha256 are
+        # passed through unchanged rather than derived: a derived value that
+        # disagreed with the declared one would be exactly the silent divergence
+        # this packet exists to prevent.
+        daemon_argv = [
+            "ember-lab",
+            "launch",
+            "--root",
+            str(launch_repo_root),
+            "--certificate",
+            str(final_certificate),
+            "--declaration-ledger",
+            str(final_ledger),
+            "--run-spec",
+            str(final_run_spec),
+            "--custody-receipt-sha256",
+            custody_receipt_sha256,
+            "--pipe",
+            EMBER_LAB_PIPE,
+            "--receipt",
+            str(final_packet_directory / "certified-launch.json"),
+        ]
+        # The argv the daemon gives its caged child. Recorded so the packet says
+        # exactly what will run inside the job object; it is NOT a command for a
+        # person to type, and the validator has no command-line entry point.
         consumer_argv = [
             sys.executable,
             str(source_root / "tools/ember-restart-3b/certified_train_launch.py"),
@@ -414,6 +446,7 @@ def build_ready_for_compute_packet(
                 "surface": "ember-cli",
                 "authority": "ember-lab",
                 "consumer": "certified_train_launch.py",
+                "daemon_argv": daemon_argv,
                 "surface_argv": surface_argv,
                 "consumer_argv": consumer_argv,
             },

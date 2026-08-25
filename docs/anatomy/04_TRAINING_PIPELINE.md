@@ -14,7 +14,7 @@ successful bounded run is execution and restart evidence only."
 
 Notable modules under `tools/ember-restart-3b/`:
 - `model.py` — the network implementation matching `configs/ember-restart-3b.json`
-- `certified_train_launch.py` — the gated launch path
+- `certified_train_launch.py` — the certified-launch validator. It holds every gate a certified launch must pass: declaration-ledger membership, completion-receipt and conjunct authority, requested-scope subset, run-scoped custody, resume and specialist and semantic and A1 route validation, and runner argv derivation. It is NOT directly runnable and has no command-line entry point (issue 898); the daemon dispatches it as a caged child with its path and sha256 pinned in a manifest the daemon builds. Contributors do not invoke it — see "Launch discipline" below for the one command that starts a governed run.
 - `checkpoint_artifacts.py`, `checkpoint_scratch.py` — checkpoint bundle publication
 - `disk_budget_runner.py` — wraps any command with a hard C:/B: drive write-budget preflight (see the CPU-only launch example in `docs/ember-restart/ember-restart-3b-governed-runner-v1.md`, which caps `--max-c-write-gib 0` for the canary preflight)
 - `build_owned_audio_frames.py`, `build_owned_vision_scenes.py`, `build_owned_reasoning_tool_trajectories.py`, `build_owned_curriculum.py` — owned (non-borrowed) data construction per modality, matching the 03_MODEL_ARCHITECTURE.md expert set
@@ -22,13 +22,29 @@ Notable modules under `tools/ember-restart-3b/`:
 
 ## Launch discipline
 
-The governed runner launches via `disk_budget_runner.py` wrapping
-`run_vertical_slice.py`, executed from repo root with an explicit bounded
-custody directory (`docs/ember-restart/ember-restart-3b-governed-runner-v1.md`'s
-PowerShell example creates `$custody` + `$custody/artifacts` first, then
-passes both as `--write-root` bounds). This mirrors the retired
-`timeshare_pretrain.py`'s launch-interlock pattern (default-closed GPU path,
-explicit `--live` + env-var gate) but scoped to the current 3B contract.
+A governed run starts with one command and no manual steps before it:
+
+```
+ember-lab launch --root <repo-root> --certificate <certificate.json> \
+  --declaration-ledger <declaration-ledger.jsonl> --run-spec <run-spec.json> \
+  --custody-receipt-sha256 <64hex> --pipe <\\.\pipe\ember-lab> \
+  --receipt <custody>/certified-launch.json
+```
+
+Every argument comes from the launch packet the run already has; a contributor
+writes nothing by hand. The daemon hash-pins the certified-launch validator,
+builds and snapshots the dispatch manifest itself, and dispatches the validator
+as a caged child, so the run is born inside the job object and behind the commit
+ceiling, the VRAM ceiling and the foreign-process fence. The validator's exit
+code is returned unchanged and its stderr relayed verbatim, so a refusal still
+names the gate that refused — declaration-ledger membership, custody, scope, or
+route — rather than being flattened into a daemon-level error.
+
+The training program the validator then runs is `run_vertical_slice.py` under
+`disk_budget_runner.py`'s bounded write roots, exactly as before; what changed is
+that nothing outside the daemon starts it. There is no launcher script to run by
+hand: the standalone entry points were removed under issue 898 and the repo
+guard's `[launcher-shape]` check refuses their reintroduction.
 
 ## Retired pipeline (see 03_MODEL_ARCHITECTURE.md)
 

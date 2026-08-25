@@ -12,11 +12,18 @@ hashed evidence through mandatory arguments; it cannot silently consume
 different config or admissibility bytes.
 
 This is a launch mechanism, not a claim that any C8 arm has run or passed.
+
+NOT DIRECTLY RUNNABLE (issue 898). The command-line entry point was removed:
+a script outside the daemon that a person can run by hand to start a run is the
+class that issue exists to end, and the repo guard's launcher-shape check
+refuses its reintroduction. What remains is a library. `run_governed_launch` is
+unchanged and every validation it performs is unchanged; a caller that starts a
+C8 arm imports it from inside the daemon's dispatch path instead of invoking
+this file as a command.
 """
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -296,32 +303,15 @@ def run_governed_launch(
     )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo-root", required=True)
-    parser.add_argument("--manifest", required=True)
-    args = parser.parse_args(argv)
-    try:
-        result = run_governed_launch(repo_root=args.repo_root, manifest_path=args.manifest)
-    except (GovernedLaunchError, OSError) as exc:
-        print(f"C8_GOVERNED_LAUNCH_REFUSED: {exc}", file=sys.stderr)
-        return 2
-    print(
-        json.dumps(
-            {
-                "schema_version": "ember-c8-governed-launch-result-v1",
-                "run_id": result.run_id,
-                "arm": result.arm,
-                "returncode": result.returncode,
-                "config_sha256": result.config_sha256,
-                "admissibility_receipt_sha256": result.admissibility_receipt_sha256,
-                "python_script_sha256": result.python_script_sha256,
-            },
-            sort_keys=True,
-        )
-    )
-    return result.returncode
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+def governed_launch_result_record(result: GovernedLaunchResult) -> dict[str, object]:
+    """The result record a caller reports, unchanged from what the removed
+    command-line entry point printed."""
+    return {
+        "schema_version": "ember-c8-governed-launch-result-v1",
+        "run_id": result.run_id,
+        "arm": result.arm,
+        "returncode": result.returncode,
+        "config_sha256": result.config_sha256,
+        "admissibility_receipt_sha256": result.admissibility_receipt_sha256,
+        "python_script_sha256": result.python_script_sha256,
+    }

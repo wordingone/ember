@@ -17,8 +17,8 @@
     },
     {
       "path": "scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "7eaec087ede528f57c7ef0cee7c96ce08b59dcafcde8b63c61268b8ef766204d",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "sha256": "319053c9e669ce999a0b1646d5f9beb342939219071e9f2d9897cdd830fb08f4",
+      "reason": "emits the packet manifest, including the single daemon launch command a contributor runs; derives no child process itself"
     },
     {
       "path": "scripts/ember_surface2_capture.py",
