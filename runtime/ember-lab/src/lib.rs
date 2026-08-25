@@ -31,7 +31,7 @@ pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
-const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 6;
+const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 7;
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
@@ -2140,11 +2140,14 @@ impl Daemon {
         fs::create_dir_all(&log_dir)?;
         #[cfg(windows)]
         let monitor_shutdown = create_monitor_shutdown()?;
+        #[cfg(windows)]
+        let foreign_process_provider: Arc<dyn ForeignProcessCensusProvider> =
+            Arc::new(WindowsForeignProcessCensusProvider);
         let mut conn = Connection::open(path)?;
         let ember_lab_binary_sha256 = hash_file(&std::env::current_exe()?)?;
         let ember_lab_source_sha256 = ember_lab_source_hash();
         conn.busy_timeout(Duration::from_secs(10))?;
-        conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+        conn.execute_batch(r#"PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
             CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             INSERT OR IGNORE INTO metadata(key,value) VALUES('schema_version','1');
             CREATE TABLE IF NOT EXISTS identities(job_id TEXT PRIMARY KEY, canonical_path TEXT NOT NULL, sha256 TEXT NOT NULL, identity_blob BLOB NOT NULL, bound_at_ms INTEGER NOT NULL);
@@ -2166,7 +2169,10 @@ impl Daemon {
             CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
-            INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');")?;
+            INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');
+            CREATE TABLE IF NOT EXISTS foreign_process_pressure_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','observed','fenced','probe_failed')), observed_at_ms INTEGER NOT NULL, observation_json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS foreign_process_pressure_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+            INSERT OR IGNORE INTO foreign_process_pressure_state(singleton,state,observed_at_ms,observation_json) VALUES(1,'probe_failed',0,'{"schema_version":"ember-lab-foreign-process-pressure-observation-v1","result":"NOT_YET_SAMPLED"}');"#)?;
         migrate_schema(&mut conn, &log_dir)?;
         conn.execute(
             "INSERT OR IGNORE INTO metadata(key,value) VALUES('schedule_monitor_started_at_ms',?1)",
@@ -2195,12 +2201,23 @@ impl Daemon {
         persist_resource_guard_headroom(&*daemon.conn()?, now_ms(), resource_guard_seed)?;
         #[cfg(windows)]
         {
+            let owned_jobs = {
+                let conn = daemon.conn()?;
+                owned_job_identities_from_connection(&conn)?
+            };
+            let observed_at_ms = now_ms();
+            let census = sample_foreign_process_census(
+                foreign_process_provider.as_ref(),
+                &owned_jobs,
+            );
+            persist_foreign_process_census(&*daemon.conn()?, observed_at_ms, census)?;
             spawn_resource_guard_monitor(
                 Arc::downgrade(&daemon.db),
                 Arc::downgrade(&daemon.live),
                 daemon.log_dir.clone(),
                 duplicate_owned_handle(daemon.monitor_shutdown.raw())?,
                 Arc::downgrade(&daemon.monitor_ownership),
+                foreign_process_provider,
             )?;
         }
         Ok(daemon)
@@ -2225,6 +2242,11 @@ impl Daemon {
     pub fn resource_guard_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         resource_guard_status_from_connection(&conn)
+    }
+
+    pub fn foreign_process_pressure_status(&self) -> Result<Value> {
+        let conn = self.conn()?;
+        foreign_process_pressure_status_from_connection(&conn)
     }
 
     pub fn wall_observation_snapshot(
@@ -2680,6 +2702,15 @@ impl Daemon {
         } else {
             Ok(None)
         }
+    }
+
+    fn admission_guard_statuses(&self) -> Result<(Value, Value)> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Deferred)?;
+        let resource_guard = resource_guard_status_from_connection(&tx)?;
+        let foreign_process_pressure = foreign_process_pressure_status_from_connection(&tx)?;
+        tx.commit()?;
+        Ok((resource_guard, foreign_process_pressure))
     }
 
     pub fn bind_identity(&self, job_id: &str, path: &Path, expected: &str) -> Result<()> {
@@ -4034,7 +4065,30 @@ impl Daemon {
         )? {
             return Ok(existing);
         }
-        if let Some(resource_guard) = self.frozen_resource_guard()? {
+        let (resource_guard, foreign_process_pressure) = self.admission_guard_statuses()?;
+        let foreign_pressure_state = foreign_process_pressure
+            .get("state")
+            .and_then(Value::as_str)
+            .unwrap_or("probe_failed");
+        if cfg!(windows) && matches!(foreign_pressure_state, "fenced" | "probe_failed") {
+            let reason = format!("foreign_process_pressure_{foreign_pressure_state}");
+            let refusal = json!({
+                "schema_version": "ember-lab-dispatch-preflight-v1",
+                "result": "REFUSED_FOREIGN_PROCESS_PRESSURE",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+                "resource_guard": resource_guard,
+                "foreign_process_pressure": foreign_process_pressure,
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberLabError::ResourceAdmissionFrozen {
+                reason,
+                receipt_path,
+            });
+        }
+        if resource_guard.get("admission_state") == Some(&Value::String("frozen".into())) {
             let reason = resource_guard
                 .get("reason")
                 .and_then(Value::as_str)
@@ -4048,6 +4102,7 @@ impl Daemon {
                 "observed_at_ms": observed_at_ms,
                 "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
                 "resource_guard": resource_guard,
+                "foreign_process_pressure": foreign_process_pressure,
             });
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
             return Err(EmberLabError::ResourceAdmissionFrozen {
@@ -8497,7 +8552,7 @@ fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
         [],
     )?;
     tx.execute_batch(
-        "CREATE TABLE IF NOT EXISTS job_vram_walls(job_id TEXT PRIMARY KEY, contract_json TEXT NOT NULL, maximum_process_vram_bytes INTEGER NOT NULL, consecutive_breach_observations INTEGER NOT NULL DEFAULT 0, active_breach_class TEXT, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
+        r#"CREATE TABLE IF NOT EXISTS job_vram_walls(job_id TEXT PRIMARY KEY, contract_json TEXT NOT NULL, maximum_process_vram_bytes INTEGER NOT NULL, consecutive_breach_observations INTEGER NOT NULL DEFAULT 0, active_breach_class TEXT, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
          CREATE TABLE IF NOT EXISTS vram_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
          CREATE TABLE IF NOT EXISTS job_disk_walls(job_id TEXT NOT NULL, write_root TEXT NOT NULL, contract_json TEXT NOT NULL, baseline_tree_bytes INTEGER NOT NULL, consecutive_duration_misses INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(job_id,write_root), FOREIGN KEY(job_id) REFERENCES jobs(job_id));
          CREATE TABLE IF NOT EXISTS disk_wall_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL, write_root TEXT NOT NULL, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL, FOREIGN KEY(job_id) REFERENCES jobs(job_id));
@@ -8505,7 +8560,10 @@ fn migrate_schema(conn: &mut Connection, log_dir: &Path) -> Result<()> {
          CREATE TABLE IF NOT EXISTS resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL CHECK(admission_state IN ('open','frozen')), reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL CHECK(oracle_evidence_required IN (0,1)), observation_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS resource_guard_rearms(frozen_observation_sha256 TEXT PRIMARY KEY, breach_class TEXT NOT NULL, transitioned_at_ms INTEGER NOT NULL, receipt_path TEXT NOT NULL, receipt_sha256 TEXT NOT NULL UNIQUE, healthy_sample_count INTEGER NOT NULL, healthy_window_ms INTEGER NOT NULL, flap_multiplier INTEGER NOT NULL);
-         INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');",
+         INSERT OR IGNORE INTO resource_guard_state(singleton,admission_state,reason,observed_at_ms,oracle_evidence_required,observation_json) VALUES(1,'open',NULL,0,0,'{}');
+         CREATE TABLE IF NOT EXISTS foreign_process_pressure_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','observed','fenced','probe_failed')), observed_at_ms INTEGER NOT NULL, observation_json TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS foreign_process_pressure_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+         INSERT OR IGNORE INTO foreign_process_pressure_state(singleton,state,observed_at_ms,observation_json) VALUES(1,'probe_failed',0,'{"schema_version":"ember-lab-foreign-process-pressure-observation-v1","result":"NOT_YET_SAMPLED"}');"#,
     )?;
     data_catalog::migrate(&tx)?;
     tx.execute(
@@ -8533,14 +8591,16 @@ struct HostSurvivalHeadroom {
     commit_remaining_bytes: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct ForeignProcessIdentity {
     pid: u32,
     process_start_token: String,
     private_commit_bytes: u64,
     gpu_bytes: Option<u64>,
+    gpu_memory_unavailable_token: Option<String>,
     provider: Option<String>,
     candidate_classes: Vec<String>,
+    survived_end_probe: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -8548,12 +8608,118 @@ struct ForeignProcessCensus {
     host_commit_total_bytes: u64,
     host_commit_limit_bytes: u64,
     host_commit_remaining_bytes: u64,
+    host_page_size_bytes: u64,
     total_foreign_private_commit_bytes: u64,
     named_foreign_processes: Vec<ForeignProcessIdentity>,
     excluded_kernel_pids: Vec<u32>,
     enumerated_process_count: u64,
     owned_process_count: u64,
+    probe_complete: bool,
+    exited_processes: Vec<ProcessExitObservation>,
+    unreadable_processes: Vec<ProcessReadFailure>,
+    identity_conflicts: Vec<ProcessIdentityConflict>,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct HostCommitSample {
+    commit_total_bytes: u64,
+    commit_limit_bytes: u64,
+    commit_remaining_bytes: u64,
+    page_size_bytes: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProcessCommitSample {
+    pid: u32,
+    process_start_token: String,
+    private_commit_bytes: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct GpuComputeSample {
+    bytes: Option<u64>,
+    unavailable_token: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct ProcessExitObservation {
+    pid: u32,
+    phase: String,
+    win32_code: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct ProcessReadFailure {
+    pid: u32,
+    phase: String,
+    win32_code: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct ProcessIdentityConflict {
+    pid: u32,
+    expected_start_token: String,
+    observed_start_token: String,
+    phase: String,
+    win32_code: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ProcessCensusObservation {
+    Live(ProcessCommitSample),
+    Exited(ProcessExitObservation),
+    Unreadable(ProcessReadFailure),
+    IdentityConflict(ProcessIdentityConflict),
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct OwnedJobIdentity {
+    job_id: String,
+    job_object_name: String,
+}
+
+#[cfg(windows)]
+trait ForeignProcessCensusProvider: Send + Sync {
+    fn sample(&self, owned_jobs: &[OwnedJobIdentity]) -> Result<ForeignProcessCensus>;
+}
+
+#[cfg(windows)]
+struct WindowsForeignProcessCensusProvider;
+
+#[cfg(windows)]
+impl ForeignProcessCensusProvider for WindowsForeignProcessCensusProvider {
+    fn sample(&self, owned_jobs: &[OwnedJobIdentity]) -> Result<ForeignProcessCensus> {
+        sample_windows_foreign_process_census(owned_jobs)
+    }
+}
+
+#[cfg(windows)]
+fn sample_foreign_process_census(
+    provider: &dyn ForeignProcessCensusProvider,
+    owned_jobs: &[OwnedJobIdentity],
+) -> Result<ForeignProcessCensus> {
+    provider.sample(owned_jobs)
+}
+
+#[cfg(windows)]
+fn owned_job_identities_from_connection(conn: &Connection) -> Result<Vec<OwnedJobIdentity>> {
+    let mut statement = conn.prepare(
+        "SELECT job_id,job_object_name FROM jobs WHERE state='running' ORDER BY job_id",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok(OwnedJobIdentity {
+            job_id: row.get(0)?,
+            job_object_name: row.get(1)?,
+        })
+    })?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(Into::into)
+}
+
+#[cfg(windows)]
+const FOREIGN_PROCESS_OPEN_ACCESS_MASK: u32 =
+    windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION | 0x0010_0000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ForeignPressureState {
@@ -8563,14 +8729,686 @@ enum ForeignPressureState {
     ProbeFailed,
 }
 
+const FOREIGN_PRESSURE_OBSERVATION_LIMIT: i64 = 4096;
+const FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+impl ForeignPressureState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Clear => "clear",
+            Self::Observed => "observed",
+            Self::Fenced => "fenced",
+            Self::ProbeFailed => "probe_failed",
+        }
+    }
+}
+
 fn foreign_pressure_transition(census: &ForeignProcessCensus) -> ForeignPressureState {
-    if census.host_commit_remaining_bytes < RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES {
+    if !census.probe_complete {
+        ForeignPressureState::ProbeFailed
+    } else if census.host_commit_remaining_bytes < RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES {
         ForeignPressureState::Fenced
     } else if census.named_foreign_processes.is_empty() {
         ForeignPressureState::Clear
     } else {
         ForeignPressureState::Observed
     }
+}
+
+fn classify_foreign_samples(
+    host: HostCommitSample,
+    observations: Vec<ProcessCensusObservation>,
+    gpu_bytes_by_pid: &BTreeMap<u32, GpuComputeSample>,
+    owned_identities: &std::collections::BTreeSet<(u32, String)>,
+) -> Result<ForeignProcessCensus> {
+    let enumerated_process_count = u64::try_from(observations.len()).unwrap_or(u64::MAX);
+    let mut total_foreign_private_commit_bytes = 0_u64;
+    let mut named_foreign_processes = Vec::new();
+    let mut exited_processes = Vec::new();
+    let mut unreadable_processes = Vec::new();
+    let mut identity_conflicts = Vec::new();
+    let mut owned_process_count = 0_u64;
+
+    for observation in observations {
+        match observation {
+            ProcessCensusObservation::Live(process) => {
+                if owned_identities.contains(&(process.pid, process.process_start_token.clone())) {
+                    owned_process_count = owned_process_count.saturating_add(1);
+                    continue;
+                }
+                total_foreign_private_commit_bytes = total_foreign_private_commit_bytes
+                    .checked_add(process.private_commit_bytes)
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                        detail: "foreign private commit aggregate overflowed".into(),
+                    })?;
+                let mut candidate_classes = Vec::new();
+                let gpu_sample = gpu_bytes_by_pid.get(&process.pid);
+                let gpu_bytes = gpu_sample.and_then(|sample| sample.bytes);
+                if gpu_sample.is_some() {
+                    candidate_classes.push("gpu_compute".into());
+                }
+                if process.private_commit_bytes >= FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES {
+                    candidate_classes.push("private_commit_attribution".into());
+                }
+                if !candidate_classes.is_empty() {
+                    named_foreign_processes.push(ForeignProcessIdentity {
+                        pid: process.pid,
+                        process_start_token: process.process_start_token,
+                        private_commit_bytes: process.private_commit_bytes,
+                        gpu_bytes,
+                        gpu_memory_unavailable_token: gpu_sample
+                            .and_then(|sample| sample.unavailable_token.clone()),
+                        provider: gpu_sample.map(|_| "nvidia_smi_nvml".into()),
+                        candidate_classes,
+                        survived_end_probe: false,
+                    });
+                }
+            }
+            ProcessCensusObservation::Exited(exited) => exited_processes.push(exited),
+            ProcessCensusObservation::Unreadable(unreadable) => {
+                unreadable_processes.push(unreadable)
+            }
+            ProcessCensusObservation::IdentityConflict(conflict) => {
+                identity_conflicts.push(conflict)
+            }
+        }
+    }
+    named_foreign_processes.sort_by(|left, right| {
+        (left.pid, &left.process_start_token).cmp(&(right.pid, &right.process_start_token))
+    });
+    let probe_complete = unreadable_processes.is_empty() && identity_conflicts.is_empty();
+
+    Ok(ForeignProcessCensus {
+        host_commit_total_bytes: host.commit_total_bytes,
+        host_commit_limit_bytes: host.commit_limit_bytes,
+        host_commit_remaining_bytes: host.commit_remaining_bytes,
+        host_page_size_bytes: host.page_size_bytes,
+        total_foreign_private_commit_bytes,
+        named_foreign_processes,
+        excluded_kernel_pids: vec![0, 4],
+        enumerated_process_count,
+        owned_process_count,
+        probe_complete,
+        exited_processes,
+        unreadable_processes,
+        identity_conflicts,
+    })
+}
+
+fn persist_foreign_process_census(
+    conn: &Connection,
+    observed_at_ms: i64,
+    sample: Result<ForeignProcessCensus>,
+) -> Result<()> {
+    let (state, observation) = match sample {
+        Ok(census) => {
+            let state = foreign_pressure_transition(&census);
+            let result = match state {
+                ForeignPressureState::Clear => "CLEAR",
+                ForeignPressureState::Observed => "OBSERVED",
+                ForeignPressureState::Fenced => "FENCED",
+                ForeignPressureState::ProbeFailed => "PROBE_FAILED",
+            };
+            (
+                state,
+                json!({
+                    "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+                    "result": result,
+                    "observed_at_ms": observed_at_ms,
+                    "monitor_tier": "windows_process_private_commit_and_gpu_context",
+                    "host_commit_total_bytes": census.host_commit_total_bytes,
+                    "host_commit_limit_bytes": census.host_commit_limit_bytes,
+                    "host_commit_remaining_bytes": census.host_commit_remaining_bytes,
+                    "host_page_size_bytes": census.host_page_size_bytes,
+                    "minimum_commit_remaining_bytes": RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES,
+                    "foreign_process_attribution_cutoff_bytes": FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES,
+                    "total_foreign_private_commit_bytes": census.total_foreign_private_commit_bytes,
+                    "named_foreign_processes": census.named_foreign_processes,
+                    "excluded_kernel_pids": census.excluded_kernel_pids,
+                    "enumerated_process_count": census.enumerated_process_count,
+                    "owned_process_count": census.owned_process_count,
+                    "probe_complete": census.probe_complete,
+                    "exited_processes": census.exited_processes,
+                    "unreadable_processes": census.unreadable_processes,
+                    "identity_conflicts": census.identity_conflicts,
+                    "counter_sources": {
+                        "host_commit": "GetPerformanceInfo.CommitLimit-CommitTotal",
+                        "process_private_commit": "K32GetProcessMemoryInfo.PROCESS_MEMORY_COUNTERS_EX.PrivateUsage",
+                        "gpu_compute_context": "nvidia-smi.query-compute-apps",
+                    },
+                    "foreign_process_control": false,
+                }),
+            )
+        }
+        Err(error) => (
+            ForeignPressureState::ProbeFailed,
+            json!({
+                "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+                "result": "PROBE_FAILED",
+                "observed_at_ms": observed_at_ms,
+                "monitor_tier": "windows_process_private_commit_and_gpu_context",
+                "error": format!("{error:?}"),
+                "minimum_commit_remaining_bytes": RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES,
+                "foreign_process_attribution_cutoff_bytes": FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES,
+                "foreign_process_control": false,
+            }),
+        ),
+    };
+    let observation_json = serde_json::to_string(&observation)?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "INSERT INTO foreign_process_pressure_observations(observed_at_ms,outcome,payload_json) VALUES(?1,?2,?3)",
+        params![observed_at_ms, state.as_str(), observation_json],
+    )?;
+    tx.execute(
+        "DELETE FROM foreign_process_pressure_observations WHERE seq <= COALESCE((SELECT MAX(seq) FROM foreign_process_pressure_observations),0)-?1",
+        [FOREIGN_PRESSURE_OBSERVATION_LIMIT],
+    )?;
+    tx.execute(
+        "UPDATE foreign_process_pressure_state SET state=?1,observed_at_ms=?2,observation_json=?3 WHERE singleton=1",
+        params![state.as_str(), observed_at_ms, observation_json],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn foreign_process_pressure_status_from_connection(conn: &Connection) -> Result<Value> {
+    let (state, observed_at_ms, observation_json): (String, i64, String) = conn.query_row(
+        "SELECT state,observed_at_ms,observation_json FROM foreign_process_pressure_state WHERE singleton=1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )?;
+    let (resource_guard_state, resource_guard_reason): (String, Option<String>) = conn.query_row(
+        "SELECT admission_state,reason FROM resource_guard_state WHERE singleton=1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let observation: Value = serde_json::from_str(&observation_json).map_err(|error| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: format!("foreign process pressure observation is invalid: {error}"),
+        }
+    })?;
+    let pressure_refuses = state == "fenced" || state == "probe_failed";
+    let admission_state = if resource_guard_state == "frozen" || pressure_refuses {
+        "frozen"
+    } else {
+        "open"
+    };
+    Ok(json!({
+        "schema_version": "ember-lab-foreign-process-pressure-state-v1",
+        "state": state,
+        "observed_at_ms": observed_at_ms,
+        "observation": observation,
+        "sampling_interval_ms": RESOURCE_GUARD_SAMPLE_INTERVAL_MS,
+        "effective_admission": {
+            "admission_state": admission_state,
+            "resource_guard_state": resource_guard_state,
+            "resource_guard_reason": resource_guard_reason,
+            "foreign_process_pressure_state": state,
+        },
+    }))
+}
+
+#[cfg(windows)]
+fn process_start_token(pid: u32) -> Result<String> {
+    use windows_sys::Win32::System::Threading::OpenProcess;
+
+    let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
+    if process.is_null() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let process = OwnedHandle(process);
+    windows_process_time_identity(process.raw()).map(|(token, _)| token)
+}
+
+#[cfg(windows)]
+fn windows_process_time_identity(
+    handle: windows_sys::Win32::Foundation::HANDLE,
+) -> Result<(String, bool)> {
+    use std::mem::zeroed;
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::Threading::GetProcessTimes;
+
+    let (mut creation, mut exit, mut kernel, mut user): (FILETIME, FILETIME, FILETIME, FILETIME) =
+        unsafe { zeroed() };
+    if unsafe { GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok((
+        format!(
+            "{:08x}{:08x}",
+            creation.dwHighDateTime, creation.dwLowDateTime
+        ),
+        exit.dwHighDateTime != 0 || exit.dwLowDateTime != 0,
+    ))
+}
+
+#[cfg(windows)]
+fn sample_windows_host_commit() -> Result<HostCommitSample> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::System::ProcessStatus::{GetPerformanceInfo, PERFORMANCE_INFORMATION};
+
+    let mut info: PERFORMANCE_INFORMATION = unsafe { zeroed() };
+    info.cb = size_of::<PERFORMANCE_INFORMATION>() as u32;
+    if unsafe { GetPerformanceInfo(&mut info, info.cb) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let page_size_bytes = u64::try_from(info.PageSize).map_err(|_| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "host page size does not fit in u64".into(),
+        }
+    })?;
+    let commit_total_pages = u64::try_from(info.CommitTotal).map_err(|_| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "host commit total does not fit in u64".into(),
+        }
+    })?;
+    let commit_limit_pages = u64::try_from(info.CommitLimit).map_err(|_| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "host commit limit does not fit in u64".into(),
+        }
+    })?;
+    let commit_total_bytes = commit_total_pages.checked_mul(page_size_bytes).ok_or_else(|| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "host commit total overflowed".into(),
+        }
+    })?;
+    let commit_limit_bytes = commit_limit_pages.checked_mul(page_size_bytes).ok_or_else(|| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "host commit limit overflowed".into(),
+        }
+    })?;
+    let commit_remaining_bytes = commit_limit_bytes.checked_sub(commit_total_bytes).ok_or_else(|| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: "host commit total exceeded commit limit".into(),
+        }
+    })?;
+    Ok(HostCommitSample {
+        commit_total_bytes,
+        commit_limit_bytes,
+        commit_remaining_bytes,
+        page_size_bytes,
+    })
+}
+
+#[cfg(windows)]
+fn enumerate_windows_process_ids() -> Result<Vec<u32>> {
+    use windows_sys::Win32::System::ProcessStatus::K32EnumProcesses;
+
+    let mut capacity = 1024_usize;
+    loop {
+        let mut pids = vec![0_u32; capacity];
+        let byte_capacity = pids
+            .len()
+            .checked_mul(std::mem::size_of::<u32>())
+            .and_then(|size| u32::try_from(size).ok())
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "process enumeration buffer overflowed".into(),
+            })?;
+        let mut bytes_written = 0_u32;
+        if unsafe { K32EnumProcesses(pids.as_mut_ptr(), byte_capacity, &mut bytes_written) } == 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        if bytes_written < byte_capacity {
+            pids.truncate(bytes_written as usize / std::mem::size_of::<u32>());
+            return Ok(pids);
+        }
+        capacity = capacity.checked_mul(2).ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "process enumeration capacity overflowed".into(),
+            }
+        })?;
+    }
+}
+
+#[cfg(windows)]
+fn parse_nvidia_compute_rows(stdout: &str) -> Result<BTreeMap<u32, GpuComputeSample>> {
+    let mut result = BTreeMap::new();
+    for (line_index, line) in stdout.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut fields = line.split(',').map(str::trim);
+        let pid = fields
+            .next()
+            .and_then(|value| value.parse::<u32>().ok())
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: format!("invalid NVIDIA compute PID at line {}", line_index + 1),
+            })?;
+        let memory = fields
+            .next()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: format!("missing NVIDIA compute memory at line {}", line_index + 1),
+            })?;
+        if fields.next().is_some() {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!("unexpected NVIDIA compute fields at line {}", line_index + 1),
+            });
+        }
+        let normalized = memory.to_ascii_lowercase();
+        let sample = if normalized == "n/a" || normalized == "[n/a]" {
+            GpuComputeSample {
+                bytes: None,
+                unavailable_token: Some(memory.to_string()),
+            }
+        } else {
+            let mib = memory.parse::<u64>().map_err(|_| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: format!("invalid NVIDIA compute memory at line {}", line_index + 1),
+                }
+            })?;
+            GpuComputeSample {
+                bytes: Some(mib.checked_mul(1024 * 1024).ok_or_else(|| {
+                    EmberLabError::InvalidDispatchManifest {
+                        detail: "NVIDIA compute memory overflowed".into(),
+                    }
+                })?),
+                unavailable_token: None,
+            }
+        };
+        match result.entry(pid) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(sample);
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                let prior = entry.get_mut();
+                prior.bytes = match (prior.bytes, sample.bytes) {
+                    (Some(left), Some(right)) => Some(left.checked_add(right).ok_or_else(|| {
+                        EmberLabError::InvalidDispatchManifest {
+                            detail: "NVIDIA compute memory aggregate overflowed".into(),
+                        }
+                    })?),
+                    _ => None,
+                };
+                if prior.unavailable_token.is_none() {
+                    prior.unavailable_token = sample.unavailable_token;
+                }
+            }
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(windows)]
+fn nvidia_compute_bytes_by_pid() -> Result<BTreeMap<u32, GpuComputeSample>> {
+    let stdout = nvidia_smi_text(&[
+        "--query-compute-apps=pid,used_gpu_memory",
+        "--format=csv,noheader,nounits",
+    ])?;
+    parse_nvidia_compute_rows(&stdout)
+}
+
+#[cfg(windows)]
+fn probe_windows_process_observations_with_owned(
+    owned_jobs: &[OwnedJobIdentity],
+) -> Result<(
+    HostCommitSample,
+    Vec<ProcessCensusObservation>,
+    BTreeMap<u32, GpuComputeSample>,
+    std::collections::BTreeSet<(u32, String)>,
+)> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
+    use windows_sys::Win32::System::JobObjects::{IsProcessInJob, OpenJobObjectW};
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
+    };
+    use windows_sys::Win32::System::SystemServices::JOB_OBJECT_QUERY;
+    use windows_sys::Win32::System::Threading::OpenProcess;
+
+    let host = sample_windows_host_commit()?;
+    let pids = enumerate_windows_process_ids()?;
+    let gpu_bytes_by_pid = nvidia_compute_bytes_by_pid()?;
+    let mut owned_handles = Vec::with_capacity(owned_jobs.len());
+    for owned_job in owned_jobs {
+        let name = wide(&owned_job.job_object_name);
+        let handle = unsafe { OpenJobObjectW(JOB_OBJECT_QUERY, 0, name.as_ptr()) };
+        if handle.is_null() {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        owned_handles.push((owned_job.job_id.clone(), OwnedHandle(handle)));
+    }
+
+    let mut observations = Vec::with_capacity(pids.len());
+    let mut owned_identities = std::collections::BTreeSet::new();
+    for pid in pids.into_iter().filter(|pid| *pid != 0 && *pid != 4) {
+        let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
+        if process.is_null() {
+            let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
+            if code == ERROR_INVALID_PARAMETER {
+                observations.push(ProcessCensusObservation::Exited(ProcessExitObservation {
+                    pid,
+                    phase: "enumeration".into(),
+                    win32_code: code,
+                }));
+            } else {
+                observations.push(ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                    pid,
+                    phase: "enumeration_open".into(),
+                    win32_code: code,
+                }));
+            }
+            continue;
+        }
+        let process = OwnedHandle(process);
+        let process_start_token = match windows_process_time_identity(process.raw()) {
+            Ok((_, true)) => {
+                observations.push(ProcessCensusObservation::Exited(ProcessExitObservation {
+                    pid,
+                    phase: "enumeration_identity".into(),
+                    win32_code: 0,
+                }));
+                continue;
+            }
+            Ok((token, false)) => token,
+            Err(error) => {
+                let code = match &error {
+                    EmberLabError::Io(error) => error.raw_os_error().unwrap_or(0) as u32,
+                    _ => 0,
+                };
+                let observation = if code == ERROR_INVALID_PARAMETER {
+                    ProcessCensusObservation::Exited(ProcessExitObservation {
+                        pid,
+                        phase: "enumeration_identity".into(),
+                        win32_code: code,
+                    })
+                } else {
+                    ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                        pid,
+                        phase: "enumeration_identity".into(),
+                        win32_code: code,
+                    })
+                };
+                observations.push(observation);
+                continue;
+            }
+        };
+
+        let mut counters: PROCESS_MEMORY_COUNTERS_EX = unsafe { zeroed() };
+        counters.cb = size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+        if unsafe {
+            K32GetProcessMemoryInfo(
+                process.raw(),
+                (&mut counters as *mut PROCESS_MEMORY_COUNTERS_EX).cast::<PROCESS_MEMORY_COUNTERS>(),
+                counters.cb,
+            )
+        } == 0
+        {
+            let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
+            let observation = if code == ERROR_INVALID_PARAMETER {
+                ProcessCensusObservation::Exited(ProcessExitObservation {
+                    pid,
+                    phase: "enumeration_private_commit".into(),
+                    win32_code: code,
+                })
+            } else {
+                ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                    pid,
+                    phase: "enumeration_private_commit".into(),
+                    win32_code: code,
+                })
+            };
+            observations.push(observation);
+            continue;
+        }
+
+        let mut ownership_probe_failed = None;
+        for (_, job) in &owned_handles {
+            let mut is_member = 0;
+            if unsafe { IsProcessInJob(process.raw(), job.raw(), &mut is_member) } == 0 {
+                ownership_probe_failed = Some(
+                    std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32,
+                );
+                break;
+            }
+            if is_member != 0 {
+                owned_identities.insert((pid, process_start_token.clone()));
+                break;
+            }
+        }
+        if let Some(code) = ownership_probe_failed {
+            observations.push(ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                pid,
+                phase: "owned_job_membership".into(),
+                win32_code: code,
+            }));
+            continue;
+        }
+        observations.push(ProcessCensusObservation::Live(ProcessCommitSample {
+            pid,
+            process_start_token,
+            private_commit_bytes: u64::try_from(counters.PrivateUsage).map_err(|_| {
+                EmberLabError::InvalidDispatchManifest {
+                    detail: format!("private commit for PID {pid} does not fit in u64"),
+                }
+            })?,
+        }));
+    }
+    Ok((host, observations, gpu_bytes_by_pid, owned_identities))
+}
+
+#[cfg(windows)]
+fn probe_windows_process_observations(
+    owned_jobs: &[OwnedJobIdentity],
+) -> Result<(
+    HostCommitSample,
+    Vec<ProcessCensusObservation>,
+    BTreeMap<u32, GpuComputeSample>,
+)> {
+    let (host, observations, gpu_bytes_by_pid, _) =
+        probe_windows_process_observations_with_owned(owned_jobs)?;
+    Ok((host, observations, gpu_bytes_by_pid))
+}
+
+#[cfg(windows)]
+fn sample_windows_foreign_process_census(
+    owned_jobs: &[OwnedJobIdentity],
+) -> Result<ForeignProcessCensus> {
+    use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
+    use windows_sys::Win32::System::Threading::OpenProcess;
+
+    let (host, mut observations, gpu_bytes_by_pid, owned_identities) =
+        probe_windows_process_observations_with_owned(owned_jobs)?;
+    let initial = classify_foreign_samples(
+        host,
+        observations.clone(),
+        &gpu_bytes_by_pid,
+        &owned_identities,
+    )?;
+    let expected = initial
+        .named_foreign_processes
+        .iter()
+        .map(|process| (process.pid, process.process_start_token.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let mut survived = std::collections::BTreeSet::new();
+
+    for (pid, expected_start_token) in expected {
+        let replacement = {
+            let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
+            if process.is_null() {
+                let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
+                Some(if code == ERROR_INVALID_PARAMETER {
+                    ProcessCensusObservation::Exited(ProcessExitObservation {
+                        pid,
+                        phase: "named_process_end_probe".into(),
+                        win32_code: code,
+                    })
+                } else {
+                    ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                        pid,
+                        phase: "named_process_end_probe".into(),
+                        win32_code: code,
+                    })
+                })
+            } else {
+                let process = OwnedHandle(process);
+                match windows_process_time_identity(process.raw()) {
+                    Ok((_, true)) => Some(ProcessCensusObservation::Exited(
+                        ProcessExitObservation {
+                            pid,
+                            phase: "named_process_end_probe".into(),
+                            win32_code: 0,
+                        },
+                    )),
+                    Ok((observed_start_token, false))
+                        if observed_start_token == expected_start_token =>
+                    {
+                        survived.insert((pid, expected_start_token.clone()));
+                        None
+                    }
+                    Ok((observed_start_token, false)) => {
+                        Some(ProcessCensusObservation::IdentityConflict(
+                            ProcessIdentityConflict {
+                                pid,
+                                expected_start_token: expected_start_token.clone(),
+                                observed_start_token,
+                                phase: "named_process_end_probe".into(),
+                                win32_code: 0,
+                            },
+                        ))
+                    }
+                    Err(error) => {
+                        let code = match &error {
+                            EmberLabError::Io(error) => error.raw_os_error().unwrap_or(0) as u32,
+                            _ => 0,
+                        };
+                        Some(if code == ERROR_INVALID_PARAMETER {
+                            ProcessCensusObservation::Exited(ProcessExitObservation {
+                                pid,
+                                phase: "named_process_end_probe".into(),
+                                win32_code: code,
+                            })
+                        } else {
+                            ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                                pid,
+                                phase: "named_process_end_probe".into(),
+                                win32_code: code,
+                            })
+                        })
+                    }
+                }
+            }
+        };
+        if let Some(replacement) = replacement {
+            observations.retain(|observation| {
+                !matches!(observation, ProcessCensusObservation::Live(sample) if sample.pid == pid && sample.process_start_token == expected_start_token)
+            });
+            observations.push(replacement);
+        }
+    }
+
+    let mut census = classify_foreign_samples(
+        host,
+        observations,
+        &gpu_bytes_by_pid,
+        &owned_identities,
+    )?;
+    for process in &mut census.named_foreign_processes {
+        process.survived_end_probe =
+            survived.contains(&(process.pid, process.process_start_token.clone()));
+    }
+    Ok(census)
 }
 
 fn foreign_pressure_state_from_sample(
@@ -8586,6 +9424,43 @@ fn foreign_pressure_state_from_sample(
 mod foreign_pressure_policy_tests {
     use super::*;
 
+    fn pressure_test_connection() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            r#"CREATE TABLE foreign_process_pressure_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), state TEXT NOT NULL CHECK(state IN ('clear','observed','fenced','probe_failed')), observed_at_ms INTEGER NOT NULL, observation_json TEXT NOT NULL);
+               CREATE TABLE foreign_process_pressure_observations(seq INTEGER PRIMARY KEY AUTOINCREMENT, observed_at_ms INTEGER NOT NULL, outcome TEXT NOT NULL, payload_json TEXT NOT NULL);
+               INSERT INTO foreign_process_pressure_state VALUES(1,'probe_failed',0,'{}');
+               CREATE TABLE resource_guard_state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), admission_state TEXT NOT NULL, reason TEXT, observed_at_ms INTEGER NOT NULL, oracle_evidence_required INTEGER NOT NULL, observation_json TEXT NOT NULL);
+               INSERT INTO resource_guard_state VALUES(1,'frozen','preexisting_sticky_guard',1,1,'{"result":"FROZEN"}');"#,
+        )
+        .unwrap();
+        conn
+    }
+
+    fn pressure_census(
+        commit_remaining_bytes: u64,
+        named_foreign_processes: Vec<ForeignProcessIdentity>,
+    ) -> ForeignProcessCensus {
+        ForeignProcessCensus {
+            host_commit_total_bytes: 64 * 1024 * 1024 * 1024 - commit_remaining_bytes,
+            host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
+            host_commit_remaining_bytes: commit_remaining_bytes,
+            host_page_size_bytes: 4096,
+            total_foreign_private_commit_bytes: named_foreign_processes
+                .iter()
+                .map(|process| process.private_commit_bytes)
+                .sum(),
+            named_foreign_processes,
+            excluded_kernel_pids: vec![0, 4],
+            enumerated_process_count: 14,
+            owned_process_count: 2,
+            probe_complete: true,
+            exited_processes: vec![],
+            unreadable_processes: vec![],
+            identity_conflicts: vec![],
+        }
+    }
+
     #[test]
     fn healthy_host_with_five_gib_foreign_process_is_observed_without_fence() {
         let five_gib = 5 * 1024 * 1024 * 1024;
@@ -8593,18 +9468,25 @@ mod foreign_pressure_policy_tests {
             host_commit_total_bytes: 44 * 1024 * 1024 * 1024,
             host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
             host_commit_remaining_bytes: 20 * 1024 * 1024 * 1024,
+            host_page_size_bytes: 4096,
             total_foreign_private_commit_bytes: five_gib,
             named_foreign_processes: vec![ForeignProcessIdentity {
                 pid: 500,
                 process_start_token: "00000000000001f4".into(),
                 private_commit_bytes: five_gib,
                 gpu_bytes: None,
+                gpu_memory_unavailable_token: None,
                 provider: None,
                 candidate_classes: vec!["private_commit_attribution".into()],
+                survived_end_probe: true,
             }],
             excluded_kernel_pids: vec![0, 4],
             enumerated_process_count: 3,
             owned_process_count: 0,
+            probe_complete: true,
+            exited_processes: vec![],
+            unreadable_processes: vec![],
+            identity_conflicts: vec![],
         };
 
         assert_eq!(
@@ -8619,11 +9501,16 @@ mod foreign_pressure_policy_tests {
             host_commit_total_bytes: 55 * 1024 * 1024 * 1024,
             host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
             host_commit_remaining_bytes: 9 * 1024 * 1024 * 1024,
+            host_page_size_bytes: 4096,
             total_foreign_private_commit_bytes: 42 * 1024 * 1024 * 1024,
             named_foreign_processes: vec![],
             excluded_kernel_pids: vec![0, 4],
             enumerated_process_count: 14,
             owned_process_count: 0,
+            probe_complete: true,
+            exited_processes: vec![],
+            unreadable_processes: vec![],
+            identity_conflicts: vec![],
         };
 
         assert_eq!(
@@ -8638,11 +9525,16 @@ mod foreign_pressure_policy_tests {
             host_commit_total_bytes: 54 * 1024 * 1024 * 1024,
             host_commit_limit_bytes: 64 * 1024 * 1024 * 1024,
             host_commit_remaining_bytes: 10 * 1024 * 1024 * 1024,
+            host_page_size_bytes: 4096,
             total_foreign_private_commit_bytes: 0,
             named_foreign_processes: vec![],
             excluded_kernel_pids: vec![0, 4],
             enumerated_process_count: 2,
             owned_process_count: 0,
+            probe_complete: true,
+            exited_processes: vec![],
+            unreadable_processes: vec![],
+            identity_conflicts: vec![],
         };
         let below_floor = ForeignProcessCensus {
             host_commit_remaining_bytes: at_floor.host_commit_remaining_bytes - 1,
@@ -8669,6 +9561,353 @@ mod foreign_pressure_policy_tests {
             foreign_pressure_state_from_sample(sample),
             ForeignPressureState::ProbeFailed
         );
+    }
+
+    #[test]
+    fn persistence_transitions_probe_failed_observed_fenced_clear_without_clearing_sticky_guard() {
+        let conn = pressure_test_connection();
+        persist_foreign_process_census(
+            &conn,
+            10,
+            Err(EmberLabError::InvalidDispatchManifest {
+                detail: "synthetic census failure".into(),
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            foreign_process_pressure_status_from_connection(&conn).unwrap()["state"],
+            "probe_failed"
+        );
+
+        let named = ForeignProcessIdentity {
+            pid: 500,
+            process_start_token: "token-500".into(),
+            private_commit_bytes: 5 * 1024 * 1024 * 1024,
+            gpu_bytes: None,
+            gpu_memory_unavailable_token: None,
+            provider: None,
+            candidate_classes: vec!["private_commit_attribution".into()],
+            survived_end_probe: true,
+        };
+        persist_foreign_process_census(
+            &conn,
+            20,
+            Ok(pressure_census(12 * 1024 * 1024 * 1024, vec![named])),
+        )
+        .unwrap();
+        assert_eq!(
+            foreign_process_pressure_status_from_connection(&conn).unwrap()["state"],
+            "observed"
+        );
+        persist_foreign_process_census(
+            &conn,
+            30,
+            Ok(pressure_census(9 * 1024 * 1024 * 1024, vec![])),
+        )
+        .unwrap();
+        assert_eq!(
+            foreign_process_pressure_status_from_connection(&conn).unwrap()["state"],
+            "fenced"
+        );
+        persist_foreign_process_census(
+            &conn,
+            40,
+            Ok(pressure_census(12 * 1024 * 1024 * 1024, vec![])),
+        )
+        .unwrap();
+        let status = foreign_process_pressure_status_from_connection(&conn).unwrap();
+        assert_eq!(status["state"], "clear");
+        assert_eq!(status["effective_admission"]["resource_guard_state"], "frozen");
+        assert_eq!(status["effective_admission"]["admission_state"], "frozen");
+    }
+
+    #[test]
+    fn foreign_pressure_observation_ledger_is_bounded() {
+        let conn = pressure_test_connection();
+        for observed_at_ms in 0..=FOREIGN_PRESSURE_OBSERVATION_LIMIT {
+            persist_foreign_process_census(
+                &conn,
+                observed_at_ms,
+                Ok(pressure_census(12 * 1024 * 1024 * 1024, vec![])),
+            )
+            .unwrap();
+        }
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM foreign_process_pressure_observations",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, FOREIGN_PRESSURE_OBSERVATION_LIMIT);
+    }
+}
+
+#[cfg(test)]
+mod foreign_process_census_tests {
+    use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    fn host() -> HostCommitSample {
+        HostCommitSample {
+            commit_total_bytes: 44 * GIB,
+            commit_limit_bytes: 64 * GIB,
+            commit_remaining_bytes: 20 * GIB,
+            page_size_bytes: 4096,
+        }
+    }
+
+    fn live(pid: u32, token: &str, private_commit_bytes: u64) -> ProcessCensusObservation {
+        ProcessCensusObservation::Live(ProcessCommitSample {
+            pid,
+            process_start_token: token.into(),
+            private_commit_bytes,
+        })
+    }
+
+    #[test]
+    fn gpu_pid_below_commit_cutoff_is_named() {
+        let gpu = BTreeMap::from([(
+            77,
+            GpuComputeSample {
+                bytes: Some(256 * 1024 * 1024),
+                unavailable_token: None,
+            },
+        )]);
+        let census = classify_foreign_samples(
+            host(),
+            vec![live(77, "aa", GIB)],
+            &gpu,
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert_eq!(census.named_foreign_processes.len(), 1);
+        assert_eq!(
+            census.named_foreign_processes[0].candidate_classes,
+            vec!["gpu_compute"]
+        );
+    }
+
+    #[test]
+    fn nvidia_absent_memory_tokens_keep_gpu_context_pids_named_and_complete() {
+        let gpu = parse_nvidia_compute_rows("2396, [N/A]\n7328, [n/a]\n7684, N/A\n")
+            .unwrap();
+        assert_eq!(gpu.len(), 3);
+        assert_eq!(gpu[&2396].bytes, None);
+        assert_eq!(gpu[&2396].unavailable_token.as_deref(), Some("[N/A]"));
+
+        let census = classify_foreign_samples(
+            host(),
+            vec![live(2396, "aa", GIB), live(7328, "bb", GIB), live(7684, "cc", GIB)],
+            &gpu,
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert!(census.probe_complete);
+        assert_eq!(census.named_foreign_processes.len(), 3);
+        assert!(census.named_foreign_processes.iter().all(|process| {
+            process.gpu_bytes.is_none()
+                && process
+                    .candidate_classes
+                    .iter()
+                    .any(|class| class == "gpu_compute")
+        }));
+    }
+
+    #[test]
+    fn owned_job_member_is_excluded_from_foreign_totals() {
+        let owned = BTreeSet::from([(88, "bb".to_string())]);
+        let census = classify_foreign_samples(
+            host(),
+            vec![live(88, "bb", 6 * GIB)],
+            &BTreeMap::new(),
+            &owned,
+        )
+        .unwrap();
+
+        assert_eq!(census.total_foreign_private_commit_bytes, 0);
+        assert!(census.named_foreign_processes.is_empty());
+        assert_eq!(census.owned_process_count, 1);
+    }
+
+    #[test]
+    fn many_subcutoff_foreign_processes_remain_visible_in_aggregate() {
+        let observations = (100..112)
+            .map(|pid| live(pid, &format!("token-{pid}"), 3 * GIB + GIB / 2))
+            .collect();
+        let census = classify_foreign_samples(
+            host(),
+            observations,
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert_eq!(census.total_foreign_private_commit_bytes, 42 * GIB);
+        assert!(census.named_foreign_processes.is_empty());
+    }
+
+    #[test]
+    fn foreign_private_commit_sum_overflow_fails_closed() {
+        let result = classify_foreign_samples(
+            host(),
+            vec![live(201, "one", u64::MAX), live(202, "two", 1)],
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        );
+
+        assert!(matches!(
+            foreign_pressure_state_from_sample(result),
+            ForeignPressureState::ProbeFailed
+        ));
+    }
+
+    #[test]
+    fn exited_process_during_enumeration_keeps_census_complete() {
+        let census = classify_foreign_samples(
+            host(),
+            vec![ProcessCensusObservation::Exited(ProcessExitObservation {
+                pid: 301,
+                phase: "enumeration".into(),
+                win32_code: 87,
+            })],
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert!(census.probe_complete);
+        assert_eq!(census.total_foreign_private_commit_bytes, 0);
+        assert_eq!(census.exited_processes[0].win32_code, 87);
+    }
+
+    #[test]
+    fn unreadable_live_process_makes_census_incomplete() {
+        let census = classify_foreign_samples(
+            host(),
+            vec![ProcessCensusObservation::Unreadable(ProcessReadFailure {
+                pid: 302,
+                phase: "enumeration".into(),
+                win32_code: 5,
+            })],
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert!(!census.probe_complete);
+        assert_eq!(
+            foreign_pressure_transition(&census),
+            ForeignPressureState::ProbeFailed
+        );
+        assert_eq!(census.unreadable_processes[0].win32_code, 5);
+    }
+
+    #[test]
+    fn named_process_exit_during_production_probe_is_recorded_and_dropped() {
+        let census = classify_foreign_samples(
+            host(),
+            vec![ProcessCensusObservation::Exited(ProcessExitObservation {
+                pid: 303,
+                phase: "named_process_end_probe".into(),
+                win32_code: 87,
+            })],
+            &BTreeMap::from([(
+                303,
+                GpuComputeSample {
+                    bytes: Some(128 * 1024 * 1024),
+                    unavailable_token: None,
+                },
+            )]),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert!(census.probe_complete);
+        assert!(census.named_foreign_processes.is_empty());
+        assert_eq!(
+            census.exited_processes[0].phase,
+            "named_process_end_probe"
+        );
+    }
+
+    #[test]
+    fn named_pid_reuse_makes_census_incomplete() {
+        let census = classify_foreign_samples(
+            host(),
+            vec![ProcessCensusObservation::IdentityConflict(
+                ProcessIdentityConflict {
+                    pid: 304,
+                    expected_start_token: "old".into(),
+                    observed_start_token: "new".into(),
+                    phase: "named_process_end_probe".into(),
+                    win32_code: 0,
+                },
+            )],
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert!(!census.probe_complete);
+        assert_eq!(census.identity_conflicts[0].expected_start_token, "old");
+        assert_eq!(census.identity_conflicts[0].observed_start_token, "new");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn foreign_process_open_mask_is_query_and_synchronize_only() {
+        use windows_sys::Win32::System::Threading::PROCESS_QUERY_LIMITED_INFORMATION;
+        const SYNCHRONIZE_RIGHT: u32 = 0x0010_0000;
+
+        assert_eq!(
+            FOREIGN_PROCESS_OPEN_ACCESS_MASK,
+            PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT
+        );
+    }
+}
+
+#[cfg(all(test, windows))]
+mod foreign_process_provider_integration_tests {
+    use super::*;
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    #[test]
+    fn integration_foreign_fixture_survives_same_identity() {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut child = Command::new("cmd.exe")
+            .args(["/d", "/s", "/c", "ping -n 20 127.0.0.1 >nul"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+
+        let result = (|| -> Result<()> {
+            let start_token = process_start_token(pid)?;
+            let (_, observations, _) = probe_windows_process_observations(&[])?;
+            assert!(observations.iter().any(|observation| matches!(
+                observation,
+                ProcessCensusObservation::Live(sample)
+                    if sample.pid == pid && sample.process_start_token == start_token
+            )));
+
+            let _census = sample_windows_foreign_process_census(&[])?;
+            assert_eq!(process_start_token(pid)?, start_token);
+            assert!(child.try_wait()?.is_none());
+            Ok(())
+        })();
+
+        let _ = child.kill();
+        let _ = child.wait();
+        result.unwrap();
     }
 }
 
@@ -9686,6 +10925,7 @@ fn spawn_resource_guard_monitor(
     log_dir: PathBuf,
     shutdown: OwnedHandle,
     ownership: Weak<RwLock<bool>>,
+    foreign_process_provider: Arc<dyn ForeignProcessCensusProvider>,
 ) -> Result<()> {
     std::thread::Builder::new()
         .name("ember-lab-resource-guard".into())
@@ -9712,17 +10952,34 @@ fn spawn_resource_guard_monitor(
                 let Some(db) = db.upgrade() else {
                     break;
                 };
+                let owned_jobs = {
+                    let Ok(conn) = db.lock() else {
+                        break;
+                    };
+                    owned_job_identities_from_connection(&conn)
+                };
+                let observed_at_ms = now_ms();
+                let foreign_process_census = owned_jobs.and_then(|owned_jobs| {
+                    sample_foreign_process_census(
+                        foreign_process_provider.as_ref(),
+                        &owned_jobs,
+                    )
+                });
                 let mut job_ids = {
                     let Ok(conn) = db.lock() else {
                         break;
                     };
-                    if persist_resource_guard_headroom(
+                    let resource_guard_result = persist_resource_guard_headroom(
                         &conn,
-                        now_ms(),
+                        observed_at_ms,
                         probe_host_survival_headroom(),
-                    )
-                    .is_err()
-                    {
+                    );
+                    let foreign_pressure_result = persist_foreign_process_census(
+                        &conn,
+                        observed_at_ms,
+                        foreign_process_census,
+                    );
+                    if resource_guard_result.is_err() || foreign_pressure_result.is_err() {
                         Vec::new()
                     } else {
                         running_job_ids_for_protective_stop(&conn).unwrap_or_default()

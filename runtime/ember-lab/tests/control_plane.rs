@@ -678,6 +678,14 @@ fn fixture_child_process() {
     if std::env::var("EMBER_LAB_FIXTURE_CHILD").as_deref() != Ok("1") {
         return;
     }
+    for key in [
+        "EMBER_LAB_FIXTURE_ARGV_MARKER",
+        "EMBER_LAB_FIXTURE_CHILD_BIRTH_MARKER",
+    ] {
+        if let Some(path) = std::env::var_os(key) {
+            fs::write(path, key.as_bytes()).unwrap();
+        }
+    }
     if std::env::var("EMBER_LAB_MINIMAL_SLICE").as_deref() == Ok("1") {
         let root = PathBuf::from(std::env::var_os("EMBER_LAB_PHASE_OUTPUT_ROOT").unwrap());
         let job_id = std::env::var("EMBER_LAB_MINIMAL_SLICE_JOB_ID").unwrap();
@@ -722,6 +730,192 @@ fn fixture_child_process() {
         return;
     }
     thread::sleep(Duration::from_millis(sleep_ms));
+}
+
+#[test]
+fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_both_guards() {
+    let root = sandbox("foreign-pressure-dispatch-refusal");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    let pressure_observation = json!({
+        "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+        "result": "FENCED",
+        "observed_at_ms": 77,
+        "foreign_process_control": false,
+    });
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute(
+        "UPDATE foreign_process_pressure_state SET state='fenced',observed_at_ms=77,observation_json=?1 WHERE singleton=1",
+        [pressure_observation.to_string()],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE resource_guard_state SET admission_state='frozen',reason='preexisting_sticky_guard',observed_at_ms=76,oracle_evidence_required=1,observation_json=?1 WHERE singleton=1",
+        [json!({"result":"FROZEN"}).to_string()],
+    )
+    .unwrap();
+    drop(conn);
+
+    let argv_marker = root.join("must-not-build-argv.marker");
+    let child_birth_marker = root.join("must-not-birth-child.marker");
+    let manifest = write_restore_manifest(&root, "foreign-pressure-refused-job");
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_FIXTURE_ARGV_MARKER"] =
+        Value::String(argv_marker.to_string_lossy().into_owned());
+    payload["env"]["EMBER_LAB_FIXTURE_CHILD_BIRTH_MARKER"] =
+        Value::String(child_birth_marker.to_string_lossy().into_owned());
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64,
+            |_root| Ok(16 * 1024 * 1024 * 1024),
+            || Ok(2 * 1024 * 1024 * 1024),
+            || Ok(test_host_capacity()),
+        )
+        .unwrap_err();
+    assert!(matches!(error, EmberLabError::ResourceAdmissionFrozen { .. }));
+    assert!(!argv_marker.exists());
+    assert!(!child_birth_marker.exists());
+    assert_eq!(daemon.job_state("foreign-pressure-refused-job").unwrap(), None);
+
+    let receipt_path = PathBuf::from(payload["preflight_receipt"].as_str().unwrap());
+    let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "REFUSED_FOREIGN_PROCESS_PRESSURE");
+    assert_eq!(receipt["resource_guard"]["admission_state"], "frozen");
+    assert_eq!(receipt["resource_guard"]["reason"], "preexisting_sticky_guard");
+    assert_eq!(receipt["foreign_process_pressure"]["state"], "fenced");
+    assert_eq!(
+        receipt["foreign_process_pressure"]["observation"],
+        pressure_observation
+    );
+}
+
+fn set_foreign_pressure_state(db: &Path, state: &str, result: &str) {
+    let observation = json!({
+        "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+        "result": result,
+        "observed_at_ms": 88,
+        "foreign_process_control": false,
+    });
+    rusqlite::Connection::open(db)
+        .unwrap()
+        .execute(
+            "UPDATE foreign_process_pressure_state SET state=?1,observed_at_ms=88,observation_json=?2 WHERE singleton=1",
+            rusqlite::params![state, observation.to_string()],
+        )
+        .unwrap();
+}
+
+fn dispatch_pressure_fixture(
+    root: &Path,
+    daemon: &Daemon,
+    job_id: &str,
+) -> (std::result::Result<ember_lab::DispatchOutcome, EmberLabError>, PathBuf, PathBuf, Value) {
+    let argv_marker = root.join(format!("{job_id}-argv.marker"));
+    let child_birth_marker = root.join(format!("{job_id}-birth.marker"));
+    let manifest = write_restore_manifest(root, job_id);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_FIXTURE_ARGV_MARKER"] =
+        Value::String(argv_marker.to_string_lossy().into_owned());
+    payload["env"]["EMBER_LAB_FIXTURE_CHILD_BIRTH_MARKER"] =
+        Value::String(child_birth_marker.to_string_lossy().into_owned());
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64,
+        |_root| Ok(16 * 1024 * 1024 * 1024),
+        || Ok(2 * 1024 * 1024 * 1024),
+        || Ok(test_host_capacity()),
+    );
+    (result, argv_marker, child_birth_marker, payload)
+}
+
+#[test]
+fn fenced_foreign_pressure_alone_refuses_before_process_birth() {
+    let root = sandbox("foreign-pressure-only-fenced");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    set_foreign_pressure_state(&db, "fenced", "FENCED");
+
+    let (result, argv_marker, child_birth_marker, payload) =
+        dispatch_pressure_fixture(&root, &daemon, "foreign-pressure-only-fenced-job");
+    if result.is_ok() {
+        daemon.stop_job("foreign-pressure-only-fenced-job").unwrap();
+    }
+    assert!(matches!(result, Err(EmberLabError::ResourceAdmissionFrozen { .. })));
+    assert!(!argv_marker.exists());
+    assert!(!child_birth_marker.exists());
+    assert_eq!(daemon.job_state("foreign-pressure-only-fenced-job").unwrap(), None);
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(payload["preflight_receipt"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_FOREIGN_PROCESS_PRESSURE");
+    assert_eq!(receipt["resource_guard"]["admission_state"], "open");
+    assert_eq!(receipt["foreign_process_pressure"]["state"], "fenced");
+}
+
+#[test]
+fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
+    let root = sandbox("foreign-pressure-only-probe-failed");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    set_foreign_pressure_state(&db, "probe_failed", "PROBE_FAILED");
+
+    let (result, argv_marker, child_birth_marker, payload) =
+        dispatch_pressure_fixture(&root, &daemon, "foreign-pressure-only-probe-failed-job");
+    if result.is_ok() {
+        daemon
+            .stop_job("foreign-pressure-only-probe-failed-job")
+            .unwrap();
+    }
+    assert!(matches!(result, Err(EmberLabError::ResourceAdmissionFrozen { .. })));
+    assert!(!argv_marker.exists());
+    assert!(!child_birth_marker.exists());
+    assert_eq!(
+        daemon
+            .job_state("foreign-pressure-only-probe-failed-job")
+            .unwrap(),
+        None
+    );
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(payload["preflight_receipt"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_FOREIGN_PROCESS_PRESSURE");
+    assert_eq!(receipt["resource_guard"]["admission_state"], "open");
+    assert_eq!(receipt["foreign_process_pressure"]["state"], "probe_failed");
+}
+
+#[cfg(windows)]
+#[test]
+fn observed_foreign_processes_with_healthy_host_allow_dispatch() {
+    let root = sandbox("foreign-pressure-observed-admits");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    set_foreign_pressure_state(&db, "observed", "OBSERVED");
+
+    let (result, argv_marker, child_birth_marker, _) =
+        dispatch_pressure_fixture(&root, &daemon, "foreign-pressure-observed-job");
+    let outcome = result.unwrap();
+    assert!(outcome.handle.pid > 0);
+    for _ in 0..200 {
+        if argv_marker.exists() && child_birth_marker.exists() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(argv_marker.exists());
+    assert!(child_birth_marker.exists());
+    daemon.stop_job("foreign-pressure-observed-job").unwrap();
 }
 
 #[cfg(windows)]

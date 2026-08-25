@@ -22,6 +22,72 @@ fn temp_root(name: &str) -> PathBuf {
     root
 }
 
+#[test]
+fn fresh_database_schema_seven_contains_foreign_pressure_tables() {
+    let root = temp_root("foreign-pressure-schema");
+    let db = root.join("ember-lab.sqlite3");
+    drop(Daemon::open(&db).unwrap());
+
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    let version: String = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key='schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, "7");
+
+    let tables: Vec<String> = conn
+        .prepare(
+            "SELECT name FROM sqlite_master
+             WHERE type='table' AND name LIKE 'foreign_process_pressure_%'
+             ORDER BY name",
+        )
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        tables,
+        vec![
+            "foreign_process_pressure_observations".to_string(),
+            "foreign_process_pressure_state".to_string(),
+        ]
+    );
+
+    let observation_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM foreign_process_pressure_observations",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(observation_count, 0);
+
+    let seed: (String, i64, String) = conn
+        .query_row(
+            "SELECT state,observed_at_ms,observation_json
+             FROM foreign_process_pressure_state WHERE singleton=1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(seed.0, "probe_failed");
+    assert_eq!(seed.1, 0);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&seed.2).unwrap(),
+        json!({
+            "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+            "result": "NOT_YET_SAMPLED",
+        })
+    );
+
+    drop(conn);
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn minimal_manifest_bytes() -> Vec<u8> {
     let source_id = "source:courtlistener:2026-08-08";
     let object_sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

@@ -100,9 +100,10 @@ Every complete observation records
 `total_foreign_private_commit_bytes`, the checked sum of `PrivateUsage` for all
 enumerated user processes that are not members of an active Ember Lab-owned Job
 Object. This includes values below 4 GiB. PID 0 and PID 4 are explicitly recorded
-as excluded kernel pseudo-processes; any other enumerated PID whose identity or
-private-commit counter cannot be read makes the census incomplete and fail
-closed rather than silently lowering the aggregate.
+as excluded kernel pseudo-processes. An ordinary exited PID is recorded without
+making the census incomplete; any live/unknown PID whose identity or
+private-commit counter cannot be read fails closed rather than silently lowering
+the aggregate.
 
 The host fence and process aggregate are the same *kind* of quantity—commit—but
 they are not expected to be numerically equal. `CommitTotal` includes kernel and
@@ -114,15 +115,24 @@ from the host counter proves causation.
 
 One census tick performs these steps:
 
-1. Read the host commit sample with `GetPerformanceInfo`.
+1. Read one host commit sample with `GetPerformanceInfo` and share that exact
+   sample with the sticky survival guard. The pressure state and survival state
+   for one tick must never bind different host readings.
 2. Enumerate process IDs with `K32EnumProcesses`, resizing until the returned
    buffer is demonstrably complete.
 3. Read NVIDIA compute-app PIDs and used GPU bytes through the existing
    `nvidia-smi --query-compute-apps=pid,used_gpu_memory` provider path. Provider
    failure makes the census incomplete; an empty successful result is valid.
-4. Open each non-kernel process with `PROCESS_QUERY_LIMITED_INFORMATION |
-   SYNCHRONIZE`. Read its creation time with `GetProcessTimes` and private commit with
-   `K32GetProcessMemoryInfo(...).PrivateUsage`.
+4. Open each non-kernel PID with `PROCESS_QUERY_LIMITED_INFORMATION |
+   SYNCHRONIZE`. A successful open is sampled with `GetProcessTimes` and
+   `K32GetProcessMemoryInfo(...).PrivateUsage`. If `GetProcessTimes` reports a
+   nonzero exit time, record `exited_during_enumeration` with the PID and Win32
+   classification code; the census remains complete and the process contributes
+   no live private commit. `ERROR_INVALID_PARAMETER` (87) from `OpenProcess`
+   against a PID that no longer exists is the same exited class.
+   `ERROR_ACCESS_DENIED` (5) is `unreadable_live_process`; every other code
+   defaults to that unreadable/incomplete class. An unrecognized code never
+   enters the benign exited class. Never cure denial by widening the access mask.
 5. Snapshot the active Ember Lab owned Job Objects from persisted jobs and
    retained handles. Classify a process as owned only when `IsProcessInJob`
    returns true for one of those exact Job Object handles. A matching executable
@@ -130,14 +140,23 @@ One census tick performs these steps:
 6. Sum all non-owned private commit and name every non-owned PID that either has
    an NVIDIA compute context or has private commit greater than or equal to
    4 GiB.
-7. Immediately re-open every named PID by PID and require the same creation-time
-   token at the end of the probe. A missing or changed identity makes the probe
-   fail. A successful probe positively asserts that every named foreign identity
-   remained alive through probe completion.
+7. Immediately re-open every named PID with the same access mask. In a production
+   tick, a missing or exited identity records
+   `named_process_exited_during_probe` with the exact Win32 code and is removed
+   from the terminal named set because its commit is gone. A successful re-open
+   with a different creation token records `pid_reused_identity_conflict` and
+   makes the census incomplete. A still-live same-token identity records
+   `survived_probe: true`. In the integration probe, the test-created fixture
+   must remain the same live identity through probe completion; exit is a hard
+   test failure. The production rule does not weaken that non-control proof.
 
 Named rows are ordered by PID then creation-time token so receipt hashes and
 tests are deterministic. A PID without a stable creation token is never
 silently admitted as an identity.
+
+Exited identities produce only `ProcessExitObservation`; they never become a
+`ProcessCommitSample`. Exclusion from the aggregate is therefore guaranteed by
+the types rather than by a caller remembering to inspect an exit flag.
 
 ## State, observations, and admission
 
@@ -148,6 +167,10 @@ Migration adds:
   and observation timestamp; and
 - `foreign_process_pressure_observations`, an append-only bounded ledger with
   outcome and exact JSON payload.
+
+The two tables and `CURRENT_DATABASE_SCHEMA_VERSION = 7` land in the same
+migration transaction. A version-6 database never contains the L7 tables, and a
+version-7 database always does.
 
 Each payload uses schema `ember-lab-foreign-process-pressure-observation-v1`
 and carries:
@@ -160,8 +183,10 @@ and carries:
 - ordered named foreign identities with PID, creation token, private commit,
   GPU bytes when present, provider, and candidate classes;
 - owned Job Object identities considered during classification;
-- probe completeness, end-of-probe survival result, and any unreadable or
-  identity-conflict rows; and
+- `exited_during_enumeration` and `named_process_exited_during_probe` PID/code
+  rows, `unreadable_live_process` PID/code rows, and
+  `pid_reused_identity_conflict` rows with old/new creation tokens and code;
+- probe completeness and each terminal named identity's `survived_probe`; and
 - `foreign_process_control: false` and the counter claim boundary.
 
 State transitions are atomic with the observation insert:
@@ -171,8 +196,12 @@ State transitions are atomic with the observation insert:
   (detection evidence without a fence);
 - complete sample, headroom below the floor: `fenced`, regardless of whether
   the 4 GiB named set is empty; and
-- incomplete enumeration, provider, counter, identity, membership, or survival
-  check: `probe_failed` and fail-closed admission.
+- incomplete enumeration, provider, counter, live/unknown identity read,
+  membership, or PID-reuse check: `probe_failed` and fail-closed admission.
+
+Ordinary exit is evidence, not incompleteness. Live/unknown unreadability and
+PID reuse are incompleteness. Every classification carries the Win32 code that
+selected it.
 
 The first complete sample at or above the floor transitions `fenced` or
 `probe_failed` to `clear`/`observed`. This is the pressure-clear rule. It does
@@ -229,11 +258,14 @@ RED tests are written before implementation for:
 - foreign GPU-compute PID below 4 GiB: named by GPU class;
 - complete healthy sample after pressure: pressure state clears/observes while
   sticky survival state is unchanged;
-- any non-kernel unreadable PID, provider failure, aggregate overflow, PID reuse,
-  or named-process death: `probe_failed` and admission refused;
+- ordinary process exit during enumeration or a production probe: recorded by
+  PID/code while the census remains complete;
+- any non-kernel live/unknown unreadable PID, provider failure, aggregate
+  overflow, or PID reuse: `probe_failed` and admission refused;
 - an owned Job Object member excluded from the foreign aggregate and named set;
-- foreign process handles never requesting terminate/control rights and a
-  positive probe-end survival assertion;
+- `foreign_process_open_mask_is_query_and_synchronize_only`, asserting the named
+  access-mask constant is exactly `PROCESS_QUERY_LIMITED_INFORMATION |
+  SYNCHRONIZE`, plus a positive integration probe-end survival assertion;
 - dispatch refusal before argv construction/spawn for current `fenced` and
   `probe_failed` rows; and
 - owned-orphan receipt persistence before termination, second immediate identity
