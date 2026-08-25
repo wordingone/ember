@@ -312,9 +312,40 @@ jobs:
             }
           }
 
+          function Assert-UsageNamesDuringTargetRecreate(
+              [object] $Snapshot,
+              [string[]] $ExpectedNames,
+              [string] $TargetName) {
+            $targetRows = @($Snapshot.pagefile_usage | Where-Object {
+              $_.Name -ieq $TargetName
+            })
+            if ($targetRows.Count -gt 1) {
+              throw "target recreation observed duplicate active rows for ${TargetName}: $($targetRows.Count)"
+            }
+            $actualNonTarget = [string[]]@($Snapshot.pagefile_usage | Where-Object {
+              $_.Name -ine $TargetName
+            } | ForEach-Object {
+              ([string]$_.Name).ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $expectedNonTarget = [string[]]@($ExpectedNames | Where-Object {
+              $_ -ine $TargetName
+            } | ForEach-Object {
+              $_.ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $difference = @(
+              Compare-Object -ReferenceObject $expectedNonTarget -DifferenceObject $actualNonTarget
+            )
+            if ($difference.Count -ne 0) {
+              throw "non-target pagefile topology changed during target recreation: $($difference | ConvertTo-Json -Compress)"
+            }
+          }
+
           function Assert-FinalPinnedTopology([object] $Snapshot) {
             $usageRows = @($Snapshot.pagefile_usage)
             $settingRows = @($Snapshot.pagefile_settings)
+            if ([bool]$Snapshot.automatic_managed_pagefile) {
+              throw 'final topology still has automatic pagefile management enabled'
+            }
             if ($usageRows.Count -eq 0) { throw 'final active pagefile census is empty' }
             if ($usageRows.Count -ne $settingRows.Count) {
               throw "final usage/setting count mismatch: usage=$($usageRows.Count) settings=$($settingRows.Count)"
@@ -428,25 +459,36 @@ jobs:
                  [uint32]$targetSnapshotSettings[0].MaximumSize -ne [uint32]$targetLiveSettings[0].MaximumSize)) {
               throw "target setting values changed before pinning $pagefileName"
             }
-            $wroteTargetPin = $false
-            if ($targetLiveSettings.Count -eq 0) {
+            $createdTargetPin = $false
+            $recreateTargetPin = $targetLiveSettings.Count -eq 1 -and
+              ([uint32]$targetLiveSettings[0].InitialSize -ne $fixedMiB -or
+               [uint32]$targetLiveSettings[0].MaximumSize -ne $fixedMiB)
+            if ($recreateTargetPin) {
+              Remove-CimInstance -InputObject $targetLiveSettings[0]
+              $current = Get-CapabilitySnapshot 'AFTER_TARGET_DELETE'
+              $mutationSnapshots += $current
+              Assert-UsageNamesDuringTargetRecreate $current $expectedNames $pagefileName
+              $remainingTargetSettings = @(Get-SettingRows $current $pagefileName)
+              if ($remainingTargetSettings.Count -ne 0) {
+                throw "target setting remained after target-only delete: $($remainingTargetSettings.Count)"
+              }
               New-CimInstance -ClassName Win32_PageFileSetting -Property @{
                 Name = $pagefileName
                 InitialSize = $fixedMiB
                 MaximumSize = $fixedMiB
               } | Out-Null
-              $expectedNames = [string[]]@($expectedNames + $pagefileName)
-              $wroteTargetPin = $true
-            } elseif ([uint32]$targetLiveSettings[0].InitialSize -ne $fixedMiB -or
-                [uint32]$targetLiveSettings[0].MaximumSize -ne $fixedMiB) {
-              Set-CimInstance -InputObject $targetLiveSettings[0] -Property @{
+              $createdTargetPin = $true
+            } elseif ($targetLiveSettings.Count -eq 0) {
+              New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                Name = $pagefileName
                 InitialSize = $fixedMiB
                 MaximumSize = $fixedMiB
               } | Out-Null
-              $wroteTargetPin = $true
+              $createdTargetPin = $true
             }
-            if ($wroteTargetPin) {
-              $current = Get-CapabilitySnapshot 'AFTER_TARGET_PIN'
+            if ($createdTargetPin) {
+              $expectedNames = [string[]]@($expectedNames + $pagefileName | Sort-Object -Unique)
+              $current = Get-CapabilitySnapshot 'AFTER_TARGET_CREATE'
               $mutationSnapshots += $current
               Assert-UsageNames $current $expectedNames
             }
