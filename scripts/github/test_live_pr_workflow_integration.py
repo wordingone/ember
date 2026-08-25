@@ -35,10 +35,9 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertIn("python -m scripts.github.live_pr_policy", workflow)
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
-        # Every job that checks out does so at the exact PR head, never a moving
-        # branch ref. Asserted over the parsed steps rather than as a count of
-        # matching lines, so adding a job cannot drift the invariant and a correct
-        # new job does not have to bump a magic number.
+        # Every required job that checks out does so at the exact PR head,
+        # never a moving branch ref. The exact roster is a deliberate allowlist:
+        # a required checkout job disappearing must fail this integration test.
         checkouts = [
             (name, step.get("with", {}).get("ref"))
             for name, job in yaml.safe_load(workflow)["jobs"].items()
@@ -49,6 +48,7 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
             {
                 "python",
                 "rust",
+                "rust-linux-compile",
                 "cli",
                 "launcher",
                 "production-rung-replay",
