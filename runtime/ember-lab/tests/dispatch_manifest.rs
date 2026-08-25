@@ -1989,6 +1989,8 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
     assert_eq!(receipt["result"], "REFUSED_RESOURCE_GUARD_FROZEN");
     assert_eq!(receipt["resource_guard"]["admission_state"], "frozen");
     assert_eq!(receipt["resource_guard"]["oracle_evidence_required"], true);
+    assert_eq!(receipt["foreign_process_pressure_refusal"], false);
+    assert!(receipt.get("foreign_process_pressure").is_none());
     let refusal_path = root.join("custody").join("preflight.json");
     let refusal_before = fs::read(&refusal_path).unwrap();
     fs::remove_file(&refusal_path).unwrap();
@@ -2003,6 +2005,20 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
             10_000,
         )
         .is_err());
+    Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE foreign_process_pressure_state
+             SET state='clear',observed_at_ms=20001,observation_json=?1
+             WHERE singleton=1",
+            [json!({
+                "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+                "result": "CLEAR",
+                "test_marker": "changed_between_sticky_refusals"
+            })
+            .to_string()],
+        )
+        .unwrap();
     assert!(daemon
         .dispatch_manifest_at_with_probes_and_host(
             &manifest,

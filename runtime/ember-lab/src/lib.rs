@@ -4267,7 +4267,7 @@ impl Daemon {
                 "observed_at_ms": observed_at_ms,
                 "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
                 "resource_guard": resource_guard,
-                "foreign_process_pressure": foreign_process_pressure,
+                "foreign_process_pressure_refusal": false,
             });
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
             return Err(EmberLabError::ResourceAdmissionFrozen {
