@@ -114,22 +114,46 @@ jobs:
             Select-Object Name, InitialSize, MaximumSize)
           Write-Output ('PAGEFILE_SETTINGS=' + ($settings | ConvertTo-Json -Compress -Depth 4))
           $runtime = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            throw "pagefile capability helper exited $LASTEXITCODE"
+          }
           Write-Output ('RUNTIME_CAPABILITY=' + $runtime)
           Remove-Item -LiteralPath $example -Force
 
-  mutation-spike:
-    name: "mutation-spike (windows-latest)"
+  mutation-boundary-census:
+    name: "boundary (${{ matrix.mutation_shape }}, ${{ matrix.fixed_mib }} MiB)"
+    strategy:
+      fail-fast: false
+      matrix:
+        mutation_shape:
+          - delete_create
+          - update_existing
+        fixed_mib:
+          - 24576
+          - 20480
+          - 18432
+          - 16384
+          - 14336
+          - 12288
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
 
-      - name: Measure whether a fixed setting changes the live ceiling
+      - name: Measure one pagefile size and mutation shape
         working-directory: runtime/ember-lab
         shell: pwsh
+        env:
+          FIXED_MIB: ${{ matrix.fixed_mib }}
+          MUTATION_SHAPE: ${{ matrix.mutation_shape }}
+          CENSUS_ROOT: ${{ runner.temp }}\issue898-pagefile-boundary-${{ github.run_id }}-${{ matrix.mutation_shape }}-${{ matrix.fixed_mib }}
         run: |
           $ErrorActionPreference = 'Stop'
+          if (Test-Path -LiteralPath $env:CENSUS_ROOT) {
+            throw "no-overwrite census root already exists: $env:CENSUS_ROOT"
+          }
+          [System.IO.Directory]::CreateDirectory($env:CENSUS_ROOT) | Out-Null
+          $resultPath = Join-Path $env:CENSUS_ROOT 'result.json'
           $example = Join-Path $PWD 'examples\issue898_pagefile_capability_probe.rs'
           New-Item -ItemType Directory -Force -Path (Split-Path -Parent $example) | Out-Null
           @'
@@ -200,15 +224,14 @@ jobs:
 
           function Get-CapabilitySnapshot([string] $Phase) {
             $registryPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
-            $raw = @((Get-ItemPropertyValue -LiteralPath $registryPath -Name PagingFiles))
-            Write-Host ("${Phase}_PAGINGFILES_RAW_BEGIN")
-            $raw | ForEach-Object { Write-Host $_ }
-            Write-Host ("${Phase}_PAGINGFILES_RAW_END")
+            $raw = [string[]]@((Get-ItemPropertyValue -LiteralPath $registryPath -Name PagingFiles))
             $computer = Get-CimInstance -ClassName Win32_ComputerSystem
             $settings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
               Select-Object Name, InitialSize, MaximumSize)
             $runtimeText = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($LASTEXITCODE -ne 0) {
+              throw "pagefile capability helper exited $LASTEXITCODE"
+            }
             [pscustomobject]@{
               schema_version = 'ember-issue898-pagefile-capability-snapshot-v1'
               phase = $Phase
@@ -220,85 +243,122 @@ jobs:
           }
 
           $before = Get-CapabilitySnapshot 'BEFORE'
-          Write-Output ('BEFORE_SNAPSHOT=' + ($before | ConvertTo-Json -Compress -Depth 8))
-
           $tempDrive = (Get-Item -LiteralPath $env:RUNNER_TEMP).PSDrive.Root.TrimEnd('\')
           $driveId = $tempDrive.TrimEnd(':') + ':'
           $logicalDisk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$driveId'"
           if ($null -eq $logicalDisk) { throw "no logical disk for RUNNER_TEMP drive $driveId" }
-          $reserveBytes = 4GB
-          $minimumBytes = 4GB
-          $maximumBytes = 24GB
-          $candidateBytes = [uint64]$logicalDisk.FreeSpace - [uint64]$reserveBytes
-          if ($candidateBytes -lt $minimumBytes) {
-            throw "RUNNER_TEMP drive cannot preserve the fixed 4 GiB reserve"
+          $reserveBytes = [uint64]4GB
+          $fixedMiB = [uint32]$env:FIXED_MIB
+          $fixedBytes = [uint64]$fixedMiB * [uint64]1MB
+          if ([uint64]$logicalDisk.FreeSpace -lt $reserveBytes + $fixedBytes) {
+            throw "RUNNER_TEMP drive cannot preserve the fixed 4 GiB reserve at $fixedMiB MiB"
           }
-          $fixedBytes = [Math]::Min([uint64]$candidateBytes, [uint64]$maximumBytes)
-          $fixedMiB = [uint32][Math]::Floor($fixedBytes / 1MB)
-          if ($fixedMiB -lt 4096) { throw "computed fixed pagefile is below 4096 MiB" }
           $pagefileName = "$driveId\pagefile.sys"
-          Write-Output ("MUTATION_PLAN=drive=$driveId fixed_mib=$fixedMiB reserve_bytes=$reserveBytes")
 
-          $computer = Get-CimInstance -ClassName Win32_ComputerSystem
-          Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $false } | Out-Null
-          @(Get-CimInstance -ClassName Win32_PageFileSetting) |
-            ForEach-Object { Remove-CimInstance -InputObject $_ }
-          New-CimInstance -ClassName Win32_PageFileSetting -Property @{
-            Name = $pagefileName
-            InitialSize = $fixedMiB
-            MaximumSize = $fixedMiB
-          } | Out-Null
-
-          $after = Get-CapabilitySnapshot 'AFTER'
-          Write-Output ('AFTER_SNAPSHOT=' + ($after | ConvertTo-Json -Compress -Depth 8))
-
-          $registryFixed = @($after.raw_paging_files).Count -gt 0
-          foreach ($entry in @($after.raw_paging_files)) {
-            $parts = @($entry -split '\s+' | Where-Object { $_ })
-            if ($parts.Count -lt 3 -or
-                $parts[-1] -notmatch '^[1-9][0-9]*$') {
-              $registryFixed = $false
-            }
-          }
-          $liveCeilingMoved =
-            [uint64]$after.runtime.live.commit_limit_bytes -ne
-            [uint64]$before.runtime.live.commit_limit_bytes
-          $runtimeAccepted = $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
-          $fixedPagefileBytes = [uint64]$fixedMiB * 1MB
-          $expectedCommitLimitBytes =
-            [uint64]$after.runtime.live.physical_ram_bytes + $fixedPagefileBytes
-          $actualCommitLimitBytes = [uint64]$after.runtime.live.commit_limit_bytes
-          $commitLimitDeltaBytes = if ($actualCommitLimitBytes -ge $expectedCommitLimitBytes) {
-            $actualCommitLimitBytes - $expectedCommitLimitBytes
-          } else {
-            $expectedCommitLimitBytes - $actualCommitLimitBytes
-          }
-          $commitLimitToleranceBytes = 512MB
-          $liveCeilingMatchesDeclared =
-            $commitLimitDeltaBytes -le $commitLimitToleranceBytes
-          $headline = [pscustomobject]@{
-            schema_version = 'ember-issue898-pagefile-capability-headline-v1'
-            result = if ($registryFixed -and $liveCeilingMoved -and
-                $runtimeAccepted -and $liveCeilingMatchesDeclared) {
-              'LIVE_CEILING_CHANGED'
-            } elseif ($registryFixed -and $runtimeAccepted -and -not $liveCeilingMoved) {
-              'DANGEROUS_FALSE_ACCEPT'
+          $mutationFault = $null
+          try {
+            $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+            Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $false } | Out-Null
+            if ($env:MUTATION_SHAPE -eq 'delete_create') {
+              @(Get-CimInstance -ClassName Win32_PageFileSetting) |
+                ForEach-Object { Remove-CimInstance -InputObject $_ }
+              New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                Name = $pagefileName
+                InitialSize = $fixedMiB
+                MaximumSize = $fixedMiB
+              } | Out-Null
+            } elseif ($env:MUTATION_SHAPE -eq 'update_existing') {
+              $sameDrive = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+                Where-Object { $_.Name -ieq $pagefileName })
+              if ($sameDrive.Count -ne 1) {
+                throw "update_existing requires exactly one $pagefileName setting; observed $($sameDrive.Count)"
+              }
+              Set-CimInstance -InputObject $sameDrive[0] -Property @{
+                InitialSize = $fixedMiB
+                MaximumSize = $fixedMiB
+              } | Out-Null
             } else {
-              'SETTING_NOT_EFFECTIVE'
+              throw "unknown mutation shape: $env:MUTATION_SHAPE"
             }
-            registry_fixed = $registryFixed
-            runtime_accepted = $runtimeAccepted
-            live_commit_limit_changed = $liveCeilingMoved
-            live_commit_limit_matches_declared = $liveCeilingMatchesDeclared
-            physical_ram_bytes = [uint64]$after.runtime.live.physical_ram_bytes
-            fixed_pagefile_bytes = $fixedPagefileBytes
-            expected_commit_limit_bytes = $expectedCommitLimitBytes
-            actual_commit_limit_bytes = $actualCommitLimitBytes
-            commit_limit_delta_bytes = $commitLimitDeltaBytes
-            commit_limit_tolerance_bytes = $commitLimitToleranceBytes
-            before_commit_limit_bytes = [uint64]$before.runtime.live.commit_limit_bytes
-            after_commit_limit_bytes = [uint64]$after.runtime.live.commit_limit_bytes
+          } catch {
+            $mutationFault = $_.Exception.ToString()
           }
-          Write-Output ('HEADLINE=' + ($headline | ConvertTo-Json -Compress -Depth 4))
+
+          $after = $null
+          $snapshotFault = $null
+          try {
+            $after = Get-CapabilitySnapshot 'AFTER'
+          } catch {
+            $snapshotFault = $_.Exception.ToString()
+          }
+          $runtimeAccepted = $null -ne $after -and
+            $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
+          $result = if ($null -ne $mutationFault) {
+            'REFUSED_BY_HOST'
+          } elseif ($null -ne $snapshotFault) {
+            'MEASUREMENT_FAILED'
+          } elseif ($runtimeAccepted) {
+            'ACCEPTED'
+          } else {
+            'FALSE_ACCEPT'
+          }
+          $faultText = if ($null -ne $mutationFault) {
+            $mutationFault
+          } elseif ($null -ne $snapshotFault) {
+            $snapshotFault
+          } elseif (-not $runtimeAccepted) {
+            [string]$after.runtime.runtime_probe.detail
+          } else { $null }
+          $record = [ordered]@{
+            schema_version = 'ember-issue898-pagefile-boundary-census-v1'
+            recorded_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            result = $result
+            fault_text = $faultText
+            mutation_accepted = $null -eq $mutationFault
+            measurement_obtained = $null -ne $after -and $null -eq $snapshotFault
+            mutation_shape = $env:MUTATION_SHAPE
+            requested_pagefile_mib = $fixedMiB
+            requested_pagefile_bytes = $fixedBytes
+            disk_reserve_bytes = $reserveBytes
+            runner_temp_drive = $driveId
+            raw_paging_files_before = $before.raw_paging_files
+            automatic_managed_before = $before.automatic_managed_pagefile
+            before_runtime = $before.runtime
+            raw_paging_files_after = if ($null -ne $after) { $after.raw_paging_files } else { $null }
+            automatic_managed_after = if ($null -ne $after) { $after.automatic_managed_pagefile } else { $null }
+            after_runtime = if ($null -ne $after) { $after.runtime } else { $null }
+            measured_commit_limit_bytes = if ($null -ne $after) {
+              [uint64]$after.runtime.live.commit_limit_bytes
+            } else { $null }
+            measured_commit_total_bytes = if ($null -ne $after) {
+              [uint64]$after.runtime.live.commit_total_bytes
+            } else { $null }
+            measured_commit_remaining_bytes = if ($null -ne $after) {
+              [uint64]$after.runtime.live.commit_remaining_bytes
+            } else { $null }
+            runtime_declared_maximum_commit_capacity_bytes = if ($runtimeAccepted) {
+              [uint64]$after.runtime.runtime_probe.maximum_commit_capacity_bytes
+            } else { $null }
+          }
+          $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes(
+            (($record | ConvertTo-Json -Depth 10) + "`n")
+          )
+          $stream = [System.IO.File]::Open($resultPath, [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+          try {
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Flush($true)
+          } finally {
+            $stream.Dispose()
+          }
+          Write-Output ('BOUNDARY_RESULT=' + ($record | ConvertTo-Json -Compress -Depth 10))
           Remove-Item -LiteralPath $example -Force
-          if ($headline.result -ne 'LIVE_CEILING_CHANGED') { exit 1 }
+
+      - name: Upload boundary census record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue898-pagefile-boundary-${{ github.run_id }}-${{ matrix.mutation_shape }}-${{ matrix.fixed_mib }}
+          path: ${{ runner.temp }}/issue898-pagefile-boundary-${{ github.run_id }}-${{ matrix.mutation_shape }}-${{ matrix.fixed_mib }}
+          if-no-files-found: error
+          retention-days: 30
