@@ -395,6 +395,51 @@ else
   printf '%s\n' "$EMBERD_CHECK_OUT" | sed 's/^/      /'
 fi
 
+# ---- 3c. governed-entry: no launcher-shaped script outside the sanctioned homes ----
+# A governed training run is born through the sanctioned entry homes and nowhere
+# else. A tracked script outside those homes that reaches for the training-segment
+# API is launcher-shaped, and a standalone launcher is exactly the class this
+# check keeps out of the tree.
+#
+# Adjudication is by (path, sha256) PAIR via tools/check_governed_entry_exceptions.py,
+# never by path alone -- a file can be renamed into an exempted prefix, but its
+# digest cannot be forged, and editing an enumerated file un-exempts it so the new
+# behaviour is re-adjudicated rather than inherited.
+#
+# Test paths are excluded by construction: a test that references the training
+# entry is asserting something about it, not starting a run. The sanctioned homes
+# are excluded because that is where a launcher belongs.
+#
+# Byte source follows REPO_GUARD_SCOPE exactly as the check above does: the git
+# INDEX under staged scope, the working tree otherwise. Reading working-tree bytes
+# while committing staged bytes adjudicates content that never lands.
+GOVERNED_ENTRY_RE='run_pretraining_segment|run_selection_pretraining_segment|run_manifest_bound_semantic_segment|run_vertical_slice'
+GOVERNED_ENTRY_PATHSPEC=(
+  -- '*.py' '*.sh'
+  ':(exclude)runtime/ember-lab'
+  ':(exclude)tools/ember-cli'
+  ':(exclude)tools/ember-restart-3b'
+  ':(exclude)tools/check_governed_entry_exceptions.py'
+  ':(exclude)tools/repo-guard.sh'
+  ':(exclude)tests'
+  ':(exclude)scripts/tests'
+  ':(exclude)*/tests/*'
+  ':(exclude)*test_*'
+)
+if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
+  GOVERNED_ENTRY_PATHS="$(git grep --cached -lIE "$GOVERNED_ENTRY_RE" "${GOVERNED_ENTRY_PATHSPEC[@]}" 2>/dev/null || true)"
+else
+  GOVERNED_ENTRY_PATHS="$(git grep -lIE "$GOVERNED_ENTRY_RE" "${GOVERNED_ENTRY_PATHSPEC[@]}" 2>/dev/null || true)"
+fi
+GOVERNED_ENTRY_OUT="$(GOVERNED_ENTRY_PATHS="$GOVERNED_ENTRY_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_governed_entry_exceptions.py" 2>&1)"
+GOVERNED_ENTRY_RC=$?
+if [ "$GOVERNED_ENTRY_RC" -eq 0 ]; then
+  ok "governed-entry" "$(printf '%s' "$GOVERNED_ENTRY_OUT" | head -1)"
+else
+  fail "governed-entry" "launcher-shaped script outside the sanctioned entry homes"
+  printf '%s\n' "$GOVERNED_ENTRY_OUT" | sed 's/^/      /'
+fi
+
 # ---- 4. exactly one old-or-new authority document ------------------------
 AUTHORITY_PATHS_OK=1
 GOAL_REL=""
