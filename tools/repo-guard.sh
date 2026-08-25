@@ -470,6 +470,7 @@ LAUNCHER_MAIN_RE='^if __name__ == .__main__.:'
 LAUNCHER_TRAINER_RE='(Popen|subprocess\.(run|check_call|check_output)|exec[vl]p?)\('
 LAUNCHER_TRAINER_CHILD_RE='run_vertical_slice|certified_train|run_pretraining|torchrun|train\.py|pretrain\.py'
 LAUNCHER_CHILD_RE='(subprocess\.(Popen|run|check_call)|os\.exec[vl]p?|Command::new)'
+LAUNCHER_PS_CHILD_RE='(Start-(Process|Job)([[:space:]]|$)|Invoke-Expression([[:space:]]|$)|(^|[[:space:];|])&[[:space:]]+)'
 LAUNCHER_SHAPE_PATHSPEC=(
   -- '*.py' '*.sh'
   ':(exclude)runtime/ember-lab'
@@ -490,17 +491,36 @@ LAUNCHER_NAMED_PATHSPEC=(
   ':(exclude)*/tests/*'
   ':(exclude)*test_*'
 )
+LAUNCHER_PS_SHAPE_PATHSPEC=(
+  -- '*.ps1'
+  ':(exclude)runtime/ember-lab'
+  ':(exclude)tools/ember-cli'
+  ':(exclude)tests'
+  ':(exclude)scripts/tests'
+  ':(exclude)*/tests/*'
+  ':(exclude)*test_*'
+)
+LAUNCHER_PS_NAMED_PATHSPEC=(
+  -- '*launch*.ps1' '*launcher*.ps1'
+  ':(exclude)runtime/ember-lab'
+  ':(exclude)tools/ember-cli'
+  ':(exclude)tests'
+  ':(exclude)scripts/tests'
+  ':(exclude)*/tests/*'
+  ':(exclude)*test_*'
+)
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   LAUNCHER_GREP=(git grep --cached)
 else
   LAUNCHER_GREP=(git grep)
 fi
 # Arm A: the spawn call and its child name may sit on different lines, so the
-# child name is matched inside a two-line window after the call and the path is
-# recovered from grep's own prefix (which uses '-' as the separator on context
-# lines and ':' on match lines).
+# child name is matched inside a two-line window before or after the call and
+# the path is recovered from grep's own prefix (which uses '-' as the separator
+# on context lines and ':' on match lines). Context options must precede the
+# pattern: anything after `--` is a pathspec and silently provides no window.
 LAUNCHER_SPAWN_PATHS="$(
-  "${LAUNCHER_GREP[@]}" -nIE "$LAUNCHER_TRAINER_RE" "${LAUNCHER_SHAPE_PATHSPEC[@]}" -A2 2>/dev/null \
+  "${LAUNCHER_GREP[@]}" -nIE -B2 -A2 "$LAUNCHER_TRAINER_RE" "${LAUNCHER_SHAPE_PATHSPEC[@]}" 2>/dev/null \
     | grep -iE "$LAUNCHER_TRAINER_CHILD_RE" \
     | sed -E 's/^(.*\.(py|sh))[-:][0-9]+[-:].*/\1/' | sort -u || true
 )"
@@ -510,7 +530,19 @@ LAUNCHER_ARM_A="$(comm -12 <(printf '%s\n' "$LAUNCHER_SPAWN_PATHS") <(printf '%s
 LAUNCHER_NAMED_MAIN="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_MAIN_RE" "${LAUNCHER_NAMED_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
 LAUNCHER_NAMED_CHILD="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_CHILD_RE" "${LAUNCHER_NAMED_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
 LAUNCHER_ARM_B="$(comm -12 <(printf '%s\n' "$LAUNCHER_NAMED_MAIN") <(printf '%s\n' "$LAUNCHER_NAMED_CHILD"))"
-LAUNCHER_SHAPE_PATHS="$(printf '%s\n%s\n' "$LAUNCHER_ARM_A" "$LAUNCHER_ARM_B" | sed '/^$/d' | sort -u)"
+LAUNCHER_PS_SPAWN_PATHS="$(
+  "${LAUNCHER_GREP[@]}" -nIE -B2 -A2 "$LAUNCHER_PS_CHILD_RE" "${LAUNCHER_PS_SHAPE_PATHSPEC[@]}" 2>/dev/null \
+    | grep -iE "$LAUNCHER_TRAINER_CHILD_RE" \
+    | sed -E 's/^(.*\.ps1)[-:][0-9]+[-:].*/\1/I' | sort -u || true
+)"
+LAUNCHER_PS_ARM_B="$(
+  "${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_PS_CHILD_RE" "${LAUNCHER_PS_NAMED_PATHSPEC[@]}" 2>/dev/null \
+    | sort -u || true
+)"
+LAUNCHER_SHAPE_PATHS="$(printf '%s\n%s\n%s\n%s\n' \
+  "$LAUNCHER_ARM_A" "$LAUNCHER_ARM_B" \
+  "$LAUNCHER_PS_SPAWN_PATHS" "$LAUNCHER_PS_ARM_B" \
+  | sed '/^$/d' | sort -u)"
 LAUNCHER_SHAPE_OUT="$(LAUNCHER_SHAPE_PATHS="$LAUNCHER_SHAPE_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_governed_entry_exceptions.py" launcher-shape 2>&1)"
 LAUNCHER_SHAPE_RC=$?
 if [ "$LAUNCHER_SHAPE_RC" -eq 0 ]; then

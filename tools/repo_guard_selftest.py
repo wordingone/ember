@@ -41,6 +41,9 @@ GUARD_SUPPORT_FILES = [
     "tools/check_text_encoding.py",
     "tools/check_executable_redaction_placeholders.py",
     "tools/check_names_hashed.py",
+    "tools/check_governed_entry_exceptions.py",
+    "tools/governed-entry-exceptions.json",
+    "tools/launcher-shape-exceptions.json",
     _LEGACY_CHECKER_REL,
     _LEGACY_POLICY_REL,
     "scripts/verify_authority_conservation.py",
@@ -1374,6 +1377,57 @@ def test_red_pr_merge_still_rejects_branch_goal_evidence_commit():
         cleanup(tmp)
 
 
+def test_red_powershell_launcher_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-launcher")
+    try:
+        (tmp / "scripts" / "operator-resident.ps1").write_text(
+            "Start-Process -FilePath 'train.py'\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-resident.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_launcher_shape_preceding_assignment():
+    tmp = make_fixture("fix/selftest-red-powershell-launcher-preceding")
+    try:
+        (tmp / "scripts" / "operator-daemon.ps1").write_text(
+            "$script = 'train.py'\nStart-Process -FilePath $script\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-daemon.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_named_launcher_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-named-launcher")
+    try:
+        (tmp / "scripts" / "operator-launch.ps1").write_text(
+            "Start-Process -FilePath 'notepad.exe'\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-launch.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -1418,6 +1472,9 @@ ALL_TESTS = [
     test_green_pr_merge_excludes_live_base_squash_commit,
     test_red_pr_merge_still_rejects_branch_goal_evidence_commit,
     test_red_line_endings_staged_bypass_worktree_restore,
+    test_red_powershell_launcher_shape,
+    test_red_powershell_launcher_shape_preceding_assignment,
+    test_red_powershell_named_launcher_shape,
 ]
 
 
