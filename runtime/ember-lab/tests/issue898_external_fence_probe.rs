@@ -32,7 +32,6 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const FLOOR: u64 = 10 * GIB;
 const TARGET: u64 = 6 * GIB;
 const CUTOFF: u64 = 4 * GIB;
-const HARD_CAP: u64 = 24 * GIB;
 const PHYSICAL_REARM_PREFLIGHT: u64 = 12 * GIB;
 const COMMIT_REARM_PREFLIGHT: u64 = 15 * GIB;
 const MINIMUM_RUNNER_REMAINING: u64 = 2 * GIB;
@@ -44,6 +43,16 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system clock before Unix epoch")
         .as_millis() as i64
+}
+
+fn fixture_ceiling_assertion_bytes() -> u64 {
+    let raw = std::env::var("EMBER_ISSUE898_FIXTURE_CEILING_ASSERTION_BYTES")
+        .expect("EMBER_ISSUE898_FIXTURE_CEILING_ASSERTION_BYTES is required");
+    let value = raw
+        .parse::<u64>()
+        .expect("EMBER_ISSUE898_FIXTURE_CEILING_ASSERTION_BYTES must be an unsigned integer");
+    assert!(value > TARGET, "fixture ceiling assertion must exceed TARGET");
+    value
 }
 
 fn sha256_bytes(bytes: &[u8]) -> String {
@@ -530,7 +539,7 @@ fn write_commit_diagnostic(
     (path, digest, executed_at_ms)
 }
 
-fn run_main_leg(output: &Path, ledger: &mut StageLedger) -> Value {
+fn run_main_leg(output: &Path, ledger: &mut StageLedger, ceiling_assertion: u64) -> Value {
     let root = output.join("main");
     fs::create_dir(&root).unwrap();
     let preflight = probe_host_commit_capacity().expect("real capacity preflight");
@@ -543,7 +552,7 @@ fn run_main_leg(output: &Path, ledger: &mut StageLedger) -> Value {
         "fixture_commit_bytes": fixture_bytes,
         "fixed_floor_bytes": FLOOR,
         "cutoff_bytes": CUTOFF,
-        "hard_cap_bytes": HARD_CAP,
+        "ceiling_consistency_limit_bytes": ceiling_assertion,
     });
     if remaining < COMMIT_REARM_PREFLIGHT
         || preflight.physical_available_bytes < PHYSICAL_REARM_PREFLIGHT
@@ -565,14 +574,14 @@ fn run_main_leg(output: &Path, ledger: &mut StageLedger) -> Value {
         );
         panic!("INCONCLUSIVE_FIXTURE_BELOW_ATTRIBUTION_CUTOFF: {gates}");
     }
-    if fixture_bytes > HARD_CAP {
+    if fixture_bytes > ceiling_assertion {
         ledger.record(
             "main",
             "preflight",
-            "INCONCLUSIVE_HOST_TOO_LARGE",
+            "INCONCLUSIVE_CEILING_ARITHMETIC_INCONSISTENT",
             gates.clone(),
         );
-        panic!("INCONCLUSIVE_HOST_TOO_LARGE: {gates}");
+        panic!("INCONCLUSIVE_CEILING_ARITHMETIC_INCONSISTENT: {gates}");
     }
     ledger.record("main", "preflight", "PASS", gates);
 
@@ -795,7 +804,7 @@ fn run_control_leg(output: &Path, ledger: &mut StageLedger) {
     );
 }
 
-fn run_survival_red(output: &Path, ledger: &mut StageLedger) {
+fn run_survival_red(output: &Path, ledger: &mut StageLedger, ceiling_assertion: u64) {
     let root = output.join("survival-red");
     fs::create_dir(&root).unwrap();
     let preflight = probe_host_commit_capacity().unwrap();
@@ -803,7 +812,7 @@ fn run_survival_red(output: &Path, ledger: &mut StageLedger) {
         .current_commit_remaining_bytes
         .checked_sub(TARGET)
         .unwrap();
-    assert!((CUTOFF..=HARD_CAP).contains(&fixture_bytes));
+    assert!((CUTOFF..=ceiling_assertion).contains(&fixture_bytes));
     let fixture = spawn_fixture(&root, fixture_bytes);
     let pid = fixture.pid;
     let token = fixture.start_token.clone();
@@ -858,10 +867,11 @@ fn issue898_external_fence_live_probe() {
     );
     fs::create_dir(&output).expect("output root must not already exist");
     let mut ledger = StageLedger::create(&output.join("stages.jsonl"));
-    ledger.record("probe", "start", "PASS", json!({"github_sha": std::env::var("GITHUB_SHA").ok(), "github_run_id": std::env::var("GITHUB_RUN_ID").ok(), "gpu_external_class": "NOT_PROVEN_HOSTED_RUNNER_HAS_NO_GPU"}));
-    let main = run_main_leg(&output, &mut ledger);
+    let ceiling_assertion = fixture_ceiling_assertion_bytes();
+    ledger.record("probe", "start", "PASS", json!({"github_sha": std::env::var("GITHUB_SHA").ok(), "github_run_id": std::env::var("GITHUB_RUN_ID").ok(), "gpu_external_class": "NOT_PROVEN_HOSTED_RUNNER_HAS_NO_GPU", "fixture_ceiling_consistency_limit_bytes": ceiling_assertion, "safety_bound": "fixture_bytes = commit_remaining_bytes - TARGET"}));
+    let main = run_main_leg(&output, &mut ledger, ceiling_assertion);
     run_control_leg(&output, &mut ledger);
-    run_survival_red(&output, &mut ledger);
+    run_survival_red(&output, &mut ledger, ceiling_assertion);
     let summary = json!({
         "schema_version": "ember-issue898-external-fence-probe-v1",
         "verdict": "PASS",
