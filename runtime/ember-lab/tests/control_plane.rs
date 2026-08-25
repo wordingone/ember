@@ -756,6 +756,7 @@ fn fixture_child_process() {
     thread::sleep(Duration::from_millis(sleep_ms));
 }
 
+#[cfg(windows)]
 #[test]
 fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_both_guards() {
     let root = sandbox("foreign-pressure-dispatch-refusal");
@@ -879,6 +880,7 @@ fn dispatch_pressure_fixture(
     (result, argv_marker, child_birth_marker, payload)
 }
 
+#[cfg(windows)]
 #[test]
 fn fenced_foreign_pressure_alone_refuses_before_process_birth() {
     let root = sandbox("foreign-pressure-only-fenced");
@@ -915,6 +917,7 @@ fn fenced_foreign_pressure_alone_refuses_before_process_birth() {
     assert_eq!(receipt["foreign_process_pressure"]["state"], "fenced");
 }
 
+#[cfg(windows)]
 #[test]
 fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
     let root = sandbox("foreign-pressure-only-probe-failed");
@@ -962,6 +965,7 @@ fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
     );
 }
 
+#[cfg(windows)]
 #[test]
 fn malformed_foreign_pressure_observation_is_not_reported_as_counter_failure() {
     let root = sandbox("foreign-pressure-malformed-observation");
