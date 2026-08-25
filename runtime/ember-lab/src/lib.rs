@@ -10417,6 +10417,19 @@ fn probe_windows_process_observations_with_owned(
 }
 
 #[cfg(windows)]
+fn record_named_process_end_probe_failure(
+    observations: &mut Vec<ProcessCensusObservation>,
+    pid: u32,
+    expected_start_token: &str,
+    replacement: ProcessCensusObservation,
+) {
+    observations.retain(|observation| {
+        !matches!(observation, ProcessCensusObservation::Live(sample) if sample.pid == pid && sample.process_start_token == expected_start_token)
+    });
+    observations.push(replacement);
+}
+
+#[cfg(windows)]
 fn sample_windows_foreign_process_census(
     owned_jobs: &[OwnedJobIdentity],
 ) -> Result<ForeignProcessCensus> {
@@ -10504,10 +10517,12 @@ fn sample_windows_foreign_process_census(
             }
         };
         if let Some(replacement) = replacement {
-            observations.retain(|observation| {
-                !matches!(observation, ProcessCensusObservation::Live(sample) if sample.pid == pid && sample.process_start_token == expected_start_token)
-            });
-            observations.push(replacement);
+            record_named_process_end_probe_failure(
+                &mut observations,
+                pid,
+                &expected_start_token,
+                replacement,
+            );
         }
     }
 
@@ -11027,6 +11042,52 @@ mod foreign_process_provider_integration_tests {
     use std::process::{Command, Stdio};
 
     #[test]
+    fn named_identity_exit_is_receipted_without_phantom_commit_attribution() {
+        let pid = 4242;
+        let start_token = "start-token-4242";
+        let mut observations = vec![ProcessCensusObservation::Live(ProcessCommitSample {
+            pid,
+            process_start_token: start_token.into(),
+            private_commit_bytes: FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES,
+        })];
+
+        record_named_process_end_probe_failure(
+            &mut observations,
+            pid,
+            start_token,
+            ProcessCensusObservation::Exited(ProcessExitObservation {
+                pid,
+                phase: "named_process_end_probe".into(),
+                win32_code: 0,
+            }),
+        );
+
+        let census = classify_foreign_samples(
+            HostCommitSample {
+                commit_total_bytes: 20 * 1024 * 1024 * 1024,
+                commit_limit_bytes: 40 * 1024 * 1024 * 1024,
+                commit_remaining_bytes: 20 * 1024 * 1024 * 1024,
+                page_size_bytes: 4096,
+            },
+            observations,
+            &GpuComputeInventory {
+                samples: BTreeMap::new(),
+                attribution_available: true,
+                unavailable_token: None,
+            },
+            &std::collections::BTreeSet::new(),
+        )
+        .unwrap();
+
+        assert!(census.named_foreign_processes.is_empty());
+        assert_eq!(census.total_foreign_private_commit_bytes, 0);
+        assert!(census
+            .exited_processes
+            .iter()
+            .any(|exit| { exit.pid == pid && exit.phase == "named_process_end_probe" }));
+    }
+
+    #[test]
     fn missing_persisted_owned_job_object_does_not_destroy_host_census() {
         let missing_job = OwnedJobIdentity {
             job_id: "missing-owned-job".into(),
@@ -11230,6 +11291,23 @@ mod foreign_pressure_probe_receipt_tests {
             &serde_json::to_vec(&drifted).unwrap()
         )
         .is_err());
+    }
+
+    #[test]
+    fn exact_verifier_rejects_a_named_identity_that_did_not_survive_the_end_probe() {
+        let mut died = valid_receipt();
+        died["observation"]["named_foreign_processes"][0]["survived_end_probe"] =
+            Value::Bool(false);
+        let died = refresh_hashes(died);
+
+        let error =
+            verify_foreign_process_pressure_probe_receipt(&serde_json::to_vec(&died).unwrap())
+                .unwrap_err();
+        assert!(matches!(
+            error,
+            EmberLabError::InvalidDispatchManifest { ref detail }
+                if detail == "foreign pressure probe named identity did not survive end probe"
+        ));
     }
 }
 
