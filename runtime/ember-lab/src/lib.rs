@@ -10077,7 +10077,7 @@ fn enumerate_windows_process_ids() -> Result<Vec<u32>> {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn parse_nvidia_compute_rows(stdout: &str) -> Result<BTreeMap<u32, GpuComputeSample>> {
     let mut result = BTreeMap::new();
     for (line_index, line) in stdout.lines().enumerate() {

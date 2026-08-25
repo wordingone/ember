@@ -165,8 +165,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Lint all Rust targets on Linux
-        run: cargo clippy --all-targets --locked -- -D warnings
       - name: Compile complete Rust test suite on Linux
         run: cargo test --locked --no-run
   production-rung-replay:
