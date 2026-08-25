@@ -80,6 +80,10 @@ class HealthAndIntakeTests(unittest.TestCase):
             "types: [opened, edited, labeled, unlabeled, milestoned, demilestoned, reopened]",
             workflow,
         )
+        self.assertIn(
+            "if: ${{ !github.event.issue.pull_request }}",
+            workflow,
+        )
 
 
 if __name__ == "__main__":
