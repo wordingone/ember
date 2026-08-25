@@ -1,0 +1,304 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "Issue 898: Windows pagefile capability census"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue898-pagefile-capability-census
+  cancel-in-progress: false
+
+jobs:
+  native-census:
+    name: "native-census (${{ matrix.image }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - windows-latest
+          - windows-2025
+          - windows-2022
+          - windows-11-arm
+          - windows-11-vs2026-arm
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Read native pagefile capability without mutation
+        working-directory: runtime/ember-lab
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $example = Join-Path $PWD 'examples\issue898_pagefile_capability_probe.rs'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $example) | Out-Null
+          @'
+          #[cfg(not(windows))]
+          compile_error!("issue898 pagefile capability probe is Windows-only");
+
+          use ember_lab::probe_host_commit_capacity;
+          use serde_json::json;
+          use windows_sys::Win32::System::ProcessStatus::{
+              GetPerformanceInfo, PERFORMANCE_INFORMATION,
+          };
+
+          fn checked_bytes(pages: usize, page_size: u64, label: &str) -> u64 {
+              (pages as u64)
+                  .checked_mul(page_size)
+                  .unwrap_or_else(|| panic!("live GetPerformanceInfo overflowed {label}"))
+          }
+
+          fn main() {
+              let mut info: PERFORMANCE_INFORMATION = unsafe { std::mem::zeroed() };
+              info.cb = std::mem::size_of::<PERFORMANCE_INFORMATION>() as u32;
+              assert_ne!(
+                  unsafe { GetPerformanceInfo(&mut info, info.cb) },
+                  0,
+                  "GetPerformanceInfo failed: {}",
+                  std::io::Error::last_os_error()
+              );
+              let page_size = info.PageSize as u64;
+              let physical_ram_bytes =
+                  checked_bytes(info.PhysicalTotal, page_size, "physical RAM bytes");
+              let commit_total_bytes =
+                  checked_bytes(info.CommitTotal, page_size, "committed bytes");
+              let commit_limit_bytes =
+                  checked_bytes(info.CommitLimit, page_size, "commit limit bytes");
+              let commit_remaining_bytes = commit_limit_bytes
+                  .checked_sub(commit_total_bytes)
+                  .expect("live committed bytes exceed live commit limit");
+              let runtime_probe = match probe_host_commit_capacity() {
+                  Ok(capacity) => json!({
+                      "verdict": "ACCEPT",
+                      "pagefile_maximum_bytes": capacity.pagefile_maximum_bytes,
+                      "pagefile_configuration_sha256": capacity.pagefile_configuration_sha256,
+                      "maximum_commit_capacity_bytes": capacity.maximum_commit_capacity_bytes,
+                      "available_maximum_commit_bytes": capacity.available_maximum_commit_bytes,
+                  }),
+                  Err(error) => json!({
+                      "verdict": "REFUSE",
+                      "detail": error.to_string(),
+                  }),
+              };
+              println!(
+                  "{}",
+                  serde_json::to_string(&json!({
+                      "schema_version": "ember-issue898-pagefile-capability-runtime-v1",
+                      "live": {
+                          "page_size_bytes": page_size,
+                          "physical_ram_bytes": physical_ram_bytes,
+                          "commit_total_bytes": commit_total_bytes,
+                          "commit_limit_bytes": commit_limit_bytes,
+                          "commit_remaining_bytes": commit_remaining_bytes,
+                      },
+                      "runtime_probe": runtime_probe,
+                  }))
+                  .expect("serialize runtime capability")
+              );
+          }
+          '@ | Set-Content -LiteralPath $example -Encoding utf8NoBOM
+
+          $registryPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+          $raw = @((Get-ItemPropertyValue -LiteralPath $registryPath -Name PagingFiles))
+          Write-Output 'PAGINGFILES_RAW_BEGIN'
+          $raw | ForEach-Object { Write-Output $_ }
+          Write-Output 'PAGINGFILES_RAW_END'
+          $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+          Write-Output ('AUTOMATIC_MANAGED_PAGEFILE=' + $computer.AutomaticManagedPagefile)
+          $settings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+            Select-Object Name, InitialSize, MaximumSize)
+          Write-Output ('PAGEFILE_SETTINGS=' + ($settings | ConvertTo-Json -Compress -Depth 4))
+          $runtime = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Output ('RUNTIME_CAPABILITY=' + $runtime)
+          Remove-Item -LiteralPath $example -Force
+
+  mutation-spike:
+    name: "mutation-spike (windows-latest)"
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Measure whether a fixed setting changes the live ceiling
+        working-directory: runtime/ember-lab
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $example = Join-Path $PWD 'examples\issue898_pagefile_capability_probe.rs'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $example) | Out-Null
+          @'
+          #[cfg(not(windows))]
+          compile_error!("issue898 pagefile capability probe is Windows-only");
+
+          use ember_lab::probe_host_commit_capacity;
+          use serde_json::json;
+          use windows_sys::Win32::System::ProcessStatus::{
+              GetPerformanceInfo, PERFORMANCE_INFORMATION,
+          };
+
+          fn checked_bytes(pages: usize, page_size: u64, label: &str) -> u64 {
+              (pages as u64)
+                  .checked_mul(page_size)
+                  .unwrap_or_else(|| panic!("live GetPerformanceInfo overflowed {label}"))
+          }
+
+          fn main() {
+              let mut info: PERFORMANCE_INFORMATION = unsafe { std::mem::zeroed() };
+              info.cb = std::mem::size_of::<PERFORMANCE_INFORMATION>() as u32;
+              assert_ne!(
+                  unsafe { GetPerformanceInfo(&mut info, info.cb) },
+                  0,
+                  "GetPerformanceInfo failed: {}",
+                  std::io::Error::last_os_error()
+              );
+              let page_size = info.PageSize as u64;
+              let physical_ram_bytes =
+                  checked_bytes(info.PhysicalTotal, page_size, "physical RAM bytes");
+              let commit_total_bytes =
+                  checked_bytes(info.CommitTotal, page_size, "committed bytes");
+              let commit_limit_bytes =
+                  checked_bytes(info.CommitLimit, page_size, "commit limit bytes");
+              let commit_remaining_bytes = commit_limit_bytes
+                  .checked_sub(commit_total_bytes)
+                  .expect("live committed bytes exceed live commit limit");
+              let runtime_probe = match probe_host_commit_capacity() {
+                  Ok(capacity) => json!({
+                      "verdict": "ACCEPT",
+                      "pagefile_maximum_bytes": capacity.pagefile_maximum_bytes,
+                      "pagefile_configuration_sha256": capacity.pagefile_configuration_sha256,
+                      "maximum_commit_capacity_bytes": capacity.maximum_commit_capacity_bytes,
+                      "available_maximum_commit_bytes": capacity.available_maximum_commit_bytes,
+                  }),
+                  Err(error) => json!({
+                      "verdict": "REFUSE",
+                      "detail": error.to_string(),
+                  }),
+              };
+              println!(
+                  "{}",
+                  serde_json::to_string(&json!({
+                      "schema_version": "ember-issue898-pagefile-capability-runtime-v1",
+                      "live": {
+                          "page_size_bytes": page_size,
+                          "physical_ram_bytes": physical_ram_bytes,
+                          "commit_total_bytes": commit_total_bytes,
+                          "commit_limit_bytes": commit_limit_bytes,
+                          "commit_remaining_bytes": commit_remaining_bytes,
+                      },
+                      "runtime_probe": runtime_probe,
+                  }))
+                  .expect("serialize runtime capability")
+              );
+          }
+          '@ | Set-Content -LiteralPath $example -Encoding utf8NoBOM
+
+          function Get-CapabilitySnapshot([string] $Phase) {
+            $registryPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+            $raw = @((Get-ItemPropertyValue -LiteralPath $registryPath -Name PagingFiles))
+            Write-Host ("${Phase}_PAGINGFILES_RAW_BEGIN")
+            $raw | ForEach-Object { Write-Host $_ }
+            Write-Host ("${Phase}_PAGINGFILES_RAW_END")
+            $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+            $settings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+              Select-Object Name, InitialSize, MaximumSize)
+            $runtimeText = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            [pscustomobject]@{
+              schema_version = 'ember-issue898-pagefile-capability-snapshot-v1'
+              phase = $Phase
+              raw_paging_files = $raw
+              automatic_managed_pagefile = [bool]$computer.AutomaticManagedPagefile
+              pagefile_settings = $settings
+              runtime = ($runtimeText | ConvertFrom-Json)
+            }
+          }
+
+          $before = Get-CapabilitySnapshot 'BEFORE'
+          Write-Output ('BEFORE_SNAPSHOT=' + ($before | ConvertTo-Json -Compress -Depth 8))
+
+          $tempDrive = (Get-Item -LiteralPath $env:RUNNER_TEMP).PSDrive.Root.TrimEnd('\')
+          $driveId = $tempDrive.TrimEnd(':') + ':'
+          $logicalDisk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$driveId'"
+          if ($null -eq $logicalDisk) { throw "no logical disk for RUNNER_TEMP drive $driveId" }
+          $reserveBytes = 4GB
+          $minimumBytes = 4GB
+          $maximumBytes = 24GB
+          $candidateBytes = [uint64]$logicalDisk.FreeSpace - [uint64]$reserveBytes
+          if ($candidateBytes -lt $minimumBytes) {
+            throw "RUNNER_TEMP drive cannot preserve the fixed 4 GiB reserve"
+          }
+          $fixedBytes = [Math]::Min([uint64]$candidateBytes, [uint64]$maximumBytes)
+          $fixedMiB = [uint32][Math]::Floor($fixedBytes / 1MB)
+          if ($fixedMiB -lt 4096) { throw "computed fixed pagefile is below 4096 MiB" }
+          $pagefileName = "$driveId\pagefile.sys"
+          Write-Output ("MUTATION_PLAN=drive=$driveId fixed_mib=$fixedMiB reserve_bytes=$reserveBytes")
+
+          $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+          Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $false } | Out-Null
+          @(Get-CimInstance -ClassName Win32_PageFileSetting) |
+            ForEach-Object { Remove-CimInstance -InputObject $_ }
+          New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+            Name = $pagefileName
+            InitialSize = $fixedMiB
+            MaximumSize = $fixedMiB
+          } | Out-Null
+
+          $after = Get-CapabilitySnapshot 'AFTER'
+          Write-Output ('AFTER_SNAPSHOT=' + ($after | ConvertTo-Json -Compress -Depth 8))
+
+          $registryFixed = @($after.raw_paging_files).Count -gt 0
+          foreach ($entry in @($after.raw_paging_files)) {
+            $parts = @($entry -split '\s+' | Where-Object { $_ })
+            if ($parts.Count -lt 3 -or
+                $parts[-1] -notmatch '^[1-9][0-9]*$') {
+              $registryFixed = $false
+            }
+          }
+          $liveCeilingMoved =
+            [uint64]$after.runtime.live.commit_limit_bytes -ne
+            [uint64]$before.runtime.live.commit_limit_bytes
+          $runtimeAccepted = $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
+          $fixedPagefileBytes = [uint64]$fixedMiB * 1MB
+          $expectedCommitLimitBytes =
+            [uint64]$after.runtime.live.physical_ram_bytes + $fixedPagefileBytes
+          $actualCommitLimitBytes = [uint64]$after.runtime.live.commit_limit_bytes
+          $commitLimitDeltaBytes = if ($actualCommitLimitBytes -ge $expectedCommitLimitBytes) {
+            $actualCommitLimitBytes - $expectedCommitLimitBytes
+          } else {
+            $expectedCommitLimitBytes - $actualCommitLimitBytes
+          }
+          $commitLimitToleranceBytes = 512MB
+          $liveCeilingMatchesDeclared =
+            $commitLimitDeltaBytes -le $commitLimitToleranceBytes
+          $headline = [pscustomobject]@{
+            schema_version = 'ember-issue898-pagefile-capability-headline-v1'
+            result = if ($registryFixed -and $liveCeilingMoved -and
+                $runtimeAccepted -and $liveCeilingMatchesDeclared) {
+              'LIVE_CEILING_CHANGED'
+            } elseif ($registryFixed -and $runtimeAccepted -and -not $liveCeilingMoved) {
+              'DANGEROUS_FALSE_ACCEPT'
+            } else {
+              'SETTING_NOT_EFFECTIVE'
+            }
+            registry_fixed = $registryFixed
+            runtime_accepted = $runtimeAccepted
+            live_commit_limit_changed = $liveCeilingMoved
+            live_commit_limit_matches_declared = $liveCeilingMatchesDeclared
+            physical_ram_bytes = [uint64]$after.runtime.live.physical_ram_bytes
+            fixed_pagefile_bytes = $fixedPagefileBytes
+            expected_commit_limit_bytes = $expectedCommitLimitBytes
+            actual_commit_limit_bytes = $actualCommitLimitBytes
+            commit_limit_delta_bytes = $commitLimitDeltaBytes
+            commit_limit_tolerance_bytes = $commitLimitToleranceBytes
+            before_commit_limit_bytes = [uint64]$before.runtime.live.commit_limit_bytes
+            after_commit_limit_bytes = [uint64]$after.runtime.live.commit_limit_bytes
+          }
+          Write-Output ('HEADLINE=' + ($headline | ConvertTo-Json -Compress -Depth 4))
+          Remove-Item -LiteralPath $example -Force
+          if ($headline.result -ne 'LIVE_CEILING_CHANGED') { exit 1 }
