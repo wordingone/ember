@@ -18,6 +18,7 @@
 - Every complete observation sums `PROCESS_MEMORY_COUNTERS_EX.PrivateUsage` for all non-owned user processes, including sub-threshold processes.
 - Ownership requires actual current Ember Lab Job Object membership; image, path, name, parent PID, argv, and environment are never ownership.
 - Foreign process handles request read/query rights only and never terminate, suspend, debug, duplicate, or write rights.
+- One `GetPerformanceInfo` sample is shared by the survival guard and foreign-pressure census on each monitor tick.
 - Never control a pre-existing desktop process; tests create and own their own hidden/no-window sentinel fixtures and bind them by creation token.
 - The integration owner holds shared Git/index/commit authority. Do not commit locally unless that authority is explicitly transferred; after each reviewable task, send the review seat exact status, diff, test output, and hashes.
 - This plan runs no Python commands.
@@ -163,7 +164,32 @@ Run `git diff --check`, `git status --short`, and SHA-256 the modified files wit
 
 ---
 
-### Task 2: Read-only Windows census provider
+### Task 2A: Schema version 7
+
+**Files:**
+- Modify: `runtime/ember-lab/src/lib.rs`
+- Modify: `runtime/ember-lab/tests/data_catalog.rs`
+- Modify: `runtime/ember-lab/tests/artifact_custody.rs`
+
+**Interfaces:**
+- Produces: schema version 7 and both foreign-pressure tables.
+- Consumes: the existing immediate SQLite migration transaction.
+
+- [ ] **Step 1: RED — fresh schema identity**
+
+Add `fresh_database_schema_seven_contains_foreign_pressure_tables`: a fresh `Daemon` database must report metadata version `7`, contain exactly both foreign-pressure tables, have zero observation rows, and hold the exact `probe_failed` / `NOT_YET_SAMPLED` singleton seed.
+
+- [ ] **Step 2: GREEN — version and tables travel together**
+
+Bump `CURRENT_DATABASE_SCHEMA_VERSION` from 6 to 7 and create/seed both tables inside the existing migration transaction. Run the focused schema test with `-j 8` and `--test-threads=2`.
+
+- [ ] **Step 3: Continue directly into Task 2B**
+
+Do not add rollback or historical rollback-chain changes in this packet. Review schema 7 together with the classifier/provider packet after Task 2C.
+
+---
+
+### Task 2B: Pure classifier and read-only Windows census provider
 
 **Files:**
 - Modify: `runtime/ember-lab/src/lib.rs:8280-8420`
@@ -172,7 +198,7 @@ Run `git diff --check`, `git status --short`, and SHA-256 the modified files wit
 
 **Interfaces:**
 - Consumes: `ForeignProcessIdentity`, `ForeignProcessCensus`, existing `ProcessIdentity`, `inspect_handle`, `nvidia_smi_text`, and retained/persisted Job Object identities.
-- Produces: `OwnedJobIdentity { job_id: String, job_object_name: String }`, `ProcessCommitSample { pid: u32, process_start_token: String, private_commit_bytes: u64 }`, `HostCommitSample { commit_total_bytes: u64, commit_limit_bytes: u64, commit_remaining_bytes: u64 }`, `trait ForeignProcessCensusProvider { fn sample(&self, owned_jobs: &[OwnedJobIdentity]) -> Result<ForeignProcessCensus>; }`, production `WindowsForeignProcessCensusProvider`, and `sample_foreign_process_census(provider, owned_jobs)`.
+- Produces: `OwnedJobIdentity { job_id: String, job_object_name: String }`, live-only `ProcessCommitSample { pid: u32, process_start_token: String, private_commit_bytes: u64 }`, `ProcessExitObservation`, `ProcessReadFailure`, `ProcessIdentityConflict`, `HostCommitSample { commit_total_bytes: u64, commit_limit_bytes: u64, commit_remaining_bytes: u64, page_size_bytes: u64 }`, `trait ForeignProcessCensusProvider { fn sample(&self, owned_jobs: &[OwnedJobIdentity]) -> Result<ForeignProcessCensus>; }`, production `WindowsForeignProcessCensusProvider`, and `sample_foreign_process_census(provider, owned_jobs)`.
 
 - [ ] **Step 1: Write failing parser and classifier tests**
 
@@ -197,7 +223,7 @@ fn owned_job_member_is_excluded_from_aggregate_and_named_rows() {
 }
 ```
 
-Also add failures for checked-sum overflow, duplicate PID/start identities, an unreadable non-kernel PID, NVIDIA provider failure, and an end-of-probe start-token mismatch.
+Also add `many_subcutoff_foreign_processes_remain_visible_in_aggregate`, `foreign_private_commit_sum_overflow_fails_closed`, `exited_process_during_enumeration_keeps_census_complete`, `unreadable_live_process_makes_census_incomplete`, `named_process_exit_during_production_probe_is_recorded_and_dropped`, `named_pid_reuse_makes_census_incomplete`, and `foreign_process_open_mask_is_query_and_synchronize_only`.
 
 - [ ] **Step 2: Run the focused tests and confirm RED**
 
@@ -218,15 +244,17 @@ K32EnumProcesses(pids.as_mut_ptr(), capacity_bytes, &mut bytes_returned);
 
 // Query/read only: no PROCESS_TERMINATE, PROCESS_SUSPEND_RESUME,
 // PROCESS_DUP_HANDLE, PROCESS_VM_WRITE, or PROCESS_ALL_ACCESS.
-OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT, 0, pid);
+const FOREIGN_PROCESS_OPEN_ACCESS_MASK: u32 =
+    PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT;
+OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid);
 GetProcessTimes(process, &mut creation, &mut exit, &mut kernel, &mut user);
 K32GetProcessMemoryInfo(process, (&mut counters as *mut PROCESS_MEMORY_COUNTERS_EX).cast(), size);
 IsProcessInJob(process, owned_job_handle, &mut is_member);
 ```
 
-Reuse the existing NVIDIA command runner and parse `pid,used_gpu_memory` as a complete successful set. Exclude only PID 0 and PID 4 as explicit kernel pseudo-processes. Any other per-PID read failure returns a census error. Sort named identities by `(pid, process_start_token)`.
+Reuse the existing NVIDIA command runner and parse `pid,used_gpu_memory` as a complete successful set. Exclude only PID 0 and PID 4 as explicit kernel pseudo-processes. `ERROR_INVALID_PARAMETER` (87) means exited; `ERROR_ACCESS_DENIED` (5) and every unrecognized code mean unreadable/incomplete. Exited identities produce `ProcessExitObservation`, never `ProcessCommitSample`. Sort named identities by `(pid, process_start_token)`.
 
-After building the named set, re-open each named PID with the same read/query-only mask, call `GetProcessTimes`, and require the same token. This provides the positive end-of-probe survival assertion.
+After building the named set, re-open each named PID with the same constant mask. A production exit is recorded and dropped, a changed token fails as PID reuse, and a same-token live identity records survival. The integration fixture's exit remains a hard failure.
 
 - [ ] **Step 4: Run unit tests and a real Windows read-only integration probe**
 
