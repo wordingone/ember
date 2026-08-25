@@ -605,31 +605,45 @@ function _interpretCertifiedResult(
     };
   }
   let execution: Record<string, unknown>;
-  try {
-    // Defense in depth (issue #1408): the consumer redirects its child's
-    // stdout away from its own, so this should already be a single pure
-    // JSON line -- but parse only the LAST non-empty line rather than the
-    // whole stream, so a fixed runner that still leaks noise ahead of the
-    // handshake (or a future consumer regression) does not corrupt the
-    // cockpit's ability to register a successful certified launch.
-    const lines = certifiedResult.stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
-    const lastLine = lines.length > 0 ? lines[lines.length - 1] : certifiedResult.stdout;
-    const parsedResult: unknown = JSON.parse(lastLine);
-    if (typeof parsedResult !== "object" || parsedResult === null) {
-      throw new Error("not an object");
+  const lines = certifiedResult.stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
+  const parsedObjects: Record<string, unknown>[] = [];
+  const taggedCompletions: Record<string, unknown>[] = [];
+  for (const line of lines) {
+    try {
+      const candidate: unknown = JSON.parse(line);
+      if (typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)) {
+        const row = candidate as Record<string, unknown>;
+        parsedObjects.push(row);
+        if (row["schema_version"] === "ember-lab-certified-launch-completion-v1") {
+          taggedCompletions.push(row);
+        }
+      }
+    } catch {
+      // Non-JSON diagnostic lines are not terminal records.
     }
-    execution = parsedResult as Record<string, unknown>;
-  } catch {
+  }
+  if (taggedCompletions.length === 1) {
+    execution = taggedCompletions[0]!;
+  } else if (taggedCompletions.length === 0 && parsedObjects.length === 1) {
+    // Legacy certified consumers may leak plain diagnostic lines ahead of
+    // their sole JSON handshake (#1408). Non-JSON noise is ignored, while a
+    // second JSON object is ambiguous and therefore refused.
+    execution = parsedObjects[0]!;
+  } else {
     return {
       type: "message" as const,
-      message: "error: certified train consumer exited 0 without a valid execution receipt response.",
+      message: "error: certified train consumer exited 0 without exactly one valid completion record.",
       exitCode: 1,
     };
   }
   const executionReceipt = execution["execution_receipt"];
   const artifactRoot = execution["artifact_root"];
   const operationalReceipt = execution["operational_receipt"];
-  if (typeof operationalReceipt === "string" && operationalReceipt !== "") {
+  if (
+    execution["schema_version"] === "ember-lab-certified-launch-completion-v1" &&
+    typeof operationalReceipt === "string" &&
+    operationalReceipt !== ""
+  ) {
     return {
       type: "message" as const,
       message: [

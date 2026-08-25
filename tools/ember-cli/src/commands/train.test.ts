@@ -223,7 +223,7 @@ describe("train command", () => {
 
     const started = await _defaultCertifiedLaunchRunner(process.execPath, [
       "-e",
-      `console.log(JSON.stringify({schema_version:"ember-lab-certified-launch-start-v1",job_id:"run-1",governed_pid:4321,preflight_receipt:"B:/run/preflight.json",preflight_receipt_sha256:"${"a".repeat(64)}"}));setTimeout(() => { console.log(JSON.stringify({exit_code:0,operational_receipt:"B:/run/receipt.json"})); process.exit(0); }, 100)`,
+      `console.log(JSON.stringify({schema_version:"ember-lab-certified-launch-start-v1",job_id:"run-1",governed_pid:4321,preflight_receipt:"B:/run/preflight.json",preflight_receipt_sha256:"${"a".repeat(64)}"}));setTimeout(() => { console.log(JSON.stringify({schema_version:"ember-lab-certified-launch-completion-v1",exit_code:0,operational_receipt:"B:/run/receipt.json"})); console.log("trailing diagnostic"); process.exit(0); }, 100)`,
     ]);
 
     expect("kind" in started && started.kind === "background").toBe(true);
@@ -317,6 +317,14 @@ describe("train command", () => {
         { status: 9, stdout: "" },
         { status: null, stdout: "" },
         { status: 0, stdout: "not-a-certified-response" },
+        { status: 0, stdout: JSON.stringify({ operational_receipt: "untrusted.json" }) },
+        {
+          status: 0,
+          stdout: [
+            JSON.stringify({ execution_receipt: "first.json", artifact_root: "artifacts/run" }),
+            JSON.stringify({ execution_receipt: "second.json", artifact_root: "artifacts/run" }),
+          ].join("\n"),
+        },
       ] satisfies LaunchPacketRunResult[]) {
         let finish: ((result: LaunchPacketRunResult) => void) | undefined;
         const completion = new Promise<LaunchPacketRunResult>((resolve) => { finish = resolve; });
@@ -424,7 +432,11 @@ describe("train command", () => {
 
       finish?.({
         status: 0,
-        stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+        stdout: [
+          JSON.stringify({ schema_version: "ember-lab-certified-launch-start-v1" }),
+          JSON.stringify({ schema_version: "ember-lab-certified-launch-completion-v1", exit_code: 0, operational_receipt: "receipt.json" }),
+          "trailing diagnostic",
+        ].join("\n"),
       });
       await completion;
       await Promise.resolve();
