@@ -114,7 +114,9 @@ jobs:
             Select-Object Name, InitialSize, MaximumSize)
           Write-Output ('PAGEFILE_SETTINGS=' + ($settings | ConvertTo-Json -Compress -Depth 4))
           $runtime = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            throw "pagefile capability helper exited $LASTEXITCODE"
+          }
           Write-Output ('RUNTIME_CAPABILITY=' + $runtime)
           Remove-Item -LiteralPath $example -Force
 
@@ -227,7 +229,9 @@ jobs:
             $settings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
               Select-Object Name, InitialSize, MaximumSize)
             $runtimeText = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($LASTEXITCODE -ne 0) {
+              throw "pagefile capability helper exited $LASTEXITCODE"
+            }
             [pscustomobject]@{
               schema_version = 'ember-issue898-pagefile-capability-snapshot-v1'
               phase = $Phase
@@ -289,8 +293,15 @@ jobs:
           }
           $runtimeAccepted = $null -ne $after -and
             $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
-          $result = if ($null -eq $mutationFault -and $null -eq $snapshotFault -and
-              $runtimeAccepted) { 'ACCEPTED' } else { 'REFUSED' }
+          $result = if ($null -ne $mutationFault) {
+            'REFUSED_BY_HOST'
+          } elseif ($null -ne $snapshotFault) {
+            'MEASUREMENT_FAILED'
+          } elseif ($runtimeAccepted) {
+            'ACCEPTED'
+          } else {
+            'FALSE_ACCEPT'
+          }
           $faultText = if ($null -ne $mutationFault) {
             $mutationFault
           } elseif ($null -ne $snapshotFault) {
@@ -303,6 +314,8 @@ jobs:
             recorded_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
             result = $result
             fault_text = $faultText
+            mutation_accepted = $null -eq $mutationFault
+            measurement_obtained = $null -ne $after -and $null -eq $snapshotFault
             mutation_shape = $env:MUTATION_SHAPE
             requested_pagefile_mib = $fixedMiB
             requested_pagefile_bytes = $fixedBytes
@@ -314,13 +327,13 @@ jobs:
             raw_paging_files_after = if ($null -ne $after) { $after.raw_paging_files } else { $null }
             automatic_managed_after = if ($null -ne $after) { $after.automatic_managed_pagefile } else { $null }
             after_runtime = if ($null -ne $after) { $after.runtime } else { $null }
-            measured_commit_limit_bytes = if ($runtimeAccepted) {
+            measured_commit_limit_bytes = if ($null -ne $after) {
               [uint64]$after.runtime.live.commit_limit_bytes
             } else { $null }
-            measured_commit_total_bytes = if ($runtimeAccepted) {
+            measured_commit_total_bytes = if ($null -ne $after) {
               [uint64]$after.runtime.live.commit_total_bytes
             } else { $null }
-            measured_commit_remaining_bytes = if ($runtimeAccepted) {
+            measured_commit_remaining_bytes = if ($null -ne $after) {
               [uint64]$after.runtime.live.commit_remaining_bytes
             } else { $null }
             runtime_declared_maximum_commit_capacity_bytes = if ($runtimeAccepted) {
