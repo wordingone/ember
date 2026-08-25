@@ -37,6 +37,30 @@ fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+#[cfg(windows)]
+fn write_when_unlocked(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut last_sharing_violation = None;
+    for _ in 0..50 {
+        match fs::write(path, bytes) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.raw_os_error() == Some(32) => {
+                last_sharing_violation = Some(error);
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    let exhausted_detail = last_sharing_violation
+        .as_ref()
+        .map(ToString::to_string)
+        .unwrap_or_else(|| "no sharing violation was captured".into());
+    assert!(
+        last_sharing_violation.is_none(),
+        "sealed log remained locked after bounded write retries: {exhausted_detail}"
+    );
+    Ok(())
+}
+
 fn test_host_capacity() -> HostCommitCapacity {
     HostCommitCapacity {
         physical_ram_bytes: 64 * 1024 * 1024 * 1024,
@@ -3654,6 +3678,258 @@ fn starting_reconciliation_cannot_kill_a_concurrently_committed_start() {
         Err(EmberLabError::InvalidTransition { .. })
     ));
 }
+
+#[cfg(windows)]
+#[test]
+fn starting_reconciliation_persists_owned_orphan_receipt_before_termination() {
+    let root = sandbox("starting-owned-orphan-receipt");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("starting-owned-orphan", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("owned-orphan-resource", "starting-owned-orphan")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "starting-owned-orphan",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "owned-orphan-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE jobs SET state='starting' WHERE job_id='starting-owned-orphan'",
+            [],
+        )
+        .unwrap();
+
+    daemon.reconcile().unwrap();
+
+    assert!(!process_is_alive(started.pid));
+    assert_eq!(
+        daemon.job_state("starting-owned-orphan").unwrap(),
+        Some(JobState::Failed)
+    );
+    assert_eq!(daemon.lease_owner("owned-orphan-resource").unwrap(), None);
+    let receipt_dir = root
+        .join("ember-lab.sqlite3.logs")
+        .join("owned-orphan-terminations");
+    let receipts: Vec<_> = match fs::read_dir(&receipt_dir) {
+        Ok(entries) => entries.map(|entry| entry.unwrap().path()).collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => panic!("cannot inspect owned-orphan receipts: {error}"),
+    };
+    assert_eq!(
+        receipts.len(),
+        1,
+        "expected one durable owned-orphan receipt, found {}",
+        receipts.len()
+    );
+    let receipt_path = &receipts[0];
+    let receipt: Value = serde_json::from_slice(&fs::read(receipt_path).unwrap()).unwrap();
+    assert_eq!(
+        receipt["schema_version"],
+        "ember-lab-owned-orphan-termination-v1"
+    );
+    assert_eq!(receipt["result"], "OWNED_ORPHAN_TERMINATION_AUTHORIZED");
+    assert_eq!(receipt["job_id"], "starting-owned-orphan");
+    assert_eq!(receipt["lease"]["resource"], "owned-orphan-resource");
+    assert_eq!(receipt["process"]["pid"], started.pid);
+    assert_eq!(receipt["process"]["identity_verified"], true);
+    assert_eq!(receipt["process"]["job_object_membership_verified"], true);
+    assert_eq!(receipt["verification"]["query_only_completed"], true);
+    assert_eq!(
+        receipt["termination"]["query_and_terminate_reverification_required"],
+        true
+    );
+    assert_eq!(
+        receipt["termination"]["decision_receipt_persisted_before_termination"],
+        true
+    );
+    assert_eq!(receipt["termination"]["foreign_process_control"], false);
+    let receipt_sha = sha256(receipt_path);
+    assert_eq!(
+        receipt_path.file_stem().unwrap().to_string_lossy(),
+        receipt_sha
+    );
+    let event_payload: String = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT payload_json FROM events WHERE job_id='starting-owned-orphan' AND kind='job_reconciled_unrecorded_process' ORDER BY seq DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let event: Value = serde_json::from_str(&event_payload).unwrap();
+    assert_eq!(event["receipt_sha256"], receipt_sha);
+    assert_eq!(
+        event["receipt_locator"],
+        format!("owned-orphan-terminations/{receipt_sha}.json")
+    );
+    assert!(event["query_and_terminate_verified_at_ms"].is_number());
+    assert_eq!(event["terminated_through_retained_verified_handle"], true);
+}
+
+#[cfg(windows)]
+#[test]
+fn starting_reconciliation_refuses_identity_conflict_without_termination_or_lease_release() {
+    let root = sandbox("starting-owned-orphan-identity-conflict");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("starting-identity-conflict", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("identity-conflict-resource", "starting-identity-conflict")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "starting-identity-conflict",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "identity-conflict-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE jobs SET state='starting',process_start_token='forged-start-token' WHERE job_id='starting-identity-conflict'",
+            [],
+        )
+        .unwrap();
+
+    let result = daemon.reconcile();
+    let alive_after_refusal = process_is_alive(started.pid);
+    let state_after_refusal = daemon.job_state("starting-identity-conflict").unwrap();
+    let lease_after_refusal = daemon.lease_owner("identity-conflict-resource").unwrap();
+    if alive_after_refusal {
+        force_terminate_process(started.pid);
+    }
+
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ProcessControlUncertain { .. })
+    ));
+    assert!(
+        alive_after_refusal,
+        "identity conflict must preserve the process"
+    );
+    assert_eq!(state_after_refusal, Some(JobState::Starting));
+    assert_eq!(
+        lease_after_refusal,
+        Some("starting-identity-conflict".into())
+    );
+    assert!(!root
+        .join("ember-lab.sqlite3.logs")
+        .join("owned-orphan-terminations")
+        .exists());
+}
+
+#[cfg(windows)]
+#[test]
+fn starting_reconciliation_finalization_rollback_cannot_erase_durable_decision_receipt() {
+    let root = sandbox("starting-owned-orphan-finalization-rollback");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("starting-finalization-rollback", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease(
+            "finalization-rollback-resource",
+            "starting-finalization-rollback",
+        )
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "starting-finalization-rollback",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "finalization-rollback-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "UPDATE jobs SET state='starting'
+             WHERE job_id='starting-finalization-rollback';
+             CREATE TRIGGER fail_owned_orphan_finalization
+             BEFORE UPDATE OF state ON jobs
+             WHEN OLD.job_id='starting-finalization-rollback'
+              AND NEW.state='failed'
+             BEGIN SELECT RAISE(FAIL, 'forced owned-orphan finalization rollback'); END;",
+        )
+        .unwrap();
+
+    let result = daemon.reconcile();
+
+    assert!(matches!(result, Err(EmberLabError::Sqlite(_))));
+    assert!(
+        !process_is_alive(started.pid),
+        "the exact verified owned process should already be terminal"
+    );
+    assert_eq!(
+        daemon.job_state("starting-finalization-rollback").unwrap(),
+        Some(JobState::Starting)
+    );
+    assert_eq!(
+        daemon
+            .lease_owner("finalization-rollback-resource")
+            .unwrap(),
+        Some("starting-finalization-rollback".into())
+    );
+    let receipt_dir = root
+        .join("ember-lab.sqlite3.logs")
+        .join("owned-orphan-terminations");
+    let receipts: Vec<_> = match fs::read_dir(&receipt_dir) {
+        Ok(entries) => entries.map(|entry| entry.unwrap().path()).collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => panic!("cannot inspect owned-orphan receipts: {error}"),
+    };
+    assert_eq!(
+        receipts.len(),
+        1,
+        "expected one durable receipt after finalization rollback, found {}",
+        receipts.len()
+    );
+    assert_eq!(
+        sha256(&receipts[0]),
+        receipts[0].file_stem().unwrap().to_string_lossy()
+    );
+    let decision_payload: String = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT payload_json FROM events WHERE job_id='starting-finalization-rollback' AND kind='owned_orphan_termination_authorized' ORDER BY seq DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let decision: Value = serde_json::from_str(&decision_payload).unwrap();
+    assert_eq!(decision["receipt_sha256"], sha256(&receipts[0]));
+    assert_eq!(
+        decision["receipt_locator"],
+        format!("owned-orphan-terminations/{}.json", sha256(&receipts[0]))
+    );
+}
 #[test]
 fn resident_daemon_reaps_natural_exit_records_status_and_releases_lease() {
     let root = sandbox("resident-reaper");
@@ -4148,7 +4424,7 @@ fn assessment_evidence_refuses_running_or_unbound_job_without_publication() {
             rusqlite::params!["assessment-running", stdout_sha],
         )
         .unwrap();
-    fs::write(&stdout, b"tampered-after-daemon-seal").unwrap();
+    write_when_unlocked(&stdout, b"tampered-after-daemon-seal").unwrap();
     let tampered_output = root.join("tampered-output");
     assert!(matches!(
         daemon.export_assessment_evidence("assessment-running", &tampered_output),
@@ -4223,7 +4499,7 @@ fn sealed_log_tampering_is_detected_instead_of_blessed() {
         Some(JobState::Exited)
     );
     let (stdout_path, _) = daemon.job_log_paths("tamper-job").unwrap();
-    fs::write(&stdout_path, b"rewritten-after-seal").unwrap();
+    write_when_unlocked(&stdout_path, b"rewritten-after-seal").unwrap();
 
     assert!(matches!(
         daemon.export_content_addressed_receipt("tamper-job", &root.join("receipts")),
