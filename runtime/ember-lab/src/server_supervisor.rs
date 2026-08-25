@@ -1548,7 +1548,10 @@ mod tests {
     use std::fs;
     use std::net::TcpListener;
     use std::path::{Path, PathBuf};
-    use std::sync::mpsc;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    };
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1711,15 +1714,28 @@ mod tests {
             ))
             .unwrap();
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
         let port = listener.local_addr().unwrap().port();
         let (ready_tx, ready_rx) = mpsc::sync_channel(0);
+        let stop_server = Arc::new(AtomicBool::new(false));
+        let server_stop = Arc::clone(&stop_server);
         let server = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(10);
             ready_tx.send(()).unwrap();
-            if let Ok((mut stream, _)) = listener.accept() {
-                let _ = std::io::Write::write_all(
-                    &mut stream,
-                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
-                );
+            while !server_stop.load(Ordering::Acquire) && Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        std::io::Write::write_all(
+                            &mut stream,
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+                        )
+                        .unwrap();
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("fixture server accept failed: {error}"),
+                }
             }
         });
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -1774,6 +1790,7 @@ mod tests {
         assert_eq!(receipt.decision, "HEALTHY");
         assert_eq!(receipt.job_id, "restored-server-job");
         daemon.stop_job("restored-server-job").unwrap();
+        stop_server.store(true, Ordering::Release);
         server.join().unwrap();
     }
 }
