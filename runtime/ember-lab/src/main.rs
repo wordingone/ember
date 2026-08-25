@@ -10,7 +10,7 @@ use ember_lab::{
     DispatchOutcome, DispatchVramWall, VramDeviceCapacity, VramWallContract,
     MAX_DISPATCH_MANIFEST_BYTES,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -77,7 +77,7 @@ struct CertifiedLaunchCliArgs {
     custody_receipt_sha256: String,
     db: Option<PathBuf>,
     pipe: Option<String>,
-    receipt: PathBuf,
+    receipt: Option<PathBuf>,
 }
 
 struct CertifiedLaunchDaemonDefaults {
@@ -136,12 +136,17 @@ fn certified_launch_daemon_defaults(
     Ok(CertifiedLaunchDaemonDefaults { db, pipe })
 }
 
+const DEFAULT_CERTIFIED_LAUNCH_RECEIPT: &str = "ember-lab-certified-launch-operational.json";
+
 fn resolve_certified_launch_request(
     cli: CertifiedLaunchCliArgs,
     python_executable: PathBuf,
     now_ms: i64,
 ) -> Result<(CertifiedLaunchRequest, CertifiedLaunchDaemonDefaults), Box<dyn std::error::Error>> {
     let run_custody_root = certified_launch_run_custody_root(&cli.run_spec)?;
+    let receipt = cli
+        .receipt
+        .unwrap_or_else(|| run_custody_root.join(DEFAULT_CERTIFIED_LAUNCH_RECEIPT));
     let daemon = certified_launch_daemon_defaults(&run_custody_root, cli.db, cli.pipe)?;
     let request = CertifiedLaunchRequest {
         root: cli.root,
@@ -150,11 +155,20 @@ fn resolve_certified_launch_request(
         run_spec: cli.run_spec,
         custody_receipt_sha256: cli.custody_receipt_sha256,
         pipe: daemon.pipe.clone(),
-        receipt: cli.receipt,
+        receipt,
         python_executable,
         now_ms,
     };
     Ok((request, daemon))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct CertifiedLaunchStart {
+    schema_version: &'static str,
+    job_id: String,
+    governed_pid: u32,
+    preflight_receipt: PathBuf,
+    preflight_receipt_sha256: String,
 }
 
 #[derive(Debug)]
@@ -174,18 +188,20 @@ where
     S: FnMut(),
 {
     let prepared = prepare_certified_launch(request)?;
-    launch_prepared_certified_with(&prepared, "existing", 0, rpc, wait)
+    launch_prepared_certified_with(&prepared, "existing", 0, rpc, |_| Ok(()), wait)
 }
 
-fn launch_prepared_certified_with<F, S>(
+fn launch_prepared_certified_with<F, T, S>(
     prepared: &PreparedCertifiedLaunch,
     daemon_mode: &str,
     daemon_pid: u32,
     mut rpc: F,
+    started: T,
     wait: S,
 ) -> Result<CertifiedLaunchCompletion, Box<dyn std::error::Error>>
 where
     F: FnMut(&Value) -> Result<Value, Box<dyn std::error::Error>>,
+    T: FnOnce(&CertifiedLaunchStart) -> Result<(), Box<dyn std::error::Error>>,
     S: FnMut(),
 {
     let manifest_bytes = std::fs::read(&prepared.manifest_path)?;
@@ -200,17 +216,32 @@ where
             "manifest_sha256": manifest_sha256
         }
     }))?;
-    if dispatched.get("pid").and_then(Value::as_u64).is_none()
-        || dispatched
-            .get("preflight_receipt_sha256")
-            .and_then(Value::as_str)
-            .is_none()
-    {
-        return Err(std::io::Error::other(
-            "certified launch dispatch response lacks owned child evidence",
-        )
-        .into());
-    }
+    let governed_pid = dispatched
+        .get("pid")
+        .and_then(Value::as_u64)
+        .and_then(|pid| u32::try_from(pid).ok())
+        .filter(|pid| *pid != 0)
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch dispatch response lacks governed child PID")
+        })?;
+    let preflight_receipt = dispatched
+        .get("preflight_receipt_path")
+        .and_then(Value::as_str)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch dispatch response lacks preflight receipt path")
+        })?;
+    let preflight_receipt_sha256 = dispatched
+        .get("preflight_receipt_sha256")
+        .and_then(Value::as_str)
+        .filter(|sha256| sha256.len() == 64 && sha256.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .ok_or_else(|| {
+            std::io::Error::other(
+                "certified launch dispatch response lacks preflight receipt SHA-256",
+            )
+        })?
+        .to_ascii_lowercase();
     let recorded = rpc(&json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -227,6 +258,13 @@ where
         )
         .into());
     }
+    started(&CertifiedLaunchStart {
+        schema_version: "ember-lab-certified-launch-start-v1",
+        job_id: prepared.job_id.clone(),
+        governed_pid,
+        preflight_receipt,
+        preflight_receipt_sha256,
+    })?;
     complete_certified_launch(
         &prepared.job_id,
         &prepared.receipt_path,
@@ -968,7 +1006,7 @@ where
 }
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> --receipt <path> [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -1148,7 +1186,7 @@ where
             .ok_or_else(|| format!("missing --custody-receipt-sha256\n{}", usage()))?,
         db,
         pipe,
-        receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
+        receipt,
     }))
 }
 
@@ -2039,6 +2077,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 daemon.mode,
                 daemon.pid,
                 |rpc_request| call_rpc(&daemon_defaults.pipe, rpc_request, "launch"),
+                |start| {
+                    println!("{}", serde_json::to_string(start)?);
+                    std::io::stdout().flush()?;
+                    Ok(())
+                },
                 || std::thread::sleep(Duration::from_millis(100)),
             );
             let shutdown = shutdown_owned_launch_daemon(&daemon_defaults.pipe, &mut daemon);
@@ -2060,6 +2103,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!(
                 "{}",
                 serde_json::to_string(&json!({
+                    "schema_version": "ember-lab-certified-launch-completion-v1",
                     "exit_code": completion.exit_code,
                     "operational_receipt": receipt
                 }))?
@@ -2359,7 +2403,7 @@ mod tests {
                 custody_receipt_sha256: custody_sha256.clone(),
                 db: None,
                 pipe: None,
-                receipt: receipt.clone(),
+                receipt: Some(receipt.clone()),
             },
             python.clone(),
             1_800_000_000_000,
@@ -2379,7 +2423,7 @@ mod tests {
                 custody_receipt_sha256: custody_sha256.clone(),
                 db: Some(explicit_db.clone()),
                 pipe: Some(explicit_pipe.clone()),
-                receipt: receipt.clone(),
+                receipt: Some(receipt.clone()),
             },
             python.clone(),
             1_800_000_000_000,
@@ -2579,6 +2623,72 @@ mod tests {
     }
 
     #[test]
+    fn certified_launch_start_names_governed_child_after_context_recording() {
+        let root =
+            std::env::temp_dir().join(format!("ember-lab-streaming-start-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let manifest_path = root.join("dispatch-manifest.json");
+        std::fs::write(&manifest_path, b"{}\n").unwrap();
+        let prepared = PreparedCertifiedLaunch {
+            manifest_path,
+            job_id: "run-1-launch-1800000000000".into(),
+            receipt_path: root.join("operational.json"),
+            run_custody_root: root.clone(),
+        };
+        let context_recorded = std::rc::Rc::new(std::cell::Cell::new(false));
+        let rpc_recorded = context_recorded.clone();
+        let start_recorded = context_recorded.clone();
+
+        let completion = launch_prepared_certified_with(
+            &prepared,
+            "owned_started",
+            91,
+            move |request| {
+                let method = request["method"].as_str().unwrap();
+                Ok(match method {
+                    "dispatch_manifest" => json!({
+                        "pid": 4321,
+                        "preflight_receipt_path": r"B:\custody\launch.preflight.json",
+                        "preflight_receipt_sha256": "a".repeat(64),
+                    }),
+                    "record_launch_context" => {
+                        rpc_recorded.set(true);
+                        json!({"recorded": true})
+                    }
+                    "job_state" => json!({"state": "exited"}),
+                    "job_result" => json!({"exit_code": 0, "stderr": ""}),
+                    "export_receipt" => json!({"exported": true}),
+                    _ => panic!("unexpected method {method}"),
+                })
+            },
+            move |evidence| {
+                assert!(
+                    start_recorded.get(),
+                    "start preceded launch-context recording"
+                );
+                assert_eq!(
+                    evidence.schema_version,
+                    "ember-lab-certified-launch-start-v1"
+                );
+                assert_eq!(evidence.job_id, "run-1-launch-1800000000000");
+                assert_eq!(evidence.governed_pid, 4321);
+                assert_eq!(
+                    evidence.preflight_receipt,
+                    PathBuf::from(r"B:\custody\launch.preflight.json")
+                );
+                assert_eq!(evidence.preflight_receipt_sha256, "a".repeat(64));
+                Ok(())
+            },
+            || {},
+        )
+        .unwrap();
+
+        assert_eq!(completion.exit_code, 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn certified_launch_cli_accepts_zero_daemon_arguments() {
         let command = parse_launch_arguments(
             [
@@ -2602,6 +2712,7 @@ mod tests {
         let Command::Launch(cli) = command else {
             panic!("launch parser returned another command");
         };
+        assert!(cli.receipt.is_some());
         assert!(cli.db.is_none());
         assert!(cli.pipe.is_none());
 

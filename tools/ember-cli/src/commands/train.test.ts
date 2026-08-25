@@ -10,12 +10,12 @@
 
 import { afterEach, describe, it, expect } from "bun:test";
 import {
-  CERTIFIED_LAUNCH_TIMEOUT_MS,
   PREFLIGHT_TIMEOUT_MS,
   _defaultCertifiedLaunchRunner,
   _defaultLaunchPacketRunner,
   createTrainCommand,
   type LaunchPacketRunResult,
+  type CertifiedLaunchHandle,
 } from "./train.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
@@ -37,6 +37,20 @@ const mockCtx: CommandContext = {
 interface RecordedSpawn {
   executable: string;
   args: string[];
+}
+
+function governedHandle(
+  pid: number,
+  completion: Promise<LaunchPacketRunResult>,
+): CertifiedLaunchHandle {
+  return {
+    kind: "background",
+    pid,
+    jobId: "run-1-launch-1800000000000",
+    preflightReceipt: "B:\\run\\launch.preflight.json",
+    preflightReceiptSha256: "a".repeat(64),
+    completion,
+  };
 }
 
 /** The real launch command string launch_packet.py names on an all-green packet. */
@@ -171,9 +185,8 @@ function makeExecuteCmd(
   );
   const cmd = createTrainCommand({
     pythonBin: "python",
+    emberLabBinary: "ember-lab",
     repoRoot,
-    certifiedLaunchScriptPath:
-      "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
     runLaunchPacket: (executable, args) => {
       preflightSpawns.push({ executable, args });
       return preflight;
@@ -210,14 +223,15 @@ describe("train command", () => {
 
     const started = await _defaultCertifiedLaunchRunner(process.execPath, [
       "-e",
-      "setTimeout(() => process.exit(0), 100)",
+      `console.log(JSON.stringify({schema_version:"ember-lab-certified-launch-start-v1",job_id:"run-1",governed_pid:4321,preflight_receipt:"B:/run/preflight.json",preflight_receipt_sha256:"${"a".repeat(64)}"}));setTimeout(() => { console.log(JSON.stringify({schema_version:"ember-lab-certified-launch-completion-v1",exit_code:0,operational_receipt:"B:/run/receipt.json"})); console.log("trailing diagnostic"); process.exit(0); }, 100)`,
     ]);
 
     expect("kind" in started && started.kind === "background").toBe(true);
     if (!("kind" in started) || started.kind !== "background") {
       throw new Error("certified child did not start");
     }
-    expect(started.pid).toBeGreaterThan(0);
+    expect(started.pid).toBe(4321);
+    expect(started.preflightReceiptSha256).toBe("a".repeat(64));
     await Bun.sleep(10);
     expect(eventLoopTurnRan).toBe(true);
     expect((await started.completion).status).toBe(0);
@@ -261,7 +275,7 @@ describe("train command", () => {
         repoRoot: scratch,
         launchAuthorityRoot: canonicalDir(scratch),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
+        runCertifiedLaunch: () => governedHandle(4321, completion),
       });
       const dispatchDeps = {
         getCommands: async () => [cmd],
@@ -279,7 +293,8 @@ describe("train command", () => {
         dispatchDeps,
       );
       expect(confirmation?.message).toContain("started in background");
-      expect(confirmation?.message).toContain("child pid: 4321");
+      expect(confirmation?.message).toContain("governed child pid: 4321");
+      expect(confirmation?.message).toContain("preflight receipt sha256");
       expect(confirmation?.message).toContain("activity feed");
       expect(childFinished).toBe(false);
 
@@ -302,6 +317,14 @@ describe("train command", () => {
         { status: 9, stdout: "" },
         { status: null, stdout: "" },
         { status: 0, stdout: "not-a-certified-response" },
+        { status: 0, stdout: JSON.stringify({ operational_receipt: "untrusted.json" }) },
+        {
+          status: 0,
+          stdout: [
+            JSON.stringify({ execution_receipt: "first.json", artifact_root: "artifacts/run" }),
+            JSON.stringify({ execution_receipt: "second.json", artifact_root: "artifacts/run" }),
+          ].join("\n"),
+        },
       ] satisfies LaunchPacketRunResult[]) {
         let finish: ((result: LaunchPacketRunResult) => void) | undefined;
         const completion = new Promise<LaunchPacketRunResult>((resolve) => { finish = resolve; });
@@ -310,7 +333,7 @@ describe("train command", () => {
           repoRoot: scratch,
           launchAuthorityRoot: canonicalDir(scratch),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-          runCertifiedLaunch: () => ({ kind: "background", pid: 4321, completion }),
+          runCertifiedLaunch: () => governedHandle(4321, completion),
           reportCertifiedLaunchFailure: (failure) => failures.push(failure),
         });
         const dispatchDeps = {
@@ -356,7 +379,7 @@ describe("train command", () => {
         repoRoot: scratch,
         launchAuthorityRoot: canonicalDir(scratch),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        runCertifiedLaunch: () => ({ kind: "background", pid: 2468, completion }),
+        runCertifiedLaunch: () => governedHandle(2468, completion),
       });
       const dispatchDeps = {
         getCommands: async () => [cmd],
@@ -395,7 +418,7 @@ describe("train command", () => {
         repoRoot: scratch,
         launchAuthorityRoot: canonicalDir(scratch),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
-        runCertifiedLaunch: () => ({ kind: "background", pid: 9876, completion }),
+        runCertifiedLaunch: () => governedHandle(9876, completion),
         reportCertifiedLaunchFailure: (failure) => failures.push(failure),
       });
       const dispatchDeps = {
@@ -409,7 +432,11 @@ describe("train command", () => {
 
       finish?.({
         status: 0,
-        stdout: JSON.stringify({ execution_receipt: "receipt.json", artifact_root: "artifacts/run" }),
+        stdout: [
+          JSON.stringify({ schema_version: "ember-lab-certified-launch-start-v1" }),
+          JSON.stringify({ schema_version: "ember-lab-certified-launch-completion-v1", exit_code: 0, operational_receipt: "receipt.json" }),
+          "trailing diagnostic",
+        ].join("\n"),
       });
       await completion;
       await Promise.resolve();
@@ -429,12 +456,7 @@ describe("train command", () => {
         pythonBin: "python",
         repoRoot: scratch,
         launchAuthorityRoot: canonicalDir(scratch),
-        certifiedLaunchScriptPath: path.join(
-          scratch,
-          "tools",
-          "ember-restart-3b",
-          "certified_train_launch.py",
-        ),
+        emberLabBinary: path.join(scratch, "runtime", "ember-lab", "target", "release", "ember-lab"),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: (executable, args) => {
           certifiedSpawns.push({ executable, args });
@@ -484,12 +506,7 @@ describe("train command", () => {
         pythonBin: "python",
         repoRoot: scratch,
         launchAuthorityRoot: canonicalDir(scratch),
-        certifiedLaunchScriptPath: path.join(
-          scratch,
-          "tools",
-          "ember-restart-3b",
-          "certified_train_launch.py",
-        ),
+        emberLabBinary: path.join(scratch, "runtime", "ember-lab", "target", "release", "ember-lab"),
         runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
         runCertifiedLaunch: (executable, args) => {
           certifiedSpawns.push({ executable, args });
@@ -550,9 +567,8 @@ describe("train command", () => {
       expect(cmd.description.toLowerCase()).toContain("train");
     });
 
-    it("keeps the certified canary timeout above the 15-minute run budget", () => {
+    it("keeps only the CPU preflight timeout in the cockpit", () => {
       expect(PREFLIGHT_TIMEOUT_MS).toBe(600_000);
-      expect(CERTIFIED_LAUNCH_TIMEOUT_MS).toBeGreaterThan(15 * 60_000);
     });
   });
 
@@ -980,7 +996,7 @@ describe("train command", () => {
       expect(certifiedSpawns).toHaveLength(0);
     });
 
-    it("green preflight invokes exactly one certified consumer with fixed argv", async () => {
+    it("green preflight invokes exactly one Ember Lab composer with fixed authority argv", async () => {
       const { cmd, preflightSpawns, certifiedSpawns, repoRoot } = makeExecuteCmd(
         { status: 0, stdout: allGreenStdout() },
         {
@@ -1001,9 +1017,9 @@ describe("train command", () => {
       expect(result?.exitCode).toBeUndefined();
       expect(preflightSpawns).toHaveLength(1);
       expect(certifiedSpawns).toHaveLength(1);
-      expect(certifiedSpawns[0]!.executable).toBe("python");
+      expect(certifiedSpawns[0]!.executable).toBe("ember-lab");
       expect(certifiedSpawns[0]!.args).toEqual([
-        "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
+        "launch",
         "--root",
         repoRoot,
         "--certificate",
@@ -1417,7 +1433,7 @@ describe("acceptance map: train-launch-operability v1", () => {
       expect(result?.exitCode).toBeUndefined();
       expect(preflightSpawns).toHaveLength(1);
       expect(certifiedSpawns[0]!.args).toEqual([
-        "/fake/ember/tools/ember-restart-3b/certified_train_launch.py",
+        "launch",
         "--root",
         repoRoot,
         "--certificate",
@@ -1619,7 +1635,7 @@ describe("acceptance map: train-launch-operability v1", () => {
   });
 
   describe("full happy path: OFFER -> confirm invokes the real fixed consumer", () => {
-    it("confirm <id> invokes exactly the same certified_train_launch.py consumer --execute would, with the resolved canonical paths", async () => {
+    it("confirm <id> invokes the same Ember Lab composer as --execute with resolved canonical paths", async () => {
       const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "ember-train-confirm-"));
       try {
         writeCanonicalArtifacts(scratch);
@@ -1628,7 +1644,7 @@ describe("acceptance map: train-launch-operability v1", () => {
           pythonBin: "python",
           repoRoot: scratch,
           launchAuthorityRoot: canonicalDir(scratch),
-          certifiedLaunchScriptPath: path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
+          emberLabBinary: path.join(scratch, "runtime", "ember-lab", "target", "release", "ember-lab"),
           runLaunchPacket: () => ({ status: 0, stdout: allGreenStdout() }),
           runCertifiedLaunch: (executable, args) => {
             certifiedSpawns.push({ executable, args });
@@ -1649,7 +1665,7 @@ describe("acceptance map: train-launch-operability v1", () => {
         expect(confirmResult?.message).toContain("receipt.json");
         expect(certifiedSpawns).toHaveLength(1);
         expect(certifiedSpawns[0]!.args).toEqual([
-          path.join(scratch, "tools", "ember-restart-3b", "certified_train_launch.py"),
+          "launch",
           "--root",
           scratch,
           "--certificate",
