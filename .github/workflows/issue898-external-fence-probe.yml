@@ -126,7 +126,9 @@ jobs:
             $raw = [string[]]@((Get-ItemPropertyValue -LiteralPath $registryPath -Name PagingFiles))
             $computer = Get-CimInstance -ClassName Win32_ComputerSystem
             $runtimeText = & cargo run --locked --quiet --example issue898_host_envelope_snapshot
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($LASTEXITCODE -ne 0) {
+              throw "host-envelope snapshot helper exited $LASTEXITCODE"
+            }
             [pscustomobject]@{
               raw_paging_files = $raw
               automatic_managed_pagefile = [bool]$computer.AutomaticManagedPagefile
