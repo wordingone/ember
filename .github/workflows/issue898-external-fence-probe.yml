@@ -5,6 +5,12 @@ name: "Issue 898: external process fence probe"
 
 on:
   workflow_dispatch:
+    inputs:
+      force_setup_fault:
+        description: "Claim-free durability red: force setup REFUSE before host mutation"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -34,6 +40,7 @@ jobs:
         working-directory: runtime/ember-lab
         env:
           EMBER_ISSUE898_EXTERNAL_ARTIFACT: ${{ runner.temp }}\issue898-external-fence-${{ github.run_id }}
+          EMBER_ISSUE898_FORCE_SETUP_FAULT: ${{ inputs.force_setup_fault }}
         run: |
           $ErrorActionPreference = 'Stop'
           $artifactRoot = $env:EMBER_ISSUE898_EXTERNAL_ARTIFACT
@@ -181,18 +188,32 @@ jobs:
           $requestedPagefileMiB = [uint32]($requestedPagefileBytes / 1MB)
           $pagefileName = "$driveId\pagefile.sys"
 
-          $computer = Get-CimInstance -ClassName Win32_ComputerSystem
-          Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $false } | Out-Null
-          @(Get-CimInstance -ClassName Win32_PageFileSetting) |
-            ForEach-Object { Remove-CimInstance -InputObject $_ }
-          New-CimInstance -ClassName Win32_PageFileSetting -Property @{
-            Name = $pagefileName
-            InitialSize = $requestedPagefileMiB
-            MaximumSize = $requestedPagefileMiB
-          } | Out-Null
+          $mutationFault = $null
+          try {
+            if ($env:EMBER_ISSUE898_FORCE_SETUP_FAULT -eq 'true') {
+              throw 'deliberate issue898 host-envelope setup fault'
+            }
+            $computer = Get-CimInstance -ClassName Win32_ComputerSystem
+            Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $false } | Out-Null
+            @(Get-CimInstance -ClassName Win32_PageFileSetting) |
+              ForEach-Object { Remove-CimInstance -InputObject $_ }
+            New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+              Name = $pagefileName
+              InitialSize = $requestedPagefileMiB
+              MaximumSize = $requestedPagefileMiB
+            } | Out-Null
+          } catch {
+            $mutationFault = $_.Exception.ToString()
+          }
 
-          $after = Get-HostEnvelopeSnapshot
-          $runtime = $after.runtime.runtime_probe
+          $after = $null
+          $afterSnapshotFault = $null
+          try {
+            $after = Get-HostEnvelopeSnapshot
+          } catch {
+            $afterSnapshotFault = $_.Exception.ToString()
+          }
+          $runtime = if ($null -ne $after) { $after.runtime.runtime_probe } else { $null }
           $targetMatch = [regex]::Match(
             (Get-Content -LiteralPath 'tests\issue898_external_fence_probe.rs' -Raw),
             '(?m)^const TARGET: u64 = ([1-9][0-9]*) \* GIB;\r?$'
@@ -208,34 +229,44 @@ jobs:
           $targetBytes = [uint64]$targetMatch.Groups[1].Value * $gib
           $fixtureHardCapBytes = [uint64]$hardCapMatch.Groups[1].Value * $gib
 
-          $measuredPagefileMaximum = if ($runtime.verdict -eq 'ACCEPT') {
+          $runtimeAccepted = $null -ne $runtime -and $runtime.verdict -eq 'ACCEPT'
+          $measuredPagefileMaximum = if ($runtimeAccepted) {
             [uint64]$runtime.pagefile_maximum_bytes
           } else { $null }
-          $physicalRamBytes = if ($runtime.verdict -eq 'ACCEPT') {
+          $physicalRamBytes = if ($runtimeAccepted) {
             [uint64]$runtime.physical_ram_bytes
-          } else { [uint64]$after.runtime.live.physical_ram_bytes }
-          $commitLimitAfterBytes = if ($runtime.verdict -eq 'ACCEPT') {
+          } elseif ($null -ne $after) { [uint64]$after.runtime.live.physical_ram_bytes } else { $null }
+          $commitLimitAfterBytes = if ($runtimeAccepted) {
             [uint64]$runtime.commit_limit_bytes
-          } else { [uint64]$after.runtime.live.commit_limit_bytes }
-          $commitRemainingAfterBytes = if ($runtime.verdict -eq 'ACCEPT') {
+          } elseif ($null -ne $after) { [uint64]$after.runtime.live.commit_limit_bytes } else { $null }
+          $commitRemainingAfterBytes = if ($runtimeAccepted) {
             [uint64]$runtime.commit_remaining_bytes
-          } else { [uint64]$after.runtime.live.commit_remaining_bytes }
-          $expectedCommitLimitBytes = if ($null -ne $measuredPagefileMaximum) {
+          } elseif ($null -ne $after) { [uint64]$after.runtime.live.commit_remaining_bytes } else { $null }
+          $expectedCommitLimitBytes = if ($null -ne $measuredPagefileMaximum -and
+              $null -ne $physicalRamBytes) {
             $physicalRamBytes + $measuredPagefileMaximum
           } else { $null }
-          $commitLimitDeltaBytes = if ($null -ne $expectedCommitLimitBytes) {
+          $commitLimitDeltaBytes = if ($null -ne $expectedCommitLimitBytes -and
+              $null -ne $commitLimitAfterBytes) {
             [uint64][Math]::Abs([decimal]$commitLimitAfterBytes - [decimal]$expectedCommitLimitBytes)
           } else { [uint64]::MaxValue }
-          $fixtureAllocationBytes = if ($commitRemainingAfterBytes -ge $targetBytes) {
+          $fixtureAllocationBytes = if ($null -ne $commitRemainingAfterBytes -and
+              $commitRemainingAfterBytes -ge $targetBytes) {
             $commitRemainingAfterBytes - $targetBytes
           } else { [uint64]::MaxValue }
           $fixtureFitsHardCap = $fixtureAllocationBytes -le $fixtureHardCapBytes
-          $decision = Get-EnvelopeDecision `
-            ([string]$runtime.verdict) `
-            ([string]$runtime.detail) `
-            $commitLimitDeltaBytes `
-            $commitLimitToleranceBytes `
-            $fixtureFitsHardCap
+          $decision = if ($null -ne $mutationFault) {
+            [pscustomobject]@{ result = 'REFUSE'; detail = $mutationFault }
+          } elseif ($null -ne $afterSnapshotFault) {
+            [pscustomobject]@{ result = 'REFUSE'; detail = $afterSnapshotFault }
+          } else {
+            Get-EnvelopeDecision `
+              ([string]$runtime.verdict) `
+              ([string]$runtime.detail) `
+              $commitLimitDeltaBytes `
+              $commitLimitToleranceBytes `
+              $fixtureFitsHardCap
+          }
 
           $row = [ordered]@{
             schema_version = 'ember-issue898-host-envelope-setup-v1'
@@ -244,9 +275,9 @@ jobs:
             result = $decision.result
             detail = $decision.detail
             raw_paging_files_before = $before.raw_paging_files
-            raw_paging_files_after = $after.raw_paging_files
+            raw_paging_files_after = if ($null -ne $after) { $after.raw_paging_files } else { $null }
             automatic_managed_before = $before.automatic_managed_pagefile
-            automatic_managed_after = $after.automatic_managed_pagefile
+            automatic_managed_after = if ($null -ne $after) { $after.automatic_managed_pagefile } else { $null }
             requested_pagefile_bytes = $requestedPagefileBytes
             measured_pagefile_maximum = $measuredPagefileMaximum
             physical_ram_bytes = $physicalRamBytes
@@ -256,9 +287,14 @@ jobs:
             commit_limit_delta_bytes = $commitLimitDeltaBytes
             commit_limit_tolerance_bytes = $commitLimitToleranceBytes
             commit_remaining_after_bytes = $commitRemainingAfterBytes
-            runtime_verdict = [string]$runtime.verdict
-            runtime_detail = [string]$runtime.detail
-            pagefile_configuration_sha256 = [string]$runtime.pagefile_configuration_sha256
+            runtime_verdict = if ($null -ne $runtime) { [string]$runtime.verdict } else { 'REFUSE' }
+            runtime_detail = if ($null -ne $runtime) { [string]$runtime.detail } else { $afterSnapshotFault }
+            pagefile_configuration_sha256 = if ($null -ne $runtime) {
+              [string]$runtime.pagefile_configuration_sha256
+            } else { $null }
+            mutation_fault = $mutationFault
+            after_snapshot_fault = $afterSnapshotFault
+            forced_fault = $env:EMBER_ISSUE898_FORCE_SETUP_FAULT -eq 'true'
             fixture_allocation_bytes = $fixtureAllocationBytes
             fixture_hard_cap_bytes = $fixtureHardCapBytes
             fixture_fits_hard_cap = $fixtureFitsHardCap
