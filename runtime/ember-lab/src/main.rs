@@ -221,18 +221,26 @@ where
         .and_then(Value::as_u64)
         .and_then(|pid| u32::try_from(pid).ok())
         .filter(|pid| *pid != 0)
-        .ok_or_else(|| std::io::Error::other("certified launch dispatch response lacks governed child PID"))?;
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch dispatch response lacks governed child PID")
+        })?;
     let preflight_receipt = dispatched
         .get("preflight_receipt_path")
         .and_then(Value::as_str)
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
-        .ok_or_else(|| std::io::Error::other("certified launch dispatch response lacks preflight receipt path"))?;
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch dispatch response lacks preflight receipt path")
+        })?;
     let preflight_receipt_sha256 = dispatched
         .get("preflight_receipt_sha256")
         .and_then(Value::as_str)
         .filter(|sha256| sha256.len() == 64 && sha256.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .ok_or_else(|| std::io::Error::other("certified launch dispatch response lacks preflight receipt SHA-256"))?
+        .ok_or_else(|| {
+            std::io::Error::other(
+                "certified launch dispatch response lacks preflight receipt SHA-256",
+            )
+        })?
         .to_ascii_lowercase();
     let recorded = rpc(&json!({
         "jsonrpc": "2.0",
@@ -2615,10 +2623,8 @@ mod tests {
 
     #[test]
     fn certified_launch_start_names_governed_child_after_context_recording() {
-        let root = std::env::temp_dir().join(format!(
-            "ember-lab-streaming-start-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("ember-lab-streaming-start-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let manifest_path = root.join("dispatch-manifest.json");
@@ -2656,8 +2662,14 @@ mod tests {
                 })
             },
             move |evidence| {
-                assert!(start_recorded.get(), "start preceded launch-context recording");
-                assert_eq!(evidence.schema_version, "ember-lab-certified-launch-start-v1");
+                assert!(
+                    start_recorded.get(),
+                    "start preceded launch-context recording"
+                );
+                assert_eq!(
+                    evidence.schema_version,
+                    "ember-lab-certified-launch-start-v1"
+                );
                 assert_eq!(evidence.job_id, "run-1-launch-1800000000000");
                 assert_eq!(evidence.governed_pid, 4321);
                 assert_eq!(
