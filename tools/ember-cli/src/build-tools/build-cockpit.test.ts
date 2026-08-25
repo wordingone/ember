@@ -9,6 +9,7 @@ import {
   cockpitCompileArgs,
   requireBuildCommit,
   requireCleanTrackedStatus,
+  requireProductionReconcilerBinary,
 } from "./build-cockpit.ts";
 
 describe("cockpit build commit binding", () => {
@@ -31,6 +32,15 @@ describe("cockpit build commit binding", () => {
     );
   });
 
+  it("rejects development reconciler markers in compiled output", () => {
+    expect(() => requireProductionReconcilerBinary(
+      Buffer.from("prefix root.render() middle Changed Props suffix"),
+    )).toThrow("development React reconciler markers: root.render(), Changed Props");
+    expect(() => requireProductionReconcilerBinary(
+      Buffer.from("production reconciler output"),
+    )).not.toThrow();
+  });
+
   it("brands every compiled Windows binary as Ember", () => {
     const commit = "c".repeat(40);
     const args = cockpitCompileArgs(commit, "owned-temp/ember.exe");
@@ -42,6 +52,8 @@ describe("cockpit build commit binding", () => {
       "owned-temp/ember.exe",
       "--banner",
       buildCommitBanner(commit),
+      "--define",
+      'process.env.NODE_ENV="production"',
       "--windows-title",
       "Ember",
       "--windows-publisher",

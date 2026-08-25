@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { spawnSync } from "child_process";
-import { dirname, join } from "path";
+import { readFileSync } from "fs";
+import { dirname, isAbsolute, join } from "path";
 import { fileURLToPath } from "url";
 
 const cockpitIconPath = join(
@@ -52,8 +53,22 @@ export function cockpitCompileArgs(commit: string, outfile = "ember.exe"): strin
     outfile,
     "--banner",
     buildCommitBanner(commit),
+    "--define",
+    'process.env.NODE_ENV="production"',
     ...cockpitWindowsMetadataArgs(),
   ];
+}
+
+const DEVELOPMENT_RECONCILER_MARKERS = ["root.render()", "Changed Props"] as const;
+
+export function requireProductionReconcilerBinary(binary: Uint8Array): void {
+  const bytes = Buffer.from(binary.buffer, binary.byteOffset, binary.byteLength);
+  const found = DEVELOPMENT_RECONCILER_MARKERS.filter(
+    (marker) => bytes.indexOf(Buffer.from(marker, "utf8")) !== -1,
+  );
+  if (found.length !== 0) {
+    throw new Error(`cockpit build contains development React reconciler markers: ${found.join(", ")}`);
+  }
 }
 
 export function requireCleanTrackedStatus(status: string): void {
@@ -96,4 +111,6 @@ if (import.meta.main) {
   if (result.status !== 0) {
     throw new Error("cockpit build failed with exit code " + result.status);
   }
+  const outputPath = isAbsolute(outfile) ? outfile : join(sourceRoot, outfile);
+  requireProductionReconcilerBinary(readFileSync(outputPath));
 }
