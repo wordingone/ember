@@ -2030,7 +2030,7 @@ fn sticky_resource_guard_freeze_refuses_dispatch_with_a_durable_receipt() {
         .is_err());
     assert_eq!(fs::read(&refusal_path).unwrap(), refusal_before);
     drop(daemon);
-    fs::remove_dir_all(root).unwrap();
+    remove_sandbox_when_unlocked(&root);
 }
 
 #[test]
@@ -2429,7 +2429,7 @@ fn resource_guard_monitor_samples_for_the_daemon_lifetime() {
         "UNAVAILABLE"
     );
     drop(daemon);
-    fs::remove_dir_all(root).unwrap();
+    remove_sandbox_when_unlocked(&root);
 }
 
 #[test]
