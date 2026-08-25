@@ -24,6 +24,16 @@
       "path": "scripts/roadmap/roadmap_projection_launch.py",
       "sha256": "339e4c5a237ccf50a310ea7a5c3776c0cbaf6b9ab5070d9422665f25e196bba5",
       "reason": "matched on its name, not its behaviour. It adapts the roadmap runner to a file-backed JSON transport; the child it creates is that runner, never a training run."
+    },
+    {
+      "path": "scripts/launch-installed-ember.ps1",
+      "sha256": "65b9cb6525508f1875d5550fa69e8bbfdc45448eb7576ccc348322d2ac180f45",
+      "reason": "temporarily hash-admitted installed GUI/cockpit launcher pending atomic installed one-command retirement; it never starts a training run"
+    },
+    {
+      "path": "scripts/launch-ember-cli.ps1",
+      "sha256": "f4f776773b72f78c4df22d7d756617ef313e6f627e02ebada59a8d3cc83a718a",
+      "reason": "temporarily hash-admitted developer cockpit/bootstrap launcher behind Ember.cmd pending atomic cockpit retirement; governed training still dispatches only through the daemon"
     }
   ]
 }
