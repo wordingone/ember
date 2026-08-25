@@ -228,17 +228,43 @@ jobs:
             $computer = Get-CimInstance -ClassName Win32_ComputerSystem
             $settings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
               Select-Object Name, InitialSize, MaximumSize)
+            $usage = @(Get-CimInstance -ClassName Win32_PageFileUsage |
+              Sort-Object Name |
+              Select-Object Name, AllocatedBaseSize, CurrentUsage, PeakUsage, TempPageFile)
+            $usageAllocatedBytes = [uint64]0
+            foreach ($row in $usage) {
+              $allocatedBytes = [uint64]$row.AllocatedBaseSize * [uint64]1MB
+              if ($usageAllocatedBytes -gt [uint64]::MaxValue - $allocatedBytes) {
+                throw 'Win32_PageFileUsage allocated size sum overflowed'
+              }
+              $usageAllocatedBytes += $allocatedBytes
+            }
             $runtimeText = & cargo run --locked --quiet --example issue898_pagefile_capability_probe
             if ($LASTEXITCODE -ne 0) {
               throw "pagefile capability helper exited $LASTEXITCODE"
             }
+            $runtime = $runtimeText | ConvertFrom-Json
+            $physicalRamBytes = [uint64]$runtime.live.physical_ram_bytes
+            $commitLimitBytes = [uint64]$runtime.live.commit_limit_bytes
+            if ($physicalRamBytes -gt [uint64]::MaxValue - $usageAllocatedBytes) {
+              throw 'RAM plus Win32_PageFileUsage allocated size overflowed'
+            }
+            $usageExpectedCommitLimitBytes = $physicalRamBytes + $usageAllocatedBytes
+            $usageCommitLimitDeltaBytes = [int64]$commitLimitBytes -
+              [int64]$usageExpectedCommitLimitBytes
             [pscustomobject]@{
               schema_version = 'ember-issue898-pagefile-capability-snapshot-v1'
               phase = $Phase
               raw_paging_files = $raw
               automatic_managed_pagefile = [bool]$computer.AutomaticManagedPagefile
               pagefile_settings = $settings
-              runtime = ($runtimeText | ConvertFrom-Json)
+              pagefile_setting_count = $settings.Count
+              pagefile_usage = $usage
+              pagefile_usage_count = $usage.Count
+              pagefile_usage_allocated_bytes = $usageAllocatedBytes
+              pagefile_usage_expected_commit_limit_bytes = $usageExpectedCommitLimitBytes
+              pagefile_usage_commit_limit_delta_bytes = $usageCommitLimitDeltaBytes
+              runtime = $runtime
             }
           }
 
@@ -293,9 +319,11 @@ jobs:
           }
           $runtimeAccepted = $null -ne $after -and
             $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
+          $measurementComplete = $null -ne $after -and
+            $null -eq $snapshotFault
           $result = if ($null -ne $mutationFault) {
             'REFUSED_BY_HOST'
-          } elseif ($null -ne $snapshotFault) {
+          } elseif (-not $measurementComplete) {
             'MEASUREMENT_FAILED'
           } elseif ($runtimeAccepted) {
             'ACCEPTED'
@@ -309,13 +337,17 @@ jobs:
           } elseif (-not $runtimeAccepted) {
             [string]$after.runtime.runtime_probe.detail
           } else { $null }
+          $rawPagingFilesAfter = $null
+          if ($null -ne $after) {
+            $rawPagingFilesAfter = [string[]]@($after.raw_paging_files)
+          }
           $record = [ordered]@{
             schema_version = 'ember-issue898-pagefile-boundary-census-v1'
             recorded_at_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
             result = $result
             fault_text = $faultText
             mutation_accepted = $null -eq $mutationFault
-            measurement_obtained = $null -ne $after -and $null -eq $snapshotFault
+            measurement_obtained = $measurementComplete
             mutation_shape = $env:MUTATION_SHAPE
             requested_pagefile_mib = $fixedMiB
             requested_pagefile_bytes = $fixedBytes
@@ -323,9 +355,23 @@ jobs:
             runner_temp_drive = $driveId
             raw_paging_files_before = $before.raw_paging_files
             automatic_managed_before = $before.automatic_managed_pagefile
+            pagefile_settings_before = $before.pagefile_settings
+            pagefile_setting_count_before = $before.pagefile_setting_count
+            pagefile_usage_before = $before.pagefile_usage
+            pagefile_usage_count_before = $before.pagefile_usage_count
+            pagefile_usage_allocated_bytes_before = $before.pagefile_usage_allocated_bytes
+            pagefile_usage_expected_commit_limit_bytes_before = $before.pagefile_usage_expected_commit_limit_bytes
+            pagefile_usage_commit_limit_delta_bytes_before = $before.pagefile_usage_commit_limit_delta_bytes
             before_runtime = $before.runtime
-            raw_paging_files_after = if ($null -ne $after) { $after.raw_paging_files } else { $null }
+            raw_paging_files_after = $rawPagingFilesAfter
             automatic_managed_after = if ($null -ne $after) { $after.automatic_managed_pagefile } else { $null }
+            pagefile_settings_after = if ($null -ne $after) { $after.pagefile_settings } else { $null }
+            pagefile_setting_count_after = if ($null -ne $after) { $after.pagefile_setting_count } else { $null }
+            pagefile_usage_after = if ($null -ne $after) { $after.pagefile_usage } else { $null }
+            pagefile_usage_count_after = if ($null -ne $after) { $after.pagefile_usage_count } else { $null }
+            pagefile_usage_allocated_bytes_after = if ($null -ne $after) { $after.pagefile_usage_allocated_bytes } else { $null }
+            pagefile_usage_expected_commit_limit_bytes_after = if ($null -ne $after) { $after.pagefile_usage_expected_commit_limit_bytes } else { $null }
+            pagefile_usage_commit_limit_delta_bytes_after = if ($null -ne $after) { $after.pagefile_usage_commit_limit_delta_bytes } else { $null }
             after_runtime = if ($null -ne $after) { $after.runtime } else { $null }
             measured_commit_limit_bytes = if ($null -ne $after) {
               [uint64]$after.runtime.live.commit_limit_bytes
