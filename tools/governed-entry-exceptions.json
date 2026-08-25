@@ -1,0 +1,54 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-governed-entry-exceptions-v1",
+  "policy": "A tracked script outside the sanctioned governed-entry homes that references the training-segment API passes only when enumerated here with a matching content digest. Path alone is never sufficient.",
+  "sanctioned_homes": [
+    "runtime/ember-lab/",
+    "tools/ember-cli/",
+    "tools/ember-restart-3b/"
+  ],
+  "exceptions": [
+    {
+      "path": "scripts/build_fixed_prior_manifest.py",
+      "sha256": "6d4bef2e558dd4156e114a217ba13c359f925995f7748b7d3fcc6ad36cb41bef",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/ember_restart/r1_launch_packet.py",
+      "sha256": "7eaec087ede528f57c7ef0cee7c96ce08b59dcafcde8b63c61268b8ef766204d",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/ember_surface2_capture.py",
+      "sha256": "d963ec44164128da77d0de70b65a540ea5253cc1daf6867901156903fd0d80e6",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/forecast_recalibration.py",
+      "sha256": "070b283e764cd937db56dbc8f0ff096837d8100573e924239f952f6d11e46547",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/legb_live_candidate_v5_scorer.py",
+      "sha256": "02974abee31a16010f565a6284ae7324f0b4884949521dd28c9a7d8441053393",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/nativization_motion_trace.py",
+      "sha256": "478be400244249979b1fee3044e3b81c0f7f813f0432305bb63a052f3e556454",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/r1_exit_battery.py",
+      "sha256": "16510502b681d3bd0aef307e1597a6db9d84bbd2df4228b96d04eeedf362b7dd",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "scripts/training_closure.py",
+      "sha256": "e3384dcde2c4a3d8e7b2bd91105a2a01afe372c77ef76433055c8b9ad8fd440a",
+      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    }
+  ]
+}
