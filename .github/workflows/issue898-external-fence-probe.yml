@@ -1,0 +1,51 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "Issue 898: external process fence probe"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue898-external-process-fence
+  cancel-in-progress: false
+
+jobs:
+  external-fence:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
+      - name: Run exact survival representation and verifier reds
+        shell: pwsh
+        working-directory: runtime/ember-lab
+        run: |
+          cargo test --locked -p ember-lab --lib foreign_process_provider_integration_tests::named_identity_exit_is_receipted_without_phantom_commit_attribution -- --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked -p ember-lab --lib foreign_pressure_probe_receipt_tests::exact_verifier_rejects_a_named_identity_that_did_not_survive_the_end_probe -- --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run governed external fence probe
+        shell: pwsh
+        working-directory: runtime/ember-lab
+        env:
+          EMBER_ISSUE898_EXTERNAL_OUTPUT: ${{ runner.temp }}\issue898-external-fence-${{ github.run_id }}
+        run: |
+          if (Test-Path -LiteralPath $env:EMBER_ISSUE898_EXTERNAL_OUTPUT) {
+            throw "no-overwrite output root already exists: $env:EMBER_ISSUE898_EXTERNAL_OUTPUT"
+          }
+          cargo test --locked -p ember-lab --test issue898_external_fence_probe issue898_external_fence_live_probe -- --ignored --exact --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload immutable probe receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue898-external-fence-${{ github.run_id }}
+          path: ${{ runner.temp }}/issue898-external-fence-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
