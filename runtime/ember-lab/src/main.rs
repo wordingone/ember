@@ -336,6 +336,23 @@ fn required_gib(
     Ok(bytes as u64)
 }
 
+fn required_u64(
+    value: &serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("certified launch {key} must be a positive integer"),
+            )
+            .into()
+        })
+}
+
 fn prepare_certified_launch(
     request: &CertifiedLaunchRequest,
 ) -> Result<PreparedCertifiedLaunch, Box<dyn std::error::Error>> {
@@ -495,15 +512,45 @@ fn prepare_certified_launch(
                 "certified launch job-memory model overflow",
             )
         })?;
+    let is_a1_route = run_spec_object
+        .get("a1_family")
+        .is_some_and(|value| !value.is_null());
+    let a1_storage_floor = execution_scope.get("a1_b_custody_floor_gib");
+    let a1_host_reserve = execution_scope.get("a1_host_commit_reserve_gib");
+    if is_a1_route && (a1_storage_floor.is_none() || a1_host_reserve.is_none()) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch A1 route lacks its declared resource authority",
+        )
+        .into());
+    }
+    if !is_a1_route && (a1_storage_floor.is_some() || a1_host_reserve.is_some()) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch non-A1 route carries A1-only resource authority",
+        )
+        .into());
+    }
+    let host_commit_reserve_bytes = if is_a1_route {
+        required_gib(execution_scope, "a1_host_commit_reserve_gib")?
+            .max(HOST_COMMIT_SURVIVAL_RESERVE_BYTES)
+    } else {
+        HOST_COMMIT_SURVIVAL_RESERVE_BYTES
+    };
     let required_available_maximum_commit_bytes = maximum_job_memory_bytes
-        .checked_add(HOST_COMMIT_SURVIVAL_RESERVE_BYTES)
+        .checked_add(host_commit_reserve_bytes)
         .ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "certified launch host-commit model overflow",
             )
         })?;
-    let storage_floor_bytes = required_gib(execution_scope, "a1_b_custody_floor_gib")?;
+    let write_budget_bytes = required_u64(requested_scope, "write_budget_bytes")?;
+    let storage_floor_bytes = if is_a1_route {
+        required_gib(execution_scope, "a1_b_custody_floor_gib")?.max(write_budget_bytes)
+    } else {
+        write_budget_bytes
+    };
 
     let receipt_stem = receipt_path
         .file_stem()
@@ -1880,10 +1927,7 @@ mod tests {
             &certificate,
             serde_json::to_vec(&json!({
                 "public_master_sha": "0123456789abcdef0123456789abcdef01234567",
-                "execution_scope": {
-                    "a1_b_custody_floor_gib": 250,
-                    "a1_host_commit_reserve_gib": 6
-                }
+                "execution_scope": {}
             }))
             .unwrap(),
         )
@@ -1900,6 +1944,7 @@ mod tests {
                     "mode": "governed-vertical",
                     "gpu_vram_gib": 20.0,
                     "transient_checkpoint_gib": 8.0,
+                    "write_budget_bytes": 123_480_309_760_u64,
                     "custody_root": root.join("custody")
                 }
             }))
@@ -2049,6 +2094,10 @@ mod tests {
         assert_eq!(
             manifest["minimum_free_vram_bytes"],
             20_u64 * 1024 * 1024 * 1024
+        );
+        assert_eq!(
+            manifest["storage_reserves"][0]["minimum_free_bytes"],
+            123_480_309_760_u64
         );
         assert!(manifest["bindings"]
             .as_array()
