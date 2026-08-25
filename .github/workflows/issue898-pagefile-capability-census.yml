@@ -126,8 +126,7 @@ jobs:
       fail-fast: false
       matrix:
         mutation_shape:
-          - delete_create
-          - update_existing
+          - pin_all_fixed
         fixed_mib:
           - 24576
           - 20480
@@ -268,6 +267,82 @@ jobs:
             }
           }
 
+          function Get-UsageRow([object] $Snapshot, [string] $Name) {
+            $rows = @($Snapshot.pagefile_usage | Where-Object { $_.Name -ieq $Name })
+            if ($rows.Count -ne 1) {
+              throw "expected exactly one active usage row for $Name; observed $($rows.Count)"
+            }
+            $rows[0]
+          }
+
+          function Get-SettingRows([object] $Snapshot, [string] $Name) {
+            @($Snapshot.pagefile_settings | Where-Object { $_.Name -ieq $Name })
+          }
+
+          function Assert-PinApplied([object] $Snapshot, [string] $Name, [uint32] $ExpectedMiB) {
+            $usageRow = Get-UsageRow $Snapshot $Name
+            $settingRows = @(Get-SettingRows $Snapshot $Name)
+            if ($settingRows.Count -ne 1) {
+              throw "pin verification requires exactly one setting for $Name; observed $($settingRows.Count)"
+            }
+            $setting = $settingRows[0]
+            if ([uint32]$setting.InitialSize -ne $ExpectedMiB -or
+                [uint32]$setting.MaximumSize -ne $ExpectedMiB -or
+                $ExpectedMiB -eq 0) {
+              throw "pin verification did not read back fixed positive $ExpectedMiB MiB for $Name"
+            }
+            if ([uint32]$usageRow.AllocatedBaseSize -ne $ExpectedMiB) {
+              throw "active allocation for $Name is $($usageRow.AllocatedBaseSize) MiB, expected $ExpectedMiB MiB"
+            }
+            if ([bool]$usageRow.TempPageFile) {
+              throw "active contributor remains a temporary pagefile after pin: $Name"
+            }
+          }
+
+          function Assert-UsageNames([object] $Snapshot, [string[]] $ExpectedNames) {
+            $actual = [string[]]@($Snapshot.pagefile_usage | ForEach-Object {
+              ([string]$_.Name).ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $expected = [string[]]@($ExpectedNames | ForEach-Object {
+              $_.ToLowerInvariant()
+            } | Sort-Object -Unique)
+            $difference = @(Compare-Object -ReferenceObject $expected -DifferenceObject $actual)
+            if ($difference.Count -ne 0) {
+              throw "active pagefile topology changed unexpectedly: $($difference | ConvertTo-Json -Compress)"
+            }
+          }
+
+          function Assert-FinalPinnedTopology([object] $Snapshot) {
+            $usageRows = @($Snapshot.pagefile_usage)
+            $settingRows = @($Snapshot.pagefile_settings)
+            if ($usageRows.Count -eq 0) { throw 'final active pagefile census is empty' }
+            if ($usageRows.Count -ne $settingRows.Count) {
+              throw "final usage/setting count mismatch: usage=$($usageRows.Count) settings=$($settingRows.Count)"
+            }
+            foreach ($usageRow in $usageRows) {
+              $settings = @(Get-SettingRows $Snapshot ([string]$usageRow.Name))
+              if ($settings.Count -ne 1) {
+                throw "final active contributor lacks one setting: $($usageRow.Name)"
+              }
+              Assert-PinApplied $Snapshot ([string]$usageRow.Name) ([uint32]$settings[0].MaximumSize)
+            }
+            foreach ($setting in $settingRows) {
+              [void](Get-UsageRow $Snapshot ([string]$setting.Name))
+            }
+            $expectedRegistry = [string[]]@($settingRows | ForEach-Object {
+              ("{0} {1} {2}" -f $_.Name, $_.InitialSize, $_.MaximumSize).ToLowerInvariant()
+            } | Sort-Object)
+            $actualRegistry = [string[]]@($Snapshot.raw_paging_files | ForEach-Object {
+              ([string]$_).Trim().ToLowerInvariant()
+            } | Sort-Object)
+            $registryDifference = @(
+              Compare-Object -ReferenceObject $expectedRegistry -DifferenceObject $actualRegistry
+            )
+            if ($registryDifference.Count -ne 0) {
+              throw "registry/settings fixed pagefile sets disagree: $($registryDifference | ConvertTo-Json -Compress)"
+            }
+          }
+
           $before = Get-CapabilitySnapshot 'BEFORE'
           $tempDrive = (Get-Item -LiteralPath $env:RUNNER_TEMP).PSDrive.Root.TrimEnd('\')
           $driveId = $tempDrive.TrimEnd(':') + ':'
@@ -282,30 +357,101 @@ jobs:
           $pagefileName = "$driveId\pagefile.sys"
 
           $mutationFault = $null
+          $mutationSnapshots = @()
           try {
             $computer = Get-CimInstance -ClassName Win32_ComputerSystem
-            Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $false } | Out-Null
-            if ($env:MUTATION_SHAPE -eq 'delete_create') {
-              @(Get-CimInstance -ClassName Win32_PageFileSetting) |
-                ForEach-Object { Remove-CimInstance -InputObject $_ }
+            $current = $before
+            if ([bool]$computer.AutomaticManagedPagefile) {
+              Set-CimInstance -InputObject $computer -Property @{
+                AutomaticManagedPagefile = $false
+              } | Out-Null
+              $current = Get-CapabilitySnapshot 'AFTER_AUTOMATIC_MANAGEMENT_DISABLED'
+              $mutationSnapshots += $current
+            }
+            if ($env:MUTATION_SHAPE -ne 'pin_all_fixed') {
+              throw "unknown mutation shape: $env:MUTATION_SHAPE"
+            }
+
+            $initialUsage = @($current.pagefile_usage)
+            if ($initialUsage.Count -eq 0) { throw 'pin-all requires at least one active pagefile' }
+            $expectedNames = [string[]]@($initialUsage | ForEach-Object { [string]$_.Name })
+
+            foreach ($usageRow in $initialUsage) {
+              $name = [string]$usageRow.Name
+              if ($name -ieq $pagefileName) { continue }
+              $desiredMiB = [uint32]$usageRow.AllocatedBaseSize
+              if ($desiredMiB -eq 0) { throw "cannot pin zero-sized active pagefile: $name" }
+              $snapshotSettings = @(Get-SettingRows $current $name)
+              $liveSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+                Where-Object { $_.Name -ieq $name })
+              if ($snapshotSettings.Count -ne $liveSettings.Count -or $liveSettings.Count -gt 1) {
+                throw "setting census changed before pinning ${name}: snapshot=$($snapshotSettings.Count) live=$($liveSettings.Count)"
+              }
+              if ($liveSettings.Count -eq 1 -and
+                  ([uint32]$snapshotSettings[0].InitialSize -ne [uint32]$liveSettings[0].InitialSize -or
+                   [uint32]$snapshotSettings[0].MaximumSize -ne [uint32]$liveSettings[0].MaximumSize)) {
+                throw "setting values changed before pinning $name"
+              }
+              $wrotePin = $false
+              if ($liveSettings.Count -eq 0) {
+                New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                  Name = $name
+                  InitialSize = $desiredMiB
+                  MaximumSize = $desiredMiB
+                } | Out-Null
+                $wrotePin = $true
+              } elseif ([uint32]$liveSettings[0].InitialSize -ne $desiredMiB -or
+                  [uint32]$liveSettings[0].MaximumSize -ne $desiredMiB) {
+                Set-CimInstance -InputObject $liveSettings[0] -Property @{
+                  InitialSize = $desiredMiB
+                  MaximumSize = $desiredMiB
+                } | Out-Null
+                $wrotePin = $true
+              }
+              if ($wrotePin) {
+                $current = Get-CapabilitySnapshot "AFTER_PIN_$($mutationSnapshots.Count)"
+                $mutationSnapshots += $current
+                Assert-UsageNames $current $expectedNames
+              }
+              Assert-PinApplied $current $name $desiredMiB
+            }
+
+            $targetSnapshotSettings = @(Get-SettingRows $current $pagefileName)
+            $targetLiveSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting |
+              Where-Object { $_.Name -ieq $pagefileName })
+            if ($targetSnapshotSettings.Count -ne $targetLiveSettings.Count -or
+                $targetLiveSettings.Count -gt 1) {
+              throw "target setting census changed before pinning ${pagefileName}: snapshot=$($targetSnapshotSettings.Count) live=$($targetLiveSettings.Count)"
+            }
+            if ($targetLiveSettings.Count -eq 1 -and
+                ([uint32]$targetSnapshotSettings[0].InitialSize -ne [uint32]$targetLiveSettings[0].InitialSize -or
+                 [uint32]$targetSnapshotSettings[0].MaximumSize -ne [uint32]$targetLiveSettings[0].MaximumSize)) {
+              throw "target setting values changed before pinning $pagefileName"
+            }
+            $wroteTargetPin = $false
+            if ($targetLiveSettings.Count -eq 0) {
               New-CimInstance -ClassName Win32_PageFileSetting -Property @{
                 Name = $pagefileName
                 InitialSize = $fixedMiB
                 MaximumSize = $fixedMiB
               } | Out-Null
-            } elseif ($env:MUTATION_SHAPE -eq 'update_existing') {
-              $sameDrive = @(Get-CimInstance -ClassName Win32_PageFileSetting |
-                Where-Object { $_.Name -ieq $pagefileName })
-              if ($sameDrive.Count -ne 1) {
-                throw "update_existing requires exactly one $pagefileName setting; observed $($sameDrive.Count)"
-              }
-              Set-CimInstance -InputObject $sameDrive[0] -Property @{
+              $expectedNames = [string[]]@($expectedNames + $pagefileName)
+              $wroteTargetPin = $true
+            } elseif ([uint32]$targetLiveSettings[0].InitialSize -ne $fixedMiB -or
+                [uint32]$targetLiveSettings[0].MaximumSize -ne $fixedMiB) {
+              Set-CimInstance -InputObject $targetLiveSettings[0] -Property @{
                 InitialSize = $fixedMiB
                 MaximumSize = $fixedMiB
               } | Out-Null
-            } else {
-              throw "unknown mutation shape: $env:MUTATION_SHAPE"
+              $wroteTargetPin = $true
             }
+            if ($wroteTargetPin) {
+              $current = Get-CapabilitySnapshot 'AFTER_TARGET_PIN'
+              $mutationSnapshots += $current
+              Assert-UsageNames $current $expectedNames
+            }
+            Assert-PinApplied $current $pagefileName $fixedMiB
+            Assert-FinalPinnedTopology $current
           } catch {
             $mutationFault = $_.Exception.ToString()
           }
@@ -316,6 +462,15 @@ jobs:
             $after = Get-CapabilitySnapshot 'AFTER'
           } catch {
             $snapshotFault = $_.Exception.ToString()
+          }
+          if ($null -ne $after -and $null -eq $mutationFault) {
+            try {
+              Assert-UsageNames $after $expectedNames
+              Assert-PinApplied $after $pagefileName $fixedMiB
+              Assert-FinalPinnedTopology $after
+            } catch {
+              $mutationFault = "final pin verification failed: $($_.Exception.ToString())"
+            }
           }
           $runtimeAccepted = $null -ne $after -and
             $after.runtime.runtime_probe.verdict -eq 'ACCEPT'
@@ -340,6 +495,7 @@ jobs:
           $rawPagingFilesAfter = $null
           $pagefileSettingsAfter = $null
           $pagefileUsageAfter = $null
+          $mutationSnapshotsRecord = [object[]]@($mutationSnapshots)
           if ($null -ne $after) {
             $rawPagingFilesAfter = [string[]]@($after.raw_paging_files)
             $pagefileSettingsAfter = [object[]]@($after.pagefile_settings)
@@ -357,6 +513,7 @@ jobs:
             requested_pagefile_bytes = $fixedBytes
             disk_reserve_bytes = $reserveBytes
             runner_temp_drive = $driveId
+            mutation_snapshots = $mutationSnapshotsRecord
             raw_paging_files_before = $before.raw_paging_files
             automatic_managed_before = $before.automatic_managed_pagefile
             pagefile_settings_before = $before.pagefile_settings
