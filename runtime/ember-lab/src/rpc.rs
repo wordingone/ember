@@ -70,6 +70,14 @@ struct JobIdParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LaunchContextParams {
+    job_id: String,
+    daemon_mode: String,
+    daemon_pid: u32,
+}
+
+#[derive(Debug, Deserialize)]
 struct DispatchManifestParams {
     manifest_utf8: String,
     manifest_sha256: String,
@@ -490,6 +498,20 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                     success(id, json!({"exit_code":exit_code,"stderr":stderr})),
                     false,
                 ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "record_launch_context" => {
+            let params: LaunchContextParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.record_launch_context(
+                &params.job_id,
+                &params.daemon_mode,
+                params.daemon_pid,
+            ) {
+                Ok(()) => (success(id, json!({"recorded":true})), false),
                 Err(error) => (operation_error(id, error), false),
             }
         }
