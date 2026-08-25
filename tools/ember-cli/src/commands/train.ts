@@ -7,11 +7,13 @@
 // HARD PRE-TRAINING GATE (load-bearing): the default command is preflight-only.
 // Explicit `--execute` mode is available only with all three certificate paths,
 // after the same cond7 launch-packet readiness preflight succeeds, and invokes only
-// the fixed certified_train_launch.py consumer. The named run_vertical_slice.py
+// Ember Lab's fixed `launch` subcommand. Rust composes the governed validator.
+// The named run_vertical_slice.py
 // command from launch_packet output is never executed as a command string. On any
 // preflight, certificate-consumer, or response failure, execution fails closed.
 
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
+import { resolveEmberLabBinary } from "./verify-training.ts";
 import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
 import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
 import { spawn } from "child_process";
@@ -31,12 +33,16 @@ export interface LaunchPacketRunResult {
   stdout: string;
 }
 
-/** A certified consumer that has crossed the only synchronous boundary the cockpit needs:
- * the OS accepted the child spawn.  Its terminal receipt remains owned by the certified
- * consumer and is surfaced by the existing receipt/activity watcher. */
+/** A governed launch that has crossed the only synchronous boundary the cockpit needs:
+ * Ember Lab dispatched the governed child and recorded its ownership context. Its terminal
+ * receipt remains daemon-owned and is surfaced by the existing receipt/activity watcher. */
 export interface CertifiedLaunchHandle {
   kind: "background";
+  /** Governed PID returned only after Ember Lab records launch ownership context. */
   pid: number;
+  jobId: string;
+  preflightReceipt: string;
+  preflightReceiptSha256: string;
   completion: Promise<LaunchPacketRunResult>;
 }
 
@@ -49,9 +55,6 @@ export interface CertifiedLaunchFailure {
 }
 
 export const PREFLIGHT_TIMEOUT_MS = 600_000;
-// The certificate permits at most 15 minutes of training. Keep one minute for
-// interpreter startup, final receipt emission, and orderly process exit.
-export const CERTIFIED_LAUNCH_TIMEOUT_MS = 16 * 60_000;
 
 /**
  * Runs a child process off the render thread and resolves only once it exits.
@@ -63,8 +66,8 @@ export const CERTIFIED_LAUNCH_TIMEOUT_MS = 16 * 60_000;
  * preflight that "instantiates a tiny CPU model and round-trips a checkpoint"). spawn
  * plus an awaited completion Promise keeps the event loop free to service timers (render tick, spinner,
  * heartbeat) while the caller still awaits the full result, unlike
- * _runPythonProcessInBackground below, which intentionally resolves at spawn instead of
- * at exit for the certified consumer's fire-and-forget dispatch.
+ * _runEmberLabLaunchInBackground below, which intentionally resolves on Rust's governed
+ * start-evidence row instead of at helper exit.
  */
 function _runPythonProcessAsync(
   executable: string,
@@ -108,16 +111,49 @@ function _runPythonProcessAsync(
   });
 }
 
-function _runPythonProcessInBackground(
+function _parseCertifiedLaunchStart(
+  line: string,
+): Omit<CertifiedLaunchHandle, "kind" | "completion"> | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (typeof value !== "object" || value === null) return null;
+  const row = value as Record<string, unknown>;
+  if (
+    row["schema_version"] !== "ember-lab-certified-launch-start-v1" ||
+    typeof row["job_id"] !== "string" ||
+    row["job_id"] === "" ||
+    typeof row["governed_pid"] !== "number" ||
+    !Number.isSafeInteger(row["governed_pid"]) ||
+    row["governed_pid"] <= 0 ||
+    typeof row["preflight_receipt"] !== "string" ||
+    row["preflight_receipt"] === "" ||
+    typeof row["preflight_receipt_sha256"] !== "string" ||
+    !/^[0-9a-f]{64}$/.test(row["preflight_receipt_sha256"])
+  ) {
+    return null;
+  }
+  return {
+    pid: row["governed_pid"],
+    jobId: row["job_id"],
+    preflightReceipt: row["preflight_receipt"],
+    preflightReceiptSha256: row["preflight_receipt_sha256"],
+  };
+}
+
+function _runEmberLabLaunchInBackground(
   executable: string,
   args: string[],
-  timeout: number,
 ): Promise<CertifiedLaunchRunnerResult> {
   return new Promise((resolveStarted) => {
     let stdout = "";
+    let pendingLine = "";
+    let outputOverflow = false;
     let settled = false;
     let startSettled = false;
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     let resolveCompletion!: (result: LaunchPacketRunResult) => void;
     const completion = new Promise<LaunchPacketRunResult>((resolve) => {
       resolveCompletion = resolve;
@@ -126,11 +162,10 @@ function _runPythonProcessInBackground(
     const finish = (result: LaunchPacketRunResult): void => {
       if (settled) return;
       settled = true;
-      if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
       resolveCompletion(result);
       if (!startSettled) {
         startSettled = true;
-        resolveStarted(result);
+        resolveStarted({ status: null, stdout: "" });
       }
     };
 
@@ -141,33 +176,33 @@ function _runPythonProcessInBackground(
       });
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-        if (Buffer.byteLength(stdout, "utf8") > 16 * 1024 * 1024) {
-          child.kill();
-          finish({ status: null, stdout: "" });
+        if (!outputOverflow) {
+          stdout += chunk;
+          if (Buffer.byteLength(stdout, "utf8") > 16 * 1024 * 1024) {
+            outputOverflow = true;
+            stdout = "";
+          }
+        }
+        if (!startSettled && !outputOverflow) {
+          pendingLine += chunk;
+          const lines = pendingLine.split(/\r?\n/);
+          pendingLine = lines.pop() ?? "";
+          for (const line of lines) {
+            const start = _parseCertifiedLaunchStart(line);
+            if (start === null) continue;
+            startSettled = true;
+            resolveStarted({ kind: "background", ...start, completion });
+            break;
+          }
         }
       });
-      const publishStarted = (): void => {
-        if (startSettled) return;
-        if (child.pid === undefined) return;
-        startSettled = true;
-        resolveStarted({
-          kind: "background",
-          pid: child.pid,
-          completion,
-        });
-      };
-      // Node and Bun both expose the owned child PID synchronously once the OS has accepted the
-      // spawn. Bun does not consistently emit Node's optional `spawn` event, so publish from the
-      // PID first and retain the event only as a compatibility fallback.
-      publishStarted();
-      child.once("spawn", publishStarted);
       child.once("error", () => finish({ status: null, stdout: "" }));
-      child.once("close", (status) => finish({ status, stdout }));
-      timeoutHandle = setTimeout(() => {
-        child.kill();
-        finish({ status: null, stdout: "" });
-      }, timeout);
+      child.once("close", (status) =>
+        finish({
+          status: outputOverflow ? null : status,
+          stdout: outputOverflow ? "" : stdout,
+        }),
+      );
     } catch {
       finish({ status: null, stdout: "" });
     }
@@ -192,12 +227,12 @@ export function _defaultLaunchPacketRunner(
   return _runPythonProcessAsync(executable, args, PREFLIGHT_TIMEOUT_MS);
 }
 
-/** Fixed certified-consumer runner with headroom above the 15-minute canary. */
+/** Governed Ember Lab launch. Certificate and job walls own the timeout; this helper is never killed. */
 export function _defaultCertifiedLaunchRunner(
   executable: string,
   args: string[],
 ): Promise<CertifiedLaunchRunnerResult> {
-  return _runPythonProcessInBackground(executable, args, CERTIFIED_LAUNCH_TIMEOUT_MS);
+  return _runEmberLabLaunchInBackground(executable, args);
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +344,7 @@ interface TrainCommandDeps {
     executable: string,
     args: string[],
   ) => LaunchPacketRunResult | Promise<LaunchPacketRunResult>;
-  /** Certified B7 consumer with a timeout separate from the CPU preflight. */
+  /** Streaming Ember Lab launch transport. */
   runCertifiedLaunch?: (
     executable: string,
     args: string[],
@@ -318,14 +353,14 @@ interface TrainCommandDeps {
   reportCertifiedLaunchFailure?: (failure: CertifiedLaunchFailure) => void;
   /** Python executable; defaults to EMBER_PYTHON_BIN env, else "python". */
   pythonBin?: string;
+  /** Governed composer executable; defaults through resolveEmberLabBinary. */
+  emberLabBinary?: string;
   /** Ember repo root override; defaults to _defaultRepoRoot(ctx.cwd). */
   repoRoot?: string;
   /** Config path override; defaults to <repoRoot>/configs/ember-restart-3b.json. */
   configPath?: string;
   /** launch_packet.py path override; defaults to <repoRoot>/tools/ember-restart-3b/launch_packet.py. */
   scriptPath?: string;
-  /** certified_train_launch.py path override. */
-  certifiedLaunchScriptPath?: string;
   /**
    * External, run-scoped launch-authority custody root. Defaults to
    * EMBER_LAUNCH_AUTHORITY_ROOT. The committed receipt tree is historical
@@ -551,8 +586,8 @@ function _parseTrainArgs(raw: string): TrainArgs {
 // ---------------------------------------------------------------------------
 
 /**
- * Interprets a certified_train_launch.py run result into a CommandResult. Shared by both
- * paths that may invoke the fixed consumer -- explicit `--execute` and `confirm <id>` --
+ * Interprets an Ember Lab launch completion into a CommandResult. Shared by both
+ * paths that may invoke the fixed composer -- explicit `--execute` and `confirm <id>` --
  * so the two paths can never drift into different response handling.
  */
 function _interpretCertifiedResult(
@@ -570,29 +605,53 @@ function _interpretCertifiedResult(
     };
   }
   let execution: Record<string, unknown>;
-  try {
-    // Defense in depth (issue #1408): the consumer redirects its child's
-    // stdout away from its own, so this should already be a single pure
-    // JSON line -- but parse only the LAST non-empty line rather than the
-    // whole stream, so a fixed runner that still leaks noise ahead of the
-    // handshake (or a future consumer regression) does not corrupt the
-    // cockpit's ability to register a successful certified launch.
-    const lines = certifiedResult.stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
-    const lastLine = lines.length > 0 ? lines[lines.length - 1] : certifiedResult.stdout;
-    const parsedResult: unknown = JSON.parse(lastLine);
-    if (typeof parsedResult !== "object" || parsedResult === null) {
-      throw new Error("not an object");
+  const lines = certifiedResult.stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
+  const parsedObjects: Record<string, unknown>[] = [];
+  const taggedCompletions: Record<string, unknown>[] = [];
+  for (const line of lines) {
+    try {
+      const candidate: unknown = JSON.parse(line);
+      if (typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)) {
+        const row = candidate as Record<string, unknown>;
+        parsedObjects.push(row);
+        if (row["schema_version"] === "ember-lab-certified-launch-completion-v1") {
+          taggedCompletions.push(row);
+        }
+      }
+    } catch {
+      // Non-JSON diagnostic lines are not terminal records.
     }
-    execution = parsedResult as Record<string, unknown>;
-  } catch {
+  }
+  if (taggedCompletions.length === 1) {
+    execution = taggedCompletions[0]!;
+  } else if (taggedCompletions.length === 0 && parsedObjects.length === 1) {
+    // Legacy certified consumers may leak plain diagnostic lines ahead of
+    // their sole JSON handshake (#1408). Non-JSON noise is ignored, while a
+    // second JSON object is ambiguous and therefore refused.
+    execution = parsedObjects[0]!;
+  } else {
     return {
       type: "message" as const,
-      message: "error: certified train consumer exited 0 without a valid execution receipt response.",
+      message: "error: certified train consumer exited 0 without exactly one valid completion record.",
       exitCode: 1,
     };
   }
   const executionReceipt = execution["execution_receipt"];
   const artifactRoot = execution["artifact_root"];
+  const operationalReceipt = execution["operational_receipt"];
+  if (
+    execution["schema_version"] === "ember-lab-certified-launch-completion-v1" &&
+    typeof operationalReceipt === "string" &&
+    operationalReceipt !== ""
+  ) {
+    return {
+      type: "message" as const,
+      message: [
+        "certified governed launch completed.",
+        `operational receipt: ${operationalReceipt}`,
+      ].join("\n"),
+    };
+  }
   if (
     typeof executionReceipt !== "string" ||
     executionReceipt === "" ||
@@ -621,7 +680,7 @@ function _isCertifiedLaunchHandle(
   return "kind" in value && value.kind === "background";
 }
 
-/** Return control to the cockpit at spawn, never at child exit.  The certified consumer remains
+/** Return control to the cockpit at governed start, never at child exit. Ember Lab remains
  * the sole terminal receipt authority; the existing activity watcher renders that receipt when
  * it lands.  Keeping a rejection handler attached prevents a background failure from becoming an
  * unhandled promise without fabricating a second completion surface. */
@@ -648,7 +707,10 @@ function _interpretCertifiedDispatch(
     type: "message" as const,
     message: [
       "certified train consumer started in background.",
-      `child pid: ${result.pid}`,
+      `governed child pid: ${result.pid}`,
+      `job id: ${result.jobId}`,
+      `preflight receipt: ${result.preflightReceipt}`,
+      `preflight receipt sha256: ${result.preflightReceiptSha256}`,
       "terminal execution receipt will appear in the activity feed.",
     ].join("\n"),
   };
@@ -668,11 +730,11 @@ function _interpretCertifiedDispatch(
  *     present and valid, mint a single-use OFFER through the panel's own confirm-only
  *     idiom (core/encounter-membrane.ts's shape, reused rather than reinvented). No
  *     command string is handed to the operator to paste.
- *  3. `/train confirm <id>` invokes exactly the same fixed certified_train_launch.py consumer
+ *  3. `/train confirm <id>` invokes exactly the same fixed Ember Lab launch composer
  *     `--execute` invokes, with the paths resolved at offer time -- only for an id
  *     minted by a green preflight earlier in this session.
  *  4. With `--execute` and all three certificate paths, invoke exactly one fixed
- *     certified_train_launch.py consumer with the EXPLICIT paths; canonical resolution
+ *     Ember Lab launch composer with the EXPLICIT paths; canonical resolution
  *     is never consulted on this path. Never execute the named command string.
  *  5. Any malformed input, nonzero exit, or invalid response fails closed.
  */
@@ -743,15 +805,12 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
         trainOffers.delete(suppliedId);
 
         const repoRoot = deps.repoRoot ?? _defaultRepoRoot(ctx.cwd);
-        const pythonBin = deps.pythonBin ?? process.env["EMBER_PYTHON_BIN"] ?? "python";
-        const certifiedLaunchScriptPath =
-          deps.certifiedLaunchScriptPath ??
-          join(repoRoot, "tools", "ember-restart-3b", "certified_train_launch.py");
+        const emberLabBinary = deps.emberLabBinary ?? resolveEmberLabBinary(repoRoot);
 
         let certifiedResult: CertifiedLaunchRunnerResult;
         try {
-          certifiedResult = await runCertifiedLaunch(pythonBin, [
-            certifiedLaunchScriptPath,
+          certifiedResult = await runCertifiedLaunch(emberLabBinary, [
+            "launch",
             "--root",
             repoRoot,
             "--certificate",
@@ -787,21 +846,13 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
 
       const repoRoot = deps.repoRoot ?? _defaultRepoRoot(ctx.cwd);
       const pythonBin = deps.pythonBin ?? process.env["EMBER_PYTHON_BIN"] ?? "python";
+      const emberLabBinary = deps.emberLabBinary ?? resolveEmberLabBinary(repoRoot);
       const configPath =
         deps.configPath ?? join(repoRoot, "configs", "ember-restart-3b.json");
       const scriptPath =
         deps.scriptPath ?? join(repoRoot, "tools", "ember-restart-3b", "launch_packet.py");
-      const certifiedLaunchScriptPath =
-        deps.certifiedLaunchScriptPath ??
-        join(
-          repoRoot,
-          "tools",
-          "ember-restart-3b",
-          "certified_train_launch.py",
-        );
-
       // (1) Run the preflight first. It is the only subprocess in default mode;
-      // certified execute mode may invoke only the fixed consumer below.
+      // certified execute mode may invoke only the fixed Ember Lab composer below.
       const firstPreflightForSession = !trainPreflightSessions.has(ctx.sessionId);
       const preflightAttempts: Array<number | null> = [];
       let result: LaunchPacketRunResult;
@@ -901,8 +952,8 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
           if (resolvedCustodyReceipt.status !== "ok") {
             throw new Error(_artifactFailureLine("custody receipt", resolvedCustodyReceipt));
           }
-          certifiedResult = await runCertifiedLaunch(pythonBin, [
-            certifiedLaunchScriptPath,
+          certifiedResult = await runCertifiedLaunch(emberLabBinary, [
+            "launch",
             "--root",
             repoRoot,
             "--certificate",
