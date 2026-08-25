@@ -4646,5 +4646,15 @@ def main(argv: list[str] | None = None) -> int:
     return exit_code
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+# NOT DIRECTLY RUNNABLE (issue 898). The `if __name__ == "__main__"` entry point
+# was removed. Every gate in this file is unchanged and still runs on every
+# launch -- declaration-ledger membership, completion-receipt and conjunct
+# authority, requested-scope subset, run-scoped custody, resume and specialist
+# and semantic and A1 route validation, and runner argv derivation are all still
+# performed by `main` under the same argument contract. What changed is WHO
+# invokes it: the daemon dispatches this file as a caged child with its path and
+# sha256 pinned in a manifest the daemon builds, so a certified launch is born
+# inside the job object, behind the commit and VRAM ceilings and the
+# foreign-pressure fence, instead of in whatever host state a person's shell
+# happened to have. A launcher a person runs by hand is the class issue 898
+# ends; the repo guard's launcher-shape check refuses its reintroduction.
