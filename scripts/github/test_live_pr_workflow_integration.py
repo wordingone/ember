@@ -48,7 +48,7 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
             {
                 "python",
                 "rust",
-                "rust-linux-compile",
+                "rust-linux-test",
                 "cli",
                 "launcher",
                 "production-rung-replay",
