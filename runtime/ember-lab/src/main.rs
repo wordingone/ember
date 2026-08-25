@@ -16,16 +16,488 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_PIPE_ENV: &str = "EMBER_LAB_PIPE";
 const DISPATCH_MAXIMUM_JOB_MEMORY_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES";
+const GIB: u64 = 1024 * 1024 * 1024;
+const CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES: u64 = 2 * GIB;
+const HOST_COMMIT_SURVIVAL_RESERVE_BYTES: u64 = 10 * GIB;
+
+struct PreparedCertifiedLaunch {
+    manifest: Value,
+    manifest_path: PathBuf,
+    job_id: String,
+    receipt_path: PathBuf,
+}
+
+#[derive(Debug)]
+struct CertifiedLaunchCompletion {
+    exit_code: i32,
+    stderr: String,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn launch_certified_with<F, S>(
+    root: &Path,
+    certificate_path: &Path,
+    declaration_ledger_path: &Path,
+    run_spec_path: &Path,
+    custody_receipt_sha256: &str,
+    pipe: &str,
+    receipt_path: &Path,
+    python_executable: &Path,
+    now_ms: i64,
+    mut rpc: F,
+    wait: S,
+) -> Result<CertifiedLaunchCompletion, Box<dyn std::error::Error>>
+where
+    F: FnMut(&Value) -> Result<Value, Box<dyn std::error::Error>>,
+    S: FnMut(),
+{
+    let prepared = prepare_certified_launch(
+        root,
+        certificate_path,
+        declaration_ledger_path,
+        run_spec_path,
+        custody_receipt_sha256,
+        pipe,
+        receipt_path,
+        python_executable,
+        now_ms,
+    )?;
+    let manifest_bytes = std::fs::read(&prepared.manifest_path)?;
+    let manifest_utf8 = String::from_utf8(manifest_bytes.clone())?;
+    let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
+    let dispatched = rpc(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "dispatch_manifest",
+        "params": {
+            "manifest_utf8": manifest_utf8,
+            "manifest_sha256": manifest_sha256
+        }
+    }))?;
+    if dispatched.get("pid").and_then(Value::as_u64).is_none()
+        || dispatched
+            .get("preflight_receipt_sha256")
+            .and_then(Value::as_str)
+            .is_none()
+    {
+        return Err(std::io::Error::other(
+            "certified launch dispatch response lacks owned child evidence",
+        )
+        .into());
+    }
+    complete_certified_launch(
+        &prepared.job_id,
+        &prepared.receipt_path,
+        |request| rpc(request),
+        wait,
+    )
+}
+
+fn complete_certified_launch<F, S>(
+    job_id: &str,
+    receipt_path: &Path,
+    mut rpc: F,
+    mut wait: S,
+) -> Result<CertifiedLaunchCompletion, Box<dyn std::error::Error>>
+where
+    F: FnMut(&Value) -> Result<Value, Box<dyn std::error::Error>>,
+    S: FnMut(),
+{
+    loop {
+        let state = rpc(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "job_state",
+            "params": {"job_id": job_id}
+        }))?;
+        match state.get("state").and_then(Value::as_str) {
+            Some("exited" | "failed" | "stopped") => break,
+            Some("starting" | "running" | "stopping") => wait(),
+            Some(other) => {
+                return Err(std::io::Error::other(format!(
+                    "certified launch job returned unknown state {other}"
+                ))
+                .into())
+            }
+            None => {
+                return Err(std::io::Error::other(
+                    "certified launch job disappeared before terminal evidence",
+                )
+                .into())
+            }
+        }
+    }
+    let result = rpc(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "job_result",
+        "params": {"job_id": job_id}
+    }))?;
+    let exit_code = result
+        .get("exit_code")
+        .and_then(Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok())
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch terminal result lacks an i32 exit code")
+        })?;
+    let stderr = result
+        .get("stderr")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch terminal result lacks UTF-8 stderr")
+        })?
+        .to_string();
+    let exported = rpc(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "export_receipt",
+        "params": {"job_id": job_id, "path": receipt_path}
+    }))?;
+    if exported.get("exported") != Some(&Value::Bool(true)) {
+        return Err(
+            std::io::Error::other("certified launch operational receipt was not exported").into(),
+        );
+    }
+    Ok(CertifiedLaunchCompletion { exit_code, stderr })
+}
+
+fn required_object<'a>(
+    value: &'a Value,
+    key: &str,
+) -> Result<&'a serde_json::Map<String, Value>, Box<dyn std::error::Error>> {
+    value.get(key).and_then(Value::as_object).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("certified launch {key} must be an object"),
+        )
+        .into()
+    })
+}
+
+fn required_string<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<&'a str, Box<dyn std::error::Error>> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("certified launch {key} must be a non-empty string"),
+            )
+            .into()
+        })
+}
+
+fn required_gib(
+    value: &serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    let gib = value
+        .get(key)
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("certified launch {key} must be a positive finite number"),
+            )
+        })?;
+    let bytes = gib * GIB as f64;
+    if bytes > u64::MAX as f64 || bytes.fract() != 0.0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("certified launch {key} is not an exact byte quantity"),
+        )
+        .into());
+    }
+    Ok(bytes as u64)
+}
+
+fn prepare_certified_launch(
+    root: &Path,
+    certificate_path: &Path,
+    declaration_ledger_path: &Path,
+    run_spec_path: &Path,
+    custody_receipt_sha256: &str,
+    pipe: &str,
+    receipt_path: &Path,
+    python_executable: &Path,
+    now_ms: i64,
+) -> Result<PreparedCertifiedLaunch, Box<dyn std::error::Error>> {
+    let certificate: Value = serde_json::from_slice(&std::fs::read(certificate_path)?)?;
+    let run_spec: Value = serde_json::from_slice(&std::fs::read(run_spec_path)?)?;
+    let certificate_object = certificate.as_object().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch certificate must be an object",
+        )
+    })?;
+    let run_spec_object = run_spec.as_object().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch run spec must be an object",
+        )
+    })?;
+    if required_string(run_spec_object, "schema_version")? != "ember-certified-train-run-v1" {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch run spec schema is not ember-certified-train-run-v1",
+        )
+        .into());
+    }
+    let source_commit = required_string(certificate_object, "public_master_sha")?;
+    if source_commit.len() != 40 || !source_commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch public_master_sha is invalid",
+        )
+        .into());
+    }
+    let execution_scope = required_object(&certificate, "execution_scope")?;
+    let requested_scope = required_object(&run_spec, "requested_scope")?;
+    if required_string(requested_scope, "mode")? != "governed-vertical" {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch requested mode is not governed-vertical",
+        )
+        .into());
+    }
+    let run_id = required_string(run_spec_object, "run_id")?;
+    if run_id
+        .bytes()
+        .any(|byte| !(byte.is_ascii_alphanumeric() || b"-_.".contains(&byte)))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch run_id is not path-safe",
+        )
+        .into());
+    }
+    let requested_custody_root = PathBuf::from(required_string(requested_scope, "custody_root")?);
+    if !requested_custody_root.is_absolute() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch custody root must be absolute",
+        )
+        .into());
+    }
+    let run_custody_root = requested_custody_root.join(run_id);
+    let canonical_run_custody_root = std::fs::canonicalize(&run_custody_root)?;
+    let receipt_parent = std::fs::canonicalize(receipt_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch receipt lacks a parent",
+        )
+    })?)?;
+    if !receipt_path.is_absolute()
+        || !receipt_parent.starts_with(&canonical_run_custody_root)
+        || receipt_path.exists()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch receipt must be a new absolute path inside the run custody root",
+        )
+        .into());
+    }
+    let validator = root.join("tools/ember-restart-3b/certified_train_launch.py");
+    let readme = root.join("README.md");
+    let custody_receipt = certificate_path
+        .parent()
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch certificate lacks a packet directory",
+            )
+        })?
+        .join("launch-authority-custody.json");
+    for (label, path) in [
+        ("python executable", python_executable),
+        ("certified validator", validator.as_path()),
+        ("repository root binding", readme.as_path()),
+        ("certificate", certificate_path),
+        ("declaration ledger", declaration_ledger_path),
+        ("run spec", run_spec_path),
+        ("custody receipt", custody_receipt.as_path()),
+    ] {
+        if !path.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "certified launch {label} is unavailable at {}",
+                    path.display()
+                ),
+            )
+            .into());
+        }
+    }
+    let actual_custody_sha256 = hash_file(&custody_receipt)?;
+    if custody_receipt_sha256.len() != 64
+        || !custody_receipt_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+        || actual_custody_sha256 != custody_receipt_sha256
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch custody receipt SHA-256 mismatch",
+        )
+        .into());
+    }
+
+    let gpu_vram_bytes = required_gib(requested_scope, "gpu_vram_gib")?;
+    let checkpoint_bytes = required_gib(requested_scope, "transient_checkpoint_gib")?;
+    let telemetry_bytes = 4 * GIB;
+    let loader_bytes = gpu_vram_bytes.checked_mul(4).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "certified launch host-memory model overflow",
+        )
+    })?;
+    let simulated_peak_commit_bytes = loader_bytes
+        .checked_add(checkpoint_bytes)
+        .and_then(|value| value.checked_add(telemetry_bytes))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch host-memory model overflow",
+            )
+        })?;
+    let maximum_job_memory_bytes = simulated_peak_commit_bytes
+        .checked_add(CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch job-memory model overflow",
+            )
+        })?;
+    let required_available_maximum_commit_bytes = maximum_job_memory_bytes
+        .checked_add(HOST_COMMIT_SURVIVAL_RESERVE_BYTES)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch host-commit model overflow",
+            )
+        })?;
+    let storage_floor_bytes = required_gib(execution_scope, "a1_b_custody_floor_gib")?;
+
+    let receipt_stem = receipt_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch receipt has no UTF-8 stem",
+            )
+        })?;
+    let cache_root = receipt_parent.join(format!(".{receipt_stem}-dispatch-{now_ms}"));
+    std::fs::create_dir(&cache_root)?;
+    let mut env = BTreeMap::new();
+    for key in [
+        "TEMP",
+        "TMP",
+        "TORCH_HOME",
+        "TRITON_CACHE_DIR",
+        "CUDA_CACHE_PATH",
+        "HF_HOME",
+        "XDG_CACHE_HOME",
+    ] {
+        let directory = cache_root.join(key.to_ascii_lowercase());
+        std::fs::create_dir(&directory)?;
+        env.insert(key.to_string(), directory.to_string_lossy().into_owned());
+    }
+    env.insert("EMBER_LAB_PIPE".into(), pipe.into());
+    env.insert("PYTHONDONTWRITEBYTECODE".into(), "1".into());
+    env.insert("PYTHONFAULTHANDLER".into(), "1".into());
+    env.insert("PYTHONUNBUFFERED".into(), "1".into());
+    let preflight_receipt = receipt_parent.join(format!("{receipt_stem}.preflight.json"));
+    if preflight_receipt.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "certified launch preflight receipt already exists",
+        )
+        .into());
+    }
+    let job_id = format!("{run_id}-launch-{now_ms}");
+    let bindings = [
+        ("config", validator.as_path()),
+        ("config", readme.as_path()),
+        ("config", certificate_path),
+        ("input", declaration_ledger_path),
+        ("manifest", run_spec_path),
+        ("input", custody_receipt.as_path()),
+    ]
+    .into_iter()
+    .map(
+        |(kind, path)| -> Result<Value, Box<dyn std::error::Error>> {
+            Ok(json!({"kind": kind, "path": path, "sha256": hash_file(path)?}))
+        },
+    )
+    .collect::<Result<Vec<_>, _>>()?;
+    let manifest = json!({
+        "schema_version": "ember-lab-dispatch-manifest-v3",
+        "job_id": job_id,
+        "source_commit": source_commit,
+        "not_before_ms": now_ms,
+        "expires_at_ms": now_ms + 3_600_000,
+        "resource_lease": format!("gpu:{job_id}"),
+        "program": {"path": python_executable, "sha256": hash_file(python_executable)?},
+        "args": [
+            validator.to_string_lossy(),
+            "--root", root.to_string_lossy(),
+            "--certificate", certificate_path.to_string_lossy(),
+            "--declaration-ledger", declaration_ledger_path.to_string_lossy(),
+            "--run-spec", run_spec_path.to_string_lossy(),
+            "--custody-receipt-sha256", custody_receipt_sha256
+        ],
+        "workload_profile": {
+            "profile_id": "governed_vertical",
+            "pinned_host_producers": [
+                {"kind": "training_data_loader", "maximum_bytes": loader_bytes},
+                {"kind": "checkpoint_writer", "maximum_bytes": checkpoint_bytes},
+                {"kind": "telemetry_buffer", "maximum_bytes": telemetry_bytes}
+            ],
+            "requires_ui_responsiveness": false,
+            "cpu_rate_percent": 90
+        },
+        "cpu_pacing_class": "unpaced",
+        "window_contract": "headless_no_windows",
+        "env": env,
+        "bindings": bindings,
+        "custody_root": canonical_run_custody_root,
+        "storage_reserves": [{"root": requested_custody_root, "minimum_free_bytes": storage_floor_bytes}],
+        "minimum_free_vram_bytes": gpu_vram_bytes,
+        "required_available_maximum_commit_bytes": required_available_maximum_commit_bytes,
+        "maximum_job_memory_bytes": maximum_job_memory_bytes,
+        "simulated_peak_commit_bytes": simulated_peak_commit_bytes,
+        "preflight_receipt": preflight_receipt
+    });
+    let manifest_path = cache_root.join("dispatch-manifest.json");
+    let mut manifest_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&manifest_path)?;
+    manifest_file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
+    manifest_file.sync_all()?;
+    Ok(PreparedCertifiedLaunch {
+        manifest,
+        manifest_path,
+        job_id,
+        receipt_path: receipt_path.to_path_buf(),
+    })
+}
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> --pipe <\\\\.\\pipe\\name> --receipt <path>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -36,6 +508,15 @@ enum Command {
     Dispatch {
         pipe: String,
         manifest: PathBuf,
+    },
+    Launch {
+        root: PathBuf,
+        certificate: PathBuf,
+        declaration_ledger: PathBuf,
+        run_spec: PathBuf,
+        custody_receipt_sha256: String,
+        pipe: String,
+        receipt: PathBuf,
     },
     ResourceGuardRearm {
         pipe: String,
@@ -169,6 +650,43 @@ impl RehearsalRunner for CurrentAuthorityRunner {
 fn parse_args() -> Result<Command, String> {
     let mut args = std::env::args().skip(1);
     let command = args.next().ok_or_else(|| usage().to_string())?;
+
+    if command == "launch" {
+        let mut root = None;
+        let mut certificate = None;
+        let mut declaration_ledger = None;
+        let mut run_spec = None;
+        let mut custody_receipt_sha256 = None;
+        let mut pipe = None;
+        let mut receipt = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--root" => root = Some(PathBuf::from(value)),
+                "--certificate" => certificate = Some(PathBuf::from(value)),
+                "--declaration-ledger" => declaration_ledger = Some(PathBuf::from(value)),
+                "--run-spec" => run_spec = Some(PathBuf::from(value)),
+                "--custody-receipt-sha256" => custody_receipt_sha256 = Some(value),
+                "--pipe" => pipe = Some(value),
+                "--receipt" => receipt = Some(PathBuf::from(value)),
+                _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::Launch {
+            root: root.ok_or_else(|| format!("missing --root\n{}", usage()))?,
+            certificate: certificate
+                .ok_or_else(|| format!("missing --certificate\n{}", usage()))?,
+            declaration_ledger: declaration_ledger
+                .ok_or_else(|| format!("missing --declaration-ledger\n{}", usage()))?,
+            run_spec: run_spec.ok_or_else(|| format!("missing --run-spec\n{}", usage()))?,
+            custody_receipt_sha256: custody_receipt_sha256
+                .ok_or_else(|| format!("missing --custody-receipt-sha256\n{}", usage()))?,
+            pipe: pipe.ok_or_else(|| format!("missing --pipe\n{}", usage()))?,
+            receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
+        });
+    }
 
     if command == "verify-training" {
         let mut root = None;
@@ -851,6 +1369,32 @@ fn resource_guard_rearm(
     call_rpc(pipe, &request, "resource-guard-rearm")
 }
 
+fn resolve_python_executable() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut candidates = Vec::new();
+    if let Some(explicit) = std::env::var_os("EMBER_PYTHON") {
+        candidates.push(PathBuf::from(explicit));
+    }
+    if let Some(home) = std::env::var_os("PYTHONHOME") {
+        candidates.push(PathBuf::from(home).join("python.exe"));
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&path) {
+            candidates.push(directory.join("python.exe"));
+            candidates.push(directory.join("python3.exe"));
+        }
+    }
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Ok(std::fs::canonicalize(candidate)?);
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "certified launch could not resolve a Python executable from EMBER_PYTHON, PYTHONHOME, or PATH",
+    )
+    .into())
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     match parse_args().map_err(std::io::Error::other)? {
         Command::Serve { db, pipe } => {
@@ -860,6 +1404,45 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Dispatch { pipe, manifest } => {
             println!("{}", serde_json::to_string(&dispatch(&pipe, &manifest)?)?);
+        }
+        Command::Launch {
+            root,
+            certificate,
+            declaration_ledger,
+            run_spec,
+            custody_receipt_sha256,
+            pipe,
+            receipt,
+        } => {
+            let python = resolve_python_executable()?;
+            let now_ms = i64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())?;
+            let completion = launch_certified_with(
+                &root,
+                &certificate,
+                &declaration_ledger,
+                &run_spec,
+                &custody_receipt_sha256,
+                &pipe,
+                &receipt,
+                &python,
+                now_ms,
+                |request| call_rpc(&pipe, request, "launch"),
+                || std::thread::sleep(Duration::from_millis(100)),
+            )?;
+            if !completion.stderr.is_empty() {
+                eprint!("{}", completion.stderr);
+                std::io::stderr().flush()?;
+            }
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "exit_code": completion.exit_code,
+                    "operational_receipt": receipt
+                }))?
+            );
+            if completion.exit_code != 0 {
+                std::process::exit(completion.exit_code);
+            }
         }
         Command::ResourceGuardRearm {
             pipe,
@@ -1004,6 +1587,187 @@ fn main() {
 mod tests {
     use super::*;
     use ember_lab::{JobSpec, ReceiptArtifact};
+
+    #[test]
+    fn certified_launch_manifest_is_derived_and_pins_the_exact_validator_inputs() {
+        let root = std::env::temp_dir().join(format!(
+            "ember-lab-certified-launch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let repo = root.join("repo");
+        let packet = root.join("custody").join("run-1").join("launch-authority");
+        std::fs::create_dir_all(repo.join("tools/ember-restart-3b")).unwrap();
+        std::fs::create_dir_all(&packet).unwrap();
+        std::fs::write(repo.join("README.md"), b"bound root").unwrap();
+        let validator = repo.join("tools/ember-restart-3b/certified_train_launch.py");
+        std::fs::write(&validator, b"print('validator')\n").unwrap();
+        let python = root.join("python.exe");
+        std::fs::write(&python, b"python fixture").unwrap();
+        let certificate = packet.join("certificate.json");
+        std::fs::write(
+            &certificate,
+            serde_json::to_vec(&json!({
+                "public_master_sha": "0123456789abcdef0123456789abcdef01234567",
+                "execution_scope": {
+                    "a1_b_custody_floor_gib": 250,
+                    "a1_host_commit_reserve_gib": 6
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let ledger = packet.join("declaration-ledger.jsonl");
+        std::fs::write(&ledger, b"{}\n").unwrap();
+        let run_spec = packet.join("run-spec.json");
+        std::fs::write(
+            &run_spec,
+            serde_json::to_vec(&json!({
+                "schema_version": "ember-certified-train-run-v1",
+                "run_id": "run-1",
+                "requested_scope": {
+                    "mode": "governed-vertical",
+                    "gpu_vram_gib": 20.0,
+                    "transient_checkpoint_gib": 8.0,
+                    "custody_root": root.join("custody")
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let custody = packet.join("launch-authority-custody.json");
+        std::fs::write(&custody, b"custody receipt").unwrap();
+        let custody_sha256 = hash_file(&custody).unwrap();
+        let receipt = root.join("custody/run-1/certified-launch.json");
+
+        let mut refused_rpc_calls = 0;
+        let refusal = launch_certified_with(
+            &repo,
+            &certificate,
+            &ledger,
+            &run_spec,
+            &"0".repeat(64),
+            r"\\.\pipe\ember-lab-test",
+            &receipt,
+            &python,
+            1_800_000_000_000,
+            |_request| {
+                refused_rpc_calls += 1;
+                Ok(Value::Null)
+            },
+            || {},
+        )
+        .unwrap_err();
+        assert!(refusal
+            .to_string()
+            .contains("custody receipt SHA-256 mismatch"));
+        assert_eq!(
+            refused_rpc_calls, 0,
+            "no dispatch RPC means no child and no job row"
+        );
+
+        let prepared = prepare_certified_launch(
+            &repo,
+            &certificate,
+            &ledger,
+            &run_spec,
+            &custody_sha256,
+            r"\\.\pipe\ember-lab-test",
+            &receipt,
+            &python,
+            1_800_000_000_000,
+        )
+        .unwrap();
+        let manifest = prepared.manifest;
+        assert_eq!(manifest["schema_version"], "ember-lab-dispatch-manifest-v3");
+        assert_eq!(
+            manifest["source_commit"],
+            "0123456789abcdef0123456789abcdef01234567"
+        );
+        assert_eq!(
+            manifest["program"]["path"],
+            python.to_string_lossy().as_ref()
+        );
+        assert_eq!(manifest["program"]["sha256"], hash_file(&python).unwrap());
+        assert_eq!(manifest["args"][0], validator.to_string_lossy().as_ref());
+        assert_eq!(manifest["args"][1], "--root");
+        assert_eq!(manifest["args"][3], "--certificate");
+        assert_eq!(manifest["args"][5], "--declaration-ledger");
+        assert_eq!(manifest["args"][7], "--run-spec");
+        assert_eq!(manifest["args"][9], "--custody-receipt-sha256");
+        assert_eq!(manifest["args"][10], custody_sha256);
+        assert_eq!(
+            manifest["workload_profile"]["profile_id"],
+            "governed_vertical"
+        );
+        assert_eq!(
+            manifest["simulated_peak_commit_bytes"],
+            92_u64 * 1024 * 1024 * 1024
+        );
+        assert_eq!(
+            manifest["maximum_job_memory_bytes"],
+            94_u64 * 1024 * 1024 * 1024
+        );
+        assert_eq!(
+            manifest["required_available_maximum_commit_bytes"],
+            104_u64 * 1024 * 1024 * 1024
+        );
+        assert_eq!(
+            manifest["minimum_free_vram_bytes"],
+            20_u64 * 1024 * 1024 * 1024
+        );
+        assert!(manifest["bindings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|binding| {
+                binding["path"] == validator.to_string_lossy().as_ref()
+                    && binding["sha256"] == hash_file(&validator).unwrap()
+            }));
+        assert_eq!(prepared.job_id, manifest["job_id"]);
+        assert_eq!(prepared.receipt_path, receipt);
+    }
+
+    #[test]
+    fn certified_launch_completion_exports_receipt_and_propagates_exact_child_result() {
+        let receipt = PathBuf::from(r"B:\custody\certified-launch.json");
+        let mut methods = Vec::new();
+        let mut state_samples = 0;
+        let completion = complete_certified_launch(
+            "run-1-launch-1800000000000",
+            &receipt,
+            |request| {
+                let method = request["method"].as_str().unwrap().to_string();
+                methods.push(method.clone());
+                Ok(match method.as_str() {
+                    "job_state" => {
+                        state_samples += 1;
+                        json!({"state": if state_samples == 1 { "running" } else { "exited" }})
+                    }
+                    "job_result" => json!({
+                        "exit_code": 2,
+                        "stderr": "error: declaration-ledger membership failed\r\n"
+                    }),
+                    "export_receipt" => json!({"exported": true}),
+                    _ => panic!("unexpected method {method}"),
+                })
+            },
+            || {},
+        )
+        .unwrap();
+        assert_eq!(completion.exit_code, 2);
+        assert_eq!(
+            completion.stderr,
+            "error: declaration-ledger membership failed\r\n"
+        );
+        assert_eq!(
+            methods,
+            ["job_state", "job_state", "job_result", "export_receipt"]
+        );
+    }
 
     #[test]
     fn arbitrary_phase_bytes_without_current_producer_refuse() {

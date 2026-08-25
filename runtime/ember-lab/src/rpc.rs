@@ -480,6 +480,19 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Err(error) => (operation_error(id, error), false),
             }
         }
+        "job_result" => {
+            let params: JobIdParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.job_result(&params.job_id) {
+                Ok((exit_code, stderr)) => (
+                    success(id, json!({"exit_code":exit_code,"stderr":stderr})),
+                    false,
+                ),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
         "shutdown" => (success(id, json!({"status": "shutting_down"})), true),
         method => (method_not_found(id, method), false),
     }
