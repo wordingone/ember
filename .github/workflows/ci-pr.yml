@@ -151,6 +151,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked --test rpc_named_pipe named_pipe_rpc_survives_daemon_restart_and_controls_bound_job -- --exact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  rust-linux-compile:
+    # Compile every ember-lab Rust target on Linux before merge. The Windows
+    # Rust job cannot detect a Linux test calling a helper hidden by
+    # cfg(windows), while ci-main discovers that class only after merge.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: runtime/ember-lab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Lint all Rust targets on Linux
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Compile complete Rust test suite on Linux
+        run: cargo test --locked --no-run
   production-rung-replay:
     # Class-kill for #1302: a generator/tokenizer/config edit that lands
     # without re-minting the checked-in rung must fail HERE, on the PR --
@@ -224,7 +242,7 @@ jobs:
         run: python -B scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
-    needs: [python, owned-process-posix, rust, cli, launcher, production-rung-replay]
+    needs: [python, owned-process-posix, rust, rust-linux-compile, cli, launcher, production-rung-replay]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
