@@ -64,6 +64,9 @@ fn fresh_database_schema_seven_contains_foreign_pressure_tables() {
             |row| row.get(0),
         )
         .unwrap();
+    #[cfg(windows)]
+    assert_eq!(observation_count, 1);
+    #[cfg(not(windows))]
     assert_eq!(observation_count, 0);
 
     let seed: (String, i64, String) = conn
@@ -74,15 +77,40 @@ fn fresh_database_schema_seven_contains_foreign_pressure_tables() {
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .unwrap();
-    assert_eq!(seed.0, "probe_failed");
-    assert_eq!(seed.1, 0);
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&seed.2).unwrap(),
-        json!({
-            "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
-            "result": "NOT_YET_SAMPLED",
-        })
-    );
+    #[cfg(windows)]
+    {
+        let observation: (i64, String, String) = conn
+            .query_row(
+                "SELECT observed_at_ms,outcome,payload_json
+                 FROM foreign_process_pressure_observations",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert!(observation.0 > 0);
+        assert_eq!(seed.0, observation.1);
+        assert_eq!(seed.1, observation.0);
+        assert_eq!(seed.2, observation.2);
+        let payload: serde_json::Value = serde_json::from_str(&seed.2).unwrap();
+        assert_eq!(
+            payload["schema_version"],
+            "ember-lab-foreign-process-pressure-observation-v1"
+        );
+        assert_ne!(payload["result"], "NOT_YET_SAMPLED");
+        assert_eq!(payload["foreign_process_control"], false);
+    }
+    #[cfg(not(windows))]
+    {
+        assert_eq!(seed.0, "probe_failed");
+        assert_eq!(seed.1, 0);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&seed.2).unwrap(),
+            json!({
+                "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+                "result": "NOT_YET_SAMPLED",
+            })
+        );
+    }
 
     drop(conn);
     fs::remove_dir_all(root).unwrap();
@@ -1128,20 +1156,22 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
     let error = rollback_empty_foreign_process_pressure_migration(&wrong_version).unwrap_err();
     assert!(format!("{error:?}").contains("requires database schema version 7"));
 
-    let ledger = root.join("ledger.sqlite3");
-    drop(Daemon::open(&ledger).unwrap());
-    reset_to_empty_pressure_seed(&ledger);
-    rusqlite::Connection::open(&ledger)
+    let mismatch = root.join("mismatch.sqlite3");
+    drop(Daemon::open(&mismatch).unwrap());
+    reset_to_empty_pressure_seed(&mismatch);
+    rusqlite::Connection::open(&mismatch)
         .unwrap()
         .execute(
             "INSERT INTO foreign_process_pressure_observations(observed_at_ms,outcome,payload_json) VALUES(1,'clear','{}')",
             [],
         )
         .unwrap();
-    let error = rollback_empty_foreign_process_pressure_migration(&ledger).unwrap_err();
-    assert!(format!("{error:?}").contains("observation ledger is nonempty"));
+    let error = rollback_empty_foreign_process_pressure_migration(&mismatch).unwrap_err();
+    assert!(format!("{error:?}").contains(
+        "state is neither the pristine migration seed nor one validated startup observation"
+    ));
     assert_eq!(
-        rusqlite::Connection::open(&ledger)
+        rusqlite::Connection::open(&mismatch)
             .unwrap()
             .query_row(
                 "SELECT value FROM metadata WHERE key='schema_version'",
@@ -1152,18 +1182,23 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
         "7"
     );
 
-    let state = root.join("state.sqlite3");
-    drop(Daemon::open(&state).unwrap());
-    reset_to_empty_pressure_seed(&state);
-    rusqlite::Connection::open(&state)
-        .unwrap()
-        .execute(
-            "UPDATE foreign_process_pressure_state SET state='clear',observed_at_ms=1,observation_json='{}' WHERE singleton=1",
-            [],
-        )
-        .unwrap();
-    let error = rollback_empty_foreign_process_pressure_migration(&state).unwrap_err();
-    assert!(format!("{error:?}").contains("singleton is not the pristine migration seed"));
+    let history = root.join("history.sqlite3");
+    drop(Daemon::open(&history).unwrap());
+    reset_to_empty_pressure_seed(&history);
+    let conn = rusqlite::Connection::open(&history).unwrap();
+    conn.execute(
+        "INSERT INTO foreign_process_pressure_observations(observed_at_ms,outcome,payload_json) VALUES(1,'clear','{}')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO foreign_process_pressure_observations(observed_at_ms,outcome,payload_json) VALUES(2,'observed','{}')",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+    let error = rollback_empty_foreign_process_pressure_migration(&history).unwrap_err();
+    assert!(format!("{error:?}").contains("observation ledger contains history"));
 
     fs::remove_dir_all(root).unwrap();
 }

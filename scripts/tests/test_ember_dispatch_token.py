@@ -84,6 +84,62 @@ def _write_canonical_repo(tmp_path):
     }
 
 
+def test_named_pipe_connect_retries_only_transient_listener_states(monkeypatch):
+    handles = iter([-1, -1, 42])
+    errors = iter([2, 2, 231, 231])
+    waited = []
+    monkeypatch.setattr(token.time, "monotonic", lambda: 1.0)
+
+    handle = token._open_pipe_with_bounded_retry(
+        VALID_PIPE,
+        lambda *_args: next(handles),
+        lambda pipe, milliseconds: waited.append((pipe, milliseconds)) or False,
+        -1,
+        lambda: next(errors),
+    )
+
+    assert handle == 42
+    assert waited == [
+        (VALID_PIPE, token._PIPE_CONNECT_RETRY_MILLISECONDS),
+        (VALID_PIPE, token._PIPE_CONNECT_RETRY_MILLISECONDS),
+    ]
+
+
+def test_named_pipe_connect_refuses_nontransient_error_without_retry(monkeypatch):
+    waited = []
+    monkeypatch.setattr(token.time, "monotonic", lambda: 1.0)
+
+    with pytest.raises(OSError) as refused:
+        token._open_pipe_with_bounded_retry(
+            VALID_PIPE,
+            lambda *_args: -1,
+            lambda *_args: waited.append(True) or True,
+            -1,
+            lambda: 5,  # ERROR_ACCESS_DENIED
+        )
+
+    assert refused.value.errno == 5
+    assert waited == []
+
+
+def test_named_pipe_connect_transient_retry_is_deadline_bounded(monkeypatch):
+    observed_times = iter([1.0, 4.0])
+    waited = []
+    monkeypatch.setattr(token.time, "monotonic", lambda: next(observed_times))
+
+    with pytest.raises(OSError) as refused:
+        token._open_pipe_with_bounded_retry(
+            VALID_PIPE,
+            lambda *_args: -1,
+            lambda *_args: waited.append(True) or True,
+            -1,
+            lambda: 231,  # ERROR_PIPE_BUSY
+        )
+
+    assert refused.value.errno == 231
+    assert waited == []
+
+
 def _well_formed_envelope(repo_fixture, daemon_pid: int) -> dict:
     return {
         "server_pid": daemon_pid,

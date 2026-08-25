@@ -850,8 +850,8 @@ fn handle_connection(
 
 #[cfg(windows)]
 pub fn serve_named_pipe(daemon: Arc<Daemon>, pipe_name: &str) -> io::Result<()> {
-    use std::fs::File;
-    use std::os::windows::io::{FromRawHandle, RawHandle};
+    use std::fs::{File, OpenOptions};
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
     use windows_sys::Win32::Foundation::{
         CloseHandle, GetLastError, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE,
     };
@@ -859,7 +859,7 @@ pub fn serve_named_pipe(daemon: Arc<Daemon>, pipe_name: &str) -> io::Result<()> 
     use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
     use windows_sys::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
-        PIPE_TYPE_BYTE, PIPE_WAIT,
+        PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
     };
 
     let mut wide: Vec<u16> = pipe_name.encode_utf16().collect();
@@ -887,13 +887,18 @@ pub fn serve_named_pipe(daemon: Arc<Daemon>, pipe_name: &str) -> io::Result<()> 
             thread::sleep(Duration::from_secs(1));
         }
     });
+    let pipe_name = pipe_name.to_owned();
+    let mut connection_workers = Vec::new();
     let result = (|| loop {
+        if shutdown.load(Ordering::Acquire) {
+            break Ok(());
+        }
         let handle = unsafe {
             CreateNamedPipeW(
                 wide.as_ptr(),
                 PIPE_ACCESS_DUPLEX,
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                1,
+                PIPE_UNLIMITED_INSTANCES,
                 64 * 1024,
                 64 * 1024,
                 0,
@@ -908,13 +913,49 @@ pub fn serve_named_pipe(daemon: Arc<Daemon>, pipe_name: &str) -> io::Result<()> 
             unsafe { CloseHandle(handle) };
             continue;
         }
-
-        let stream = unsafe { File::from_raw_handle(handle as RawHandle) };
-        if handle_connection(&daemon, stream, handle).unwrap_or(false) {
+        if shutdown.load(Ordering::Acquire) {
+            unsafe { CloseHandle(handle) };
             break Ok(());
         }
+        let stream = unsafe { File::from_raw_handle(handle as RawHandle) };
+        let connection_daemon = Arc::clone(&daemon);
+        let connection_shutdown = Arc::clone(&shutdown);
+        let wake_pipe = pipe_name.clone();
+        connection_workers.push(thread::spawn(move || {
+            let pipe = stream.as_raw_handle().cast();
+            if handle_connection(&connection_daemon, stream, pipe).unwrap_or(false) {
+                connection_shutdown.store(true, Ordering::Release);
+                // The accept loop may already be blocked in ConnectNamedPipe on
+                // the continuously available next instance. Connect locally to
+                // wake it so it can observe shutdown; if the loop has not yet
+                // created that instance, retry only for this bounded handoff.
+                for _ in 0..100 {
+                    if OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .open(&wake_pipe)
+                        .is_ok()
+                    {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }));
+        let mut active_workers = Vec::new();
+        for worker in connection_workers.drain(..) {
+            if worker.is_finished() {
+                let _ = worker.join();
+            } else {
+                active_workers.push(worker);
+            }
+        }
+        connection_workers = active_workers;
     })();
     shutdown.store(true, Ordering::Release);
+    for connection_worker in connection_workers {
+        let _ = connection_worker.join();
+    }
     let _ = worker.join();
     result
 }

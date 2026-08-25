@@ -136,14 +136,19 @@ fn oversized_request_is_rejected_without_terminating_server() {
 }
 
 #[test]
-fn stalled_connection_does_not_monopolize_server() {
+fn held_first_connection_keeps_a_second_named_pipe_listener_available() {
     let root = sandbox("stalled");
     let pipe = unique_pipe();
     let _server = start_server(&ember_lab_binary(), &root.join("state.sqlite3"), &pipe);
     ping(&pipe);
 
     let stalled = open_pipe(&pipe, Duration::from_secs(2));
+    let second_connect_started = Instant::now();
     ping(&pipe);
+    assert!(
+        second_connect_started.elapsed() < Duration::from_secs(2),
+        "a held first connection must not consume the daemon's only named-pipe listener"
+    );
     drop(stalled);
 
     shutdown(&pipe);

@@ -3,7 +3,10 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use ember_lab::data_catalog::ArtifactLocationInput;
-use ember_lab::{rollback_empty_artifact_custody_migration, Daemon, EmberLabError};
+use ember_lab::{
+    rollback_empty_artifact_custody_migration, rollback_empty_foreign_process_pressure_migration,
+    Daemon, EmberLabError,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -313,6 +316,7 @@ fn empty_artifact_custody_migration_can_roll_back_but_registered_data_blocks_dow
     let root = temp_root("custody-rollback");
     let empty_db = root.join("empty.sqlite3");
     drop(Daemon::open(&empty_db).unwrap());
+    rollback_empty_foreign_process_pressure_migration(&empty_db).unwrap();
     rollback_empty_artifact_custody_migration(&empty_db).unwrap();
     let conn = rusqlite::Connection::open(&empty_db).unwrap();
     let version: String = conn
@@ -337,6 +341,7 @@ fn empty_artifact_custody_migration_can_roll_back_but_registered_data_blocks_dow
         )
         .unwrap();
     drop(populated);
+    rollback_empty_foreign_process_pressure_migration(&populated_db).unwrap();
     let error = rollback_empty_artifact_custody_migration(&populated_db).unwrap_err();
     assert!(matches!(error, EmberLabError::InvalidDataCatalog { .. }));
     // The registration survives the refused rollback attempt untouched.

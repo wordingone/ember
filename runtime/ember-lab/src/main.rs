@@ -5,10 +5,12 @@
 use ember_lab::data_catalog::ArtifactLocationInput;
 use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
 use ember_lab::{
-    ember_lab_source_hash, hash_file, read_custody_verify, read_data_catalog_status,
-    rpc::serve_named_pipe, training_verify, Daemon, DispatchManifest, DispatchOutcome,
+    ember_lab_source_hash, hash_file, probe_single_vram_device_capacity, read_custody_verify,
+    read_data_catalog_status, rpc::serve_named_pipe, training_verify, Daemon, DispatchManifest,
+    DispatchOutcome, DispatchVramWall, VramDeviceCapacity, VramWallContract,
     MAX_DISPATCH_MANIFEST_BYTES,
 };
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -27,6 +29,26 @@ const DISPATCH_MAXIMUM_JOB_MEMORY_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_JOB_ME
 const GIB: u64 = 1024 * 1024 * 1024;
 const CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES: u64 = 2 * GIB;
 const HOST_COMMIT_SURVIVAL_RESERVE_BYTES: u64 = 10 * GIB;
+const CERTIFIED_LAUNCH_VRAM_HEADROOM_RESERVE_BYTES: u64 = 256 * 1024 * 1024;
+
+#[derive(Clone, Debug, Deserialize)]
+struct ResourceMechanismProjection {
+    total_parameters: u64,
+    active_parameters: u64,
+    parameter_bytes_all: u64,
+    gradient_bytes_active: u64,
+    optimizer_state_bytes_active: u64,
+    activation_reserve_bytes: u64,
+    runtime_reserve_bytes: u64,
+    mechanism_peak_bytes: u64,
+    checkpoint_publication_host_commit_reserve_bytes: u64,
+}
+
+struct HostCommitModel {
+    simulated_peak_commit_bytes: u64,
+    maximum_job_memory_bytes: u64,
+    required_available_maximum_commit_bytes: u64,
+}
 
 struct PreparedCertifiedLaunch {
     manifest_path: PathBuf,
@@ -353,9 +375,186 @@ fn required_u64(
         })
 }
 
+fn parse_resource_projection(
+    bytes: &[u8],
+) -> Result<ResourceMechanismProjection, Box<dyn std::error::Error>> {
+    let value: Value = serde_json::from_slice(bytes)?;
+    if value.get("schema_version")
+        != Some(&Value::String(
+            "ember-issue898-resource-projection-v1".into(),
+        ))
+        || value.get("authority")
+            != Some(&Value::String(
+                "tools/ember-restart-3b/launch_packet.py::preflight_resource".into(),
+            ))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "certified launch resource producer returned an invalid authority binding",
+        )
+        .into());
+    }
+    let projection: ResourceMechanismProjection = serde_json::from_value(value)?;
+    if projection.total_parameters == 0
+        || projection.active_parameters == 0
+        || projection.active_parameters > projection.total_parameters
+        || projection.parameter_bytes_all == 0
+        || projection.gradient_bytes_active == 0
+        || projection.optimizer_state_bytes_active == 0
+        || projection.activation_reserve_bytes == 0
+        || projection.runtime_reserve_bytes == 0
+        || projection.mechanism_peak_bytes == 0
+        || projection.checkpoint_publication_host_commit_reserve_bytes == 0
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "certified launch resource producer returned an invalid projection",
+        )
+        .into());
+    }
+    Ok(projection)
+}
+
+fn resource_projection_from_producer(
+    request: &CertifiedLaunchRequest,
+) -> Result<ResourceMechanismProjection, Box<dyn std::error::Error>> {
+    let producer = request
+        .root
+        .join("runtime/ember-lab/issue898_resource_projection.py");
+    let config = request.root.join("configs/ember-restart-3b.json");
+    if !producer.is_file() || !config.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "certified launch resource producer or bound config is unavailable",
+        )
+        .into());
+    }
+    let mut command = ProcessCommand::new(&request.python_executable);
+    command
+        .arg(&producer)
+        .arg("--config")
+        .arg(&config)
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err(std::io::Error::other(format!(
+            "certified launch resource projection producer refused: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+        .into());
+    }
+    parse_resource_projection(&output.stdout)
+}
+
+fn non_a1_host_commit_model(
+    projection: &ResourceMechanismProjection,
+    checkpoint_bytes: u64,
+) -> Result<HostCommitModel, Box<dyn std::error::Error>> {
+    let simulated_peak_commit_bytes = projection
+        .mechanism_peak_bytes
+        .checked_add(checkpoint_bytes)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch host-commit projection overflow",
+            )
+        })?;
+    let maximum_job_memory_bytes = simulated_peak_commit_bytes;
+    let required_available_maximum_commit_bytes = maximum_job_memory_bytes
+        .checked_add(HOST_COMMIT_SURVIVAL_RESERVE_BYTES)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch host-survival reserve overflow",
+            )
+        })?;
+    Ok(HostCommitModel {
+        simulated_peak_commit_bytes,
+        maximum_job_memory_bytes,
+        required_available_maximum_commit_bytes,
+    })
+}
+
+fn certified_launch_vram_wall(
+    required_process_bytes: u64,
+    capacity: VramDeviceCapacity,
+) -> Result<DispatchVramWall, Box<dyn std::error::Error>> {
+    if capacity.provider != "nvidia_smi_nvml"
+        || capacity.device_uuid.trim().is_empty()
+        || capacity.total_bytes == 0
+        || capacity.free_bytes > capacity.total_bytes
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "certified launch observed an invalid VRAM device capacity",
+        )
+        .into());
+    }
+    if capacity.total_bytes < required_process_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "certified launch requires {required_process_bytes} VRAM bytes but measured device capacity is {} bytes",
+                capacity.total_bytes
+            ),
+        )
+        .into());
+    }
+    let fraction = required_process_bytes
+        .checked_mul(1_000_000)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch VRAM fraction derivation overflow",
+            )
+        })?
+        / capacity.total_bytes;
+    let maximum_process_fraction_millionths = u32::try_from(fraction)
+        .ok()
+        .filter(|value| (1..=1_000_000).contains(value))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch VRAM fraction is outside the enforceable range",
+            )
+        })?;
+    Ok(DispatchVramWall::Required(VramWallContract {
+        provider: capacity.provider,
+        device_uuid: capacity.device_uuid,
+        maximum_process_fraction_millionths,
+        minimum_free_bytes: CERTIFIED_LAUNCH_VRAM_HEADROOM_RESERVE_BYTES,
+        consecutive_breach_samples: 3,
+        sample_interval_ms: 2_000,
+    }))
+}
+
 fn prepare_certified_launch(
     request: &CertifiedLaunchRequest,
 ) -> Result<PreparedCertifiedLaunch, Box<dyn std::error::Error>> {
+    prepare_certified_launch_with(request, resource_projection_from_producer, |_| {
+        probe_single_vram_device_capacity().map_err(Into::into)
+    })
+}
+
+fn prepare_certified_launch_with<F, G>(
+    request: &CertifiedLaunchRequest,
+    load_resource_projection: F,
+    load_vram_capacity: G,
+) -> Result<PreparedCertifiedLaunch, Box<dyn std::error::Error>>
+where
+    F: FnOnce(
+        &CertifiedLaunchRequest,
+    ) -> Result<ResourceMechanismProjection, Box<dyn std::error::Error>>,
+    G: FnOnce(&CertifiedLaunchRequest) -> Result<VramDeviceCapacity, Box<dyn std::error::Error>>,
+{
     let root = &request.root;
     let certificate_path = &request.certificate;
     let declaration_ledger_path = &request.declaration_ledger;
@@ -379,6 +578,9 @@ fn prepare_certified_launch(
             "certified launch run spec must be an object",
         )
     })?;
+    let is_a1_route = run_spec_object
+        .get("a1_family")
+        .is_some_and(|value| !value.is_null());
     if required_string(run_spec_object, "schema_version")? != "ember-certified-train-run-v1" {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -472,6 +674,32 @@ fn prepare_certified_launch(
             .into());
         }
     }
+    let resource_projection_producer =
+        root.join("runtime/ember-lab/issue898_resource_projection.py");
+    let resource_projection_config = root.join("configs/ember-restart-3b.json");
+    if !is_a1_route {
+        for (label, path) in [
+            (
+                "resource projection producer",
+                resource_projection_producer.as_path(),
+            ),
+            (
+                "resource projection config",
+                resource_projection_config.as_path(),
+            ),
+        ] {
+            if !path.is_file() {
+                let normalized_path = path.to_string_lossy().replace('\\', "/");
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "certified launch {label} is unavailable at {normalized_path}; this bound repository root may predate the daemon binary",
+                    ),
+                )
+                .into());
+            }
+        }
+    }
     let actual_custody_sha256 = hash_file(&custody_receipt)?;
     if custody_receipt_sha256.len() != 64
         || !custody_receipt_sha256
@@ -487,34 +715,16 @@ fn prepare_certified_launch(
     }
 
     let gpu_vram_bytes = required_gib(requested_scope, "gpu_vram_gib")?;
-    let checkpoint_bytes = required_gib(requested_scope, "transient_checkpoint_gib")?;
-    let telemetry_bytes = 4 * GIB;
-    let loader_bytes = gpu_vram_bytes.checked_mul(4).ok_or_else(|| {
+    let vram_capacity = load_vram_capacity(request).map_err(|error| {
         std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "certified launch host-memory model overflow",
+            std::io::ErrorKind::NotFound,
+            format!(
+                "certified launch requires the nvidia-smi VRAM provider to measure and enforce its required VRAM wall: {error}"
+            ),
         )
     })?;
-    let simulated_peak_commit_bytes = loader_bytes
-        .checked_add(checkpoint_bytes)
-        .and_then(|value| value.checked_add(telemetry_bytes))
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "certified launch host-memory model overflow",
-            )
-        })?;
-    let maximum_job_memory_bytes = simulated_peak_commit_bytes
-        .checked_add(CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES)
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "certified launch job-memory model overflow",
-            )
-        })?;
-    let is_a1_route = run_spec_object
-        .get("a1_family")
-        .is_some_and(|value| !value.is_null());
+    let vram_wall = certified_launch_vram_wall(gpu_vram_bytes, vram_capacity)?;
+    let checkpoint_bytes = required_gib(requested_scope, "transient_checkpoint_gib")?;
     let a1_storage_floor = execution_scope.get("a1_b_custody_floor_gib");
     let a1_host_reserve = execution_scope.get("a1_host_commit_reserve_gib");
     if is_a1_route && (a1_storage_floor.is_none() || a1_host_reserve.is_none()) {
@@ -531,20 +741,117 @@ fn prepare_certified_launch(
         )
         .into());
     }
-    let host_commit_reserve_bytes = if is_a1_route {
-        required_gib(execution_scope, "a1_host_commit_reserve_gib")?
-            .max(HOST_COMMIT_SURVIVAL_RESERVE_BYTES)
+    let resource_projection = if is_a1_route {
+        None
     } else {
-        HOST_COMMIT_SURVIVAL_RESERVE_BYTES
+        Some(load_resource_projection(request)?)
     };
-    let required_available_maximum_commit_bytes = maximum_job_memory_bytes
-        .checked_add(host_commit_reserve_bytes)
-        .ok_or_else(|| {
+    let (
+        simulated_peak_commit_bytes,
+        maximum_job_memory_bytes,
+        required_available_maximum_commit_bytes,
+        pinned_host_producers,
+        memory_model_authority,
+    ) = if let Some(projection) = resource_projection.as_ref() {
+        let model = non_a1_host_commit_model(projection, checkpoint_bytes)?;
+        let training_mechanism_bytes = projection
+            .mechanism_peak_bytes
+            .checked_sub(projection.runtime_reserve_bytes)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "certified launch resource projection has no training mechanism budget",
+                )
+            })?;
+        (
+            model.simulated_peak_commit_bytes,
+            model.maximum_job_memory_bytes,
+            model.required_available_maximum_commit_bytes,
+            json!([
+                {"kind": "training_data_loader", "maximum_bytes": training_mechanism_bytes},
+                {"kind": "checkpoint_writer", "maximum_bytes": checkpoint_bytes},
+                {"kind": "telemetry_buffer", "maximum_bytes": projection.runtime_reserve_bytes}
+            ]),
+            json!({
+                "route": "non_a1_device_resident",
+                "producer": {
+                    "path": &resource_projection_producer,
+                    "sha256": hash_file(&resource_projection_producer)?,
+                },
+                "config": {
+                    "path": &resource_projection_config,
+                    "sha256": hash_file(&resource_projection_config)?,
+                },
+                "mechanism": "device_resident_training",
+                "mechanism_authority": "tools/ember-restart-3b/launch_packet.py::preflight_resource",
+                "projection_kind": "host_commit_projection_from_device_resident_mechanism_plus_transient_checkpoint",
+                "zero_overshoot_allowance": true,
+                "total_parameters": projection.total_parameters,
+                "active_parameters": projection.active_parameters,
+                "parameter_bytes_all": projection.parameter_bytes_all,
+                "gradient_bytes_active": projection.gradient_bytes_active,
+                "optimizer_state_bytes_active": projection.optimizer_state_bytes_active,
+                "activation_reserve_bytes": projection.activation_reserve_bytes,
+                "runtime_reserve_bytes": projection.runtime_reserve_bytes,
+                "mechanism_peak_bytes": projection.mechanism_peak_bytes,
+                "transient_checkpoint_bytes": checkpoint_bytes,
+                "checkpoint_publication_host_commit_reserve_bytes": projection.checkpoint_publication_host_commit_reserve_bytes,
+                "checkpoint_publication_reserve_role": "writer_staging_headroom_enforced_at_checkpoint_publication",
+                "daemon_host_survival_reserve_bytes": HOST_COMMIT_SURVIVAL_RESERVE_BYTES,
+                "daemon_host_survival_reserve_role": "headroom_outside_the_job_maximum_for_windows_and_ember_lab_survival"
+            }),
+        )
+    } else {
+        let telemetry_bytes = 4 * GIB;
+        let loader_bytes = gpu_vram_bytes.checked_mul(4).ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "certified launch host-commit model overflow",
+                "certified launch A1 host-memory model overflow",
             )
         })?;
+        let simulated = loader_bytes
+            .checked_add(checkpoint_bytes)
+            .and_then(|value| value.checked_add(telemetry_bytes))
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "certified launch A1 host-memory model overflow",
+                )
+            })?;
+        let maximum = simulated
+            .checked_add(CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "certified launch A1 job-memory model overflow",
+                )
+            })?;
+        let reserve = required_gib(execution_scope, "a1_host_commit_reserve_gib")?
+            .max(HOST_COMMIT_SURVIVAL_RESERVE_BYTES);
+        let required = maximum.checked_add(reserve).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch A1 host-commit model overflow",
+            )
+        })?;
+        (
+            simulated,
+            maximum,
+            required,
+            json!([
+                {"kind": "training_data_loader", "maximum_bytes": loader_bytes},
+                {"kind": "checkpoint_writer", "maximum_bytes": checkpoint_bytes},
+                {"kind": "telemetry_buffer", "maximum_bytes": telemetry_bytes}
+            ]),
+            json!({
+                "route": "a1_declared_mechanism",
+                "mechanism": "a1_cpu_offload",
+                "overshoot_allowance_bytes": CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES,
+                "daemon_host_survival_reserve_bytes": reserve
+            }),
+        )
+    };
     let write_budget_bytes = required_u64(requested_scope, "write_budget_bytes")?;
     let storage_floor_bytes = if is_a1_route {
         required_gib(execution_scope, "a1_b_custody_floor_gib")?.max(write_budget_bytes)
@@ -590,23 +897,28 @@ fn prepare_certified_launch(
         .into());
     }
     let job_id = format!("{run_id}-launch-{now_ms}");
-    let bindings = [
+    let mut binding_inputs = vec![
         ("config", validator.as_path()),
         ("config", readme.as_path()),
         ("config", certificate_path),
         ("input", declaration_ledger_path),
         ("manifest", run_spec_path),
         ("input", custody_receipt.as_path()),
-    ]
-    .into_iter()
-    .map(
-        |(kind, path)| -> Result<Value, Box<dyn std::error::Error>> {
-            Ok(json!({"kind": kind, "path": path, "sha256": hash_file(path)?}))
-        },
-    )
-    .collect::<Result<Vec<_>, _>>()?;
+    ];
+    if !is_a1_route {
+        binding_inputs.push(("config", resource_projection_producer.as_path()));
+        binding_inputs.push(("config", resource_projection_config.as_path()));
+    }
+    let bindings = binding_inputs
+        .into_iter()
+        .map(
+            |(kind, path)| -> Result<Value, Box<dyn std::error::Error>> {
+                Ok(json!({"kind": kind, "path": path, "sha256": hash_file(path)?}))
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()?;
     let manifest = json!({
-        "schema_version": "ember-lab-dispatch-manifest-v3",
+        "schema_version": "ember-lab-dispatch-manifest-v4",
         "job_id": job_id,
         "source_commit": source_commit,
         "not_before_ms": now_ms,
@@ -623,21 +935,18 @@ fn prepare_certified_launch(
         ],
         "workload_profile": {
             "profile_id": "governed_vertical",
-            "pinned_host_producers": [
-                {"kind": "training_data_loader", "maximum_bytes": loader_bytes},
-                {"kind": "checkpoint_writer", "maximum_bytes": checkpoint_bytes},
-                {"kind": "telemetry_buffer", "maximum_bytes": telemetry_bytes}
-            ],
+            "pinned_host_producers": pinned_host_producers,
             "requires_ui_responsiveness": false,
             "cpu_rate_percent": 90
         },
+        "memory_model_authority": memory_model_authority,
         "cpu_pacing_class": "unpaced",
         "window_contract": "headless_no_windows",
         "env": env,
         "bindings": bindings,
         "custody_root": &canonical_run_custody_root,
         "storage_reserves": [{"root": requested_custody_root, "minimum_free_bytes": storage_floor_bytes}],
-        "minimum_free_vram_bytes": gpu_vram_bytes,
+        "vram_wall": vram_wall,
         "required_available_maximum_commit_bytes": required_available_maximum_commit_bytes,
         "maximum_job_memory_bytes": maximum_job_memory_bytes,
         "simulated_peak_commit_bytes": simulated_peak_commit_bytes,
@@ -1903,6 +2212,64 @@ mod tests {
     use super::*;
     use ember_lab::{JobSpec, ReceiptArtifact};
 
+    fn fixture_resource_projection() -> ResourceMechanismProjection {
+        parse_resource_projection(
+            br#"{"schema_version":"ember-issue898-resource-projection-v1","authority":"tools/ember-restart-3b/launch_packet.py::preflight_resource","total_parameters":3839161856,"active_parameters":1725232640,"parameter_bytes_all":7678323712,"gradient_bytes_active":3450465280,"optimizer_state_bytes_active":3450465280,"activation_reserve_bytes":4294967296,"runtime_reserve_bytes":2147483648,"mechanism_peak_bytes":21021705216,"checkpoint_publication_host_commit_reserve_bytes":8589934592}"#,
+        )
+        .unwrap()
+    }
+
+    fn fixture_vram_capacity() -> VramDeviceCapacity {
+        VramDeviceCapacity {
+            provider: "nvidia_smi_nvml".into(),
+            device_uuid: "GPU-certified-launch-fixture".into(),
+            total_bytes: 24 * GIB,
+            free_bytes: 23 * GIB,
+        }
+    }
+
+    #[test]
+    fn non_a1_host_commit_model_consumes_the_producer_projection_without_overshoot() {
+        let projection = fixture_resource_projection();
+        let model = non_a1_host_commit_model(&projection, 8 * GIB).unwrap();
+
+        assert_eq!(model.simulated_peak_commit_bytes, 29_611_639_808);
+        assert_eq!(
+            model.maximum_job_memory_bytes,
+            model.simulated_peak_commit_bytes
+        );
+        assert_eq!(
+            model.required_available_maximum_commit_bytes,
+            model.maximum_job_memory_bytes + 10 * GIB
+        );
+        assert_eq!(
+            projection.checkpoint_publication_host_commit_reserve_bytes,
+            8 * GIB
+        );
+    }
+
+    #[test]
+    fn certified_launch_derives_required_vram_wall_and_refuses_a_smaller_device() {
+        let wall = certified_launch_vram_wall(20 * GIB, fixture_vram_capacity()).unwrap();
+        let DispatchVramWall::Required(contract) = wall else {
+            panic!("certified launch did not require a VRAM wall");
+        };
+        assert_eq!(contract.device_uuid, "GPU-certified-launch-fixture");
+        assert_eq!(contract.maximum_process_fraction_millionths, 833_333);
+        assert_eq!(
+            contract.minimum_free_bytes,
+            CERTIFIED_LAUNCH_VRAM_HEADROOM_RESERVE_BYTES
+        );
+        assert_eq!(contract.consecutive_breach_samples, 3);
+        assert_eq!(contract.sample_interval_ms, 2_000);
+
+        let mut smaller = fixture_vram_capacity();
+        smaller.total_bytes = 16 * GIB;
+        smaller.free_bytes = 15 * GIB;
+        let refusal = certified_launch_vram_wall(20 * GIB, smaller).unwrap_err();
+        assert!(refusal.to_string().contains("measured device capacity"));
+    }
+
     #[test]
     fn certified_launch_manifest_is_derived_and_pins_the_exact_validator_inputs() {
         let root = std::env::temp_dir().join(format!(
@@ -1916,10 +2283,17 @@ mod tests {
         let repo = root.join("repo");
         let packet = root.join("custody").join("run-1").join("launch-authority");
         std::fs::create_dir_all(repo.join("tools/ember-restart-3b")).unwrap();
+        std::fs::create_dir_all(repo.join("runtime/ember-lab")).unwrap();
+        std::fs::create_dir_all(repo.join("configs")).unwrap();
         std::fs::create_dir_all(&packet).unwrap();
         std::fs::write(repo.join("README.md"), b"bound root").unwrap();
         let validator = repo.join("tools/ember-restart-3b/certified_train_launch.py");
         std::fs::write(&validator, b"print('validator')\n").unwrap();
+        let resource_projection_producer =
+            repo.join("runtime/ember-lab/issue898_resource_projection.py");
+        std::fs::write(&resource_projection_producer, b"# projection fixture\n").unwrap();
+        let resource_projection_config = repo.join("configs/ember-restart-3b.json");
+        std::fs::write(&resource_projection_config, b"{}\n").unwrap();
         let python = root.join("python.exe");
         std::fs::write(&python, b"python fixture").unwrap();
         let certificate = packet.join("certificate.json");
@@ -2055,10 +2429,62 @@ mod tests {
             python_executable: python.clone(),
             now_ms: 1_800_000_000_000,
         };
-        let prepared = prepare_certified_launch(&request).unwrap();
+        let provider_refusal = match prepare_certified_launch_with(
+            &request,
+            |_| Ok(fixture_resource_projection()),
+            |_| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "nvidia-smi program not found",
+                )
+                .into())
+            },
+        ) {
+            Ok(_) => panic!("certified launch accepted an unavailable VRAM provider"),
+            Err(error) => error.to_string(),
+        };
+        assert!(provider_refusal.contains("certified launch requires the nvidia-smi VRAM provider"));
+        assert!(provider_refusal.contains("measure and enforce its required VRAM wall"));
+        assert!(provider_refusal.contains("program not found"));
+
+        let prepared = prepare_certified_launch_with(
+            &request,
+            |_| Ok(fixture_resource_projection()),
+            |_| Ok(fixture_vram_capacity()),
+        )
+        .unwrap();
         let manifest: Value =
             serde_json::from_slice(&std::fs::read(&prepared.manifest_path).unwrap()).unwrap();
-        assert_eq!(manifest["schema_version"], "ember-lab-dispatch-manifest-v3");
+        let parsed_manifest: DispatchManifest = serde_json::from_value(manifest.clone()).unwrap();
+        let authority = parsed_manifest.memory_model_authority.unwrap();
+        match authority {
+            ember_lab::DispatchMemoryModelAuthority::NonA1DeviceResident(authority) => {
+                let ember_lab::DispatchNonA1MemoryModelAuthority {
+                    producer,
+                    config,
+                    mechanism,
+                    total_parameters,
+                    active_parameters,
+                    mechanism_peak_bytes,
+                    zero_overshoot_allowance,
+                    ..
+                } = *authority;
+                assert_eq!(producer.path, resource_projection_producer);
+                assert_eq!(producer.sha256, hash_file(&producer.path).unwrap());
+                assert_eq!(config.path, resource_projection_config);
+                assert_eq!(config.sha256, hash_file(&config.path).unwrap());
+                assert!(matches!(
+                    mechanism,
+                    ember_lab::DispatchMemoryMechanism::DeviceResidentTraining
+                ));
+                assert_eq!(total_parameters, 3_839_161_856);
+                assert_eq!(active_parameters, 1_725_232_640);
+                assert_eq!(mechanism_peak_bytes, 21_021_705_216);
+                assert!(zero_overshoot_allowance);
+            }
+            _ => panic!("non-A1 certified launch parsed the wrong memory authority route"),
+        }
+        assert_eq!(manifest["schema_version"], "ember-lab-dispatch-manifest-v4");
         assert_eq!(
             manifest["source_commit"],
             "0123456789abcdef0123456789abcdef01234567"
@@ -2079,21 +2505,24 @@ mod tests {
             manifest["workload_profile"]["profile_id"],
             "governed_vertical"
         );
-        assert_eq!(
-            manifest["simulated_peak_commit_bytes"],
-            92_u64 * 1024 * 1024 * 1024
-        );
-        assert_eq!(
-            manifest["maximum_job_memory_bytes"],
-            94_u64 * 1024 * 1024 * 1024
-        );
+        assert_eq!(manifest["simulated_peak_commit_bytes"], 29_611_639_808_u64);
+        assert_eq!(manifest["maximum_job_memory_bytes"], 29_611_639_808_u64);
         assert_eq!(
             manifest["required_available_maximum_commit_bytes"],
-            104_u64 * 1024 * 1024 * 1024
+            40_349_058_048_u64
+        );
+        assert_eq!(manifest["vram_wall"]["applicability"], "required");
+        assert_eq!(
+            manifest["vram_wall"]["contract"]["device_uuid"],
+            "GPU-certified-launch-fixture"
         );
         assert_eq!(
-            manifest["minimum_free_vram_bytes"],
-            20_u64 * 1024 * 1024 * 1024
+            manifest["vram_wall"]["contract"]["maximum_process_fraction_millionths"],
+            833_333
+        );
+        assert_eq!(
+            manifest["vram_wall"]["contract"]["minimum_free_bytes"],
+            CERTIFIED_LAUNCH_VRAM_HEADROOM_RESERVE_BYTES
         );
         assert_eq!(
             manifest["storage_reserves"][0]["minimum_free_bytes"],

@@ -805,12 +805,15 @@ fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_bot
 }
 
 fn set_foreign_pressure_state(db: &Path, state: &str, result: &str) {
-    let observation = json!({
+    let mut observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
         "result": result,
         "observed_at_ms": 88,
         "foreign_process_control": false,
     });
+    if result == "PROBE_FAILED" {
+        observation["error"] = Value::String("fixture counter failure".into());
+    }
     rusqlite::Connection::open(db)
         .unwrap()
         .execute(
@@ -904,7 +907,8 @@ fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
     }
     assert!(matches!(
         result,
-        Err(EmberLabError::ResourceAdmissionFrozen { .. })
+        Err(EmberLabError::ResourceAdmissionFrozen { ref reason, .. })
+            if reason == "foreign_process_census_reported_failure"
     ));
     assert!(!argv_marker.exists());
     assert!(!child_birth_marker.exists());
@@ -924,6 +928,61 @@ fn failed_foreign_pressure_probe_alone_refuses_before_process_birth() {
     assert_eq!(receipt["result"], "REFUSED_FOREIGN_PROCESS_PRESSURE");
     assert_eq!(receipt["resource_guard"]["admission_state"], "open");
     assert_eq!(receipt["foreign_process_pressure"]["state"], "probe_failed");
+    assert_eq!(
+        receipt["foreign_process_pressure_diagnosis"],
+        json!({
+            "classification": "reported_probe_failure",
+            "recorded_result": "PROBE_FAILED",
+            "recorded_error": "fixture counter failure",
+        })
+    );
+}
+
+#[test]
+fn malformed_foreign_pressure_observation_is_not_reported_as_counter_failure() {
+    let root = sandbox("foreign-pressure-malformed-observation");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    let malformed_observation = json!({
+        "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+        "error": "fixture counter failure",
+        "observed_at_ms": 88,
+        "foreign_process_control": false,
+    });
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE foreign_process_pressure_state SET state='probe_failed',observed_at_ms=88,observation_json=?1 WHERE singleton=1",
+            [malformed_observation.to_string()],
+        )
+        .unwrap();
+
+    let (result, argv_marker, child_birth_marker, payload) =
+        dispatch_pressure_fixture(&root, &daemon, "foreign-pressure-malformed-observation-job");
+
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ResourceAdmissionFrozen { ref reason, .. })
+            if reason == "foreign_process_pressure_status_unreadable"
+    ));
+    assert!(!argv_marker.exists());
+    assert!(!child_birth_marker.exists());
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(
+            payload["preflight_receipt"].as_str().unwrap(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        receipt["foreign_process_pressure_diagnosis"],
+        json!({
+            "classification": "status_unreadable",
+            "recorded_result": Value::Null,
+            "recorded_error": "fixture counter failure",
+            "status_error": "missing or invalid observation.result",
+        })
+    );
 }
 
 #[cfg(windows)]

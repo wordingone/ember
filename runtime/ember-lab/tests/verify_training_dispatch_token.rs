@@ -56,7 +56,8 @@ fn serve_forged_consumed_once(pipe_name: String) -> std::thread::JoinHandle<()> 
     let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(0);
     let server = std::thread::spawn(move || {
         use windows_sys::Win32::Foundation::{
-            GetLastError, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, INVALID_HANDLE_VALUE,
+            CloseHandle, GetLastError, ERROR_NO_DATA, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING,
+            INVALID_HANDLE_VALUE,
         };
         use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
         use windows_sys::Win32::System::Pipes::{
@@ -87,6 +88,14 @@ fn serve_forged_consumed_once(pipe_name: String) -> std::thread::JoinHandle<()> 
                 break;
             }
             let error = unsafe { GetLastError() };
+            if error == ERROR_NO_DATA {
+                // The verifier authenticates the named-pipe server process before
+                // writing JSON-RPC. A forged server may therefore see the client
+                // connect and close between nonblocking accept polls; that early
+                // close is the expected fail-closed result, not a missing retry.
+                unsafe { CloseHandle(handle) };
+                return;
+            }
             assert_eq!(error, ERROR_PIPE_LISTENING);
             assert!(
                 Instant::now() < deadline,

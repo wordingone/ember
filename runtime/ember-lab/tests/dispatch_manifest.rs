@@ -1151,21 +1151,6 @@ fn dispatch_manifest_does_not_wall_the_windows_ui_surface_for_cockpit_profiles()
     // (validate_dispatch_manifest_snapshot_preconditions) — write_manifest's
     // default fixture leaves it at 0 because evidence_verifier is exempt.
     payload["minimum_free_vram_bytes"] = json!(1);
-    // The daemon only mints EMBER_LAB_DISPATCH_JOB_ID/EMBER_LAB_DISPATCH_TOKEN
-    // for the EvidenceVerifier profile (dispatch_manifest_bytes_at_with_probes_and_host_inner
-    // gates with_dispatch_token on profile_id == EvidenceVerifier); a Cockpit
-    // dispatch never receives them. write_manifest's fixture still sets
-    // EMBER_LAB_DISPATCH_TOKEN_CAPTURE in env unconditionally, so
-    // fixture_dispatch_child's token-capture branch would unwrap() a missing
-    // EMBER_LAB_DISPATCH_JOB_ID and panic immediately after spawn instead of
-    // reaching its 30s sleep — turning this into a race between the crashed
-    // child's exit reconciliation and this test's own assertions/teardown.
-    // Drop the capture request so the child takes the plain-sleep path Cockpit
-    // dispatch actually exercises.
-    payload["env"]
-        .as_object_mut()
-        .unwrap()
-        .remove("EMBER_LAB_DISPATCH_TOKEN_CAPTURE");
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
 
     let db = root.join("ember-lab.sqlite3");
@@ -1179,6 +1164,16 @@ fn dispatch_manifest_does_not_wall_the_windows_ui_surface_for_cockpit_profiles()
             || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
         )
         .unwrap();
+    let token_capture = root.join("custody").join("dispatch-token.txt");
+    let token_capture_deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !token_capture.exists() && std::time::Instant::now() < token_capture_deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+    let token_capture = fs::read_to_string(&token_capture).unwrap();
+    let mut token_lines = token_capture.lines();
+    assert_eq!(token_lines.next(), Some("dispatch-ui-cockpit-escape"));
+    assert_eq!(token_lines.next().unwrap().len(), 64);
+    assert_eq!(token_lines.next(), None);
     let connection = Connection::open(&db).unwrap();
     let job_object_name: String = connection
         .query_row(
