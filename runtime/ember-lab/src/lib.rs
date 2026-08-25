@@ -4234,8 +4234,7 @@ impl Daemon {
         let (resource_guard, foreign_process_pressure) = self.admission_guard_statuses()?;
         let foreign_pressure_refusal =
             foreign_process_pressure_admission_refusal(&foreign_process_pressure);
-        if cfg!(windows) && foreign_pressure_refusal.is_some() {
-            let refusal_detail = foreign_pressure_refusal.unwrap();
+        if let (true, Some(refusal_detail)) = (cfg!(windows), foreign_pressure_refusal) {
             let diagnosis = serde_json::to_value(refusal_detail.diagnosis)?;
             let refusal = json!({
                 "schema_version": "ember-lab-dispatch-preflight-v1",
