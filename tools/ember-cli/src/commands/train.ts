@@ -7,7 +7,8 @@
 // HARD PRE-TRAINING GATE (load-bearing): the default command is preflight-only.
 // Explicit `--execute` mode is available only with all three certificate paths,
 // after the same cond7 launch-packet readiness preflight succeeds, and invokes only
-// the fixed certified_train_launch.py consumer. The named run_vertical_slice.py
+// Ember Lab's fixed `launch` subcommand. Rust composes the governed validator.
+// The named run_vertical_slice.py
 // command from launch_packet output is never executed as a command string. On any
 // preflight, certificate-consumer, or response failure, execution fails closed.
 
@@ -32,9 +33,9 @@ export interface LaunchPacketRunResult {
   stdout: string;
 }
 
-/** A certified consumer that has crossed the only synchronous boundary the cockpit needs:
- * the OS accepted the child spawn.  Its terminal receipt remains owned by the certified
- * consumer and is surfaced by the existing receipt/activity watcher. */
+/** A governed launch that has crossed the only synchronous boundary the cockpit needs:
+ * Ember Lab dispatched the governed child and recorded its ownership context. Its terminal
+ * receipt remains daemon-owned and is surfaced by the existing receipt/activity watcher. */
 export interface CertifiedLaunchHandle {
   kind: "background";
   /** Governed PID returned only after Ember Lab records launch ownership context. */
@@ -65,8 +66,8 @@ export const PREFLIGHT_TIMEOUT_MS = 600_000;
  * preflight that "instantiates a tiny CPU model and round-trips a checkpoint"). spawn
  * plus an awaited completion Promise keeps the event loop free to service timers (render tick, spinner,
  * heartbeat) while the caller still awaits the full result, unlike
- * _runPythonProcessInBackground below, which intentionally resolves at spawn instead of
- * at exit for the certified consumer's fire-and-forget dispatch.
+ * _runEmberLabLaunchInBackground below, which intentionally resolves on Rust's governed
+ * start-evidence row instead of at helper exit.
  */
 function _runPythonProcessAsync(
   executable: string,
@@ -585,8 +586,8 @@ function _parseTrainArgs(raw: string): TrainArgs {
 // ---------------------------------------------------------------------------
 
 /**
- * Interprets a certified_train_launch.py run result into a CommandResult. Shared by both
- * paths that may invoke the fixed consumer -- explicit `--execute` and `confirm <id>` --
+ * Interprets an Ember Lab launch completion into a CommandResult. Shared by both
+ * paths that may invoke the fixed composer -- explicit `--execute` and `confirm <id>` --
  * so the two paths can never drift into different response handling.
  */
 function _interpretCertifiedResult(
@@ -665,7 +666,7 @@ function _isCertifiedLaunchHandle(
   return "kind" in value && value.kind === "background";
 }
 
-/** Return control to the cockpit at spawn, never at child exit.  The certified consumer remains
+/** Return control to the cockpit at governed start, never at child exit. Ember Lab remains
  * the sole terminal receipt authority; the existing activity watcher renders that receipt when
  * it lands.  Keeping a rejection handler attached prevents a background failure from becoming an
  * unhandled promise without fabricating a second completion surface. */
@@ -715,11 +716,11 @@ function _interpretCertifiedDispatch(
  *     present and valid, mint a single-use OFFER through the panel's own confirm-only
  *     idiom (core/encounter-membrane.ts's shape, reused rather than reinvented). No
  *     command string is handed to the operator to paste.
- *  3. `/train confirm <id>` invokes exactly the same fixed certified_train_launch.py consumer
+ *  3. `/train confirm <id>` invokes exactly the same fixed Ember Lab launch composer
  *     `--execute` invokes, with the paths resolved at offer time -- only for an id
  *     minted by a green preflight earlier in this session.
  *  4. With `--execute` and all three certificate paths, invoke exactly one fixed
- *     certified_train_launch.py consumer with the EXPLICIT paths; canonical resolution
+ *     Ember Lab launch composer with the EXPLICIT paths; canonical resolution
  *     is never consulted on this path. Never execute the named command string.
  *  5. Any malformed input, nonzero exit, or invalid response fails closed.
  */
@@ -837,7 +838,7 @@ export function createTrainCommand(deps: TrainCommandDeps = {}): RegistryCommand
       const scriptPath =
         deps.scriptPath ?? join(repoRoot, "tools", "ember-restart-3b", "launch_packet.py");
       // (1) Run the preflight first. It is the only subprocess in default mode;
-      // certified execute mode may invoke only the fixed consumer below.
+      // certified execute mode may invoke only the fixed Ember Lab composer below.
       const firstPreflightForSession = !trainPreflightSessions.has(ctx.sessionId);
       const preflightAttempts: Array<number | null> = [];
       let result: LaunchPacketRunResult;
