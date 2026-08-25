@@ -3,13 +3,13 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use ember_lab::{
-    rollback_empty_artifact_custody_migration, rollback_empty_data_catalog_migration, Daemon,
-    EmberLabError,
+    rollback_empty_artifact_custody_migration, rollback_empty_data_catalog_migration,
+    rollback_empty_foreign_process_pressure_migration, Daemon, EmberLabError,
 };
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temp_root(name: &str) -> PathBuf {
@@ -1034,8 +1034,19 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     let root = temp_root("catalog-explicit-rollback");
     let empty_db = root.join("empty.sqlite3");
     drop(Daemon::open(&empty_db).unwrap());
-    // A fresh Daemon::open lands at the current schema (6, #1721's artifact-custody tables
-    // included), so a downgrade to 4 chains through each historical step in order.
+    // Reset only the live pressure observation to the exact migration seed so this fixture
+    // represents a schema-7 database before its first census.
+    let conn = rusqlite::Connection::open(&empty_db).unwrap();
+    conn.execute("DELETE FROM foreign_process_pressure_observations", [])
+        .unwrap();
+    conn.execute(
+        "UPDATE foreign_process_pressure_state SET state='probe_failed',observed_at_ms=0,observation_json=?1 WHERE singleton=1",
+        [r#"{"schema_version":"ember-lab-foreign-process-pressure-observation-v1","result":"NOT_YET_SAMPLED"}"#],
+    )
+    .unwrap();
+    drop(conn);
+    // A downgrade to 4 chains through each historical step in order.
+    rollback_empty_foreign_process_pressure_migration(&empty_db).unwrap();
     rollback_empty_artifact_custody_migration(&empty_db).unwrap();
     rollback_empty_data_catalog_migration(&empty_db).unwrap();
     let conn = rusqlite::Connection::open(&empty_db).unwrap();
@@ -1066,9 +1077,19 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
         .unwrap();
     let before = populated.export_data_catalog_manifest().unwrap();
     drop(populated);
-    // No artifact custody data exists in this fixture, so the 6 -> 5 step succeeds; the
+    // No pressure or artifact custody data exists in this fixture, so the 7 -> 6 and 6 -> 5 steps succeed; the
     // 5 -> 4 step is the one this test actually exercises: the manifest's catalog data blocks
     // that downgrade.
+    let conn = rusqlite::Connection::open(&populated_db).unwrap();
+    conn.execute("DELETE FROM foreign_process_pressure_observations", [])
+        .unwrap();
+    conn.execute(
+        "UPDATE foreign_process_pressure_state SET state='probe_failed',observed_at_ms=0,observation_json=?1 WHERE singleton=1",
+        [r#"{"schema_version":"ember-lab-foreign-process-pressure-observation-v1","result":"NOT_YET_SAMPLED"}"#],
+    )
+    .unwrap();
+    drop(conn);
+    rollback_empty_foreign_process_pressure_migration(&populated_db).unwrap();
     rollback_empty_artifact_custody_migration(&populated_db).unwrap();
     let error = rollback_empty_data_catalog_migration(&populated_db).unwrap_err();
     assert!(matches!(error, EmberLabError::InvalidDataCatalog { .. }));
@@ -1076,5 +1097,73 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     assert_eq!(reopened.export_data_catalog_manifest().unwrap(), before);
 
     drop(reopened);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
+    fn reset_to_empty_pressure_seed(path: &Path) {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute("DELETE FROM foreign_process_pressure_observations", [])
+            .unwrap();
+        conn.execute(
+            "UPDATE foreign_process_pressure_state SET state='probe_failed',observed_at_ms=0,observation_json=?1 WHERE singleton=1",
+            [r#"{"schema_version":"ember-lab-foreign-process-pressure-observation-v1","result":"NOT_YET_SAMPLED"}"#],
+        )
+        .unwrap();
+    }
+
+    let root = temp_root("foreign-pressure-rollback-refusals");
+
+    let wrong_version = root.join("wrong-version.sqlite3");
+    drop(Daemon::open(&wrong_version).unwrap());
+    reset_to_empty_pressure_seed(&wrong_version);
+    rusqlite::Connection::open(&wrong_version)
+        .unwrap()
+        .execute(
+            "UPDATE metadata SET value='6' WHERE key='schema_version'",
+            [],
+        )
+        .unwrap();
+    let error = rollback_empty_foreign_process_pressure_migration(&wrong_version).unwrap_err();
+    assert!(format!("{error:?}").contains("requires database schema version 7"));
+
+    let ledger = root.join("ledger.sqlite3");
+    drop(Daemon::open(&ledger).unwrap());
+    reset_to_empty_pressure_seed(&ledger);
+    rusqlite::Connection::open(&ledger)
+        .unwrap()
+        .execute(
+            "INSERT INTO foreign_process_pressure_observations(observed_at_ms,outcome,payload_json) VALUES(1,'clear','{}')",
+            [],
+        )
+        .unwrap();
+    let error = rollback_empty_foreign_process_pressure_migration(&ledger).unwrap_err();
+    assert!(format!("{error:?}").contains("observation ledger is nonempty"));
+    assert_eq!(
+        rusqlite::Connection::open(&ledger)
+            .unwrap()
+            .query_row(
+                "SELECT value FROM metadata WHERE key='schema_version'",
+                [],
+                |row| row.get::<_, String>(0)
+            )
+            .unwrap(),
+        "7"
+    );
+
+    let state = root.join("state.sqlite3");
+    drop(Daemon::open(&state).unwrap());
+    reset_to_empty_pressure_seed(&state);
+    rusqlite::Connection::open(&state)
+        .unwrap()
+        .execute(
+            "UPDATE foreign_process_pressure_state SET state='clear',observed_at_ms=1,observation_json='{}' WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+    let error = rollback_empty_foreign_process_pressure_migration(&state).unwrap_err();
+    assert!(format!("{error:?}").contains("singleton is not the pristine migration seed"));
+
     fs::remove_dir_all(root).unwrap();
 }

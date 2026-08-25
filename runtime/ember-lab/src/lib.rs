@@ -189,6 +189,62 @@ pub fn rollback_empty_artifact_custody_migration(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Rolls back the #898 foreign-process-pressure migration specifically (schema 7 -> 6).
+/// The rollback is permitted only before the first census changes the pristine migration seed.
+pub fn rollback_empty_foreign_process_pressure_migration(path: &Path) -> Result<()> {
+    const ROLLBACK_FROM_SCHEMA_VERSION: u32 = 7;
+    const PRISTINE_OBSERVATION: &str = r#"{"schema_version":"ember-lab-foreign-process-pressure-observation-v1","result":"NOT_YET_SAMPLED"}"#;
+    let _state_writer_lock = acquire_state_writer_lock(path)?;
+    let mut conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: String = tx.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != ROLLBACK_FROM_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "foreign process pressure rollback requires database schema version {ROLLBACK_FROM_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    let observation_rows: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM foreign_process_pressure_observations",
+        [],
+        |row| row.get(0),
+    )?;
+    if observation_rows != 0 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "foreign process pressure rollback refuses because the observation ledger is nonempty".into(),
+        });
+    }
+    let pristine_rows: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM foreign_process_pressure_state WHERE singleton=1 AND state='probe_failed' AND observed_at_ms=0 AND observation_json=?1",
+        [PRISTINE_OBSERVATION],
+        |row| row.get(0),
+    )?;
+    let state_rows: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM foreign_process_pressure_state",
+        [],
+        |row| row.get(0),
+    )?;
+    if pristine_rows != 1 || state_rows != 1 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "foreign process pressure rollback refuses because the singleton is not the pristine migration seed".into(),
+        });
+    }
+    tx.execute_batch(
+        "DROP TABLE foreign_process_pressure_observations;
+         DROP TABLE foreign_process_pressure_state;
+         UPDATE metadata SET value='6' WHERE key='schema_version';",
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
 #[derive(Debug)]
 pub enum EmberLabError {
     Sqlite(rusqlite::Error),
@@ -2206,10 +2262,8 @@ impl Daemon {
                 owned_job_identities_from_connection(&conn)?
             };
             let observed_at_ms = now_ms();
-            let census = sample_foreign_process_census(
-                foreign_process_provider.as_ref(),
-                &owned_jobs,
-            );
+            let census =
+                sample_foreign_process_census(foreign_process_provider.as_ref(), &owned_jobs);
             persist_foreign_process_census(&*daemon.conn()?, observed_at_ms, census)?;
             spawn_resource_guard_monitor(
                 Arc::downgrade(&daemon.db),
@@ -2247,6 +2301,65 @@ impl Daemon {
     pub fn foreign_process_pressure_status(&self) -> Result<Value> {
         let conn = self.conn()?;
         foreign_process_pressure_status_from_connection(&conn)
+    }
+
+    pub fn foreign_process_pressure_probe_receipt(&self, output: &Path) -> Result<ReceiptArtifact> {
+        let status = self.foreign_process_pressure_status()?;
+        let state = status.get("state").and_then(Value::as_str).ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure state is missing".into(),
+            }
+        })?;
+        let observed_at_ms = status
+            .get("observed_at_ms")
+            .and_then(Value::as_i64)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure timestamp is missing".into(),
+            })?;
+        let observation = status.get("observation").cloned().ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure observation is missing".into(),
+            }
+        })?;
+        if observation.get("probe_complete") != Some(&Value::Bool(true)) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe receipt requires a complete production observation"
+                    .into(),
+            });
+        }
+        let observation_sha256 = hash_bytes(&serde_json::to_vec(&observation)?);
+        let mut receipt = json!({
+            "schema_version": "ember-lab-foreign-process-pressure-probe-v1",
+            "verdict": "EXECUTED",
+            "state": state,
+            "observed_at_ms": observed_at_ms,
+            "observation": observation,
+            "observation_sha256": observation_sha256,
+            "ember_lab_identity": {
+                "binary_sha256": self.ember_lab_binary_sha256,
+                "source_sha256": self.ember_lab_source_sha256,
+            },
+            "foreign_process_control": false,
+        });
+        let receipt_sha256 = hash_bytes(&serde_json::to_vec(&receipt)?);
+        receipt.as_object_mut().unwrap().insert(
+            "receipt_sha256".into(),
+            Value::String(receipt_sha256.clone()),
+        );
+        let bytes = serde_json::to_vec_pretty(&receipt)?;
+        verify_foreign_process_pressure_probe_receipt(&bytes)?;
+        if output.exists() {
+            return Err(EmberLabError::ReceiptAlreadyExists {
+                path: output.to_path_buf(),
+            });
+        }
+        fs::create_dir(output)?;
+        let path = output.join(format!("{receipt_sha256}.json"));
+        atomic_create(&path, &bytes)?;
+        Ok(ReceiptArtifact {
+            path,
+            sha256: receipt_sha256,
+        })
     }
 
     pub fn wall_observation_snapshot(
@@ -2693,15 +2806,6 @@ impl Daemon {
     ) -> Result<Value> {
         let conn = self.conn()?;
         data_catalog::custody_verify(&conn, hashes, roots, rehash, now_ms())
-    }
-
-    fn frozen_resource_guard(&self) -> Result<Option<Value>> {
-        let status = self.resource_guard_status()?;
-        if status.get("admission_state") == Some(&Value::String("frozen".into())) {
-            Ok(Some(status))
-        } else {
-            Ok(None)
-        }
     }
 
     fn admission_guard_statuses(&self) -> Result<(Value, Value)> {
@@ -4071,7 +4175,11 @@ impl Daemon {
             .and_then(Value::as_str)
             .unwrap_or("probe_failed");
         if cfg!(windows) && matches!(foreign_pressure_state, "fenced" | "probe_failed") {
-            let reason = format!("foreign_process_pressure_{foreign_pressure_state}");
+            let reason = if foreign_pressure_state == "probe_failed" {
+                "foreign_process_host_counter_unavailable".to_string()
+            } else {
+                "foreign_process_host_commit_below_survival_floor".to_string()
+            };
             let refusal = json!({
                 "schema_version": "ember-lab-dispatch-preflight-v1",
                 "result": "REFUSED_FOREIGN_PROCESS_PRESSURE",
@@ -4841,6 +4949,54 @@ impl Daemon {
             .ok_or_else(|| EmberLabError::JobNotFound {
                 job_id: job_id.into(),
             })
+    }
+
+    pub fn job_result(&self, job_id: &str) -> Result<(i64, String)> {
+        let row: (String, Option<i64>, String, Option<String>) = self
+            .conn()?
+            .query_row(
+                "SELECT state,exit_code,stderr_log_path,stderr_log_sha256 FROM jobs WHERE job_id=?1",
+                [job_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?
+            .ok_or_else(|| EmberLabError::JobNotFound {
+                job_id: job_id.into(),
+            })?;
+        let state = JobState::parse(&row.0)?;
+        if !matches!(
+            state,
+            JobState::Stopped | JobState::Exited | JobState::Failed
+        ) {
+            return Err(EmberLabError::NonTerminalReceipt {
+                job_id: job_id.into(),
+                state: state.as_str().into(),
+            });
+        }
+        let exit_code = row.1.ok_or_else(|| EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "terminal certified launch lacks an exit code".into(),
+        })?;
+        let expected_stderr_sha256 = row.3.ok_or_else(|| EmberLabError::LogEvidenceUnsealed {
+            job_id: job_id.into(),
+        })?;
+        let stderr_path = PathBuf::from(row.2);
+        let stderr_bytes = fs::read(&stderr_path)?;
+        let actual_stderr_sha256 = hash_bytes(&stderr_bytes);
+        if actual_stderr_sha256 != expected_stderr_sha256 {
+            return Err(EmberLabError::LogEvidenceMismatch {
+                job_id: job_id.into(),
+                stream: "stderr".into(),
+                expected: expected_stderr_sha256,
+                actual: actual_stderr_sha256,
+            });
+        }
+        let stderr =
+            String::from_utf8(stderr_bytes).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "terminal certified launch stderr is not UTF-8".into(),
+            })?;
+        Ok((exit_code, stderr))
     }
 
     pub fn adopt_job(&self, job_id: &str) -> Result<JobHandle> {
@@ -7597,7 +7753,11 @@ fn validate_dispatch_workload_profile(
                 .into(),
         });
     }
-    let governed_vertical = args.iter().any(|arg| arg == "governed-vertical");
+    let governed_vertical = args.iter().any(|arg| {
+        arg == "governed-vertical"
+            || Path::new(arg).file_name().and_then(|name| name.to_str())
+                == Some("certified_train_launch.py")
+    });
     if governed_vertical != (profile.profile_id == DispatchWorkloadProfileId::GovernedVertical) {
         return Err(EmberLabError::InvalidDispatchManifest {
             detail: "dispatch workload profile does not match the governed-vertical argv".into(),
@@ -8615,6 +8775,8 @@ struct ForeignProcessCensus {
     enumerated_process_count: u64,
     owned_process_count: u64,
     probe_complete: bool,
+    attribution_complete: bool,
+    total_foreign_private_commit_is_lower_bound: bool,
     exited_processes: Vec<ProcessExitObservation>,
     unreadable_processes: Vec<ProcessReadFailure>,
     identity_conflicts: Vec<ProcessIdentityConflict>,
@@ -8704,9 +8866,8 @@ fn sample_foreign_process_census(
 
 #[cfg(windows)]
 fn owned_job_identities_from_connection(conn: &Connection) -> Result<Vec<OwnedJobIdentity>> {
-    let mut statement = conn.prepare(
-        "SELECT job_id,job_object_name FROM jobs WHERE state='running' ORDER BY job_id",
-    )?;
+    let mut statement = conn
+        .prepare("SELECT job_id,job_object_name FROM jobs WHERE state='running' ORDER BY job_id")?;
     let rows = statement.query_map([], |row| {
         Ok(OwnedJobIdentity {
             job_id: row.get(0)?,
@@ -8816,7 +8977,7 @@ fn classify_foreign_samples(
     named_foreign_processes.sort_by(|left, right| {
         (left.pid, &left.process_start_token).cmp(&(right.pid, &right.process_start_token))
     });
-    let probe_complete = unreadable_processes.is_empty() && identity_conflicts.is_empty();
+    let attribution_complete = unreadable_processes.is_empty() && identity_conflicts.is_empty();
 
     Ok(ForeignProcessCensus {
         host_commit_total_bytes: host.commit_total_bytes,
@@ -8828,7 +8989,9 @@ fn classify_foreign_samples(
         excluded_kernel_pids: vec![0, 4],
         enumerated_process_count,
         owned_process_count,
-        probe_complete,
+        probe_complete: true,
+        attribution_complete,
+        total_foreign_private_commit_is_lower_bound: !attribution_complete,
         exited_processes,
         unreadable_processes,
         identity_conflicts,
@@ -8868,6 +9031,8 @@ fn persist_foreign_process_census(
                     "enumerated_process_count": census.enumerated_process_count,
                     "owned_process_count": census.owned_process_count,
                     "probe_complete": census.probe_complete,
+                    "attribution_complete": census.attribution_complete,
+                    "total_foreign_private_commit_is_lower_bound": census.total_foreign_private_commit_is_lower_bound,
                     "exited_processes": census.exited_processes,
                     "unreadable_processes": census.unreadable_processes,
                     "identity_conflicts": census.identity_conflicts,
@@ -8949,6 +9114,352 @@ fn foreign_process_pressure_status_from_connection(conn: &Connection) -> Result<
     }))
 }
 
+fn verify_foreign_process_pressure_probe_receipt(bytes: &[u8]) -> Result<Value> {
+    let receipt: Value = serde_json::from_slice(bytes)?;
+    let object = receipt
+        .as_object()
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe receipt is not an object".into(),
+        })?;
+    let expected_keys = std::collections::BTreeSet::from([
+        "ember_lab_identity",
+        "foreign_process_control",
+        "observation",
+        "observation_sha256",
+        "observed_at_ms",
+        "receipt_sha256",
+        "schema_version",
+        "state",
+        "verdict",
+    ]);
+    if object
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != expected_keys
+        || object.get("schema_version")
+            != Some(&Value::String(
+                "ember-lab-foreign-process-pressure-probe-v1".into(),
+            ))
+        || object.get("verdict") != Some(&Value::String("EXECUTED".into()))
+        || object.get("foreign_process_control") != Some(&Value::Bool(false))
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe receipt has an invalid top-level shape".into(),
+        });
+    }
+    let identity = object
+        .get("ember_lab_identity")
+        .and_then(Value::as_object)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe receipt lacks daemon identity".into(),
+        })?;
+    if identity
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != std::collections::BTreeSet::from(["binary_sha256", "source_sha256"])
+        || !identity
+            .values()
+            .all(|value| value.as_str().is_some_and(is_sha256))
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe receipt has an invalid daemon identity".into(),
+        });
+    }
+    let observation =
+        object
+            .get("observation")
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe receipt lacks observation".into(),
+            })?;
+    let observation_object =
+        observation
+            .as_object()
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe observation is not an object".into(),
+            })?;
+    let expected_observation_keys = std::collections::BTreeSet::from([
+        "attribution_complete",
+        "counter_sources",
+        "enumerated_process_count",
+        "excluded_kernel_pids",
+        "exited_processes",
+        "foreign_process_attribution_cutoff_bytes",
+        "foreign_process_control",
+        "host_commit_limit_bytes",
+        "host_commit_remaining_bytes",
+        "host_commit_total_bytes",
+        "host_page_size_bytes",
+        "identity_conflicts",
+        "minimum_commit_remaining_bytes",
+        "monitor_tier",
+        "named_foreign_processes",
+        "observed_at_ms",
+        "owned_process_count",
+        "probe_complete",
+        "result",
+        "schema_version",
+        "total_foreign_private_commit_bytes",
+        "total_foreign_private_commit_is_lower_bound",
+        "unreadable_processes",
+    ]);
+    if observation_object
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != expected_observation_keys
+        || observation_object.get("schema_version")
+            != Some(&Value::String(
+                "ember-lab-foreign-process-pressure-observation-v1".into(),
+            ))
+        || observation_object.get("probe_complete") != Some(&Value::Bool(true))
+        || observation_object
+            .get("attribution_complete")
+            .and_then(Value::as_bool)
+            .is_none()
+        || observation_object
+            .get("total_foreign_private_commit_is_lower_bound")
+            .and_then(Value::as_bool)
+            != observation_object
+                .get("attribution_complete")
+                .and_then(Value::as_bool)
+                .map(|complete| !complete)
+        || observation_object.get("foreign_process_control") != Some(&Value::Bool(false))
+        || observation_object.get("monitor_tier")
+            != Some(&Value::String(
+                "windows_process_private_commit_and_gpu_context".into(),
+            ))
+        || observation_object.get("excluded_kernel_pids") != Some(&json!([0, 4]))
+        || observation_object
+            .get("unreadable_processes")
+            .and_then(Value::as_array)
+            .is_none()
+        || observation_object
+            .get("identity_conflicts")
+            .and_then(Value::as_array)
+            .is_none()
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe observation is incomplete or malformed".into(),
+        });
+    }
+    let attribution_complete = observation_object["attribution_complete"]
+        .as_bool()
+        .unwrap();
+    let attribution_failure_count = observation_object["unreadable_processes"]
+        .as_array()
+        .unwrap()
+        .len()
+        + observation_object["identity_conflicts"]
+            .as_array()
+            .unwrap()
+            .len();
+    if attribution_complete != (attribution_failure_count == 0) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe attribution completeness is inconsistent".into(),
+        });
+    }
+    let actual_observation_sha256 = hash_bytes(&serde_json::to_vec(observation)?);
+    if object.get("observed_at_ms") != observation_object.get("observed_at_ms")
+        || object.get("observation_sha256").and_then(Value::as_str)
+            != Some(actual_observation_sha256.as_str())
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe observation binding is invalid".into(),
+        });
+    }
+    let counters = observation_object
+        .get("counter_sources")
+        .and_then(Value::as_object);
+    if counters
+        .and_then(|value| value.get("host_commit"))
+        .and_then(Value::as_str)
+        != Some("GetPerformanceInfo.CommitLimit-CommitTotal")
+        || counters
+            .and_then(|value| value.get("process_private_commit"))
+            .and_then(Value::as_str)
+            != Some("K32GetProcessMemoryInfo.PROCESS_MEMORY_COUNTERS_EX.PrivateUsage")
+        || counters
+            .and_then(|value| value.get("gpu_compute_context"))
+            .and_then(Value::as_str)
+            != Some("nvidia-smi.query-compute-apps")
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe counter sources are invalid".into(),
+        });
+    }
+    let u64_field = |name: &str| {
+        observation_object
+            .get(name)
+            .and_then(Value::as_u64)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: format!("foreign pressure probe lacks {name}"),
+            })
+    };
+    let total = u64_field("host_commit_total_bytes")?;
+    let limit = u64_field("host_commit_limit_bytes")?;
+    let remaining = u64_field("host_commit_remaining_bytes")?;
+    if limit.checked_sub(total) != Some(remaining)
+        || u64_field("host_page_size_bytes")? == 0
+        || u64_field("minimum_commit_remaining_bytes")? != RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES
+        || u64_field("foreign_process_attribution_cutoff_bytes")?
+            != FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe host counter arithmetic is invalid".into(),
+        });
+    }
+    let named = observation_object
+        .get("named_foreign_processes")
+        .and_then(Value::as_array)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe named identities are invalid".into(),
+        })?;
+    let mut previous: Option<(u64, String)> = None;
+    let mut named_private_commit = 0_u64;
+    for process in named {
+        let process_object =
+            process
+                .as_object()
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: "foreign pressure probe named identity is not an object".into(),
+                })?;
+        if process_object
+            .keys()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>()
+            != std::collections::BTreeSet::from([
+                "candidate_classes",
+                "gpu_bytes",
+                "gpu_memory_unavailable_token",
+                "pid",
+                "private_commit_bytes",
+                "process_start_token",
+                "provider",
+                "survived_end_probe",
+            ])
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identity shape is invalid".into(),
+            });
+        }
+        let pid = process.get("pid").and_then(Value::as_u64).ok_or_else(|| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identity lacks PID".into(),
+            }
+        })?;
+        let token = process
+            .get("process_start_token")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identity lacks start token".into(),
+            })?;
+        if pid > u32::MAX as u64 || process.get("survived_end_probe") != Some(&Value::Bool(true)) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identity did not survive end probe".into(),
+            });
+        }
+        let identity = (pid, token.to_string());
+        if previous
+            .as_ref()
+            .is_some_and(|previous| previous >= &identity)
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identities are not sorted and unique".into(),
+            });
+        }
+        previous = Some(identity);
+        let classes = process
+            .get("candidate_classes")
+            .and_then(Value::as_array)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identity lacks candidate classes".into(),
+            })?;
+        if classes.is_empty()
+            || classes.iter().any(|class| {
+                !matches!(
+                    class.as_str(),
+                    Some("gpu_compute" | "private_commit_attribution")
+                )
+            })
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named identity classes are invalid".into(),
+            });
+        }
+        let gpu_class = classes
+            .iter()
+            .any(|class| class.as_str() == Some("gpu_compute"));
+        let gpu_bytes = process.get("gpu_bytes").and_then(Value::as_u64);
+        let unavailable = process
+            .get("gpu_memory_unavailable_token")
+            .and_then(Value::as_str);
+        if (gpu_class && gpu_bytes.is_none() && unavailable.is_none())
+            || (gpu_bytes.is_some() && unavailable.is_some())
+            || (!gpu_class && (gpu_bytes.is_some() || unavailable.is_some()))
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe GPU size availability is invalid".into(),
+            });
+        }
+        named_private_commit = named_private_commit
+            .checked_add(
+                process
+                    .get("private_commit_bytes")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                        detail: "foreign pressure probe named identity lacks private commit".into(),
+                    })?,
+            )
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "foreign pressure probe named private commit overflowed".into(),
+            })?;
+    }
+    let total_foreign = u64_field("total_foreign_private_commit_bytes")?;
+    if named_private_commit > total_foreign {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe named private commit exceeds total foreign commit"
+                .into(),
+        });
+    }
+    let expected_state = if remaining < RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES {
+        "fenced"
+    } else if named.is_empty() {
+        "clear"
+    } else {
+        "observed"
+    };
+    let expected_result = expected_state.to_ascii_uppercase();
+    if object.get("state").and_then(Value::as_str) != Some(expected_state)
+        || observation_object.get("result").and_then(Value::as_str)
+            != Some(expected_result.as_str())
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe state does not match its observation".into(),
+        });
+    }
+    let expected_self_hash = object
+        .get("receipt_sha256")
+        .and_then(Value::as_str)
+        .filter(|value| is_sha256(value))
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe receipt lacks self hash".into(),
+        })?;
+    let mut without_self_hash = receipt.clone();
+    without_self_hash
+        .as_object_mut()
+        .unwrap()
+        .remove("receipt_sha256");
+    if hash_bytes(&serde_json::to_vec(&without_self_hash)?) != expected_self_hash {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe self hash is invalid".into(),
+        });
+    }
+    Ok(receipt)
+}
+
 #[cfg(windows)]
 fn process_start_token(pid: u32) -> Result<String> {
     use windows_sys::Win32::System::Threading::OpenProcess;
@@ -8993,36 +9504,33 @@ fn sample_windows_host_commit() -> Result<HostCommitSample> {
     if unsafe { GetPerformanceInfo(&mut info, info.cb) } == 0 {
         return Err(std::io::Error::last_os_error().into());
     }
-    let page_size_bytes = u64::try_from(info.PageSize).map_err(|_| {
-        EmberLabError::InvalidDispatchManifest {
+    let page_size_bytes =
+        u64::try_from(info.PageSize).map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "host page size does not fit in u64".into(),
-        }
-    })?;
-    let commit_total_pages = u64::try_from(info.CommitTotal).map_err(|_| {
-        EmberLabError::InvalidDispatchManifest {
+        })?;
+    let commit_total_pages =
+        u64::try_from(info.CommitTotal).map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "host commit total does not fit in u64".into(),
-        }
-    })?;
-    let commit_limit_pages = u64::try_from(info.CommitLimit).map_err(|_| {
-        EmberLabError::InvalidDispatchManifest {
+        })?;
+    let commit_limit_pages =
+        u64::try_from(info.CommitLimit).map_err(|_| EmberLabError::InvalidDispatchManifest {
             detail: "host commit limit does not fit in u64".into(),
-        }
-    })?;
-    let commit_total_bytes = commit_total_pages.checked_mul(page_size_bytes).ok_or_else(|| {
-        EmberLabError::InvalidDispatchManifest {
+        })?;
+    let commit_total_bytes = commit_total_pages
+        .checked_mul(page_size_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "host commit total overflowed".into(),
-        }
-    })?;
-    let commit_limit_bytes = commit_limit_pages.checked_mul(page_size_bytes).ok_or_else(|| {
-        EmberLabError::InvalidDispatchManifest {
+        })?;
+    let commit_limit_bytes = commit_limit_pages
+        .checked_mul(page_size_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "host commit limit overflowed".into(),
-        }
-    })?;
-    let commit_remaining_bytes = commit_limit_bytes.checked_sub(commit_total_bytes).ok_or_else(|| {
-        EmberLabError::InvalidDispatchManifest {
+        })?;
+    let commit_remaining_bytes = commit_limit_bytes
+        .checked_sub(commit_total_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "host commit total exceeded commit limit".into(),
-        }
-    })?;
+        })?;
     Ok(HostCommitSample {
         commit_total_bytes,
         commit_limit_bytes,
@@ -9053,11 +9561,12 @@ fn enumerate_windows_process_ids() -> Result<Vec<u32>> {
             pids.truncate(bytes_written as usize / std::mem::size_of::<u32>());
             return Ok(pids);
         }
-        capacity = capacity.checked_mul(2).ok_or_else(|| {
-            EmberLabError::InvalidDispatchManifest {
-                detail: "process enumeration capacity overflowed".into(),
-            }
-        })?;
+        capacity =
+            capacity
+                .checked_mul(2)
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: "process enumeration capacity overflowed".into(),
+                })?;
     }
 }
 
@@ -9083,7 +9592,10 @@ fn parse_nvidia_compute_rows(stdout: &str) -> Result<BTreeMap<u32, GpuComputeSam
             })?;
         if fields.next().is_some() {
             return Err(EmberLabError::InvalidDispatchManifest {
-                detail: format!("unexpected NVIDIA compute fields at line {}", line_index + 1),
+                detail: format!(
+                    "unexpected NVIDIA compute fields at line {}",
+                    line_index + 1
+                ),
             });
         }
         let normalized = memory.to_ascii_lowercase();
@@ -9093,11 +9605,12 @@ fn parse_nvidia_compute_rows(stdout: &str) -> Result<BTreeMap<u32, GpuComputeSam
                 unavailable_token: Some(memory.to_string()),
             }
         } else {
-            let mib = memory.parse::<u64>().map_err(|_| {
-                EmberLabError::InvalidDispatchManifest {
-                    detail: format!("invalid NVIDIA compute memory at line {}", line_index + 1),
-                }
-            })?;
+            let mib =
+                memory
+                    .parse::<u64>()
+                    .map_err(|_| EmberLabError::InvalidDispatchManifest {
+                        detail: format!("invalid NVIDIA compute memory at line {}", line_index + 1),
+                    })?;
             GpuComputeSample {
                 bytes: Some(mib.checked_mul(1024 * 1024).ok_or_else(|| {
                     EmberLabError::InvalidDispatchManifest {
@@ -9114,11 +9627,13 @@ fn parse_nvidia_compute_rows(stdout: &str) -> Result<BTreeMap<u32, GpuComputeSam
             std::collections::btree_map::Entry::Occupied(mut entry) => {
                 let prior = entry.get_mut();
                 prior.bytes = match (prior.bytes, sample.bytes) {
-                    (Some(left), Some(right)) => Some(left.checked_add(right).ok_or_else(|| {
-                        EmberLabError::InvalidDispatchManifest {
-                            detail: "NVIDIA compute memory aggregate overflowed".into(),
-                        }
-                    })?),
+                    (Some(left), Some(right)) => {
+                        Some(left.checked_add(right).ok_or_else(|| {
+                            EmberLabError::InvalidDispatchManifest {
+                                detail: "NVIDIA compute memory aggregate overflowed".into(),
+                            }
+                        })?)
+                    }
                     _ => None,
                 };
                 if prior.unavailable_token.is_none() {
@@ -9230,7 +9745,8 @@ fn probe_windows_process_observations_with_owned(
         if unsafe {
             K32GetProcessMemoryInfo(
                 process.raw(),
-                (&mut counters as *mut PROCESS_MEMORY_COUNTERS_EX).cast::<PROCESS_MEMORY_COUNTERS>(),
+                (&mut counters as *mut PROCESS_MEMORY_COUNTERS_EX)
+                    .cast::<PROCESS_MEMORY_COUNTERS>(),
                 counters.cb,
             )
         } == 0
@@ -9257,9 +9773,8 @@ fn probe_windows_process_observations_with_owned(
         for (_, job) in &owned_handles {
             let mut is_member = 0;
             if unsafe { IsProcessInJob(process.raw(), job.raw(), &mut is_member) } == 0 {
-                ownership_probe_failed = Some(
-                    std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32,
-                );
+                ownership_probe_failed =
+                    Some(std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32);
                 break;
             }
             if is_member != 0 {
@@ -9344,30 +9859,28 @@ fn sample_windows_foreign_process_census(
             } else {
                 let process = OwnedHandle(process);
                 match windows_process_time_identity(process.raw()) {
-                    Ok((_, true)) => Some(ProcessCensusObservation::Exited(
-                        ProcessExitObservation {
+                    Ok((_, true)) => {
+                        Some(ProcessCensusObservation::Exited(ProcessExitObservation {
                             pid,
                             phase: "named_process_end_probe".into(),
                             win32_code: 0,
-                        },
-                    )),
+                        }))
+                    }
                     Ok((observed_start_token, false))
                         if observed_start_token == expected_start_token =>
                     {
                         survived.insert((pid, expected_start_token.clone()));
                         None
                     }
-                    Ok((observed_start_token, false)) => {
-                        Some(ProcessCensusObservation::IdentityConflict(
-                            ProcessIdentityConflict {
-                                pid,
-                                expected_start_token: expected_start_token.clone(),
-                                observed_start_token,
-                                phase: "named_process_end_probe".into(),
-                                win32_code: 0,
-                            },
-                        ))
-                    }
+                    Ok((observed_start_token, false)) => Some(
+                        ProcessCensusObservation::IdentityConflict(ProcessIdentityConflict {
+                            pid,
+                            expected_start_token: expected_start_token.clone(),
+                            observed_start_token,
+                            phase: "named_process_end_probe".into(),
+                            win32_code: 0,
+                        }),
+                    ),
                     Err(error) => {
                         let code = match &error {
                             EmberLabError::Io(error) => error.raw_os_error().unwrap_or(0) as u32,
@@ -9398,12 +9911,8 @@ fn sample_windows_foreign_process_census(
         }
     }
 
-    let mut census = classify_foreign_samples(
-        host,
-        observations,
-        &gpu_bytes_by_pid,
-        &owned_identities,
-    )?;
+    let mut census =
+        classify_foreign_samples(host, observations, &gpu_bytes_by_pid, &owned_identities)?;
     for process in &mut census.named_foreign_processes {
         process.survived_end_probe =
             survived.contains(&(process.pid, process.process_start_token.clone()));
@@ -9455,6 +9964,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 14,
             owned_process_count: 2,
             probe_complete: true,
+            attribution_complete: true,
+            total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
             unreadable_processes: vec![],
             identity_conflicts: vec![],
@@ -9484,6 +9995,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 3,
             owned_process_count: 0,
             probe_complete: true,
+            attribution_complete: true,
+            total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
             unreadable_processes: vec![],
             identity_conflicts: vec![],
@@ -9508,6 +10021,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 14,
             owned_process_count: 0,
             probe_complete: true,
+            attribution_complete: true,
+            total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
             unreadable_processes: vec![],
             identity_conflicts: vec![],
@@ -9532,6 +10047,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 2,
             owned_process_count: 0,
             probe_complete: true,
+            attribution_complete: true,
+            total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
             unreadable_processes: vec![],
             identity_conflicts: vec![],
@@ -9617,7 +10134,10 @@ mod foreign_pressure_policy_tests {
         .unwrap();
         let status = foreign_process_pressure_status_from_connection(&conn).unwrap();
         assert_eq!(status["state"], "clear");
-        assert_eq!(status["effective_admission"]["resource_guard_state"], "frozen");
+        assert_eq!(
+            status["effective_admission"]["resource_guard_state"],
+            "frozen"
+        );
         assert_eq!(status["effective_admission"]["admission_state"], "frozen");
     }
 
@@ -9676,13 +10196,9 @@ mod foreign_process_census_tests {
                 unavailable_token: None,
             },
         )]);
-        let census = classify_foreign_samples(
-            host(),
-            vec![live(77, "aa", GIB)],
-            &gpu,
-            &BTreeSet::new(),
-        )
-        .unwrap();
+        let census =
+            classify_foreign_samples(host(), vec![live(77, "aa", GIB)], &gpu, &BTreeSet::new())
+                .unwrap();
 
         assert_eq!(census.named_foreign_processes.len(), 1);
         assert_eq!(
@@ -9693,15 +10209,18 @@ mod foreign_process_census_tests {
 
     #[test]
     fn nvidia_absent_memory_tokens_keep_gpu_context_pids_named_and_complete() {
-        let gpu = parse_nvidia_compute_rows("2396, [N/A]\n7328, [n/a]\n7684, N/A\n")
-            .unwrap();
+        let gpu = parse_nvidia_compute_rows("2396, [N/A]\n7328, [n/a]\n7684, N/A\n").unwrap();
         assert_eq!(gpu.len(), 3);
         assert_eq!(gpu[&2396].bytes, None);
         assert_eq!(gpu[&2396].unavailable_token.as_deref(), Some("[N/A]"));
 
         let census = classify_foreign_samples(
             host(),
-            vec![live(2396, "aa", GIB), live(7328, "bb", GIB), live(7684, "cc", GIB)],
+            vec![
+                live(2396, "aa", GIB),
+                live(7328, "bb", GIB),
+                live(7684, "cc", GIB),
+            ],
             &gpu,
             &BTreeSet::new(),
         )
@@ -9739,13 +10258,9 @@ mod foreign_process_census_tests {
         let observations = (100..112)
             .map(|pid| live(pid, &format!("token-{pid}"), 3 * GIB + GIB / 2))
             .collect();
-        let census = classify_foreign_samples(
-            host(),
-            observations,
-            &BTreeMap::new(),
-            &BTreeSet::new(),
-        )
-        .unwrap();
+        let census =
+            classify_foreign_samples(host(), observations, &BTreeMap::new(), &BTreeSet::new())
+                .unwrap();
 
         assert_eq!(census.total_foreign_private_commit_bytes, 42 * GIB);
         assert!(census.named_foreign_processes.is_empty());
@@ -9786,7 +10301,7 @@ mod foreign_process_census_tests {
     }
 
     #[test]
-    fn unreadable_live_process_makes_census_incomplete() {
+    fn denied_process_makes_attribution_a_lower_bound_but_does_not_fence_healthy_host() {
         let census = classify_foreign_samples(
             host(),
             vec![ProcessCensusObservation::Unreadable(ProcessReadFailure {
@@ -9799,10 +10314,12 @@ mod foreign_process_census_tests {
         )
         .unwrap();
 
-        assert!(!census.probe_complete);
+        assert!(census.probe_complete);
+        assert!(!census.attribution_complete);
+        assert!(census.total_foreign_private_commit_is_lower_bound);
         assert_eq!(
             foreign_pressure_transition(&census),
-            ForeignPressureState::ProbeFailed
+            ForeignPressureState::Clear
         );
         assert_eq!(census.unreadable_processes[0].win32_code, 5);
     }
@@ -9829,14 +10346,11 @@ mod foreign_process_census_tests {
 
         assert!(census.probe_complete);
         assert!(census.named_foreign_processes.is_empty());
-        assert_eq!(
-            census.exited_processes[0].phase,
-            "named_process_end_probe"
-        );
+        assert_eq!(census.exited_processes[0].phase, "named_process_end_probe");
     }
 
     #[test]
-    fn named_pid_reuse_makes_census_incomplete() {
+    fn named_pid_reuse_makes_attribution_incomplete_without_destroying_host_decision() {
         let census = classify_foreign_samples(
             host(),
             vec![ProcessCensusObservation::IdentityConflict(
@@ -9853,7 +10367,9 @@ mod foreign_process_census_tests {
         )
         .unwrap();
 
-        assert!(!census.probe_complete);
+        assert!(census.probe_complete);
+        assert!(!census.attribution_complete);
+        assert!(census.total_foreign_private_commit_is_lower_bound);
         assert_eq!(census.identity_conflicts[0].expected_start_token, "old");
         assert_eq!(census.identity_conflicts[0].observed_start_token, "new");
     }
@@ -9908,6 +10424,102 @@ mod foreign_process_provider_integration_tests {
         let _ = child.kill();
         let _ = child.wait();
         result.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod foreign_pressure_probe_receipt_tests {
+    use super::*;
+
+    fn valid_receipt() -> Value {
+        let observation = json!({
+            "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
+            "result": "OBSERVED",
+            "observed_at_ms": 100,
+            "monitor_tier": "windows_process_private_commit_and_gpu_context",
+            "host_commit_total_bytes": 44_u64 * 1024 * 1024 * 1024,
+            "host_commit_limit_bytes": 64_u64 * 1024 * 1024 * 1024,
+            "host_commit_remaining_bytes": 20_u64 * 1024 * 1024 * 1024,
+            "host_page_size_bytes": 4096,
+            "minimum_commit_remaining_bytes": RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES,
+            "foreign_process_attribution_cutoff_bytes": FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES,
+            "total_foreign_private_commit_bytes": 5_u64 * 1024 * 1024 * 1024,
+            "named_foreign_processes": [{
+                "pid": 500,
+                "process_start_token": "token-500",
+                "private_commit_bytes": 5_u64 * 1024 * 1024 * 1024,
+                "gpu_bytes": Value::Null,
+                "gpu_memory_unavailable_token": Value::Null,
+                "provider": Value::Null,
+                "candidate_classes": ["private_commit_attribution"],
+                "survived_end_probe": true,
+            }],
+            "excluded_kernel_pids": [0, 4],
+            "enumerated_process_count": 3,
+            "owned_process_count": 0,
+            "probe_complete": true,
+            "attribution_complete": true,
+            "total_foreign_private_commit_is_lower_bound": false,
+            "exited_processes": [],
+            "unreadable_processes": [],
+            "identity_conflicts": [],
+            "counter_sources": {
+                "host_commit": "GetPerformanceInfo.CommitLimit-CommitTotal",
+                "process_private_commit": "K32GetProcessMemoryInfo.PROCESS_MEMORY_COUNTERS_EX.PrivateUsage",
+                "gpu_compute_context": "nvidia-smi.query-compute-apps",
+            },
+            "foreign_process_control": false,
+        });
+        let observation_sha256 = hash_bytes(&serde_json::to_vec(&observation).unwrap());
+        let mut receipt = json!({
+            "schema_version": "ember-lab-foreign-process-pressure-probe-v1",
+            "verdict": "EXECUTED",
+            "state": "observed",
+            "observed_at_ms": 100,
+            "observation": observation,
+            "observation_sha256": observation_sha256,
+            "ember_lab_identity": {
+                "binary_sha256": "a".repeat(64),
+                "source_sha256": "b".repeat(64),
+            },
+            "foreign_process_control": false,
+        });
+        let self_hash = hash_bytes(&serde_json::to_vec(&receipt).unwrap());
+        receipt
+            .as_object_mut()
+            .unwrap()
+            .insert("receipt_sha256".into(), Value::String(self_hash));
+        receipt
+    }
+
+    #[test]
+    fn exact_verifier_accepts_bound_receipt_and_rejects_identity_aggregate_and_self_hash_tamper() {
+        let receipt = valid_receipt();
+        verify_foreign_process_pressure_probe_receipt(&serde_json::to_vec(&receipt).unwrap())
+            .unwrap();
+
+        let mut identity = receipt;
+        identity["observation"]["named_foreign_processes"][0]["process_start_token"] =
+            Value::String("token-reused".into());
+        assert!(verify_foreign_process_pressure_probe_receipt(
+            &serde_json::to_vec(&identity).unwrap()
+        )
+        .is_err());
+
+        let mut aggregate = valid_receipt();
+        aggregate["observation"]["total_foreign_private_commit_bytes"] =
+            json!(4_u64 * 1024 * 1024 * 1024);
+        assert!(verify_foreign_process_pressure_probe_receipt(
+            &serde_json::to_vec(&aggregate).unwrap()
+        )
+        .is_err());
+
+        let mut self_hash = valid_receipt();
+        self_hash["receipt_sha256"] = Value::String("c".repeat(64));
+        assert!(verify_foreign_process_pressure_probe_receipt(
+            &serde_json::to_vec(&self_hash).unwrap()
+        )
+        .is_err());
     }
 }
 
