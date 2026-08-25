@@ -2153,7 +2153,10 @@ fn resource_guard_rearm_fixture(
 ) {
     let root = sandbox(name);
     let db = root.join("ember-lab.sqlite3");
-    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(host_capacity(16 * GIB))).unwrap();
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(host_capacity(16 * GIB)))
+            .unwrap();
+    assert!(!daemon.resource_guard_monitor_started_for_test());
     let freeze_at_ms = 10_000i64;
     let freeze = json!({
         "schema_version": "ember-lab-resource-guard-observation-v1",
@@ -2400,6 +2403,47 @@ fn resource_guard_rearm_refuses_unbound_stale_or_insufficient_evidence_without_t
 }
 
 #[test]
+fn real_epoch_monitor_observation_refuses_a_synthetic_rearm_timeline() {
+    let (root, _db, daemon, connection, request) =
+        resource_guard_rearm_fixture("real-epoch-row-refuses-synthetic-rearm", 31, 40_000);
+    let real_epoch_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    let real_epoch_observation = json!({
+        "schema_version": "ember-lab-resource-guard-observation-v1",
+        "result": "HEALTHY",
+        "observed_at_ms": real_epoch_ms,
+        "monitor_tier": "cheap_host_counters",
+        "driver_locked_provider": "UNAVAILABLE",
+        "physical_available_bytes": 16 * GIB,
+        "commit_remaining_bytes": 20 * GIB,
+        "minimum_physical_available_bytes": 8 * GIB,
+        "minimum_commit_remaining_bytes": 10 * GIB,
+    });
+    let real_epoch_observation_json = serde_json::to_string(&real_epoch_observation).unwrap();
+    connection
+        .execute(
+            "INSERT INTO resource_guard_observations(observed_at_ms,outcome,payload_json) VALUES(?1,'healthy',?2)",
+            rusqlite::params![real_epoch_ms, real_epoch_observation_json],
+        )
+        .unwrap();
+    let error = daemon.rearm_resource_guard_at(request, 73_000).unwrap_err();
+    assert!(matches!(
+        error,
+        EmberLabError::InvalidDispatchManifest { ref detail }
+            if detail == "resource guard re-arm newest healthy observation is stale or future"
+    ));
+    assert_eq!(
+        daemon.resource_guard_status().unwrap()["admission_state"],
+        "frozen"
+    );
+    drop(daemon);
+    drop(connection);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
 fn resource_guard_monitor_samples_for_the_daemon_lifetime() {
     let root = sandbox("resource-guard-monitor-lifetime");
     let db_path = root.join("ember-lab.sqlite3");
@@ -2414,16 +2458,25 @@ fn resource_guard_monitor_samples_for_the_daemon_lifetime() {
         .unwrap();
     assert_eq!(initial, 1);
 
-    thread::sleep(Duration::from_millis(2_300));
-    let later = Connection::open(&db_path)
-        .unwrap()
-        .query_row(
-            "SELECT COUNT(*) FROM resource_guard_observations",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .unwrap();
-    assert!(later >= 2, "expected a daemon-lifetime monitor sample");
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let later = loop {
+        let count = Connection::open(&db_path)
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM resource_guard_observations",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap();
+        if count >= 2 || std::time::Instant::now() >= deadline {
+            break count;
+        }
+        thread::sleep(Duration::from_millis(100));
+    };
+    assert!(
+        later >= 2,
+        "expected a daemon-lifetime monitor sample before the 10-second deadline; observed {later} rows"
+    );
     assert_eq!(
         daemon.resource_guard_status().unwrap()["driver_locked_provider"],
         "UNAVAILABLE"

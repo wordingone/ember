@@ -1644,6 +1644,8 @@ pub struct Daemon {
     monitor_shutdown: OwnedHandle,
     #[cfg(windows)]
     monitor_ownership: Arc<RwLock<bool>>,
+    #[cfg(all(windows, debug_assertions))]
+    resource_guard_monitor_started_for_test: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -2220,7 +2222,7 @@ where
 
 impl Daemon {
     pub fn open(path: &Path) -> Result<Self> {
-        Self::open_inner(path, probe_host_survival_headroom())
+        Self::open_inner(path, probe_host_survival_headroom(), true)
     }
 
     /// Debug-build integration seam. It exercises the real `Daemon::open`
@@ -2241,10 +2243,36 @@ impl Daemon {
                 physical_available_bytes: capacity.physical_available_bytes,
                 commit_remaining_bytes: capacity.current_commit_remaining_bytes,
             }),
+            true,
         )
     }
 
-    fn open_inner(path: &Path, resource_guard_seed: Result<HostSurvivalHeadroom>) -> Result<Self> {
+    /// Debug-build deterministic seam for tests that author a complete
+    /// synthetic resource-guard timeline. The ordinary seeded constructor
+    /// still launches the production monitor; this variant keeps the same
+    /// schema, migration, startup sample, and Windows census but prevents a
+    /// real epoch-ms monitor row from racing a fixture's synthetic clock.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn open_with_resource_guard_seed_without_monitor(
+        path: &Path,
+        resource_guard_seed: Result<HostCommitCapacity>,
+    ) -> Result<Self> {
+        Self::open_inner(
+            path,
+            resource_guard_seed.map(|capacity| HostSurvivalHeadroom {
+                physical_available_bytes: capacity.physical_available_bytes,
+                commit_remaining_bytes: capacity.current_commit_remaining_bytes,
+            }),
+            false,
+        )
+    }
+
+    fn open_inner(
+        path: &Path,
+        resource_guard_seed: Result<HostSurvivalHeadroom>,
+        start_resource_guard_monitor: bool,
+    ) -> Result<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -2308,7 +2336,11 @@ impl Daemon {
             monitor_shutdown,
             #[cfg(windows)]
             monitor_ownership: Arc::new(RwLock::new(true)),
+            #[cfg(all(windows, debug_assertions))]
+            resource_guard_monitor_started_for_test: false,
         };
+        #[cfg(all(windows, debug_assertions))]
+        let mut daemon = daemon;
         // Linux gets the same real point-in-time headroom seed as Windows so
         // `resource_guard_state` is never left at its empty-observation seed
         // row (which reads as `available_headroom_bytes = 0` everywhere that
@@ -2327,20 +2359,34 @@ impl Daemon {
             let census =
                 sample_foreign_process_census(foreign_process_provider.as_ref(), &owned_jobs);
             persist_foreign_process_census(&*daemon.conn()?, observed_at_ms, census)?;
-            spawn_resource_guard_monitor(
-                Arc::downgrade(&daemon.db),
-                Arc::downgrade(&daemon.live),
-                daemon.log_dir.clone(),
-                duplicate_owned_handle(daemon.monitor_shutdown.raw())?,
-                Arc::downgrade(&daemon.monitor_ownership),
-                foreign_process_provider,
-            )?;
+            if start_resource_guard_monitor {
+                spawn_resource_guard_monitor(
+                    Arc::downgrade(&daemon.db),
+                    Arc::downgrade(&daemon.live),
+                    daemon.log_dir.clone(),
+                    duplicate_owned_handle(daemon.monitor_shutdown.raw())?,
+                    Arc::downgrade(&daemon.monitor_ownership),
+                    foreign_process_provider,
+                )?;
+                #[cfg(debug_assertions)]
+                {
+                    daemon.resource_guard_monitor_started_for_test = true;
+                }
+            }
         }
+        #[cfg(not(windows))]
+        let _ = start_resource_guard_monitor;
         Ok(daemon)
     }
 
     fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
         self.db.lock().map_err(|_| EmberLabError::Poisoned)
+    }
+
+    #[cfg(all(windows, debug_assertions))]
+    #[doc(hidden)]
+    pub fn resource_guard_monitor_started_for_test(&self) -> bool {
+        self.resource_guard_monitor_started_for_test
     }
     pub fn journal_mode(&self) -> Result<String> {
         Ok(self
