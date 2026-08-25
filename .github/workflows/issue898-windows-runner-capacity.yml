@@ -1,0 +1,96 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: "Issue 898: Windows runner capacity"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue898-windows-runner-capacity
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Measure real Windows commit and physical capacity
+        shell: pwsh
+        run: |
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+
+          public static class Issue898PerformanceInfo {
+              [StructLayout(LayoutKind.Sequential)]
+              public struct PERFORMANCE_INFORMATION {
+                  public UInt32 cb;
+                  public UIntPtr CommitTotal;
+                  public UIntPtr CommitLimit;
+                  public UIntPtr CommitPeak;
+                  public UIntPtr PhysicalTotal;
+                  public UIntPtr PhysicalAvailable;
+                  public UIntPtr SystemCache;
+                  public UIntPtr KernelTotal;
+                  public UIntPtr KernelPaged;
+                  public UIntPtr KernelNonpaged;
+                  public UIntPtr PageSize;
+                  public UInt32 HandleCount;
+                  public UInt32 ProcessCount;
+                  public UInt32 ThreadCount;
+              }
+
+              [DllImport("psapi.dll", SetLastError = true)]
+              public static extern bool GetPerformanceInfo(
+                  ref PERFORMANCE_INFORMATION information,
+                  UInt32 size
+              );
+          }
+          '@
+
+          $information = New-Object Issue898PerformanceInfo+PERFORMANCE_INFORMATION
+          $information.cb = [Runtime.InteropServices.Marshal]::SizeOf($information)
+          if (-not [Issue898PerformanceInfo]::GetPerformanceInfo(
+              [ref] $information,
+              $information.cb
+          )) {
+              throw [ComponentModel.Win32Exception]::new(
+                  [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+              )
+          }
+
+          $pageSize = $information.PageSize.ToUInt64()
+          $commitTotal = $information.CommitTotal.ToUInt64() * $pageSize
+          $commitLimit = $information.CommitLimit.ToUInt64() * $pageSize
+          $receipt = [ordered]@{
+              schema_version = "ember-issue898-windows-runner-capacity-v1"
+              captured_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
+              github_sha = $env:GITHUB_SHA
+              github_run_id = $env:GITHUB_RUN_ID
+              runner_name = $env:RUNNER_NAME
+              runner_os = $env:RUNNER_OS
+              runner_arch = $env:RUNNER_ARCH
+              runner_image = $env:ImageOS
+              page_size_bytes = $pageSize
+              commit_total_bytes = $commitTotal
+              commit_limit_bytes = $commitLimit
+              commit_remaining_bytes = $commitLimit - $commitTotal
+              commit_peak_bytes = $information.CommitPeak.ToUInt64() * $pageSize
+              physical_total_bytes = $information.PhysicalTotal.ToUInt64() * $pageSize
+              physical_available_bytes = $information.PhysicalAvailable.ToUInt64() * $pageSize
+          }
+          $json = $receipt | ConvertTo-Json -Depth 3
+          $output = Join-Path $env:RUNNER_TEMP "issue898-windows-runner-capacity.json"
+          [IO.File]::WriteAllText($output, $json, [Text.UTF8Encoding]::new($false))
+          $json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue898-windows-runner-capacity-${{ github.run_id }}
+          path: ${{ runner.temp }}/issue898-windows-runner-capacity.json
+          if-no-files-found: error
+          retention-days: 30
