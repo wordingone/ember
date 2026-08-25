@@ -216,9 +216,9 @@ pub fn rollback_empty_foreign_process_pressure_migration(path: &Path) -> Result<
         [],
         |row| row.get(0),
     )?;
-    if observation_rows != 0 {
+    if observation_rows > 1 {
         return Err(EmberLabError::InvalidDataCatalog {
-            detail: "foreign process pressure rollback refuses because the observation ledger is nonempty".into(),
+            detail: "foreign process pressure rollback refuses because the observation ledger contains history".into(),
         });
     }
     let pristine_rows: i64 = tx.query_row(
@@ -231,9 +231,25 @@ pub fn rollback_empty_foreign_process_pressure_migration(path: &Path) -> Result<
         [],
         |row| row.get(0),
     )?;
-    if pristine_rows != 1 || state_rows != 1 {
+    let startup_row_matches_state = if observation_rows == 1 && state_rows == 1 {
+        tx.query_row(
+            "SELECT COUNT(*)
+             FROM foreign_process_pressure_observations AS observation
+             JOIN foreign_process_pressure_state AS state ON state.singleton=1
+             WHERE observation.seq=1
+               AND observation.observed_at_ms=state.observed_at_ms
+               AND observation.outcome=state.state
+               AND observation.payload_json=state.observation_json",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? == 1
+    } else {
+        false
+    };
+    let pristine_empty_migration = observation_rows == 0 && pristine_rows == 1 && state_rows == 1;
+    if !pristine_empty_migration && !startup_row_matches_state {
         return Err(EmberLabError::InvalidDataCatalog {
-            detail: "foreign process pressure rollback refuses because the singleton is not the pristine migration seed".into(),
+            detail: "foreign process pressure rollback refuses because state is neither the pristine migration seed nor one validated startup observation".into(),
         });
     }
     tx.execute_batch(
@@ -1106,6 +1122,50 @@ pub struct DispatchWorkloadProfile {
     pub cpu_rate_percent: u32,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchMemoryMechanism {
+    DeviceResidentTraining,
+    A1CpuOffload,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DispatchNonA1MemoryModelAuthority {
+    pub producer: DispatchFileHash,
+    pub config: DispatchFileHash,
+    pub mechanism: DispatchMemoryMechanism,
+    pub mechanism_authority: String,
+    pub projection_kind: String,
+    pub zero_overshoot_allowance: bool,
+    pub total_parameters: u64,
+    pub active_parameters: u64,
+    pub parameter_bytes_all: u64,
+    pub gradient_bytes_active: u64,
+    pub optimizer_state_bytes_active: u64,
+    pub activation_reserve_bytes: u64,
+    pub runtime_reserve_bytes: u64,
+    pub mechanism_peak_bytes: u64,
+    pub transient_checkpoint_bytes: u64,
+    pub checkpoint_publication_host_commit_reserve_bytes: u64,
+    pub checkpoint_publication_reserve_role: String,
+    pub daemon_host_survival_reserve_bytes: u64,
+    pub daemon_host_survival_reserve_role: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "route", deny_unknown_fields)]
+pub enum DispatchMemoryModelAuthority {
+    #[serde(rename = "non_a1_device_resident")]
+    NonA1DeviceResident(Box<DispatchNonA1MemoryModelAuthority>),
+    #[serde(rename = "a1_declared_mechanism")]
+    A1DeclaredMechanism {
+        mechanism: DispatchMemoryMechanism,
+        overshoot_allowance_bytes: u64,
+        daemon_host_survival_reserve_bytes: u64,
+    },
+}
+
 /// Declares whether a dispatched job's CPU usage is paced.
 ///
 /// This is a required, closed-choice declaration: no `Option`, no
@@ -1155,6 +1215,8 @@ pub struct DispatchManifest {
     pub program: DispatchFileHash,
     pub args: Vec<String>,
     pub workload_profile: DispatchWorkloadProfile,
+    #[serde(default)]
+    pub memory_model_authority: Option<DispatchMemoryModelAuthority>,
     pub cpu_pacing_class: DispatchCpuPacingClass,
     pub window_contract: DispatchWindowContract,
     #[serde(default)]
@@ -4170,16 +4232,11 @@ impl Daemon {
             return Ok(existing);
         }
         let (resource_guard, foreign_process_pressure) = self.admission_guard_statuses()?;
-        let foreign_pressure_state = foreign_process_pressure
-            .get("state")
-            .and_then(Value::as_str)
-            .unwrap_or("probe_failed");
-        if cfg!(windows) && matches!(foreign_pressure_state, "fenced" | "probe_failed") {
-            let reason = if foreign_pressure_state == "probe_failed" {
-                "foreign_process_host_counter_unavailable".to_string()
-            } else {
-                "foreign_process_host_commit_below_survival_floor".to_string()
-            };
+        let foreign_pressure_refusal =
+            foreign_process_pressure_admission_refusal(&foreign_process_pressure);
+        if cfg!(windows) && foreign_pressure_refusal.is_some() {
+            let refusal_detail = foreign_pressure_refusal.unwrap();
+            let diagnosis = serde_json::to_value(refusal_detail.diagnosis)?;
             let refusal = json!({
                 "schema_version": "ember-lab-dispatch-preflight-v1",
                 "result": "REFUSED_FOREIGN_PROCESS_PRESSURE",
@@ -4189,10 +4246,11 @@ impl Daemon {
                 "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
                 "resource_guard": resource_guard,
                 "foreign_process_pressure": foreign_process_pressure,
+                "foreign_process_pressure_diagnosis": diagnosis,
             });
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
             return Err(EmberLabError::ResourceAdmissionFrozen {
-                reason,
+                reason: refusal_detail.reason.into(),
                 receipt_path,
             });
         }
@@ -4226,7 +4284,6 @@ impl Daemon {
             let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
             return Err(error);
         }
-        let profile_id = manifest.workload_profile.profile_id;
         let dispatch_expires_at_ms = manifest.expires_at_ms;
         let mut spec = JobSpec::new(
             job_id.clone(),
@@ -4249,9 +4306,7 @@ impl Daemon {
         for (key, value) in manifest.env {
             spec = spec.with_env(key, value);
         }
-        if profile_id == DispatchWorkloadProfileId::EvidenceVerifier || spec.vram_wall.is_some() {
-            spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
-        }
+        spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         let handle = match self.start_job_with_window_census_budget(spec, window_census_budget) {
             Ok(handle) => handle,
             Err(error) => {
@@ -8551,20 +8606,14 @@ fn nvidia_smi_text(args: &[&str]) -> Result<String> {
     })
 }
 
-fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceCapacity> {
-    let stdout = nvidia_smi_text(&[
-        "--query-gpu=uuid,memory.total,memory.free",
-        "--format=csv,noheader,nounits",
-    ])?;
+fn parse_nvidia_vram_device_capacities(stdout: &str) -> Result<Vec<VramDeviceCapacity>> {
+    let mut capacities = Vec::new();
     for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
         let fields = line.split(',').map(str::trim).collect::<Vec<_>>();
         if fields.len() != 3 {
             return Err(EmberLabError::InvalidDispatchManifest {
                 detail: "nvidia-smi device capacity row has invalid cardinality".into(),
             });
-        }
-        if fields[0] != contract.device_uuid {
-            continue;
         }
         let total_mib =
             fields[1]
@@ -8578,7 +8627,7 @@ fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceC
                 .map_err(|error| EmberLabError::InvalidDispatchManifest {
                     detail: format!("nvidia-smi free VRAM value is invalid: {error}"),
                 })?;
-        return Ok(VramDeviceCapacity {
+        capacities.push(VramDeviceCapacity {
             provider: "nvidia_smi_nvml".into(),
             device_uuid: fields[0].into(),
             total_bytes: total_mib.checked_mul(1024 * 1024).ok_or_else(|| {
@@ -8592,6 +8641,37 @@ fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceC
                 }
             })?,
         });
+    }
+    Ok(capacities)
+}
+
+pub fn probe_single_vram_device_capacity() -> Result<VramDeviceCapacity> {
+    let stdout = nvidia_smi_text(&[
+        "--query-gpu=uuid,memory.total,memory.free",
+        "--format=csv,noheader,nounits",
+    ])?;
+    let mut capacities = parse_nvidia_vram_device_capacities(&stdout)?;
+    if capacities.len() != 1 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: format!(
+                "certified launch requires exactly one visible GPU, observed {}",
+                capacities.len()
+            ),
+        });
+    }
+    Ok(capacities.remove(0))
+}
+
+fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceCapacity> {
+    let stdout = nvidia_smi_text(&[
+        "--query-gpu=uuid,memory.total,memory.free",
+        "--format=csv,noheader,nounits",
+    ])?;
+    if let Some(capacity) = parse_nvidia_vram_device_capacities(&stdout)?
+        .into_iter()
+        .find(|capacity| capacity.device_uuid == contract.device_uuid)
+    {
+        return Ok(capacity);
     }
     Err(EmberLabError::InvalidDispatchManifest {
         detail: format!(
@@ -8803,6 +8883,8 @@ struct ForeignProcessCensus {
     enumerated_process_count: u64,
     owned_process_count: u64,
     probe_complete: bool,
+    gpu_process_attribution_available: bool,
+    gpu_process_attribution_unavailable_token: Option<String>,
     attribution_complete: bool,
     total_foreign_private_commit_is_lower_bound: bool,
     exited_processes: Vec<ProcessExitObservation>,
@@ -8828,6 +8910,13 @@ struct ProcessCommitSample {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct GpuComputeSample {
     bytes: Option<u64>,
+    unavailable_token: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct GpuComputeInventory {
+    samples: BTreeMap<u32, GpuComputeSample>,
+    attribution_available: bool,
     unavailable_token: Option<String>,
 }
 
@@ -8947,7 +9036,7 @@ fn foreign_pressure_transition(census: &ForeignProcessCensus) -> ForeignPressure
 fn classify_foreign_samples(
     host: HostCommitSample,
     observations: Vec<ProcessCensusObservation>,
-    gpu_bytes_by_pid: &BTreeMap<u32, GpuComputeSample>,
+    gpu_inventory: &GpuComputeInventory,
     owned_identities: &std::collections::BTreeSet<(u32, String)>,
 ) -> Result<ForeignProcessCensus> {
     let enumerated_process_count = u64::try_from(observations.len()).unwrap_or(u64::MAX);
@@ -8971,7 +9060,7 @@ fn classify_foreign_samples(
                         detail: "foreign private commit aggregate overflowed".into(),
                     })?;
                 let mut candidate_classes = Vec::new();
-                let gpu_sample = gpu_bytes_by_pid.get(&process.pid);
+                let gpu_sample = gpu_inventory.samples.get(&process.pid);
                 let gpu_bytes = gpu_sample.and_then(|sample| sample.bytes);
                 if gpu_sample.is_some() {
                     candidate_classes.push("gpu_compute".into());
@@ -9018,6 +9107,8 @@ fn classify_foreign_samples(
         enumerated_process_count,
         owned_process_count,
         probe_complete: true,
+        gpu_process_attribution_available: gpu_inventory.attribution_available,
+        gpu_process_attribution_unavailable_token: gpu_inventory.unavailable_token.clone(),
         attribution_complete,
         total_foreign_private_commit_is_lower_bound: !attribution_complete,
         exited_processes,
@@ -9059,6 +9150,8 @@ fn persist_foreign_process_census(
                     "enumerated_process_count": census.enumerated_process_count,
                     "owned_process_count": census.owned_process_count,
                     "probe_complete": census.probe_complete,
+                    "gpu_process_attribution_available": census.gpu_process_attribution_available,
+                    "gpu_process_attribution_unavailable_token": census.gpu_process_attribution_unavailable_token,
                     "attribution_complete": census.attribution_complete,
                     "total_foreign_private_commit_is_lower_bound": census.total_foreign_private_commit_is_lower_bound,
                     "exited_processes": census.exited_processes,
@@ -9105,6 +9198,122 @@ fn persist_foreign_process_census(
     Ok(())
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct ForeignProcessPressureEffectiveAdmission {
+    admission_state: String,
+    resource_guard_state: String,
+    resource_guard_reason: Option<String>,
+    foreign_process_pressure_state: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct ForeignProcessPressureStatus {
+    schema_version: String,
+    state: String,
+    observed_at_ms: i64,
+    observation: Value,
+    sampling_interval_ms: u64,
+    effective_admission: ForeignProcessPressureEffectiveAdmission,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "classification", rename_all = "snake_case")]
+enum ForeignProcessPressureDiagnosis {
+    Fenced {
+        recorded_result: Option<String>,
+        recorded_error: Option<String>,
+    },
+    ReportedProbeFailure {
+        recorded_result: String,
+        recorded_error: Option<String>,
+    },
+    NotYetSampled {
+        recorded_result: String,
+        recorded_error: Option<String>,
+    },
+    StatusUnreadable {
+        recorded_result: Option<String>,
+        recorded_error: Option<String>,
+        status_error: String,
+    },
+}
+
+struct ForeignProcessPressureAdmissionRefusal {
+    reason: &'static str,
+    diagnosis: ForeignProcessPressureDiagnosis,
+}
+
+fn foreign_process_pressure_admission_refusal(
+    status_value: &Value,
+) -> Option<ForeignProcessPressureAdmissionRefusal> {
+    let recorded_result = status_value
+        .get("observation")
+        .and_then(|observation| observation.get("result"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let recorded_error = status_value
+        .get("observation")
+        .and_then(|observation| observation.get("error"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let status = match serde_json::from_value::<ForeignProcessPressureStatus>(status_value.clone())
+    {
+        Ok(status) => status,
+        Err(_) => {
+            return Some(ForeignProcessPressureAdmissionRefusal {
+                reason: "foreign_process_pressure_status_unreadable",
+                diagnosis: ForeignProcessPressureDiagnosis::StatusUnreadable {
+                    recorded_result,
+                    recorded_error,
+                    status_error: "missing or invalid state".into(),
+                },
+            });
+        }
+    };
+    match status.state.as_str() {
+        "clear" | "observed" => None,
+        "fenced" => Some(ForeignProcessPressureAdmissionRefusal {
+            reason: "foreign_process_host_commit_below_survival_floor",
+            diagnosis: ForeignProcessPressureDiagnosis::Fenced {
+                recorded_result,
+                recorded_error,
+            },
+        }),
+        "probe_failed" => match recorded_result.as_deref() {
+            Some("PROBE_FAILED") => Some(ForeignProcessPressureAdmissionRefusal {
+                reason: "foreign_process_census_reported_failure",
+                diagnosis: ForeignProcessPressureDiagnosis::ReportedProbeFailure {
+                    recorded_result: "PROBE_FAILED".into(),
+                    recorded_error,
+                },
+            }),
+            Some("NOT_YET_SAMPLED") => Some(ForeignProcessPressureAdmissionRefusal {
+                reason: "foreign_process_census_not_yet_sampled",
+                diagnosis: ForeignProcessPressureDiagnosis::NotYetSampled {
+                    recorded_result: "NOT_YET_SAMPLED".into(),
+                    recorded_error,
+                },
+            }),
+            _ => Some(ForeignProcessPressureAdmissionRefusal {
+                reason: "foreign_process_pressure_status_unreadable",
+                diagnosis: ForeignProcessPressureDiagnosis::StatusUnreadable {
+                    recorded_result,
+                    recorded_error,
+                    status_error: "missing or invalid observation.result".into(),
+                },
+            }),
+        },
+        _ => Some(ForeignProcessPressureAdmissionRefusal {
+            reason: "foreign_process_pressure_status_unreadable",
+            diagnosis: ForeignProcessPressureDiagnosis::StatusUnreadable {
+                recorded_result,
+                recorded_error,
+                status_error: "missing or invalid state".into(),
+            },
+        }),
+    }
+}
+
 fn foreign_process_pressure_status_from_connection(conn: &Connection) -> Result<Value> {
     let (state, observed_at_ms, observation_json): (String, i64, String) = conn.query_row(
         "SELECT state,observed_at_ms,observation_json FROM foreign_process_pressure_state WHERE singleton=1",
@@ -9127,19 +9336,19 @@ fn foreign_process_pressure_status_from_connection(conn: &Connection) -> Result<
     } else {
         "open"
     };
-    Ok(json!({
-        "schema_version": "ember-lab-foreign-process-pressure-state-v1",
-        "state": state,
-        "observed_at_ms": observed_at_ms,
-        "observation": observation,
-        "sampling_interval_ms": RESOURCE_GUARD_SAMPLE_INTERVAL_MS,
-        "effective_admission": {
-            "admission_state": admission_state,
-            "resource_guard_state": resource_guard_state,
-            "resource_guard_reason": resource_guard_reason,
-            "foreign_process_pressure_state": state,
+    Ok(serde_json::to_value(ForeignProcessPressureStatus {
+        schema_version: "ember-lab-foreign-process-pressure-state-v1".into(),
+        state: state.clone(),
+        observed_at_ms,
+        observation,
+        sampling_interval_ms: RESOURCE_GUARD_SAMPLE_INTERVAL_MS.into(),
+        effective_admission: ForeignProcessPressureEffectiveAdmission {
+            admission_state: admission_state.into(),
+            resource_guard_state,
+            resource_guard_reason,
+            foreign_process_pressure_state: state,
         },
-    }))
+    })?)
 }
 
 fn verify_foreign_process_pressure_probe_receipt(bytes: &[u8]) -> Result<Value> {
@@ -9215,6 +9424,8 @@ fn verify_foreign_process_pressure_probe_receipt(bytes: &[u8]) -> Result<Value> 
         "exited_processes",
         "foreign_process_attribution_cutoff_bytes",
         "foreign_process_control",
+        "gpu_process_attribution_available",
+        "gpu_process_attribution_unavailable_token",
         "host_commit_limit_bytes",
         "host_commit_remaining_bytes",
         "host_commit_total_bytes",
@@ -9242,6 +9453,10 @@ fn verify_foreign_process_pressure_probe_receipt(bytes: &[u8]) -> Result<Value> 
                 "ember-lab-foreign-process-pressure-observation-v1".into(),
             ))
         || observation_object.get("probe_complete") != Some(&Value::Bool(true))
+        || observation_object
+            .get("gpu_process_attribution_available")
+            .and_then(Value::as_bool)
+            .is_none()
         || observation_object
             .get("attribution_complete")
             .and_then(Value::as_bool)
@@ -9275,6 +9490,21 @@ fn verify_foreign_process_pressure_probe_receipt(bytes: &[u8]) -> Result<Value> 
     let attribution_complete = observation_object["attribution_complete"]
         .as_bool()
         .unwrap();
+    let gpu_process_attribution_available = observation_object["gpu_process_attribution_available"]
+        .as_bool()
+        .unwrap();
+    let gpu_process_attribution_unavailable_token = observation_object
+        .get("gpu_process_attribution_unavailable_token")
+        .and_then(Value::as_str);
+    if (gpu_process_attribution_available
+        && !observation_object["gpu_process_attribution_unavailable_token"].is_null())
+        || (!gpu_process_attribution_available
+            && gpu_process_attribution_unavailable_token != Some("nvidia_smi_program_not_found"))
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "foreign pressure probe GPU attribution availability is inconsistent".into(),
+        });
+    }
     let attribution_failure_count = observation_object["unreadable_processes"]
         .as_array()
         .unwrap()
@@ -9662,19 +9892,61 @@ fn parse_nvidia_compute_rows(stdout: &str) -> Result<BTreeMap<u32, GpuComputeSam
 }
 
 #[cfg(windows)]
-fn nvidia_compute_bytes_by_pid() -> Result<BTreeMap<u32, GpuComputeSample>> {
-    let stdout = nvidia_smi_text(&[
-        "--query-compute-apps=pid,used_gpu_memory",
-        "--format=csv,noheader,nounits",
-    ])?;
-    parse_nvidia_compute_rows(&stdout)
+fn nvidia_compute_inventory_start_error(error: &std::io::Error) -> Option<GpuComputeInventory> {
+    (error.kind() == std::io::ErrorKind::NotFound).then(|| GpuComputeInventory {
+        samples: BTreeMap::new(),
+        attribution_available: false,
+        unavailable_token: Some("nvidia_smi_program_not_found".into()),
+    })
+}
+
+#[cfg(windows)]
+fn nvidia_compute_inventory() -> Result<GpuComputeInventory> {
+    use std::os::windows::process::CommandExt;
+
+    let mut command = std::process::Command::new("nvidia-smi");
+    command
+        .args([
+            "--query-compute-apps=pid,used_gpu_memory",
+            "--format=csv,noheader,nounits",
+        ])
+        .creation_flags(0x0800_0000);
+    let output = match command.output() {
+        Ok(output) => output,
+        Err(error) => {
+            if let Some(inventory) = nvidia_compute_inventory_start_error(&error) {
+                return Ok(inventory);
+            }
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: format!("nvidia-smi compute attribution probe failed to start: {error}"),
+            });
+        }
+    };
+    if !output.status.success() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: format!(
+                "nvidia-smi compute attribution probe failed with {}",
+                output.status
+            ),
+        });
+    }
+    let stdout = String::from_utf8(output.stdout).map_err(|error| {
+        EmberLabError::InvalidDispatchManifest {
+            detail: format!("nvidia-smi compute attribution output was not UTF-8: {error}"),
+        }
+    })?;
+    Ok(GpuComputeInventory {
+        samples: parse_nvidia_compute_rows(&stdout)?,
+        attribution_available: true,
+        unavailable_token: None,
+    })
 }
 
 #[cfg(windows)]
 type WindowsProcessObservationSnapshot = (
     HostCommitSample,
     Vec<ProcessCensusObservation>,
-    BTreeMap<u32, GpuComputeSample>,
+    GpuComputeInventory,
     std::collections::BTreeSet<(u32, String)>,
 );
 
@@ -9683,7 +9955,7 @@ fn probe_windows_process_observations_with_owned(
     owned_jobs: &[OwnedJobIdentity],
 ) -> Result<WindowsProcessObservationSnapshot> {
     use std::mem::{size_of, zeroed};
-    use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
+    use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER};
     use windows_sys::Win32::System::JobObjects::{IsProcessInJob, OpenJobObjectW};
     use windows_sys::Win32::System::ProcessStatus::{
         K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
@@ -9693,18 +9965,33 @@ fn probe_windows_process_observations_with_owned(
 
     let host = sample_windows_host_commit()?;
     let pids = enumerate_windows_process_ids()?;
-    let gpu_bytes_by_pid = nvidia_compute_bytes_by_pid()?;
+    let gpu_inventory = nvidia_compute_inventory()?;
     let mut owned_handles = Vec::with_capacity(owned_jobs.len());
+    let mut absent_owned_jobs = Vec::new();
     for owned_job in owned_jobs {
         let name = wide(&owned_job.job_object_name);
         let handle = unsafe { OpenJobObjectW(JOB_OBJECT_QUERY, 0, name.as_ptr()) };
         if handle.is_null() {
-            return Err(std::io::Error::last_os_error().into());
+            let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
+            if matches!(code, ERROR_FILE_NOT_FOUND | ERROR_INVALID_PARAMETER) {
+                absent_owned_jobs.push(ProcessExitObservation {
+                    pid: 0,
+                    phase: format!("owned_job_object_absent:{}", owned_job.job_id),
+                    win32_code: code,
+                });
+                continue;
+            }
+            return Err(std::io::Error::from_raw_os_error(code as i32).into());
         }
         owned_handles.push((owned_job.job_id.clone(), OwnedHandle(handle)));
     }
 
-    let mut observations = Vec::with_capacity(pids.len());
+    let mut observations = Vec::with_capacity(pids.len() + absent_owned_jobs.len());
+    observations.extend(
+        absent_owned_jobs
+            .into_iter()
+            .map(ProcessCensusObservation::Exited),
+    );
     let mut owned_identities = std::collections::BTreeSet::new();
     for pid in pids.into_iter().filter(|pid| *pid != 0 && *pid != 4) {
         let process = unsafe { OpenProcess(FOREIGN_PROCESS_OPEN_ACCESS_MASK, 0, pid) };
@@ -9819,7 +10106,7 @@ fn probe_windows_process_observations_with_owned(
             })?,
         }));
     }
-    Ok((host, observations, gpu_bytes_by_pid, owned_identities))
+    Ok((host, observations, gpu_inventory, owned_identities))
 }
 
 #[cfg(windows)]
@@ -9829,12 +10116,12 @@ fn sample_windows_foreign_process_census(
     use windows_sys::Win32::Foundation::ERROR_INVALID_PARAMETER;
     use windows_sys::Win32::System::Threading::OpenProcess;
 
-    let (host, mut observations, gpu_bytes_by_pid, owned_identities) =
+    let (host, mut observations, gpu_inventory, owned_identities) =
         probe_windows_process_observations_with_owned(owned_jobs)?;
     let initial = classify_foreign_samples(
         host,
         observations.clone(),
-        &gpu_bytes_by_pid,
+        &gpu_inventory,
         &owned_identities,
     )?;
     let expected = initial
@@ -9918,7 +10205,7 @@ fn sample_windows_foreign_process_census(
     }
 
     let mut census =
-        classify_foreign_samples(host, observations, &gpu_bytes_by_pid, &owned_identities)?;
+        classify_foreign_samples(host, observations, &gpu_inventory, &owned_identities)?;
     for process in &mut census.named_foreign_processes {
         process.survived_end_probe =
             survived.contains(&(process.pid, process.process_start_token.clone()));
@@ -9961,6 +10248,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 14,
             owned_process_count: 2,
             probe_complete: true,
+            gpu_process_attribution_available: true,
+            gpu_process_attribution_unavailable_token: None,
             attribution_complete: true,
             total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
@@ -9992,6 +10281,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 3,
             owned_process_count: 0,
             probe_complete: true,
+            gpu_process_attribution_available: true,
+            gpu_process_attribution_unavailable_token: None,
             attribution_complete: true,
             total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
@@ -10018,6 +10309,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 14,
             owned_process_count: 0,
             probe_complete: true,
+            gpu_process_attribution_available: true,
+            gpu_process_attribution_unavailable_token: None,
             attribution_complete: true,
             total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
@@ -10044,6 +10337,8 @@ mod foreign_pressure_policy_tests {
             enumerated_process_count: 2,
             owned_process_count: 0,
             probe_complete: true,
+            gpu_process_attribution_available: true,
+            gpu_process_attribution_unavailable_token: None,
             attribution_complete: true,
             total_foreign_private_commit_is_lower_bound: false,
             exited_processes: vec![],
@@ -10185,6 +10480,14 @@ mod foreign_process_census_tests {
         })
     }
 
+    fn gpu_inventory(samples: BTreeMap<u32, GpuComputeSample>) -> GpuComputeInventory {
+        GpuComputeInventory {
+            samples,
+            attribution_available: true,
+            unavailable_token: None,
+        }
+    }
+
     #[test]
     fn gpu_pid_below_commit_cutoff_is_named() {
         let gpu = BTreeMap::from([(
@@ -10194,9 +10497,13 @@ mod foreign_process_census_tests {
                 unavailable_token: None,
             },
         )]);
-        let census =
-            classify_foreign_samples(host(), vec![live(77, "aa", GIB)], &gpu, &BTreeSet::new())
-                .unwrap();
+        let census = classify_foreign_samples(
+            host(),
+            vec![live(77, "aa", GIB)],
+            &gpu_inventory(gpu),
+            &BTreeSet::new(),
+        )
+        .unwrap();
 
         assert_eq!(census.named_foreign_processes.len(), 1);
         assert_eq!(
@@ -10219,7 +10526,7 @@ mod foreign_process_census_tests {
                 live(7328, "bb", GIB),
                 live(7684, "cc", GIB),
             ],
-            &gpu,
+            &gpu_inventory(gpu),
             &BTreeSet::new(),
         )
         .unwrap();
@@ -10241,7 +10548,7 @@ mod foreign_process_census_tests {
         let census = classify_foreign_samples(
             host(),
             vec![live(88, "bb", 6 * GIB)],
-            &BTreeMap::new(),
+            &gpu_inventory(BTreeMap::new()),
             &owned,
         )
         .unwrap();
@@ -10256,9 +10563,13 @@ mod foreign_process_census_tests {
         let observations = (100..112)
             .map(|pid| live(pid, &format!("token-{pid}"), 3 * GIB + GIB / 2))
             .collect();
-        let census =
-            classify_foreign_samples(host(), observations, &BTreeMap::new(), &BTreeSet::new())
-                .unwrap();
+        let census = classify_foreign_samples(
+            host(),
+            observations,
+            &gpu_inventory(BTreeMap::new()),
+            &BTreeSet::new(),
+        )
+        .unwrap();
 
         assert_eq!(census.total_foreign_private_commit_bytes, 42 * GIB);
         assert!(census.named_foreign_processes.is_empty());
@@ -10269,7 +10580,7 @@ mod foreign_process_census_tests {
         let result = classify_foreign_samples(
             host(),
             vec![live(201, "one", u64::MAX), live(202, "two", 1)],
-            &BTreeMap::new(),
+            &gpu_inventory(BTreeMap::new()),
             &BTreeSet::new(),
         );
 
@@ -10289,7 +10600,7 @@ mod foreign_process_census_tests {
                 phase: "enumeration".into(),
                 win32_code: 87,
             })],
-            &BTreeMap::new(),
+            &gpu_inventory(BTreeMap::new()),
             &BTreeSet::new(),
         )
         .unwrap();
@@ -10308,7 +10619,7 @@ mod foreign_process_census_tests {
                 phase: "enumeration".into(),
                 win32_code: 5,
             })],
-            &BTreeMap::new(),
+            &gpu_inventory(BTreeMap::new()),
             &BTreeSet::new(),
         )
         .unwrap();
@@ -10332,13 +10643,13 @@ mod foreign_process_census_tests {
                 phase: "named_process_end_probe".into(),
                 win32_code: 87,
             })],
-            &BTreeMap::from([(
+            &gpu_inventory(BTreeMap::from([(
                 303,
                 GpuComputeSample {
                     bytes: Some(128 * 1024 * 1024),
                     unavailable_token: None,
                 },
-            )]),
+            )])),
             &BTreeSet::new(),
         )
         .unwrap();
@@ -10361,7 +10672,7 @@ mod foreign_process_census_tests {
                     win32_code: 0,
                 },
             )],
-            &BTreeMap::new(),
+            &gpu_inventory(BTreeMap::new()),
             &BTreeSet::new(),
         )
         .unwrap();
@@ -10384,6 +10695,22 @@ mod foreign_process_census_tests {
             PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE_RIGHT
         );
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn missing_nvidia_smi_is_explicitly_unavailable_without_destroying_host_census() {
+        let inventory = nvidia_compute_inventory_start_error(&std::io::Error::from(
+            std::io::ErrorKind::NotFound,
+        ))
+        .unwrap();
+
+        assert!(inventory.samples.is_empty());
+        assert!(!inventory.attribution_available);
+        assert_eq!(
+            inventory.unavailable_token.as_deref(),
+            Some("nvidia_smi_program_not_found")
+        );
+    }
 }
 
 #[cfg(all(test, windows))]
@@ -10393,8 +10720,43 @@ mod foreign_process_provider_integration_tests {
     use std::process::{Command, Stdio};
 
     #[test]
+    fn missing_persisted_owned_job_object_does_not_destroy_host_census() {
+        let missing_job = OwnedJobIdentity {
+            job_id: "missing-owned-job".into(),
+            job_object_name: format!(
+                "Local\\ember-lab-missing-owned-job-{}-{}",
+                std::process::id(),
+                now_ms()
+            ),
+        };
+
+        let census = sample_windows_foreign_process_census(&[missing_job]).unwrap();
+
+        assert!(census.probe_complete);
+        assert!(census.host_commit_limit_bytes > 0);
+        assert!(census.enumerated_process_count > 0);
+        assert!(census.exited_processes.iter().any(|observation| {
+            observation.pid == 0
+                && observation.phase == "owned_job_object_absent:missing-owned-job"
+                && matches!(observation.win32_code, 2 | 87)
+        }));
+    }
+
+    #[test]
     fn integration_foreign_fixture_survives_same_identity() {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        if let Err(error) = nvidia_smi_text(&[
+            "--query-gpu=uuid,memory.total,memory.free",
+            "--format=csv,noheader,nounits",
+        ]) {
+            if error.to_string().contains("VRAM probe failed to start") {
+                eprintln!(
+                    "SKIP integration_foreign_fixture_survives_same_identity: nvidia-smi provider is unavailable on this host"
+                );
+                return;
+            }
+            panic!("nvidia-smi provider probe failed unexpectedly: {error}");
+        }
         let mut child = Command::new("cmd.exe")
             .args(["/d", "/s", "/c", "ping -n 20 127.0.0.1 >nul"])
             .stdin(Stdio::null())
@@ -10420,7 +10782,12 @@ mod foreign_process_provider_integration_tests {
                     if sample.pid == pid && sample.process_start_token == start_token
             )));
 
-            let _census = sample_windows_foreign_process_census(&[])?;
+            let census = sample_windows_foreign_process_census(&[])?;
+            assert!(
+                census.gpu_process_attribution_available
+                    || census.gpu_process_attribution_unavailable_token.as_deref()
+                        == Some("nvidia_smi_program_not_found")
+            );
             assert_eq!(windows_process_time_identity(process.raw())?.0, start_token);
             assert!(child.try_wait()?.is_none());
             Ok(())
@@ -10463,6 +10830,8 @@ mod foreign_pressure_probe_receipt_tests {
             "enumerated_process_count": 3,
             "owned_process_count": 0,
             "probe_complete": true,
+            "gpu_process_attribution_available": true,
+            "gpu_process_attribution_unavailable_token": Value::Null,
             "attribution_complete": true,
             "total_foreign_private_commit_is_lower_bound": false,
             "exited_processes": [],
@@ -10497,6 +10866,15 @@ mod foreign_pressure_probe_receipt_tests {
         receipt
     }
 
+    fn refresh_hashes(mut receipt: Value) -> Value {
+        let observation_sha256 = hash_bytes(&serde_json::to_vec(&receipt["observation"]).unwrap());
+        receipt["observation_sha256"] = Value::String(observation_sha256);
+        receipt.as_object_mut().unwrap().remove("receipt_sha256");
+        let self_hash = hash_bytes(&serde_json::to_vec(&receipt).unwrap());
+        receipt["receipt_sha256"] = Value::String(self_hash);
+        receipt
+    }
+
     #[test]
     fn exact_verifier_accepts_bound_receipt_and_rejects_identity_aggregate_and_self_hash_tamper() {
         let receipt = valid_receipt();
@@ -10523,6 +10901,26 @@ mod foreign_pressure_probe_receipt_tests {
         self_hash["receipt_sha256"] = Value::String("c".repeat(64));
         assert!(verify_foreign_process_pressure_probe_receipt(
             &serde_json::to_vec(&self_hash).unwrap()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn exact_verifier_accepts_named_gpu_provider_absence_and_rejects_token_drift() {
+        let mut absent = valid_receipt();
+        absent["observation"]["gpu_process_attribution_available"] = Value::Bool(false);
+        absent["observation"]["gpu_process_attribution_unavailable_token"] =
+            Value::String("nvidia_smi_program_not_found".into());
+        let absent = refresh_hashes(absent);
+        verify_foreign_process_pressure_probe_receipt(&serde_json::to_vec(&absent).unwrap())
+            .unwrap();
+
+        let mut drifted = absent;
+        drifted["observation"]["gpu_process_attribution_unavailable_token"] =
+            Value::String("unknown_provider_failure".into());
+        let drifted = refresh_hashes(drifted);
+        assert!(verify_foreign_process_pressure_probe_receipt(
+            &serde_json::to_vec(&drifted).unwrap()
         )
         .is_err());
     }
