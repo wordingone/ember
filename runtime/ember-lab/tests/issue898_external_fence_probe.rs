@@ -51,7 +51,10 @@ fn fixture_ceiling_assertion_bytes() -> u64 {
     let value = raw
         .parse::<u64>()
         .expect("EMBER_ISSUE898_FIXTURE_CEILING_ASSERTION_BYTES must be an unsigned integer");
-    assert!(value > TARGET, "fixture ceiling assertion must exceed TARGET");
+    assert!(
+        value > TARGET,
+        "fixture ceiling assertion must exceed TARGET"
+    );
     value
 }
 
