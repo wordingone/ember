@@ -74,7 +74,12 @@ def load_frontier_module():
     spec = importlib.util.spec_from_file_location("frontier_receipt_under_test", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(path.parent))
+    try:
+        importlib.invalidate_caches()
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 
@@ -1514,11 +1519,17 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertEqual({row["run_root_name"] for row in rows}, {paths["custody_root"].name})
             self.assertEqual(
                 [row["launch_receipt_ref"] for row in rows],
-                ["run-spec.json", "runner-receipt.json"],
+                [
+                    "owned-3b-canary-test/launch-authority/run-spec.json",
+                    "runner-receipt.json",
+                ],
             )
             self.assertEqual(
                 [row["source_receipt"] for row in rows],
-                ["run-spec.json", "runner-receipt.json"],
+                [
+                    "owned-3b-canary-test/launch-authority/run-spec.json",
+                    "runner-receipt.json",
+                ],
             )
             self.assertIsNone(rows[0]["end_utc"])
             self.assertIsInstance(rows[1]["end_utc"], str)
@@ -1888,6 +1899,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_direct_cli_scope_escalation_is_refused_at_dispatch_before_runner_receipt(self) -> None:
+        module = load_module()
         current_master = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
             check=True,
@@ -1913,29 +1925,38 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             request["requested_scope"]["active_expert_families"] = 2
             write_json(paths["run_spec"], request)
 
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(MODULE_PATH),
-                    "--root",
-                    str(ROOT),
-                    "--certificate",
-                    str(paths["certificate"]),
-                    "--declaration-ledger",
-                    str(paths["ledger"]),
-                    "--run-spec",
-                    str(paths["run_spec"]),
-                    "--custody-receipt-sha256",
-                    hashlib.sha256(paths["custody_receipt"].read_bytes()).hexdigest(),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-                shell=False,
-            )
+            argv = [
+                "--root",
+                str(ROOT),
+                "--certificate",
+                str(paths["certificate"]),
+                "--declaration-ledger",
+                str(paths["ledger"]),
+                "--run-spec",
+                str(paths["run_spec"]),
+                "--custody-receipt-sha256",
+                hashlib.sha256(paths["custody_receipt"].read_bytes()).hexdigest(),
+            ]
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if key != "EMBER_LAB_PIPE"
+                and not key.startswith("EMBER_LAB_DISPATCH_")
+            }
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                result = module.main(argv)
 
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("EMBER_LAB_DISPATCH_REQUIRED", result.stdout + result.stderr)
+            self.assertEqual(result, 2)
+            self.assertIn(
+                "EMBER_LAB_DISPATCH_REQUIRED",
+                stdout.getvalue() + stderr.getvalue(),
+            )
             self.assertFalse(
                 (paths["custody_root"] / "runner-receipt.json").exists()
             )
@@ -2300,6 +2321,11 @@ class GuardFloorCertificateTests(unittest.TestCase):
     }
 
     def _mutate_guard_floor(self, paths: dict[str, pathlib.Path], extra=None) -> None:
+        shutil.copy2(
+            paths["completion"],
+            paths["certificate"].parent / "ember-01-completion.json",
+        )
+
         def mutate(certificate: dict) -> None:
             certificate.update(self.GUARD_FLOOR)
             certificate["completion_receipt_path"] = "ember-01-completion.json"
@@ -2446,6 +2472,25 @@ class GuardFloorCertificateTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "completion_receipt_path must not name a drive or root anchor"
                 ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_nested_packet_path(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "receipts/ember-01-completion.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "must directly name a file"):
                     module.validate_certified_request(
                         paths["repo"],
                         paths["certificate"],
@@ -2847,6 +2892,11 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "a1_sequence_length",
                 "a1_checkpoint_interval",
                 "a1_telemetry_path",
+                "a1_tier2_contract",
+                "a1_tier2_contract_sha256",
+                "a1_liveness_receipt",
+                "a1_liveness_receipt_sha256",
+                "job_memory_ceiling_probe",
             },
         )
 
@@ -3510,16 +3560,31 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
-                mutate_run_spec=lambda spec: spec.update(
+            )
+            relative_checkpoint = os.path.relpath(
+                paths["checkpoint"], paths["run_spec"].parent
+            )
+            relative_evidence = os.path.relpath(
+                paths["evidence"], paths["run_spec"].parent
+            )
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda spec: spec.update(
                     {
-                        "resume_checkpoint": "checkpoint-000100",
-                        "resume_counter_receipt": "counter-success.json",
+                        "resume_checkpoint": relative_checkpoint,
+                        "resume_counter_receipt": relative_evidence,
                     }
                 ),
             )
             launch = self._validate(module, paths)
-            self.assertEqual(launch.resume_checkpoint, paths["checkpoint"])
-            self.assertEqual(launch.resume_evidence_path, paths["evidence"])
+            self.assertEqual(
+                launch.resume_checkpoint.resolve(strict=False),
+                paths["checkpoint"].resolve(strict=False),
+            )
+            self.assertEqual(
+                launch.resume_evidence_path.resolve(strict=False),
+                paths["evidence"].resolve(strict=False),
+            )
 
     def test_resume_flags_match_the_runner_argparse(self) -> None:
         """Bind the consumer's flag spelling to run_vertical_slice's parsers,
@@ -3790,6 +3855,10 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 "allowed_admitted_row_set_sha256",
                 "allowed_receipt_custody_root",
                 "allowed_a1_families",
+                "a1_host_commit_reserve_gib",
+                "a1_gpu_free_margin_gib",
+                "a1_b_custody_floor_gib",
+                "allowed_job_memory_ceiling_probe",
             },
         )
         self.assertFalse(
@@ -6053,6 +6122,7 @@ class DispatchAuthorityTests(unittest.TestCase):
             "EMBER_LAB_DISPATCH_JOB_ID": "forged-job",
             "EMBER_LAB_DISPATCH_TOKEN": "a" * 64,
             "EMBER_LAB_DISPATCH_DAEMON_PID": "1234",
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES": "1073741824",
         }
         exit_code, stderr, validate = self._invoke_before_validation(module, environment)
 
@@ -6163,7 +6233,12 @@ class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
             from datetime import datetime, timezone
 
             event = a1_execution._train_step_envelope(
-                run_id="a1run", step=1, tokens=170, loss=1.0, wall_seconds=1.0,
+                run_id="a1run",
+                step=1,
+                tokens=170,
+                loss=1.0,
+                grad_norm=1.0,
+                wall_seconds=1.0,
             )
             event["ts"] = datetime.fromtimestamp(1.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
             self._write_jsonl(telemetry_path, [event])
