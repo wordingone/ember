@@ -34,6 +34,11 @@
       "path": "scripts/launch-ember-cli.ps1",
       "sha256": "f4f776773b72f78c4df22d7d756617ef313e6f627e02ebada59a8d3cc83a718a",
       "reason": "temporarily hash-admitted developer cockpit/bootstrap launcher behind Ember.cmd pending atomic cockpit retirement; governed training still dispatches only through the daemon"
+    },
+    {
+      "path": "tools/reference-launch/launch.ps1",
+      "sha256": "3d1058eb46369ba4c33c8b9939da15cf9e5caf1620f58f74690787b75cb0139f",
+      "reason": "temporarily hash-admitted reference launcher pending atomic bullet-3 retirement; it forwards into the governed entry and does not bypass the daemon"
     }
   ]
 }
