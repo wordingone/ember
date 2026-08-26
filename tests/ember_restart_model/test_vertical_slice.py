@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import batch
+import run_vertical_slice
 from batch import decode_owned_batch, run_one_batch
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import _counter_expected_counts
@@ -34,6 +35,67 @@ class VerticalSliceTests(unittest.TestCase):
         if expert == "vision":
             return {"schema_version": "ember-owned-bootstrap-batch-v1", "sample_id": "owned-vision-0001", "token_ids": [1, self.config.image_token_id, 2], "target_ids": [2, 3, 4], "image_patches_u8_base64": [base64.b64encode(image).decode("ascii")], "image_coordinates": [[0, 0]], "multimodal_spans": [{"start": 1, "length": 1, "modality": "image", "attention_mode": "isolated"}], "active_expert": "vision"}
         return {"schema_version": "ember-owned-bootstrap-batch-v1", "sample_id": "owned-audio-0001", "token_ids": [1, self.config.audio_token_id, 2], "target_ids": [2, 3, 4], "audio_frames_i16le_base64": [base64.b64encode(audio).decode("ascii")], "image_coordinates": [], "multimodal_spans": [{"start": 1, "length": 1, "modality": "audio", "attention_mode": "causal"}], "active_expert": "audio"}
+
+    def test_trainer_event_consumer_refuses_pid_mismatch_before_membership_credit(self) -> None:
+        segment = {"optimizer_step_events": [{
+            "event": "trainer_optimizer_step",
+            "trainer_pid": 41,
+            "trainer_process_start_token": "638915651999000000",
+            "optimizer_step": 1,
+        }]}
+        queried: list[tuple[int, str, str]] = []
+        with self.assertRaisesRegex(RuntimeError, "trainer PID mismatch"):
+            run_vertical_slice.verify_trainer_optimizer_step_events(
+                segment,
+                current_pid=42,
+                job_object_name="Local\\ember-lab-exact",
+                membership_query=lambda pid, token, name: queried.append((pid, token, name)) or True,
+            )
+        self.assertEqual(queried, [])
+
+    def test_trainer_event_consumer_requires_direct_named_job_membership(self) -> None:
+        segment = {"optimizer_step_events": [{
+            "event": "trainer_optimizer_step",
+            "trainer_pid": 42,
+            "trainer_process_start_token": "638915652000000000",
+            "optimizer_step": 1,
+        }]}
+        with self.assertRaisesRegex(RuntimeError, "not a member"):
+            run_vertical_slice.verify_trainer_optimizer_step_events(
+                segment,
+                current_pid=42,
+                job_object_name="Local\\ember-lab-exact",
+                membership_query=lambda _pid, _token, _name: False,
+            )
+
+    def test_trainer_event_consumer_binds_membership_to_emitted_start_token(self) -> None:
+        segment = {"optimizer_step_events": [{
+            "event": "trainer_optimizer_step",
+            "trainer_pid": 42,
+            "trainer_process_start_token": "638915652000000000",
+            "optimizer_step": 1,
+        }]}
+        queried: list[tuple[int, str, str]] = []
+        result = run_vertical_slice.verify_trainer_optimizer_step_events(
+            segment,
+            current_pid=42,
+            job_object_name="Local\\ember-lab-exact",
+            membership_query=lambda pid, token, name: queried.append((pid, token, name)) or True,
+        )
+        self.assertEqual(queried, [(42, "638915652000000000", "Local\\ember-lab-exact")])
+        self.assertEqual(result["trainer_process_start_token"], "638915652000000000")
+
+    def test_production_train_confirm_converges_on_this_caged_trainer(self) -> None:
+        train_command = (ROOT / "tools/ember-cli/src/commands/train.ts").read_text(encoding="utf-8")
+        lab_entry = (ROOT / "runtime/ember-lab/src/main.rs").read_text(encoding="utf-8")
+        certified = (ROOT / "tools/ember-restart-3b/certified_train_launch.py").read_text(encoding="utf-8")
+        self.assertIn("_runEmberLabLaunchInBackground(executable, args)", train_command)
+        self.assertIn('runCertifiedLaunch(emberLabBinary, [', train_command)
+        self.assertIn('"launch",', train_command)
+        self.assertIn('root.join("tools/ember-restart-3b/certified_train_launch.py")', lab_entry)
+        self.assertIn('"program": {"path": python_executable', lab_entry)
+        self.assertIn('/ "disk_budget_runner.py"', certified)
+        self.assertIn('/ "run_vertical_slice.py"', certified)
 
     def test_decoded_domain_records_retain_only_their_raw_modality(self) -> None:
         vision = decode_owned_batch(self._record("vision"), self.config, device=torch.device("cpu"))

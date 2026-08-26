@@ -34,6 +34,7 @@ pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
 const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 7;
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
+const DISPATCH_JOB_OBJECT_NAME_ENV: &str = "EMBER_LAB_DISPATCH_JOB_OBJECT_NAME";
 const DISPATCH_DAEMON_PID_ENV: &str = "EMBER_LAB_DISPATCH_DAEMON_PID";
 const DISPATCH_MAXIMUM_JOB_MEMORY_ENV: &str = "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES";
 const DISPATCH_VRAM_PROVIDER_ENV: &str = "EMBER_LAB_DISPATCH_VRAM_PROVIDER";
@@ -3917,6 +3918,7 @@ impl Daemon {
         }
         if manifest.env.contains_key(DISPATCH_TOKEN_ENV)
             || manifest.env.contains_key(DISPATCH_JOB_ID_ENV)
+            || manifest.env.contains_key(DISPATCH_JOB_OBJECT_NAME_ENV)
             || manifest.env.contains_key(DISPATCH_DAEMON_PID_ENV)
             || manifest.env.contains_key(DISPATCH_MAXIMUM_JOB_MEMORY_ENV)
             || manifest.env.contains_key(DISPATCH_VRAM_PROVIDER_ENV)
@@ -5029,6 +5031,14 @@ impl Daemon {
                 maximum_job_memory_bytes.to_string(),
             );
         }
+        let job_object_name = job_object_name(&spec.job_id);
+        if spec.env.contains_key(DISPATCH_JOB_OBJECT_NAME_ENV) {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "Job Object name environment is daemon-owned".into(),
+            });
+        }
+        spec.env
+            .insert(DISPATCH_JOB_OBJECT_NAME_ENV.into(), job_object_name.clone());
         let argv_json = serde_json::to_string(&spec.args)?;
         let persisted_env = spec
             .env
@@ -5038,7 +5048,6 @@ impl Daemon {
             .collect::<BTreeMap<_, _>>();
         let env_json = serde_json::to_string(&persisted_env)?;
         let argv_sha = hash_bytes(argv_json.as_bytes());
-        let job_object_name = job_object_name(&spec.job_id);
         let log_key = hash_bytes(spec.job_id.as_bytes());
         let stdout_log_path = self.log_dir.join(format!("{log_key}.stdout.log"));
         let stderr_log_path = self.log_dir.join(format!("{log_key}.stderr.log"));

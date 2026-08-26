@@ -24,7 +24,7 @@ def canonical(path: str | Path) -> str:
     `realpath` is what expands the short form on Windows -- `abspath` leaves it alone."""
     return os.path.normcase(os.path.realpath(path))
 PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
-LAUNCH_IMPL = REPOSITORY / "scripts" / "launch-ember-cli.ps1"
+LAUNCH_IMPL = REPOSITORY / "scripts" / "prepare-ember-cockpit.ps1"
 LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
 WINDOW_PLACEMENT = REPOSITORY / "scripts" / "ember-window-placement.ps1"
 START_HERE = REPOSITORY / "docs" / "guides" / "START-HERE.md"
@@ -38,9 +38,9 @@ class EmberRootLauncherTests(unittest.TestCase):
         source = root / "tools" / "ember-cli" / "src"
         (source / "entrypoints").mkdir(parents=True)
         shutil.copy2(PUBLIC_LAUNCHER, root / "Ember.cmd")
-        shutil.copy2(LAUNCH_IMPL, root / "scripts" / "launch-ember-cli.ps1")
-        # The launcher dot-sources this sibling at startup; the fixture mirrors the
-        # deployed scripts/ layout so the copy under test can actually run.
+        shutil.copy2(LAUNCH_IMPL, root / "scripts" / "prepare-ember-cockpit.ps1")
+        # The preparation helper dot-sources the staging sibling at startup; the
+        # fixture mirrors the deployed scripts/ layout so the copy can actually run.
         shutil.copy2(LAUNCH_STAGING, root / "scripts" / "ember-launch-staging.ps1")
         shutil.copy2(WINDOW_PLACEMENT, root / "scripts" / "ember-window-placement.ps1")
         (source / "entrypoints" / "main.ts").write_text("throw new Error('fixture only');\n", encoding="utf-8")
@@ -160,26 +160,22 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertIn("841ff9c5dffcaa3a2620d1e3f87ee500f32a4ca830b001cade7a3479609d4a89", implementation)
         self.assertLess(implementation.index("Get-FileHash"), implementation.index("Expand-Archive"))
 
-    def test_production_path_builds_and_runs_a_commit_bound_executable(self) -> None:
+    def test_production_path_builds_commit_bound_application_and_governed_runtime(self) -> None:
         implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
         self.assertIn("& $bun run build", implementation)
         self.assertIn('Join-Path $stateRoot "runtime\\ember\\$commit"', implementation)
-        self.assertIn('& $application', implementation)
+        self.assertIn('cargo build --locked --release --manifest-path', implementation)
+        self.assertNotIn('& $application', implementation)
         self.assertIn('$ErrorActionPreference = "Continue"', implementation)
         self.assertNotIn('$LASTEXITCODE -ne 0 -or $commit', implementation)
         self.assertNotIn('& $bun run entrypoints/main.ts\n    if ($LASTEXITCODE', implementation)
 
-    def test_prepare_application_only_returns_before_window_or_child_launch(self) -> None:
+    def test_preparation_helper_only_returns_authenticated_build_paths(self) -> None:
         implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
-        self.assertIn("[switch]$PrepareApplicationOnly", implementation)
-        prepare = implementation.index("if ($PrepareApplicationOnly)")
-        window = implementation.index("$windowHandle = Get-EmberHostWindowHandle")
-        child = implementation.index("& $application", window)
-        self.assertLess(prepare, window)
-        self.assertLess(prepare, child)
-        block = implementation[prepare:window]
-        self.assertIn("GetFullPath($application)", block)
-        self.assertIn("return", block)
+        self.assertIn('Write-Output ("EMBER_APPLICATION="', implementation)
+        self.assertIn('Write-Output ("EMBER_LAB="', implementation)
+        self.assertNotIn("$windowHandle = Get-EmberHostWindowHandle", implementation)
+        self.assertNotIn("& $application", implementation)
     def run_library_command(self, body: str) -> subprocess.CompletedProcess[str]:
         script = str(LAUNCH_IMPL).replace("'", "''")
         command = f"$env:EMBER_LAUNCH_LIBRARY_ONLY='1'; . '{script}'; {body}"
@@ -193,8 +189,21 @@ class EmberRootLauncherTests(unittest.TestCase):
         )
 
     def test_left_half_geometry_uses_full_work_area_and_real_dimensions(self) -> None:
-        result = self.run_library_command(
-            "Get-EmberLeftHalfRectangle -Left -1920 -Top 40 -Right 0 -Bottom 1080 | ConvertTo-Json -Compress"
+        placement_script = str(WINDOW_PLACEMENT).replace("'", "''")
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                f". '{placement_script}'; Get-EmberLeftHalfRectangle -Left -1920 -Top 40 -Right 0 -Bottom 1080 | ConvertTo-Json -Compress",
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=20,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('{"X":-1920,"Y":40,"Width":960,"Height":1040}', result.stdout)
@@ -469,13 +478,85 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertIn("Ember CLI exited with code 3", result.stdout)
         self.assertNotIn("could not prepare its runtime", result.stdout)
 
-    def test_production_launcher_stays_in_one_shell_and_verifies_geometry(self) -> None:
+    def test_production_entry_uses_only_the_governed_cockpit_command(self) -> None:
         implementation = LAUNCH_IMPL.read_text(encoding="utf-8")
+        public = PUBLIC_LAUNCHER.read_text(encoding="utf-8")
         self.assertIn("Enter-EmberLauncherLease", implementation)
-        self.assertIn("Stop-StaleOwnedEmberApplications", implementation)
-        self.assertIn("Set-EmberWindowToLeftWorkArea", implementation)
-        self.assertIn("& $application", implementation)
+        self.assertNotIn("& $application", implementation)
         self.assertNotIn("Start-Process -FilePath $application", implementation)
+        self.assertIn('"%EMBER_LAB%" cockpit', public)
+        self.assertIn('--application "%EMBER_APPLICATION%"', public)
+
+    def test_production_entry_parses_authority_and_invokes_exact_governed_argv(self) -> None:
+        owner, root, _ = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        application = root / "dist" / "ember-cockpit.exe"
+        state_root = root.parent / "governed state"
+        source_commit = "a" * 40
+        ember_lab = root / "fake-ember-lab.cmd"
+        call_log = root / "governed-call.log"
+        ember_lab.write_text(
+            "@echo off\r\n"
+            "> \"%EMBER_GOVERNED_CALL_LOG%\" echo %*\r\n"
+            "exit /b 0\r\n",
+            encoding="utf-8",
+        )
+        (root / "scripts" / "prepare-ember-cockpit.ps1").write_text(
+            f'Write-Output "EMBER_APPLICATION={application}"\n'
+            f'Write-Output "EMBER_LAB={ember_lab}"\n'
+            f'Write-Output "EMBER_SOURCE_COMMIT={source_commit}"\n'
+            f'Write-Output "EMBER_STATE_ROOT={state_root}"\n',
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env.update(
+            {
+                "EMBER_LAUNCH_NONINTERACTIVE": "1",
+                "EMBER_GOVERNED_CALL_LOG": str(call_log),
+            }
+        )
+        env.pop("EMBER_LAUNCH_TEST_MODE", None)
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", str(root / "Ember.cmd")],
+            cwd=Path(tempfile.gettempdir()),
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=20,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(
+            call_log.read_text(encoding="utf-8").strip(),
+            (
+                f'cockpit --root "{root}\\" --application "{application}" '
+                f'--source-commit "{source_commit}" --state-root "{state_root}"'
+            ),
+        )
+
+    def test_production_entry_names_preparation_failure_instead_of_closing_silently(self) -> None:
+        owner, root, _ = self.make_fixture()
+        self.addCleanup(owner.cleanup)
+        (root / "scripts" / "prepare-ember-cockpit.ps1").write_text(
+            'Write-Output "EMBER_APPLICATION=C:\\missing.exe"\n',
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["EMBER_LAUNCH_NONINTERACTIVE"] = "1"
+        env.pop("EMBER_LAUNCH_TEST_MODE", None)
+        result = subprocess.run(
+            ["cmd.exe", "/d", "/c", str(root / "Ember.cmd")],
+            cwd=Path(tempfile.gettempdir()),
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=20,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Ember could not prepare the cockpit", result.stdout)
 
 
 if __name__ == "__main__":
