@@ -14,7 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from consumers import CONSUMER_COMMAND_CONTRACTS, CONSUMER_ENTRYPOINTS
+from scripts.ember_admission.consumers import (
+    CONSUMER_COMMAND_CONTRACTS,
+    CONSUMER_ENTRYPOINTS,
+)
 from source_snapshot import SourceSnapshot
 
 

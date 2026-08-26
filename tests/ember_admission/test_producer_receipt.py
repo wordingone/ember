@@ -15,8 +15,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PRODUCER_ROOT = REPO_ROOT / "scripts" / "ember_admission"
 sys.path.insert(0, str(PRODUCER_ROOT))
 
-from receipt import verify_producer_receipt, write_producer_receipt  # noqa: E402
-from consumers import CONSUMER_COMMAND_CONTRACTS, CONSUMER_ENTRYPOINTS  # noqa: E402
+from scripts.ember_admission.consumers import (  # noqa: E402
+    CONSUMER_COMMAND_CONTRACTS,
+    CONSUMER_ENTRYPOINTS,
+)
+from scripts.ember_admission.receipt import (  # noqa: E402
+    verify_producer_receipt,
+    write_producer_receipt,
+)
 from source_snapshot import SourceSnapshot  # noqa: E402
 
 def _validator_closure(name: str, digest: str) -> dict[str, dict[str, object]]:

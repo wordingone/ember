@@ -17,7 +17,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import hf_fetch
-import receipt as rcpt
+from tools.corpus_connectors import receipt as rcpt
 
 
 class FakeHfApi:

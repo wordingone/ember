@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import receipt as connector_receipt
+from tools.corpus_connectors import receipt as connector_receipt
 from source_inventory import load_authorized_source_inventory, reopen_authorized_source_inventory
 
 

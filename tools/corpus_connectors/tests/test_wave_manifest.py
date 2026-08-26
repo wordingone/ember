@@ -278,6 +278,7 @@ class CliTests(unittest.TestCase):
         for call in run_mock.call_args_list:
             cmd = call.args[0]
             self.assertEqual(cmd[0], sys.executable)
+            self.assertEqual(call.kwargs["cwd"], wm.REPO_ROOT)
 
     def test_include_bulk_without_execute_never_calls_subprocess(self):
         with mock.patch("wave_manifest.subprocess.run") as run_mock:

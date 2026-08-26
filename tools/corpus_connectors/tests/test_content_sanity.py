@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import http_fetch
-import receipt as rcpt
+from tools.corpus_connectors import receipt as rcpt
 import wave_manifest
 
 

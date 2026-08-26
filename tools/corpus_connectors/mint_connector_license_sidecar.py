@@ -13,12 +13,19 @@ import os
 import re
 import shutil
 import stat
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from tools.corpus_connectors import receipt as connector_receipt
+# Direct execution appends the repository root so package imports resolve
+# without publishing connector-local bare names or shadowing earlier imports.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.append(str(_REPO_ROOT))
+
+from tools.corpus_connectors import receipt as connector_receipt  # noqa: E402
 
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
