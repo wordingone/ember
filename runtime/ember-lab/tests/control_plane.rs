@@ -5088,6 +5088,77 @@ fn protective_owned_stop_requests_checkpoint_then_stops_only_after_durable_decis
 
 #[cfg(windows)]
 #[test]
+fn protective_owned_stop_completion_failure_rolls_back_the_stopped_state() {
+    let root = sandbox("protective-owned-stop-completion-rollback");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("rollback-protected-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("rollback-protected-resource", "rollback-protected-job")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "rollback-protected-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "rollback-protected-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state
+             SET admission_state='frozen',
+                 reason='physical_available_below_survival_floor',
+                 observed_at_ms=1234,
+                 oracle_evidence_required=1,
+                 observation_json='{\"result\":\"SURVIVAL_FLOOR_BREACH\"}'
+             WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER fail_protective_stop_completion
+             BEFORE INSERT ON events
+             WHEN NEW.kind='protective_owned_stop_completed'
+             BEGIN SELECT RAISE(FAIL, 'forced completion receipt failure'); END;",
+        )
+        .unwrap();
+
+    assert!(matches!(
+        daemon.protective_owned_stop("rollback-protected-job", Duration::from_millis(25),),
+        Err(EmberLabError::Sqlite(_))
+    ));
+
+    assert!(!process_is_alive(started.pid));
+    assert_eq!(
+        daemon.job_state("rollback-protected-job").unwrap(),
+        Some(JobState::Stopping),
+        "a failed completion receipt must roll back the stopped state",
+    );
+    assert_eq!(
+        daemon.lease_owner("rollback-protected-resource").unwrap(),
+        Some("rollback-protected-job".into()),
+        "a failed completion receipt must roll back lease release",
+    );
+    assert!(!daemon
+        .job_event_kinds("rollback-protected-job")
+        .unwrap()
+        .iter()
+        .any(|kind| kind == "protective_owned_stop_completed"));
+}
+
+#[cfg(windows)]
+#[test]
 fn daemon_lifetime_guard_automatically_protects_an_owned_job_after_sticky_freeze() {
     let root = sandbox("protective-owned-stop-monitor");
     let db = root.join("ember-lab.sqlite3");
@@ -5126,7 +5197,12 @@ fn daemon_lifetime_guard_automatically_protects_an_owned_job_after_sticky_freeze
         .unwrap();
 
     for _ in 0..100 {
-        if daemon.job_state("monitor-protected-job").unwrap() == Some(JobState::Stopped) {
+        if daemon
+            .job_event_kinds("monitor-protected-job")
+            .unwrap()
+            .iter()
+            .any(|kind| kind == "protective_owned_stop_completed")
+        {
             break;
         }
         thread::sleep(Duration::from_millis(100));
