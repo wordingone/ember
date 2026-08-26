@@ -1419,18 +1419,28 @@ fn receipt_publication_failure_is_typed_and_an_identical_retry_recovers_without_
         )
         .unwrap();
     fs::remove_dir(&receipt_path).unwrap();
+    connection
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='recovery_must_precede_new_admission',observed_at_ms=10002,oracle_evidence_required=1,observation_json=?1 WHERE singleton=1",
+            [json!({"result":"FROZEN_DURING_RECEIPT_RECOVERY"}).to_string()],
+        )
+        .unwrap();
+    drop(connection);
 
     let recovered = daemon
         .dispatch_manifest_at_with_probes_and_host(
             &manifest,
             10_001,
-            |_root| Ok(1024),
-            || Ok(2048),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            |_root| panic!("an already-admitted recovery must not rerun storage admission"),
+            || panic!("an already-admitted recovery must not rerun VRAM admission"),
+            || panic!("an already-admitted recovery must not rerun host-commit admission"),
         )
         .unwrap();
     assert_eq!(recovered.handle.pid, first_pid);
     assert!(recovered.receipt.path.is_file());
+    let recovered_receipt: Value =
+        serde_json::from_slice(&fs::read(&recovered.receipt.path).unwrap()).unwrap();
+    assert_eq!(recovered_receipt["result"], "PREFLIGHT_PASSED");
     daemon.stop_job("dispatch-receipt-recovery").unwrap();
 }
 
