@@ -2889,6 +2889,14 @@ def _validate_run_scoped_custody_packet(
         "sha-binding-map.json",
         "launch-authority-custody.json",
     }
+    if GUARD_FLOOR_CERTIFICATE_KEYS & set(certificate):
+        completion_receipt = pathlib.Path(certificate["completion_receipt_path"])
+        if completion_receipt.parent != pathlib.Path("."):
+            raise ValueError(
+                "guard-floor completion_receipt_path must directly name a file "
+                "in the launch-authority packet"
+            )
+        expected_packet_names.add(completion_receipt.name)
     try:
         actual_packet_names = {
             entry.name for entry in canonical_packet_directory.iterdir()
@@ -3024,6 +3032,11 @@ def validate_certified_request(
             raise ValueError(
                 "certificate completion_receipt_path must not name a drive or "
                 "root anchor"
+            )
+        if completion_path.parent != pathlib.Path("."):
+            raise ValueError(
+                "guard-floor completion_receipt_path must directly name a file "
+                "in the launch-authority packet"
             )
         # Resolved backstop for anything the syntactic checks miss (a symlinked
         # segment, a differing drive letter).
