@@ -687,7 +687,11 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
             },
         )
         .unwrap();
-    assert_eq!(host_probe_calls.get(), 2, "host commit must be re-read near spawn");
+    assert_eq!(
+        host_probe_calls.get(),
+        2,
+        "host commit must be re-read near spawn"
+    );
     assert!(outcome.handle.pid > 0);
     assert_eq!(
         daemon.job_state("dispatch-green").unwrap(),
@@ -760,11 +764,16 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         "maximum_configured_capacity"
     );
     assert_eq!(receipt["host_commit"]["sampled_at_ms"], 10_002);
-    assert_eq!(receipt["host_commit"]["snapshot_sha256"], format!("{:064x}", 2));
-    assert!(receipt["host_commit"]["spawn_authorized_at_ms"]
-        .as_i64()
-        .unwrap()
-        > 0);
+    assert_eq!(
+        receipt["host_commit"]["snapshot_sha256"],
+        format!("{:064x}", 2)
+    );
+    assert!(
+        receipt["host_commit"]["spawn_authorized_at_ms"]
+            .as_i64()
+            .unwrap()
+            > 0
+    );
     assert_eq!(
         receipt["host_commit"]["reserve_bytes"],
         HOST_COMMIT_RESERVE_BYTES

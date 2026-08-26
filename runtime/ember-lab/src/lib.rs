@@ -8780,8 +8780,7 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
         physical_available_bytes.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "Windows host commit probe overflowed physical available bytes".into(),
         })?;
-    let (pagefile_maximum, pagefile_configuration_sha256) =
-        configured_pagefile_maximum()?;
+    let (pagefile_maximum, pagefile_configuration_sha256) = configured_pagefile_maximum()?;
     host_commit_capacity_from_windows_snapshot(
         physical_ram_bytes,
         physical_available_bytes,
@@ -8857,7 +8856,10 @@ fn configured_pagefile_maximum() -> Result<(PagefileMaximum, String)> {
             Ok(text)
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok((pagefile_maximum_from_entries(&entries)?, configuration_sha256))
+    Ok((
+        pagefile_maximum_from_entries(&entries)?,
+        configuration_sha256,
+    ))
 }
 
 fn pagefile_maximum_from_entries(entries: &[String]) -> Result<PagefileMaximum> {
@@ -8875,16 +8877,18 @@ fn pagefile_maximum_from_entries(entries: &[String]) -> Result<PagefileMaximum> 
                 detail: "pagefile setting must contain path, initial MiB, and maximum MiB".into(),
             });
         }
-        let initial_mib = fields[1].parse::<u64>().map_err(|_| {
-            EmberLabError::InvalidDispatchManifest {
-                detail: "pagefile initial size is not an unsigned MiB value".into(),
-            }
-        })?;
-        let maximum_mib = fields[2].parse::<u64>().map_err(|_| {
-            EmberLabError::InvalidDispatchManifest {
-                detail: "pagefile maximum is not an unsigned MiB value".into(),
-            }
-        })?;
+        let initial_mib =
+            fields[1]
+                .parse::<u64>()
+                .map_err(|_| EmberLabError::InvalidDispatchManifest {
+                    detail: "pagefile initial size is not an unsigned MiB value".into(),
+                })?;
+        let maximum_mib =
+            fields[2]
+                .parse::<u64>()
+                .map_err(|_| EmberLabError::InvalidDispatchManifest {
+                    detail: "pagefile maximum is not an unsigned MiB value".into(),
+                })?;
         if initial_mib == 0 && maximum_mib == 0 {
             system_managed += 1;
             continue;
@@ -8908,11 +8912,11 @@ fn pagefile_maximum_from_entries(entries: &[String]) -> Result<PagefileMaximum> 
             detail: "mixed fixed and system-managed pagefile settings are ambiguous".into(),
         });
     }
-    let bytes = total_mib
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+    let bytes = total_mib.checked_mul(1024 * 1024).ok_or_else(|| {
+        EmberLabError::InvalidDispatchManifest {
             detail: "pagefile maximum overflowed bytes".into(),
-        })?;
+        }
+    })?;
     Ok(PagefileMaximum::Fixed(bytes))
 }
 
@@ -8935,28 +8939,30 @@ fn host_commit_capacity_from_windows_snapshot(
             detail: "live Windows commit snapshot is unavailable or implausible".into(),
         });
     }
-    let (basis, pagefile_maximum_bytes, maximum_commit_capacity_bytes) =
-        match pagefile_maximum {
-            PagefileMaximum::Fixed(pagefile_maximum_bytes) => {
-                let maximum = physical_ram_bytes
-                    .checked_add(pagefile_maximum_bytes)
-                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
-                        detail: "Windows maximum commit capacity overflowed bytes".into(),
-                    })?;
-                if maximum < current_commit_limit_bytes || maximum < commit_total_bytes {
-                    return Err(EmberLabError::InvalidDispatchManifest {
-                        detail: "configured pagefile maximum is below live Windows commit usage"
-                            .into(),
-                    });
-                }
-                ("maximum_configured_capacity", pagefile_maximum_bytes, maximum)
+    let (basis, pagefile_maximum_bytes, maximum_commit_capacity_bytes) = match pagefile_maximum {
+        PagefileMaximum::Fixed(pagefile_maximum_bytes) => {
+            let maximum = physical_ram_bytes
+                .checked_add(pagefile_maximum_bytes)
+                .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                    detail: "Windows maximum commit capacity overflowed bytes".into(),
+                })?;
+            if maximum < current_commit_limit_bytes || maximum < commit_total_bytes {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "configured pagefile maximum is below live Windows commit usage".into(),
+                });
             }
-            PagefileMaximum::SystemManaged => (
-                "live_commit_limit_system_managed",
-                0,
-                current_commit_limit_bytes,
-            ),
-        };
+            (
+                "maximum_configured_capacity",
+                pagefile_maximum_bytes,
+                maximum,
+            )
+        }
+        PagefileMaximum::SystemManaged => (
+            "live_commit_limit_system_managed",
+            0,
+            current_commit_limit_bytes,
+        ),
+    };
     let current_commit_remaining_bytes = current_commit_limit_bytes - commit_total_bytes;
     let snapshot_bytes = format!(
         "basis={basis}\nphysical_ram_bytes={physical_ram_bytes}\nphysical_available_bytes={physical_available_bytes}\ncommit_total_bytes={commit_total_bytes}\ncurrent_commit_limit_bytes={current_commit_limit_bytes}\npagefile_configuration_sha256={pagefile_configuration_sha256}\nsampled_at_ms={sampled_at_ms}\n"
@@ -15329,8 +15335,14 @@ mod dispatch_binding_snapshot_tests {
         )
         .unwrap();
         assert_eq!(capacity.basis, "live_commit_limit_system_managed");
-        assert_eq!(capacity.maximum_commit_capacity_bytes, 80 * 1024 * 1024 * 1024);
-        assert_eq!(capacity.available_maximum_commit_bytes, 40 * 1024 * 1024 * 1024);
+        assert_eq!(
+            capacity.maximum_commit_capacity_bytes,
+            80 * 1024 * 1024 * 1024
+        );
+        assert_eq!(
+            capacity.available_maximum_commit_bytes,
+            40 * 1024 * 1024 * 1024
+        );
         assert_eq!(capacity.pagefile_maximum_bytes, 0);
         assert_eq!(capacity.sampled_at_ms, 1_000);
         assert_eq!(capacity.snapshot_sha256.len(), 64);
