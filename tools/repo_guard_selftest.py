@@ -1428,6 +1428,77 @@ def test_red_powershell_named_launcher_shape():
         cleanup(tmp)
 
 
+def test_red_powershell_direct_invocation_launcher_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-direct-launcher")
+    try:
+        (tmp / "scripts" / "operator-direct-launch.ps1").write_text(
+            r"C:\Tools\ordinary-worker.exe --quiet" "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-direct-launch.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_direct_invocation_training_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-direct-training")
+    try:
+        (tmp / "scripts" / "operator-direct.ps1").write_text(
+            r"C:\Python310\python.exe scripts/certified_train_launch.py --execute" "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-direct.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_powershell_direct_invocation_tokens_in_data():
+    tmp = make_fixture("fix/selftest-green-powershell-direct-data")
+    try:
+        (tmp / "scripts" / "operator-document-launch.ps1").write_text(
+            r"# C:\Tools\commented.exe is documentation only" "\n"
+            r"$example = 'C:\Tools\string-literal.exe'" "\n"
+            r"Write-Host 'C:\Tools\displayed.exe'" "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected zero exit, got {rc}\n{out}"
+        assert "ok   [launcher-shape]" in out, out
+        assert "FAIL [launcher-shape]" not in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_known_gap_powershell_assignment_capture_is_not_detected():
+    """Document the line-initial regex boundary until an AST guard replaces it."""
+    tmp = make_fixture("fix/selftest-known-gap-powershell-assignment-capture")
+    try:
+        (tmp / "scripts" / "operator-capture-launch.ps1").write_text(
+            "$out = python scripts/ember_gate_launch_entry.py --repo $repo\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"known assignment-capture gap unexpectedly closed: {rc}\n{out}"
+        assert "ok   [launcher-shape]" in out, out
+        assert "FAIL [launcher-shape]" not in out, out
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -1475,6 +1546,10 @@ ALL_TESTS = [
     test_red_powershell_launcher_shape,
     test_red_powershell_launcher_shape_preceding_assignment,
     test_red_powershell_named_launcher_shape,
+    test_red_powershell_direct_invocation_launcher_shape,
+    test_red_powershell_direct_invocation_training_shape,
+    test_green_powershell_direct_invocation_tokens_in_data,
+    test_known_gap_powershell_assignment_capture_is_not_detected,
 ]
 
 
