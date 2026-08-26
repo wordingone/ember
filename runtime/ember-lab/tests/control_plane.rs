@@ -830,6 +830,170 @@ fn foreign_pressure_refuses_dispatch_before_argv_or_child_birth_and_receipts_bot
 }
 
 #[cfg(windows)]
+#[test]
+fn foreign_pressure_refusal_precedes_a_simultaneous_host_commit_cap_refusal() {
+    let root = sandbox("foreign-pressure-precedes-host-cap");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    set_foreign_pressure_state(&db, "fenced", "FENCED");
+
+    let manifest = write_restore_manifest(&root, "foreign-pressure-precedes-host-cap-job");
+    let payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let mut insufficient_host_capacity = test_host_capacity();
+    insufficient_host_capacity.available_maximum_commit_bytes = 0;
+    insufficient_host_capacity.current_commit_remaining_bytes = 0;
+
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64,
+        |_root| Ok(16 * 1024 * 1024 * 1024),
+        || Ok(2 * 1024 * 1024 * 1024),
+        || Ok(insufficient_host_capacity.clone()),
+    );
+    if !matches!(&result, Err(EmberLabError::ResourceAdmissionFrozen { .. })) {
+        assert!(
+            matches!(
+                &result,
+                Err(EmberLabError::DispatchHostCommitReserve { .. })
+            ),
+            "the regression must fail through the hosted run's cap precedence, got {result:?}"
+        );
+        let losing_receipt: Value = serde_json::from_slice(
+            &fs::read(PathBuf::from(
+                payload["preflight_receipt"].as_str().unwrap(),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(losing_receipt["result"], "REFUSED_HOST_COMMIT_CAP");
+        assert!(losing_receipt.get("foreign_process_pressure").is_none());
+        panic!("foreign-pressure fence was masked by the host-commit cap");
+    }
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ResourceAdmissionFrozen { .. })
+    ));
+    assert_eq!(
+        daemon
+            .job_state("foreign-pressure-precedes-host-cap-job")
+            .unwrap(),
+        None
+    );
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(
+            payload["preflight_receipt"].as_str().unwrap(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_FOREIGN_PROCESS_PRESSURE");
+    assert_eq!(receipt["foreign_process_pressure"]["state"], "fenced");
+    assert_eq!(
+        receipt["host_commit"]["observed_available_maximum_commit_bytes"],
+        0
+    );
+    assert_eq!(receipt["host_commit"]["current_commit_remaining_bytes"], 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn foreign_pressure_refusal_survives_a_host_commit_measurement_failure() {
+    let root = sandbox("foreign-pressure-precedes-host-measurement-failure");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    set_foreign_pressure_state(&db, "fenced", "FENCED");
+    let manifest = write_restore_manifest(
+        &root,
+        "foreign-pressure-precedes-host-measurement-failure-job",
+    );
+    let payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64,
+        |_root| Ok(16 * 1024 * 1024 * 1024),
+        || Ok(2 * 1024 * 1024 * 1024),
+        || {
+            Err(EmberLabError::InvalidDispatchManifest {
+                detail: "host commit measurement unavailable".into(),
+            })
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ResourceAdmissionFrozen { .. })
+    ));
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(
+            payload["preflight_receipt"].as_str().unwrap(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_FOREIGN_PROCESS_PRESSURE");
+    assert_eq!(receipt["host_commit"]["measurement_available"], false);
+    assert!(receipt["host_commit"]["measurement_error"]
+        .as_str()
+        .unwrap()
+        .contains("host commit measurement unavailable"));
+}
+
+#[cfg(windows)]
+#[test]
+fn resource_guard_refusal_precedes_host_cap_and_carries_its_measurement() {
+    let root = sandbox("resource-guard-precedes-host-cap");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='sticky_guard_fixture',observed_at_ms=99,oracle_evidence_required=1,observation_json=?1 WHERE singleton=1",
+            [json!({"result":"FROZEN"}).to_string()],
+        )
+        .unwrap();
+    let manifest = write_restore_manifest(&root, "resource-guard-precedes-host-cap-job");
+    let payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let mut insufficient_host_capacity = test_host_capacity();
+    insufficient_host_capacity.available_maximum_commit_bytes = 0;
+    insufficient_host_capacity.current_commit_remaining_bytes = 0;
+
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64,
+        |_root| Ok(16 * 1024 * 1024 * 1024),
+        || Ok(2 * 1024 * 1024 * 1024),
+        || Ok(insufficient_host_capacity.clone()),
+    );
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ResourceAdmissionFrozen { .. })
+    ));
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(
+            payload["preflight_receipt"].as_str().unwrap(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_RESOURCE_GUARD_FROZEN");
+    assert_eq!(receipt["resource_guard"]["reason"], "sticky_guard_fixture");
+    assert_eq!(receipt["foreign_process_pressure_refusal"], false);
+    assert_eq!(
+        receipt["host_commit"]["observed_available_maximum_commit_bytes"],
+        0
+    );
+}
+
+#[cfg(windows)]
 fn set_foreign_pressure_state(db: &Path, state: &str, result: &str) {
     let mut observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",

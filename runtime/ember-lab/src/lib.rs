@@ -3888,17 +3888,92 @@ impl Daemon {
         {
             return Ok(existing);
         }
+        if let Some(existing) =
+            self.recover_pending_dispatch_receipt(&manifest, manifest_bytes, &receipt_path)?
+        {
+            return Ok(existing);
+        }
 
-        let host_commit = free_host_commit()?;
+        let host_commit_measurement = free_host_commit();
+        let host_commit_receipt = match &host_commit_measurement {
+            Ok(host_commit) => json!({
+                "basis": "maximum_configured_capacity",
+                "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
+                "observed_available_maximum_commit_bytes": host_commit.available_maximum_commit_bytes,
+                "physical_ram_bytes": host_commit.physical_ram_bytes,
+                "physical_available_bytes": host_commit.physical_available_bytes,
+                "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
+                "pagefile_configuration_source": host_commit.pagefile_configuration_source,
+                "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
+                "commit_total_bytes": host_commit.commit_total_bytes,
+                "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
+                "current_commit_remaining_bytes": host_commit.current_commit_remaining_bytes,
+                "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
+                "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
+                "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+                "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
+            }),
+            Err(error) => json!({
+                "measurement_available": false,
+                "measurement_error": error.to_string(),
+            }),
+        };
+        let (resource_guard, foreign_process_pressure) = self.admission_guard_statuses()?;
+        let foreign_pressure_refusal =
+            foreign_process_pressure_admission_refusal(&foreign_process_pressure);
+        if let (true, Some(refusal_detail)) = (cfg!(windows), foreign_pressure_refusal) {
+            let diagnosis = serde_json::to_value(refusal_detail.diagnosis)?;
+            let refusal = json!({
+                "schema_version": "ember-lab-dispatch-preflight-v1",
+                "result": "REFUSED_FOREIGN_PROCESS_PRESSURE",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+                "resource_guard": resource_guard,
+                "foreign_process_pressure": foreign_process_pressure,
+                "foreign_process_pressure_diagnosis": diagnosis,
+                "host_commit": &host_commit_receipt,
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberLabError::ResourceAdmissionFrozen {
+                reason: refusal_detail.reason.into(),
+                receipt_path,
+            });
+        }
+        if resource_guard.get("admission_state") == Some(&Value::String("frozen".into())) {
+            let reason = resource_guard
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("resource_guard_frozen")
+                .to_string();
+            let refusal = json!({
+                "schema_version": "ember-lab-dispatch-preflight-v1",
+                "result": "REFUSED_RESOURCE_GUARD_FROZEN",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+                "resource_guard": resource_guard,
+                "foreign_process_pressure_refusal": false,
+                "host_commit": &host_commit_receipt,
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberLabError::ResourceAdmissionFrozen {
+                reason,
+                receipt_path,
+            });
+        }
+        let host_commit = host_commit_measurement?;
         let observed_available_maximum_commit_bytes = host_commit.available_maximum_commit_bytes;
         let derived_maximum = manifest
             .required_available_maximum_commit_bytes
             .checked_sub(DISPATCH_HOST_COMMIT_RESERVE_BYTES);
-        if derived_maximum != Some(manifest.maximum_job_memory_bytes)
+        let host_commit_refused = derived_maximum != Some(manifest.maximum_job_memory_bytes)
             || observed_available_maximum_commit_bytes
                 < manifest.required_available_maximum_commit_bytes
-            || manifest.simulated_peak_commit_bytes > manifest.maximum_job_memory_bytes
-        {
+            || manifest.simulated_peak_commit_bytes > manifest.maximum_job_memory_bytes;
+        if host_commit_refused {
             let refusal = json!({
                 "schema_version": "ember-lab-dispatch-preflight-v1",
                 "result": "REFUSED_HOST_COMMIT_CAP",
@@ -3906,23 +3981,7 @@ impl Daemon {
                 "source_commit": &manifest.source_commit,
                 "observed_at_ms": observed_at_ms,
                 "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
-                "host_commit": {
-                    "basis": "maximum_configured_capacity",
-                    "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
-                    "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
-                    "physical_ram_bytes": host_commit.physical_ram_bytes,
-                    "physical_available_bytes": host_commit.physical_available_bytes,
-                    "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
-                    "pagefile_configuration_source": host_commit.pagefile_configuration_source,
-                    "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
-                    "commit_total_bytes": host_commit.commit_total_bytes,
-                    "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
-                    "current_commit_remaining_bytes": host_commit.current_commit_remaining_bytes,
-                    "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
-                    "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
-                    "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
-                    "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
-                },
+                "host_commit": &host_commit_receipt,
             });
             atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
             return Err(EmberLabError::DispatchHostCommitReserve {
@@ -4269,58 +4328,6 @@ impl Daemon {
             },
         });
         let receipt_bytes = serde_json::to_vec(&receipt_payload)?;
-        if let Some(existing) = self.recover_pending_dispatch_receipt(
-            &manifest,
-            manifest_bytes,
-            &receipt_path,
-            &receipt_bytes,
-        )? {
-            return Ok(existing);
-        }
-        let (resource_guard, foreign_process_pressure) = self.admission_guard_statuses()?;
-        let foreign_pressure_refusal =
-            foreign_process_pressure_admission_refusal(&foreign_process_pressure);
-        if let (true, Some(refusal_detail)) = (cfg!(windows), foreign_pressure_refusal) {
-            let diagnosis = serde_json::to_value(refusal_detail.diagnosis)?;
-            let refusal = json!({
-                "schema_version": "ember-lab-dispatch-preflight-v1",
-                "result": "REFUSED_FOREIGN_PROCESS_PRESSURE",
-                "job_id": &manifest.job_id,
-                "source_commit": &manifest.source_commit,
-                "observed_at_ms": observed_at_ms,
-                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
-                "resource_guard": resource_guard,
-                "foreign_process_pressure": foreign_process_pressure,
-                "foreign_process_pressure_diagnosis": diagnosis,
-            });
-            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
-            return Err(EmberLabError::ResourceAdmissionFrozen {
-                reason: refusal_detail.reason.into(),
-                receipt_path,
-            });
-        }
-        if resource_guard.get("admission_state") == Some(&Value::String("frozen".into())) {
-            let reason = resource_guard
-                .get("reason")
-                .and_then(Value::as_str)
-                .unwrap_or("resource_guard_frozen")
-                .to_string();
-            let refusal = json!({
-                "schema_version": "ember-lab-dispatch-preflight-v1",
-                "result": "REFUSED_RESOURCE_GUARD_FROZEN",
-                "job_id": &manifest.job_id,
-                "source_commit": &manifest.source_commit,
-                "observed_at_ms": observed_at_ms,
-                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
-                "resource_guard": resource_guard,
-                "foreign_process_pressure_refusal": false,
-            });
-            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
-            return Err(EmberLabError::ResourceAdmissionFrozen {
-                reason,
-                receipt_path,
-            });
-        }
         let job_id = manifest.job_id.clone();
         let resource_lease = manifest.resource_lease.clone();
         let created_identity = self.identity_hash(&job_id)?.is_none();
@@ -4461,7 +4468,6 @@ impl Daemon {
         manifest: &DispatchManifest,
         manifest_bytes: &[u8],
         receipt_path: &Path,
-        receipt_bytes: &[u8],
     ) -> Result<Option<DispatchOutcome>> {
         let row: Option<(String, String, String, String, Vec<u8>)> = self
             .conn()?
@@ -4476,11 +4482,23 @@ impl Daemon {
         else {
             return Ok(None);
         };
+        let stored_receipt: Value = serde_json::from_slice(&stored_bytes).map_err(|_| {
+            EmberLabError::ReceiptAlreadyExists {
+                path: receipt_path.to_path_buf(),
+            }
+        })?;
         if resource_lease != manifest.resource_lease
             || manifest_sha256 != hash_bytes(manifest_bytes)
             || stored_path != receipt_path.to_string_lossy()
-            || receipt_sha256 != hash_bytes(receipt_bytes)
-            || stored_bytes != receipt_bytes
+            || receipt_sha256 != hash_bytes(&stored_bytes)
+            || stored_receipt.get("schema_version")
+                != Some(&Value::String("ember-lab-dispatch-preflight-v1".into()))
+            || stored_receipt.get("result") != Some(&Value::String("PREFLIGHT_PASSED".into()))
+            || stored_receipt.get("job_id") != Some(&Value::String(manifest.job_id.clone()))
+            || stored_receipt.get("source_commit")
+                != Some(&Value::String(manifest.source_commit.clone()))
+            || stored_receipt.get("dispatch_manifest_sha256")
+                != Some(&Value::String(manifest_sha256.clone()))
             || self.identity_hash(&manifest.job_id)? != Some(manifest_sha256.clone())
             || self.lease_owner(&manifest.resource_lease)?.as_deref()
                 != Some(manifest.job_id.as_str())
