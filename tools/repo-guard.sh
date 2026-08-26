@@ -470,7 +470,7 @@ LAUNCHER_MAIN_RE='^if __name__ == .__main__.:'
 LAUNCHER_TRAINER_RE='(Popen|subprocess\.(run|check_call|check_output)|exec[vl]p?)\('
 LAUNCHER_TRAINER_CHILD_RE='run_vertical_slice|certified_train|run_pretraining|torchrun|train\.py|pretrain\.py'
 LAUNCHER_CHILD_RE='(subprocess\.(Popen|run|check_call)|os\.exec[vl]p?|Command::new)'
-LAUNCHER_PS_CHILD_RE='(Start-(Process|Job)([[:space:]]|$)|Invoke-Expression([[:space:]]|$)|(^|[[:space:];|])&[[:space:]]+)'
+LAUNCHER_PS_CHILD_RE='(Start-(Process|Job)([[:space:]]|$)|Invoke-Expression([[:space:]]|$)|(^|[[:space:];|])&[[:space:]]+|^[[:space:]]*(([^[:space:]]*[\\/])?(python([0-9]+(\.[0-9]+)?)?|py|node|bun|cargo|rustc|dotnet|cmd|powershell|pwsh|bash|wsl|torchrun|ember(-lab)?)(\.exe)?|[^[:space:]]+\.(exe|com|bat|cmd))([[:space:]]|$))'
 LAUNCHER_SHAPE_PATHSPEC=(
   -- '*.py' '*.sh'
   ':(exclude)runtime/ember-lab'
