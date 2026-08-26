@@ -54,12 +54,40 @@ class PretrainingSegmentTests(unittest.TestCase):
             "trainer_pid": pretrain.os.getpid(),
             "trainer_process_start_token": "638915652000000000",
             "optimizer_step": 7,
+            "job_object_name": "Local\\EmberLabDispatch-test",
+            "direct_membership_query_succeeded": True,
+            "trainer_is_member": True,
         })
         self.assertEqual(queries, [(
             pretrain.os.getpid(),
             "638915652000000000",
             "Local\\EmberLabDispatch-test",
         )])
+
+    def test_governed_and_ungoverned_optimizer_events_are_distinguishable(self) -> None:
+        with (
+            patch.dict(pretrain.os.environ, {}, clear=True),
+            patch.object(
+                pretrain,
+                "_current_process_start_token",
+                return_value="638915652000000000",
+            ),
+        ):
+            ungoverned = pretrain.trainer_optimizer_step_event(1)
+            governed = pretrain.trainer_optimizer_step_event(
+                1,
+                job_object_name="Local\\EmberLabDispatch-test",
+                membership_query=lambda _pid, _token, _name: True,
+            )
+
+        self.assertEqual(ungoverned, {
+            "event": "trainer_optimizer_step",
+            "trainer_pid": pretrain.os.getpid(),
+            "trainer_process_start_token": "638915652000000000",
+            "optimizer_step": 1,
+            "direct_membership_query_succeeded": False,
+        })
+        self.assertNotEqual(governed, ungoverned)
 
     def test_optimizer_step_consumer_refuses_pid_mismatch_before_job_query(self) -> None:
         queries: list[tuple[int, str, str]] = []
