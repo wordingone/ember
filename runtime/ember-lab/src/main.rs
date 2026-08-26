@@ -1,6 +1,7 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use ember_lab::data_catalog::ArtifactLocationInput;
 use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
@@ -89,6 +90,16 @@ struct CertifiedLaunchCliArgs {
     receipt: Option<PathBuf>,
 }
 
+struct CockpitCliArgs {
+    root: PathBuf,
+    application: PathBuf,
+    source_commit: String,
+    state_root: PathBuf,
+    db: Option<PathBuf>,
+    pipe: Option<String>,
+    receipt: Option<PathBuf>,
+}
+
 struct CertifiedLaunchDaemonDefaults {
     db: PathBuf,
     pipe: String,
@@ -98,6 +109,126 @@ struct LaunchDaemon {
     child: Option<Child>,
     mode: &'static str,
     pid: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CockpitPlacement {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+fn left_half_placement(left: i32, top: i32, right: i32, bottom: i32) -> Option<CockpitPlacement> {
+    let width = right.checked_sub(left)?;
+    let height = bottom.checked_sub(top)?;
+    if width <= 1 || height <= 0 {
+        return None;
+    }
+    Some(CockpitPlacement {
+        x: left,
+        y: top,
+        width: width / 2,
+        height,
+    })
+}
+
+#[cfg(windows)]
+fn place_cockpit_window_left(governed_pid: u32) -> Result<(), Box<dyn std::error::Error>> {
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SetWindowPos, SWP_NOACTIVATE,
+        SWP_NOZORDER,
+    };
+
+    struct Search {
+        pid: u32,
+        hwnd: HWND,
+    }
+
+    unsafe extern "system" fn visit(hwnd: HWND, parameter: LPARAM) -> BOOL {
+        let search = &mut *(parameter as *mut Search);
+        let mut owner_pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut owner_pid);
+        if owner_pid == search.pid && IsWindowVisible(hwnd) != 0 {
+            search.hwnd = hwnd;
+            return 0;
+        }
+        1
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let hwnd = loop {
+        let mut search = Search {
+            pid: governed_pid,
+            hwnd: std::ptr::null_mut(),
+        };
+        unsafe {
+            EnumWindows(Some(visit), (&mut search as *mut Search) as LPARAM);
+        }
+        if !search.hwnd.is_null() {
+            break search.hwnd;
+        }
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!(
+                    "no visible top-level window appeared for governed cockpit PID {governed_pid}"
+                ),
+            )
+            .into());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+
+    let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    if monitor.is_null() {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let mut info = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        rcMonitor: RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        },
+        rcWork: RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        },
+        dwFlags: 0,
+    };
+    if unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let placement = left_half_placement(
+        info.rcWork.left,
+        info.rcWork.top,
+        info.rcWork.right,
+        info.rcWork.bottom,
+    )
+    .ok_or_else(|| std::io::Error::other("cockpit monitor work area is invalid"))?;
+    if unsafe {
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            placement.x,
+            placement.y,
+            placement.width,
+            placement.height,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(())
 }
 
 fn certified_launch_run_custody_root(
@@ -1337,6 +1468,146 @@ where
     })
 }
 
+fn prepare_cockpit_launch(
+    cli: &CockpitCliArgs,
+    now_ms: i64,
+) -> Result<(PreparedCertifiedLaunch, CertifiedLaunchDaemonDefaults), Box<dyn std::error::Error>> {
+    prepare_cockpit_launch_with(cli, now_ms, probe_single_vram_device_capacity()?)
+}
+
+fn prepare_cockpit_launch_with(
+    cli: &CockpitCliArgs,
+    now_ms: i64,
+    vram_capacity: VramDeviceCapacity,
+) -> Result<(PreparedCertifiedLaunch, CertifiedLaunchDaemonDefaults), Box<dyn std::error::Error>> {
+    if cli.source_commit.len() != 40
+        || !cli
+            .source_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "cockpit source commit must be exact lowercase Git identity",
+        )
+        .into());
+    }
+    let root = std::fs::canonicalize(&cli.root)?;
+    let application = std::fs::canonicalize(&cli.application)?;
+    if !application.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "cockpit application is not a file",
+        )
+        .into());
+    }
+    std::fs::create_dir_all(&cli.state_root)?;
+    let state_root = std::fs::canonicalize(&cli.state_root)?;
+    let job_id = format!("cockpit-{}-{}", now_ms, std::process::id());
+    let custody_root = state_root.join("cockpit-launches").join(&job_id);
+    std::fs::create_dir_all(&custody_root)?;
+    let custody_root = std::fs::canonicalize(custody_root)?;
+    let daemon = certified_launch_daemon_defaults(&state_root, cli.db.clone(), cli.pipe.clone())?;
+    let application_sha256 = hash_file(&application)?;
+    let config_path = custody_root.join("cockpit-config.json");
+    let authority_path = custody_root.join("cockpit-authority.json");
+    std::fs::write(
+        &config_path,
+        serde_json::to_vec_pretty(&json!({
+            "schema_version":"ember-cockpit-dispatch-config-v1",
+            "source_root":root,
+            "state_root":state_root,
+            "requires_ui_responsiveness":true,
+            "window_contract":"cockpit_hosted"
+        }))?,
+    )?;
+    std::fs::write(
+        &authority_path,
+        serde_json::to_vec_pretty(&json!({
+            "schema_version":"ember-cockpit-launch-authority-v1",
+            "source_commit":cli.source_commit,
+            "application":{"path":application,"sha256":application_sha256}
+        }))?,
+    )?;
+    let mut env = BTreeMap::new();
+    for key in [
+        "TEMP",
+        "TMP",
+        "TORCH_HOME",
+        "TRITON_CACHE_DIR",
+        "CUDA_CACHE_PATH",
+        "HF_HOME",
+        "XDG_CACHE_HOME",
+    ] {
+        let directory = custody_root.join(key.to_ascii_lowercase());
+        std::fs::create_dir(&directory)?;
+        env.insert(key.to_string(), directory.to_string_lossy().into_owned());
+    }
+    env.insert(
+        "EMBER_SOURCE_ROOT".into(),
+        root.to_string_lossy().into_owned(),
+    );
+    env.insert(
+        "EMBER_STATE_ROOT".into(),
+        state_root.to_string_lossy().into_owned(),
+    );
+    env.insert("EMBER_GPU_FREE".into(), "1".into());
+    let receipt_path = cli
+        .receipt
+        .clone()
+        .unwrap_or_else(|| custody_root.join("cockpit-operational.json"));
+    let preflight_receipt = custody_root.join("cockpit-preflight.json");
+    let telemetry_bytes = 512 * 1024 * 1024_u64;
+    let maximum_job_memory_bytes = GIB;
+    let vram_wall = certified_launch_vram_wall(GIB, vram_capacity)?;
+    let manifest = json!({
+        "schema_version":"ember-lab-dispatch-manifest-v4",
+        "job_id":job_id,
+        "source_commit":cli.source_commit,
+        "not_before_ms":now_ms,
+        "expires_at_ms":now_ms + 3_600_000,
+        "resource_lease":format!("cockpit:{job_id}"),
+        "program":{"path":application,"sha256":application_sha256},
+        "args":[],
+        "workload_profile":{
+            "profile_id":"cockpit",
+            "pinned_host_producers":[{"kind":"telemetry_buffer","maximum_bytes":telemetry_bytes}],
+            "requires_ui_responsiveness":true,
+            "cpu_rate_percent":90
+        },
+        "cpu_pacing_class":"governed",
+        "window_contract":"cockpit_hosted",
+        "env":env,
+        "bindings":[
+            {"kind":"config","path":config_path,"sha256":hash_file(&config_path)?},
+            {"kind":"manifest","path":authority_path,"sha256":hash_file(&authority_path)?}
+        ],
+        "custody_root":custody_root,
+        "storage_reserves":[{"root":state_root,"minimum_free_bytes":64 * 1024 * 1024_u64}],
+        "vram_wall":vram_wall,
+        "required_available_maximum_commit_bytes":maximum_job_memory_bytes + HOST_COMMIT_SURVIVAL_RESERVE_BYTES,
+        "maximum_job_memory_bytes":maximum_job_memory_bytes,
+        "simulated_peak_commit_bytes":telemetry_bytes,
+        "preflight_receipt":preflight_receipt
+    });
+    let manifest_path = custody_root.join("dispatch-manifest.json");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&manifest_path)?;
+    file.write_all(&serde_json::to_vec_pretty(&manifest)?)?;
+    file.sync_all()?;
+    Ok((
+        PreparedCertifiedLaunch {
+            manifest_path,
+            job_id,
+            receipt_path,
+            run_custody_root: custody_root,
+        },
+        daemon,
+    ))
+}
+
 fn usage() -> &'static str {
     "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
@@ -1351,6 +1622,7 @@ enum Command {
         manifest: PathBuf,
     },
     Launch(CertifiedLaunchCliArgs),
+    Cockpit(CockpitCliArgs),
     ResourceGuardRearm {
         pipe: String,
         frozen_observation_sha256: String,
@@ -1522,12 +1794,53 @@ where
     }))
 }
 
+fn parse_cockpit_arguments<I>(mut args: I) -> Result<Command, String>
+where
+    I: Iterator<Item = String>,
+{
+    let mut root = None;
+    let mut application = None;
+    let mut source_commit = None;
+    let mut state_root = None;
+    let mut db = None;
+    let mut pipe = None;
+    let mut receipt = None;
+    while let Some(flag) = args.next() {
+        let value = args
+            .next()
+            .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+        match flag.as_str() {
+            "--root" => root = Some(PathBuf::from(value)),
+            "--application" => application = Some(PathBuf::from(value)),
+            "--source-commit" => source_commit = Some(value),
+            "--state-root" => state_root = Some(PathBuf::from(value)),
+            "--db" => db = Some(PathBuf::from(value)),
+            "--pipe" => pipe = Some(value),
+            "--receipt" => receipt = Some(PathBuf::from(value)),
+            _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+        }
+    }
+    Ok(Command::Cockpit(CockpitCliArgs {
+        root: root.ok_or_else(|| format!("missing --root\n{}", usage()))?,
+        application: application.ok_or_else(|| format!("missing --application\n{}", usage()))?,
+        source_commit: source_commit
+            .ok_or_else(|| format!("missing --source-commit\n{}", usage()))?,
+        state_root: state_root.ok_or_else(|| format!("missing --state-root\n{}", usage()))?,
+        db,
+        pipe,
+        receipt,
+    }))
+}
+
 fn parse_args() -> Result<Command, String> {
     let mut args = std::env::args().skip(1);
     let command = args.next().ok_or_else(|| usage().to_string())?;
 
     if command == "launch" {
         return parse_launch_arguments(args);
+    }
+    if command == "cockpit" {
+        return parse_cockpit_arguments(args);
     }
 
     if command == "verify-training" {
@@ -2444,6 +2757,60 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(completion.exit_code);
             }
         }
+        Command::Cockpit(cli) => {
+            let now_ms = i64::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis())?;
+            let (prepared, daemon_defaults) = prepare_cockpit_launch(&cli, now_ms)?;
+            let receipt = prepared.receipt_path.clone();
+            let log_root = prepared.manifest_path.parent().ok_or_else(|| {
+                std::io::Error::other("cockpit dispatch manifest lacks a custody parent")
+            })?;
+            let mut daemon = ensure_launch_daemon(&daemon_defaults, log_root)?;
+            let attempt = launch_prepared_certified_with(
+                &prepared,
+                daemon.mode,
+                daemon.pid,
+                |rpc_request| call_rpc(&daemon_defaults.pipe, rpc_request, "cockpit"),
+                |start| {
+                    #[cfg(windows)]
+                    if let Err(error) = place_cockpit_window_left(start.governed_pid) {
+                        eprintln!(
+                            "WARNING: cockpit window placement was not applied for governed PID {}: {error}",
+                            start.governed_pid
+                        );
+                    }
+                    println!("{}", serde_json::to_string(start)?);
+                    std::io::stdout().flush()?;
+                    Ok(())
+                },
+                || std::thread::sleep(Duration::from_millis(100)),
+            );
+            let shutdown = shutdown_owned_launch_daemon(&daemon_defaults.pipe, &mut daemon);
+            let completion = match (attempt, shutdown) {
+                (Ok(completion), Ok(())) => completion,
+                (Err(error), Ok(())) => return Err(error),
+                (Ok(_), Err(error)) => return Err(error),
+                (Err(operation), Err(cleanup)) => {
+                    return Err(std::io::Error::other(format!(
+                        "cockpit launch failed: {operation}; owned daemon cleanup also failed: {cleanup}"
+                    )).into())
+                }
+            };
+            if !completion.stderr.is_empty() {
+                eprint!("{}", completion.stderr);
+                std::io::stderr().flush()?;
+            }
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "schema_version":"ember-lab-certified-launch-completion-v1",
+                    "exit_code":completion.exit_code,
+                    "operational_receipt":receipt
+                }))?
+            );
+            if completion.exit_code != 0 {
+                std::process::exit(completion.exit_code);
+            }
+        }
         Command::ResourceGuardRearm {
             pipe,
             frozen_observation_sha256,
@@ -3189,6 +3556,107 @@ mod tests {
 
         assert_eq!(completion.exit_code, 0);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cockpit_entry_requires_exact_application_source_and_state_authority() {
+        let command = parse_cockpit_arguments(
+            [
+                "--root",
+                "C:\\repo",
+                "--application",
+                "C:\\app\\Ember.exe",
+                "--source-commit",
+                "0123456789abcdef0123456789abcdef01234567",
+                "--state-root",
+                "C:\\state",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .unwrap();
+        let Command::Cockpit(cli) = command else {
+            panic!("cockpit command not parsed")
+        };
+        assert_eq!(cli.application, PathBuf::from(r"C:\app\Ember.exe"));
+        assert_eq!(
+            cli.source_commit,
+            "0123456789abcdef0123456789abcdef01234567"
+        );
+        assert_eq!(cli.state_root, PathBuf::from(r"C:\state"));
+    }
+
+    #[test]
+    fn cockpit_left_half_placement_uses_monitor_work_area_without_focus_or_z_order_math() {
+        assert_eq!(
+            left_half_placement(-1920, 40, 0, 1080),
+            Some(CockpitPlacement {
+                x: -1920,
+                y: 40,
+                width: 960,
+                height: 1040,
+            })
+        );
+        assert_eq!(left_half_placement(0, 0, 1, 1080), None);
+    }
+
+    #[test]
+    fn cockpit_manifest_is_closed_and_daemon_refuses_caller_owned_identity() {
+        let root =
+            std::env::temp_dir().join(format!("ember-cockpit-manifest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let repo = root.join("repo");
+        let state = root.join("state");
+        std::fs::create_dir_all(&repo).unwrap();
+        let application = root.join("Ember.exe");
+        std::fs::write(&application, b"fixture application").unwrap();
+        let cli = CockpitCliArgs {
+            root: repo,
+            application,
+            source_commit: "0123456789abcdef0123456789abcdef01234567".into(),
+            state_root: state,
+            db: None,
+            pipe: None,
+            receipt: None,
+        };
+        let (prepared, _) = prepare_cockpit_launch_with(
+            &cli,
+            1_800_000_000_000,
+            VramDeviceCapacity {
+                provider: "nvidia_smi_nvml".into(),
+                device_uuid: "GPU-cockpit-fixture".into(),
+                total_bytes: 24 * GIB,
+                free_bytes: 20 * GIB,
+            },
+        )
+        .unwrap();
+        let mut manifest: Value =
+            serde_json::from_slice(&std::fs::read(&prepared.manifest_path).unwrap()).unwrap();
+        assert_eq!(manifest["workload_profile"]["profile_id"], "cockpit");
+        assert_eq!(manifest["window_contract"], "cockpit_hosted");
+        assert_eq!(manifest["cpu_pacing_class"], "governed");
+        manifest["env"]["EMBER_LAB_DISPATCH_JOB_OBJECT_NAME"] =
+            Value::String("caller-forgery".into());
+        let bytes = serde_json::to_vec(&manifest).unwrap();
+        let digest = format!("{:x}", Sha256::digest(&bytes));
+        let daemon = Daemon::open(&root.join("daemon.sqlite3")).unwrap();
+        let error = daemon.dispatch_manifest_bytes(&bytes, &digest).unwrap_err();
+        assert!(error.to_string().contains("daemon-owned"), "{error}");
+        drop(daemon);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cockpit_rpc_refuses_when_daemon_is_absent() {
+        let pipe = format!(r"\\.\pipe\ember-cockpit-absent-{}", std::process::id());
+        let error = call_rpc(
+            &pipe,
+            &json!({"jsonrpc":"2.0","id":1,"method":"ping"}),
+            "cockpit",
+        )
+        .unwrap_err();
+        assert!(!error.to_string().is_empty());
     }
 
     #[test]

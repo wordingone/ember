@@ -63,7 +63,7 @@
     "data/ember-restart-3b/owned-four-domain-production-rung-v1.receipt.json",
     "data/ember-restart-3b/text-lab-authority-index-v1.json",
     "manifests/python-environment-v1.json",
-    "scripts/launch-ember-cli.ps1",
+    "scripts/prepare-ember-cockpit.ps1",
     "tokenizer/tokenizer.json",
     "tools/ember-restart-3b/ember-restart-3b-a1.json",
     "tools/ember-restart-3b/ember-restart-3b-a1-tier2.json",

@@ -1,15 +1,10 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-param(
-    [switch]$PrepareApplicationOnly
-)
-
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot "ember-launch-staging.ps1")
-. (Join-Path $PSScriptRoot "ember-window-placement.ps1")
 
 $BunVersion = "1.3.12"
 $BunArchiveUrl = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.12/bun-windows-x64.zip"
@@ -415,10 +410,6 @@ try {
         return
     }
 
-    if (-not $PrepareApplicationOnly) {
-        Stop-StaleOwnedEmberApplications $stateRoot
-    }
-
     $commit = (& git -C $repositoryRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
     if ($commit -notmatch "^[0-9a-f]{40}$") {
         throw "This repository does not have an exact Git source identity."
@@ -482,27 +473,28 @@ try {
     }
     Assert-EmberStateIsExternal $repositoryRoot
 
-    if ($PrepareApplicationOnly) {
-        Write-Output ([System.IO.Path]::GetFullPath($application))
-        return
+    # Preparation only: compile the existing dispatch authority beside the immutable
+    # cockpit build. This script never starts Ember.exe and therefore cannot bypass emberd.
+    $labTargetRoot = Join-Path $stateRoot "runtime\ember-lab\$commit"
+    $emberLab = Join-Path $labTargetRoot "release\ember-lab.exe"
+    if (-not (Test-Path -LiteralPath $emberLab -PathType Leaf)) {
+        New-Item -ItemType Directory -Force -Path $labTargetRoot | Out-Null
+        $previousCargoTarget = $env:CARGO_TARGET_DIR
+        $env:CARGO_TARGET_DIR = $labTargetRoot
+        try {
+            & cargo build --locked --release --manifest-path (Join-Path $repositoryRoot "runtime\ember-lab\Cargo.toml")
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $emberLab -PathType Leaf)) {
+                throw "The governed Ember Lab runtime could not be built."
+            }
+        }
+        finally {
+            $env:CARGO_TARGET_DIR = $previousCargoTarget
+        }
     }
-
-    $windowHandle = Get-EmberHostWindowHandle
-    Set-EmberWindowToLeftWorkArea $windowHandle | Out-Null
-
-    # Invoke in this shell: no second terminal or dead launcher window may remain underneath.
-    # #1486: the child resolves its source root by walking up from CWD, and Ember.exe is
-    # staged under the state root, so an inherited launch cwd (wt.exe -w new hands the
-    # wrapper %USERPROFILE%) left the walk nothing to find. Hand the child the root this
-    # launcher already resolved and validated: cwd for the walk, EMBER_SOURCE_ROOT as the
-    # explicit override the resolver prefers.
-    Set-Location -LiteralPath $repositoryRoot
-    $env:EMBER_SOURCE_ROOT = $repositoryRoot
-    & $application
-    $applicationExit = $LASTEXITCODE
-    if ($applicationExit -ne 0) {
-        Stop-EmberLaunchAfterChildExit $applicationExit
-    }
+    Write-Output ("EMBER_APPLICATION=" + [System.IO.Path]::GetFullPath($application))
+    Write-Output ("EMBER_LAB=" + [System.IO.Path]::GetFullPath($emberLab))
+    Write-Output ("EMBER_SOURCE_COMMIT=" + $commit)
+    Write-Output ("EMBER_STATE_ROOT=" + [System.IO.Path]::GetFullPath($stateRoot))
 }
 catch {
     Stop-EmberLaunch $_.Exception.Message

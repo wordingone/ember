@@ -137,7 +137,7 @@ bytes the artifact does not control):
       mention) is overwritten in the scratch copy with the entry stub.
       `EMBER_LAUNCH_TEST_MODE=1` substitutes the faithful runtime proxy for
       `bun` at this repository's own `& $bun run entrypoints/main.ts` call
-      site -- the hook exists in `launch-ember-cli.ps1` precisely for this,
+      site -- the hook exists in `prepare-ember-cockpit.ps1` precisely for this,
       letting the probe avoid the real production path's git-identity and
       built-desktop-app requirements, neither of which a bounded probe can
       safely exercise, while still genuinely reaching the entry through
@@ -805,7 +805,7 @@ def resolve_invocation(entry: Path, root: Path) -> dict:
 #      about this repository's own test-mode hook.
 #   2. `EMBER_LAUNCH_TEST_MODE=1` / `EMBER_LAUNCH_TEST_RUNTIME=<owned
 #      sentinel executable>` are set in the probe's environment. This
-#      repository's own `launch-ember-cli.ps1` carries this hook precisely
+#      repository's own `prepare-ember-cockpit.ps1` carries this hook precisely
 #      so a substitute runtime can stand in for bun at the exact call site
 #      `& $bun run entrypoints/main.ts`, without requiring a real git
 #      identity or a built desktop app -- both of which the genuine

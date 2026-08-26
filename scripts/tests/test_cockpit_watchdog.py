@@ -736,7 +736,7 @@ def test_run_cycle_never_kills_or_closes_or_restores():
 # #413/#1330 review round 2 -- the renderer-heartbeat-path default is a THIRD
 # resolution-point consumer, in lockstep with tools/ember-cli/src/utils/ember-state-root.ts
 # (emberStateRoot/repoStateKey) and Get-EmberStateRoot/Get-EmberStateRootKey in
-# scripts/launch-ember-cli.ps1. KEY_PARITY_VECTORS below is the SAME set already shared by
+# the preparation-only cockpit helper. KEY_PARITY_VECTORS below is the SAME set already shared by
 # ember-state-root.test.ts and tests/test_ember_root_launcher.py -- if this port drifts from
 # either, this suite goes red.
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ Ember gains a normal per-user Windows installation. A stable Desktop or Start Me
 
 ## Authority boundary
 
-`scripts/install-ember-desktop.ps1` is the sole Windows deployment mutation entrypoint. It owns `Install`, `Repair`, `Rollback`, and `Uninstall`. `scripts/launch-installed-ember.ps1` is read-only launch admission: it validates the current manifest and executable hash before spawning. Neither script launches model servers, schedules work, updates over the network, modifies shell profiles, or writes machine-wide state.
+`scripts/install-ember-desktop.ps1` is the sole Windows deployment mutation entrypoint. It owns `Install`, `Repair`, `Rollback`, and `Uninstall`. Installed shortcuts target the immutable, hash-recorded `ember-lab.exe cockpit` command directly; there is no installed launcher script.
 
 The installed artifacts live below `%LOCALAPPDATA%\Programs\Ember` unless `-InstallRoot` is explicitly supplied. Tests always supply an isolated root.
 
@@ -17,7 +17,7 @@ The installed artifacts live below `%LOCALAPPDATA%\Programs\Ember` unless `-Inst
 ```text
 <install-root>/
   Ember.cmd
-  launch-installed-ember.ps1
+  versions/<commit>/ember-lab.exe
   current.json
   install-receipt.json
   versions/
@@ -38,7 +38,7 @@ Reinstalling the same commit is idempotent: the existing executable must match t
 
 ## Stable launch
 
-The shortcut targets `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` with fixed flags and the stable installed `launch-installed-ember.ps1`. No manifest string becomes a command or argument. The launcher resolves and rehashes the admitted executable, sets its working directory to the install root, and runs it in the current console, returning its exact exit code.
+The shortcut targets the immutable versioned `ember-lab.exe` with the fixed `cockpit` command and exact source/application/state arguments. Both runtime and application hashes are closed in the deployment manifests; the daemon exports terminal evidence.
 
 ## Shortcut contract
 

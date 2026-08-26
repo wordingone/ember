@@ -413,7 +413,7 @@ discovery cycle:
    behavior, not merely exposed through a wrapper command. The
    existing `the predecessor CLI` launch surface is the real compiled
    `<local-path>`, plus Ember-side launchers such as
-   `tools/reference-launch/launch.ps1` and `tools/reference-goal-mode/goal-mode.ps1`; a missing
+   the former reference launcher and `tools/reference-goal-mode/goal-mode.ps1`; a missing
    `<local-path>` lookup is not evidence that the app is absent.
    These launch surfaces are behavior/provenance sources to inventory, not
    codebases Ember may copy or train on before clean-room clearance. Only after this harness exists may
@@ -585,4 +585,3 @@ works, but MLE competition downloads return `403 Forbidden` for download-all and
 explicit per-file requests across the frozen task set. Do not treat "Kaggle CLI
 works" as equivalent to "official MLE raw files exist." The active goal path is
 therefore the downloadable Kaggle external-heldout task, not MLE.
-

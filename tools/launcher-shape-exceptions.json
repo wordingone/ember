@@ -7,7 +7,7 @@
   "exceptions": [
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "37ca8853fa3f8df24646c40f991a3a801fac95b7bac977de11659c064a4de0c9",
+      "sha256": "35a8291dd351795833c6f4fdcb45a32f8426c6d4db3488fd46d1d3d52d06e6ae",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "path": "scripts/ember_gate_launch_packaging.py",
-      "sha256": "a2379f39dfbe5e264b2dde1025ec8413286c6701b50fb0b222c4071f06d86a18",
+      "sha256": "386764fe20a96bc3ba76aedc5c47868625f5fd1a90ff167442f036c6178be87e",
       "reason": "matched on its name, not its behaviour. It is a CLI parity harness: the child it creates is the packaged CLI under test with a 20-second timeout, never a training run."
     },
     {
@@ -26,19 +26,54 @@
       "reason": "matched on its name, not its behaviour. It adapts the roadmap runner to a file-backed JSON transport; the child it creates is that runner, never a training run."
     },
     {
-      "path": "scripts/launch-installed-ember.ps1",
-      "sha256": "65b9cb6525508f1875d5550fa69e8bbfdc45448eb7576ccc348322d2ac180f45",
-      "reason": "temporarily hash-admitted installed GUI/cockpit launcher pending atomic installed one-command retirement; it never starts a training run"
+      "path": "scripts/ember-desktop-deployment-selftest.ps1",
+      "sha256": "97129ed7d9ca1a6ba7d0ceefb3db7820e7bd76646b16737cddf3f475e6cfd336",
+      "reason": "genuine hermetic deployment fixture. It creates fake application and runtime executables and invokes the installer only inside a unique temporary repository/install root; it never starts a training run or a production cockpit. The exact digest is required because filename-based test exclusions are forbidden."
     },
     {
-      "path": "scripts/launch-ember-cli.ps1",
-      "sha256": "f4f776773b72f78c4df22d7d756617ef313e6f627e02ebada59a8d3cc83a718a",
-      "reason": "temporarily hash-admitted developer cockpit/bootstrap launcher behind Ember.cmd pending atomic cockpit retirement; governed training still dispatches only through the daemon"
+      "path": "scripts/prepare-ember-cockpit.ps1",
+      "sha256": "375917983e53c40d4a46ee633e1b11b255a293be262670f5bf3b82809bd13c55",
+      "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
-      "path": "tools/reference-launch/launch.ps1",
-      "sha256": "3d1058eb46369ba4c33c8b9939da15cf9e5caf1620f58f74690787b75cb0139f",
-      "reason": "temporarily hash-admitted reference launcher pending atomic bullet-3 retirement; it forwards into the governed entry and does not bypass the daemon"
+      "path": "scripts/c8_prelaunch/test_governed_run_launcher.py",
+      "sha256": "32eb3b192436a1a89923bd2881731a0e75f59e6e6fc507fcb2c67a33451a38eb",
+      "reason": "hermetic unit test for the historical governed-run adapter. It creates a temporary worker fixture and exercises timeout, cancellation, manifest, and receipt behavior without addressing any production run or persistent custody root."
+    },
+    {
+      "path": "scripts/test_ember_cbase_launch.py",
+      "sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58",
+      "reason": "CPU-only wrapper test with CUDA explicitly disabled. Its child commands are temporary stub-core fixtures used to prove STOP/CEILING_STOP and receipt shapes; it does not launch a GPU job or daemon."
+    },
+    {
+      "path": "tests/ember_restart_model/test_certified_train_launch.py",
+      "sha256": "9f43f74a05b0fbdbe57b5f8d683b7bbb1d5cd89c3cd73281497528f53f300f0d",
+      "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
+    },
+    {
+      "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
+      "sha256": "4289d6fc2a69659d2921b1b2baa27844d341e69b12d8d58b3444960e47df314c",
+      "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
+    },
+    {
+      "path": "tests/ember_restart_model/test_runner_preflight.py",
+      "sha256": "fc7ad118e0b55741e0c0073a3defa641a62bcffd39922a31ba1fa15c4e399af5",
+      "reason": "runner preflight unit suite that deliberately avoids allocating the production model. Any process surface is a patched or temporary probe used to test refusal ordering and preflight evidence, not a runnable training entry."
+    },
+    {
+      "path": "tests/ember_restart_model/test_runner_storage.py",
+      "sha256": "1f9f61f05e49e7bd9515f8b16d224228e3208aeb346023238908c4e273f67575",
+      "reason": "storage-preflight fixture operating on temporary checkpoint and custody paths. Its child-process cases exercise bounded runner storage diagnostics; they do not dispatch a model run or expose a production launcher."
+    },
+    {
+      "path": "tests/test_ember_root_launcher.py",
+      "sha256": "9a60610f52bfdc0b9353687c28fc67378fd87f18c28d38a9d660be519ef4bded",
+      "reason": "root-entry hermetic acceptance suite. It copies Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
+    },
+    {
+      "path": "tests/test_nativization_motion.py",
+      "sha256": "aedc8acd40bde45f2a8f5d271a217eb0fadab5269ecc0c4259eac964a759ed06",
+      "reason": "offline nativization-motion test suite. It executes only synthetic temporary runner/import fixtures to validate delta and receipt calculations, with zero network and no production training identity or custody."
     },
     {
       "path": "tools/powershell-launcher-shape-guard.ps1",

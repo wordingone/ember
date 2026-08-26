@@ -17,8 +17,8 @@ $requestedRepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', 
 if (-not $requestedRepositoryRoot.Equals($boundRepositoryRoot, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Installation RepositoryRoot must be the exact checkout containing this installer."
 }
-$script:ManifestFields = @("schema_version", "source_commit", "executable_sha256", "executable_relative_path", "installed_at_utc", "previous_source_commit")
-$script:VersionFields = @("schema_version", "source_commit", "executable_sha256", "executable_relative_path", "published_at_utc")
+$script:ManifestFields = @("schema_version", "source_commit", "executable_sha256", "executable_relative_path", "runtime_sha256", "runtime_relative_path", "installed_at_utc", "previous_source_commit")
+$script:VersionFields = @("schema_version", "source_commit", "executable_sha256", "executable_relative_path", "runtime_sha256", "runtime_relative_path", "published_at_utc")
 $script:OwnerFields = @("schema_version", "product")
 
 function Write-AtomicJson([string]$Path, $Value) {
@@ -60,8 +60,9 @@ function Read-VersionRecord([string]$Root, [string]$Commit) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Rollback version.json is absent." }
     $record = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-ClosedObject $record $script:VersionFields "version.json"
-    if ($record.schema_version -ne 1 -or $record.source_commit -ne $Commit -or
-        $record.executable_sha256 -notmatch '^[0-9a-f]{64}$' -or $record.executable_relative_path -ne "Ember.exe") {
+    if ($record.schema_version -ne 2 -or $record.source_commit -ne $Commit -or
+        $record.executable_sha256 -notmatch '^[0-9a-f]{64}$' -or $record.executable_relative_path -ne "Ember.exe" -or
+        $record.runtime_sha256 -notmatch '^[0-9a-f]{64}$' -or $record.runtime_relative_path -ne "ember-lab.exe") {
         throw "version.json is invalid."
     }
     $published = [DateTime]::MinValue
@@ -70,14 +71,20 @@ function Read-VersionRecord([string]$Root, [string]$Commit) {
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Rollback executable is absent." }
     $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($hash -ne $record.executable_sha256) { throw "Rollback executable hash does not match version.json." }
+    $runtime = Join-Path $Root "versions\$Commit\ember-lab.exe"
+    if (-not (Test-Path -LiteralPath $runtime -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $runtime -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.runtime_sha256) {
+        throw "Rollback Ember Lab runtime hash does not match version.json."
+    }
     return $record
 }
 
-function Get-ShortcutSpecification([string]$Root, [string]$IconPath) {
-    $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+function Get-ShortcutSpecification([string]$Root, $Manifest, [string]$IconPath) {
+    $runtime = Join-Path $Root ($Manifest.runtime_relative_path.Replace('/', '\'))
+    $application = Join-Path $Root ($Manifest.executable_relative_path.Replace('/', '\'))
     [pscustomobject]@{
-        TargetPath = $powershell
-        Arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $Root "launch-installed-ember.ps1") + '"'
+        TargetPath = $runtime
+        Arguments = 'cockpit --root "' + $Root + '" --application "' + $application + '" --source-commit ' + $Manifest.source_commit + ' --state-root "' + (Join-Path $Root "state") + '"'
         WorkingDirectory = $Root
         Description = "Ember local AI laboratory"
         IconLocation = "$IconPath,0"
@@ -184,13 +191,7 @@ function Install-StableFiles([string]$Root) {
 
     # Complete every other fallible stable-file write while the legacy authority marker
     # is still intact. The marker transition below is the final publication boundary.
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "launch-installed-ember.ps1") -Destination (Join-Path $Root "launch-installed-ember.ps1") -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "ember-window-placement.ps1") -Destination (Join-Path $Root "ember-window-placement.ps1") -Force
-    @(
-        '@echo off'
-        'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0launch-installed-ember.ps1"'
-        'exit /b %ERRORLEVEL%'
-    ) | Set-Content -LiteralPath (Join-Path $Root "Ember.cmd") -Encoding ASCII
     # A compiled deployment is intentionally git-less. These marker bytes let the existing
     # strict runtime resolver bind state to the installation itself instead of a checkout.
     New-Item -ItemType Directory -Force -Path (Join-Path $Root "tools\ember-cli") | Out-Null
@@ -222,9 +223,11 @@ function Read-Current([string]$Root) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
     $value = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-ClosedObject $value $script:ManifestFields "current.json"
-    if ($value.schema_version -ne 1 -or $value.source_commit -notmatch '^[0-9a-f]{40}$' -or
+    if ($value.schema_version -ne 2 -or $value.source_commit -notmatch '^[0-9a-f]{40}$' -or
         $value.executable_sha256 -notmatch '^[0-9a-f]{64}$' -or
         $value.executable_relative_path -ne "versions/$($value.source_commit)/Ember.exe" -or
+        $value.runtime_sha256 -notmatch '^[0-9a-f]{64}$' -or
+        $value.runtime_relative_path -ne "versions/$($value.source_commit)/ember-lab.exe" -or
         ($value.previous_source_commit -ne "" -and $value.previous_source_commit -notmatch '^[0-9a-f]{40}$')) {
         throw "current.json is invalid."
     }
@@ -235,7 +238,7 @@ function Read-Current([string]$Root) {
 
 function Repair-Shortcuts([string]$Root, $Manifest, [string]$Desktop, [string]$StartMenu) {
     $exe = Join-Path $Root ($Manifest.executable_relative_path.Replace('/', '\'))
-    $spec = Get-ShortcutSpecification $Root $exe
+    $spec = Get-ShortcutSpecification $Root $Manifest $exe
     Write-VerifiedShortcut (Join-Path $Desktop "Ember.lnk") $spec
     Write-VerifiedShortcut (Join-Path $StartMenu "Ember.lnk") $spec
 }
@@ -254,10 +257,13 @@ function Remove-OwnedShortcut([string]$Path, [string]$Root) {
     $shell = New-Object -ComObject WScript.Shell
     try {
         $shortcut = $shell.CreateShortcut($Path)
-        $ownedLauncher = Join-Path $Root "launch-installed-ember.ps1"
-        $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-        $expectedArguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $ownedLauncher + '"'
-        if ($shortcut.TargetPath -ne $powershell -or $shortcut.Arguments -ne $expectedArguments -or
+        $runtime = [IO.Path]::GetFullPath($shortcut.TargetPath)
+        $versionRoot = Split-Path -Parent $runtime
+        $commit = Split-Path -Leaf $versionRoot
+        $expectedRuntime = Join-Path $Root "versions\$commit\ember-lab.exe"
+        $expectedApplication = Join-Path $Root "versions\$commit\Ember.exe"
+        $expectedArguments = 'cockpit --root "' + $Root + '" --application "' + $expectedApplication + '" --source-commit ' + $commit + ' --state-root "' + (Join-Path $Root "state") + '"'
+        if ($commit -notmatch '^[0-9a-f]{40}$' -or $runtime -ne $expectedRuntime -or $shortcut.Arguments -ne $expectedArguments -or
             $shortcut.WorkingDirectory -ne $Root -or $shortcut.Description -ne "Ember local AI laboratory") {
             throw "Refusing to remove a foreign Ember shortcut."
         }
@@ -293,7 +299,9 @@ try {
         if ($null -eq $current) { throw "Repair requires an installed current.json." }
         $record = Read-VersionRecord $root $current.source_commit
         if ($record.executable_sha256 -ne $current.executable_sha256 -or
-            $current.executable_relative_path -ne "versions/$($record.source_commit)/Ember.exe") {
+            $record.runtime_sha256 -ne $current.runtime_sha256 -or
+            $current.executable_relative_path -ne "versions/$($record.source_commit)/Ember.exe" -or
+            $current.runtime_relative_path -ne "versions/$($record.source_commit)/ember-lab.exe") {
             throw "current.json does not match the authenticated version record."
         }
         Install-StableFiles $root
@@ -308,8 +316,9 @@ try {
         if ($null -eq $current -or [string]::IsNullOrWhiteSpace($current.previous_source_commit)) { throw "No authenticated previous Ember version is available." }
         $record = Read-VersionRecord $root $current.previous_source_commit
         $replacement = [ordered]@{
-            schema_version = 1; source_commit = $record.source_commit; executable_sha256 = $record.executable_sha256
+            schema_version = 2; source_commit = $record.source_commit; executable_sha256 = $record.executable_sha256
             executable_relative_path = "versions/$($record.source_commit)/Ember.exe"; installed_at_utc = [DateTime]::UtcNow.ToString("o")
+            runtime_sha256 = $record.runtime_sha256; runtime_relative_path = "versions/$($record.source_commit)/ember-lab.exe"
             previous_source_commit = $current.source_commit
         }
         Install-StableFiles $root
@@ -323,18 +332,21 @@ try {
     $status = & git -C $RepositoryRoot status --porcelain --untracked-files=no
     if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($status -join "`n"))) { throw "Installation requires a clean tracked source checkout." }
     $commit = (& git -C $RepositoryRoot rev-parse HEAD | Select-Object -First 1).Trim()
-    $lines = @(& (Join-Path $PSScriptRoot "launch-ember-cli.ps1") -PrepareApplicationOnly)
-    $built = @($lines | Where-Object {
-        $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_) -and
-        (Test-Path -LiteralPath $_ -PathType Leaf)
-    } | Select-Object -Last 1)[0]
+    $lines = @(& (Join-Path $PSScriptRoot "prepare-ember-cockpit.ps1"))
+    $built = @($lines | Where-Object { $_ -is [string] -and $_.StartsWith("EMBER_APPLICATION=") } | ForEach-Object { $_.Substring(18) } | Select-Object -Last 1)[0]
+    $builtRuntime = @($lines | Where-Object { $_ -is [string] -and $_.StartsWith("EMBER_LAB=") } | ForEach-Object { $_.Substring(10) } | Select-Object -Last 1)[0]
     if ($commit -notmatch '^[0-9a-f]{40}$') { throw "Installation requires an exact lowercase source commit." }
     if (-not (Test-Path -LiteralPath $built -PathType Leaf)) { throw "The canonical build did not return an executable." }
+    if (-not (Test-Path -LiteralPath $builtRuntime -PathType Leaf)) { throw "The canonical build did not return the Ember Lab runtime." }
     $hash = (Get-FileHash -LiteralPath $built -Algorithm SHA256).Hash.ToLowerInvariant()
+    $runtimeHash = (Get-FileHash -LiteralPath $builtRuntime -Algorithm SHA256).Hash.ToLowerInvariant()
     $versionRoot = Join-Path $root "versions\$commit"
     $existing = Join-Path $versionRoot "Ember.exe"
     if (Test-Path -LiteralPath $existing -PathType Leaf) {
         if ((Get-FileHash -LiteralPath $existing -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash) { throw "Immutable Ember version bytes differ for the same source commit." }
+        $existingRuntime = Join-Path $versionRoot "ember-lab.exe"
+        if (-not (Test-Path -LiteralPath $existingRuntime -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $existingRuntime -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runtimeHash) { throw "Immutable Ember Lab runtime bytes differ for the same source commit." }
         [void](Read-VersionRecord $root $commit)
     }
     else {
@@ -342,9 +354,11 @@ try {
         New-Item -ItemType Directory -Force -Path $stage | Out-Null
         try {
             Copy-Item -LiteralPath $built -Destination (Join-Path $stage "Ember.exe")
+            Copy-Item -LiteralPath $builtRuntime -Destination (Join-Path $stage "ember-lab.exe")
             Write-AtomicJson (Join-Path $stage "version.json") ([ordered]@{
-                schema_version = 1; source_commit = $commit; executable_sha256 = $hash
+                schema_version = 2; source_commit = $commit; executable_sha256 = $hash
                 executable_relative_path = "Ember.exe"; published_at_utc = [DateTime]::UtcNow.ToString("o")
+                runtime_sha256 = $runtimeHash; runtime_relative_path = "ember-lab.exe"
             })
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $versionRoot) | Out-Null
             Move-Item -LiteralPath $stage -Destination $versionRoot
@@ -354,8 +368,9 @@ try {
     $prior = Read-Current $root
     $previous = if ($null -eq $prior -or $prior.source_commit -eq $commit) { "" } else { $prior.source_commit }
     $manifest = [ordered]@{
-        schema_version = 1; source_commit = $commit; executable_sha256 = $hash
+        schema_version = 2; source_commit = $commit; executable_sha256 = $hash
         executable_relative_path = "versions/$commit/Ember.exe"; installed_at_utc = [DateTime]::UtcNow.ToString("o")
+        runtime_sha256 = $runtimeHash; runtime_relative_path = "versions/$commit/ember-lab.exe"
         previous_source_commit = $previous
     }
     Install-StableFiles $root

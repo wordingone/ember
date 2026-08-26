@@ -18,7 +18,7 @@
 // repo-guard.sh's cockpit-state check only sees the directory once it is already resident.
 //
 // Resolution order:
-//   1. `EMBER_STATE_ROOT` — used VERBATIM. scripts/launch-ember-cli.ps1 computes the root
+//   1. `EMBER_STATE_ROOT` — used VERBATIM. scripts/prepare-ember-cockpit.ps1 computes the root
 //      and exports it into the cockpit child, so at runtime there is exactly one authority
 //      for the location and every cwd inside a session collapses onto it.
 //   2. `<EMBER_HOME>/cockpit-state/<repoStateKey(root)>` when EMBER_HOME is explicit.
@@ -27,7 +27,7 @@
 //      retain the user config-home fallback. The per-root key keeps checkouts disjoint.
 //
 // The default's key derivation is mirrored by Get-EmberStateRootKey in
-// scripts/launch-ember-cli.ps1, AND by _repo_state_key in scripts/cockpit_watchdog.py (#413:
+// scripts/prepare-ember-cockpit.ps1, AND by _repo_state_key in scripts/cockpit_watchdog.py (#413:
 // the renderer-heartbeat reader needs the same default the writer resolves to, since nothing
 // exports EMBER_STATE_ROOT into the watchdog's own launch environment). Three
 // implementations, not two — TS, PowerShell, Python — all pinned to the same fixture vectors
