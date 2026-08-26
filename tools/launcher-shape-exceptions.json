@@ -7,7 +7,7 @@
   "exceptions": [
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "35a8291dd351795833c6f4fdcb45a32f8426c6d4db3488fd46d1d3d52d06e6ae",
+      "sha256": "37ca8853fa3f8df24646c40f991a3a801fac95b7bac977de11659c064a4de0c9",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
