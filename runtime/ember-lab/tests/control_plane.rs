@@ -994,6 +994,60 @@ fn resource_guard_refusal_precedes_host_cap_and_carries_its_measurement() {
 }
 
 #[cfg(windows)]
+#[test]
+fn resource_guard_refusal_survives_a_host_commit_measurement_failure() {
+    let root = sandbox("resource-guard-precedes-host-measurement-failure");
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open_with_resource_guard_seed(&db, Ok(test_host_capacity())).unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state SET admission_state='frozen',reason='sticky_guard_fixture',observed_at_ms=100,oracle_evidence_required=1,observation_json=?1 WHERE singleton=1",
+            [json!({"result":"FROZEN"}).to_string()],
+        )
+        .unwrap();
+    let manifest = write_restore_manifest(
+        &root,
+        "resource-guard-precedes-host-measurement-failure-job",
+    );
+    let payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64,
+        |_root| Ok(16 * 1024 * 1024 * 1024),
+        || Ok(2 * 1024 * 1024 * 1024),
+        || {
+            Err(EmberLabError::InvalidDispatchManifest {
+                detail: "host commit measurement unavailable".into(),
+            })
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(EmberLabError::ResourceAdmissionFrozen { .. })
+    ));
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(PathBuf::from(
+            payload["preflight_receipt"].as_str().unwrap(),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["result"], "REFUSED_RESOURCE_GUARD_FROZEN");
+    assert_eq!(receipt["resource_guard"]["reason"], "sticky_guard_fixture");
+    assert_eq!(receipt["foreign_process_pressure_refusal"], false);
+    assert_eq!(receipt["host_commit"]["measurement_available"], false);
+    assert!(receipt["host_commit"]["measurement_error"]
+        .as_str()
+        .unwrap()
+        .contains("host commit measurement unavailable"));
+}
+
+#[cfg(windows)]
 fn set_foreign_pressure_state(db: &Path, state: &str, result: &str) {
     let mut observation = json!({
         "schema_version": "ember-lab-foreign-process-pressure-observation-v1",
