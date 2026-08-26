@@ -204,7 +204,7 @@ jobs:
       # Keep the merge gate executable and deterministic by naming only the
       # independently green suites that protect load-bearing production paths,
       # rather than making every PR inherit that historical failure surface.
-      - run: bun run test -- build-tools/lifecycle-smoke.test.ts commands/train.test.ts
+      - run: bun run test -- build-tools/lifecycle-smoke.test.ts build-tools/drive-job-memory-probe.test.ts commands/train.test.ts
       # The launcher compiles the cockpit straight into its external state root by
       # setting EMBER_BUILD_OUTFILE (#1330). Nothing in CI exercised that override, so
       # a regression in it only surfaced on a real launch. This runs BEFORE the default
