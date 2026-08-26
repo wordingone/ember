@@ -454,6 +454,9 @@ pub enum JobState {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostCommitCapacity {
+    pub basis: String,
+    pub sampled_at_ms: i64,
+    pub snapshot_sha256: String,
     pub physical_ram_bytes: u64,
     pub physical_available_bytes: u64,
     pub pagefile_maximum_bytes: u64,
@@ -464,6 +467,12 @@ pub struct HostCommitCapacity {
     pub current_commit_remaining_bytes: u64,
     pub maximum_commit_capacity_bytes: u64,
     pub available_maximum_commit_bytes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PagefileMaximum {
+    Fixed(u64),
+    SystemManaged,
 }
 
 impl JobState {
@@ -3911,7 +3920,9 @@ impl Daemon {
         let host_commit_measurement = free_host_commit();
         let host_commit_receipt = match &host_commit_measurement {
             Ok(host_commit) => json!({
-                "basis": "maximum_configured_capacity",
+                "basis": host_commit.basis,
+                "sampled_at_ms": host_commit.sampled_at_ms,
+                "snapshot_sha256": host_commit.snapshot_sha256,
                 "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
                 "observed_available_maximum_commit_bytes": host_commit.available_maximum_commit_bytes,
                 "physical_ram_bytes": host_commit.physical_ram_bytes,
@@ -4301,6 +4312,63 @@ impl Daemon {
             &verified_bindings,
             &custody_root,
         )?;
+        // Re-read the live commit snapshot after every potentially slow disk,
+        // VRAM, binding, and argument check.  This is the admission sample
+        // that authorizes the immediately following spawn; the earlier read
+        // exists only to fail fast and populate preflight refusal receipts.
+        let host_commit = free_host_commit()?;
+        let observed_available_maximum_commit_bytes = host_commit.available_maximum_commit_bytes;
+        let derived_maximum = manifest
+            .required_available_maximum_commit_bytes
+            .checked_sub(DISPATCH_HOST_COMMIT_RESERVE_BYTES);
+        let peak_relation_admitted = manifest.simulated_peak_commit_bytes
+            <= manifest.maximum_job_memory_bytes
+            || manifest.workload_profile.profile_id
+                == DispatchWorkloadProfileId::JobMemoryCeilingProbe;
+        if derived_maximum != Some(manifest.maximum_job_memory_bytes)
+            || observed_available_maximum_commit_bytes
+                < manifest.required_available_maximum_commit_bytes
+            || !peak_relation_admitted
+        {
+            let refusal = json!({
+                "schema_version": "ember-lab-dispatch-preflight-v1",
+                "result": "REFUSED_HOST_COMMIT_CAP",
+                "job_id": &manifest.job_id,
+                "source_commit": &manifest.source_commit,
+                "observed_at_ms": observed_at_ms,
+                "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+                "host_commit": {
+                    "basis": host_commit.basis,
+                    "sampled_at_ms": host_commit.sampled_at_ms,
+                    "snapshot_sha256": host_commit.snapshot_sha256,
+                    "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
+                    "observed_available_maximum_commit_bytes": host_commit.available_maximum_commit_bytes,
+                    "physical_ram_bytes": host_commit.physical_ram_bytes,
+                    "physical_available_bytes": host_commit.physical_available_bytes,
+                    "pagefile_maximum_bytes": host_commit.pagefile_maximum_bytes,
+                    "pagefile_configuration_source": host_commit.pagefile_configuration_source,
+                    "pagefile_configuration_sha256": host_commit.pagefile_configuration_sha256,
+                    "commit_total_bytes": host_commit.commit_total_bytes,
+                    "current_commit_limit_bytes": host_commit.current_commit_limit_bytes,
+                    "current_commit_remaining_bytes": host_commit.current_commit_remaining_bytes,
+                    "maximum_commit_capacity_bytes": host_commit.maximum_commit_capacity_bytes,
+                    "reserve_bytes": DISPATCH_HOST_COMMIT_RESERVE_BYTES,
+                    "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+                    "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
+                },
+            });
+            atomic_replace(&receipt_path, &serde_json::to_vec(&refusal)?)?;
+            return Err(EmberLabError::DispatchHostCommitReserve {
+                required_available_maximum_commit_bytes: manifest
+                    .required_available_maximum_commit_bytes,
+                observed_available_maximum_commit_bytes,
+                reserve_bytes: DISPATCH_HOST_COMMIT_RESERVE_BYTES,
+                maximum_job_memory_bytes: manifest.maximum_job_memory_bytes,
+                simulated_peak_commit_bytes: manifest.simulated_peak_commit_bytes,
+                receipt_path,
+            });
+        }
+        let spawn_authorized_at_ms = now_ms();
         let manifest_sha256 = hash_bytes(manifest_bytes);
         let args_sha256 = hash_bytes(&serde_json::to_vec(&manifest.args)?);
         let env_sha256 = hash_bytes(&serde_json::to_vec(&manifest.env)?);
@@ -4324,7 +4392,10 @@ impl Daemon {
             "disk_write_walls": disk_wall_receipts,
             "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
             "host_commit": {
-                "basis": "maximum_configured_capacity",
+                "basis": host_commit.basis,
+                "sampled_at_ms": host_commit.sampled_at_ms,
+                "snapshot_sha256": host_commit.snapshot_sha256,
+                "spawn_authorized_at_ms": spawn_authorized_at_ms,
                 "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
                 "observed_available_maximum_commit_bytes": observed_available_maximum_commit_bytes,
                 "physical_ram_bytes": host_commit.physical_ram_bytes,
@@ -8709,46 +8780,21 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
         physical_available_bytes.ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "Windows host commit probe overflowed physical available bytes".into(),
         })?;
-    let (pagefile_maximum_bytes, pagefile_configuration_sha256) =
-        configured_pagefile_maximum_bytes()?;
-    let maximum_commit_capacity_bytes = physical_ram_bytes
-        .checked_add(pagefile_maximum_bytes)
-        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
-            detail: "Windows maximum commit capacity overflowed bytes".into(),
-        })?;
-    if maximum_commit_capacity_bytes < current_commit_limit_bytes {
-        return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "configured pagefile maximum is below the live Windows commit limit".into(),
-        });
-    }
-    if maximum_commit_capacity_bytes < commit_total_bytes {
-        return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "live committed bytes exceed configured maximum commit capacity".into(),
-        });
-    }
-    let current_commit_remaining_bytes = current_commit_limit_bytes
-        .checked_sub(commit_total_bytes)
-        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
-            detail: "live committed bytes exceed current Windows commit limit".into(),
-        })?;
-    Ok(HostCommitCapacity {
+    let (pagefile_maximum, pagefile_configuration_sha256) =
+        configured_pagefile_maximum()?;
+    host_commit_capacity_from_windows_snapshot(
         physical_ram_bytes,
         physical_available_bytes,
-        pagefile_maximum_bytes,
-        pagefile_configuration_source:
-            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
-                .into(),
-        pagefile_configuration_sha256,
         commit_total_bytes,
         current_commit_limit_bytes,
-        current_commit_remaining_bytes,
-        maximum_commit_capacity_bytes,
-        available_maximum_commit_bytes: maximum_commit_capacity_bytes - commit_total_bytes,
-    })
+        pagefile_maximum,
+        pagefile_configuration_sha256,
+        now_ms(),
+    )
 }
 
 #[cfg(windows)]
-fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
+fn configured_pagefile_maximum() -> Result<(PagefileMaximum, String)> {
     use windows_sys::Win32::Foundation::ERROR_SUCCESS;
     use windows_sys::Win32::System::Registry::{
         RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_MULTI_SZ,
@@ -8811,39 +8857,127 @@ fn configured_pagefile_maximum_bytes() -> Result<(u64, String)> {
             Ok(text)
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok((
-        pagefile_maximum_bytes_from_entries(&entries)?,
-        configuration_sha256,
-    ))
+    Ok((pagefile_maximum_from_entries(&entries)?, configuration_sha256))
 }
 
-fn pagefile_maximum_bytes_from_entries(entries: &[String]) -> Result<u64> {
+fn pagefile_maximum_from_entries(entries: &[String]) -> Result<PagefileMaximum> {
+    if entries.is_empty() {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "no pagefile configuration is present".into(),
+        });
+    }
     let mut total_mib = 0u64;
+    let mut system_managed = 0usize;
     for text in entries {
-        let maximum_mib = text
-            .split_whitespace()
-            .next_back()
-            .and_then(|value| value.parse::<u64>().ok())
-            .filter(|value| *value > 0)
-            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
-                detail: "pagefile setting is not a fixed positive maximum".into(),
-            })?;
+        let fields = text.split_whitespace().collect::<Vec<_>>();
+        if fields.len() != 3 {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "pagefile setting must contain path, initial MiB, and maximum MiB".into(),
+            });
+        }
+        let initial_mib = fields[1].parse::<u64>().map_err(|_| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "pagefile initial size is not an unsigned MiB value".into(),
+            }
+        })?;
+        let maximum_mib = fields[2].parse::<u64>().map_err(|_| {
+            EmberLabError::InvalidDispatchManifest {
+                detail: "pagefile maximum is not an unsigned MiB value".into(),
+            }
+        })?;
+        if initial_mib == 0 && maximum_mib == 0 {
+            system_managed += 1;
+            continue;
+        }
+        if maximum_mib == 0 || initial_mib > maximum_mib {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "pagefile setting is not a valid fixed maximum".into(),
+            });
+        }
         total_mib = total_mib.checked_add(maximum_mib).ok_or_else(|| {
             EmberLabError::InvalidDispatchManifest {
                 detail: "pagefile maximum overflowed MiB".into(),
             }
         })?;
     }
-    if total_mib == 0 {
+    if system_managed == entries.len() {
+        return Ok(PagefileMaximum::SystemManaged);
+    }
+    if system_managed != 0 {
         return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "no fixed pagefile maximum is configured".into(),
+            detail: "mixed fixed and system-managed pagefile settings are ambiguous".into(),
         });
     }
-    total_mib
+    let bytes = total_mib
         .checked_mul(1024 * 1024)
         .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
             detail: "pagefile maximum overflowed bytes".into(),
-        })
+        })?;
+    Ok(PagefileMaximum::Fixed(bytes))
+}
+
+fn host_commit_capacity_from_windows_snapshot(
+    physical_ram_bytes: u64,
+    physical_available_bytes: u64,
+    commit_total_bytes: u64,
+    current_commit_limit_bytes: u64,
+    pagefile_maximum: PagefileMaximum,
+    pagefile_configuration_sha256: String,
+    sampled_at_ms: i64,
+) -> Result<HostCommitCapacity> {
+    if physical_ram_bytes == 0
+        || current_commit_limit_bytes == 0
+        || physical_available_bytes > physical_ram_bytes
+        || commit_total_bytes > current_commit_limit_bytes
+        || sampled_at_ms <= 0
+    {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "live Windows commit snapshot is unavailable or implausible".into(),
+        });
+    }
+    let (basis, pagefile_maximum_bytes, maximum_commit_capacity_bytes) =
+        match pagefile_maximum {
+            PagefileMaximum::Fixed(pagefile_maximum_bytes) => {
+                let maximum = physical_ram_bytes
+                    .checked_add(pagefile_maximum_bytes)
+                    .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                        detail: "Windows maximum commit capacity overflowed bytes".into(),
+                    })?;
+                if maximum < current_commit_limit_bytes || maximum < commit_total_bytes {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: "configured pagefile maximum is below live Windows commit usage"
+                            .into(),
+                    });
+                }
+                ("maximum_configured_capacity", pagefile_maximum_bytes, maximum)
+            }
+            PagefileMaximum::SystemManaged => (
+                "live_commit_limit_system_managed",
+                0,
+                current_commit_limit_bytes,
+            ),
+        };
+    let current_commit_remaining_bytes = current_commit_limit_bytes - commit_total_bytes;
+    let snapshot_bytes = format!(
+        "basis={basis}\nphysical_ram_bytes={physical_ram_bytes}\nphysical_available_bytes={physical_available_bytes}\ncommit_total_bytes={commit_total_bytes}\ncurrent_commit_limit_bytes={current_commit_limit_bytes}\npagefile_configuration_sha256={pagefile_configuration_sha256}\nsampled_at_ms={sampled_at_ms}\n"
+    );
+    Ok(HostCommitCapacity {
+        basis: basis.into(),
+        sampled_at_ms,
+        snapshot_sha256: hash_bytes(snapshot_bytes.as_bytes()),
+        physical_ram_bytes,
+        physical_available_bytes,
+        pagefile_maximum_bytes,
+        pagefile_configuration_source:
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles"
+                .into(),
+        pagefile_configuration_sha256,
+        commit_total_bytes,
+        current_commit_limit_bytes,
+        current_commit_remaining_bytes,
+        maximum_commit_capacity_bytes,
+        available_maximum_commit_bytes: maximum_commit_capacity_bytes - commit_total_bytes,
+    })
 }
 
 /// Linux commit-capacity probe, read from `/proc/meminfo`. Field mapping
@@ -8898,6 +9032,9 @@ pub fn probe_host_commit_capacity() -> Result<HostCommitCapacity> {
         .checked_sub(commit_total_bytes)
         .unwrap_or(0);
     Ok(HostCommitCapacity {
+        basis: "physical_ram_plus_swap_total".into(),
+        sampled_at_ms: now_ms(),
+        snapshot_sha256: hash_bytes(raw.as_bytes()),
         physical_ram_bytes,
         physical_available_bytes,
         pagefile_maximum_bytes,
@@ -15142,31 +15279,90 @@ mod dispatch_binding_snapshot_tests {
     }
 
     #[test]
-    fn fixed_pagefile_maxima_are_parsed_and_system_managed_values_fail_closed() {
+    fn fixed_and_system_managed_pagefile_modes_are_distinguished() {
         let fixed = vec![r"C:\pagefile.sys 16384 32768".to_string()];
         assert_eq!(
-            pagefile_maximum_bytes_from_entries(&fixed).unwrap(),
-            32 * 1024 * 1024 * 1024
+            pagefile_maximum_from_entries(&fixed).unwrap(),
+            PagefileMaximum::Fixed(32 * 1024 * 1024 * 1024)
         );
         let multiple = vec![
             r"C:\pagefile.sys 1024 4096".to_string(),
             r"D:\pagefile.sys 2048 8192".to_string(),
         ];
         assert_eq!(
-            pagefile_maximum_bytes_from_entries(&multiple).unwrap(),
-            12 * 1024 * 1024 * 1024
+            pagefile_maximum_from_entries(&multiple).unwrap(),
+            PagefileMaximum::Fixed(12 * 1024 * 1024 * 1024)
         );
+        assert_eq!(
+            pagefile_maximum_from_entries(&[r"D:\pagefile.sys 0 0".to_string()]).unwrap(),
+            PagefileMaximum::SystemManaged
+        );
+    }
+
+    #[test]
+    fn malformed_non_system_managed_pagefile_entries_fail_closed() {
         for invalid in [
-            vec![r"C:\pagefile.sys 0 0".to_string()],
             vec![r"C:\pagefile.sys malformed".to_string()],
+            vec![r"C:\pagefile.sys nope 8192".to_string()],
+            vec![r"C:\pagefile.sys 8192 nope".to_string()],
+            vec![r"C:\pagefile.sys 8192 4096".to_string()],
+            vec![
+                r"C:\pagefile.sys 1024 4096".to_string(),
+                r"D:\pagefile.sys 0 0".to_string(),
+            ],
             Vec::new(),
         ] {
-            assert!(pagefile_maximum_bytes_from_entries(&invalid).is_err());
+            assert!(pagefile_maximum_from_entries(&invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn system_managed_basis_uses_and_hashes_the_live_commit_limit() {
+        let capacity = host_commit_capacity_from_windows_snapshot(
+            64 * 1024 * 1024 * 1024,
+            32 * 1024 * 1024 * 1024,
+            40 * 1024 * 1024 * 1024,
+            80 * 1024 * 1024 * 1024,
+            PagefileMaximum::SystemManaged,
+            "b".repeat(64),
+            1_000,
+        )
+        .unwrap();
+        assert_eq!(capacity.basis, "live_commit_limit_system_managed");
+        assert_eq!(capacity.maximum_commit_capacity_bytes, 80 * 1024 * 1024 * 1024);
+        assert_eq!(capacity.available_maximum_commit_bytes, 40 * 1024 * 1024 * 1024);
+        assert_eq!(capacity.pagefile_maximum_bytes, 0);
+        assert_eq!(capacity.sampled_at_ms, 1_000);
+        assert_eq!(capacity.snapshot_sha256.len(), 64);
+    }
+
+    #[test]
+    fn system_managed_basis_refuses_an_unusable_live_snapshot() {
+        for (physical, available, committed, limit, sampled_at_ms) in [
+            (0, 0, 0, 1, 1),
+            (1, 2, 0, 1, 1),
+            (1, 1, 2, 1, 1),
+            (1, 1, 0, 0, 1),
+            (1, 1, 0, 1, 0),
+        ] {
+            assert!(host_commit_capacity_from_windows_snapshot(
+                physical,
+                available,
+                committed,
+                limit,
+                PagefileMaximum::SystemManaged,
+                "c".repeat(64),
+                sampled_at_ms,
+            )
+            .is_err());
         }
     }
 
     fn healthy_host_capacity() -> HostCommitCapacity {
         HostCommitCapacity {
+            basis: "maximum_configured_capacity".into(),
+            sampled_at_ms: now_ms(),
+            snapshot_sha256: "b".repeat(64),
             physical_ram_bytes: 64 * 1024 * 1024 * 1024,
             physical_available_bytes: 32 * 1024 * 1024 * 1024,
             pagefile_maximum_bytes: 64 * 1024 * 1024 * 1024,

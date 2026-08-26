@@ -27,6 +27,9 @@ const CPU_RATE_PERCENT: u32 = 25;
 
 fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
     HostCommitCapacity {
+        basis: "maximum_configured_capacity".to_string(),
+        sampled_at_ms: 10_000,
+        snapshot_sha256: "c".repeat(64),
         physical_ram_bytes: 64 * GIB,
         physical_available_bytes: 32 * GIB,
         pagefile_maximum_bytes: 32 * GIB,
@@ -667,15 +670,24 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     let root = sandbox("green");
     let manifest = write_manifest(&root, "dispatch-green", 10_000);
     let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let host_probe_calls = std::cell::Cell::new(0_u32);
     let outcome = daemon
         .dispatch_manifest_at_with_probes_and_host(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            || {
+                let call = host_probe_calls.get() + 1;
+                host_probe_calls.set(call);
+                let mut capacity = host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES);
+                capacity.sampled_at_ms = 10_000 + i64::from(call);
+                capacity.snapshot_sha256 = format!("{call:064x}");
+                Ok(capacity)
+            },
         )
         .unwrap();
+    assert_eq!(host_probe_calls.get(), 2, "host commit must be re-read near spawn");
     assert!(outcome.handle.pid > 0);
     assert_eq!(
         daemon.job_state("dispatch-green").unwrap(),
@@ -747,6 +759,12 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
         receipt["host_commit"]["basis"],
         "maximum_configured_capacity"
     );
+    assert_eq!(receipt["host_commit"]["sampled_at_ms"], 10_002);
+    assert_eq!(receipt["host_commit"]["snapshot_sha256"], format!("{:064x}", 2));
+    assert!(receipt["host_commit"]["spawn_authorized_at_ms"]
+        .as_i64()
+        .unwrap()
+        > 0);
     assert_eq!(
         receipt["host_commit"]["reserve_bytes"],
         HOST_COMMIT_RESERVE_BYTES
@@ -1583,6 +1601,9 @@ fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
                 || Ok(1024),
                 || {
                     Ok(HostCommitCapacity {
+                        basis: "maximum_configured_capacity".to_string(),
+                        sampled_at_ms: 10_000,
+                        snapshot_sha256: "d".repeat(64),
                         physical_ram_bytes: physical,
                         physical_available_bytes: 32 * GIB,
                         pagefile_maximum_bytes: pagefile_maximum,
