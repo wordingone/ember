@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import receipt as rcpt
+from tools.corpus_connectors import receipt as rcpt
 
 
 def _mk_receipt(dest_root: Path, **overrides) -> rcpt.Receipt:

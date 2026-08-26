@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bulk_fetch  # noqa: E402
 import chunked_download as bulk  # noqa: E402
-import receipt as rcpt  # noqa: E402
+from tools.corpus_connectors import receipt as rcpt  # noqa: E402
 from _range_fixture import start_server, stop_server  # noqa: E402
 
 

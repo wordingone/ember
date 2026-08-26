@@ -16,7 +16,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import openreview_fetch
-import receipt as rcpt
+from tools.corpus_connectors import receipt as rcpt
 
 
 class _FakeResp:

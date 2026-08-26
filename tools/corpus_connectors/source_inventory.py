@@ -17,10 +17,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-try:
-    from .receipt import L3_STATEMENT, SCHEMA_NAME, sha256_of_manifest
-except ImportError:  # direct test/module execution from this connector dir
-    from receipt import L3_STATEMENT, SCHEMA_NAME, sha256_of_manifest
+from tools.corpus_connectors.receipt import (
+    L3_STATEMENT,
+    SCHEMA_NAME,
+    sha256_of_manifest,
+)
 
 SCHEMA = "ember-authorized-source-inventory-v1"
 RECEIPT_SCHEMA = SCHEMA_NAME

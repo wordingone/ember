@@ -47,6 +47,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parents[1]
 BULK_RESOLUTION_SCHEMA = "ember-wave2-bulk-resolution-v1"
 
 CHARTER_DOMAINS = {
@@ -729,7 +730,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"# {s.name} ({','.join(s.domains)}) [{s.license_basis}]")
         print(" ".join(cmd))
         if args.execute:
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, cwd=REPO_ROOT)
     if args.include_bulk:
         if args.execute:
             for v, target_url, evidence in bulk_plan:
@@ -744,7 +745,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 ]
                 print(f"# {v.name} ({','.join(v.domains)}) [{v.license_basis}]")
                 print(" ".join(cmd))
-                subprocess.run(cmd, check=True)
+                subprocess.run(cmd, check=True, cwd=REPO_ROOT)
         for v in selected_bulk:
             if not args.execute:
                 print(f"# {v.name} ({','.join(v.domains)}) [{v.license_basis}] -- bulk vein, needs explicit resolution/evidence before dispatch")
