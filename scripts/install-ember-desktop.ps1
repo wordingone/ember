@@ -12,6 +12,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$boundRepositoryRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot)).TrimEnd('\', '/')
+$requestedRepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', '/')
+if (-not $requestedRepositoryRoot.Equals($boundRepositoryRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Installation RepositoryRoot must be the exact checkout containing this installer."
+}
 $script:ManifestFields = @("schema_version", "source_commit", "executable_sha256", "executable_relative_path", "installed_at_utc", "previous_source_commit")
 $script:VersionFields = @("schema_version", "source_commit", "executable_sha256", "executable_relative_path", "published_at_utc")
 $script:OwnerFields = @("schema_version", "product")
@@ -318,7 +323,7 @@ try {
     $status = & git -C $RepositoryRoot status --porcelain --untracked-files=no
     if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($status -join "`n"))) { throw "Installation requires a clean tracked source checkout." }
     $commit = (& git -C $RepositoryRoot rev-parse HEAD | Select-Object -First 1).Trim()
-    $lines = @(& (Join-Path $RepositoryRoot "scripts\launch-ember-cli.ps1") -PrepareApplicationOnly)
+    $lines = @(& (Join-Path $PSScriptRoot "launch-ember-cli.ps1") -PrepareApplicationOnly)
     $built = @($lines | Where-Object {
         $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_) -and
         (Test-Path -LiteralPath $_ -PathType Leaf)
