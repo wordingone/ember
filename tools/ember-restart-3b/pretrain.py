@@ -1044,12 +1044,12 @@ def trainer_optimizer_step_event(
         "trainer_process_start_token": _current_process_start_token(),
         "optimizer_step": optimizer_step,
     }
-    verify_trainer_optimizer_step_event(
+    verified = verify_trainer_optimizer_step_event(
         event,
         job_object_name=job_object_name,
         membership_query=membership_query,
     )
-    return event
+    return {**event, **verified}
 
 
 def run_pretraining_segment(
