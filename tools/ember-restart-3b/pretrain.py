@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import base64
+import ctypes
 import hashlib
 import json
 import math
+import os
 import subprocess
 import sys
 import time
@@ -38,6 +40,13 @@ ProgressCallback = Callable[[dict[str, object]], None]
 SignatureObserver = Callable[[dict[str, object]], None]
 VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
 VERIFIER_PUBLIC_PATH = "tools/ember-restart-3b/verify_capability_record.py"
+_DISPATCH_JOB_OBJECT_NAME_ENV = "EMBER_LAB_DISPATCH_JOB_OBJECT_NAME"
+_DISPATCH_CUSTODY_ENV = (
+    "EMBER_LAB_DISPATCH_JOB_ID",
+    "EMBER_LAB_DISPATCH_TOKEN",
+    "EMBER_LAB_DISPATCH_DAEMON_PID",
+    "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
+)
 
 
 def _eager_forward_loss_backward(
@@ -851,6 +860,198 @@ def _expert_routing_entropy(counts: Mapping[str, int]) -> tuple[float, dict[str,
     return entropy, utilization
 
 
+def _current_process_start_token() -> str:
+    """Return an immutable kernel start token for this trainer process."""
+
+    if os.name == "nt":
+        class _FileTime(ctypes.Structure):
+            _fields_ = (("low", ctypes.c_uint32), ("high", ctypes.c_uint32))
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.GetProcessTimes.argtypes = (
+            ctypes.c_void_p,
+            ctypes.POINTER(_FileTime),
+            ctypes.POINTER(_FileTime),
+            ctypes.POINTER(_FileTime),
+            ctypes.POINTER(_FileTime),
+        )
+        kernel32.GetProcessTimes.restype = ctypes.c_int
+        creation, exit_time, kernel_time, user_time = (_FileTime() for _ in range(4))
+        if not kernel32.GetProcessTimes(
+            kernel32.GetCurrentProcess(),
+            ctypes.byref(creation),
+            ctypes.byref(exit_time),
+            ctypes.byref(kernel_time),
+            ctypes.byref(user_time),
+        ):
+            raise RuntimeError(
+                f"trainer process start-token query failed with Win32 error {ctypes.get_last_error()}"
+            )
+        return str((int(creation.high) << 32) | int(creation.low))
+    if sys.platform.startswith("linux"):
+        fields = Path("/proc/self/stat").read_text(encoding="ascii").rsplit(")", 1)[1].split()
+        return fields[19]
+    raise RuntimeError("trainer process start-token query is unsupported on this host")
+
+
+def _query_named_job_membership(pid: int, process_start_token: str, job_object_name: str) -> bool:
+    """Query direct membership after retaining the exact trainer process identity."""
+
+    if os.name != "nt":
+        raise RuntimeError("trainer Job Object membership query requires Windows")
+    if (
+        type(pid) is not int
+        or pid < 1
+        or not isinstance(process_start_token, str)
+        or not process_start_token.isdecimal()
+        or not isinstance(job_object_name, str)
+        or not job_object_name
+    ):
+        raise RuntimeError("trainer Job Object membership query identity is invalid")
+
+    class _FileTime(ctypes.Structure):
+        _fields_ = (("low", ctypes.c_uint32), ("high", ctypes.c_uint32))
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenJobObjectW.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p)
+    kernel32.OpenJobObjectW.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetProcessTimes.argtypes = (
+        ctypes.c_void_p,
+        ctypes.POINTER(_FileTime),
+        ctypes.POINTER(_FileTime),
+        ctypes.POINTER(_FileTime),
+        ctypes.POINTER(_FileTime),
+    )
+    kernel32.GetProcessTimes.restype = ctypes.c_int
+    kernel32.IsProcessInJob.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int),
+    )
+    kernel32.IsProcessInJob.restype = ctypes.c_int
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    job = kernel32.OpenJobObjectW(0x0004, 0, job_object_name)
+    if not job:
+        raise RuntimeError(
+            f"trainer Job Object open failed with Win32 error {ctypes.get_last_error()}"
+        )
+    process = kernel32.OpenProcess(0x1000, 0, pid)
+    try:
+        if not process:
+            raise RuntimeError(
+                f"trainer process open failed with Win32 error {ctypes.get_last_error()}"
+            )
+        creation, exit_time, kernel_time, user_time = (_FileTime() for _ in range(4))
+        if not kernel32.GetProcessTimes(
+            process,
+            ctypes.byref(creation),
+            ctypes.byref(exit_time),
+            ctypes.byref(kernel_time),
+            ctypes.byref(user_time),
+        ):
+            raise RuntimeError(
+                f"trainer process start-token query failed with Win32 error {ctypes.get_last_error()}"
+            )
+        retained_start_token = str((int(creation.high) << 32) | int(creation.low))
+        if retained_start_token != process_start_token:
+            raise RuntimeError(
+                "trainer process start token changed before Job Object membership query"
+            )
+        is_member = ctypes.c_int(0)
+        if not kernel32.IsProcessInJob(process, job, ctypes.byref(is_member)):
+            raise RuntimeError(
+                f"trainer Job Object membership query failed with Win32 error {ctypes.get_last_error()}"
+            )
+        return bool(is_member.value)
+    finally:
+        if process:
+            kernel32.CloseHandle(process)
+        kernel32.CloseHandle(job)
+
+
+def verify_trainer_optimizer_step_event(
+    event: Mapping[str, object],
+    *,
+    current_pid: int | None = None,
+    job_object_name: str | None = None,
+    membership_query: Callable[[int, str, str], bool] | None = None,
+) -> dict[str, object]:
+    """Validate a trainer-authored event before admitting it to segment evidence."""
+
+    pid = os.getpid() if current_pid is None else current_pid
+    expected_keys = {
+        "event", "trainer_pid", "trainer_process_start_token", "optimizer_step",
+    }
+    if set(event) != expected_keys:
+        raise RuntimeError("trainer optimizer step event is not closed")
+    if event.get("event") != "trainer_optimizer_step":
+        raise RuntimeError("trainer optimizer step event has the wrong kind")
+    if event.get("trainer_pid") != pid:
+        raise RuntimeError("trainer PID mismatch between optimizer event and running process")
+    process_start_token = event.get("trainer_process_start_token")
+    if not isinstance(process_start_token, str) or not process_start_token.isdecimal():
+        raise RuntimeError("trainer optimizer step event has an invalid process start token")
+    optimizer_step = event.get("optimizer_step")
+    if type(optimizer_step) is not int or optimizer_step < 1:
+        raise RuntimeError("trainer optimizer step event has an invalid step")
+
+    name = (
+        os.environ.get(_DISPATCH_JOB_OBJECT_NAME_ENV)
+        if job_object_name is None
+        else job_object_name
+    )
+    if name is None:
+        if any(key in os.environ for key in _DISPATCH_CUSTODY_ENV):
+            raise RuntimeError("daemon-owned trainer Job Object identity is absent")
+        return {
+            "trainer_pid": pid,
+            "trainer_process_start_token": process_start_token,
+            "optimizer_step": optimizer_step,
+            "direct_membership_query_succeeded": False,
+        }
+    if not isinstance(name, str) or not name:
+        raise RuntimeError("daemon-owned trainer Job Object identity is invalid")
+    query = _query_named_job_membership if membership_query is None else membership_query
+    if query(pid, process_start_token, name) is not True:
+        raise RuntimeError("trainer process is not a member of the directly queried Job Object")
+    return {
+        "trainer_pid": pid,
+        "trainer_process_start_token": process_start_token,
+        "optimizer_step": optimizer_step,
+        "job_object_name": name,
+        "direct_membership_query_succeeded": True,
+        "trainer_is_member": True,
+    }
+
+
+def trainer_optimizer_step_event(
+    optimizer_step: int,
+    *,
+    job_object_name: str | None = None,
+    membership_query: Callable[[int, str, str], bool] | None = None,
+) -> dict[str, object]:
+    """Return a validated event from the process that called optimizer.step()."""
+
+    if type(optimizer_step) is not int or optimizer_step < 1:
+        raise ValueError("trainer optimizer step must be a positive integer")
+    event: dict[str, object] = {
+        "event": "trainer_optimizer_step",
+        "trainer_pid": os.getpid(),
+        "trainer_process_start_token": _current_process_start_token(),
+        "optimizer_step": optimizer_step,
+    }
+    verify_trainer_optimizer_step_event(
+        event,
+        job_object_name=job_object_name,
+        membership_query=membership_query,
+    )
+    return event
+
+
 def run_pretraining_segment(
     *,
     model: UnifiedDecoder,
@@ -971,6 +1172,7 @@ def run_pretraining_segment(
         del prepared_batches
     elapsed_step_seconds = 0.0
     step_timings_seconds: list[float] = []
+    optimizer_step_events: list[dict[str, object]] = []
     for local_step, record in enumerate(remaining_records, start=1):
         step_started = time.perf_counter()
         batch = decode_owned_batch(record, config, device=device)
@@ -1017,6 +1219,9 @@ def run_pretraining_segment(
         optimizer.step()
         if stage2_executor is not None:
             stage2_executor.after_optimizer_step()
+        optimizer_event = trainer_optimizer_step_event(initial_global_step + local_step)
+        optimizer_step_events.append(optimizer_event)
+        print(json.dumps(optimizer_event, sort_keys=True, separators=(",", ":")), flush=True)
         if device.type == "cuda":
             torch.cuda.synchronize(device)
         losses.append(float(loss.detach().cpu()))
@@ -1082,6 +1287,7 @@ def run_pretraining_segment(
             (tokens_seen - initial_tokens_seen) / elapsed_step_seconds
             if elapsed_step_seconds > 0.0 else 0.0
         ),
+        "optimizer_step_events": optimizer_step_events,
         "stage2_runtime": stage2_executor.receipt() if stage2_executor is not None else None,
     }
 
