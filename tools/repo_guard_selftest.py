@@ -36,6 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 GUARD_SUPPORT_FILES = [
     ".gitattributes",
     "tools/repo-guard.sh",
+    "tools/powershell-launcher-shape-guard.ps1",
     "tools/run-python-hidden.sh",
     "tools/check_line_endings.py",
     "tools/check_text_encoding.py",
@@ -1428,6 +1429,210 @@ def test_red_powershell_named_launcher_shape():
         cleanup(tmp)
 
 
+def test_red_powershell_direct_invocation_launcher_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-direct-launcher")
+    try:
+        (tmp / "scripts" / "operator-direct-launch.ps1").write_text(
+            r"C:\Tools\ordinary-worker.exe --quiet" "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-direct-launch.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_direct_invocation_training_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-direct-training")
+    try:
+        (tmp / "scripts" / "operator-direct.ps1").write_text(
+            r"C:\Python310\python.exe scripts/certified_train_launch.py --execute" "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-direct.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_powershell_direct_invocation_tokens_in_data():
+    tmp = make_fixture("fix/selftest-green-powershell-direct-data")
+    try:
+        (tmp / "scripts" / "operator-document-launch.ps1").write_text(
+            r"# C:\Tools\commented.exe is documentation only" "\n"
+            r"$example = 'C:\Tools\string-literal.exe'" "\n"
+            r"Write-Host 'C:\Tools\displayed.exe'" "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected zero exit, got {rc}\n{out}"
+        assert "ok   [launcher-shape]" in out, out
+        assert "FAIL [launcher-shape]" not in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_assignment_capture_launcher_shape():
+    tmp = make_fixture("fix/selftest-known-gap-powershell-assignment-capture")
+    try:
+        (tmp / "scripts" / "operator-capture-launch.ps1").write_text(
+            "$out = python scripts/certified_train_launch.py --repo $repo\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-capture-launch.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_dynamic_call_operator_launcher_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-dynamic-call")
+    try:
+        (tmp / "scripts" / "operator-dynamic.ps1").write_text(
+            "$cmd = 'python'\n& $cmd scripts/certified_train_launch.py\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-dynamic.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_opaque_dynamic_command_target():
+    tmp = make_fixture("fix/selftest-red-powershell-opaque-dynamic")
+    try:
+        (tmp / "scripts" / "operator-policy.ps1").write_text(
+            "param([string]$cmd, [string]$args)\n& $cmd $args\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-policy.ps1" in out, out
+        # A launcher failure must accumulate rather than enabling shell-wide
+        # errexit: the load-bearing authority leg still has to execute.
+        assert "ok   [authority]" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_script_root_target_must_exist_in_tree():
+    tmp = make_fixture("fix/selftest-red-powershell-missing-script-root-target")
+    try:
+        (tmp / "scripts" / "operator-policy.ps1").write_text(
+            '& (Join-Path $PSScriptRoot "missing-launch.ps1")\n',
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-policy.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_ast_engine_absence_refuses():
+    """The no-engine branch bypasses scanner execution entirely.
+
+    It proves fail-closed engine selection, but intentionally does not stand in
+    for the dynamic-target red above, which exercises a nonzero scanner result
+    and proves later guard legs still run.
+    """
+    tmp = make_fixture("fix/selftest-red-powershell-no-ast-engine")
+    try:
+        (tmp / "scripts" / "operator-policy.ps1").write_text(
+            "Write-Output 'no child launch here'\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(
+            tmp,
+            extra_env={"REPO_GUARD_DISABLE_POWERSHELL_AST_ENGINE": "1"},
+        )
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "REFUSED: no PowerShell AST engine is available" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_green_powershell_script_root_target_is_digest_adjudicated():
+    tmp = make_fixture("fix/selftest-green-powershell-script-root-target")
+    try:
+        target = tmp / "scripts" / "launch-ember-cli.ps1"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / "scripts" / "launch-ember-cli.ps1", target)
+        (tmp / "scripts" / "operator-policy.ps1").write_text(
+            '& (Join-Path (Split-Path $PSCommandPath) "launch-ember-cli.ps1") -PrepareApplicationOnly\n',
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc == 0, f"expected zero exit, got {rc}\n{out}"
+        assert "ok   [launcher-shape]" in out, out
+        assert "FAIL [launcher-shape]" not in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_process_start_member_launcher_shape():
+    tmp = make_fixture("fix/selftest-red-powershell-process-start-member")
+    try:
+        (tmp / "scripts" / "operator-member.ps1").write_text(
+            "[System.Diagnostics.Process]::Start('python.exe', 'train.py')\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-member.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_malformed_source_refuses_even_when_not_named_launcher():
+    tmp = make_fixture("fix/selftest-red-powershell-malformed")
+    try:
+        (tmp / "scripts" / "operator-policy.ps1").write_text(
+            "if ($true) {\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "PowerShell source could not be safely parsed" in out, out
+        assert "scripts/operator-policy.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
 ALL_TESTS = [
     test_red_name_via_hash_match,
     test_red_absolute_path_single_separator,
@@ -1475,6 +1680,17 @@ ALL_TESTS = [
     test_red_powershell_launcher_shape,
     test_red_powershell_launcher_shape_preceding_assignment,
     test_red_powershell_named_launcher_shape,
+    test_red_powershell_direct_invocation_launcher_shape,
+    test_red_powershell_direct_invocation_training_shape,
+    test_green_powershell_direct_invocation_tokens_in_data,
+    test_red_powershell_assignment_capture_launcher_shape,
+    test_red_powershell_dynamic_call_operator_launcher_shape,
+    test_red_powershell_opaque_dynamic_command_target,
+    test_red_powershell_script_root_target_must_exist_in_tree,
+    test_red_powershell_ast_engine_absence_refuses,
+    test_green_powershell_script_root_target_is_digest_adjudicated,
+    test_red_powershell_process_start_member_launcher_shape,
+    test_red_powershell_malformed_source_refuses_even_when_not_named_launcher,
 ]
 
 

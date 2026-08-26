@@ -74,7 +74,12 @@ def load_frontier_module():
     spec = importlib.util.spec_from_file_location("frontier_receipt_under_test", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(path.parent))
+    try:
+        importlib.invalidate_caches()
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 
@@ -285,6 +290,18 @@ def _write_custody_sidecars(paths: dict[str, pathlib.Path]) -> None:
     )
     paths["binding_map"] = binding_path
     paths["custody_receipt"] = receipt_path
+
+
+def _rewrite_run_spec_with_custody(
+    paths: dict[str, pathlib.Path], mutate
+) -> dict[str, object]:
+    """Mutate a fixture run spec and refresh the receipt that binds its bytes."""
+
+    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+    mutate(run_spec)
+    write_json(paths["run_spec"], run_spec)
+    _write_custody_sidecars(paths)
+    return run_spec
 
 
 def rewrite_certificate(
@@ -1502,11 +1519,17 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertEqual({row["run_root_name"] for row in rows}, {paths["custody_root"].name})
             self.assertEqual(
                 [row["launch_receipt_ref"] for row in rows],
-                ["run-spec.json", "runner-receipt.json"],
+                [
+                    "owned-3b-canary-test/launch-authority/run-spec.json",
+                    "runner-receipt.json",
+                ],
             )
             self.assertEqual(
                 [row["source_receipt"] for row in rows],
-                ["run-spec.json", "runner-receipt.json"],
+                [
+                    "owned-3b-canary-test/launch-authority/run-spec.json",
+                    "runner-receipt.json",
+                ],
             )
             self.assertIsNone(rows[0]["end_utc"])
             self.assertIsInstance(rows[1]["end_utc"], str)
@@ -1876,6 +1899,7 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_direct_cli_scope_escalation_is_refused_at_dispatch_before_runner_receipt(self) -> None:
+        module = load_module()
         current_master = subprocess.run(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
             check=True,
@@ -1901,29 +1925,38 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             request["requested_scope"]["active_expert_families"] = 2
             write_json(paths["run_spec"], request)
 
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(MODULE_PATH),
-                    "--root",
-                    str(ROOT),
-                    "--certificate",
-                    str(paths["certificate"]),
-                    "--declaration-ledger",
-                    str(paths["ledger"]),
-                    "--run-spec",
-                    str(paths["run_spec"]),
-                    "--custody-receipt-sha256",
-                    hashlib.sha256(paths["custody_receipt"].read_bytes()).hexdigest(),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-                shell=False,
-            )
+            argv = [
+                "--root",
+                str(ROOT),
+                "--certificate",
+                str(paths["certificate"]),
+                "--declaration-ledger",
+                str(paths["ledger"]),
+                "--run-spec",
+                str(paths["run_spec"]),
+                "--custody-receipt-sha256",
+                hashlib.sha256(paths["custody_receipt"].read_bytes()).hexdigest(),
+            ]
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if key != "EMBER_LAB_PIPE"
+                and not key.startswith("EMBER_LAB_DISPATCH_")
+            }
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                result = module.main(argv)
 
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("EMBER_LAB_DISPATCH_REQUIRED", result.stdout + result.stderr)
+            self.assertEqual(result, 2)
+            self.assertIn(
+                "EMBER_LAB_DISPATCH_REQUIRED",
+                stdout.getvalue() + stderr.getvalue(),
+            )
             self.assertFalse(
                 (paths["custody_root"] / "runner-receipt.json").exists()
             )
@@ -2288,6 +2321,11 @@ class GuardFloorCertificateTests(unittest.TestCase):
     }
 
     def _mutate_guard_floor(self, paths: dict[str, pathlib.Path], extra=None) -> None:
+        shutil.copy2(
+            paths["completion"],
+            paths["certificate"].parent / "ember-01-completion.json",
+        )
+
         def mutate(certificate: dict) -> None:
             certificate.update(self.GUARD_FLOOR)
             certificate["completion_receipt_path"] = "ember-01-completion.json"
@@ -2434,6 +2472,25 @@ class GuardFloorCertificateTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "completion_receipt_path must not name a drive or root anchor"
                 ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_nested_packet_path(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "receipts/ember-01-completion.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "must directly name a file"):
                     module.validate_certified_request(
                         paths["repo"],
                         paths["certificate"],
@@ -2835,6 +2892,11 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "a1_sequence_length",
                 "a1_checkpoint_interval",
                 "a1_telemetry_path",
+                "a1_tier2_contract",
+                "a1_tier2_contract_sha256",
+                "a1_liveness_receipt",
+                "a1_liveness_receipt_sha256",
+                "job_memory_ceiling_probe",
             },
         )
 
@@ -3066,10 +3128,15 @@ def set_resume_paths(
     computed at validation time, and only certificate_sha256 binds it back.
     """
 
-    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-    run_spec["resume_checkpoint"] = str(checkpoint)
-    run_spec["resume_counter_receipt"] = str(evidence)
-    write_json(paths["run_spec"], run_spec)
+    _rewrite_run_spec_with_custody(
+        paths,
+        lambda run_spec: run_spec.update(
+            {
+                "resume_checkpoint": str(checkpoint),
+                "resume_counter_receipt": str(evidence),
+            }
+        ),
+    )
 
 
 def install_resume_material(directory: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
@@ -3110,12 +3177,13 @@ class _ResumeBundleMixin:
         paths["checkpoint"] = checkpoint
         paths["evidence"] = evidence
 
-        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-        run_spec["resume_checkpoint"] = str(checkpoint)
-        run_spec["resume_counter_receipt"] = str(evidence)
-        if mutate_run_spec is not None:
-            mutate_run_spec(run_spec)
-        write_json(paths["run_spec"], run_spec)
+        def apply_resume_spec(run_spec: dict[str, object]) -> None:
+            run_spec["resume_checkpoint"] = str(checkpoint)
+            run_spec["resume_counter_receipt"] = str(evidence)
+            if mutate_run_spec is not None:
+                mutate_run_spec(run_spec)
+
+        _rewrite_run_spec_with_custody(paths, apply_resume_spec)
         if authorize_resume:
             roots = (
                 [paths["custody_root"]] if resume_roots is None else resume_roots
@@ -3347,10 +3415,15 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             )
             evidence = paths["custody_root"] / "counter-success.json"
             write_json(evidence, {"ok": True})
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["resume_checkpoint"] = str(checkpoint)
-            run_spec["resume_counter_receipt"] = str(evidence)
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.update(
+                    {
+                        "resume_checkpoint": str(checkpoint),
+                        "resume_counter_receipt": str(evidence),
+                    }
+                ),
+            )
             self._refused(paths, "quarantined checkpoint")
 
     def test_quarantined_checkpoint_behind_a_link_is_refused(self) -> None:
@@ -3379,10 +3452,15 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self.assertEqual(link.resolve(), real.resolve())
             evidence = paths["custody_root"] / "counter-success.json"
             write_json(evidence, {"ok": True})
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["resume_checkpoint"] = str(link)
-            run_spec["resume_counter_receipt"] = str(evidence)
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.update(
+                    {
+                        "resume_checkpoint": str(link),
+                        "resume_counter_receipt": str(evidence),
+                    }
+                ),
+            )
             self._refused(paths, "quarantined checkpoint")
 
     def test_quarantined_evidence_path_is_refused(self) -> None:
@@ -3413,9 +3491,12 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
     def test_checkpoint_pointing_at_a_file_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["resume_checkpoint"] = str(paths["evidence"])
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.__setitem__(
+                    "resume_checkpoint", str(paths["evidence"])
+                ),
+            )
             self._refused(paths, "existing checkpoint directory")
 
     def test_dangling_evidence_path_is_refused(self) -> None:
@@ -3479,16 +3560,31 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
                 directory,
-                mutate_run_spec=lambda spec: spec.update(
+            )
+            relative_checkpoint = os.path.relpath(
+                paths["checkpoint"], paths["run_spec"].parent
+            )
+            relative_evidence = os.path.relpath(
+                paths["evidence"], paths["run_spec"].parent
+            )
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda spec: spec.update(
                     {
-                        "resume_checkpoint": "checkpoint-000100",
-                        "resume_counter_receipt": "counter-success.json",
+                        "resume_checkpoint": relative_checkpoint,
+                        "resume_counter_receipt": relative_evidence,
                     }
                 ),
             )
             launch = self._validate(module, paths)
-            self.assertEqual(launch.resume_checkpoint, paths["checkpoint"])
-            self.assertEqual(launch.resume_evidence_path, paths["evidence"])
+            self.assertEqual(
+                launch.resume_checkpoint.resolve(strict=False),
+                paths["checkpoint"].resolve(strict=False),
+            )
+            self.assertEqual(
+                launch.resume_evidence_path.resolve(strict=False),
+                paths["evidence"].resolve(strict=False),
+            )
 
     def test_resume_flags_match_the_runner_argparse(self) -> None:
         """Bind the consumer's flag spelling to run_vertical_slice's parsers,
@@ -3759,6 +3855,10 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
                 "allowed_admitted_row_set_sha256",
                 "allowed_receipt_custody_root",
                 "allowed_a1_families",
+                "a1_host_commit_reserve_gib",
+                "a1_gpu_free_margin_gib",
+                "a1_b_custody_floor_gib",
+                "allowed_job_memory_ceiling_probe",
             },
         )
         self.assertFalse(
@@ -3828,15 +3928,18 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         paths["manifest"] = manifest_path
         paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
 
-        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-        run_spec["training_data_manifest"] = str(manifest_path)
-        run_spec["training_capability"] = capability
-        run_spec["training_checkpoint_interval"] = 8_192
-        run_spec["training_telemetry_path"] = str(paths["telemetry"])
-        run_spec["training_model_chat_restore_not_before"] = "2026-07-18T11:00:00-07:00"
-        if mutate_run_spec is not None:
-            mutate_run_spec(run_spec)
-        write_json(paths["run_spec"], run_spec)
+        def apply_specialist_spec(run_spec: dict[str, object]) -> None:
+            run_spec["training_data_manifest"] = str(manifest_path)
+            run_spec["training_capability"] = capability
+            run_spec["training_checkpoint_interval"] = 8_192
+            run_spec["training_telemetry_path"] = str(paths["telemetry"])
+            run_spec["training_model_chat_restore_not_before"] = (
+                "2026-07-18T11:00:00-07:00"
+            )
+            if mutate_run_spec is not None:
+                mutate_run_spec(run_spec)
+
+        _rewrite_run_spec_with_custody(paths, apply_specialist_spec)
 
         # Issue #1430 review Defect 3: the certificate, not the run spec,
         # decides which capabilities may route to the specialist runner.
@@ -4206,17 +4309,23 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
     def test_write_budget_not_exact_gib_multiple_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "write_budget_bytes", 16 * 1024**3 - 1
+                ),
+            )
             self._refused(paths, "exact GiB multiple")
 
     def test_write_budget_below_one_gib_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["write_budget_bytes"] = 0
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "write_budget_bytes", 0
+                ),
+            )
             self._refused(paths, "at least 1 GiB")
 
     def test_max_records_below_one_is_refused_for_specialist(self) -> None:
@@ -4233,9 +4342,12 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
 
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["max_records"] = 0
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "max_records", 0
+                ),
+            )
             self._refused(paths, "max_records must be at least 1")
 
     def test_fractional_max_records_is_refused(self) -> None:
@@ -4251,16 +4363,18 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
 
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["max_records"] = 0.5
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "max_records", 0.5
+                ),
+            )
             self._refused(paths, "max_records must be an exact integer")
 
-    def test_run_id_over_128_characters_is_refused(self) -> None:
-        """Issue #1430 review Defect 5 (LOW): run_id doubles as
-        --telemetry-run-id, which run_vertical_slice.py bounds to 128
-        characters ("training telemetry run id is invalid"); unbounded here
-        would build argv the runner refuses at parse time."""
+    def test_run_id_over_128_characters_is_refused_by_custody_before_routing(
+        self,
+    ) -> None:
+        """The run-scoped custody boundary owns the effective run-id bound."""
 
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
@@ -4269,7 +4383,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                     "run_id", "r" * 129
                 ),
             )
-            self._refused(paths, "run_id must be at most 128 characters")
+            self._refused(paths, "launch-authority custody run_id is invalid")
 
     def test_model_chat_restore_not_before_accepts_the_chains_own_formats(
         self,
@@ -5558,22 +5672,6 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
             paths["tokenizer"].unlink()
             self._refused(paths, "canonical")
 
-    # No test_run_id_over_128_characters_is_refused here (unlike
-    # SpecialistRoutingTests' test of the same name): the run-scoped custody
-    # packet's own _RUN_ID_RE (checked in _validate_run_scoped_custody_packet,
-    # ahead of routing) already caps run_id at 128 characters via its
-    # {0,127}-after-one-required-char pattern, so a 129-character run_id is
-    # refused there first, with "launch-authority custody run_id is invalid"
-    # -- the semantic_canary-route-local "at most 128 characters" check added
-    # in _validate_semantic_canary_request (mirroring the specialist route's
-    # own, identically unreachable, check) can never actually be exercised
-    # through the public run_spec.json path. Confirmed this is a pre-existing
-    # condition, not something this change introduced: SpecialistRoutingTests
-    # ::test_run_id_over_128_characters_is_refused fails the same way on an
-    # unmodified checkout. Not fixed here (out of scope for this route) --
-    # the length check is left in place for parity/defense-in-depth, just not
-    # asserted against dead code.
-
     def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
@@ -6024,6 +6122,7 @@ class DispatchAuthorityTests(unittest.TestCase):
             "EMBER_LAB_DISPATCH_JOB_ID": "forged-job",
             "EMBER_LAB_DISPATCH_TOKEN": "a" * 64,
             "EMBER_LAB_DISPATCH_DAEMON_PID": "1234",
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES": "1073741824",
         }
         exit_code, stderr, validate = self._invoke_before_validation(module, environment)
 
@@ -6134,7 +6233,12 @@ class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
             from datetime import datetime, timezone
 
             event = a1_execution._train_step_envelope(
-                run_id="a1run", step=1, tokens=170, loss=1.0, wall_seconds=1.0,
+                run_id="a1run",
+                step=1,
+                tokens=170,
+                loss=1.0,
+                grad_norm=1.0,
+                wall_seconds=1.0,
             )
             event["ts"] = datetime.fromtimestamp(1.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
             self._write_jsonl(telemetry_path, [event])

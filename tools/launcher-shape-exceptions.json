@@ -34,6 +34,16 @@
       "path": "scripts/launch-ember-cli.ps1",
       "sha256": "f4f776773b72f78c4df22d7d756617ef313e6f627e02ebada59a8d3cc83a718a",
       "reason": "temporarily hash-admitted developer cockpit/bootstrap launcher behind Ember.cmd pending atomic cockpit retirement; governed training still dispatches only through the daemon"
+    },
+    {
+      "path": "tools/reference-launch/launch.ps1",
+      "sha256": "3d1058eb46369ba4c33c8b9939da15cf9e5caf1620f58f74690787b75cb0139f",
+      "reason": "temporarily hash-admitted reference launcher pending atomic bullet-3 retirement; it forwards into the governed entry and does not bypass the daemon"
+    },
+    {
+      "path": "tools/powershell-launcher-shape-guard.ps1",
+      "sha256": "4a01efbcaf0592418ec37eaf0f52a37066fd6c052ab35485043ce6f11c90f02a",
+      "reason": "bootstrap compatibility row, temporary. This file is the AST scanner itself. The guard on this branch excludes its own scanner, but CI adjudicates with the base-pinned kernel, whose older line-oriented detector sees the scanner's own call-operator invocation of git and reports it as launcher-shaped. The exact digest admits only these reviewed bootstrap bytes and nothing else. Verified both ways: the base kernel refuses without this row and passes with it, and the branch kernel passes either way, treating the row as unused. Remove the row once the kernel CI pins is the successor that excludes the scanner by construction."
     }
   ]
 }

@@ -1562,17 +1562,7 @@ def _validate_specialist_request(
             "specialist launch (the runner refuses a zero or negative slice)"
         )
 
-    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
-    # characters ("training telemetry run id is invalid"). The top-level
-    # scalar-field check has already proved it is a non-empty string; this is
-    # the specialist-only length bound the runner additionally enforces.
     run_id = run_spec["run_id"]
-    if len(run_id) > 128:
-        raise ValueError(
-            "run spec run_id must be at most 128 characters for a specialist "
-            "launch (the runner's --telemetry-run-id enforces this bound)"
-        )
-
     telemetry_path = pathlib.Path(
         _require_specialist_string(
             run_spec["training_telemetry_path"], "training_telemetry_path"
@@ -2502,17 +2492,7 @@ def _validate_semantic_canary_request(
             "least 1 GiB for a semantic canary launch"
         )
 
-    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
-    # characters (mirrors the specialist route's identical check against the
-    # same runner-level bound).
     run_id = run_spec["run_id"]
-    if len(run_id) > 128:
-        raise ValueError(
-            "run spec run_id must be at most 128 characters for a semantic "
-            "canary launch (the runner's --telemetry-run-id enforces this "
-            "bound)"
-        )
-
     # Telemetry is REQUIRED (not optional the way it is at the bare runner
     # level) -- see SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS. No format check on
     # the path itself: mirrors _validate_specialist_request's identical
@@ -2909,6 +2889,14 @@ def _validate_run_scoped_custody_packet(
         "sha-binding-map.json",
         "launch-authority-custody.json",
     }
+    if GUARD_FLOOR_CERTIFICATE_KEYS & set(certificate):
+        completion_receipt = pathlib.Path(certificate["completion_receipt_path"])
+        if completion_receipt.parent != pathlib.Path("."):
+            raise ValueError(
+                "guard-floor completion_receipt_path must directly name a file "
+                "in the launch-authority packet"
+            )
+        expected_packet_names.add(completion_receipt.name)
     try:
         actual_packet_names = {
             entry.name for entry in canonical_packet_directory.iterdir()
@@ -3044,6 +3032,11 @@ def validate_certified_request(
             raise ValueError(
                 "certificate completion_receipt_path must not name a drive or "
                 "root anchor"
+            )
+        if completion_path.parent != pathlib.Path("."):
+            raise ValueError(
+                "guard-floor completion_receipt_path must directly name a file "
+                "in the launch-authority packet"
             )
         # Resolved backstop for anything the syntactic checks miss (a symlinked
         # segment, a differing drive letter).

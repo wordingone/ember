@@ -46,6 +46,10 @@ public static class EmberDesktopExitProbe {
 }
 "@ -OutputAssembly $fake -OutputType ConsoleApplication
     New-Item -ItemType Directory -Force -Path (Join-Path $repository "scripts") | Out-Null
+    foreach ($name in @("install-ember-desktop.ps1", "launch-installed-ember.ps1", "ember-window-placement.ps1")) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $repository "scripts\$name")
+    }
+    $installer = Join-Path $repository "scripts\install-ember-desktop.ps1"
     $env:EMBER_SELFTEST_APPLICATION = $fake
     "param([switch]`$PrepareApplicationOnly)`nWrite-Host 'preparing fixture'`nWrite-Output ''`nWrite-Output `$env:EMBER_SELFTEST_APPLICATION`n" |
         Set-Content -LiteralPath (Join-Path $repository "scripts\launch-ember-cli.ps1") -Encoding UTF8
