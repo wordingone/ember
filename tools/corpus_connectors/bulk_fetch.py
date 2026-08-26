@@ -50,8 +50,14 @@ import urllib.parse
 from pathlib import Path
 from typing import List, Optional
 
-import chunked_download as bulk
-import receipt as rcpt
+# Direct execution appends the repository root so the package import resolves
+# without publishing connector-local bare names or shadowing earlier imports.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.append(str(_REPO_ROOT))
+
+import chunked_download as bulk  # noqa: E402
+from tools.corpus_connectors import receipt as rcpt  # noqa: E402
 
 CONNECTOR_NAME = "bulk_fetch"
 

@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import chunked_download as bulk  # noqa: E402
-import receipt as rcpt  # noqa: E402
+from tools.corpus_connectors import receipt as rcpt  # noqa: E402
 from _range_fixture import flaky_opener, start_server, stop_server  # noqa: E402
 
 _FakeUsage = collections.namedtuple("usage", ["total", "used", "free"])

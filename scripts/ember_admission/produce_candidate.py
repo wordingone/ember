@@ -13,12 +13,20 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+# Direct execution publishes this script's directory at ``sys.path[0]``, not
+# the working directory.  Append the repository root so package-qualified
+# admission imports resolve without allowing repository modules to shadow
+# standard-library or site-package imports.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.append(str(_REPO_ROOT))
+
 from candidate import (
     publish_staged_candidate,
     quarantine_candidate,
     stage_candidate,
 )
-from consumers import (
+from scripts.ember_admission.consumers import (
     CONSUMER_COMMAND_CONTRACTS,
     consumer_validator_closure_identity,
     run_identity_consumer,
@@ -27,7 +35,10 @@ from consumers import (
     verify_consumer_validators,
 )
 from descriptor import validate_descriptor
-from receipt import verify_producer_receipt, write_producer_receipt
+from scripts.ember_admission.receipt import (
+    verify_producer_receipt,
+    write_producer_receipt,
+)
 from source_snapshot import (
     resolve_workspace_descriptor,
     snapshot_descriptor,

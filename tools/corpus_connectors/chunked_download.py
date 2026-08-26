@@ -90,7 +90,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-import receipt as rcpt
+from tools.corpus_connectors import receipt as rcpt
 
 SCHEMA_STATE = "corpus-bulk-transfer-state-v1"
 SCHEMA_CHUNK_MANIFEST = "corpus-bulk-chunk-manifest-v1"
