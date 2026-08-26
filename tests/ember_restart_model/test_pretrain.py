@@ -36,6 +36,83 @@ from verify_capability_record import expected_receipt
 
 
 class PretrainingSegmentTests(unittest.TestCase):
+    def test_optimizer_step_event_is_authored_by_the_trainer_process(self) -> None:
+        queries: list[tuple[int, str, str]] = []
+
+        def query(pid: int, start_token: str, job_name: str) -> bool:
+            queries.append((pid, start_token, job_name))
+            return True
+
+        with patch.object(pretrain, "_current_process_start_token", return_value="638915652000000000"):
+            event = pretrain.trainer_optimizer_step_event(
+                7,
+                job_object_name="Local\\EmberLabDispatch-test",
+                membership_query=query,
+            )
+        self.assertEqual(event, {
+            "event": "trainer_optimizer_step",
+            "trainer_pid": pretrain.os.getpid(),
+            "trainer_process_start_token": "638915652000000000",
+            "optimizer_step": 7,
+        })
+        self.assertEqual(queries, [(
+            pretrain.os.getpid(),
+            "638915652000000000",
+            "Local\\EmberLabDispatch-test",
+        )])
+
+    def test_optimizer_step_consumer_refuses_pid_mismatch_before_job_query(self) -> None:
+        queries: list[tuple[int, str, str]] = []
+        event = {
+            "event": "trainer_optimizer_step",
+            "trainer_pid": 41,
+            "trainer_process_start_token": "638915652000000000",
+            "optimizer_step": 1,
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "trainer PID mismatch"):
+            pretrain.verify_trainer_optimizer_step_event(
+                event,
+                current_pid=42,
+                job_object_name="Local\\EmberLabDispatch-test",
+                membership_query=lambda pid, token, name: queries.append((pid, token, name)) or True,
+            )
+        self.assertEqual(queries, [])
+
+    def test_optimizer_step_consumer_refuses_failed_direct_job_membership(self) -> None:
+        event = {
+            "event": "trainer_optimizer_step",
+            "trainer_pid": pretrain.os.getpid(),
+            "trainer_process_start_token": "638915652000000000",
+            "optimizer_step": 1,
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "not a member of the directly queried Job Object"):
+            pretrain.verify_trainer_optimizer_step_event(
+                event,
+                job_object_name="Local\\EmberLabDispatch-test",
+                membership_query=lambda _pid, _token, _name: False,
+            )
+
+    def test_optimizer_step_consumer_refuses_governed_run_without_job_identity(self) -> None:
+        with (
+            patch.dict(
+                pretrain.os.environ,
+                {"EMBER_LAB_DISPATCH_JOB_ID": "job-test"},
+                clear=True,
+            ),
+            patch.object(
+                pretrain,
+                "_current_process_start_token",
+                return_value="638915652000000000",
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "daemon-owned trainer Job Object identity is absent",
+            ):
+                pretrain.trainer_optimizer_step_event(1)
+
     def test_capture_safe_masked_mean_matches_selection_and_zeroes_padding_gradients(self) -> None:
         losses = torch.tensor(
             [1.5, 2.5, 99.0, 3.5, 88.0], dtype=torch.float32, requires_grad=True,
