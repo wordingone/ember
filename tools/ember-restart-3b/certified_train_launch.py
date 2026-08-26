@@ -1562,17 +1562,7 @@ def _validate_specialist_request(
             "specialist launch (the runner refuses a zero or negative slice)"
         )
 
-    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
-    # characters ("training telemetry run id is invalid"). The top-level
-    # scalar-field check has already proved it is a non-empty string; this is
-    # the specialist-only length bound the runner additionally enforces.
     run_id = run_spec["run_id"]
-    if len(run_id) > 128:
-        raise ValueError(
-            "run spec run_id must be at most 128 characters for a specialist "
-            "launch (the runner's --telemetry-run-id enforces this bound)"
-        )
-
     telemetry_path = pathlib.Path(
         _require_specialist_string(
             run_spec["training_telemetry_path"], "training_telemetry_path"
@@ -2502,17 +2492,7 @@ def _validate_semantic_canary_request(
             "least 1 GiB for a semantic canary launch"
         )
 
-    # run_id doubles as --telemetry-run-id, which the runner bounds to 128
-    # characters (mirrors the specialist route's identical check against the
-    # same runner-level bound).
     run_id = run_spec["run_id"]
-    if len(run_id) > 128:
-        raise ValueError(
-            "run spec run_id must be at most 128 characters for a semantic "
-            "canary launch (the runner's --telemetry-run-id enforces this "
-            "bound)"
-        )
-
     # Telemetry is REQUIRED (not optional the way it is at the bare runner
     # level) -- see SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS. No format check on
     # the path itself: mirrors _validate_specialist_request's identical
