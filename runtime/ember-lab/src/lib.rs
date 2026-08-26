@@ -1091,6 +1091,7 @@ pub fn measure_disk_write_wall_sample(
 #[serde(rename_all = "snake_case")]
 pub enum DispatchWorkloadProfileId {
     GovernedVertical,
+    JobMemoryCeilingProbe,
     OwnedServing,
     EvidenceVerifier,
     Cockpit,
@@ -1100,6 +1101,7 @@ pub enum DispatchWorkloadProfileId {
 #[serde(rename_all = "snake_case")]
 pub enum DispatchPinnedHostProducerKind {
     TrainingDataLoader,
+    JobMemoryProbeAllocator,
     CheckpointWriter,
     ModelServer,
     ReceiptVerifier,
@@ -1163,6 +1165,13 @@ pub enum DispatchMemoryModelAuthority {
         mechanism: DispatchMemoryMechanism,
         overshoot_allowance_bytes: u64,
         daemon_host_survival_reserve_bytes: u64,
+    },
+    #[serde(rename = "job_memory_ceiling_probe")]
+    JobMemoryCeilingProbe {
+        maximum_job_memory_bytes: u64,
+        maximum_absolute_delta_bytes: u64,
+        signed_delta_bytes: i64,
+        allocation_target_bytes: u64,
     },
 }
 
@@ -3653,7 +3662,9 @@ impl Daemon {
     ) -> Result<()> {
         let vram_declaration_valid = match manifest.schema_version.as_str() {
             "ember-lab-dispatch-manifest-v3" => {
-                manifest.vram_wall.is_none()
+                manifest.workload_profile.profile_id
+                    != DispatchWorkloadProfileId::JobMemoryCeilingProbe
+                    && manifest.vram_wall.is_none()
                     && (manifest.workload_profile.profile_id
                         == DispatchWorkloadProfileId::EvidenceVerifier
                         || manifest.minimum_free_vram_bytes > 0)
@@ -3667,11 +3678,13 @@ impl Daemon {
                         manifest.vram_wall.as_ref(),
                     ) {
                         (
-                            DispatchWorkloadProfileId::EvidenceVerifier,
+                            DispatchWorkloadProfileId::EvidenceVerifier
+                            | DispatchWorkloadProfileId::JobMemoryCeilingProbe,
                             Some(DispatchVramWall::NotApplicable),
                         ) => true,
                         (
-                            DispatchWorkloadProfileId::EvidenceVerifier,
+                            DispatchWorkloadProfileId::EvidenceVerifier
+                            | DispatchWorkloadProfileId::JobMemoryCeilingProbe,
                             Some(DispatchVramWall::Required(_)) | None,
                         ) => false,
                         (_, Some(DispatchVramWall::Required(contract))) => {
@@ -3740,6 +3753,7 @@ impl Daemon {
         }
         validate_dispatch_workload_profile(
             &manifest.workload_profile,
+            manifest.memory_model_authority.as_ref(),
             manifest.cpu_pacing_class,
             &manifest.args,
             manifest.maximum_job_memory_bytes,
@@ -3969,10 +3983,14 @@ impl Daemon {
         let derived_maximum = manifest
             .required_available_maximum_commit_bytes
             .checked_sub(DISPATCH_HOST_COMMIT_RESERVE_BYTES);
+        let peak_relation_admitted = manifest.simulated_peak_commit_bytes
+            <= manifest.maximum_job_memory_bytes
+            || manifest.workload_profile.profile_id
+                == DispatchWorkloadProfileId::JobMemoryCeilingProbe;
         let host_commit_refused = derived_maximum != Some(manifest.maximum_job_memory_bytes)
             || observed_available_maximum_commit_bytes
                 < manifest.required_available_maximum_commit_bytes
-            || manifest.simulated_peak_commit_bytes > manifest.maximum_job_memory_bytes;
+            || !peak_relation_admitted;
         if host_commit_refused {
             let refusal = json!({
                 "schema_version": "ember-lab-dispatch-preflight-v1",
@@ -8079,6 +8097,7 @@ fn is_sha256(value: &str) -> bool {
 
 fn validate_dispatch_workload_profile(
     profile: &DispatchWorkloadProfile,
+    memory_model_authority: Option<&DispatchMemoryModelAuthority>,
     cpu_pacing_class: DispatchCpuPacingClass,
     args: &[String],
     maximum_job_memory_bytes: u64,
@@ -8119,9 +8138,42 @@ fn validate_dispatch_workload_profile(
             }
         })?;
     }
-    if total != simulated_peak_commit_bytes || total > maximum_job_memory_bytes {
+    let probe_authority_valid = match (profile.profile_id, memory_model_authority) {
+        (
+            DispatchWorkloadProfileId::JobMemoryCeilingProbe,
+            Some(DispatchMemoryModelAuthority::JobMemoryCeilingProbe {
+                maximum_job_memory_bytes: authority_maximum,
+                maximum_absolute_delta_bytes,
+                signed_delta_bytes,
+                allocation_target_bytes,
+            }),
+        ) => {
+            let magnitude = signed_delta_bytes.unsigned_abs();
+            let derived_target = if *signed_delta_bytes > 0 {
+                authority_maximum.checked_add(magnitude)
+            } else {
+                authority_maximum.checked_sub(magnitude)
+            };
+            *authority_maximum == maximum_job_memory_bytes
+                && *maximum_absolute_delta_bytes > 0
+                && *signed_delta_bytes != 0
+                && magnitude <= *maximum_absolute_delta_bytes
+                && derived_target == Some(*allocation_target_bytes)
+                && *allocation_target_bytes == simulated_peak_commit_bytes
+        }
+        (DispatchWorkloadProfileId::JobMemoryCeilingProbe, _) => false,
+        (_, Some(DispatchMemoryModelAuthority::JobMemoryCeilingProbe { .. })) => false,
+        _ => true,
+    };
+    let peak_relation_valid =
+        if profile.profile_id == DispatchWorkloadProfileId::JobMemoryCeilingProbe {
+            probe_authority_valid && total == simulated_peak_commit_bytes
+        } else {
+            total == simulated_peak_commit_bytes && total <= maximum_job_memory_bytes
+        };
+    if !peak_relation_valid {
         return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "dispatch workload producer budgets must exactly cover the simulated peak within the Job Object ceiling".into(),
+            detail: "dispatch workload producer budgets must exactly cover the authenticated peak relation to the Job Object ceiling".into(),
         });
     }
     let expected = match profile.profile_id {
@@ -8132,6 +8184,11 @@ fn validate_dispatch_workload_profile(
         ]
         .into_iter()
         .collect(),
+        DispatchWorkloadProfileId::JobMemoryCeilingProbe => {
+            [DispatchPinnedHostProducerKind::JobMemoryProbeAllocator]
+                .into_iter()
+                .collect()
+        }
         DispatchWorkloadProfileId::OwnedServing => [
             DispatchPinnedHostProducerKind::ModelServer,
             DispatchPinnedHostProducerKind::TelemetryBuffer,
@@ -8161,17 +8218,84 @@ fn validate_dispatch_workload_profile(
                 .into(),
         });
     }
-    let governed_vertical = args.iter().any(|arg| {
-        arg == "governed-vertical"
-            || Path::new(arg).file_name().and_then(|name| name.to_str())
-                == Some("certified_train_launch.py")
+    let certified_launch = args.iter().any(|arg| {
+        Path::new(arg).file_name().and_then(|name| name.to_str())
+            == Some("certified_train_launch.py")
     });
-    if governed_vertical != (profile.profile_id == DispatchWorkloadProfileId::GovernedVertical) {
+    let expects_certified_launch = matches!(
+        profile.profile_id,
+        DispatchWorkloadProfileId::GovernedVertical
+            | DispatchWorkloadProfileId::JobMemoryCeilingProbe
+    );
+    if certified_launch != expects_certified_launch {
         return Err(EmberLabError::InvalidDispatchManifest {
-            detail: "dispatch workload profile does not match the governed-vertical argv".into(),
+            detail: "dispatch workload profile does not match the certified-launch argv".into(),
         });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod job_memory_ceiling_probe_profile_tests {
+    use super::*;
+
+    fn profile(
+        kind: DispatchPinnedHostProducerKind,
+        maximum_bytes: u64,
+    ) -> DispatchWorkloadProfile {
+        DispatchWorkloadProfile {
+            profile_id: DispatchWorkloadProfileId::JobMemoryCeilingProbe,
+            pinned_host_producers: vec![DispatchPinnedHostProducer {
+                kind,
+                maximum_bytes,
+            }],
+            requires_ui_responsiveness: false,
+            cpu_rate_percent: 90,
+        }
+    }
+
+    fn authority(delta: i64, target: u64) -> DispatchMemoryModelAuthority {
+        DispatchMemoryModelAuthority::JobMemoryCeilingProbe {
+            maximum_job_memory_bytes: 100,
+            maximum_absolute_delta_bytes: 20,
+            signed_delta_bytes: delta,
+            allocation_target_bytes: target,
+        }
+    }
+
+    fn validate(
+        profile: &DispatchWorkloadProfile,
+        authority: Option<&DispatchMemoryModelAuthority>,
+        maximum: u64,
+        target: u64,
+    ) -> Result<()> {
+        validate_dispatch_workload_profile(
+            profile,
+            authority,
+            DispatchCpuPacingClass::Unpaced,
+            &["certified_train_launch.py".into()],
+            maximum,
+            target,
+        )
+    }
+
+    #[test]
+    fn probe_profile_requires_exact_authenticated_signed_target() {
+        let positive = profile(DispatchPinnedHostProducerKind::JobMemoryProbeAllocator, 110);
+        assert!(validate(&positive, Some(&authority(10, 110)), 100, 110).is_ok());
+        assert!(validate(&positive, None, 100, 110).is_err());
+        assert!(validate(&positive, Some(&authority(10, 109)), 100, 110).is_err());
+        assert!(validate(&positive, Some(&authority(30, 130)), 100, 110).is_err());
+
+        let negative = profile(DispatchPinnedHostProducerKind::JobMemoryProbeAllocator, 90);
+        assert!(validate(&negative, Some(&authority(-10, 90)), 100, 90).is_ok());
+    }
+
+    #[test]
+    fn probe_profile_cannot_carry_an_ordinary_producer() {
+        let ordinary = profile(DispatchPinnedHostProducerKind::TrainingDataLoader, 110);
+        assert!(validate(&ordinary, Some(&authority(10, 110)), 100, 110).is_err());
+    }
 }
 
 fn verify_dispatch_file(path: &Path, sha256: &str) -> Result<PathBuf> {

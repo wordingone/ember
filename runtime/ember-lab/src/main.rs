@@ -30,6 +30,15 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const CERTIFIED_LAUNCH_OVERSHOOT_MARGIN_BYTES: u64 = 2 * GIB;
 const HOST_COMMIT_SURVIVAL_RESERVE_BYTES: u64 = 10 * GIB;
 const CERTIFIED_LAUNCH_VRAM_HEADROOM_RESERVE_BYTES: u64 = 256 * 1024 * 1024;
+const CERTIFIED_LAUNCH_PROBE_STORAGE_RESERVE_BYTES: u64 = 64 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct JobMemoryCeilingProbeAuthority {
+    maximum_job_memory_bytes: u64,
+    maximum_absolute_delta_bytes: u64,
+    signed_delta_bytes: i64,
+    allocation_target_bytes: u64,
+}
 
 #[derive(Clone, Debug, Deserialize)]
 struct ResourceMechanismProjection {
@@ -413,6 +422,274 @@ fn required_u64(
         })
 }
 
+const CERTIFIED_LAUNCH_REQUIRED_RUN_SPEC_KEYS: &[&str] = &[
+    "certificate_sha256",
+    "requested_scope",
+    "run_id",
+    "runner_receipt",
+    "schema_version",
+    "seed",
+];
+const CERTIFIED_LAUNCH_REQUIRED_EXECUTION_SCOPE_KEYS: &[&str] = &[
+    "allowed_artifact_roots",
+    "allowed_custody_roots",
+    "allowed_modes",
+    "max_active_expert_families",
+    "max_b_write_gib",
+    "max_c_write_gib",
+    "max_gpu_vram_gib",
+    "max_optimizer_steps",
+    "max_records",
+    "max_transient_checkpoint_gib",
+    "max_wall_minutes",
+    "max_write_budget_bytes",
+    "model_server_allowed",
+    "persistent_worker_allowed",
+    "purpose",
+    "wsl_allowed",
+];
+const CERTIFIED_LAUNCH_REQUIRED_REQUESTED_SCOPE_KEYS: &[&str] = &[
+    "active_expert_families",
+    "artifact_root",
+    "custody_root",
+    "gpu_vram_gib",
+    "max_b_write_gib",
+    "max_c_write_gib",
+    "max_records",
+    "mode",
+    "optimizer_steps",
+    "transient_checkpoint_gib",
+    "wall_minutes",
+    "write_budget_bytes",
+];
+
+fn parse_job_memory_ceiling_probe_authority(
+    execution_scope: &serde_json::Map<String, Value>,
+    run_spec: &serde_json::Map<String, Value>,
+    requested_mode: &str,
+) -> Result<Option<JobMemoryCeilingProbeAuthority>, Box<dyn std::error::Error>> {
+    let authorized_raw = execution_scope.get("allowed_job_memory_ceiling_probe");
+    let requested_raw = run_spec.get("job_memory_ceiling_probe");
+    if authorized_raw.is_none() && requested_raw.is_none() {
+        return Ok(None);
+    }
+    if requested_mode != "governed-vertical" || authorized_raw.is_none() || requested_raw.is_none()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "job-memory ceiling probe authority and request must be present together on governed-vertical",
+        )
+        .into());
+    }
+    let mut permitted_run_spec_keys = CERTIFIED_LAUNCH_REQUIRED_RUN_SPEC_KEYS
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    permitted_run_spec_keys.insert("job_memory_ceiling_probe");
+    let mut permitted_execution_scope_keys = CERTIFIED_LAUNCH_REQUIRED_EXECUTION_SCOPE_KEYS
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    permitted_execution_scope_keys.insert("allowed_job_memory_ceiling_probe");
+    let permitted_requested_scope_keys = CERTIFIED_LAUNCH_REQUIRED_REQUESTED_SCOPE_KEYS
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    let actual_run_spec_keys = run_spec
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    if let Some(unexpected) = actual_run_spec_keys
+        .difference(&permitted_run_spec_keys)
+        .next()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("job-memory ceiling probe run spec has unexpected key `{unexpected}`"),
+        )
+        .into());
+    }
+    if let Some(missing) = permitted_run_spec_keys
+        .difference(&actual_run_spec_keys)
+        .next()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("job-memory ceiling probe run spec lacks required key `{missing}`"),
+        )
+        .into());
+    }
+    let actual_execution_scope_keys = execution_scope
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    if let Some(unexpected) = actual_execution_scope_keys
+        .difference(&permitted_execution_scope_keys)
+        .next()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("job-memory ceiling probe certificate scope has unexpected key `{unexpected}`"),
+        )
+        .into());
+    }
+    if let Some(missing) = permitted_execution_scope_keys
+        .difference(&actual_execution_scope_keys)
+        .next()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("job-memory ceiling probe certificate scope lacks required key `{missing}`"),
+        )
+        .into());
+    }
+    let requested_scope = run_spec
+        .get("requested_scope")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "job-memory ceiling probe requested_scope must be an object",
+            )
+        })?;
+    let actual_requested_scope_keys = requested_scope
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    if let Some(unexpected) = actual_requested_scope_keys
+        .difference(&permitted_requested_scope_keys)
+        .next()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("job-memory ceiling probe requested scope has unexpected key `{unexpected}`"),
+        )
+        .into());
+    }
+    if let Some(missing) = permitted_requested_scope_keys
+        .difference(&actual_requested_scope_keys)
+        .next()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("job-memory ceiling probe requested scope lacks required key `{missing}`"),
+        )
+        .into());
+    }
+    let requested_zero_keys = [
+        "active_expert_families",
+        "gpu_vram_gib",
+        "max_b_write_gib",
+        "max_c_write_gib",
+        "max_records",
+        "optimizer_steps",
+        "transient_checkpoint_gib",
+        "write_budget_bytes",
+    ];
+    let authorized_zero_keys = [
+        "max_active_expert_families",
+        "max_b_write_gib",
+        "max_c_write_gib",
+        "max_gpu_vram_gib",
+        "max_optimizer_steps",
+        "max_records",
+        "max_transient_checkpoint_gib",
+        "max_write_budget_bytes",
+    ];
+    let allowed_modes_are_exact = execution_scope
+        .get("allowed_modes")
+        .and_then(Value::as_array)
+        .is_some_and(|modes| modes.len() == 1 && modes[0].as_str() == Some("governed-vertical"));
+    if !allowed_modes_are_exact
+        || requested_zero_keys
+            .iter()
+            .any(|key| requested_scope.get(*key).and_then(Value::as_u64) != Some(0))
+        || authorized_zero_keys
+            .iter()
+            .any(|key| execution_scope.get(*key).and_then(Value::as_u64) != Some(0))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "job-memory ceiling probe is mutually exclusive with training scope",
+        )
+        .into());
+    }
+    let authorized = authorized_raw.and_then(Value::as_object).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "allowed_job_memory_ceiling_probe must be an object",
+        )
+    })?;
+    let requested = requested_raw.and_then(Value::as_object).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "job_memory_ceiling_probe must be an object",
+        )
+    })?;
+    let authorized_keys = ["maximum_absolute_delta_bytes", "maximum_job_memory_bytes"]
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let requested_keys = ["maximum_job_memory_bytes", "signed_delta_bytes"]
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    if authorized
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != authorized_keys
+        || requested
+            .keys()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>()
+            != requested_keys
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "job-memory ceiling probe objects must use the exact closed key sets",
+        )
+        .into());
+    }
+    let maximum_job_memory_bytes = required_u64(authorized, "maximum_job_memory_bytes")?;
+    let requested_maximum = required_u64(requested, "maximum_job_memory_bytes")?;
+    let maximum_absolute_delta_bytes = required_u64(authorized, "maximum_absolute_delta_bytes")?;
+    let signed_delta_bytes = requested
+        .get("signed_delta_bytes")
+        .and_then(Value::as_i64)
+        .filter(|value| *value != 0)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "job-memory ceiling probe signed_delta_bytes must be a non-zero exact i64",
+            )
+        })?;
+    let magnitude = signed_delta_bytes.unsigned_abs();
+    if requested_maximum != maximum_job_memory_bytes || magnitude > maximum_absolute_delta_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "job-memory ceiling probe request exceeds its independent authenticated authority",
+        )
+        .into());
+    }
+    let allocation_target_bytes = if signed_delta_bytes > 0 {
+        maximum_job_memory_bytes.checked_add(magnitude)
+    } else {
+        maximum_job_memory_bytes.checked_sub(magnitude)
+    }
+    .filter(|value| *value > 0)
+    .ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "job-memory ceiling probe allocation target is invalid",
+        )
+    })?;
+    Ok(Some(JobMemoryCeilingProbeAuthority {
+        maximum_job_memory_bytes,
+        maximum_absolute_delta_bytes,
+        signed_delta_bytes,
+        allocation_target_bytes,
+    }))
+}
+
 fn parse_resource_projection(
     bytes: &[u8],
 ) -> Result<ResourceMechanismProjection, Box<dyn std::error::Error>> {
@@ -636,13 +913,17 @@ where
     }
     let execution_scope = required_object(&certificate, "execution_scope")?;
     let requested_scope = required_object(&run_spec, "requested_scope")?;
-    if required_string(requested_scope, "mode")? != "governed-vertical" {
+    let requested_mode = required_string(requested_scope, "mode")?;
+    if requested_mode != "governed-vertical" {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "certified launch requested mode is not governed-vertical",
+            "certified launch requested mode is unsupported",
         )
         .into());
     }
+    let job_memory_probe =
+        parse_job_memory_ceiling_probe_authority(execution_scope, run_spec_object, requested_mode)?;
+    let is_job_memory_probe = job_memory_probe.is_some();
     let run_id = required_string(run_spec_object, "run_id")?;
     if run_id
         .bytes()
@@ -715,7 +996,7 @@ where
     let resource_projection_producer =
         root.join("runtime/ember-lab/issue898_resource_projection.py");
     let resource_projection_config = root.join("configs/ember-restart-3b.json");
-    if !is_a1_route {
+    if !is_a1_route && !is_job_memory_probe {
         for (label, path) in [
             (
                 "resource projection producer",
@@ -752,17 +1033,28 @@ where
         .into());
     }
 
-    let gpu_vram_bytes = required_gib(requested_scope, "gpu_vram_gib")?;
-    let vram_capacity = load_vram_capacity(request).map_err(|error| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!(
-                "certified launch requires the nvidia-smi VRAM provider to measure and enforce its required VRAM wall: {error}"
-            ),
+    let (gpu_vram_bytes, vram_wall) = if is_job_memory_probe {
+        (0, DispatchVramWall::NotApplicable)
+    } else {
+        let gpu_vram_bytes = required_gib(requested_scope, "gpu_vram_gib")?;
+        let vram_capacity = load_vram_capacity(request).map_err(|error| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "certified launch requires the nvidia-smi VRAM provider to measure and enforce its required VRAM wall: {error}"
+                ),
+            )
+        })?;
+        (
+            gpu_vram_bytes,
+            certified_launch_vram_wall(gpu_vram_bytes, vram_capacity)?,
         )
-    })?;
-    let vram_wall = certified_launch_vram_wall(gpu_vram_bytes, vram_capacity)?;
-    let checkpoint_bytes = required_gib(requested_scope, "transient_checkpoint_gib")?;
+    };
+    let checkpoint_bytes = if is_job_memory_probe {
+        0
+    } else {
+        required_gib(requested_scope, "transient_checkpoint_gib")?
+    };
     let a1_storage_floor = execution_scope.get("a1_b_custody_floor_gib");
     let a1_host_reserve = execution_scope.get("a1_host_commit_reserve_gib");
     if is_a1_route && (a1_storage_floor.is_none() || a1_host_reserve.is_none()) {
@@ -779,7 +1071,7 @@ where
         )
         .into());
     }
-    let resource_projection = if is_a1_route {
+    let resource_projection = if is_a1_route || is_job_memory_probe {
         None
     } else {
         Some(load_resource_projection(request)?)
@@ -790,7 +1082,33 @@ where
         required_available_maximum_commit_bytes,
         pinned_host_producers,
         memory_model_authority,
-    ) = if let Some(projection) = resource_projection.as_ref() {
+    ) = if let Some(probe) = job_memory_probe {
+        let required = probe
+            .maximum_job_memory_bytes
+            .checked_add(HOST_COMMIT_SURVIVAL_RESERVE_BYTES)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "job-memory ceiling probe host-commit requirement overflow",
+                )
+            })?;
+        (
+            probe.allocation_target_bytes,
+            probe.maximum_job_memory_bytes,
+            required,
+            json!([{
+                "kind": "job_memory_probe_allocator",
+                "maximum_bytes": probe.allocation_target_bytes
+            }]),
+            json!({
+                "route": "job_memory_ceiling_probe",
+                "maximum_job_memory_bytes": probe.maximum_job_memory_bytes,
+                "maximum_absolute_delta_bytes": probe.maximum_absolute_delta_bytes,
+                "signed_delta_bytes": probe.signed_delta_bytes,
+                "allocation_target_bytes": probe.allocation_target_bytes
+            }),
+        )
+    } else if let Some(projection) = resource_projection.as_ref() {
         let model = non_a1_host_commit_model(projection, checkpoint_bytes)?;
         let training_mechanism_bytes = projection
             .mechanism_peak_bytes
@@ -890,8 +1208,14 @@ where
             }),
         )
     };
-    let write_budget_bytes = required_u64(requested_scope, "write_budget_bytes")?;
-    let storage_floor_bytes = if is_a1_route {
+    let write_budget_bytes = if is_job_memory_probe {
+        0
+    } else {
+        required_u64(requested_scope, "write_budget_bytes")?
+    };
+    let storage_floor_bytes = if is_job_memory_probe {
+        CERTIFIED_LAUNCH_PROBE_STORAGE_RESERVE_BYTES
+    } else if is_a1_route {
         required_gib(execution_scope, "a1_b_custody_floor_gib")?.max(write_budget_bytes)
     } else {
         write_budget_bytes
@@ -943,7 +1267,7 @@ where
         ("manifest", run_spec_path),
         ("input", custody_receipt.as_path()),
     ];
-    if !is_a1_route {
+    if !is_a1_route && !is_job_memory_probe {
         binding_inputs.push(("config", resource_projection_producer.as_path()));
         binding_inputs.push(("config", resource_projection_config.as_path()));
     }
@@ -961,7 +1285,11 @@ where
         "source_commit": source_commit,
         "not_before_ms": now_ms,
         "expires_at_ms": now_ms + 3_600_000,
-        "resource_lease": format!("gpu:{job_id}"),
+        "resource_lease": if is_job_memory_probe {
+            format!("host-memory:{job_id}")
+        } else {
+            format!("gpu:{job_id}")
+        },
         "program": {"path": python_executable, "sha256": hash_file(python_executable)?},
         "args": [
             validator.to_string_lossy(),
@@ -972,7 +1300,11 @@ where
             "--custody-receipt-sha256", custody_receipt_sha256
         ],
         "workload_profile": {
-            "profile_id": "governed_vertical",
+            "profile_id": if is_job_memory_probe {
+                "job_memory_ceiling_probe"
+            } else {
+                "governed_vertical"
+            },
             "pinned_host_producers": pinned_host_producers,
             "requires_ui_responsiveness": false,
             "cpu_rate_percent": 90
@@ -2255,6 +2587,177 @@ fn main() {
 mod tests {
     use super::*;
     use ember_lab::{JobSpec, ReceiptArtifact};
+
+    fn fixture_probe_execution_scope() -> Value {
+        json!({
+            "purpose": "BOUNDED_CANARY",
+            "allowed_modes": ["governed-vertical"],
+            "max_optimizer_steps": 0,
+            "max_records": 0,
+            "max_active_expert_families": 0,
+            "max_gpu_vram_gib": 0,
+            "max_transient_checkpoint_gib": 0,
+            "max_wall_minutes": 5,
+            "max_b_write_gib": 0,
+            "max_c_write_gib": 0,
+            "max_write_budget_bytes": 0,
+            "allowed_artifact_roots": ["B:/probe-artifacts"],
+            "allowed_custody_roots": ["B:/probe-custody"],
+            "model_server_allowed": false,
+            "wsl_allowed": false,
+            "persistent_worker_allowed": false,
+            "allowed_job_memory_ceiling_probe": {
+                "maximum_job_memory_bytes": 100,
+                "maximum_absolute_delta_bytes": 20
+            }
+        })
+    }
+
+    fn fixture_probe_run_spec(signed_delta_bytes: i64) -> Value {
+        json!({
+            "schema_version": "ember-certified-train-run-v1",
+            "certificate_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "run_id": "issue898-probe",
+            "seed": 1,
+            "runner_receipt": "B:/probe-receipt.json",
+            "requested_scope": {
+                "mode": "governed-vertical",
+                "optimizer_steps": 0,
+                "max_records": 0,
+                "active_expert_families": 0,
+                "gpu_vram_gib": 0,
+                "transient_checkpoint_gib": 0,
+                "wall_minutes": 5,
+                "max_b_write_gib": 0,
+                "max_c_write_gib": 0,
+                "write_budget_bytes": 0,
+                "artifact_root": "B:/probe-artifacts",
+                "custody_root": "B:/probe-custody"
+            },
+            "job_memory_ceiling_probe": {
+                "maximum_job_memory_bytes": 100,
+                "signed_delta_bytes": signed_delta_bytes
+            }
+        })
+    }
+
+    #[test]
+    fn job_memory_probe_composer_requires_the_exact_independent_signed_pair() {
+        let certificate = fixture_probe_execution_scope();
+        let positive = fixture_probe_run_spec(10);
+        let parsed = parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            positive.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(parsed.allocation_target_bytes, 110);
+
+        let negative = fixture_probe_run_spec(-10);
+        assert_eq!(
+            parse_job_memory_ceiling_probe_authority(
+                certificate.as_object().unwrap(),
+                negative.as_object().unwrap(),
+                "governed-vertical",
+            )
+            .unwrap()
+            .unwrap()
+            .allocation_target_bytes,
+            90
+        );
+
+        assert!(parse_job_memory_ceiling_probe_authority(
+            &serde_json::Map::new(),
+            positive.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .is_err());
+        let overbound = fixture_probe_run_spec(21);
+        assert!(parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            overbound.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn job_memory_probe_rejects_unknown_run_and_certificate_scope_keys() {
+        let certificate = fixture_probe_execution_scope();
+        let mut run_spec = fixture_probe_run_spec(-10);
+        run_spec
+            .as_object_mut()
+            .unwrap()
+            .insert("unrecognized_probe_key".into(), Value::Bool(true));
+        let error = parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            run_spec.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "job-memory ceiling probe run spec has unexpected key `unrecognized_probe_key`"
+        );
+
+        let mut certificate = fixture_probe_execution_scope();
+        certificate
+            .as_object_mut()
+            .unwrap()
+            .insert("unrecognized_probe_key".into(), Value::Bool(true));
+        let run_spec = fixture_probe_run_spec(-10);
+        let error = parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            run_spec.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "job-memory ceiling probe certificate scope has unexpected key `unrecognized_probe_key`"
+        );
+
+        let certificate = fixture_probe_execution_scope();
+        let mut run_spec = fixture_probe_run_spec(-10);
+        run_spec["requested_scope"]
+            .as_object_mut()
+            .unwrap()
+            .insert("unrecognized_probe_key".into(), Value::Bool(true));
+        let error = parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            run_spec.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "job-memory ceiling probe requested scope has unexpected key `unrecognized_probe_key`"
+        );
+    }
+
+    #[test]
+    fn job_memory_probe_rejects_nonzero_training_scope() {
+        let certificate = fixture_probe_execution_scope();
+        let mut run_spec = fixture_probe_run_spec(-10);
+        run_spec["requested_scope"]["optimizer_steps"] = Value::from(1);
+        assert!(parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            run_spec.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .is_err());
+
+        let mut certificate = fixture_probe_execution_scope();
+        certificate["max_optimizer_steps"] = Value::from(1);
+        let run_spec = fixture_probe_run_spec(-10);
+        assert!(parse_job_memory_ceiling_probe_authority(
+            certificate.as_object().unwrap(),
+            run_spec.as_object().unwrap(),
+            "governed-vertical",
+        )
+        .is_err());
+    }
 
     fn fixture_resource_projection() -> ResourceMechanismProjection {
         parse_resource_projection(
