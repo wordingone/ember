@@ -287,6 +287,18 @@ def _write_custody_sidecars(paths: dict[str, pathlib.Path]) -> None:
     paths["custody_receipt"] = receipt_path
 
 
+def _rewrite_run_spec_with_custody(
+    paths: dict[str, pathlib.Path], mutate
+) -> dict[str, object]:
+    """Mutate a fixture run spec and refresh the receipt that binds its bytes."""
+
+    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+    mutate(run_spec)
+    write_json(paths["run_spec"], run_spec)
+    _write_custody_sidecars(paths)
+    return run_spec
+
+
 def rewrite_certificate(
     paths: dict[str, pathlib.Path],
     mutate,
@@ -3066,10 +3078,15 @@ def set_resume_paths(
     computed at validation time, and only certificate_sha256 binds it back.
     """
 
-    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-    run_spec["resume_checkpoint"] = str(checkpoint)
-    run_spec["resume_counter_receipt"] = str(evidence)
-    write_json(paths["run_spec"], run_spec)
+    _rewrite_run_spec_with_custody(
+        paths,
+        lambda run_spec: run_spec.update(
+            {
+                "resume_checkpoint": str(checkpoint),
+                "resume_counter_receipt": str(evidence),
+            }
+        ),
+    )
 
 
 def install_resume_material(directory: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
@@ -3110,12 +3127,13 @@ class _ResumeBundleMixin:
         paths["checkpoint"] = checkpoint
         paths["evidence"] = evidence
 
-        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-        run_spec["resume_checkpoint"] = str(checkpoint)
-        run_spec["resume_counter_receipt"] = str(evidence)
-        if mutate_run_spec is not None:
-            mutate_run_spec(run_spec)
-        write_json(paths["run_spec"], run_spec)
+        def apply_resume_spec(run_spec: dict[str, object]) -> None:
+            run_spec["resume_checkpoint"] = str(checkpoint)
+            run_spec["resume_counter_receipt"] = str(evidence)
+            if mutate_run_spec is not None:
+                mutate_run_spec(run_spec)
+
+        _rewrite_run_spec_with_custody(paths, apply_resume_spec)
         if authorize_resume:
             roots = (
                 [paths["custody_root"]] if resume_roots is None else resume_roots
@@ -3347,10 +3365,15 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             )
             evidence = paths["custody_root"] / "counter-success.json"
             write_json(evidence, {"ok": True})
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["resume_checkpoint"] = str(checkpoint)
-            run_spec["resume_counter_receipt"] = str(evidence)
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.update(
+                    {
+                        "resume_checkpoint": str(checkpoint),
+                        "resume_counter_receipt": str(evidence),
+                    }
+                ),
+            )
             self._refused(paths, "quarantined checkpoint")
 
     def test_quarantined_checkpoint_behind_a_link_is_refused(self) -> None:
@@ -3379,10 +3402,15 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
             self.assertEqual(link.resolve(), real.resolve())
             evidence = paths["custody_root"] / "counter-success.json"
             write_json(evidence, {"ok": True})
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["resume_checkpoint"] = str(link)
-            run_spec["resume_counter_receipt"] = str(evidence)
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.update(
+                    {
+                        "resume_checkpoint": str(link),
+                        "resume_counter_receipt": str(evidence),
+                    }
+                ),
+            )
             self._refused(paths, "quarantined checkpoint")
 
     def test_quarantined_evidence_path_is_refused(self) -> None:
@@ -3413,9 +3441,12 @@ class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
     def test_checkpoint_pointing_at_a_file_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["resume_checkpoint"] = str(paths["evidence"])
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.__setitem__(
+                    "resume_checkpoint", str(paths["evidence"])
+                ),
+            )
             self._refused(paths, "existing checkpoint directory")
 
     def test_dangling_evidence_path_is_refused(self) -> None:
@@ -3828,15 +3859,18 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
         paths["manifest"] = manifest_path
         paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
 
-        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-        run_spec["training_data_manifest"] = str(manifest_path)
-        run_spec["training_capability"] = capability
-        run_spec["training_checkpoint_interval"] = 8_192
-        run_spec["training_telemetry_path"] = str(paths["telemetry"])
-        run_spec["training_model_chat_restore_not_before"] = "2026-07-18T11:00:00-07:00"
-        if mutate_run_spec is not None:
-            mutate_run_spec(run_spec)
-        write_json(paths["run_spec"], run_spec)
+        def apply_specialist_spec(run_spec: dict[str, object]) -> None:
+            run_spec["training_data_manifest"] = str(manifest_path)
+            run_spec["training_capability"] = capability
+            run_spec["training_checkpoint_interval"] = 8_192
+            run_spec["training_telemetry_path"] = str(paths["telemetry"])
+            run_spec["training_model_chat_restore_not_before"] = (
+                "2026-07-18T11:00:00-07:00"
+            )
+            if mutate_run_spec is not None:
+                mutate_run_spec(run_spec)
+
+        _rewrite_run_spec_with_custody(paths, apply_specialist_spec)
 
         # Issue #1430 review Defect 3: the certificate, not the run spec,
         # decides which capabilities may route to the specialist runner.
@@ -4206,17 +4240,23 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
     def test_write_budget_not_exact_gib_multiple_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "write_budget_bytes", 16 * 1024**3 - 1
+                ),
+            )
             self._refused(paths, "exact GiB multiple")
 
     def test_write_budget_below_one_gib_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["write_budget_bytes"] = 0
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "write_budget_bytes", 0
+                ),
+            )
             self._refused(paths, "at least 1 GiB")
 
     def test_max_records_below_one_is_refused_for_specialist(self) -> None:
@@ -4233,9 +4273,12 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
 
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["max_records"] = 0
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "max_records", 0
+                ),
+            )
             self._refused(paths, "max_records must be at least 1")
 
     def test_fractional_max_records_is_refused(self) -> None:
@@ -4251,16 +4294,18 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
 
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(directory)
-            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
-            run_spec["requested_scope"]["max_records"] = 0.5
-            write_json(paths["run_spec"], run_spec)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "max_records", 0.5
+                ),
+            )
             self._refused(paths, "max_records must be an exact integer")
 
-    def test_run_id_over_128_characters_is_refused(self) -> None:
-        """Issue #1430 review Defect 5 (LOW): run_id doubles as
-        --telemetry-run-id, which run_vertical_slice.py bounds to 128
-        characters ("training telemetry run id is invalid"); unbounded here
-        would build argv the runner refuses at parse time."""
+    def test_run_id_over_128_characters_is_refused_by_custody_before_routing(
+        self,
+    ) -> None:
+        """The run-scoped custody boundary owns the effective run-id bound."""
 
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             paths = self._bundle(
@@ -4269,7 +4314,7 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
                     "run_id", "r" * 129
                 ),
             )
-            self._refused(paths, "run_id must be at most 128 characters")
+            self._refused(paths, "launch-authority custody run_id is invalid")
 
     def test_model_chat_restore_not_before_accepts_the_chains_own_formats(
         self,
@@ -5557,22 +5602,6 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
             paths = self._bundle(directory)
             paths["tokenizer"].unlink()
             self._refused(paths, "canonical")
-
-    # No test_run_id_over_128_characters_is_refused here (unlike
-    # SpecialistRoutingTests' test of the same name): the run-scoped custody
-    # packet's own _RUN_ID_RE (checked in _validate_run_scoped_custody_packet,
-    # ahead of routing) already caps run_id at 128 characters via its
-    # {0,127}-after-one-required-char pattern, so a 129-character run_id is
-    # refused there first, with "launch-authority custody run_id is invalid"
-    # -- the semantic_canary-route-local "at most 128 characters" check added
-    # in _validate_semantic_canary_request (mirroring the specialist route's
-    # own, identically unreachable, check) can never actually be exercised
-    # through the public run_spec.json path. Confirmed this is a pre-existing
-    # condition, not something this change introduced: SpecialistRoutingTests
-    # ::test_run_id_over_128_characters_is_refused fails the same way on an
-    # unmodified checkout. Not fixed here (out of scope for this route) --
-    # the length check is left in place for parity/defense-in-depth, just not
-    # asserted against dead code.
 
     def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
