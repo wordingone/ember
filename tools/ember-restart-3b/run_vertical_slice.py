@@ -76,7 +76,6 @@ _STAGE2_PRODUCTION_ACCELERATED_ARM_SELF_SHA256 = (
     "f3baa9473802c0f9088fc30e883692b4c460a1bf67ba5221fda986a0425a7699"
 )
 _STAGE2_DIAGNOSTIC_CLAIM_BOUNDARY = "DIAGNOSTIC_ONLY_NOT_CLOSE_EVIDENCE"
-_DISPATCH_JOB_OBJECT_NAME_ENV = "EMBER_LAB_DISPATCH_JOB_OBJECT_NAME"
 
 _GENESIS_INVENTORY_SCHEMA = "ember-genesis-inventory-v1"
 _GENESIS_INVENTORY_KEYS = {
@@ -87,125 +86,6 @@ _GENESIS_SHARD_NAMES = {
     "shared-model.pt", "optimizer-state.pt", "replay-state.pt",
     "expert-vision.pt", "expert-audio.pt", "expert-reasoning.pt", "expert-tool.pt",
 }
-
-
-def _query_named_job_membership(pid: int, process_start_token: str, job_object_name: str) -> bool:
-    """Ask whether the retained PID/start-token handle belongs to the retained Job."""
-
-    if os.name != "nt":
-        raise RuntimeError("trainer Job Object membership query requires Windows")
-    if (
-        type(pid) is not int
-        or pid < 1
-        or not isinstance(process_start_token, str)
-        or not process_start_token.isdecimal()
-        or not isinstance(job_object_name, str)
-        or not job_object_name
-    ):
-        raise RuntimeError("trainer Job Object membership query identity is invalid")
-    class _FileTime(ctypes.Structure):
-        _fields_ = (("low", ctypes.c_uint32), ("high", ctypes.c_uint32))
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.OpenJobObjectW.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p)
-    kernel32.OpenJobObjectW.restype = ctypes.c_void_p
-    kernel32.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
-    kernel32.OpenProcess.restype = ctypes.c_void_p
-    kernel32.GetProcessTimes.argtypes = (
-        ctypes.c_void_p,
-        ctypes.POINTER(_FileTime),
-        ctypes.POINTER(_FileTime),
-        ctypes.POINTER(_FileTime),
-        ctypes.POINTER(_FileTime),
-    )
-    kernel32.GetProcessTimes.restype = ctypes.c_int
-    kernel32.IsProcessInJob.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int))
-    kernel32.IsProcessInJob.restype = ctypes.c_int
-    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
-    kernel32.CloseHandle.restype = ctypes.c_int
-    job = kernel32.OpenJobObjectW(0x0004, 0, job_object_name)
-    if not job:
-        raise RuntimeError(f"trainer Job Object open failed with Win32 error {ctypes.get_last_error()}")
-    process = kernel32.OpenProcess(0x1000, 0, pid)
-    try:
-        if not process:
-            raise RuntimeError(f"trainer process open failed with Win32 error {ctypes.get_last_error()}")
-        creation, exit_time, kernel_time, user_time = (_FileTime() for _ in range(4))
-        if not kernel32.GetProcessTimes(
-            process,
-            ctypes.byref(creation),
-            ctypes.byref(exit_time),
-            ctypes.byref(kernel_time),
-            ctypes.byref(user_time),
-        ):
-            raise RuntimeError(
-                f"trainer process start-token query failed with Win32 error {ctypes.get_last_error()}"
-            )
-        retained_start_token = str((int(creation.high) << 32) | int(creation.low))
-        if retained_start_token != process_start_token:
-            raise RuntimeError("trainer process start token changed before Job Object membership query")
-        is_member = ctypes.c_int(0)
-        if not kernel32.IsProcessInJob(process, job, ctypes.byref(is_member)):
-            raise RuntimeError(f"trainer Job Object membership query failed with Win32 error {ctypes.get_last_error()}")
-        return bool(is_member.value)
-    finally:
-        if process:
-            kernel32.CloseHandle(process)
-        kernel32.CloseHandle(job)
-
-
-def verify_trainer_optimizer_step_events(
-    segment: Mapping[str, object],
-    *,
-    current_pid: int | None = None,
-    job_object_name: str | None = None,
-    membership_query: Callable[[int, str, str], bool] = _query_named_job_membership,
-) -> dict[str, object]:
-    """Consume trainer-authored events and bind them to a direct named-Job query."""
-
-    pid = os.getpid() if current_pid is None else current_pid
-    name = os.environ.get(_DISPATCH_JOB_OBJECT_NAME_ENV) if job_object_name is None else job_object_name
-    events = segment.get("optimizer_step_events")
-    if not isinstance(events, list) or not events:
-        raise RuntimeError("trainer optimizer step events are absent")
-    expected_keys = {"event", "trainer_pid", "trainer_process_start_token", "optimizer_step"}
-    steps: list[int] = []
-    process_start_token: str | None = None
-    for event in events:
-        if not isinstance(event, dict) or set(event) != expected_keys:
-            raise RuntimeError("trainer optimizer step event is not closed")
-        if event.get("event") != "trainer_optimizer_step":
-            raise RuntimeError("trainer optimizer step event has the wrong kind")
-        if event.get("trainer_pid") != pid:
-            raise RuntimeError("trainer PID mismatch between optimizer event and running process")
-        event_start_token = event.get("trainer_process_start_token")
-        if not isinstance(event_start_token, str) or not event_start_token.isdecimal():
-            raise RuntimeError("trainer optimizer step event has an invalid process start token")
-        if process_start_token is None:
-            process_start_token = event_start_token
-        elif event_start_token != process_start_token:
-            raise RuntimeError("trainer process start token changed across optimizer events")
-        step = event.get("optimizer_step")
-        if type(step) is not int or step < 1:
-            raise RuntimeError("trainer optimizer step event has an invalid step")
-        steps.append(step)
-    if any(right != left + 1 for left, right in zip(steps, steps[1:])):
-        raise RuntimeError("trainer optimizer step events are not contiguous")
-    if not isinstance(name, str) or not name:
-        raise RuntimeError("daemon-owned trainer Job Object identity is absent")
-    assert process_start_token is not None
-    if membership_query(pid, process_start_token, name) is not True:
-        raise RuntimeError("trainer process is not a member of the directly queried Job Object")
-    return {
-        "trainer_pid": pid,
-        "trainer_process_start_token": process_start_token,
-        "job_object_name": name,
-        "direct_membership_query_succeeded": True,
-        "trainer_is_member": True,
-        "first_optimizer_step": steps[0],
-        "last_optimizer_step": steps[-1],
-        "optimizer_event_count": len(steps),
-    }
 _GENESIS_CLAIM_BOUNDARY = {
     "schema_version": "ember-genesis-claim-boundary-v1",
     "global_step": 0,
@@ -4673,13 +4553,11 @@ def run_semantic(
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
     )
-    trainer_job_membership = verify_trainer_optimizer_step_events(segment)
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("semantic runner did not publish its required counter-verified checkpoint")
     counts = measure_parameter_counts(model)
     return {
         "segment": segment,
-        "trainer_job_membership": trainer_job_membership,
         "counts": counts,
         "governor": governor_receipt,
         "memory_preflight": memory_preflight,
