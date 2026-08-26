@@ -296,6 +296,11 @@ pub enum EmberLabError {
         job_id: String,
         detail: String,
     },
+    JobMemoryEnforcementWitnessRefused {
+        job_id: String,
+        condition: String,
+        detail: String,
+    },
     ProcessUnavailable {
         job_id: String,
         pid: u32,
@@ -1609,6 +1614,137 @@ struct JobMemoryContract {
     simulated_peak_commit_bytes: Option<u64>,
     overshoot_allowance_basis_points: u32,
     kernel_limit_signal_observation_available: bool,
+}
+
+/// Successful existence of this closed object is the daemon's claim: every
+/// boolean is tautologically true (or false for the daemon control) because
+/// any other kernel result takes the distinct refusal path. The measurements
+/// are the exact flags and byte ceiling, witnessed while the child is still
+/// suspended and before any governed instruction can execute.
+#[cfg(windows)]
+#[derive(Clone, Debug, Serialize)]
+struct JobMemoryEnforcementWitness {
+    schema_version: &'static str,
+    witness_kind: &'static str,
+    witness_stage: &'static str,
+    observed_at_ms: i64,
+    job_object_name: String,
+    governed_pid: u32,
+    daemon_control_pid: u32,
+    assignment_method: &'static str,
+    governed_membership_query_succeeded: bool,
+    governed_is_member: bool,
+    daemon_membership_query_succeeded: bool,
+    daemon_is_member: bool,
+    extended_limit_query_succeeded: bool,
+    limit_flags: u32,
+    job_memory_limit_flag_set: bool,
+    expected_maximum_job_memory_bytes: u64,
+    observed_job_memory_limit_bytes: u64,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug)]
+struct JobMemoryWitnessRefusal {
+    observed_at_ms: i64,
+    condition: &'static str,
+    detail: String,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Debug)]
+enum JobMemoryWitnessOutcome {
+    NotRequired,
+    Verified(JobMemoryEnforcementWitness),
+    Refused(JobMemoryWitnessRefusal),
+}
+
+#[cfg(windows)]
+fn validate_job_memory_witness_event_cardinality(job_id: &str, events: &[Value]) -> Result<()> {
+    let declarations: Vec<&Value> = events
+        .iter()
+        .filter(|event| {
+            event.get("kind").and_then(Value::as_str) == Some("job_start_reserved")
+                && (event.pointer("/payload/maximum_job_memory_bytes").is_some()
+                    || event
+                        .pointer("/payload/job_memory_enforcement_witness_required")
+                        .is_some())
+        })
+        .collect();
+    if declarations.is_empty() {
+        // Receipts from before the witness schema have neither declaration
+        // field. They cannot retroactively claim this enforcement evidence.
+        return Ok(());
+    }
+    if declarations.len() != 1 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "job {job_id} requires exactly one job-memory witness declaration; found {}",
+                declarations.len()
+            ),
+        });
+    }
+    let maximum = declarations[0]
+        .pointer("/payload/maximum_job_memory_bytes")
+        .ok_or_else(|| EmberLabError::InvalidDataCatalog {
+            detail: format!("job {job_id} witness declaration omits maximum_job_memory_bytes"),
+        })?;
+    let required_from_maximum = if maximum.is_null() {
+        false
+    } else {
+        if maximum.as_u64().is_none_or(|value| value == 0) {
+            return Err(EmberLabError::InvalidDataCatalog {
+                detail: format!(
+                    "job {job_id} witness declaration maximum_job_memory_bytes is not positive"
+                ),
+            });
+        }
+        true
+    };
+    let declared_required = declarations[0]
+        .pointer("/payload/job_memory_enforcement_witness_required")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "job {job_id} witness declaration omits boolean job_memory_enforcement_witness_required"
+            ),
+        })?;
+    if declared_required != required_from_maximum {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "job {job_id} witness requirement contradicts maximum_job_memory_bytes"
+            ),
+        });
+    }
+    let required = declared_required;
+    if !required {
+        return Ok(());
+    }
+    let prepared: Vec<&Value> = events
+        .iter()
+        .filter(|event| event.get("kind").and_then(Value::as_str) == Some("job_prepared"))
+        .collect();
+    let refusals = events
+        .iter()
+        .filter(|event| {
+            event.get("kind").and_then(Value::as_str) == Some("job_memory_witness_refused")
+        })
+        .count();
+    let verified = prepared.len() == 1
+        && prepared[0]
+            .pointer("/payload/job_memory_enforcement_witness")
+            .is_some_and(Value::is_object)
+        && refusals == 0;
+    let refused = prepared.is_empty() && refusals == 1;
+    if !verified && !refused {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "job {job_id} requires exactly one prepared job-memory witness or one distinct refusal event; found {} prepared and {refusals} refusals",
+                prepared.len()
+            ),
+        });
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -4518,6 +4654,12 @@ impl Daemon {
         spec = spec.with_dispatch_token(dispatch_expires_at_ms)?;
         let handle = match self.start_job_with_window_census_budget(spec, window_census_budget) {
             Ok(handle) => handle,
+            Err(error @ EmberLabError::JobMemoryEnforcementWitnessRefused { .. }) => {
+                // The failed job and its pre-terminate refusal event are durable
+                // evidence. Dispatch rollback would erase the very refusal that
+                // distinguishes an enforcement failure from no spawn attempt.
+                return Err(error);
+            }
             Err(error) => {
                 let _ = self.rollback_dispatch_attempt(&job_id, &resource_lease, created_identity);
                 return Err(error);
@@ -4767,6 +4909,38 @@ impl Daemon {
         tx.commit()?;
         Ok(())
     }
+
+    #[cfg(windows)]
+    fn record_job_memory_witness_refusal(
+        &self,
+        job_id: &str,
+        job_object_name: &str,
+        governed_pid: u32,
+        refusal: &JobMemoryWitnessRefusal,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_memory_witness_refused',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "schema_version":"ember-lab-job-memory-witness-refusal-v1",
+                    "observed_at_ms":refusal.observed_at_ms,
+                    "condition":refusal.condition,
+                    "detail":refusal.detail,
+                    "job_object_name":job_object_name,
+                    "governed_pid":governed_pid,
+                    "termination_pending":true,
+                })
+                .to_string(),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn start_job(&self, spec: JobSpec) -> Result<JobHandle> {
         self.start_job_with_window_census_budget(spec, DEFAULT_WINDOW_CENSUS_BUDGET)
     }
@@ -4959,7 +5133,7 @@ impl Daemon {
             }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_start_reserved',?3)",
-                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"vram_wall":spec.vram_wall,"maximum_process_vram_bytes":spec.maximum_process_vram_bytes,"disk_write_walls":spec.disk_write_walls.iter().map(|wall| json!({"contract":wall.contract,"baseline_tree_bytes":wall.baseline_tree_bytes})).collect::<Vec<_>>()}).to_string()],
+                params![spec.job_id, now_ms(), json!({"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"vram_wall":spec.vram_wall,"maximum_process_vram_bytes":spec.maximum_process_vram_bytes,"maximum_job_memory_bytes":spec.maximum_job_memory_bytes,"job_memory_enforcement_witness_required":spec.maximum_job_memory_bytes.is_some(),"disk_write_walls":spec.disk_write_walls.iter().map(|wall| json!({"contract":wall.contract,"baseline_tree_bytes":wall.baseline_tree_bytes})).collect::<Vec<_>>()}).to_string()],
             )?;
             tx.commit()?;
         }
@@ -4974,6 +5148,48 @@ impl Daemon {
         let pid = spawned.pid();
         let identity = spawned.identity();
         let applied_cpu_rate = spawned.applied_cpu_rate();
+        #[cfg(windows)]
+        let job_memory_enforcement_witness = {
+            let outcome = spawned.job_memory_witness_outcome().clone();
+            let refusal = match &outcome {
+                JobMemoryWitnessOutcome::Verified(_) => None,
+                JobMemoryWitnessOutcome::Refused(refusal) => Some(refusal.clone()),
+                JobMemoryWitnessOutcome::NotRequired if spec.maximum_job_memory_bytes.is_some() => {
+                    Some(JobMemoryWitnessRefusal {
+                        observed_at_ms: now_ms(),
+                        condition: "manifest_witness_missing",
+                        detail:
+                            "manifest dispatch requires a non-null pre-execution job-memory witness"
+                                .into(),
+                    })
+                }
+                JobMemoryWitnessOutcome::NotRequired => None,
+            };
+            if let Some(refusal) = refusal {
+                // The refusal is committed while the child is still suspended,
+                // before terminate_and_wait performs the irreversible kill.
+                self.record_job_memory_witness_refusal(
+                    &spec.job_id,
+                    &job_object_name,
+                    pid,
+                    &refusal,
+                )?;
+                let terminate = spawned.terminate_and_wait();
+                let failed = self.mark_failed(&spec.job_id, "job_memory_witness_spawn_aborted");
+                terminate?;
+                failed?;
+                return Err(EmberLabError::JobMemoryEnforcementWitnessRefused {
+                    job_id: spec.job_id.clone(),
+                    condition: refusal.condition.into(),
+                    detail: refusal.detail,
+                });
+            }
+            match outcome {
+                JobMemoryWitnessOutcome::Verified(witness) => Some(witness),
+                JobMemoryWitnessOutcome::NotRequired => None,
+                JobMemoryWitnessOutcome::Refused(_) => unreachable!(),
+            }
+        };
         let prepared = (|| -> Result<()> {
             let mut conn = self.conn()?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -4987,9 +5203,15 @@ impl Daemon {
                     detail: "start reservation disappeared".into(),
                 });
             }
+            let mut prepared_payload = json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"cpu_pacing_class":spec.cpu_pacing_class,"cpu_rate_control_verified":applied_cpu_rate.is_some(),"applied_cpu_rate":applied_cpu_rate});
+            #[cfg(windows)]
+            {
+                prepared_payload["job_memory_enforcement_witness"] =
+                    json!(job_memory_enforcement_witness);
+            }
             tx.execute(
                 "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'job_prepared',?3)",
-                params![spec.job_id, now_ms(), json!({"pid":pid,"job_object_name":job_object_name,"cpu_rate_percent":spec.cpu_rate_percent,"requires_ui_responsiveness":spec.requires_ui_responsiveness,"cpu_pacing_class":spec.cpu_pacing_class,"cpu_rate_control_verified":applied_cpu_rate.is_some(),"applied_cpu_rate":applied_cpu_rate}).to_string()],
+                params![spec.job_id, now_ms(), prepared_payload.to_string()],
             )?;
             if let Some(token) = &spec.dispatch_token {
                 tx.execute(
@@ -5643,6 +5865,8 @@ impl Daemon {
                 Ok(json!({"seq":seq,"ts_ms":ts,"kind":kind,"payload":serde_json::from_str::<Value>(&payload)?}))
             })
             .collect::<Result<_>>()?;
+        #[cfg(windows)]
+        validate_job_memory_witness_event_cardinality(job_id, &events)?;
         let outage_events: Vec<Value> = raw_outage_events
             .into_iter()
             .map(|(seq, ts, kind, payload)| {
@@ -13205,6 +13429,7 @@ struct SpawnedProcess {
     identity: ProcessIdentity,
     applied_cpu_rate: Option<u32>,
     job_memory_contract: JobMemoryContract,
+    job_memory_witness_outcome: JobMemoryWitnessOutcome,
 }
 
 #[cfg(windows)]
@@ -13231,6 +13456,9 @@ impl SpawnedProcess {
     /// (`IsProcessInJob`) -- ownership stays with `self.job`.
     fn job_handle(&self) -> windows_sys::Win32::Foundation::HANDLE {
         self.job.raw()
+    }
+    fn job_memory_witness_outcome(&self) -> &JobMemoryWitnessOutcome {
+        &self.job_memory_witness_outcome
     }
     fn resume(&mut self) -> Result<()> {
         use windows_sys::Win32::System::Threading::ResumeThread;
@@ -13732,6 +13960,112 @@ fn create_job_completion_port(job: windows_sys::Win32::Foundation::HANDLE) -> Re
 }
 
 #[cfg(windows)]
+fn observe_job_memory_enforcement_before_resume(
+    job: windows_sys::Win32::Foundation::HANDLE,
+    process: windows_sys::Win32::Foundation::HANDLE,
+    job_object_name: &str,
+    governed_pid: u32,
+    expected_maximum_job_memory_bytes: u64,
+) -> JobMemoryWitnessOutcome {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::Foundation::BOOL;
+    use windows_sys::Win32::System::JobObjects::{
+        IsProcessInJob, JobObjectExtendedLimitInformation, QueryInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_JOB_MEMORY,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, GetCurrentProcessId};
+
+    let refused = |condition: &'static str, detail: String| {
+        JobMemoryWitnessOutcome::Refused(JobMemoryWitnessRefusal {
+            observed_at_ms: now_ms(),
+            condition,
+            detail,
+        })
+    };
+    let mut governed_is_member: BOOL = 0;
+    if unsafe { IsProcessInJob(process, job, &mut governed_is_member) } == 0 {
+        return refused(
+            "governed_membership_query_failed",
+            std::io::Error::last_os_error().to_string(),
+        );
+    }
+    if governed_is_member == 0 {
+        return refused(
+            "governed_not_member",
+            "created governed process is not assigned to its target job object".into(),
+        );
+    }
+
+    let daemon = unsafe { GetCurrentProcess() };
+    let mut daemon_is_member: BOOL = 0;
+    if unsafe { IsProcessInJob(daemon, job, &mut daemon_is_member) } == 0 {
+        return refused(
+            "daemon_membership_query_failed",
+            std::io::Error::last_os_error().to_string(),
+        );
+    }
+    if daemon_is_member != 0 {
+        return refused(
+            "daemon_unexpected_member",
+            "daemon control unexpectedly belongs to the governed target job object".into(),
+        );
+    }
+
+    let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
+    if unsafe {
+        QueryInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            (&mut limits as *mut JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return refused(
+            "extended_limit_query_failed",
+            std::io::Error::last_os_error().to_string(),
+        );
+    }
+    let limit_flags = limits.BasicLimitInformation.LimitFlags;
+    if limit_flags & JOB_OBJECT_LIMIT_JOB_MEMORY == 0 {
+        return refused(
+            "job_memory_limit_flag_absent",
+            "JOB_OBJECT_LIMIT_JOB_MEMORY is absent from the reopened kernel limits".into(),
+        );
+    }
+    let observed_job_memory_limit_bytes = limits.JobMemoryLimit as u64;
+    if observed_job_memory_limit_bytes != expected_maximum_job_memory_bytes {
+        return refused(
+            "job_memory_limit_mismatch",
+            format!(
+                "expected {expected_maximum_job_memory_bytes} bytes, observed {observed_job_memory_limit_bytes} bytes"
+            ),
+        );
+    }
+
+    JobMemoryWitnessOutcome::Verified(JobMemoryEnforcementWitness {
+        schema_version: "ember-lab-job-memory-enforcement-witness-v1",
+        witness_kind: "daemon_assignment_time_kernel_query",
+        witness_stage: "post_create_pre_resume",
+        observed_at_ms: now_ms(),
+        job_object_name: job_object_name.into(),
+        governed_pid,
+        daemon_control_pid: unsafe { GetCurrentProcessId() },
+        assignment_method: "proc_thread_attribute_job_list",
+        governed_membership_query_succeeded: true,
+        governed_is_member: true,
+        daemon_membership_query_succeeded: true,
+        daemon_is_member: false,
+        extended_limit_query_succeeded: true,
+        limit_flags,
+        job_memory_limit_flag_set: true,
+        expected_maximum_job_memory_bytes,
+        observed_job_memory_limit_bytes,
+    })
+}
+
+#[cfg(windows)]
 fn spawn_managed(
     spec: &JobSpec,
     job_name: &str,
@@ -13932,6 +14266,49 @@ fn spawn_managed(
         return Err(std::io::Error::last_os_error().into());
     }
 
+    // This is strictly stronger than an external live sampler: CreateProcessW
+    // assigned the still-suspended child through PROC_THREAD_ATTRIBUTE_JOB_LIST,
+    // and no governed instruction can execute before this kernel readback.
+    let witness_expected_maximum: std::result::Result<Option<u64>, String> = {
+        #[cfg(debug_assertions)]
+        {
+            spec.env
+                .get("EMBER_LAB_TEST_ONLY_JOB_MEMORY_WITNESS_EXPECTED_BYTES")
+                .map(|raw| raw.parse::<u64>())
+                .transpose()
+                .map_err(|error| error.to_string())
+                .map(|value| value.or(spec.maximum_job_memory_bytes))
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Ok(spec.maximum_job_memory_bytes)
+        }
+    };
+    let mut job_memory_witness_outcome = match witness_expected_maximum {
+        Ok(Some(expected)) => observe_job_memory_enforcement_before_resume(
+            job,
+            info.hProcess,
+            job_name,
+            info.dwProcessId,
+            expected,
+        ),
+        Ok(None) => JobMemoryWitnessOutcome::NotRequired,
+        Err(error) => JobMemoryWitnessOutcome::Refused(JobMemoryWitnessRefusal {
+            observed_at_ms: now_ms(),
+            condition: "test_override_invalid",
+            detail: error.to_string(),
+        }),
+    };
+    #[cfg(debug_assertions)]
+    if spec
+        .env
+        .get("EMBER_LAB_TEST_ONLY_SUPPRESS_JOB_MEMORY_WITNESS")
+        .map(String::as_str)
+        == Some("1")
+    {
+        job_memory_witness_outcome = JobMemoryWitnessOutcome::NotRequired;
+    }
+
     let current = unsafe { GetCurrentProcess() };
     let mut remote_lifetime_handle = std::ptr::null_mut();
     if unsafe {
@@ -13987,6 +14364,7 @@ fn spawn_managed(
             overshoot_allowance_basis_points: JOB_MEMORY_OVERSHOOT_ALLOWANCE_BASIS_POINTS,
             kernel_limit_signal_observation_available: true,
         },
+        job_memory_witness_outcome,
     })
 }
 #[cfg(windows)]

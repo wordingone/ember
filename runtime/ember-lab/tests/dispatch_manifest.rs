@@ -3147,3 +3147,277 @@ fn dispatch_manifest_rejects_cache_and_equals_path_escapes() {
         assert!(!root.join("custody").join("preflight.json").exists());
     }
 }
+
+fn dispatch_witness_fixture(root: &Path, job_id: &str, extra_env: &[(&str, &str)]) -> Daemon {
+    let manifest = write_manifest(root, job_id, 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    for (key, value) in extra_env {
+        payload["env"][*key] = json!(*value);
+    }
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || Ok(1024),
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap();
+    daemon
+}
+
+#[test]
+fn dispatch_receipts_one_exact_pre_execution_job_memory_witness() {
+    let root = sandbox("job-memory-enforcement-witness");
+    let job_id = "dispatch-job-memory-enforcement-witness";
+    let daemon = dispatch_witness_fixture(&root, job_id, &[]);
+    let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+    let prepared_row: (i64, String) = connection
+        .query_row(
+            "SELECT ts_ms,payload_json FROM events WHERE job_id=?1 AND kind='job_prepared'",
+            [job_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    let prepared: Value = serde_json::from_str(&prepared_row.1).unwrap();
+    let witness = prepared["job_memory_enforcement_witness"]
+        .as_object()
+        .expect("manifest dispatch must carry a non-null witness");
+    let expected_keys = [
+        "schema_version",
+        "witness_kind",
+        "witness_stage",
+        "observed_at_ms",
+        "job_object_name",
+        "governed_pid",
+        "daemon_control_pid",
+        "assignment_method",
+        "governed_membership_query_succeeded",
+        "governed_is_member",
+        "daemon_membership_query_succeeded",
+        "daemon_is_member",
+        "extended_limit_query_succeeded",
+        "limit_flags",
+        "job_memory_limit_flag_set",
+        "expected_maximum_job_memory_bytes",
+        "observed_job_memory_limit_bytes",
+    ];
+    assert_eq!(witness.len(), expected_keys.len());
+    assert!(expected_keys.iter().all(|key| witness.contains_key(*key)));
+    assert_eq!(
+        witness["schema_version"],
+        "ember-lab-job-memory-enforcement-witness-v1"
+    );
+    assert_eq!(
+        witness["witness_kind"],
+        "daemon_assignment_time_kernel_query"
+    );
+    assert_eq!(witness["witness_stage"], "post_create_pre_resume");
+    assert_eq!(
+        witness["assignment_method"],
+        "proc_thread_attribute_job_list"
+    );
+    assert_eq!(witness["governed_membership_query_succeeded"], true);
+    assert_eq!(witness["governed_is_member"], true);
+    assert_eq!(witness["daemon_membership_query_succeeded"], true);
+    assert_eq!(witness["daemon_is_member"], false);
+    assert_eq!(witness["extended_limit_query_succeeded"], true);
+    assert_eq!(witness["job_memory_limit_flag_set"], true);
+    assert_eq!(
+        witness["expected_maximum_job_memory_bytes"],
+        MAXIMUM_JOB_MEMORY_BYTES
+    );
+    assert_eq!(
+        witness["observed_job_memory_limit_bytes"],
+        MAXIMUM_JOB_MEMORY_BYTES
+    );
+    assert_ne!(witness["limit_flags"].as_u64().unwrap() & 0x200, 0);
+    assert_eq!(witness["governed_pid"], prepared["pid"]);
+    assert_eq!(witness["job_object_name"], prepared["job_object_name"]);
+    assert!(witness["daemon_control_pid"].as_u64().unwrap() > 0);
+    assert!(witness["observed_at_ms"].as_i64().unwrap() <= prepared_row.0);
+
+    drop(connection);
+    daemon.stop_job(job_id).unwrap();
+    let artifact = daemon
+        .export_content_addressed_receipt(job_id, &root.join("terminal-receipts"))
+        .unwrap();
+    let terminal: Value = serde_json::from_slice(&fs::read(artifact.path).unwrap()).unwrap();
+    let prepared_events: Vec<&Value> = terminal["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| event["kind"] == "job_prepared")
+        .collect();
+    assert_eq!(prepared_events.len(), 1);
+    assert_eq!(prepared_events[0]["payload"], prepared);
+}
+
+#[test]
+fn job_memory_witness_mismatch_aborts_and_receipts_refusal_before_termination() {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{OpenProcess, WaitForSingleObject};
+    const SYNCHRONIZE_RIGHT: u32 = 0x0010_0000;
+
+    let root = sandbox("job-memory-witness-mismatch");
+    let job_id = "dispatch-job-memory-witness-mismatch";
+    let manifest = write_manifest(&root, job_id, 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_TEST_ONLY_JOB_MEMORY_WITNESS_EXPECTED_BYTES"] =
+        json!((MAXIMUM_JOB_MEMORY_BYTES - 4096).to_string());
+    payload["env"]["EMBER_LAB_DISPATCH_FIXTURE_SLEEP_MS"] = json!("30000");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        10_001,
+        |_root| Ok(1024),
+        || Ok(1024),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+    );
+    if result.is_ok() {
+        daemon.stop_job(job_id).unwrap();
+    }
+    assert!(
+        result.is_err(),
+        "mismatched assignment witness must abort dispatch"
+    );
+    let connection = Connection::open(&db).unwrap();
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE job_id=?1 AND kind='job_prepared'",
+                [job_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        0
+    );
+    let refusal_payload: String = connection
+        .query_row(
+            "SELECT payload_json FROM events WHERE job_id=?1 AND kind='job_memory_witness_refused'",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let refusal: Value = serde_json::from_str(&refusal_payload).unwrap();
+    assert_eq!(
+        refusal["schema_version"],
+        "ember-lab-job-memory-witness-refusal-v1"
+    );
+    assert_eq!(refusal["condition"], "job_memory_limit_mismatch");
+    assert_eq!(refusal["termination_pending"], true);
+    let pid = refusal["governed_pid"].as_u64().unwrap() as u32;
+    let process = unsafe { OpenProcess(SYNCHRONIZE_RIGHT, 0, pid) };
+    if process.is_null() {
+        assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(87));
+    } else {
+        assert_eq!(unsafe { WaitForSingleObject(process, 0) }, WAIT_OBJECT_0);
+        unsafe { CloseHandle(process) };
+    }
+    assert_eq!(daemon.job_state(job_id).unwrap(), Some(JobState::Failed));
+    let receipt = daemon
+        .export_content_addressed_receipt(job_id, &root.join("refusal-receipts"))
+        .unwrap();
+    let terminal: Value = serde_json::from_slice(&fs::read(receipt.path).unwrap()).unwrap();
+    assert_eq!(
+        terminal["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|event| event["kind"] == "job_memory_witness_refused")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn manifest_dispatch_refuses_a_suppressed_null_job_memory_witness() {
+    let root = sandbox("job-memory-witness-null");
+    let job_id = "dispatch-job-memory-witness-null";
+    let manifest = write_manifest(&root, job_id, 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["env"]["EMBER_LAB_TEST_ONLY_SUPPRESS_JOB_MEMORY_WITNESS"] = json!("1");
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let db = root.join("ember-lab.sqlite3");
+    let daemon = Daemon::open(&db).unwrap();
+    let result = daemon.dispatch_manifest_at_with_probes_and_host(
+        &manifest,
+        10_001,
+        |_root| Ok(1024),
+        || Ok(1024),
+        || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+    );
+    if result.is_ok() {
+        daemon.stop_job(job_id).unwrap();
+    }
+    assert!(
+        result.is_err(),
+        "manifest dispatch must refuse a null witness"
+    );
+    let connection = Connection::open(&db).unwrap();
+    let condition: String = connection
+        .query_row(
+            "SELECT json_extract(payload_json,'$.condition') FROM events WHERE job_id=?1 AND kind='job_memory_witness_refused'",
+            [job_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(condition, "manifest_witness_missing");
+}
+
+#[test]
+fn terminal_receipt_refuses_corrupted_witness_cardinality_or_requirement() {
+    for mutation in ["zero", "duplicate", "required_false"] {
+        let root = sandbox(&format!("job-memory-witness-cardinality-{mutation}"));
+        let job_id = format!("dispatch-job-memory-witness-cardinality-{mutation}");
+        let daemon = dispatch_witness_fixture(&root, &job_id, &[]);
+        daemon.stop_job(&job_id).unwrap();
+        let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+        match mutation {
+            "zero" => {
+                connection
+                    .execute(
+                        "DELETE FROM events WHERE job_id=?1 AND kind='job_prepared'",
+                        [&job_id],
+                    )
+                    .unwrap();
+            }
+            "duplicate" => {
+                connection
+                    .execute(
+                        "INSERT INTO events(job_id,ts_ms,kind,payload_json) SELECT job_id,ts_ms+1,kind,payload_json FROM events WHERE job_id=?1 AND kind='job_prepared'",
+                        [&job_id],
+                    )
+                    .unwrap();
+            }
+            "required_false" => {
+                let raw: String = connection
+                    .query_row(
+                        "SELECT payload_json FROM events WHERE job_id=?1 AND kind='job_start_reserved'",
+                        [&job_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                let mut payload: Value = serde_json::from_str(&raw).unwrap();
+                payload["job_memory_enforcement_witness_required"] = json!(false);
+                connection
+                    .execute(
+                        "UPDATE events SET payload_json=?2 WHERE job_id=?1 AND kind='job_start_reserved'",
+                        rusqlite::params![job_id, payload.to_string()],
+                    )
+                    .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        assert!(daemon
+            .export_content_addressed_receipt(
+                &job_id,
+                &root.join(format!("terminal-receipts-{mutation}")),
+            )
+            .is_err());
+    }
+}
