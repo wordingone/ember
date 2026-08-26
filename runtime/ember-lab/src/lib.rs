@@ -1911,9 +1911,15 @@ impl ProtectiveStopContext {
         job_process_row_from_connection(&conn, job_id)
     }
 
-    fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow, seal_logs: bool) -> Result<()> {
+    fn finalize_stopped(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+        seal_logs: bool,
+        completion_artifact: &ReceiptArtifact,
+    ) -> Result<()> {
         let mut conn = self.conn()?;
-        finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs)
+        finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs, Some(completion_artifact))
     }
 
     #[cfg(windows)]
@@ -2244,20 +2250,7 @@ impl ProtectiveStopContext {
             }
             memory_barrier.wait()?;
         }
-        self.finalize_stopped(job_id, &row, true)?;
-        self.conn()?.execute(
-            "INSERT INTO events(job_id,ts_ms,kind,payload_json)
-             VALUES(?1,?2,'protective_owned_stop_completed',?3)",
-            params![
-                job_id,
-                now_ms(),
-                json!({
-                    "decision_receipt": artifact.path.file_name().unwrap().to_string_lossy(),
-                    "decision_receipt_sha256": &artifact.sha256,
-                })
-                .to_string()
-            ],
-        )?;
+        self.finalize_stopped(job_id, &row, true, &artifact)?;
         Ok(artifact)
     }
 }
@@ -7736,7 +7729,7 @@ impl Daemon {
 
     fn finalize_stopped(&self, job_id: &str, row: &JobProcessRow, seal_logs: bool) -> Result<()> {
         let mut conn = self.conn()?;
-        finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs)
+        finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs, None)
     }
 
     #[cfg(windows)]
@@ -8080,6 +8073,7 @@ fn finalize_stopped_in_connection(
     job_id: &str,
     row: &JobProcessRow,
     seal_logs: bool,
+    protective_completion: Option<&ReceiptArtifact>,
 ) -> Result<()> {
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let (stdout_sha256, stderr_sha256) = if seal_logs {
@@ -8122,6 +8116,21 @@ fn finalize_stopped_in_connection(
             json!({"pid":row.pid,"lease_epoch":row.lease_epoch}).to_string()
         ],
     )?;
+    if let Some(artifact) = protective_completion {
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+             VALUES(?1,?2,'protective_owned_stop_completed',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "decision_receipt": artifact.path.file_name().unwrap().to_string_lossy(),
+                    "decision_receipt_sha256": &artifact.sha256,
+                })
+                .to_string()
+            ],
+        )?;
+    }
     tx.commit()?;
     Ok(())
 }
