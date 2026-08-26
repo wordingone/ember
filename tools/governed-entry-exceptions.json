@@ -49,6 +49,11 @@
       "path": "scripts/training_closure.py",
       "sha256": "e3384dcde2c4a3d8e7b2bd91105a2a01afe372c77ef76433055c8b9ad8fd440a",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+    },
+    {
+      "path": "tools/repo_guard_selftest.py",
+      "sha256": "9d1a70fc8f3e602206518ac003aaa7d3cd7a4b2f1685b0f9409da8f3e1825007",
+      "reason": "repository-policy selftest names the governed training entry only inside a deliberate refusal fixture; it does not import, execute, or dispatch that entry"
     }
   ]
 }

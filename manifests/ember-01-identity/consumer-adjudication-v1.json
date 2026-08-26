@@ -188786,11 +188786,6 @@
       "review_basis": "inspected support file has no Ember model/experiment identity source, derivation, display, or consumption path"
     },
     {
-      "content_sha256": "3d1058eb46369ba4c33c8b9939da15cf9e5caf1620f58f74690787b75cb0139f",
-      "path": "tools/reference-launch/launch.ps1",
-      "review_basis": "inspected support file has no Ember model/experiment identity source, derivation, display, or consumption path"
-    },
-    {
       "content_sha256": "afb021cab546bf9649f1c751a0dca5c7aa7a2112f9a5e52bbeb70ba3b43faf16",
       "path": "tools/repo-guard.sh",
       "review_basis": "inspected support file has no Ember model/experiment identity source, derivation, display, or consumption path"

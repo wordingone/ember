@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Selftest for the clean-room the predecessor CLI full parity harness gate."""
 from __future__ import annotations
 
@@ -293,7 +296,7 @@ def main() -> int:
                     "verdict": "LAUNCH_PACKAGING_GATE_PASS",
                     "launch_packaging": {
                         "bin_name": "ember",
-                        "launcher_path": "tools/reference-launch/launch.ps1",
+                        "launcher_path": "Ember.cmd",
                         "uses_reference_exe": False,
                     },
                     "deletion_ablation": {

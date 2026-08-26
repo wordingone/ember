@@ -6,7 +6,7 @@
 // the certified tree (issue #1330).
 //
 // KEY_PARITY_VECTORS is the shared contract with Get-EmberStateRootKey in
-// scripts/launch-ember-cli.ps1: tests/test_ember_root_launcher.py drives the SAME inputs
+// scripts/prepare-ember-cockpit.ps1: tests/test_ember_root_launcher.py drives the SAME inputs
 // through the PowerShell side and asserts the SAME outputs. If either implementation
 // drifts, one of the two suites goes red — the failure mode this pins is a launcher and a
 // cockpit that silently disagree about where state lives.

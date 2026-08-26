@@ -37,11 +37,11 @@
 ### Task 2: Prepare-only canonical build
 
 **Files:**
-- Modify: `scripts/launch-ember-cli.ps1`
+- Modify: the preparation-only cockpit build helper
 - Modify: `tests/test_ember_root_launcher.py`
 
 **Interfaces:**
-- Produces: `scripts/launch-ember-cli.ps1 -PrepareApplicationOnly`, which prints one absolute built executable path and never launches a window.
+- Produces: `scripts/prepare-ember-cockpit.ps1`, which prints the application and governed-runtime paths and never launches the cockpit.
 
 - [x] Add a failing source/behavior test for prepare-only mode.
 - [x] Run the focused root-launcher selector and capture RED.
@@ -51,7 +51,7 @@
 ### Task 3: Closed installed-launch admission
 
 **Files:**
-- Create: `scripts/launch-installed-ember.ps1`
+- Retire: the former installed launcher; shortcuts target the governed runtime directly.
 - Create: `scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**

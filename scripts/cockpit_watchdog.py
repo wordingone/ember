@@ -853,7 +853,7 @@ def run_selftest() -> None:
 
 # #413/#1330 (review round 2): third resolution-point consumer, in lockstep with
 # tools/ember-cli/src/utils/ember-state-root.ts (emberStateRoot/repoStateKey) and
-# Get-EmberStateRoot/Get-EmberStateRootKey in scripts/launch-ember-cli.ps1. Guarded against
+# Get-EmberStateRoot/Get-EmberStateRootKey in the preparation-only cockpit helper. Guarded against
 # drift by scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS, which pins this
 # port's output against the SAME vectors the other two suites already share.
 #
@@ -864,7 +864,7 @@ def run_selftest() -> None:
 # round of this fix did) left a standard watchdog run, with EMBER_STATE_ROOT unset in its
 # own process env, reading a path the writer never touches: structural blindness dressed as
 # fail-loud. Nothing wires EMBER_STATE_ROOT into the watchdog's launch environment today
-# (launch-ember-cli.ps1 exports it only for its own cockpit child), so the default arm is
+# (prepare-ember-cockpit.ps1 resolves it only inside its owned preparation), so the default arm is
 # the one that actually fires in practice.
 
 

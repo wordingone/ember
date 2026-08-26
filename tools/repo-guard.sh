@@ -477,42 +477,23 @@ LAUNCHER_SHAPE_PATHSPEC=(
   ':(exclude)tools/ember-cli'
   ':(exclude)tools/check_governed_entry_exceptions.py'
   ':(exclude)tools/repo-guard.sh'
-  ':(exclude)tests'
-  ':(exclude)scripts/tests'
-  ':(exclude)*/tests/*'
-  ':(exclude)*test_*'
-  ':(exclude)*selftest*'
 )
 LAUNCHER_NAMED_PATHSPEC=(
   -- '*launch*.py' '*launch*.sh' '*launcher*'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
   ':(exclude)tools/powershell-launcher-shape-guard.ps1'
-  ':(exclude)tests'
-  ':(exclude)scripts/tests'
-  ':(exclude)*/tests/*'
-  ':(exclude)*test_*'
 )
 LAUNCHER_PS_SHAPE_PATHSPEC=(
   -- '*.ps1'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
   ':(exclude)tools/powershell-launcher-shape-guard.ps1'
-  ':(exclude)tests'
-  ':(exclude)scripts/tests'
-  ':(exclude)*/tests/*'
-  ':(exclude)*test_*'
-  ':(exclude)*selftest*'
 )
 LAUNCHER_PS_NAMED_PATHSPEC=(
   -- '*launch*.ps1' '*launcher*.ps1'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
-  ':(exclude)tests'
-  ':(exclude)scripts/tests'
-  ':(exclude)*/tests/*'
-  ':(exclude)*test_*'
-  ':(exclude)*selftest*'
 )
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   LAUNCHER_GREP=(git grep --cached)

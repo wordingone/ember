@@ -1582,11 +1582,11 @@ def test_red_powershell_ast_engine_absence_refuses():
 def test_green_powershell_script_root_target_is_digest_adjudicated():
     tmp = make_fixture("fix/selftest-green-powershell-script-root-target")
     try:
-        target = tmp / "scripts" / "launch-ember-cli.ps1"
+        target = tmp / "scripts" / "prepare-ember-cockpit.ps1"
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(REPO_ROOT / "scripts" / "launch-ember-cli.ps1", target)
+        shutil.copyfile(REPO_ROOT / "scripts" / "prepare-ember-cockpit.ps1", target)
         (tmp / "scripts" / "operator-policy.ps1").write_text(
-            '& (Join-Path (Split-Path $PSCommandPath) "launch-ember-cli.ps1") -PrepareApplicationOnly\n',
+            '& (Join-Path (Split-Path $PSCommandPath) "prepare-ember-cockpit.ps1")\n',
             encoding="utf-8",
             newline="\n",
         )
@@ -1612,6 +1612,24 @@ def test_red_powershell_process_start_member_launcher_shape():
         assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
         assert "FAIL [launcher-shape]" in out, out
         assert "scripts/operator-member.ps1" in out, out
+    finally:
+        cleanup(tmp)
+
+
+def test_red_powershell_launcher_shape_cannot_hide_behind_selftest_name():
+    tmp = make_fixture("fix/selftest-red-powershell-hidden-by-name")
+    try:
+        hidden = tmp / "scripts" / "operator-launch-selftest.ps1"
+        hidden.write_text(
+            "& python.exe tools/ember-restart-3b/run_vertical_slice.py governed-vertical\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        commit_fixture(tmp)
+        rc, out = run_guard(tmp)
+        assert rc != 0, f"expected nonzero exit, got {rc}\n{out}"
+        assert "FAIL [launcher-shape]" in out, out
+        assert "scripts/operator-launch-selftest.ps1" in out, out
     finally:
         cleanup(tmp)
 
@@ -1690,6 +1708,7 @@ ALL_TESTS = [
     test_red_powershell_ast_engine_absence_refuses,
     test_green_powershell_script_root_target_is_digest_adjudicated,
     test_red_powershell_process_start_member_launcher_shape,
+    test_red_powershell_launcher_shape_cannot_hide_behind_selftest_name,
     test_red_powershell_malformed_source_refuses_even_when_not_named_launcher,
 ]
 
