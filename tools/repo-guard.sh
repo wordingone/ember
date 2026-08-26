@@ -481,11 +481,13 @@ LAUNCHER_SHAPE_PATHSPEC=(
   ':(exclude)scripts/tests'
   ':(exclude)*/tests/*'
   ':(exclude)*test_*'
+  ':(exclude)*selftest*'
 )
 LAUNCHER_NAMED_PATHSPEC=(
   -- '*launch*.py' '*launch*.sh' '*launcher*'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
+  ':(exclude)tools/powershell-launcher-shape-guard.ps1'
   ':(exclude)tests'
   ':(exclude)scripts/tests'
   ':(exclude)*/tests/*'
@@ -495,10 +497,12 @@ LAUNCHER_PS_SHAPE_PATHSPEC=(
   -- '*.ps1'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
+  ':(exclude)tools/powershell-launcher-shape-guard.ps1'
   ':(exclude)tests'
   ':(exclude)scripts/tests'
   ':(exclude)*/tests/*'
   ':(exclude)*test_*'
+  ':(exclude)*selftest*'
 )
 LAUNCHER_PS_NAMED_PATHSPEC=(
   -- '*launch*.ps1' '*launcher*.ps1'
@@ -508,6 +512,7 @@ LAUNCHER_PS_NAMED_PATHSPEC=(
   ':(exclude)scripts/tests'
   ':(exclude)*/tests/*'
   ':(exclude)*test_*'
+  ':(exclude)*selftest*'
 )
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   LAUNCHER_GREP=(git grep --cached)
@@ -530,22 +535,51 @@ LAUNCHER_ARM_A="$(comm -12 <(printf '%s\n' "$LAUNCHER_SPAWN_PATHS") <(printf '%s
 LAUNCHER_NAMED_MAIN="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_MAIN_RE" "${LAUNCHER_NAMED_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
 LAUNCHER_NAMED_CHILD="$("${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_CHILD_RE" "${LAUNCHER_NAMED_PATHSPEC[@]}" 2>/dev/null | sort -u || true)"
 LAUNCHER_ARM_B="$(comm -12 <(printf '%s\n' "$LAUNCHER_NAMED_MAIN") <(printf '%s\n' "$LAUNCHER_NAMED_CHILD"))"
-LAUNCHER_PS_SPAWN_PATHS="$(
-  "${LAUNCHER_GREP[@]}" -nIE -B2 -A2 "$LAUNCHER_PS_CHILD_RE" "${LAUNCHER_PS_SHAPE_PATHSPEC[@]}" 2>/dev/null \
-    | grep -iE "$LAUNCHER_TRAINER_CHILD_RE" \
-    | sed -E 's/^(.*\.ps1)[-:][0-9]+[-:].*/\1/I' | sort -u || true
-)"
-LAUNCHER_PS_ARM_B="$(
-  "${LAUNCHER_GREP[@]}" -lIE "$LAUNCHER_PS_CHILD_RE" "${LAUNCHER_PS_NAMED_PATHSPEC[@]}" 2>/dev/null \
+LAUNCHER_PS_PATHS="$(
+  "${LAUNCHER_GREP[@]}" -lIE '.' "${LAUNCHER_PS_SHAPE_PATHSPEC[@]}" 2>/dev/null \
     | sort -u || true
 )"
-LAUNCHER_SHAPE_PATHS="$(printf '%s\n%s\n%s\n%s\n' \
-  "$LAUNCHER_ARM_A" "$LAUNCHER_ARM_B" \
-  "$LAUNCHER_PS_SPAWN_PATHS" "$LAUNCHER_PS_ARM_B" \
+LAUNCHER_PS_AST_OUT=""
+LAUNCHER_PS_AST_RC=0
+if [ -n "$LAUNCHER_PS_PATHS" ]; then
+  # This override can only make the guard stricter.  It exists so the
+  # load-bearing no-engine refusal is exercised by the hermetic selftest
+  # instead of remaining an untested host contingency.
+  if [ "${REPO_GUARD_DISABLE_POWERSHELL_AST_ENGINE:-}" = "1" ]; then
+    LAUNCHER_PS_AST_OUT=$'tools/powershell-launcher-shape-guard.ps1\tREFUSED: no PowerShell AST engine is available'
+    LAUNCHER_PS_AST_RC=1
+  elif command -v pwsh >/dev/null 2>&1; then
+    LAUNCHER_PS_ENGINE=(pwsh -NoLogo -NoProfile -NonInteractive -File)
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    LAUNCHER_PS_ENGINE=(powershell.exe -NoLogo -NoProfile -NonInteractive -File)
+  else
+    LAUNCHER_PS_AST_OUT=$'tools/powershell-launcher-shape-guard.ps1\tREFUSED: no PowerShell AST engine is available'
+    LAUNCHER_PS_AST_RC=1
+  fi
+  if [ "$LAUNCHER_PS_AST_RC" -eq 0 ]; then
+    mapfile -t LAUNCHER_PS_PATH_ARRAY <<<"$LAUNCHER_PS_PATHS"
+    LAUNCHER_PS_SCOPE="worktree"
+    [ "${REPO_GUARD_SCOPE:-}" = "staged" ] && LAUNCHER_PS_SCOPE="staged"
+    LAUNCHER_PS_AST_OUT="$(
+      "${LAUNCHER_PS_ENGINE[@]}" "$KERNEL_ROOT/tools/powershell-launcher-shape-guard.ps1" \
+        -Scope "$LAUNCHER_PS_SCOPE" "${LAUNCHER_PS_PATH_ARRAY[@]}" 2>&1
+    )"
+    LAUNCHER_PS_AST_RC=$?
+  fi
+fi
+LAUNCHER_PS_REFUSALS="$(printf '%s\n' "$LAUNCHER_PS_AST_OUT" | grep $'\tREFUSED:' || true)"
+LAUNCHER_PS_AST_PATHS="$(
+  printf '%s\n' "$LAUNCHER_PS_AST_OUT" | grep -v $'\tREFUSED:' | cut -f1 | sed '/^$/d' | sort -u
+)"
+LAUNCHER_SHAPE_PATHS="$(printf '%s\n%s\n%s\n' \
+  "$LAUNCHER_ARM_A" "$LAUNCHER_ARM_B" "$LAUNCHER_PS_AST_PATHS" \
   | sed '/^$/d' | sort -u)"
 LAUNCHER_SHAPE_OUT="$(LAUNCHER_SHAPE_PATHS="$LAUNCHER_SHAPE_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_governed_entry_exceptions.py" launcher-shape 2>&1)"
 LAUNCHER_SHAPE_RC=$?
-if [ "$LAUNCHER_SHAPE_RC" -eq 0 ]; then
+if [ "$LAUNCHER_PS_AST_RC" -ne 0 ] && [ -n "$LAUNCHER_PS_REFUSALS" ]; then
+  fail "launcher-shape" "PowerShell source could not be safely parsed for launcher shape"
+  printf '%s\n' "$LAUNCHER_PS_REFUSALS" | sed 's/^/      /'
+elif [ "$LAUNCHER_SHAPE_RC" -eq 0 ]; then
   ok "launcher-shape" "$(printf '%s' "$LAUNCHER_SHAPE_OUT" | head -1)"
 else
   fail "launcher-shape" "a script outside the daemon can be run by hand to start a run"
