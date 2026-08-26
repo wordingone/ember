@@ -387,6 +387,11 @@ pub enum EmberLabError {
         minimum_free_bytes: u64,
         available_free_bytes: u64,
     },
+    DispatchVramProbeUnavailable {
+        provider: String,
+        detail: String,
+        receipt_path: PathBuf,
+    },
     DiskWallMeasurementDuration {
         elapsed_ms: u64,
         maximum_ms: u64,
@@ -1393,6 +1398,41 @@ const DEFAULT_WINDOW_CENSUS_BUDGET: Duration = Duration::from_millis(200);
 pub struct DispatchOutcome {
     pub handle: JobHandle,
     pub receipt: ReceiptArtifact,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn refuse_vram_probe_unavailable<T>(
+    receipt_path: &Path,
+    manifest: &DispatchManifest,
+    manifest_bytes: &[u8],
+    observed_at_ms: i64,
+    provider: &str,
+    device_uuid: Option<&str>,
+    minimum_free_bytes: u64,
+    error: EmberLabError,
+) -> Result<T> {
+    let detail = error.to_string();
+    let refusal = json!({
+        "schema_version": "ember-lab-dispatch-preflight-v1",
+        "result": "REFUSED_VRAM_PROBE_UNAVAILABLE",
+        "job_id": &manifest.job_id,
+        "source_commit": &manifest.source_commit,
+        "observed_at_ms": observed_at_ms,
+        "dispatch_manifest_sha256": hash_bytes(manifest_bytes),
+        "vram_probe": {
+            "provider": provider,
+            "device_uuid": device_uuid,
+            "minimum_free_bytes": minimum_free_bytes,
+            "measurement_available": false,
+            "measurement_error": &detail,
+        },
+    });
+    atomic_replace(receipt_path, &serde_json::to_vec(&refusal)?)?;
+    Err(EmberLabError::DispatchVramProbeUnavailable {
+        provider: provider.into(),
+        detail,
+        receipt_path: receipt_path.to_path_buf(),
+    })
 }
 
 impl JobSpec {
@@ -4227,8 +4267,21 @@ impl Daemon {
                 "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5",
                 Some(DispatchVramWall::Required(contract)),
             ) => {
-                let observation: DispatchVramObservation =
-                    free_vram(Some(contract.clone()))?.into();
+                let observation: DispatchVramObservation = match free_vram(Some(contract.clone())) {
+                    Ok(observation) => observation.into(),
+                    Err(error) => {
+                        return refuse_vram_probe_unavailable(
+                            &receipt_path,
+                            &manifest,
+                            manifest_bytes,
+                            observed_at_ms,
+                            &contract.provider,
+                            Some(&contract.device_uuid),
+                            contract.minimum_free_bytes,
+                            error,
+                        )
+                    }
+                };
                 let DispatchVramObservation::Device(capacity) = observation else {
                     return Err(EmberLabError::InvalidDispatchManifest {
                         detail: "v4 VRAM wall requires a provider/UUID-bound device probe".into(),
@@ -4280,7 +4333,22 @@ impl Daemon {
                 {
                     0
                 } else {
-                    match free_vram(None)?.into() {
+                    let observation: DispatchVramObservation = match free_vram(None) {
+                        Ok(observation) => observation.into(),
+                        Err(error) => {
+                            return refuse_vram_probe_unavailable(
+                                &receipt_path,
+                                &manifest,
+                                manifest_bytes,
+                                observed_at_ms,
+                                "nvidia_smi",
+                                None,
+                                manifest.minimum_free_vram_bytes,
+                                error,
+                            )
+                        }
+                    };
+                    match observation {
                         DispatchVramObservation::LegacyFreeBytes(value) => value,
                         DispatchVramObservation::Device(capacity) => capacity.free_bytes,
                     }

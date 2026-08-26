@@ -2568,6 +2568,54 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
 }
 
 #[test]
+fn unavailable_vram_provider_is_a_receipted_refusal_before_spawn() {
+    let root = sandbox("vram-provider-unavailable");
+    let job_id = "dispatch-vram-provider-unavailable";
+    let manifest = write_manifest(&root, job_id, 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["workload_profile"]["profile_id"] = json!("cockpit");
+    payload["workload_profile"]["pinned_host_producers"][0]["kind"] = json!("telemetry_buffer");
+    payload["workload_profile"]["requires_ui_responsiveness"] = json!(true);
+    payload["minimum_free_vram_bytes"] = json!(1);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || {
+                Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "nvidia-smi VRAM probe failed to start: program not found".into(),
+                })
+            },
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberLabError::DispatchVramProbeUnavailable { .. }),
+        "got {error:?}"
+    );
+    assert_eq!(daemon.job_state(job_id).unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+
+    let receipt_path = root.join("custody").join("preflight.json");
+    let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "REFUSED_VRAM_PROBE_UNAVAILABLE");
+    assert_eq!(receipt["job_id"], job_id);
+    assert_eq!(receipt["vram_probe"]["provider"], "nvidia_smi");
+    assert_eq!(receipt["vram_probe"]["minimum_free_bytes"], 1);
+    assert_eq!(receipt["vram_probe"]["measurement_available"], false);
+    assert!(receipt["vram_probe"]["measurement_error"]
+        .as_str()
+        .unwrap()
+        .contains("program not found"));
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
+}
+
+#[test]
 fn v4_gpu_manifest_binds_uuid_fraction_floor_and_daemon_owned_environment() {
     let root = sandbox("v4-vram-wall");
     let manifest = write_manifest(&root, "dispatch-v4-vram-wall", 10_000);

@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -31,6 +32,16 @@ fn sandbox(name: &str) -> PathBuf {
 
 fn sha256(path: &Path) -> String {
     format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+}
+
+fn nvidia_smi_provider_present() -> bool {
+    Command::new("where.exe")
+        .arg("nvidia-smi.exe")
+        .creation_flags(0x0800_0000)
+        .output()
+        .expect("where.exe must be available to bind the VRAM-provider test arm")
+        .status
+        .success()
 }
 
 fn bun_binary() -> PathBuf {
@@ -653,6 +664,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
     let manifest_bytes = fs::read(&manifest).unwrap();
     let manifest_sha256 = format!("{:x}", Sha256::digest(&manifest_bytes));
     let manifest_utf8 = String::from_utf8(manifest_bytes).unwrap();
+    let vram_provider_present = nvidia_smi_provider_present();
     let pipe = format!(
         r"\\.\pipe\ember-lab-rpc-test-{}-{}",
         std::process::id(),
@@ -669,7 +681,7 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
 
     let mut first = start_server(&binary, &db, &pipe);
     assert_eq!(rpc(&pipe, 1, "ping", json!({}))["status"], "ok");
-    let started = rpc(
+    let dispatch = rpc_response(
         &pipe,
         4,
         "dispatch_manifest",
@@ -678,6 +690,37 @@ fn named_pipe_rpc_survives_daemon_restart_and_controls_bound_job() {
             "manifest_sha256": manifest_sha256,
         }),
     );
+    if !vram_provider_present {
+        let error_data = dispatch["error"]["data"]
+            .as_str()
+            .expect("GPU-less host must return a typed VRAM refusal");
+        assert!(
+            error_data.contains("DispatchVramProbeUnavailable"),
+            "GPU-less host returned the wrong dispatch outcome: {dispatch}"
+        );
+        let preflight: Value =
+            serde_json::from_slice(&fs::read(root.join("custody").join("preflight.json")).unwrap())
+                .unwrap();
+        assert_eq!(preflight["result"], "REFUSED_VRAM_PROBE_UNAVAILABLE");
+        assert_eq!(preflight["vram_probe"]["measurement_available"], false);
+        assert_eq!(
+            rpc(&pipe, 5, "job_state", json!({"job_id": "rpc-job"}))["state"],
+            Value::Null
+        );
+        rpc(&pipe, 6, "shutdown", json!({}));
+        wait_for_exit(&mut first);
+        return;
+    }
+    assert!(
+        dispatch.get("error").is_none(),
+        "host with nvidia-smi did not reach PREFLIGHT_PASSED: {dispatch}"
+    );
+    let started = &dispatch["result"];
+    let preflight: Value = serde_json::from_slice(
+        &fs::read(started["preflight_receipt_path"].as_str().unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(preflight["result"], "PREFLIGHT_PASSED");
     assert!(started["pid"].as_u64().unwrap() > 0);
     assert_eq!(
         rpc(&pipe, 5, "job_state", json!({"job_id": "rpc-job"}))["state"],
