@@ -18,7 +18,12 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 sys.path.insert(0, str(ROOT / "tools" / "corpus_connectors"))
 
 from domain_manifest import load_domain_training_manifest
-from receipt import ConnectorInfo, FileEntry, Receipt, to_manifest_row
+from tools.corpus_connectors.receipt import (
+    ConnectorInfo,
+    FileEntry,
+    Receipt,
+    to_manifest_row,
+)
 
 
 class DomainTrainingManifestTests(unittest.TestCase):
