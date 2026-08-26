@@ -673,7 +673,54 @@ describe("production driver live-query helpers", () => {
       limit_flags: 0,
       job_memory_limit_bytes: 0,
     });
-  });
+  }, 60_000);
+
+  test("kills a timed-out hidden kernel probe and settles exactly once", async () => {
+    if (process.platform !== "win32") return;
+    const queryRuntimeJobEnforcement = (
+      productionDriver as Record<string, unknown>
+    )["queryRuntimeJobEnforcement"] as (
+      jobId: string,
+      jobObjectName: string,
+      governedPid: number,
+      outsidePid: number,
+      timeoutMs?: number,
+    ) => Promise<{ exitCode: number | null; stderr: string; stdout: string }>;
+    let settlements = 0;
+    let timeoutError: (Error & { childPid?: number }) | undefined;
+    try {
+      await queryRuntimeJobEnforcement(
+        "issue898-query-timeout-gate",
+        `Local\\ember-absent-${randomUUID()}`,
+        process.pid,
+        process.pid,
+        1,
+      ).then(
+        (value) => {
+          settlements += 1;
+          return value;
+        },
+        (error: Error & { childPid?: number }) => {
+          settlements += 1;
+          throw error;
+        },
+      );
+    } catch (error) {
+      timeoutError = error as Error & { childPid?: number };
+    }
+    expect(timeoutError?.message).toBe("runtime job enforcement probe timed out after 1 ms");
+    expect(timeoutError?.childPid).toBeGreaterThan(0);
+    const childPid = timeoutError?.childPid ?? 0;
+    let childAlive = true;
+    try {
+      process.kill(childPid, 0);
+    } catch {
+      childAlive = false;
+    }
+    expect(childAlive).toBe(false);
+    await Bun.sleep(25);
+    expect(settlements).toBe(1);
+  }, 60_000);
 });
 describe("production driver failure observability", () => {
   function driverFunction(name: string): (...args: any[]) => any {
