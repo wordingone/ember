@@ -63,6 +63,9 @@ fn write_when_unlocked(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 fn test_host_capacity() -> HostCommitCapacity {
     HostCommitCapacity {
+        basis: "maximum_configured_capacity".to_string(),
+        sampled_at_ms: 10_000,
+        snapshot_sha256: "e".repeat(64),
         physical_ram_bytes: 64 * 1024 * 1024 * 1024,
         physical_available_bytes: 32 * 1024 * 1024 * 1024,
         pagefile_maximum_bytes: 32 * 1024 * 1024 * 1024,

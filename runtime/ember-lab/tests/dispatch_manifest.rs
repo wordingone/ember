@@ -27,6 +27,9 @@ const CPU_RATE_PERCENT: u32 = 25;
 
 fn host_capacity(available_maximum_commit_bytes: u64) -> HostCommitCapacity {
     HostCommitCapacity {
+        basis: "maximum_configured_capacity".to_string(),
+        sampled_at_ms: 10_000,
+        snapshot_sha256: "c".repeat(64),
         physical_ram_bytes: 64 * GIB,
         physical_available_bytes: 32 * GIB,
         pagefile_maximum_bytes: 32 * GIB,
@@ -667,15 +670,28 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     let root = sandbox("green");
     let manifest = write_manifest(&root, "dispatch-green", 10_000);
     let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let host_probe_calls = std::cell::Cell::new(0_u32);
     let outcome = daemon
         .dispatch_manifest_at_with_probes_and_host(
             &manifest,
             10_001,
             |_root| Ok(1024),
             || Ok(2048),
-            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+            || {
+                let call = host_probe_calls.get() + 1;
+                host_probe_calls.set(call);
+                let mut capacity = host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES);
+                capacity.sampled_at_ms = 10_000 + i64::from(call);
+                capacity.snapshot_sha256 = format!("{call:064x}");
+                Ok(capacity)
+            },
         )
         .unwrap();
+    assert_eq!(
+        host_probe_calls.get(),
+        2,
+        "host commit must be re-read near spawn"
+    );
     assert!(outcome.handle.pid > 0);
     assert_eq!(
         daemon.job_state("dispatch-green").unwrap(),
@@ -746,6 +762,17 @@ fn dispatch_manifest_hashes_preflights_and_governs_spawn() {
     assert_eq!(
         receipt["host_commit"]["basis"],
         "maximum_configured_capacity"
+    );
+    assert_eq!(receipt["host_commit"]["sampled_at_ms"], 10_002);
+    assert_eq!(
+        receipt["host_commit"]["snapshot_sha256"],
+        format!("{:064x}", 2)
+    );
+    assert!(
+        receipt["host_commit"]["spawn_authorized_at_ms"]
+            .as_i64()
+            .unwrap()
+            > 0
     );
     assert_eq!(
         receipt["host_commit"]["reserve_bytes"],
@@ -1583,6 +1610,9 @@ fn dispatch_manifest_refuses_physical_pagefile_and_commit_drift() {
                 || Ok(1024),
                 || {
                     Ok(HostCommitCapacity {
+                        basis: "maximum_configured_capacity".to_string(),
+                        sampled_at_ms: 10_000,
+                        snapshot_sha256: "d".repeat(64),
                         physical_ram_bytes: physical,
                         physical_available_bytes: 32 * GIB,
                         pagefile_maximum_bytes: pagefile_maximum,
@@ -2535,6 +2565,54 @@ fn dispatch_manifest_fails_closed_before_spawn_on_time_hash_and_storage() {
         assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
         assert!(!root.join("custody").join("preflight.json").exists());
     }
+}
+
+#[test]
+fn unavailable_vram_provider_is_a_receipted_refusal_before_spawn() {
+    let root = sandbox("vram-provider-unavailable");
+    let job_id = "dispatch-vram-provider-unavailable";
+    let manifest = write_manifest(&root, job_id, 10_000);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    payload["workload_profile"]["profile_id"] = json!("cockpit");
+    payload["workload_profile"]["pinned_host_producers"][0]["kind"] = json!("telemetry_buffer");
+    payload["workload_profile"]["requires_ui_responsiveness"] = json!(true);
+    payload["minimum_free_vram_bytes"] = json!(1);
+    fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+    let error = daemon
+        .dispatch_manifest_at_with_probes_and_host(
+            &manifest,
+            10_001,
+            |_root| Ok(1024),
+            || {
+                Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "nvidia-smi VRAM probe failed to start: program not found".into(),
+                })
+            },
+            || Ok(host_capacity(DECLARED_AVAILABLE_MAXIMUM_COMMIT_BYTES)),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, EmberLabError::DispatchVramProbeUnavailable { .. }),
+        "got {error:?}"
+    );
+    assert_eq!(daemon.job_state(job_id).unwrap(), None);
+    assert_eq!(daemon.lease_owner("gpu-smoke").unwrap(), None);
+
+    let receipt_path = root.join("custody").join("preflight.json");
+    let receipt: Value = serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "REFUSED_VRAM_PROBE_UNAVAILABLE");
+    assert_eq!(receipt["job_id"], job_id);
+    assert_eq!(receipt["vram_probe"]["provider"], "nvidia_smi");
+    assert_eq!(receipt["vram_probe"]["minimum_free_bytes"], 1);
+    assert_eq!(receipt["vram_probe"]["measurement_available"], false);
+    assert!(receipt["vram_probe"]["measurement_error"]
+        .as_str()
+        .unwrap()
+        .contains("program not found"));
+    drop(daemon);
+    remove_sandbox_when_unlocked(&root);
 }
 
 #[test]
