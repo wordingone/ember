@@ -201,9 +201,10 @@ jobs:
           bun-version: 1.3.12
       - run: bun install --frozen-lockfile
       # The repository currently carries unrelated full-suite/typecheck debt.
-      # Keep the merge gate executable and deterministic instead of making
-      # every PR inherit that historical failure surface.
-      - run: bun run test -- build-tools/lifecycle-smoke.test.ts
+      # Keep the merge gate executable and deterministic by naming only the
+      # independently green suites that protect load-bearing production paths,
+      # rather than making every PR inherit that historical failure surface.
+      - run: bun run test -- build-tools/lifecycle-smoke.test.ts commands/train.test.ts
       # The launcher compiles the cockpit straight into its external state root by
       # setting EMBER_BUILD_OUTFILE (#1330). Nothing in CI exercised that override, so
       # a regression in it only surfaced on a real launch. This runs BEFORE the default
