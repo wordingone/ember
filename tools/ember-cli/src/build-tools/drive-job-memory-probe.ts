@@ -64,6 +64,16 @@ interface DrainedPreflightProbe {
   stopError?: Error;
 }
 
+class RuntimeProbeTimeoutError extends Error {
+  readonly childPid: number;
+
+  constructor(timeoutMs: number, childPid: number) {
+    super(`runtime job enforcement probe timed out after ${timeoutMs} ms`);
+    this.name = "RuntimeProbeTimeoutError";
+    this.childPid = childPid;
+  }
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -577,7 +587,11 @@ export async function queryRuntimeJobEnforcement(
   jobObjectName: string,
   governedPid: number,
   outsideControlPid: number,
+  timeoutMs = 30_000,
 ): Promise<RuntimeProbeProcessResult> {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("runtime job enforcement probe timeout is invalid");
+  }
   const script = String.raw`
 $ProgressPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @'
@@ -697,6 +711,17 @@ $row | ConvertTo-Json -Compress
   return await new Promise<RuntimeProbeProcessResult>((resolveProbe, rejectProbe) => {
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    const childPid = child.pid ?? 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const finish = (error?: unknown, result?: RuntimeProbeProcessResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error !== undefined) rejectProbe(error);
+      else resolveProbe(result!);
+    };
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -707,14 +732,25 @@ $row | ConvertTo-Json -Compress
       stderr += chunk;
       if (stderr.length > 1_048_576) child.kill();
     });
-    child.once("error", rejectProbe);
+    child.once("error", (error) => {
+      if (!timedOut) finish(error);
+    });
     child.once("close", (exitCode) => {
-      if (stdout.length > 1_048_576 || stderr.length > 1_048_576) {
-        rejectProbe(new Error("runtime job enforcement probe output exceeded 1 MiB"));
+      if (timedOut) {
+        finish(new RuntimeProbeTimeoutError(timeoutMs, childPid));
         return;
       }
-      resolveProbe({ exitCode, stderr, stdout });
+      if (stdout.length > 1_048_576 || stderr.length > 1_048_576) {
+        finish(new Error("runtime job enforcement probe output exceeded 1 MiB"));
+        return;
+      }
+      finish(undefined, { exitCode, stderr, stdout });
     });
+    timer = setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      if (!child.kill()) finish(new RuntimeProbeTimeoutError(timeoutMs, childPid));
+    }, timeoutMs);
   });
 }
 
