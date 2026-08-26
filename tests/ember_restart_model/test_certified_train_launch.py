@@ -11,6 +11,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -6032,34 +6033,48 @@ class DispatchAuthorityTests(unittest.TestCase):
 
     def test_authenticated_daemon_dispatch_consumes_before_certificate_validation(self) -> None:
         module = load_module()
-        effects: list[str] = []
-        with (
-            mock.patch.dict(os.environ, {}, clear=True),
-            mock.patch.object(
-                module,
-                "consume_ember_lab_dispatch",
-                side_effect=lambda root: effects.append(f"consume:{root}"),
-                create=True,
-            ),
-            mock.patch.object(
-                module,
-                "validate_certified_request",
-                side_effect=lambda *args: (
-                    effects.append("validate"),
-                    SimpleNamespace(artifact_root=pathlib.Path("artifacts")),
-                )[1],
-            ),
-            mock.patch.object(module, "execute_validated_launch", return_value=0),
-            mock.patch.object(
-                module,
-                "_execution_receipt_path",
-                return_value=pathlib.Path("receipt.json"),
-            ),
+        for probe_maximum, expected_receipt in (
+            (None, "receipt.json"),
+            (1024, None),
         ):
-            exit_code = module.main(self._argv())
+            with self.subTest(probe_maximum=probe_maximum):
+                effects: list[str] = []
+                stdout = io.StringIO()
+                with (
+                    mock.patch.dict(os.environ, {}, clear=True),
+                    mock.patch.object(
+                        module,
+                        "consume_ember_lab_dispatch",
+                        side_effect=lambda root: effects.append(f"consume:{root}"),
+                        create=True,
+                    ),
+                    mock.patch.object(
+                        module,
+                        "validate_certified_request",
+                        side_effect=lambda *args: (
+                            effects.append("validate"),
+                            SimpleNamespace(
+                                artifact_root=pathlib.Path("artifacts"),
+                                job_memory_ceiling_probe_maximum_bytes=probe_maximum,
+                            ),
+                        )[1],
+                    ),
+                    mock.patch.object(module, "execute_validated_launch", return_value=0),
+                    mock.patch.object(
+                        module,
+                        "_execution_receipt_path",
+                        return_value=pathlib.Path("receipt.json"),
+                    ),
+                    contextlib.redirect_stdout(stdout),
+                ):
+                    exit_code = module.main(self._argv())
 
-        self.assertEqual(exit_code, 0)
-        self.assertEqual(effects, [f"consume:{ROOT}", "validate"])
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(effects, [f"consume:{ROOT}", "validate"])
+                self.assertEqual(
+                    json.loads(stdout.getvalue())["execution_receipt"],
+                    expected_receipt,
+                )
 
 
 class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
@@ -6140,6 +6155,208 @@ class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
             )
             enriched_row = json.loads(telemetry_path.read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(enriched_row["payload"]["proxy_joules"], "125.000000000000")
+
+
+class JobMemoryCeilingProbeTests(unittest.TestCase):
+    MIB = 1024**2
+    MAXIMUM = 1024 * MIB
+    DELTA = 128 * MIB
+
+    def setUp(self) -> None:
+        self.module = load_module()
+        self.authorized = {
+            "purpose": "BOUNDED_CANARY",
+            "allowed_modes": ["governed-vertical"],
+            "max_optimizer_steps": 0,
+            "max_records": 0,
+            "max_active_expert_families": 0,
+            "max_gpu_vram_gib": 0,
+            "max_transient_checkpoint_gib": 0,
+            "max_wall_minutes": 5,
+            "max_b_write_gib": 0,
+            "max_c_write_gib": 0,
+            "max_write_budget_bytes": 0,
+            "allowed_artifact_roots": ["B:/probe-artifacts"],
+            "allowed_custody_roots": ["B:/probe-custody"],
+            "model_server_allowed": False,
+            "wsl_allowed": False,
+            "persistent_worker_allowed": False,
+            "allowed_job_memory_ceiling_probe": {
+                "maximum_job_memory_bytes": self.MAXIMUM,
+                "maximum_absolute_delta_bytes": self.DELTA,
+            }
+        }
+        self.requested_scope = {
+            "mode": "governed-vertical",
+            "optimizer_steps": 0,
+            "max_records": 0,
+            "active_expert_families": 0,
+            "gpu_vram_gib": 0,
+            "transient_checkpoint_gib": 0,
+            "wall_minutes": 5,
+            "max_b_write_gib": 0,
+            "max_c_write_gib": 0,
+            "write_budget_bytes": 0,
+            "artifact_root": "B:/probe-artifacts",
+            "custody_root": "B:/probe-custody",
+        }
+
+    def request(self, signed_delta: int) -> dict[str, object]:
+        return {
+            "schema_version": "ember-certified-train-run-v1",
+            "certificate_sha256": "a" * 64,
+            "run_id": "issue898-probe",
+            "seed": 1,
+            "runner_receipt": "B:/probe-receipt.json",
+            "requested_scope": self.requested_scope,
+            "job_memory_ceiling_probe": {
+                "maximum_job_memory_bytes": self.MAXIMUM,
+                "signed_delta_bytes": signed_delta,
+            }
+        }
+
+    def rust_key_set(self, constant: str) -> set[str]:
+        source = (ROOT / "runtime" / "ember-lab" / "src" / "main.rs").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(
+            rf"const {constant}: &\[&str\] = &\[(.*?)\];", source, re.DOTALL
+        )
+        self.assertIsNotNone(match, f"Rust schema constant {constant} is absent")
+        return set(re.findall(r'"([A-Za-z0-9_]+)"', match.group(1)))
+
+    def test_rust_required_key_inventories_match_python_schema(self) -> None:
+        self.assertEqual(
+            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_RUN_SPEC_KEYS"),
+            self.module.RUN_SPEC_KEYS,
+        )
+        self.assertEqual(
+            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_EXECUTION_SCOPE_KEYS"),
+            self.module.AUTHORIZED_SCOPE_KEYS,
+        )
+        self.assertEqual(
+            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_REQUESTED_SCOPE_KEYS"),
+            self.module.REQUESTED_SCOPE_KEYS,
+        )
+
+    def test_closed_pair_binds_nonzero_signed_delta(self) -> None:
+        self.module._require_scope_subset(self.requested_scope, self.authorized)
+        self.assertEqual(
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA),
+                self.requested_scope,
+                self.authorized,
+            ),
+            (self.MAXIMUM, -self.DELTA),
+        )
+        for delta in (0, self.DELTA + 1):
+            with self.assertRaisesRegex(ValueError, "signed delta"):
+                self.module._validate_job_memory_ceiling_probe(
+                    self.request(delta),
+                    self.requested_scope,
+                    self.authorized,
+                )
+
+    def test_absent_or_extra_authority_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "declares no"):
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA), self.requested_scope, {}
+            )
+        request = self.request(-self.DELTA)
+        request["job_memory_ceiling_probe"]["extra"] = True
+        with self.assertRaisesRegex(ValueError, "schema keys mismatch"):
+            self.module._validate_job_memory_ceiling_probe(
+                request, self.requested_scope, self.authorized
+            )
+
+    def test_probe_rejects_unknown_top_level_run_and_authority_keys(self) -> None:
+        request = self.request(-self.DELTA)
+        request["unrecognized_probe_key"] = True
+        with self.assertRaises(ValueError) as raised:
+            self.module._validate_job_memory_ceiling_probe(
+                request, self.requested_scope, self.authorized
+            )
+        self.assertEqual(
+            str(raised.exception),
+            "job-memory ceiling probe run spec has unexpected key "
+            "`unrecognized_probe_key`",
+        )
+
+        authorized = dict(self.authorized)
+        authorized["unrecognized_probe_key"] = True
+        with self.assertRaises(ValueError) as raised:
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA), self.requested_scope, authorized
+            )
+        self.assertEqual(
+            str(raised.exception),
+            "job-memory ceiling probe certificate scope has unexpected key "
+            "`unrecognized_probe_key`",
+        )
+
+    def test_probe_authority_is_mutually_exclusive_with_training_routes(self) -> None:
+        request = self.request(-self.DELTA)
+        request["semantic_canary_mode"] = "warm-100"
+        with self.assertRaisesRegex(ValueError, "unexpected key"):
+            self.module._validate_job_memory_ceiling_probe(
+                request, self.requested_scope, self.authorized
+            )
+        authorized = dict(self.authorized)
+        authorized["allowed_a1_families"] = []
+        with self.assertRaisesRegex(ValueError, "unexpected key"):
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA), self.requested_scope, authorized
+            )
+
+    def test_probe_training_numeric_scope_must_be_zero(self) -> None:
+        requested_scope = dict(self.requested_scope)
+        requested_scope["optimizer_steps"] = 1
+        authorized = dict(self.authorized)
+        authorized["max_optimizer_steps"] = 1
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            self.module._require_scope_subset(requested_scope, authorized)
+
+    def test_control_must_reach_near_wall_target(self) -> None:
+        target = self.MAXIMUM - self.DELTA
+        launch = SimpleNamespace(
+            job_memory_ceiling_probe_maximum_bytes=self.MAXIMUM,
+            job_memory_ceiling_probe_signed_delta_bytes=-self.DELTA,
+        )
+        requested: list[int] = []
+        observed = iter([100 * self.MIB, target])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                self.module._execute_job_memory_ceiling_probe(
+                    launch,
+                    private_commit_probe=lambda: next(observed),
+                    allocator=lambda size: requested.append(size) or bytearray(1),
+                ),
+                0,
+            )
+        self.assertEqual(requested, [target - 100 * self.MIB])
+
+        noop = iter([100 * self.MIB, 100 * self.MIB])
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "near-wall target"):
+                self.module._execute_job_memory_ceiling_probe(
+                    launch,
+                    private_commit_probe=lambda: next(noop),
+                    allocator=lambda _size: bytearray(1),
+                )
+
+    def test_positive_leg_survival_is_never_pass(self) -> None:
+        launch = SimpleNamespace(
+            job_memory_ceiling_probe_maximum_bytes=self.MAXIMUM,
+            job_memory_ceiling_probe_signed_delta_bytes=self.DELTA,
+        )
+        observed = iter([100 * self.MIB, self.MAXIMUM + self.DELTA])
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "survived"):
+                self.module._execute_job_memory_ceiling_probe(
+                    launch,
+                    private_commit_probe=lambda: next(observed),
+                    allocator=lambda _size: bytearray(1),
+                )
 
 
 if __name__ == "__main__":

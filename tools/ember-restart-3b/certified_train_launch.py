@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import importlib.util
 import json
@@ -179,6 +180,16 @@ SPECIALIST_TOKENIZER_RELATIVE_PATH = "tokenizer/tokenizer.json"
 # a receipt with no declared mode cannot be scope-checked, and a mode with no
 # receipt names no data. Mirrors SPECIALIST_RUN_SPEC_KEYS exactly.
 SEMANTIC_CANARY_RUN_SPEC_KEYS = {"semantic_canary_mode", "semantic_canary_receipt"}
+JOB_MEMORY_CEILING_PROBE_RUN_SPEC_KEYS = {"job_memory_ceiling_probe"}
+JOB_MEMORY_CEILING_PROBE_AUTHORITY_KEYS = {
+    "maximum_job_memory_bytes",
+    "maximum_absolute_delta_bytes",
+}
+JOB_MEMORY_CEILING_PROBE_REQUEST_KEYS = {
+    "maximum_job_memory_bytes",
+    "signed_delta_bytes",
+}
+JOB_MEMORY_CEILING_PROBE_TOLERANCE_BYTES = 64 * 1024 * 1024
 # The runner's "semantic" subcommand additionally REQUIRES a shard root, a
 # sequence length, a checkpoint publication cadence, and a telemetry sink
 # before it will start. telemetry is REQUIRED here (unlike the bare runner,
@@ -252,6 +263,10 @@ OPTIONAL_RUN_SPEC_KEYS = (
     | SEMANTIC_REPRODUCTION_RUN_SPEC_KEYS
     | A1_RUN_SPEC_KEYS
     | A1_TIER2_RUN_SPEC_KEYS
+    | JOB_MEMORY_CEILING_PROBE_RUN_SPEC_KEYS
+)
+JOB_MEMORY_CEILING_PROBE_PERMITTED_RUN_SPEC_KEYS = (
+    RUN_SPEC_KEYS | JOB_MEMORY_CEILING_PROBE_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
@@ -308,7 +323,11 @@ OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
     "a1_host_commit_reserve_gib",
     "a1_gpu_free_margin_gib",
     "a1_b_custody_floor_gib",
+    "allowed_job_memory_ceiling_probe",
 }
+JOB_MEMORY_CEILING_PROBE_PERMITTED_AUTHORIZED_SCOPE_KEYS = (
+    AUTHORIZED_SCOPE_KEYS | {"allowed_job_memory_ceiling_probe"}
+)
 REQUESTED_SCOPE_KEYS = {
     "mode",
     "optimizer_steps",
@@ -491,6 +510,8 @@ class ValidatedLaunch(NamedTuple):
     a1_liveness_receipt: pathlib.Path | None = None
     a1_tier2_contract_sha256: str | None = None
     a1_liveness_receipt_sha256: str | None = None
+    job_memory_ceiling_probe_maximum_bytes: int | None = None
+    job_memory_ceiling_probe_signed_delta_bytes: int | None = None
 
 
 class A1Tier(str, Enum):
@@ -2596,6 +2617,16 @@ def _require_scope_subset(
                 f"run scope exceeds certificate: {requested_key}"
             )
 
+    if "allowed_job_memory_ceiling_probe" in authorized:
+        for requested_key, authorized_key in numeric_pairs:
+            if requested_key == "wall_minutes":
+                continue
+            if requested[requested_key] != 0 or authorized[authorized_key] != 0:
+                raise ValueError(
+                    "job-memory ceiling probe authority is mutually exclusive "
+                    f"with training scope: {requested_key}"
+                )
+
     root_pairs = (
         ("artifact_root", "allowed_artifact_roots"),
         ("custody_root", "allowed_custody_roots"),
@@ -2611,6 +2642,104 @@ def _require_scope_subset(
             raise ValueError(
                 f"run scope exceeds certificate: {requested_key}"
             )
+
+
+def _validate_job_memory_ceiling_probe(
+    run_spec: dict[str, Any],
+    requested_scope: dict[str, Any],
+    authorized_scope: dict[str, Any],
+) -> tuple[int, int] | None:
+    authorized_raw = authorized_scope.get("allowed_job_memory_ceiling_probe")
+    requested_raw = run_spec.get("job_memory_ceiling_probe")
+    if authorized_raw is None and requested_raw is None:
+        return None
+    if authorized_raw is None:
+        raise ValueError(
+            "certificate declares no allowed_job_memory_ceiling_probe"
+        )
+    if requested_raw is None:
+        raise ValueError(
+            "job-memory ceiling probe certificate authority has no matching request"
+        )
+    authorized = _require_object(
+        authorized_raw, "allowed job-memory ceiling probe"
+    )
+    requested = _require_object(
+        requested_raw, "job-memory ceiling probe request"
+    )
+    _require_keys(
+        authorized,
+        JOB_MEMORY_CEILING_PROBE_AUTHORITY_KEYS,
+        "allowed job-memory ceiling probe",
+    )
+    _require_keys(
+        requested,
+        JOB_MEMORY_CEILING_PROBE_REQUEST_KEYS,
+        "job-memory ceiling probe request",
+    )
+    maximum = authorized["maximum_job_memory_bytes"]
+    requested_maximum = requested["maximum_job_memory_bytes"]
+    maximum_delta = authorized["maximum_absolute_delta_bytes"]
+    signed_delta = requested["signed_delta_bytes"]
+    for value, label in (
+        (maximum, "maximum_job_memory_bytes"),
+        (requested_maximum, "requested maximum_job_memory_bytes"),
+        (maximum_delta, "maximum_absolute_delta_bytes"),
+        (signed_delta, "signed_delta_bytes"),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(
+                f"job-memory ceiling probe {label} must be an exact integer"
+            )
+    if maximum <= 0 or requested_maximum != maximum:
+        raise ValueError(
+            "job-memory ceiling probe maximum must be positive and exactly certificate-bound"
+        )
+    if maximum_delta <= 0 or signed_delta == 0 or abs(signed_delta) > maximum_delta:
+        raise ValueError(
+            "job-memory ceiling probe signed delta exceeds its independent authority"
+        )
+    target = maximum + signed_delta
+    if target <= 0:
+        raise ValueError("job-memory ceiling probe target must be positive")
+
+    unexpected_run_keys = sorted(
+        set(run_spec) - JOB_MEMORY_CEILING_PROBE_PERMITTED_RUN_SPEC_KEYS
+    )
+    missing_run_keys = sorted(
+        JOB_MEMORY_CEILING_PROBE_PERMITTED_RUN_SPEC_KEYS - set(run_spec)
+    )
+    if unexpected_run_keys:
+        raise ValueError(
+            "job-memory ceiling probe run spec has unexpected key "
+            f"`{unexpected_run_keys[0]}`"
+        )
+    if missing_run_keys:
+        raise ValueError(
+            "job-memory ceiling probe run spec lacks required key "
+            f"`{missing_run_keys[0]}`"
+        )
+    unexpected_authority_keys = sorted(
+        set(authorized_scope)
+        - JOB_MEMORY_CEILING_PROBE_PERMITTED_AUTHORIZED_SCOPE_KEYS
+    )
+    missing_authority_keys = sorted(
+        JOB_MEMORY_CEILING_PROBE_PERMITTED_AUTHORIZED_SCOPE_KEYS
+        - set(authorized_scope)
+    )
+    if unexpected_authority_keys:
+        raise ValueError(
+            "job-memory ceiling probe certificate scope has unexpected key "
+            f"`{unexpected_authority_keys[0]}`"
+        )
+    if missing_authority_keys:
+        raise ValueError(
+            "job-memory ceiling probe certificate scope lacks required key "
+            f"`{missing_authority_keys[0]}`"
+        )
+    if requested_scope["mode"] != "governed-vertical":
+        raise ValueError("job-memory ceiling probe request mode mismatch")
+    return maximum, signed_delta
 
 
 _RUN_SCOPED_CUSTODY_SCHEMA = "ember-launch-authority-external-custody-v1"
@@ -3044,6 +3173,9 @@ def validate_certified_request(
     # certificate's authority must be established and shape-checked before
     # anything is measured against it.
     _require_scope_subset(requested_scope, authorized_scope)
+    job_memory_ceiling_probe = _validate_job_memory_ceiling_probe(
+        run_spec, requested_scope, authorized_scope
+    )
 
     _validate_run_scoped_custody_packet(
         repo_root,
@@ -3341,6 +3473,12 @@ def validate_certified_request(
         a1_liveness_receipt=None if a1 is None else a1.liveness_receipt,
         a1_tier2_contract_sha256=None if a1 is None else a1.tier2_contract_sha256,
         a1_liveness_receipt_sha256=None if a1 is None else a1.liveness_receipt_sha256,
+        job_memory_ceiling_probe_maximum_bytes=(
+            None if job_memory_ceiling_probe is None else job_memory_ceiling_probe[0]
+        ),
+        job_memory_ceiling_probe_signed_delta_bytes=(
+            None if job_memory_ceiling_probe is None else job_memory_ceiling_probe[1]
+        ),
         authority_paths=tuple(authority_paths),
     )
 
@@ -4327,6 +4465,94 @@ def _validate_tier1_host_setup_contract(
             sys.path.remove(tools_directory)
 
 
+class _ProcessMemoryCountersEx(ctypes.Structure):
+    _fields_ = [
+        ("cb", ctypes.c_ulong),
+        ("PageFaultCount", ctypes.c_ulong),
+        ("PeakWorkingSetSize", ctypes.c_size_t),
+        ("WorkingSetSize", ctypes.c_size_t),
+        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+        ("PagefileUsage", ctypes.c_size_t),
+        ("PeakPagefileUsage", ctypes.c_size_t),
+        ("PrivateUsage", ctypes.c_size_t),
+    ]
+
+
+def _current_private_commit_bytes() -> int:
+    if os.name != "nt":
+        raise ValueError("job-memory ceiling probe requires Windows")
+    counters = _ProcessMemoryCountersEx()
+    counters.cb = ctypes.sizeof(counters)
+    process = ctypes.windll.kernel32.GetCurrentProcess()
+    if not ctypes.windll.psapi.GetProcessMemoryInfo(
+        process, ctypes.byref(counters), counters.cb
+    ):
+        raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
+    return int(counters.PrivateUsage)
+
+
+def _execute_job_memory_ceiling_probe(
+    launch: ValidatedLaunch,
+    private_commit_probe=_current_private_commit_bytes,
+    allocator=bytearray,
+) -> int:
+    maximum = launch.job_memory_ceiling_probe_maximum_bytes
+    signed_delta = launch.job_memory_ceiling_probe_signed_delta_bytes
+    if maximum is None or signed_delta is None:
+        raise ValueError("job-memory ceiling probe authority is incomplete")
+    target = maximum + signed_delta
+    current = private_commit_probe()
+    allocation_bytes = max(target - current, 0)
+    print(
+        json.dumps(
+            {
+                "schema_version": "ember-job-memory-ceiling-probe-v1",
+                "phase": "allocation_start",
+                "pid": os.getpid(),
+                "maximum_job_memory_bytes": maximum,
+                "signed_delta_bytes": signed_delta,
+                "target_job_commit_bytes": target,
+                "tolerance_bytes": JOB_MEMORY_CEILING_PROBE_TOLERANCE_BYTES,
+                "current_private_commit_bytes": current,
+                "requested_allocation_bytes": allocation_bytes,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        flush=True,
+    )
+    allocation = allocator(allocation_bytes)
+    for offset in range(0, len(allocation), 4096):
+        allocation[offset] = 1
+    observed = private_commit_probe()
+    print(
+        json.dumps(
+            {
+                "schema_version": "ember-job-memory-ceiling-probe-v1",
+                "phase": "allocation_complete",
+                "pid": os.getpid(),
+                "observed_private_commit_bytes": observed,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        flush=True,
+    )
+    if signed_delta > 0:
+        raise RuntimeError(
+            "job-memory ceiling death leg survived beyond its composed maximum"
+        )
+    floor = target - JOB_MEMORY_CEILING_PROBE_TOLERANCE_BYTES
+    if observed < floor or observed >= maximum:
+        raise RuntimeError(
+            "job-memory ceiling control did not reach its near-wall target"
+        )
+    return 0
+
+
 def execute_validated_launch(
     repo_root: pathlib.Path,
     launch: ValidatedLaunch,
@@ -4337,6 +4563,14 @@ def execute_validated_launch(
     host_setup_contract = _validate_tier1_host_setup_contract(
         launch, armed_maximum_job_memory_bytes
     )
+    if launch.job_memory_ceiling_probe_maximum_bytes is not None:
+        if armed_maximum_job_memory_bytes != (
+            launch.job_memory_ceiling_probe_maximum_bytes
+        ):
+            raise ValueError(
+                "job-memory ceiling probe maximum differs from the authenticated armed wall"
+            )
+        return _execute_job_memory_ceiling_probe(launch)
     argv = build_runner_argv(repo_root, launch)
     prelaunch_refusal = _chained_specialist_prelaunch_refusal(launch)
     if prelaunch_refusal is not None:
@@ -4635,7 +4869,11 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {
                 "outcome": "COMPLETED" if exit_code == 0 else "FAILED",
-                "execution_receipt": str(_execution_receipt_path(launch)),
+                "execution_receipt": (
+                    None
+                    if launch.job_memory_ceiling_probe_maximum_bytes is not None
+                    else str(_execution_receipt_path(launch))
+                ),
                 "artifact_root": str(launch.artifact_root),
                 "exit_code": exit_code,
             },
