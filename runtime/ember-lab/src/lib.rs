@@ -1640,6 +1640,8 @@ struct JobMemoryEnforcementWitness {
     extended_limit_query_succeeded: bool,
     limit_flags: u32,
     job_memory_limit_flag_set: bool,
+    requested_maximum_job_memory_bytes: u64,
+    kernel_page_size_bytes: u64,
     expected_maximum_job_memory_bytes: u64,
     observed_job_memory_limit_bytes: u64,
 }
@@ -1658,6 +1660,53 @@ enum JobMemoryWitnessOutcome {
     NotRequired,
     Verified(JobMemoryEnforcementWitness),
     Refused(JobMemoryWitnessRefusal),
+}
+
+const PRE_EXECUTION_REFUSAL_EXIT_CODE: i64 = 125;
+
+/// Returns the exact byte limit Windows stores for a requested Job Object
+/// memory ceiling. Windows conservatively floors the request to its runtime
+/// page size; modelling that normalization keeps the kernel readback check an
+/// exact equality without making the enforced ceiling more permissive.
+pub fn windows_job_memory_effective_limit(requested: u64, page_size: u64) -> Result<u64> {
+    if requested == 0 || page_size == 0 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "Windows job-memory request and page size must be positive".into(),
+        });
+    }
+    let residue =
+        requested
+            .checked_rem(page_size)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "Windows job-memory page normalization overflowed".into(),
+            })?;
+    let effective =
+        requested
+            .checked_sub(residue)
+            .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+                detail: "Windows job-memory page normalization underflowed".into(),
+            })?;
+    if effective == 0 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "Windows job-memory request is smaller than one runtime page".into(),
+        });
+    }
+    Ok(effective)
+}
+
+#[cfg(windows)]
+fn windows_runtime_page_size() -> Result<u64> {
+    use windows_sys::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};
+
+    let mut info = std::mem::MaybeUninit::<SYSTEM_INFO>::uninit();
+    unsafe { GetSystemInfo(info.as_mut_ptr()) };
+    let page_size = unsafe { info.assume_init() }.dwPageSize as u64;
+    if page_size == 0 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "Windows reported a zero runtime page size".into(),
+        });
+    }
+    Ok(page_size)
 }
 
 #[cfg(windows)]
@@ -5177,7 +5226,11 @@ impl Daemon {
                     &refusal,
                 )?;
                 let terminate = spawned.terminate_and_wait();
-                let failed = self.mark_failed(&spec.job_id, "job_memory_witness_spawn_aborted");
+                let failed = self.mark_failed_with_exit_code(
+                    &spec.job_id,
+                    "job_memory_witness_spawn_aborted",
+                    PRE_EXECUTION_REFUSAL_EXIT_CODE,
+                );
                 terminate?;
                 failed?;
                 return Err(EmberLabError::JobMemoryEnforcementWitnessRefused {
@@ -7990,6 +8043,51 @@ impl Daemon {
     fn mark_failed(&self, job_id: &str, kind: &str) -> Result<()> {
         let row = self.job_process_row(job_id)?;
         self.mark_dead(job_id, &row, kind)
+    }
+
+    fn mark_failed_with_exit_code(&self, job_id: &str, kind: &str, exit_code: i64) -> Result<()> {
+        if exit_code == 0 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "pre-execution refusal exit code must be non-zero".into(),
+            });
+        }
+        let row = self.job_process_row(job_id)?;
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (stdout_sha256, stderr_sha256) = seal_log_hashes(&tx, job_id)?;
+        let terminal_at_ms = now_ms();
+        let changed = tx.execute(
+            "UPDATE jobs SET state='failed',exit_code=?5,exited_at_ms=?2,stdout_log_sha256=?6,stderr_log_sha256=?7,outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),updated_at_ms=?2 WHERE job_id=?1 AND state=?3 AND lease_epoch=?4 AND EXISTS(SELECT 1 FROM leases l WHERE l.resource=jobs.resource AND l.owner_job_id=jobs.job_id AND l.lease_epoch=jobs.lease_epoch)",
+            params![job_id, terminal_at_ms, row.state.as_str(), row.lease_epoch, exit_code, stdout_sha256, stderr_sha256],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "pre-execution refusal lost its state or lease epoch fence".into(),
+            });
+        }
+        let released = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+            params![row.resource, job_id, row.lease_epoch],
+        )?;
+        if released != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "pre-execution refusal lost its lease epoch".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,?3,?4)",
+            params![
+                job_id,
+                terminal_at_ms,
+                kind,
+                json!({"exit_code": exit_code, "logs_sealed": true}).to_string()
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
     }
 
     fn mark_exited_unknown(&self, job_id: &str, row: &JobProcessRow, kind: &str) -> Result<()> {
@@ -13983,7 +14081,7 @@ fn observe_job_memory_enforcement_before_resume(
     process: windows_sys::Win32::Foundation::HANDLE,
     job_object_name: &str,
     governed_pid: u32,
-    expected_maximum_job_memory_bytes: u64,
+    requested_maximum_job_memory_bytes: u64,
 ) -> JobMemoryWitnessOutcome {
     use std::mem::{size_of, zeroed};
     use windows_sys::Win32::Foundation::BOOL;
@@ -14052,6 +14150,21 @@ fn observe_job_memory_enforcement_before_resume(
             "JOB_OBJECT_LIMIT_JOB_MEMORY is absent from the reopened kernel limits".into(),
         );
     }
+    let kernel_page_size_bytes = match windows_runtime_page_size() {
+        Ok(value) => value,
+        Err(error) => {
+            return refused("kernel_page_size_unavailable", error.to_string());
+        }
+    };
+    let expected_maximum_job_memory_bytes = match windows_job_memory_effective_limit(
+        requested_maximum_job_memory_bytes,
+        kernel_page_size_bytes,
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            return refused("job_memory_limit_normalization_invalid", error.to_string());
+        }
+    };
     let observed_job_memory_limit_bytes = limits.JobMemoryLimit as u64;
     if observed_job_memory_limit_bytes != expected_maximum_job_memory_bytes {
         return refused(
@@ -14078,6 +14191,8 @@ fn observe_job_memory_enforcement_before_resume(
         extended_limit_query_succeeded: true,
         limit_flags,
         job_memory_limit_flag_set: true,
+        requested_maximum_job_memory_bytes,
+        kernel_page_size_bytes,
         expected_maximum_job_memory_bytes,
         observed_job_memory_limit_bytes,
     })
