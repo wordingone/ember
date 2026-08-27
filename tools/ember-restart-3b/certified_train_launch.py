@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+from ctypes import wintypes
 import hashlib
 import importlib.util
 import json
@@ -4477,13 +4478,21 @@ class _ProcessMemoryCountersEx(ctypes.Structure):
 def _current_private_commit_bytes() -> int:
     if os.name != "nt":
         raise ValueError("job-memory ceiling probe requires Windows")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.argtypes = []
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    psapi.GetProcessMemoryInfo.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(_ProcessMemoryCountersEx),
+        wintypes.DWORD,
+    ]
     counters = _ProcessMemoryCountersEx()
     counters.cb = ctypes.sizeof(counters)
-    process = ctypes.windll.kernel32.GetCurrentProcess()
-    if not ctypes.windll.psapi.GetProcessMemoryInfo(
-        process, ctypes.byref(counters), counters.cb
-    ):
-        raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
+    process = kernel32.GetCurrentProcess()
+    if not psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
+        raise ctypes.WinError(ctypes.get_last_error())
     return int(counters.PrivateUsage)
 
 
