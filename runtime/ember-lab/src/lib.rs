@@ -13572,17 +13572,42 @@ fn same_executable(a: &str, b: &str) -> bool {
         a == b
     }
 }
+
+static ATOMIC_TEMP_NONCE: AtomicU64 = AtomicU64::new(0);
+
+fn atomic_temp_name(operation: &str) -> String {
+    format!(
+        ".{operation}-{:x}-{:x}-{:x}",
+        std::process::id(),
+        now_ms(),
+        ATOMIC_TEMP_NONCE.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+fn atomic_publication_paths(path: &Path, operation: &str) -> std::io::Result<(PathBuf, PathBuf)> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = path.file_name().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "atomic publication target has no file name",
+        )
+    })?;
+    #[cfg(windows)]
+    let publication_path = fs::canonicalize(parent)?.join(file_name);
+    #[cfg(not(windows))]
+    let publication_path = path.to_path_buf();
+    let temp_path = publication_path.with_file_name(atomic_temp_name(operation));
+    Ok((publication_path, temp_path))
+}
+
 fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
-    static TEMP_NONCE: AtomicU64 = AtomicU64::new(0);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let temp = path.with_extension(format!(
-        "replace-{}-{}-{}",
-        std::process::id(),
-        now_ms(),
-        TEMP_NONCE.fetch_add(1, Ordering::Relaxed)
-    ));
+    let (publication_path, temp) = atomic_publication_paths(path, "replace")?;
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -13597,7 +13622,11 @@ fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
             MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
         };
         let from: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
-        let to: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        let to: Vec<u16> = publication_path
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
         if unsafe {
             MoveFileExW(
                 from.as_ptr(),
@@ -13612,13 +13641,77 @@ fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
         }
     }
     #[cfg(not(windows))]
-    fs::rename(&temp, path)?;
-    if let Some(parent) = path.parent() {
+    fs::rename(&temp, &publication_path)?;
+    if let Some(parent) = publication_path.parent() {
         if let Ok(directory) = OpenOptions::new().read(true).open(parent) {
             let _ = directory.sync_all();
         }
     }
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod atomic_replace_path_tests {
+    use super::*;
+
+    fn target_with_exact_length(base: &Path, file_name: &str, target_length: usize) -> PathBuf {
+        let padding_length = target_length
+            .checked_sub(base.as_os_str().len() + file_name.len() + 2)
+            .expect("test temp root must leave room for the requested target");
+        let parent = base.join("x".repeat(padding_length));
+        fs::create_dir_all(&parent).unwrap();
+        let target = parent.join(file_name);
+        assert_eq!(target.as_os_str().len(), target_length);
+        target
+    }
+
+    #[test]
+    fn repeated_replacement_supports_a_long_target_after_nonce_growth() {
+        let base = std::env::temp_dir().join(format!(
+            "ember-lab-atomic-replace-long-path-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let target = target_with_exact_length(&base, "receipt.json", 234);
+
+        for value in 0_u16..256 {
+            atomic_replace(&target, &value.to_le_bytes()).unwrap();
+        }
+
+        assert_eq!(fs::read(&target).unwrap(), 255_u16.to_le_bytes());
+        assert_eq!(
+            fs::read_dir(target.parent().unwrap()).unwrap().count(),
+            1,
+            "atomic replacement must leave no temporary custody files",
+        );
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn atomic_file_publication_supports_a_long_directory_and_short_target() {
+        let base = std::env::temp_dir().join(format!(
+            "ember-lab-atomic-short-target-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        let replace_target = target_with_exact_length(&base, "a.json", 259);
+        atomic_replace(&replace_target, b"replacement").unwrap();
+        assert_eq!(fs::read(&replace_target).unwrap(), b"replacement");
+
+        let create_target = replace_target.with_file_name("b.json");
+        atomic_create(&create_target, b"original").unwrap();
+        let error = atomic_create(&create_target, b"overwrite").unwrap_err();
+        assert!(matches!(error, EmberLabError::ReceiptAlreadyExists { .. }));
+        assert_eq!(fs::read(&create_target).unwrap(), b"original");
+        assert_eq!(
+            fs::read_dir(replace_target.parent().unwrap())
+                .unwrap()
+                .count(),
+            2,
+            "atomic publication must leave no temporary custody files",
+        );
+        fs::remove_dir_all(&base).unwrap();
+    }
 }
 
 fn write_content_addressed_receipt(directory: &Path, bytes: &[u8]) -> Result<ReceiptArtifact> {
@@ -13776,7 +13869,7 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let temp = path.with_extension(format!("tmp-{}-{}", std::process::id(), now_ms()));
+    let (publication_path, temp) = atomic_publication_paths(path, "create")?;
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -13789,7 +13882,11 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
         let from: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
-        let to: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        let to: Vec<u16> = publication_path
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
         if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
             let error = std::io::Error::last_os_error();
             let _ = fs::remove_file(&temp);
@@ -13803,7 +13900,7 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
     }
     #[cfg(not(windows))]
     {
-        if let Err(error) = fs::hard_link(&temp, path) {
+        if let Err(error) = fs::hard_link(&temp, &publication_path) {
             let _ = fs::remove_file(&temp);
             return if error.kind() == std::io::ErrorKind::AlreadyExists {
                 Err(EmberLabError::ReceiptAlreadyExists {
@@ -13815,7 +13912,7 @@ fn atomic_create(path: &Path, bytes: &[u8]) -> Result<()> {
         }
         fs::remove_file(&temp)?;
     }
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = publication_path.parent() {
         if let Ok(dir) = OpenOptions::new().read(true).open(parent) {
             let _ = dir.sync_all();
         }
