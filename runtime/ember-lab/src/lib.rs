@@ -15,6 +15,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::RwLock;
 use std::sync::{Arc, Condvar, Mutex, Weak};
@@ -1973,6 +1974,171 @@ impl ProtectiveStopContext {
         finalize_stopped_in_connection(&mut conn, job_id, row, seal_logs, Some(completion_artifact))
     }
 
+    fn refuse_dead_after_authorization(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+        artifact: &ReceiptArtifact,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let (stdout_sha256, stderr_sha256, log_seal_error) = match seal_log_hashes(&tx, job_id) {
+            Ok((stdout_sha256, stderr_sha256)) => (Some(stdout_sha256), Some(stderr_sha256), None),
+            Err(error) => (None, None, Some(error.to_string())),
+        };
+        let changed = tx.execute(
+            "UPDATE jobs SET state='stopped',stdout_log_sha256=?4,stderr_log_sha256=?5,
+                    outage_event_cutoff_seq=(SELECT COALESCE(MAX(seq),0) FROM outage_events),
+                    updated_at_ms=?2
+             WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3",
+            params![
+                job_id,
+                now_ms(),
+                row.lease_epoch,
+                stdout_sha256,
+                stderr_sha256
+            ],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "dead protective stop lost its state or lease epoch fence".into(),
+            });
+        }
+        let released = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3",
+            params![row.resource, job_id, row.lease_epoch],
+        )?;
+        if released != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "dead protective stop lost its lease epoch".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+             VALUES(?1,?2,'job_stopped',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({"pid":row.pid,"lease_epoch":row.lease_epoch}).to_string()
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+             VALUES(?1,?2,'protective_owned_stop_refused',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "reason": "process_already_dead",
+                    "lease_retained": false,
+                    "decision_receipt": artifact.path.file_name().unwrap().to_string_lossy(),
+                    "decision_receipt_sha256": artifact.sha256,
+                    "foreign_process_control": false,
+                    "log_seal_error": log_seal_error,
+                })
+                .to_string()
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn refuse_uncertain_after_authorization(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+        artifact: &ReceiptArtifact,
+        detail: &str,
+    ) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let fenced: bool = tx.query_row(
+            "SELECT EXISTS(
+                 SELECT 1 FROM jobs j JOIN leases l ON l.resource=j.resource
+                 WHERE j.job_id=?1 AND j.state='stopping' AND j.lease_epoch=?2
+                   AND l.owner_job_id=j.job_id AND l.lease_epoch=j.lease_epoch
+             )",
+            params![job_id, row.lease_epoch],
+            |record| record.get(0),
+        )?;
+        if !fenced {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "uncertain protective stop lost its state or lease epoch fence".into(),
+            });
+        }
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+             VALUES(?1,?2,'protective_owned_stop_refused',?3)",
+            params![
+                job_id,
+                now_ms(),
+                json!({
+                    "reason": "process_control_uncertain",
+                    "detail": detail,
+                    "lease_retained": true,
+                    "decision_receipt": artifact.path.file_name().unwrap().to_string_lossy(),
+                    "decision_receipt_sha256": artifact.sha256,
+                    "foreign_process_control": false,
+                })
+                .to_string()
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn rollback_authorization_after_artifact_failure(
+        &self,
+        job_id: &str,
+        row: &JobProcessRow,
+        original_error: &EmberLabError,
+    ) {
+        let rollback = match self.conn() {
+            Ok(conn) => conn
+                .execute(
+                    "UPDATE jobs SET state='running',updated_at_ms=?2
+                     WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3
+                       AND EXISTS(
+                         SELECT 1 FROM leases l
+                         WHERE l.resource=jobs.resource
+                           AND l.owner_job_id=jobs.job_id
+                           AND l.lease_epoch=jobs.lease_epoch
+                       )",
+                    params![job_id, now_ms(), row.lease_epoch],
+                )
+                .map_err(EmberLabError::from),
+            Err(rollback_error) => Err(rollback_error),
+        };
+        if !matches!(rollback, Ok(1)) {
+            let rollback_detail = match &rollback {
+                Ok(changed) => {
+                    format!("authorization rollback changed {changed} fenced rows instead of one")
+                }
+                Err(rollback_error) => format!("authorization rollback failed: {rollback_error}"),
+            };
+            if let Ok(conn) = self.conn() {
+                let _ = conn.execute(
+                    "INSERT INTO events(job_id,ts_ms,kind,payload_json)
+                     VALUES(?1,?2,'protective_owned_stop_rollback_failed',?3)",
+                    params![
+                        job_id,
+                        now_ms(),
+                        json!({
+                            "original_error": original_error.to_string(),
+                            "detail": rollback_detail,
+                            "lease_epoch": row.lease_epoch,
+                            "foreign_process_control": false,
+                        })
+                        .to_string()
+                    ],
+                );
+            }
+        }
+    }
+
     #[cfg(windows)]
     fn verify_owned_live_process(&self, job_id: &str, row: &JobProcessRow) -> Result<()> {
         let retained = self.live.lock().map_err(|_| EmberLabError::Poisoned)?;
@@ -2014,6 +2180,18 @@ impl ProtectiveStopContext {
 
     #[cfg(windows)]
     fn protective_owned_stop(
+        &self,
+        job_id: &str,
+        checkpoint_grace: Duration,
+    ) -> Result<ReceiptArtifact> {
+        let result = self.protective_owned_stop_inner(job_id, checkpoint_grace);
+        if let Err(error) = &result {
+            record_protective_owned_stop_failure(&self.db, job_id, error);
+        }
+        result
+    }
+
+    fn protective_owned_stop_inner(
         &self,
         job_id: &str,
         checkpoint_grace: Duration,
@@ -2232,17 +2410,7 @@ impl ProtectiveStopContext {
         let artifact = match artifact {
             Ok(artifact) => artifact,
             Err(error) => {
-                let _ = self.conn()?.execute(
-                    "UPDATE jobs SET state='running',updated_at_ms=?2
-                     WHERE job_id=?1 AND state='stopping' AND lease_epoch=?3
-                       AND EXISTS(
-                         SELECT 1 FROM leases l
-                         WHERE l.resource=jobs.resource
-                           AND l.owner_job_id=jobs.job_id
-                           AND l.lease_epoch=jobs.lease_epoch
-                       )",
-                    params![job_id, now_ms(), row.lease_epoch],
-                );
+                self.rollback_authorization_after_artifact_failure(job_id, &row, &error);
                 return Err(error);
             }
         };
@@ -2259,17 +2427,51 @@ impl ProtectiveStopContext {
         let live = match live {
             LiveStatus::Verified(live) => live,
             LiveStatus::Dead => {
-                return Err(EmberLabError::ProcessUnavailable {
+                let unavailable = EmberLabError::ProcessUnavailable {
                     job_id: job_id.into(),
                     pid: row.pid,
-                });
+                };
+                if let Err(handler_error) =
+                    self.refuse_dead_after_authorization(job_id, &row, &artifact)
+                {
+                    let already_terminal = self.conn().ok().and_then(|conn| {
+                        let state =
+                            process_state_at_fence(&conn, job_id, row.pid, row.lease_epoch).ok()?;
+                        let lease_exists = conn
+                            .query_row(
+                                "SELECT EXISTS(
+                                     SELECT 1 FROM leases
+                                     WHERE resource=?1 AND owner_job_id=?2 AND lease_epoch=?3
+                                 )",
+                                params![row.resource, job_id, row.lease_epoch],
+                                |record| record.get::<_, bool>(0),
+                            )
+                            .ok()?;
+                        Some(
+                            matches!(state, Some(JobState::Stopped | JobState::Exited))
+                                && !lease_exists,
+                        )
+                    });
+                    if already_terminal != Some(true) {
+                        return Err(handler_error);
+                    }
+                }
+                return Err(unavailable);
             }
             LiveStatus::Orphaned(detail) | LiveStatus::IdentityConflict(detail) => {
-                return Err(EmberLabError::ProcessControlUncertain {
+                let uncertain = EmberLabError::ProcessControlUncertain {
                     job_id: job_id.into(),
                     pid: row.pid,
                     detail,
-                });
+                };
+                if let EmberLabError::ProcessControlUncertain { detail, .. } = &uncertain {
+                    if let Err(handler_error) =
+                        self.refuse_uncertain_after_authorization(job_id, &row, &artifact, detail)
+                    {
+                        record_protective_owned_stop_failure(&self.db, job_id, &handler_error);
+                    }
+                }
+                return Err(uncertain);
             }
         };
         if let Err(error) = terminate_live(&live) {
@@ -12409,18 +12611,37 @@ fn record_protective_owned_stop_failure(
     let Ok(conn) = db.lock() else {
         return;
     };
+    let error_text = error.to_string();
+    let error_class = error_text
+        .split(['(', ' ', '{'])
+        .next()
+        .unwrap_or("EmberLabError");
+    let payload = json!({
+        "error": error_text,
+        "error_class": error_class,
+        "foreign_process_control": false,
+    })
+    .to_string();
     let _ = conn.execute(
         "INSERT INTO events(job_id,ts_ms,kind,payload_json)
-         VALUES(?1,?2,'protective_owned_stop_failed',?3)",
-        params![
-            job_id,
-            now_ms(),
-            json!({
-                "error": error.to_string(),
-                "foreign_process_control": false,
-            })
-            .to_string()
-        ],
+         SELECT ?1,?2,'protective_owned_stop_failed',?3
+         WHERE NOT EXISTS(
+             SELECT 1 FROM events prior
+             WHERE prior.job_id=?1
+               AND prior.kind='protective_owned_stop_failed'
+               AND json_extract(prior.payload_json,'$.error_class')=?4
+               AND prior.seq > COALESCE((
+                   SELECT MAX(boundary.seq) FROM events boundary
+                   WHERE boundary.job_id=?1
+                     AND boundary.kind IN (
+                         'job_started',
+                         'protective_owned_stop_authorizing',
+                         'protective_owned_stop_completed',
+                         'protective_owned_stop_refused'
+                     )
+               ),0)
+         )",
+        params![job_id, now_ms(), payload, error_class,],
     );
 }
 
@@ -13291,11 +13512,8 @@ fn spawn_resource_guard_monitor(
                 let grace_ms = protective_checkpoint_monitor_grace_ms(job_ids.len());
 
                 for job_id in job_ids {
-                    if let Err(error) =
-                        context.protective_owned_stop(&job_id, Duration::from_millis(grace_ms))
-                    {
-                        record_protective_owned_stop_failure(&db, &job_id, &error);
-                    }
+                    let _ = context
+                        .protective_owned_stop(&job_id, Duration::from_millis(grace_ms));
                 }
             }
         })?;
@@ -13355,10 +13573,16 @@ fn same_executable(a: &str, b: &str) -> bool {
     }
 }
 fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
+    static TEMP_NONCE: AtomicU64 = AtomicU64::new(0);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let temp = path.with_extension(format!("replace-{}-{}", std::process::id(), now_ms()));
+    let temp = path.with_extension(format!(
+        "replace-{}-{}-{}",
+        std::process::id(),
+        now_ms(),
+        TEMP_NONCE.fetch_add(1, Ordering::Relaxed)
+    ));
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -16213,5 +16437,210 @@ mod dispatch_binding_snapshot_tests {
         assert!(running_job_ids_for_protective_stop(&conn)
             .unwrap()
             .is_empty());
+    }
+
+    #[cfg(windows)]
+    fn protective_stop_state_fixture(
+        job_id: &str,
+    ) -> (
+        Daemon,
+        ProtectiveStopContext,
+        JobProcessRow,
+        ReceiptArtifact,
+    ) {
+        static FIXTURE_NONCE: AtomicU64 = AtomicU64::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "ember-lab-protective-state-{}-{}-{}",
+            std::process::id(),
+            now_ms(),
+            FIXTURE_NONCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let db = root.join("state.sqlite3");
+        let daemon =
+            Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(healthy_host_capacity()))
+                .unwrap();
+        let stdout = root.join("stdout.log");
+        let stderr = root.join("stderr.log");
+        fs::write(&stdout, b"stdout").unwrap();
+        fs::write(&stderr, b"stderr").unwrap();
+        {
+            let conn = daemon.conn().unwrap();
+            conn.execute(
+                "INSERT INTO jobs(
+                    job_id,program,args_json,env_json,resource,lease_epoch,pid,main_thread_id,
+                    job_object_name,process_start_token,executable_identity,argv_sha256,state,
+                    stdout_log_path,stderr_log_path,started_at_ms,updated_at_ms
+                 ) VALUES(?1,'fixture','[]','{}',?2,1,4242,0,'fixture-job-object',
+                          'fixture-start','fixture-executable','fixture-argv','stopping',?3,?4,1,1)",
+                params![
+                    job_id,
+                    format!("{job_id}-resource"),
+                    stdout.to_string_lossy(),
+                    stderr.to_string_lossy()
+                ],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO leases(resource,owner_job_id,lease_epoch,acquired_at_ms)
+                 VALUES(?1,?2,1,1)",
+                params![format!("{job_id}-resource"), job_id],
+            )
+            .unwrap();
+        }
+        let context = ProtectiveStopContext {
+            db: Arc::clone(&daemon.db),
+            live: Arc::clone(&daemon.live),
+            log_dir: daemon.log_dir.clone(),
+        };
+        let row = context.job_process_row(job_id).unwrap();
+        let artifact = ReceiptArtifact {
+            path: root.join("decision.json"),
+            sha256: "d".repeat(64),
+        };
+        (daemon, context, row, artifact)
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn dead_after_protective_authorization_is_terminal_without_completion_claim() {
+        let job_id = "dead-after-authorize";
+        let (daemon, context, row, artifact) = protective_stop_state_fixture(job_id);
+        let missing_log_dir = artifact.path.parent().unwrap().join("missing-log-custody");
+        daemon
+            .conn()
+            .unwrap()
+            .execute(
+                "UPDATE jobs SET stdout_log_path=?2,stderr_log_path=?3 WHERE job_id=?1",
+                params![
+                    job_id,
+                    missing_log_dir.join("stdout.log").to_string_lossy(),
+                    missing_log_dir.join("stderr.log").to_string_lossy()
+                ],
+            )
+            .unwrap();
+        context
+            .refuse_dead_after_authorization(job_id, &row, &artifact)
+            .unwrap();
+
+        assert_eq!(daemon.job_state(job_id).unwrap(), Some(JobState::Stopped));
+        assert_eq!(daemon.lease_owner(&row.resource).unwrap(), None);
+        let kinds = daemon.job_event_kinds(job_id).unwrap();
+        assert!(kinds
+            .iter()
+            .any(|kind| kind == "protective_owned_stop_refused"));
+        assert!(!kinds
+            .iter()
+            .any(|kind| kind == "protective_owned_stop_completed"));
+        let (stdout_hash, stderr_hash): (Option<String>, Option<String>) = daemon
+            .conn()
+            .unwrap()
+            .query_row(
+                "SELECT stdout_log_sha256,stderr_log_sha256 FROM jobs WHERE job_id=?1",
+                [job_id],
+                |record| Ok((record.get(0)?, record.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((stdout_hash, stderr_hash), (None, None));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn uncertain_after_protective_authorization_retains_stopping_state_and_lease() {
+        for (job_id, detail) in [
+            (
+                "orphaned-after-authorize",
+                "named job object is unavailable",
+            ),
+            (
+                "identity-conflict-after-authorize",
+                "process identity changed",
+            ),
+        ] {
+            let (daemon, context, row, artifact) = protective_stop_state_fixture(job_id);
+            context
+                .refuse_uncertain_after_authorization(job_id, &row, &artifact, detail)
+                .unwrap();
+
+            assert_eq!(daemon.job_state(job_id).unwrap(), Some(JobState::Stopping));
+            assert_eq!(
+                daemon.lease_owner(&row.resource).unwrap(),
+                Some(job_id.into())
+            );
+            let payload: String = daemon
+                .conn()
+                .unwrap()
+                .query_row(
+                    "SELECT payload_json FROM events
+                     WHERE job_id=?1 AND kind='protective_owned_stop_refused'",
+                    [job_id],
+                    |record| record.get(0),
+                )
+                .unwrap();
+            let payload: Value = serde_json::from_str(&payload).unwrap();
+            assert_eq!(payload["reason"], "process_control_uncertain");
+            assert_eq!(payload["detail"], detail);
+            assert_eq!(payload["lease_retained"], true);
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn artifact_failure_with_lost_rollback_fence_records_failure_without_substitution() {
+        let job_id = "artifact-rollback-fence-lost";
+        let (daemon, context, row, _) = protective_stop_state_fixture(job_id);
+        daemon
+            .conn()
+            .unwrap()
+            .execute("UPDATE jobs SET state='stopped' WHERE job_id=?1", [job_id])
+            .unwrap();
+        let original_error = EmberLabError::ReceiptHashCollision {
+            path: PathBuf::from("original-decision.json"),
+        };
+
+        context.rollback_authorization_after_artifact_failure(job_id, &row, &original_error);
+
+        let payload: String = daemon
+            .conn()
+            .unwrap()
+            .query_row(
+                "SELECT payload_json FROM events
+                 WHERE job_id=?1 AND kind='protective_owned_stop_rollback_failed'",
+                [job_id],
+                |record| record.get(0),
+            )
+            .unwrap();
+        let payload: Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(payload["original_error"], original_error.to_string());
+        assert!(payload["detail"]
+            .as_str()
+            .unwrap()
+            .contains("changed 0 fenced rows instead of one"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn repeated_protective_stop_failure_is_deduplicated_within_one_transition() {
+        let job_id = "deduplicated-protective-failure";
+        let (daemon, _, _, _) = protective_stop_state_fixture(job_id);
+        let error = EmberLabError::InvalidTransition {
+            job_id: job_id.into(),
+            detail: "repeatable monitor condition".into(),
+        };
+
+        record_protective_owned_stop_failure(&daemon.db, job_id, &error);
+        record_protective_owned_stop_failure(&daemon.db, job_id, &error);
+
+        let count: i64 = daemon
+            .conn()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM events
+                 WHERE job_id=?1 AND kind='protective_owned_stop_failed'",
+                [job_id],
+                |record| record.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }

@@ -5152,7 +5152,9 @@ fn protective_owned_stop_completion_failure_rolls_back_the_stopped_state() {
     let root = sandbox("protective-owned-stop-completion-rollback");
     let db = root.join("ember-lab.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
-    let daemon = Daemon::open(&db).unwrap();
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
     daemon
         .bind_identity("rollback-protected-job", &identity, &identity_hash)
         .unwrap();
@@ -5168,7 +5170,7 @@ fn protective_owned_stop_completion_failure_rolls_back_the_stopped_state() {
                 "rollback-protected-resource",
             )
             .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
-            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "120000"),
         )
         .unwrap();
     rusqlite::Connection::open(&db)
@@ -5194,10 +5196,20 @@ fn protective_owned_stop_completion_failure_rolls_back_the_stopped_state() {
         )
         .unwrap();
 
-    assert!(matches!(
-        daemon.protective_owned_stop("rollback-protected-job", Duration::from_millis(25),),
-        Err(EmberLabError::Sqlite(_))
-    ));
+    let error = daemon
+        .protective_owned_stop("rollback-protected-job", Duration::from_millis(25))
+        .expect_err("forced completion receipt failure must be returned");
+    let diagnostic_files: Vec<_> = fs::read_dir(&root)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        matches!(&error, EmberLabError::Sqlite(_)),
+        "expected sqlite completion failure, got {error:?}; state={:?}; events={:?}; root_exists={}; files={diagnostic_files:?}",
+        daemon.job_state("rollback-protected-job").unwrap(),
+        daemon.job_event_kinds("rollback-protected-job").unwrap(),
+        root.exists(),
+    );
 
     assert!(!process_is_alive(started.pid));
     assert_eq!(
@@ -5215,6 +5227,112 @@ fn protective_owned_stop_completion_failure_rolls_back_the_stopped_state() {
         .unwrap()
         .iter()
         .any(|kind| kind == "protective_owned_stop_completed"));
+}
+
+#[cfg(windows)]
+#[test]
+fn concurrent_protective_owned_stop_records_the_named_loser() {
+    let root = sandbox("protective-owned-stop-concurrent");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Arc::new(
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap(),
+    );
+    daemon
+        .bind_identity("concurrent-protected-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("concurrent-protected-resource", "concurrent-protected-job")
+        .unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "concurrent-protected-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "concurrent-protected-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "120000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state
+             SET admission_state='frozen', reason='physical_available_below_survival_floor',
+                 observed_at_ms=1234, oracle_evidence_required=1,
+                 observation_json='{\"result\":\"SURVIVAL_FLOOR_BREACH\"}'
+             WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+
+    let gate = Arc::new(Barrier::new(3));
+    let mut callers = Vec::new();
+    for _ in 0..2 {
+        let daemon = Arc::clone(&daemon);
+        let gate = Arc::clone(&gate);
+        callers.push(thread::spawn(move || {
+            gate.wait();
+            daemon.protective_owned_stop("concurrent-protected-job", Duration::from_millis(100))
+        }));
+    }
+    gate.wait();
+    let results: Vec<_> = callers
+        .into_iter()
+        .map(|caller| caller.join().unwrap())
+        .collect();
+
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    let loser = results
+        .iter()
+        .find_map(|result| result.as_ref().err())
+        .expect("one concurrent caller must lose the ownership fence");
+    assert!(
+        matches!(
+            loser,
+            EmberLabError::InvalidTransition { .. } | EmberLabError::ProcessControlUncertain { .. }
+        ),
+        "concurrent loser must return a named ownership error, got {loser:?}"
+    );
+    let authorizing_events: i64 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM events
+             WHERE job_id='concurrent-protected-job'
+               AND kind='protective_owned_stop_authorizing'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        authorizing_events, 1,
+        "exactly one concurrent caller may clear the authorization fence"
+    );
+    let failed_events: i64 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM events
+             WHERE job_id='concurrent-protected-job'
+               AND kind='protective_owned_stop_failed'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        failed_events, 1,
+        "the losing public caller must persist exactly one outcome receipt"
+    );
+    assert_eq!(
+        daemon.job_state("concurrent-protected-job").unwrap(),
+        Some(JobState::Stopped)
+    );
+    assert_eq!(
+        daemon.lease_owner("concurrent-protected-resource").unwrap(),
+        None
+    );
 }
 
 #[cfg(windows)]
