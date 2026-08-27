@@ -77,7 +77,7 @@
     },
     {
       "path": "tools/powershell-launcher-shape-guard.ps1",
-      "sha256": "4a01efbcaf0592418ec37eaf0f52a37066fd6c052ab35485043ce6f11c90f02a",
+      "sha256": "e028dc29ca9286ee8ac5263daeaac6d6692df9900cfd988988f91f5017452f9b",
       "reason": "bootstrap compatibility row, temporary. This file is the AST scanner itself. The guard on this branch excludes its own scanner, but CI adjudicates with the base-pinned kernel, whose older line-oriented detector sees the scanner's own call-operator invocation of git and reports it as launcher-shaped. The exact digest admits only these reviewed bootstrap bytes and nothing else. Verified both ways: the base kernel refuses without this row and passes with it, and the branch kernel passes either way, treating the row as unused. Remove the row once the kernel CI pins is the successor that excludes the scanner by construction."
     }
   ]
