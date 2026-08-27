@@ -321,6 +321,7 @@ pub enum EmberLabError {
     DispatchReceiptRecoveryPending {
         job_id: String,
         receipt_path: PathBuf,
+        detail: String,
     },
     StateWriterBusy {
         path: PathBuf,
@@ -4709,7 +4710,7 @@ impl Daemon {
                 return Err(error);
             }
         };
-        if atomic_replace(&receipt_path, &receipt_bytes).is_err() {
+        if let Err(error) = atomic_replace(&receipt_path, &receipt_bytes) {
             self.persist_dispatch_receipt_recovery(
                 &job_id,
                 &resource_lease,
@@ -4720,6 +4721,7 @@ impl Daemon {
             return Err(EmberLabError::DispatchReceiptRecoveryPending {
                 job_id,
                 receipt_path,
+                detail: error.to_string(),
             });
         }
         self.persist_dispatch_preflight_receipt(
@@ -5503,13 +5505,13 @@ impl Daemon {
             })
     }
 
-    pub fn job_result(&self, job_id: &str) -> Result<(i64, String)> {
-        let row: (String, Option<i64>, String, Option<String>) = self
+    pub fn job_result(&self, job_id: &str) -> Result<(i64, String, String)> {
+        let row: (String, Option<i64>, String, Option<String>, String, Option<String>) = self
             .conn()?
             .query_row(
-                "SELECT state,exit_code,stderr_log_path,stderr_log_sha256 FROM jobs WHERE job_id=?1",
+                "SELECT state,exit_code,stdout_log_path,stdout_log_sha256,stderr_log_path,stderr_log_sha256 FROM jobs WHERE job_id=?1",
                 [job_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
             )
             .optional()?
             .ok_or_else(|| EmberLabError::JobNotFound {
@@ -5529,26 +5531,42 @@ impl Daemon {
             job_id: job_id.into(),
             detail: "terminal certified launch lacks an exit code".into(),
         })?;
-        let expected_stderr_sha256 = row.3.ok_or_else(|| EmberLabError::LogEvidenceUnsealed {
+        let expected_stdout_sha256 = row.3.ok_or_else(|| EmberLabError::LogEvidenceUnsealed {
             job_id: job_id.into(),
         })?;
-        let stderr_path = PathBuf::from(row.2);
+        let expected_stderr_sha256 = row.5.ok_or_else(|| EmberLabError::LogEvidenceUnsealed {
+            job_id: job_id.into(),
+        })?;
+        let stdout_path = PathBuf::from(row.2);
+        let stderr_path = PathBuf::from(row.4);
+        let stdout_bytes = fs::read(&stdout_path)?;
         let stderr_bytes = fs::read(&stderr_path)?;
+        let actual_stdout_sha256 = hash_bytes(&stdout_bytes);
         let actual_stderr_sha256 = hash_bytes(&stderr_bytes);
-        if actual_stderr_sha256 != expected_stderr_sha256 {
-            return Err(EmberLabError::LogEvidenceMismatch {
-                job_id: job_id.into(),
-                stream: "stderr".into(),
-                expected: expected_stderr_sha256,
-                actual: actual_stderr_sha256,
-            });
+        for (stream, expected, actual) in [
+            ("stdout", expected_stdout_sha256, actual_stdout_sha256),
+            ("stderr", expected_stderr_sha256, actual_stderr_sha256),
+        ] {
+            if actual != expected {
+                return Err(EmberLabError::LogEvidenceMismatch {
+                    job_id: job_id.into(),
+                    stream: stream.into(),
+                    expected,
+                    actual,
+                });
+            }
         }
+        let stdout =
+            String::from_utf8(stdout_bytes).map_err(|_| EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "terminal certified launch stdout is not UTF-8".into(),
+            })?;
         let stderr =
             String::from_utf8(stderr_bytes).map_err(|_| EmberLabError::InvalidTransition {
                 job_id: job_id.into(),
                 detail: "terminal certified launch stderr is not UTF-8".into(),
             })?;
-        Ok((exit_code, stderr))
+        Ok((exit_code, stdout, stderr))
     }
 
     pub fn record_launch_context(
@@ -5579,6 +5597,54 @@ impl Daemon {
         Ok(())
     }
 
+    pub fn record_launch_artifact_refusal(
+        &self,
+        job_id: &str,
+        evidence_locator: &str,
+    ) -> Result<()> {
+        if evidence_locator.is_empty() {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "certified launch artifact refusal lacks an evidence locator".into(),
+            });
+        }
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let eligible: bool = tx.query_row(
+            "SELECT state='exited' AND exit_code=0 AND EXISTS(SELECT 1 FROM events WHERE events.job_id=jobs.job_id AND kind='certified_launch_daemon_context') FROM jobs WHERE job_id=?1",
+            [job_id],
+            |row| row.get(0),
+        ).optional()?.ok_or_else(|| EmberLabError::JobNotFound { job_id: job_id.into() })?;
+        if !eligible {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "only a terminal exit-zero certified launch may record an artifact refusal"
+                    .into(),
+            });
+        }
+        let timestamp = now_ms();
+        tx.execute(
+            "INSERT INTO events(job_id,ts_ms,kind,payload_json) VALUES(?1,?2,'certified_launch_artifact_refusal',?3)",
+            params![job_id, timestamp, json!({
+                "condition":"required_terminal_artifact_missing_or_invalid",
+                "evidence_locator":evidence_locator,
+                "child_exit_code":0
+            }).to_string()],
+        )?;
+        let changed = tx.execute(
+            "UPDATE jobs SET state='failed',updated_at_ms=?2 WHERE job_id=?1 AND state='exited' AND exit_code=0",
+            params![job_id, timestamp],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::InvalidTransition {
+                job_id: job_id.into(),
+                detail: "certified launch artifact refusal lost its terminal-state race".into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn adopt_job(&self, job_id: &str) -> Result<JobHandle> {
         let pending_receipt_path: Option<String> = self
             .conn()?
@@ -5592,6 +5658,7 @@ impl Daemon {
             return Err(EmberLabError::DispatchReceiptRecoveryPending {
                 job_id: job_id.into(),
                 receipt_path: PathBuf::from(receipt_path),
+                detail: "persisted dispatch receipt recovery remains pending".into(),
             });
         }
         let row = self.job_process_row(job_id)?;

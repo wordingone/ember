@@ -78,6 +78,13 @@ struct LaunchContextParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LaunchArtifactRefusalParams {
+    job_id: String,
+    evidence_locator: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct DispatchManifestParams {
     manifest_utf8: String,
     manifest_sha256: String,
@@ -494,8 +501,11 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Err(response) => return (response, false),
             };
             match daemon.job_result(&params.job_id) {
-                Ok((exit_code, stderr)) => (
-                    success(id, json!({"exit_code":exit_code,"stderr":stderr})),
+                Ok((exit_code, stdout, stderr)) => (
+                    success(
+                        id,
+                        json!({"exit_code":exit_code,"stdout":stdout,"stderr":stderr}),
+                    ),
                     false,
                 ),
                 Err(error) => (operation_error(id, error), false),
@@ -511,6 +521,16 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 &params.daemon_mode,
                 params.daemon_pid,
             ) {
+                Ok(()) => (success(id, json!({"recorded":true})), false),
+                Err(error) => (operation_error(id, error), false),
+            }
+        }
+        "record_launch_artifact_refusal" => {
+            let params: LaunchArtifactRefusalParams = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            match daemon.record_launch_artifact_refusal(&params.job_id, &params.evidence_locator) {
                 Ok(()) => (success(id, json!({"recorded":true})), false),
                 Err(error) => (operation_error(id, error), false),
             }

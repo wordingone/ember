@@ -65,7 +65,17 @@ struct PreparedCertifiedLaunch {
     job_id: String,
     receipt_path: PathBuf,
     run_custody_root: PathBuf,
+    terminal_contract: CertifiedLaunchTerminalContract,
 }
+
+#[derive(Debug)]
+enum CertifiedLaunchTerminalContract {
+    None,
+    Artifacts(Vec<PathBuf>),
+    JobMemoryProbeStdout,
+}
+
+const CERTIFIED_LAUNCH_PYTHON_TRAMPOLINE: &str = "import importlib.util,pathlib,sys;script=pathlib.Path(sys.argv[1]);sys.path[:0]=[sys.argv[2],sys.argv[3]];spec=importlib.util.spec_from_file_location('ember_certified_train_launch',script);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);raise SystemExit(module.main(sys.argv[4:]))";
 
 struct CertifiedLaunchRequest {
     root: PathBuf,
@@ -408,6 +418,7 @@ where
     complete_certified_launch(
         &prepared.job_id,
         &prepared.receipt_path,
+        &prepared.terminal_contract,
         |request| rpc(request),
         wait,
     )
@@ -416,6 +427,7 @@ where
 fn complete_certified_launch<F, S>(
     job_id: &str,
     receipt_path: &Path,
+    terminal_contract: &CertifiedLaunchTerminalContract,
     mut rpc: F,
     mut wait: S,
 ) -> Result<CertifiedLaunchCompletion, Box<dyn std::error::Error>>
@@ -460,6 +472,12 @@ where
         .ok_or_else(|| {
             std::io::Error::other("certified launch terminal result lacks an i32 exit code")
         })?;
+    let stdout = result
+        .get("stdout")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            std::io::Error::other("certified launch terminal result lacks UTF-8 stdout")
+        })?;
     let stderr = result
         .get("stderr")
         .and_then(Value::as_str)
@@ -467,6 +485,25 @@ where
             std::io::Error::other("certified launch terminal result lacks UTF-8 stderr")
         })?
         .to_string();
+    let refusal = if exit_code == 0 {
+        validate_certified_launch_terminal_contract(terminal_contract, stdout).err()
+    } else {
+        None
+    };
+    if let Some((evidence_locator, _)) = refusal.as_ref() {
+        let recorded = rpc(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "record_launch_artifact_refusal",
+            "params": {"job_id": job_id, "evidence_locator": evidence_locator}
+        }))?;
+        if recorded.get("recorded") != Some(&Value::Bool(true)) {
+            return Err(std::io::Error::other(
+                "certified launch artifact refusal was not recorded durably",
+            )
+            .into());
+        }
+    }
     let exported = rpc(&json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -478,7 +515,75 @@ where
             std::io::Error::other("certified launch operational receipt was not exported").into(),
         );
     }
+    if let Some((_, error)) = refusal {
+        return Err(error.into());
+    }
     Ok(CertifiedLaunchCompletion { exit_code, stderr })
+}
+
+fn validate_certified_launch_terminal_contract(
+    contract: &CertifiedLaunchTerminalContract,
+    stdout: &str,
+) -> Result<(), (String, std::io::Error)> {
+    match contract {
+        CertifiedLaunchTerminalContract::None => Ok(()),
+        CertifiedLaunchTerminalContract::Artifacts(paths) => {
+            for path in paths {
+                let metadata = std::fs::symlink_metadata(path).map_err(|error| {
+                    (
+                        path.to_string_lossy().into_owned(),
+                        std::io::Error::other(format!(
+                            "certified launch required terminal artifact is missing at {}: {error}",
+                            path.display()
+                        )),
+                    )
+                })?;
+                if metadata.file_type().is_symlink() || !metadata.is_file() || metadata.len() == 0 {
+                    return Err((
+                        path.to_string_lossy().into_owned(),
+                        std::io::Error::other(format!(
+                            "certified launch required terminal artifact is not a non-empty regular file: {}",
+                            path.display()
+                        )),
+                    ));
+                }
+            }
+            Ok(())
+        }
+        CertifiedLaunchTerminalContract::JobMemoryProbeStdout => {
+            let mut phases = Vec::new();
+            for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+                let record: Value = serde_json::from_str(line).map_err(|error| {
+                    (
+                        "daemon-captured-stdout".into(),
+                        std::io::Error::other(format!(
+                            "certified launch probe stdout contains invalid JSON: {error}"
+                        )),
+                    )
+                })?;
+                if record.get("schema_version")
+                    == Some(&Value::String("ember-job-memory-ceiling-probe-v1".into()))
+                {
+                    phases.push(
+                        record
+                            .get("phase")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                    );
+                }
+            }
+            if phases != ["allocation_start", "allocation_complete"] {
+                return Err((
+                    "daemon-captured-stdout".into(),
+                    std::io::Error::other(
+                        "certified launch probe stdout lacks its ordered allocation records",
+                    ),
+                ));
+            }
+            Ok(())
+        }
+    }
 }
 
 fn required_object<'a>(
@@ -1076,6 +1181,49 @@ where
     }
     let run_custody_root = requested_custody_root.join(run_id);
     let canonical_run_custody_root = std::fs::canonicalize(&run_custody_root)?;
+    let terminal_contract = if is_job_memory_probe {
+        CertifiedLaunchTerminalContract::JobMemoryProbeStdout
+    } else {
+        let runner_receipt = PathBuf::from(required_string(run_spec_object, "runner_receipt")?);
+        let runner_parent = runner_receipt.parent().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch runner receipt lacks a parent",
+            )
+        })?;
+        let canonical_runner_parent = std::fs::canonicalize(runner_parent)?;
+        let runner_name = runner_receipt.file_name().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch runner receipt lacks a file name",
+            )
+        })?;
+        let runner_receipt = canonical_runner_parent.join(runner_name);
+        let runner_stem = runner_receipt
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .filter(|stem| !stem.is_empty())
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "certified launch runner receipt lacks a UTF-8 stem",
+                )
+            })?;
+        let execution_receipt =
+            runner_receipt.with_file_name(format!("{runner_stem}-certified-launch.json"));
+        if !runner_receipt.is_absolute()
+            || !runner_receipt.starts_with(&canonical_run_custody_root)
+            || runner_receipt.exists()
+            || execution_receipt.exists()
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "certified launch terminal artifacts must be new absolute paths inside the run custody root",
+            )
+            .into());
+        }
+        CertifiedLaunchTerminalContract::Artifacts(vec![runner_receipt, execution_receipt])
+    };
     let receipt_parent = std::fs::canonicalize(receipt_path.parent().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -1423,7 +1571,11 @@ where
         },
         "program": {"path": python_executable, "sha256": hash_file(python_executable)?},
         "args": [
+            "-c",
+            CERTIFIED_LAUNCH_PYTHON_TRAMPOLINE,
             validator.to_string_lossy(),
+            root.to_string_lossy(),
+            validator.parent().expect("certified validator has a parent").to_string_lossy(),
             "--root", root.to_string_lossy(),
             "--certificate", certificate_path.to_string_lossy(),
             "--declaration-ledger", declaration_ledger_path.to_string_lossy(),
@@ -1465,6 +1617,7 @@ where
         job_id,
         receipt_path: receipt_path.to_path_buf(),
         run_custody_root: canonical_run_custody_root,
+        terminal_contract,
     })
 }
 
@@ -1603,6 +1756,7 @@ fn prepare_cockpit_launch_with(
             job_id,
             receipt_path,
             run_custody_root: custody_root,
+            terminal_contract: CertifiedLaunchTerminalContract::None,
         },
         daemon,
     ))
@@ -3228,6 +3382,7 @@ mod tests {
             serde_json::to_vec(&json!({
                 "schema_version": "ember-certified-train-run-v1",
                 "run_id": "run-1",
+                "runner_receipt": root.join("custody/run-1/runner-receipt.json"),
                 "requested_scope": {
                     "mode": "governed-vertical",
                     "gpu_vram_gib": 20.0,
@@ -3408,13 +3563,22 @@ mod tests {
             python.to_string_lossy().as_ref()
         );
         assert_eq!(manifest["program"]["sha256"], hash_file(&python).unwrap());
-        assert_eq!(manifest["args"][0], validator.to_string_lossy().as_ref());
-        assert_eq!(manifest["args"][1], "--root");
-        assert_eq!(manifest["args"][3], "--certificate");
-        assert_eq!(manifest["args"][5], "--declaration-ledger");
-        assert_eq!(manifest["args"][7], "--run-spec");
-        assert_eq!(manifest["args"][9], "--custody-receipt-sha256");
-        assert_eq!(manifest["args"][10], custody_sha256);
+        assert_eq!(manifest["args"][0], "-c");
+        assert_eq!(manifest["args"][1], CERTIFIED_LAUNCH_PYTHON_TRAMPOLINE);
+        assert_eq!(manifest["args"][2], validator.to_string_lossy().as_ref());
+        assert_eq!(manifest["args"][3], repo.to_string_lossy().as_ref());
+        assert_eq!(
+            manifest["args"][4],
+            repo.join("tools/ember-restart-3b")
+                .to_string_lossy()
+                .as_ref()
+        );
+        assert_eq!(manifest["args"][5], "--root");
+        assert_eq!(manifest["args"][7], "--certificate");
+        assert_eq!(manifest["args"][9], "--declaration-ledger");
+        assert_eq!(manifest["args"][11], "--run-spec");
+        assert_eq!(manifest["args"][13], "--custody-receipt-sha256");
+        assert_eq!(manifest["args"][14], custody_sha256);
         assert_eq!(
             manifest["workload_profile"]["profile_id"],
             "governed_vertical"
@@ -3452,6 +3616,22 @@ mod tests {
             }));
         assert_eq!(prepared.job_id, manifest["job_id"]);
         assert_eq!(prepared.receipt_path, receipt);
+        let CertifiedLaunchTerminalContract::Artifacts(required_terminal_artifacts) =
+            &prepared.terminal_contract
+        else {
+            panic!("governed vertical lacks its artifact contract")
+        };
+        assert_eq!(
+            required_terminal_artifacts,
+            &[
+                std::fs::canonicalize(root.join("custody/run-1"))
+                    .unwrap()
+                    .join("runner-receipt.json"),
+                std::fs::canonicalize(root.join("custody/run-1"))
+                    .unwrap()
+                    .join("runner-receipt-certified-launch.json")
+            ]
+        );
     }
 
     #[test]
@@ -3462,6 +3642,7 @@ mod tests {
         let completion = complete_certified_launch(
             "run-1-launch-1800000000000",
             &receipt,
+            &CertifiedLaunchTerminalContract::None,
             |request| {
                 let method = request["method"].as_str().unwrap().to_string();
                 methods.push(method.clone());
@@ -3472,6 +3653,7 @@ mod tests {
                     }
                     "job_result" => json!({
                         "exit_code": 2,
+                        "stdout": "",
                         "stderr": "error: declaration-ledger membership failed\r\n"
                     }),
                     "export_receipt" => json!({"exported": true}),
@@ -3493,6 +3675,129 @@ mod tests {
     }
 
     #[test]
+    fn certified_launch_completion_refuses_zero_exit_without_each_declared_artifact() {
+        let root = std::env::temp_dir().join(format!(
+            "ember-lab-certified-launch-artifact-red-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let operational_receipt = root.join("operational.json");
+        let runner_receipt = root.join("runner-receipt.json");
+        let execution_receipt = root.join("runner-receipt-certified-launch.json");
+
+        for missing in [&runner_receipt, &execution_receipt] {
+            std::fs::write(&runner_receipt, b"{}\n").unwrap();
+            std::fs::write(&execution_receipt, b"{}\n").unwrap();
+            std::fs::remove_file(missing).unwrap();
+            let result = complete_certified_launch(
+                "silent-zero-exit",
+                &operational_receipt,
+                &CertifiedLaunchTerminalContract::Artifacts(vec![
+                    runner_receipt.clone(),
+                    execution_receipt.clone(),
+                ]),
+                |request| {
+                    Ok(match request["method"].as_str().unwrap() {
+                        "job_state" => json!({"state": "exited"}),
+                        "job_result" => json!({"exit_code": 0, "stdout": "", "stderr": ""}),
+                        "record_launch_artifact_refusal" => json!({"recorded": true}),
+                        "export_receipt" => json!({"exported": true}),
+                        method => panic!("unexpected method {method}"),
+                    })
+                },
+                || {},
+            );
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("required terminal artifact"),
+                "an exit-zero child with a missing declared artifact false-passed"
+            );
+        }
+        std::fs::write(&runner_receipt, b"{}\n").unwrap();
+        std::fs::write(&execution_receipt, b"{}\n").unwrap();
+        let completion = complete_certified_launch(
+            "artifact-complete-zero-exit",
+            &operational_receipt,
+            &CertifiedLaunchTerminalContract::Artifacts(vec![runner_receipt, execution_receipt]),
+            |request| {
+                Ok(match request["method"].as_str().unwrap() {
+                    "job_state" => json!({"state": "exited"}),
+                    "job_result" => json!({"exit_code": 0, "stdout": "", "stderr": ""}),
+                    "export_receipt" => json!({"exported": true}),
+                    method => panic!("unexpected method {method}"),
+                })
+            },
+            || {},
+        )
+        .unwrap();
+        assert_eq!(completion.exit_code, 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn certified_launch_probe_refuses_silent_zero_exit_and_consumes_both_schema_records() {
+        let receipt = PathBuf::from(r"B:\custody\probe-operational.json");
+        let mut refused_methods = Vec::new();
+        let refusal = complete_certified_launch(
+            "silent-probe",
+            &receipt,
+            &CertifiedLaunchTerminalContract::JobMemoryProbeStdout,
+            |request| {
+                let method = request["method"].as_str().unwrap().to_string();
+                refused_methods.push(method.clone());
+                Ok(match method.as_str() {
+                    "job_state" => json!({"state": "exited"}),
+                    "job_result" => json!({"exit_code": 0, "stdout": "", "stderr": ""}),
+                    "record_launch_artifact_refusal" => json!({"recorded": true}),
+                    "export_receipt" => json!({"exported": true}),
+                    _ => panic!("unexpected method {method}"),
+                })
+            },
+            || {},
+        )
+        .unwrap_err();
+        assert!(refusal
+            .to_string()
+            .contains("lacks its ordered allocation records"));
+        assert_eq!(
+            refused_methods,
+            [
+                "job_state",
+                "job_result",
+                "record_launch_artifact_refusal",
+                "export_receipt"
+            ]
+        );
+
+        let probe_stdout = concat!(
+            "{\"schema_version\":\"ember-job-memory-ceiling-probe-v1\",\"phase\":\"allocation_start\"}\n",
+            "{\"schema_version\":\"ember-job-memory-ceiling-probe-v1\",\"phase\":\"allocation_complete\"}\n",
+            "{\"outcome\":\"COMPLETED\",\"execution_receipt\":null,\"exit_code\":0}\n"
+        );
+        let completion = complete_certified_launch(
+            "complete-probe",
+            &receipt,
+            &CertifiedLaunchTerminalContract::JobMemoryProbeStdout,
+            |request| {
+                Ok(match request["method"].as_str().unwrap() {
+                    "job_state" => json!({"state": "exited"}),
+                    "job_result" => {
+                        json!({"exit_code": 0, "stdout": probe_stdout, "stderr": ""})
+                    }
+                    "export_receipt" => json!({"exported": true}),
+                    method => panic!("unexpected method {method}"),
+                })
+            },
+            || {},
+        )
+        .unwrap();
+        assert_eq!(completion.exit_code, 0);
+    }
+
+    #[test]
     fn certified_launch_start_names_governed_child_after_context_recording() {
         let root =
             std::env::temp_dir().join(format!("ember-lab-streaming-start-{}", std::process::id()));
@@ -3505,6 +3810,7 @@ mod tests {
             job_id: "run-1-launch-1800000000000".into(),
             receipt_path: root.join("operational.json"),
             run_custody_root: root.clone(),
+            terminal_contract: CertifiedLaunchTerminalContract::None,
         };
         let context_recorded = std::rc::Rc::new(std::cell::Cell::new(false));
         let rpc_recorded = context_recorded.clone();
@@ -3527,7 +3833,7 @@ mod tests {
                         json!({"recorded": true})
                     }
                     "job_state" => json!({"state": "exited"}),
-                    "job_result" => json!({"exit_code": 0, "stderr": ""}),
+                    "job_result" => json!({"exit_code": 0, "stdout": "", "stderr": ""}),
                     "export_receipt" => json!({"exported": true}),
                     _ => panic!("unexpected method {method}"),
                 })
