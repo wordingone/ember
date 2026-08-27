@@ -4,7 +4,10 @@
 
 #![cfg(windows)]
 
-use ember_lab::{Daemon, EmberLabError, HostCommitCapacity, JobState, ResourceGuardRearmRequest};
+use ember_lab::{
+    windows_job_memory_effective_limit, Daemon, EmberLabError, HostCommitCapacity, JobState,
+    ResourceGuardRearmRequest,
+};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -3201,6 +3204,8 @@ fn dispatch_receipts_one_exact_pre_execution_job_memory_witness() {
         "extended_limit_query_succeeded",
         "limit_flags",
         "job_memory_limit_flag_set",
+        "requested_maximum_job_memory_bytes",
+        "kernel_page_size_bytes",
         "expected_maximum_job_memory_bytes",
         "observed_job_memory_limit_bytes",
     ];
@@ -3225,6 +3230,11 @@ fn dispatch_receipts_one_exact_pre_execution_job_memory_witness() {
     assert_eq!(witness["daemon_is_member"], false);
     assert_eq!(witness["extended_limit_query_succeeded"], true);
     assert_eq!(witness["job_memory_limit_flag_set"], true);
+    assert_eq!(
+        witness["requested_maximum_job_memory_bytes"],
+        MAXIMUM_JOB_MEMORY_BYTES
+    );
+    assert!(witness["kernel_page_size_bytes"].as_u64().unwrap() > 0);
     assert_eq!(
         witness["expected_maximum_job_memory_bytes"],
         MAXIMUM_JOB_MEMORY_BYTES
@@ -3256,8 +3266,68 @@ fn dispatch_receipts_one_exact_pre_execution_job_memory_witness() {
 }
 
 #[test]
+fn windows_job_memory_limit_model_matches_kernel_across_page_residues() {
+    use windows_sys::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};
+
+    let mut info = std::mem::MaybeUninit::<SYSTEM_INFO>::uninit();
+    unsafe { GetSystemInfo(info.as_mut_ptr()) };
+    let page_size = unsafe { info.assume_init() }.dwPageSize as u64;
+    assert!(page_size > 0);
+    let aligned_base = MAXIMUM_JOB_MEMORY_BYTES - (MAXIMUM_JOB_MEMORY_BYTES % page_size);
+
+    for residue in [0, 1, 1024, page_size - 1] {
+        let requested = aligned_base + residue;
+        let required = requested + HOST_COMMIT_RESERVE_BYTES;
+        let root = sandbox(&format!("job-memory-kernel-residue-{residue}"));
+        let job_id = format!("dispatch-job-memory-kernel-residue-{residue}");
+        let manifest = write_manifest(&root, &job_id, 10_000);
+        let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+        payload["maximum_job_memory_bytes"] = json!(requested);
+        payload["required_available_maximum_commit_bytes"] = json!(required);
+        fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
+        let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+        daemon
+            .dispatch_manifest_at_with_probes_and_host(
+                &manifest,
+                10_001,
+                |_root| Ok(1024),
+                || Ok(1024),
+                || Ok(host_capacity(required)),
+            )
+            .unwrap();
+        let connection = Connection::open(root.join("ember-lab.sqlite3")).unwrap();
+        let prepared_json: String = connection
+            .query_row(
+                "SELECT payload_json FROM events WHERE job_id=?1 AND kind='job_prepared'",
+                [&job_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let prepared: Value = serde_json::from_str(&prepared_json).unwrap();
+        let witness = &prepared["job_memory_enforcement_witness"];
+        let effective = windows_job_memory_effective_limit(requested, page_size).unwrap();
+        assert_eq!(witness["requested_maximum_job_memory_bytes"], requested);
+        assert_eq!(witness["kernel_page_size_bytes"], page_size);
+        assert_eq!(witness["expected_maximum_job_memory_bytes"], effective);
+        assert_eq!(witness["observed_job_memory_limit_bytes"], effective);
+        drop(connection);
+        daemon.stop_job(&job_id).unwrap();
+        drop(daemon);
+        remove_sandbox_when_unlocked(&root);
+    }
+}
+
+#[test]
+fn windows_job_memory_limit_model_refuses_invalid_inputs() {
+    assert!(windows_job_memory_effective_limit(0, 4096).is_err());
+    assert!(windows_job_memory_effective_limit(4096, 0).is_err());
+    assert!(windows_job_memory_effective_limit(4095, 4096).is_err());
+}
+
+#[test]
 fn job_memory_witness_mismatch_aborts_and_receipts_refusal_before_termination() {
     use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};
     use windows_sys::Win32::System::Threading::{OpenProcess, WaitForSingleObject};
     const SYNCHRONIZE_RIGHT: u32 = 0x0010_0000;
 
@@ -3265,8 +3335,17 @@ fn job_memory_witness_mismatch_aborts_and_receipts_refusal_before_termination() 
     let job_id = "dispatch-job-memory-witness-mismatch";
     let manifest = write_manifest(&root, job_id, 10_000);
     let mut payload: Value = serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    let mut info = std::mem::MaybeUninit::<SYSTEM_INFO>::uninit();
+    unsafe { GetSystemInfo(info.as_mut_ptr()) };
+    let page_size = unsafe { info.assume_init() }.dwPageSize as u64;
+    let mismatched_request = MAXIMUM_JOB_MEMORY_BYTES - page_size;
+    assert_ne!(
+        windows_job_memory_effective_limit(mismatched_request, page_size).unwrap(),
+        windows_job_memory_effective_limit(MAXIMUM_JOB_MEMORY_BYTES, page_size).unwrap(),
+        "the deliberate RED must select a genuinely different kernel page"
+    );
     payload["env"]["EMBER_LAB_TEST_ONLY_JOB_MEMORY_WITNESS_EXPECTED_BYTES"] =
-        json!((MAXIMUM_JOB_MEMORY_BYTES - 4096).to_string());
+        json!(mismatched_request.to_string());
     payload["env"]["EMBER_LAB_DISPATCH_FIXTURE_SLEEP_MS"] = json!("30000");
     fs::write(&manifest, serde_json::to_vec(&payload).unwrap()).unwrap();
     let db = root.join("ember-lab.sqlite3");
@@ -3319,6 +3398,11 @@ fn job_memory_witness_mismatch_aborts_and_receipts_refusal_before_termination() 
         unsafe { CloseHandle(process) };
     }
     assert_eq!(daemon.job_state(job_id).unwrap(), Some(JobState::Failed));
+    let (exit_code, stderr) = daemon
+        .job_result(job_id)
+        .expect("pre-resume witness refusal must expose a sealed terminal result");
+    assert_ne!(exit_code, 0);
+    assert_eq!(stderr, "");
     let receipt = daemon
         .export_content_addressed_receipt(job_id, &root.join("refusal-receipts"))
         .unwrap();
