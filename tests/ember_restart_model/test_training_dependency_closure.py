@@ -71,6 +71,11 @@ def build_sandbox_repo(
                 "code": ["scripts/training_closure.py", *code],
                 "data": ["configs/training.json", *data],
                 "dynamic_call_sites": dynamic_call_sites or {},
+                "dynamic_call_site_notes": {
+                    path: "fixture has no repo target"
+                    for path, targets in (dynamic_call_sites or {}).items()
+                    if not targets
+                },
             },
             indent=2,
         )
@@ -155,11 +160,43 @@ class TrainingClosureGuardTests(unittest.TestCase):
                     'subprocess.run([sys.executable, "--version"])\n'
                 ),
                 dynamic_call_sites={
-                    "tools/entrypoint.py": ["no repo target: the interpreter banner"]
+                    "tools/entrypoint.py": []
                 },
             )
             audit = closure.audit_closure(repo)
             self.assertTrue(audit.ok, audit.failure_report())
+
+    def test_guard_fails_when_a_dynamic_caller_omits_its_repo_target(self) -> None:
+        """A caller key alone must not hide a newly added repo-target edge."""
+
+        closure = load_closure()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_sandbox_repo(
+                pathlib.Path(directory),
+                entrypoint_source=(
+                    "import importlib.util\n"
+                    "from pathlib import Path\n"
+                    "target = Path(__file__).resolve().parent / 'helper.py'\n"
+                    "importlib.util.spec_from_file_location('helper', target)\n"
+                ),
+                code=("tools/helper.py",),
+                dynamic_call_sites={"tools/entrypoint.py": []},
+            )
+            manifest_path = repo / MANIFEST_RELATIVE_PATH
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["dynamic_call_site_notes"] = {
+                "tools/entrypoint.py": "fixture deliberately omits its repo target"
+            }
+            write_text(manifest_path, json.dumps(manifest, indent=2) + "\n")
+
+            audit = closure.audit_closure(repo)
+
+            self.assertFalse(audit.ok)
+            self.assertEqual(
+                audit.undeclared_dynamic_targets,
+                ("tools/entrypoint.py -> tools/helper.py",),
+            )
+            self.assertIn("tools/helper.py", audit.failure_report())
 
     def test_guard_fails_on_a_stale_dynamic_declaration(self) -> None:
         closure = load_closure()

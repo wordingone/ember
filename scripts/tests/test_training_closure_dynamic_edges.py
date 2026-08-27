@@ -56,7 +56,16 @@ def build_repo(
                 "code": code,
                 "data": [],
                 "dynamic_call_sites": (
-                    {"tools/entrypoint.py": ["fixture-declared dynamic edge"]}
+                    {
+                        "tools/entrypoint.py": (
+                            [declared_target] if declared_target is not None else []
+                        )
+                    }
+                    if declare_dynamic
+                    else {}
+                ),
+                "dynamic_call_site_notes": (
+                    {"tools/entrypoint.py": "fixture-declared dynamic edge"}
                     if declare_dynamic
                     else {}
                 ),
@@ -132,12 +141,11 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
 
     def test_specialist_stream_declares_hash_bound_exec(self) -> None:
         closure = load_closure()
-        targets = closure.load_manifest(ROOT)["dynamic_call_sites"][
+        note = closure.load_manifest(ROOT)["dynamic_call_site_notes"][
             "tools/ember-restart-3b/specialist_stream.py"
         ]
-        declaration = " ".join(targets).lower()
-        self.assertIn("exec", declaration)
-        self.assertIn("sha256", declaration)
+        self.assertIn("exec", note.lower())
+        self.assertIn("sha256", note.lower())
 
     def test_github_license_partition_declares_connector_receipt_import(self) -> None:
         closure = load_closure()
@@ -146,6 +154,20 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
         target = "tools/corpus_connectors/receipt.py"
         self.assertIn(target, manifest["code"])
         self.assertIn(target, manifest["dynamic_call_sites"][caller])
+
+    def test_real_text_lab_dynamic_targets_are_machine_detected(self) -> None:
+        closure = load_closure()
+        caller = "tools/ember-restart-3b/text_lab_corpus.py"
+        expected = {
+            "tools/corpus_connectors/pdf_to_utf8.py",
+            "tools/corpus_connectors/receipt.py",
+            "tools/ember-restart-3b/mint_github_license_partition.py",
+        }
+
+        detected = set(closure.dynamic_repo_targets(ROOT, caller))
+
+        self.assertTrue(expected <= detected, detected)
+        self.assertTrue(closure.audit_closure(ROOT).ok)
 
 
 if __name__ == "__main__":

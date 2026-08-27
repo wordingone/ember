@@ -80,6 +80,8 @@ class ClosureAudit(NamedTuple):
     missing: tuple[str, ...]
     undeclared_dynamic: tuple[str, ...]
     stale_dynamic: tuple[str, ...]
+    undeclared_dynamic_targets: tuple[str, ...]
+    invalid_dynamic_targets: tuple[str, ...]
 
     def failure_report(self) -> str:
         lines: list[str] = []
@@ -108,6 +110,17 @@ class ClosureAudit(NamedTuple):
                 "call (drop the entry so the declaration stays honest):"
             )
             lines.extend(f"  ! {path}" for path in self.stale_dynamic)
+        if self.undeclared_dynamic_targets:
+            lines.append(
+                "dynamic_call_sites omits repo targets detected at declared "
+                "dynamic callers:"
+            )
+            lines.extend(f"  ?> {edge}" for edge in self.undeclared_dynamic_targets)
+        if self.invalid_dynamic_targets:
+            lines.append(
+                "dynamic_call_sites declares targets that are not closure members:"
+            )
+            lines.extend(f"  !> {edge}" for edge in self.invalid_dynamic_targets)
         if lines:
             lines.append(
                 "Note: changing tools/ember-restart-3b/parameter_counter.py is "
@@ -152,13 +165,37 @@ def load_manifest(root: pathlib.Path) -> dict[str, Any]:
         isinstance(path, str)
         and path
         and isinstance(targets, list)
-        and targets
-        and all(isinstance(target, str) and target for target in targets)
+        and all(
+            isinstance(target, str)
+            and target
+            and "\\" not in target
+            and not target.startswith("/")
+            and ":" not in target
+            and ".." not in pathlib.PurePosixPath(target).parts
+            for target in targets
+        )
         for path, targets in sites.items()
     ):
         raise ValueError(
             "training dependency closure manifest dynamic_call_sites must map "
-            "each path to a non-empty list of declared targets"
+            "each path to a list of repo-relative declared targets"
+        )
+    notes = manifest.get("dynamic_call_site_notes", {})
+    if not isinstance(notes, dict) or not all(
+        isinstance(path, str)
+        and path in sites
+        and isinstance(note, str)
+        and note.strip()
+        for path, note in notes.items()
+    ):
+        raise ValueError(
+            "training dependency closure manifest dynamic_call_site_notes must "
+            "map declared dynamic paths to non-empty prose"
+        )
+    if any(not targets and path not in notes for path, targets in sites.items()):
+        raise ValueError(
+            "dynamic_call_sites entries without repo targets require a "
+            "dynamic_call_site_notes explanation"
         )
     return manifest
 
@@ -188,8 +225,19 @@ def walk_seeds(manifest: dict[str, Any]) -> tuple[str, ...]:
     declared, and declaring one still subjects ITS imports to the walk.
     """
 
+    dynamic_targets = {
+        target
+        for targets in manifest["dynamic_call_sites"].values()
+        for target in targets
+    }
     return tuple(
-        sorted({*manifest["entrypoints"], *manifest["dynamic_entrypoints"]})
+        sorted(
+            {
+                *manifest["entrypoints"],
+                *manifest["dynamic_entrypoints"],
+                *dynamic_targets,
+            }
+        )
     )
 
 
@@ -295,6 +343,169 @@ def dynamic_call_sites(root: pathlib.Path, relative: str) -> bool:
     return any(_is_dynamic_call(node) for node in ast.walk(tree))
 
 
+def _resolved_path_values(
+    root: pathlib.Path,
+    source: pathlib.Path,
+    node: ast.AST,
+    assignments: dict[str, list[ast.AST]],
+    resolving: frozenset[str] = frozenset(),
+) -> set[pathlib.Path]:
+    """Conservatively resolve path expressions used by dynamic calls."""
+
+    if isinstance(node, ast.Name):
+        if node.id == "__file__":
+            return {source}
+        if node.id in {"root", "repo_root", "source_root"}:
+            return {root}
+        if node.id in assignments and node.id not in resolving:
+            return {
+                path
+                for value in assignments[node.id]
+                for path in _resolved_path_values(
+                    root,
+                    source,
+                    value,
+                    assignments,
+                    resolving | {node.id},
+                )
+            }
+        return set()
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        value = node.value
+        if not value or "\n" in value:
+            return set()
+        return {root / value, source.parent / value}
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        return {
+            path
+            for item in node.elts
+            for path in _resolved_path_values(
+                root, source, item, assignments, resolving
+            )
+        }
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _resolved_path_values(root, source, node.left, assignments, resolving)
+        right = _resolved_path_values(root, source, node.right, assignments, resolving)
+        right_suffixes: set[pathlib.Path] = set()
+        for path in right:
+            for base in (root, source.parent):
+                try:
+                    right_suffixes.add(path.relative_to(base))
+                except ValueError:
+                    continue
+        return {base / suffix for base in left for suffix in right_suffixes}
+    if isinstance(node, ast.Attribute):
+        base = _resolved_path_values(root, source, node.value, assignments, resolving)
+        if node.attr == "parent":
+            return {path.parent for path in base}
+        return base
+    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute):
+        if node.value.attr != "parents":
+            return set()
+        base = _resolved_path_values(
+            root, source, node.value.value, assignments, resolving
+        )
+        index = node.slice.value if isinstance(node.slice, ast.Constant) else None
+        if not isinstance(index, int) or index < 0:
+            return set()
+        return {path.parents[index] for path in base if len(path.parents) > index}
+    if isinstance(node, ast.Call):
+        function = node.func
+        if isinstance(function, ast.Name) and function.id in {"Path", "str"}:
+            if not node.args:
+                return set()
+            return _resolved_path_values(
+                root, source, node.args[0], assignments, resolving
+            )
+        if isinstance(function, ast.Name) and function.id == "_path":
+            if len(node.args) < 2:
+                return set()
+            values = _resolved_path_values(
+                root, source, node.args[1], assignments, resolving
+            )
+            return values
+        if isinstance(function, ast.Attribute) and function.attr in {
+            "resolve",
+            "absolute",
+        }:
+            return _resolved_path_values(
+                root, source, function.value, assignments, resolving
+            )
+        paths: set[pathlib.Path] = set()
+        for argument in [*node.args, *(keyword.value for keyword in node.keywords)]:
+            paths.update(
+                _resolved_path_values(
+                    root, source, argument, assignments, resolving
+                )
+            )
+        return paths
+    return set()
+
+
+def dynamic_repo_targets(root: pathlib.Path, relative: str) -> tuple[str, ...]:
+    """Repo files passed to a dynamic call in ``relative``."""
+
+    root = pathlib.Path(root).resolve()
+    source = root / relative
+    try:
+        tree = ast.parse(source.read_bytes(), filename=str(source))
+    except (OSError, SyntaxError, ValueError):
+        return ()
+    assignments: dict[str, list[ast.AST]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assignments.setdefault(target.id, []).append(node.value)
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.value is not None
+        ):
+            assignments.setdefault(node.target.id, []).append(node.value)
+    targets: set[str] = set()
+    for node in ast.walk(tree):
+        if not _is_dynamic_call(node):
+            continue
+        assert isinstance(node, ast.Call)
+        function = node.func
+        name = (
+            function.id
+            if isinstance(function, ast.Name)
+            else function.attr if isinstance(function, ast.Attribute) else ""
+        )
+        if name == "spec_from_file_location" and len(node.args) >= 2:
+            target_arguments = [node.args[1]]
+        elif node.args and name in {
+            "run_path",
+            "run_module",
+            "call",
+            "check_call",
+            "check_output",
+            "Popen",
+            "run",
+            "popen",
+            "posix_spawn",
+            "posix_spawnp",
+            "system",
+        }:
+            target_arguments = [node.args[0]]
+        else:
+            target_arguments = []
+        for argument in target_arguments:
+            for candidate in _resolved_path_values(
+                root, source, argument, assignments
+            ):
+                if not candidate.is_file():
+                    continue
+                if candidate.suffix.lower() not in EXECUTABLE_LITERAL_SUFFIXES:
+                    continue
+                repo_relative = _repo_relative(root, candidate)
+                if repo_relative is not None:
+                    targets.add(repo_relative)
+    return tuple(sorted(targets))
+
+
 def walk_reachable(
     root: pathlib.Path, entrypoints: Iterable[str]
 ) -> tuple[str, ...]:
@@ -347,18 +558,38 @@ def audit_closure(root: pathlib.Path, manifest: dict[str, Any] | None = None) ->
     stale_dynamic = tuple(
         sorted(path for path in dynamic_declared - dynamic_actual if (root / path).is_file())
     )
+    invalid_dynamic_targets = tuple(
+        sorted(
+            f"{caller} -> {target}"
+            for caller, targets in manifest["dynamic_call_sites"].items()
+            for target in targets
+            if target not in declared_set or not (root / target).is_file()
+        )
+    )
+    undeclared_dynamic_targets = tuple(
+        sorted(
+            f"{caller} -> {target}"
+            for caller in dynamic_actual & dynamic_declared
+            for target in dynamic_repo_targets(root, caller)
+            if target not in set(manifest["dynamic_call_sites"][caller])
+        )
+    )
 
     return ClosureAudit(
         ok=not undeclared
         and not missing
         and not undeclared_dynamic
-        and not stale_dynamic,
+        and not stale_dynamic
+        and not undeclared_dynamic_targets
+        and not invalid_dynamic_targets,
         declared=declared,
         reachable=reachable,
         undeclared=undeclared,
         missing=missing,
         undeclared_dynamic=undeclared_dynamic,
         stale_dynamic=stale_dynamic,
+        undeclared_dynamic_targets=undeclared_dynamic_targets,
+        invalid_dynamic_targets=invalid_dynamic_targets,
     )
 
 
