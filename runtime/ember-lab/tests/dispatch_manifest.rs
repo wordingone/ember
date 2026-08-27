@@ -3398,10 +3398,11 @@ fn job_memory_witness_mismatch_aborts_and_receipts_refusal_before_termination() 
         unsafe { CloseHandle(process) };
     }
     assert_eq!(daemon.job_state(job_id).unwrap(), Some(JobState::Failed));
-    let (exit_code, stderr) = daemon
+    let (exit_code, stdout, stderr) = daemon
         .job_result(job_id)
         .expect("pre-resume witness refusal must expose a sealed terminal result");
     assert_ne!(exit_code, 0);
+    assert_eq!(stdout, "");
     assert_eq!(stderr, "");
     let receipt = daemon
         .export_content_addressed_receipt(job_id, &root.join("refusal-receipts"))

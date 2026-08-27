@@ -4393,6 +4393,66 @@ fn process_stdout_and_stderr_are_append_only_and_receipt_bound() {
 
 #[cfg(windows)]
 #[test]
+fn certified_launch_artifact_refusal_durably_overrides_a_zero_exit_child() {
+    let root = sandbox("certified-launch-artifact-refusal");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("silent-launch", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "silent-launch")
+        .unwrap();
+    daemon
+        .start_job(
+            JobSpec::new(
+                "silent-launch",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "25"),
+        )
+        .unwrap();
+    for _ in 0..200 {
+        if daemon.job_state("silent-launch").unwrap() == Some(JobState::Exited) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        daemon.job_state("silent-launch").unwrap(),
+        Some(JobState::Exited)
+    );
+    daemon
+        .record_launch_context("silent-launch", "existing", 91)
+        .unwrap();
+    daemon
+        .record_launch_artifact_refusal("silent-launch", "daemon-captured-stdout")
+        .unwrap();
+    assert_eq!(
+        daemon.job_state("silent-launch").unwrap(),
+        Some(JobState::Failed)
+    );
+    let (child_exit_code, _, _) = daemon.job_result("silent-launch").unwrap();
+    assert_eq!(child_exit_code, 0, "the child result remains truthful");
+    let artifact = daemon
+        .export_content_addressed_receipt("silent-launch", &root.join("receipts"))
+        .unwrap();
+    let payload: Value = serde_json::from_slice(&fs::read(artifact.path).unwrap()).unwrap();
+    assert_eq!(payload["state"], "failed");
+    assert_eq!(payload["exit_code"], 0);
+    assert!(payload["events"].as_array().unwrap().iter().any(|event| {
+        event["kind"] == "certified_launch_artifact_refusal"
+            && event["payload"]["evidence_locator"] == "daemon-captured-stdout"
+            && event["payload"]["child_exit_code"] == 0
+    }));
+}
+
+#[cfg(windows)]
+#[test]
 fn assessment_evidence_is_one_fresh_atomic_daemon_export() {
     let root = sandbox("assessment-evidence");
     let db = root.join("ember-lab.sqlite3");
