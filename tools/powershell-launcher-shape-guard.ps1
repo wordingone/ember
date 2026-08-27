@@ -153,6 +153,40 @@ function New-LauncherFinding {
     return [pscustomobject]@{ Path = $Path; Detail = $Detail }
 }
 
+function Resolve-PriorStaticStringAssignment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.Language.Ast]$Ast,
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.Language.VariableExpressionAst]$Variable,
+        [Parameter(Mandatory = $true)]
+        [int]$BeforeOffset
+    )
+
+    $variableName = $Variable.VariablePath.UserPath
+    $assignments = @($Ast.FindAll({
+        param($node)
+        if ($node -isnot [System.Management.Automation.Language.AssignmentStatementAst]) {
+            return $false
+        }
+        if ($node.Extent.EndOffset -gt $BeforeOffset) { return $false }
+        if ($node.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) {
+            return $false
+        }
+        return $node.Left.VariablePath.UserPath -ieq $variableName
+    }, $true))
+    if ($assignments.Count -ne 1) { return $null }
+
+    $right = $assignments[0].Right
+    if (
+        $right -is [System.Management.Automation.Language.CommandExpressionAst] -and
+        $right.Expression -is [System.Management.Automation.Language.StringConstantExpressionAst]
+    ) {
+        return $right.Expression.Value
+    }
+    return $null
+}
+
 function Get-LauncherFinding {
     param(
         [Parameter(Mandatory = $true)]
@@ -195,6 +229,28 @@ function Get-LauncherFinding {
             $processAliases[$name.ToLowerInvariant()]
         } else {
             $name
+        }
+        if ($processCommands -contains $resolved) {
+            $variableArguments = @($command.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.VariableExpressionAst]
+            }, $true))
+            foreach ($variable in $variableArguments) {
+                $staticValue = Resolve-PriorStaticStringAssignment `
+                    -Ast $Ast -Variable $variable -BeforeOffset $command.Extent.StartOffset
+                if ($null -eq $staticValue) {
+                    return New-LauncherFinding -Path $Path -Detail (
+                        "opaque process-command variable $($variable.Extent.Text) at line " +
+                        $command.Extent.StartLineNumber
+                    )
+                }
+                if ($staticValue -match $trainingChild) {
+                    return New-LauncherFinding -Path $Path -Detail (
+                        "$resolved target $($variable.Extent.Text) resolves to a training child " +
+                        "at line $($command.Extent.StartLineNumber)"
+                    )
+                }
+            }
         }
         if (($processCommands -contains $resolved) -and ($namedLauncher -or $command.Extent.Text -match $trainingChild)) {
             return New-LauncherFinding -Path $Path -Detail "$resolved at line $($command.Extent.StartLineNumber)"
