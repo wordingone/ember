@@ -17,6 +17,7 @@
   ],
   "dynamic_entrypoints_note": "Programs the run path loads through spec_from_file_location or spawns from a path assembled out of several literals, which no static walk can recover: run_vertical_slice exec-loads scripts/governor.py (a different top-level directory) before any CUDA allocation, and launch_packet.py is the launch-surface program whose bytes the certificate already binds as launch_packet_sha256. Declaring one still subjects ITS imports to the walk.",
   "code": [
+    "tools/corpus_connectors/pdf_to_utf8.py",
     "tools/corpus_connectors/receipt.py",
     "tools/ember-restart-3b/a1_checkpoint.py",
     "tools/ember-restart-3b/a1_dense.py",
@@ -52,7 +53,12 @@
     "tools/ember-restart-3b/verify_capability_record.py",
     "tools/ember-restart-3b/verify_training_data.py",
     "scripts/artifact_custody_gate.py",
+    "scripts/ember_dispatch_token.py",
+    "scripts/energy_proxy_logger.py",
     "scripts/git_env_hardening.py",
+    "scripts/receipt_check.py",
+    "scripts/receipt_write.py",
+    "scripts/run_attempt_registry.py",
     "scripts/training_closure.py"
   ],
   "data": [
@@ -79,17 +85,14 @@
       "tools/ember-restart-3b/a1_execution.py",
       "tools/ember-restart-3b/disk_budget_runner.py",
       "tools/ember-restart-3b/run_vertical_slice.py",
-      "no repo target: git rev-parse and git merge-base --is-ancestor"
+      "scripts/ember_dispatch_token.py",
+      "scripts/energy_proxy_logger.py",
+      "scripts/run_attempt_registry.py"
     ],
-    "scripts/artifact_custody_gate.py": [
-      "no repo target: spawns the repository-governed ember-lab.exe custody-verify/register-artifact subcommands"
-    ],
-    "tools/ember-restart-3b/disk_budget_runner.py": [
-      "no repo target: spawns the certificate-declared child argv it is handed"
-    ],
-    "tools/ember-restart-3b/launch_packet.py": [
-      "no repo target: __import__ of stdlib base64 and hashlib"
-    ],
+    "scripts/artifact_custody_gate.py": [],
+    "tools/ember-restart-3b/disk_budget_runner.py": [],
+    "scripts/energy_proxy_logger.py": [],
+    "tools/ember-restart-3b/launch_packet.py": [],
     "tools/ember-restart-3b/mint_github_license_partition.py": [
       "tools/corpus_connectors/receipt.py"
     ],
@@ -101,21 +104,29 @@
       "tools/ember-restart-3b/parameter_counter.py",
       "tools/ember-restart-3b/verify_training_data.py"
     ],
-    "tools/ember-restart-3b/specialist_stream.py": [
-      "no repo target: controlled __import__ admits only the declared module allowlist; exec compiles only source bytes re-read through exact sha256 bindings"
-    ],
-    "tools/ember-restart-3b/tokenizer_runtime_bundle.py": [
-      "no repo target: import_module('tokenizers'), pinned by manifests/python-environment-v1.json"
-    ],
+    "tools/ember-restart-3b/specialist_stream.py": [],
+    "tools/ember-restart-3b/tokenizer_runtime_bundle.py": [],
     "tools/ember-restart-3b/text_lab_corpus.py": [
-      "no repo target: git rev-parse and git merge-base --is-ancestor"
+      "tools/corpus_connectors/pdf_to_utf8.py",
+      "tools/corpus_connectors/receipt.py",
+      "tools/ember-restart-3b/mint_github_license_partition.py"
     ],
-    "tools/ember-restart-3b/train.py": [
-      "no repo target: git rev-parse for the code commit"
-    ],
+    "tools/ember-restart-3b/train.py": [],
     "tools/ember-restart-3b/verify_training_data.py": [
-      "no repo target: stdlib and third-party imports only"
+      "tools/ember-restart-3b/verify_capability_record.py"
     ]
+  },
+  "dynamic_call_site_notes": {
+    "tools/ember-restart-3b/certified_train_launch.py": "Also invokes git rev-parse and git merge-base --is-ancestor; those commands have no repo target.",
+    "scripts/artifact_custody_gate.py": "Spawns the repository-governed ember-lab.exe custody-verify/register-artifact subcommands; the executable is not a repo path target.",
+    "tools/ember-restart-3b/disk_budget_runner.py": "Spawns the certificate-declared child argv it is handed; there is no statically knowable repo target.",
+    "scripts/energy_proxy_logger.py": "Invokes only host tools such as nvidia-smi, PowerShell, and optional hardware-provider CLIs; there is no repo target.",
+    "tools/ember-restart-3b/launch_packet.py": "Uses __import__ for the stdlib base64 and hashlib modules; there is no repo target.",
+    "tools/ember-restart-3b/specialist_stream.py": "Controlled __import__ admits only the declared module allowlist; exec compiles only source bytes re-read through exact sha256 bindings.",
+    "tools/ember-restart-3b/tokenizer_runtime_bundle.py": "Uses import_module('tokenizers'), pinned by manifests/python-environment-v1.json; there is no repo target.",
+    "tools/ember-restart-3b/text_lab_corpus.py": "Also invokes git rev-parse and git merge-base --is-ancestor; those commands have no repo target.",
+    "tools/ember-restart-3b/train.py": "Invokes git rev-parse for the code commit; there is no repo target.",
+    "tools/ember-restart-3b/verify_training_data.py": "Dynamic imports resolve only stdlib and third-party modules; there is no repo target."
   },
   "dynamic_call_sites_note": "Every closure member that calls subprocess, importlib, runpy, or __import__ appears here with what it reaches. Adding such a call to a member without adding its target FAILS the guard, so a new exec edge cannot enter the run path unreviewed."
 }
