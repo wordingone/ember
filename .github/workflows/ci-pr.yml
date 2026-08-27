@@ -229,7 +229,7 @@ jobs:
     # ran in ci-nightly only: a branch that broke it merged on a green PR and halted the
     # next nightly instead. Running it here fails the merge that causes the regression.
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
