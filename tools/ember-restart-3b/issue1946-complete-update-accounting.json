@@ -1,0 +1,49 @@
+{
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02B",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "denominator": {
+    "closes_after": [
+      "optimizer",
+      "mandatory_synchronization",
+      "telemetry",
+      "charged_checkpoint"
+    ],
+    "includes": [
+      "data_readiness",
+      "host_device_work",
+      "forward",
+      "backward",
+      "gradient_clipping",
+      "optimizer",
+      "mandatory_synchronization",
+      "telemetry",
+      "charged_checkpoint"
+    ],
+    "opens_before": [
+      "data_readiness",
+      "reference_forward"
+    ],
+    "unit": "governed_complete_update_wall_seconds"
+  },
+  "numerator": {
+    "filters": [
+      "applied",
+      "non_padding",
+      "loss_bearing",
+      "decoder_target"
+    ],
+    "tokens_per_update": 960,
+    "unit": "tokens"
+  },
+  "route": {
+    "measured_updates": 48,
+    "pack_records": 64,
+    "profiler_updates": 8,
+    "selected_record_count": 4096,
+    "warmup_updates": 16
+  },
+  "schema_version": "ember-issue1946-complete-update-accounting-v1"
+}
