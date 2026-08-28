@@ -32,7 +32,7 @@ import path from "node:path";
 function isRepoRoot(candidate: string): boolean {
   const goalMarkers = [
     path.join(candidate, "GOAL.md"),
-    path.join(candidate, "docs", "authority", "GOAL.md"),
+    path.join(candidate, "docs", "domains", "governance", "authority", "GOAL.md"),
   ].filter((marker) => fs.existsSync(marker));
   return goalMarkers.length === 1 && fs.existsSync(path.join(candidate, "tools", "ember-cli"));
 }
