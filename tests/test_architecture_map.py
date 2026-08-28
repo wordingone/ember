@@ -130,5 +130,84 @@ class PolicyFailureTests(unittest.TestCase):
         )
 
 
+class ClassificationTests(unittest.TestCase):
+    def test_each_path_has_one_owner_and_disposition(self) -> None:
+        compiler = load_compiler()
+
+        rows = compiler.classify_paths(
+            ["scripts/train.py", "receipts/run.json"], policy_fixture()
+        )
+
+        self.assertEqual(
+            rows,
+            [
+                {
+                    "path": "receipts/run.json",
+                    "owner": "Governance",
+                    "disposition": "RETAIN_STABLE",
+                    "rule_id": "receipts-stable",
+                    "touch_set_id": "governance-stable-receipts",
+                    "deferral_id": None,
+                },
+                {
+                    "path": "scripts/train.py",
+                    "owner": "Governance",
+                    "disposition": "MOVE",
+                    "rule_id": "scripts",
+                    "touch_set_id": "governance-script-census",
+                    "deferral_id": None,
+                },
+            ],
+        )
+
+    def test_classification_order_is_posix_lexicographic(self) -> None:
+        compiler = load_compiler()
+
+        rows = compiler.classify_paths(
+            ["tools/z.py", "docs/z.md", "docs/a.md"], policy_fixture()
+        )
+
+        self.assertEqual(
+            [row["path"] for row in rows],
+            ["docs/a.md", "docs/z.md", "tools/z.py"],
+        )
+
+    def test_receipts_and_manifests_retain_stable_bytes(self) -> None:
+        compiler = load_compiler()
+
+        rows = compiler.classify_paths(
+            ["receipts/a.json", "manifests/b.json"], policy_fixture()
+        )
+
+        self.assertEqual(
+            [row["disposition"] for row in rows],
+            ["RETAIN_STABLE", "RETAIN_STABLE"],
+        )
+
+    def test_data_and_evaluation_carrier_membership_is_deferred(self) -> None:
+        compiler = load_compiler()
+
+        rows = compiler.classify_paths(
+            ["data/a.json", "scripts/eval_probe.py"], policy_fixture()
+        )
+
+        self.assertEqual(
+            [(row["owner"], row["disposition"], row["deferral_id"]) for row in rows],
+            [
+                ("Data", "DEFERRED_DEPENDENCY", "data-1581"),
+                ("Evaluation", "DEFERRED_DEPENDENCY", "evaluation-api"),
+            ],
+        )
+
+    def test_current_git_tree_has_exactly_one_classification_per_path(self) -> None:
+        compiler = load_compiler()
+        paths = compiler.tracked_paths(ROOT)
+
+        rows = compiler.classify_paths(paths, policy_fixture())
+
+        self.assertEqual(len(rows), len(paths))
+        self.assertEqual([row["path"] for row in rows], sorted(set(paths)))
+
+
 if __name__ == "__main__":
     unittest.main()
