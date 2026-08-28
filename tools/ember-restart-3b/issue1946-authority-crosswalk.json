@@ -1,11 +1,11 @@
 {
   "artifacts": [
-    {"path": "receipts/fp33-e4-profiler-20260612T032739Z.json", "role": "fp33_profiler"},
-    {"path": "receipts/c04-batched-ns5-bench-20260613T134925Z.json", "role": "c04_muon_bf16ns5_qat"},
-    {"path": "receipts/fp32-l6-compile-ab-20260612T215844Z.json", "role": "eager_compile"},
-    {"path": "receipts/cuda-graph-ab-20260612T071112Z.json", "role": "cuda_graph"},
-    {"path": "receipts/ember-02-r1-exits/r1-e8-20260805T172055Z.json", "role": "r1_e8"},
-    {"path": "receipts/ember-restart-3b/energy-proxy-logger-smoke-v1.json", "role": "energy"}
+    {"path": "receipts/fp33-e4-profiler-20260612T032739Z.json", "role": "fp33_profiler", "raw_sha256": "92cbf55ec41557883db94d88294fdad49e53f52c9cc02b8a4e344c10cacfdc93"},
+    {"path": "receipts/c04-batched-ns5-bench-20260613T134925Z.json", "role": "c04_muon_bf16ns5_qat", "raw_sha256": "4b9fa6716b71aafb164e243e661fbeb14eb6913db73a8839da6bad16933fd714"},
+    {"path": "receipts/fp32-l6-compile-ab-20260612T215844Z.json", "role": "eager_compile", "raw_sha256": "5fd1d60f083fa466669e01bf69baac32f7604bdaccb59b3b313cf0c43d6e23fd"},
+    {"path": "receipts/cuda-graph-ab-20260612T071112Z.json", "role": "cuda_graph", "raw_sha256": "f24fefafd25e9c9538bcea959a8c05ce0fca031f1132cf0d6f10dd1130137e4f"},
+    {"path": "receipts/ember-02-r1-exits/r1-e8-20260805T172055Z.json", "role": "r1_e8", "raw_sha256": "a8312186e460dc57e7f260e4fa877949baf087b63c4c012560475cd522d63d8c"},
+    {"path": "receipts/ember-restart-3b/energy-proxy-logger-smoke-v1.json", "role": "energy", "raw_sha256": "a238339c34a07da995060ef6eaa55a4c8fddd8da73df9010308f0ca8ef865a24"}
   ],
   "authority": {
     "goal_id": "EMBER-02",
