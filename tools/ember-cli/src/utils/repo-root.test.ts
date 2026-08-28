@@ -18,7 +18,9 @@ import {
 let scratchDir: string;
 
 function makeRepoMarker(root: string): void {
-  fs.mkdirSync(path.join(root, "docs", "authority"), { recursive: true });
+  fs.mkdirSync(path.join(root, "docs", "domains", "governance", "authority"), {
+    recursive: true,
+  });
   fs.writeFileSync(path.join(root, "docs/domains/governance/authority/GOAL.md"), "# fixture goal\n");
   fs.mkdirSync(path.join(root, "tools", "ember-cli"), { recursive: true });
 }
