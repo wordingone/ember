@@ -33,7 +33,7 @@ override this order.
 
 **Tree provenance:** `DEGRADED_REMOTE_CHECK`; run `5cfcc66ec5e98336a7fbbcba10ac3e67915fabb5`; remote master `5cfcc66ec5e98336a7fbbcba10ac3e67915fabb5`; tree_is_stale=false; tracked_dirty=0.
 
-**Counts:** 15-GREEN / 23-RED / 1-UNEVALUABLE / 3-AUDIT-OK / 0-AUDIT-INCIDENT / 0-AUDIT-PENDING-EPOCH (total 41 rows, 36.8% of state-conditions GREEN).
+**Counts:** 14-GREEN / 23-RED / 1-UNEVALUABLE / 3-AUDIT-OK / 0-AUDIT-INCIDENT / 0-AUDIT-PENDING-EPOCH (total 41 rows, 36.8% of state-conditions GREEN).
 
 **Legend:** GREEN = a fresh receipt satisfies the condition's CHK; RED = CHK unmet or a satisfying artifact is absent; UNEVALUABLE = the probe genuinely cannot look (counts as RED for completion math); AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH = the three standing process-invariant rows (cadence-audit results, never a completion conjunct).
 <!-- BOARD-STATUS-END -->
