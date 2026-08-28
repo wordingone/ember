@@ -121,9 +121,11 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
     let manifest = root.join("manifest.json");
     let first_receipt = root.join("first-receipt.json");
     let second_receipt = root.join("second-receipt.json");
+    let first_export = root.join("first-export.json");
+    let second_export = root.join("second-export.json");
     fs::write(&manifest, minimal_manifest_bytes()).unwrap();
 
-    let run = |receipt: &PathBuf| {
+    let run = |receipt: &PathBuf, export: &PathBuf| {
         Command::new(env!("CARGO_BIN_EXE_ember-lab"))
             .args([
                 "data-catalog-import",
@@ -133,6 +135,8 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
                 manifest.to_str().unwrap(),
                 "--receipt",
                 receipt.to_str().unwrap(),
+                "--export",
+                export.to_str().unwrap(),
                 "--source-commit",
                 "1234567890abcdef1234567890abcdef12345678",
             ])
@@ -140,7 +144,7 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
             .unwrap()
     };
 
-    let first = run(&first_receipt);
+    let first = run(&first_receipt, &first_export);
     assert!(
         first.status.success(),
         "{}",
@@ -154,6 +158,10 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
     assert_eq!(first_payload["result"], "PASS");
     assert_eq!(first_payload["inserted_records"], 3);
     assert_eq!(first_payload["inserted_edges"], 2);
+    assert_eq!(
+        first_payload["canonical_export_sha256"],
+        sha256(&fs::read(&first_export).unwrap())
+    );
     assert_eq!(
         first_payload["source_commit"],
         "1234567890abcdef1234567890abcdef12345678"
@@ -169,7 +177,7 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
         sha256(&serde_json::to_vec(&without_self).unwrap())
     );
 
-    let second = run(&second_receipt);
+    let second = run(&second_receipt, &second_export);
     assert!(
         second.status.success(),
         "{}",
@@ -187,8 +195,12 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
         second_payload["canonical_manifest_sha256"],
         first_payload["canonical_manifest_sha256"]
     );
+    assert_eq!(
+        fs::read(&second_export).unwrap(),
+        fs::read(&first_export).unwrap()
+    );
 
-    let overwrite = run(&second_receipt);
+    let overwrite = run(&second_receipt, &second_export);
     assert!(!overwrite.status.success());
     assert_eq!(
         fs::read(&second_receipt).unwrap(),
@@ -202,6 +214,7 @@ fn preexisting_import_receipt_refuses_before_catalog_mutation() {
     let db = root.join("ember-lab.sqlite3");
     let manifest = root.join("manifest.json");
     let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
     fs::write(&manifest, minimal_manifest_bytes()).unwrap();
     fs::write(&receipt, b"do not overwrite").unwrap();
 
@@ -214,6 +227,8 @@ fn preexisting_import_receipt_refuses_before_catalog_mutation() {
             manifest.to_str().unwrap(),
             "--receipt",
             receipt.to_str().unwrap(),
+            "--export",
+            export.to_str().unwrap(),
             "--source-commit",
             "1234567890abcdef1234567890abcdef12345678",
         ])
@@ -221,6 +236,44 @@ fn preexisting_import_receipt_refuses_before_catalog_mutation() {
         .unwrap();
     assert!(!output.status.success());
     assert_eq!(fs::read(&receipt).unwrap(), b"do not overwrite");
+    assert!(!export.exists());
+
+    let daemon = Daemon::open(&db).unwrap();
+    assert_eq!(
+        daemon.export_data_catalog_manifest().unwrap(),
+        br#"{"edges":[],"records":[],"schema_version":"ember-data-catalog-manifest-v1"}"#
+    );
+}
+
+#[test]
+fn preexisting_import_export_refuses_before_catalog_mutation() {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
+    fs::write(&manifest, minimal_manifest_bytes()).unwrap();
+    fs::write(&export, b"do not overwrite").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+        .args([
+            "data-catalog-import",
+            "--db",
+            db.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--receipt",
+            receipt.to_str().unwrap(),
+            "--export",
+            export.to_str().unwrap(),
+            "--source-commit",
+            "1234567890abcdef1234567890abcdef12345678",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(!receipt.exists());
+    assert_eq!(fs::read(&export).unwrap(), b"do not overwrite");
 
     let daemon = Daemon::open(&db).unwrap();
     assert_eq!(
@@ -235,6 +288,7 @@ fn invalid_source_commit_refuses_before_receipt_or_catalog_creation() {
     let db = root.join("ember-lab.sqlite3");
     let manifest = root.join("manifest.json");
     let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
     fs::write(&manifest, minimal_manifest_bytes()).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
@@ -246,6 +300,8 @@ fn invalid_source_commit_refuses_before_receipt_or_catalog_creation() {
             manifest.to_str().unwrap(),
             "--receipt",
             receipt.to_str().unwrap(),
+            "--export",
+            export.to_str().unwrap(),
             "--source-commit",
             "NOT-A-COMMIT",
         ])
@@ -254,6 +310,7 @@ fn invalid_source_commit_refuses_before_receipt_or_catalog_creation() {
 
     assert!(!output.status.success());
     assert!(!receipt.exists());
+    assert!(!export.exists());
     assert!(!db.exists());
     assert!(String::from_utf8_lossy(&output.stderr)
         .contains("--source-commit must be a lowercase 40-hex SHA"));
@@ -265,6 +322,7 @@ fn invalid_manifest_removes_reserved_receipt_without_reporting_pass() {
     let db = root.join("ember-lab.sqlite3");
     let manifest = root.join("manifest.json");
     let receipt = root.join("receipt.json");
+    let export = root.join("export.json");
     fs::write(&manifest, br#"{"schema_version":"wrong"}"#).unwrap();
 
     let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
@@ -276,6 +334,8 @@ fn invalid_manifest_removes_reserved_receipt_without_reporting_pass() {
             manifest.to_str().unwrap(),
             "--receipt",
             receipt.to_str().unwrap(),
+            "--export",
+            export.to_str().unwrap(),
             "--source-commit",
             "1234567890abcdef1234567890abcdef12345678",
         ])
@@ -284,4 +344,5 @@ fn invalid_manifest_removes_reserved_receipt_without_reporting_pass() {
 
     assert!(!output.status.success());
     assert!(!receipt.exists());
+    assert!(!export.exists());
 }

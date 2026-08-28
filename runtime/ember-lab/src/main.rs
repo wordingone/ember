@@ -1763,7 +1763,7 @@ fn prepare_cockpit_launch_with(
 }
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -1791,6 +1791,7 @@ enum Command {
         db: PathBuf,
         manifest: PathBuf,
         receipt: PathBuf,
+        export: PathBuf,
         source_commit: String,
     },
     RegisterArtifact {
@@ -2117,6 +2118,7 @@ fn parse_args() -> Result<Command, String> {
         let mut db = None;
         let mut manifest = None;
         let mut receipt = None;
+        let mut export = None;
         let mut source_commit = None;
         while let Some(flag) = args.next() {
             let value = args
@@ -2126,6 +2128,7 @@ fn parse_args() -> Result<Command, String> {
                 "--db" => db = Some(PathBuf::from(value)),
                 "--manifest" => manifest = Some(PathBuf::from(value)),
                 "--receipt" => receipt = Some(PathBuf::from(value)),
+                "--export" => export = Some(PathBuf::from(value)),
                 "--source-commit" => source_commit = Some(value),
                 _ => return Err(format!("unknown argument {flag}\n{}", usage())),
             }
@@ -2147,6 +2150,7 @@ fn parse_args() -> Result<Command, String> {
             db: db.ok_or_else(|| format!("missing --db\n{}", usage()))?,
             manifest: manifest.ok_or_else(|| format!("missing --manifest\n{}", usage()))?,
             receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
+            export: export.ok_or_else(|| format!("missing --export\n{}", usage()))?,
             source_commit,
         });
     }
@@ -2892,19 +2896,30 @@ fn import_data_catalog_with_receipt(
     db: &Path,
     manifest: &Path,
     receipt: &Path,
+    export: &Path,
     source_commit: &str,
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let mut receipt_file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(receipt)?;
+    let mut export_file = match OpenOptions::new().write(true).create_new(true).open(export) {
+        Ok(file) => file,
+        Err(error) => {
+            drop(receipt_file);
+            let _ = std::fs::remove_file(receipt);
+            return Err(error.into());
+        }
+    };
     let attempt = (|| -> Result<Value, Box<dyn std::error::Error>> {
         let input_bytes = std::fs::read(manifest)?;
         let input_manifest_raw_sha256 = format!("{:x}", Sha256::digest(&input_bytes));
         let daemon = Daemon::open(db)?;
         let outcome = daemon.import_data_catalog_manifest(&input_bytes)?;
         let canonical_export = daemon.export_data_catalog_manifest()?;
-        let canonical_export_sha256 = format!("{:x}", Sha256::digest(&canonical_export));
+        export_file.write_all(&canonical_export)?;
+        export_file.sync_all()?;
+        let canonical_export_sha256 = hash_file(export)?;
         let binary_sha256 = hash_file(&std::env::current_exe()?)?;
         let mut payload = json!({
             "schema_version": "ember-data-catalog-import-receipt-v1",
@@ -2929,7 +2944,9 @@ fn import_data_catalog_with_receipt(
     })();
     if attempt.is_err() {
         drop(receipt_file);
+        drop(export_file);
         let _ = std::fs::remove_file(receipt);
+        let _ = std::fs::remove_file(export);
     }
     attempt
 }
@@ -3083,10 +3100,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             db,
             manifest,
             receipt,
+            export,
             source_commit,
         } => {
-            let payload =
-                import_data_catalog_with_receipt(&db, &manifest, &receipt, &source_commit)?;
+            let payload = import_data_catalog_with_receipt(
+                &db,
+                &manifest,
+                &receipt,
+                &export,
+                &source_commit,
+            )?;
             println!("{}", serde_json::to_string(&payload)?);
         }
         Command::RegisterArtifact {
