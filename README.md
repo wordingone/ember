@@ -47,8 +47,6 @@ Mutable board, checkpoint, and receipt-date status is generated only in
 [docs/authority/CONTINUITY.md](docs/authority/CONTINUITY.md), where it remains
 bound to its source receipts and manifests.
 
-Planted-red probe: docs/authority/PLANTED-FRONT-DOOR-RED.md.
-
 ## Roadmap status
 
 The twelve-milestone decomposition and its public contracts live in
@@ -96,5 +94,3 @@ selection.
 - docs/contracts/ember-completeness.md - preserved legacy M/C manifest and diagnostic tally input
 - docs/authority/CONTINUITY.md - exact current artifact identities, maturity, execution boundary, and resume order
 - docs/authority/GOVERNANCE.md - authority, provenance, and landing rules
-
-Deliberate scoped-canary reference for issue 1952 red1: `docs/authority/ISSUE1952-RED1-DEAD-REF.md` must be reported unresolved.
