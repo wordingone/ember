@@ -75,6 +75,19 @@ class EvalCanaryImageContractTests(unittest.TestCase):
         self.assertEqual(len({row["mutated_input_sha256"] for row in report["rows"]}), len(expected))
         for row in report["rows"]:
             self.assertEqual(row["observed_error"], row["row_class"])
+        by_class = {row["row_class"]: row for row in report["rows"] if not row.get("subcase")}
+        tensor_negative = by_class["CHECKPOINT_TENSOR_IDENTITY_MISMATCH"]
+        self.assertNotEqual(
+            tensor_negative["authority_checkpoint_sha256"],
+            tensor_negative["mutated_checkpoint_sha256"],
+        )
+        self.assertTrue(tensor_negative["mutated_tensor_identity_differs"])
+        file_negative = by_class["CHECKPOINT_FILE_IDENTITY_MISMATCH_IDENTICAL_TENSORS"]
+        self.assertNotEqual(
+            file_negative["authority_checkpoint_sha256"],
+            file_negative["mutated_checkpoint_sha256"],
+        )
+        self.assertTrue(file_negative["identical_tensor_proof"])
         self.assertEqual(report["result"], "PASS")
 
     def test_fixture_builder_is_byte_deterministic_and_scope_bound(self) -> None:
@@ -121,8 +134,12 @@ class EvalCanaryImageContractTests(unittest.TestCase):
         value = torch.tensor([[1.0, -2.0], [3.5, 0.0]], dtype=torch.float32)
         with mock.patch.object(torch.Tensor, "numpy", side_effect=RuntimeError("NumPy forbidden")):
             self.assertEqual(
-                builder.canonical_tensor_hash(value),
-                evaluator.canonical_tensor_hash(value),
+                builder.canonical_tensor_hash("probe.weight", value),
+                evaluator.canonical_tensor_hash("probe.weight", value),
+            )
+            self.assertNotEqual(
+                builder.canonical_tensor_hash("probe.weight", value),
+                builder.canonical_tensor_hash("probe.bias", value),
             )
 
     def test_positive_run_binds_real_image_path_and_recomputable_scores(self) -> None:

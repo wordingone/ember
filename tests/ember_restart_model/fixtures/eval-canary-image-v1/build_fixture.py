@@ -30,11 +30,13 @@ def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def canonical_tensor_hash(tensor: torch.Tensor) -> str:
+def canonical_tensor_hash(name: str, tensor: torch.Tensor) -> str:
+    if sys.byteorder != "little":
+        raise RuntimeError("canonical tensor hashes require little-endian raw bytes")
     value = tensor.detach().cpu().contiguous()
     raw = bytes(value.view(torch.uint8).reshape(-1).tolist())
     header = json.dumps(
-        {"dtype": str(value.dtype), "shape": list(value.shape)},
+        {"dtype": str(value.dtype), "name": name, "shape": list(value.shape)},
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
@@ -128,7 +130,7 @@ def build(output_dir: Path) -> None:
         "checkpoint": {
             "file": "checkpoint.pt",
             "sha256": sha256_bytes(checkpoint_raw),
-            "tensor_hashes": {name: canonical_tensor_hash(tensor) for name, tensor in sorted(state_dict.items())},
+            "tensor_hashes": {name: canonical_tensor_hash(name, tensor) for name, tensor in sorted(state_dict.items())},
         },
         "config": {
             "file": "config.json",

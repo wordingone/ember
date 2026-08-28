@@ -54,11 +54,13 @@ def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def canonical_tensor_hash(tensor: torch.Tensor) -> str:
+def canonical_tensor_hash(name: str, tensor: torch.Tensor) -> str:
+    if sys.byteorder != "little":
+        raise RuntimeError("canonical tensor hashes require little-endian raw bytes")
     value = tensor.detach().cpu().contiguous()
     raw = bytes(value.view(torch.uint8).reshape(-1).tolist())
     header = json.dumps(
-        {"dtype": str(value.dtype), "shape": list(value.shape)},
+        {"dtype": str(value.dtype), "name": name, "shape": list(value.shape)},
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
@@ -145,7 +147,7 @@ def load_positive(
     state_dict = checkpoint.get("state_dict")
     if not isinstance(state_dict, dict):
         raise ValueError("checkpoint state_dict missing")
-    observed_hashes = {name: canonical_tensor_hash(tensor) for name, tensor in sorted(state_dict.items())}
+    observed_hashes = {name: canonical_tensor_hash(name, tensor) for name, tensor in sorted(state_dict.items())}
     if observed_hashes != manifest["checkpoint"]["tensor_hashes"]:
         raise CanaryRefusal("CHECKPOINT_TENSOR_IDENTITY_MISMATCH", "canonical tensor hashes differ")
     model = UnifiedDecoder(config, genesis_seed=int(checkpoint["genesis_seed"])).eval()
@@ -216,7 +218,7 @@ def positive_receipt(
                 "pathway_event": "real_raw_image_adapter",
                 "postprocessor": "compare_real_tokenizer_ids:0,1",
                 "prediction": prediction,
-                "raw_logits_sha256": canonical_tensor_hash(raw_logits),
+                "raw_logits_sha256": canonical_tensor_hash(f"{item['item_id']}.raw_logits", raw_logits),
                 "scorer": "exact_match",
             }
         )
@@ -264,11 +266,37 @@ def negative_matrix_report(fixture_root: Path) -> dict[str, object]:
         options: dict[str, object] = {}
         temp_dir: tempfile.TemporaryDirectory[str] | None = None
         identical_tensor_proof = False
+        mutated_tensor_identity_differs = False
+        mutated_checkpoint_sha256: str | None = None
         if row_class == "LOADER_RECEIPT_MISSING":
             options["emit_loader_receipt"] = False
         elif row_class == "CHECKPOINT_TENSOR_IDENTITY_MISMATCH":
-            first_name = sorted(manifest["checkpoint"]["tensor_hashes"])[0]
-            manifest["checkpoint"]["tensor_hashes"][first_name] = "0" * 64
+            temp_dir = tempfile.TemporaryDirectory()
+            alternate = Path(temp_dir.name) / "checkpoint-mutated.pt"
+            original = torch.load(
+                fixture_root / str(manifest["checkpoint"]["file"]),
+                map_location="cpu",
+                weights_only=True,
+            )
+            alternate_state = {
+                name: tensor.clone() for name, tensor in original["state_dict"].items()
+            }
+            first_name = sorted(alternate_state)[0]
+            first_bytes = alternate_state[first_name].view(torch.uint8).reshape(-1)
+            first_bytes[0] = first_bytes[0] ^ 1
+            torch.save({**original, "state_dict": alternate_state}, alternate)
+            mutated_checkpoint_sha256 = sha256_bytes(alternate.read_bytes())
+            alternate_hashes = {
+                name: canonical_tensor_hash(name, tensor)
+                for name, tensor in sorted(alternate_state.items())
+            }
+            mutated_tensor_identity_differs = (
+                alternate_hashes != manifest["checkpoint"]["tensor_hashes"]
+            )
+            if not mutated_tensor_identity_differs:
+                raise RuntimeError("mutated checkpoint negative retained tensor identity")
+            manifest["checkpoint"]["file"] = str(alternate)
+            manifest["checkpoint"]["sha256"] = mutated_checkpoint_sha256
         elif row_class == "CHECKPOINT_FILE_IDENTITY_MISMATCH_IDENTICAL_TENSORS":
             temp_dir = tempfile.TemporaryDirectory()
             alternate = Path(temp_dir.name) / "checkpoint-legacy.pt"
@@ -278,9 +306,10 @@ def negative_matrix_report(fixture_root: Path) -> dict[str, object]:
                 weights_only=True,
             )
             torch.save(original, alternate, _use_new_zipfile_serialization=False)
+            mutated_checkpoint_sha256 = sha256_bytes(alternate.read_bytes())
             alternate_state = torch.load(alternate, map_location="cpu", weights_only=True)["state_dict"]
             alternate_hashes = {
-                name: canonical_tensor_hash(tensor) for name, tensor in sorted(alternate_state.items())
+                name: canonical_tensor_hash(name, tensor) for name, tensor in sorted(alternate_state.items())
             }
             identical_tensor_proof = alternate_hashes == manifest["checkpoint"]["tensor_hashes"]
             if not identical_tensor_proof:
@@ -314,6 +343,8 @@ def negative_matrix_report(fixture_root: Path) -> dict[str, object]:
             "subcase": subcase,
             "manifest": manifest if row_class != "CHECKPOINT_FILE_IDENTITY_MISMATCH_IDENTICAL_TENSORS" else base_manifest,
             "options": options,
+            "mutated_checkpoint_sha256": mutated_checkpoint_sha256,
+            "mutated_tensor_identity_differs": mutated_tensor_identity_differs,
         }
         mutated_sha256 = sha256_bytes(
             json.dumps(mutation_description, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -326,7 +357,20 @@ def negative_matrix_report(fixture_root: Path) -> dict[str, object]:
             rows.append(
                 {
                     "control_positive_sha256": control_sha256,
+                    **(
+                        {
+                            "authority_checkpoint_sha256": base_manifest["checkpoint"]["sha256"],
+                            "mutated_checkpoint_sha256": mutated_checkpoint_sha256,
+                        }
+                        if mutated_checkpoint_sha256 is not None
+                        else {}
+                    ),
                     **({"identical_tensor_proof": identical_tensor_proof} if identical_tensor_proof else {}),
+                    **(
+                        {"mutated_tensor_identity_differs": True}
+                        if mutated_tensor_identity_differs
+                        else {}
+                    ),
                     "mutated_input_sha256": mutated_sha256,
                     "observed_error": error.row_class,
                     "result": "REFUSED",
