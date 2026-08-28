@@ -1697,12 +1697,12 @@ describe("/train source-byte authority", () => {
       });
       fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
       fs.mkdirSync(path.join(mainRoot, "docs", "authority"), { recursive: true });
-      fs.writeFileSync(path.join(mainRoot, "docs/authority/GOAL.md"), "# main\n");
+      fs.writeFileSync(path.join(mainRoot, "docs/domains/governance/authority/GOAL.md"), "# main\n");
       fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), {
         recursive: true,
       });
       fs.mkdirSync(path.join(worktreeRoot, "docs", "authority"), { recursive: true });
-      fs.writeFileSync(path.join(worktreeRoot, "docs/authority/GOAL.md"), "# worktree\n");
+      fs.writeFileSync(path.join(worktreeRoot, "docs/domains/governance/authority/GOAL.md"), "# worktree\n");
       fs.writeFileSync(
         path.join(worktreeRoot, ".git"),
         `gitdir: ${path.join(mainRoot, ".git", "worktrees", "lane")}\n`,

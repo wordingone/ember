@@ -4,7 +4,7 @@
 // services/activity-feed.ts — issue #485 rung 1: the real-event engine behind the cockpit's
 // activity feed. The operator's verbatim complaint (3+ weeks up, zero activity ever seen) and
 // the board (C-PROC/C-OBS/C13 all RED) agree this is a genuine gap, not a perception problem —
-// docs/authority/GOAL.md's own P-C text: "a keyframed flame is a fabricated receipt in visual form." So every
+// docs/domains/governance/authority/GOAL.md's own P-C text: "a keyframed flame is a fabricated receipt in visual form." So every
 // line this engine renders traces to one real, observable event:
 //
 //   - a NEW receipt file landing anywhere under receipts/** (recursive fs watch)

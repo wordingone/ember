@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Selftest for Ember's clean-room native goal organ."""
 from __future__ import annotations
 
@@ -23,7 +26,7 @@ def main() -> int:
         out = root / "native-goal.json"
 
         _write(
-            repo / "docs/authority/GOAL.md",
+            repo / "docs/domains/governance/authority/GOAL.md",
             """
 # Ember Goal
 ## Current Blocker Packet

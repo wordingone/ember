@@ -31,9 +31,9 @@ describe("compactUtcStamp", () => {
 });
 
 describe("defaultRepoRoot", () => {
-  test("resolves to a directory containing docs/authority/GOAL.md (the real repo root)", () => {
+  test("resolves to a directory containing docs/domains/governance/authority/GOAL.md (the real repo root)", () => {
     const root = defaultRepoRoot();
-    expect(fs.existsSync(path.join(root, "docs/authority/GOAL.md"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "docs/domains/governance/authority/GOAL.md"))).toBe(true);
   });
 });
 

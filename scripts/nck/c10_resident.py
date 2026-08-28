@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """NC-K C10 resident entry-point — closes #340.
 
 Wires all four event sources (MailSource, FileWatchSource, JobReceiptSource,
@@ -40,7 +43,7 @@ _BUILTIN_DEFAULTS: dict = {
         "margin_gib_floor": 1.0,
         "pace_s_per_step": 0.05,
     },
-    "goal_file": os.path.join(_REPO, "docs/authority/GOAL.md"),
+    "goal_file": os.path.join(_REPO, "docs/domains/governance/authority/GOAL.md"),
     "heartbeat_file": os.path.join(_REPO, "state", "nck-heartbeat.txt"),
     "journal_path": os.path.join(_REPO, "state", "nck-journal.jsonl"),
     "gate_notes_dir": os.path.join(_REPO, "state", "nck-gate-notes"),

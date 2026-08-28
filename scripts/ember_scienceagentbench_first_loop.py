@@ -171,7 +171,7 @@ def build_receipt(
         "budget_waived": False,
     }
     verdict = "SCIENCEAGENTBENCH_FIRST_LOOP_BLOCKED" if blocked_reasons else "SCIENCEAGENTBENCH_FIRST_LOOP_READY"
-    goal_path = repo / "docs/authority/GOAL.md"
+    goal_path = repo / "docs/domains/governance/authority/GOAL.md"
     receipt = {
         "ticket": TICKET,
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),

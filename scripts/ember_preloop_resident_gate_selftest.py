@@ -25,7 +25,7 @@ def main() -> int:
         reference_root = root / "the predecessor CLI"
 
         _write(
-            repo / "docs/authority/GOAL.md",
+            repo / "docs/domains/governance/authority/GOAL.md",
             """
 ## Current Blocker Packet
 Requirement 14 requires clean-room the predecessor CLI resident harness parity, RLM,

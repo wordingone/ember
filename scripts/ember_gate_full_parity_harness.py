@@ -96,7 +96,7 @@ SURFACE_SPECS: list[dict[str, Any]] = [
     {
         "surface_id": "native_goal_organ",
         "name": "Native Codex goal-mode organ",
-        "reference_evidence": ["docs/authority/GOAL.md", "tools/reference-goal-mode/goal-mode.ps1", "scripts/ember_gate_goal_mode_parity_adapter.py"],
+        "reference_evidence": ["docs/domains/governance/authority/GOAL.md", "tools/reference-goal-mode/goal-mode.ps1", "scripts/ember_gate_goal_mode_parity_adapter.py"],
         "required_cleanroom_surface": "Resident goal organ that parses goal, reads receipts, selects blocker, compiles action, runs/delegates, verifies, writes receipt, and preserves next blocker without Codex steering.",
     },
     {
@@ -148,7 +148,7 @@ def extract_first_code(text: str) -> str:
 
 
 def inspect_goal(repo: Path) -> dict[str, Any]:
-    path = repo / "docs/authority/GOAL.md"
+    path = repo / "docs/domains/governance/authority/GOAL.md"
     text = read_text(path)
     labels = {
         "current_blocker": "Current blocker",

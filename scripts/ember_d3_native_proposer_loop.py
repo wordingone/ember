@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Post-resident D3 native proposer loop.
 
 Runs a small external-heldout A/B/C/deleted loop over fresh D3-Gym rows.
@@ -223,8 +226,8 @@ def build_receipt(
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
         "git_head": git_head(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md"),
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md"),
         "benchmark_receipt_path": str(benchmark_receipt_path),
         "benchmark_receipt_sha256": sha256_file(benchmark_receipt_path),
         "technique_receipt_path": str(technique_receipt_path),

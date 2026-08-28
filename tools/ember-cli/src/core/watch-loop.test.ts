@@ -54,7 +54,7 @@ function fixtureState(boardTs: string): EmberWorldState {
     understand: { goalTitle: "Fixture", topology: [] },
     interact: { ledgerRows: [] },
     sources: {
-      goal: { path: "docs/authority/GOAL.md", sha256: "0".repeat(64) },
+      goal: { path: "docs/domains/governance/authority/GOAL.md", sha256: "0".repeat(64) },
       ledger: { path: "docs/ledgers/ember-debt-ledger.md", sha256: "0".repeat(64) },
       board: { path: "receipts-totality/fixture.json", sha256: "0".repeat(64) },
     },

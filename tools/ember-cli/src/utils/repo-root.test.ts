@@ -19,7 +19,7 @@ let scratchDir: string;
 
 function makeRepoMarker(root: string): void {
   fs.mkdirSync(path.join(root, "docs", "authority"), { recursive: true });
-  fs.writeFileSync(path.join(root, "docs/authority/GOAL.md"), "# fixture goal\n");
+  fs.writeFileSync(path.join(root, "docs/domains/governance/authority/GOAL.md"), "# fixture goal\n");
   fs.mkdirSync(path.join(root, "tools", "ember-cli"), { recursive: true });
 }
 
@@ -171,8 +171,8 @@ describe("issue #666 — worktree-vs-main-checkout convergence", () => {
   test("divergence premise: worktree root and main root are different directories, and both carry the marker", () => {
     const { mainRoot, worktreeRoot } = makeMainAndWorktree();
     expect(worktreeRoot).not.toBe(mainRoot);
-    expect(fs.existsSync(path.join(worktreeRoot, "docs/authority/GOAL.md"))).toBe(true);
-    expect(fs.existsSync(path.join(mainRoot, "docs/authority/GOAL.md"))).toBe(true);
+    expect(fs.existsSync(path.join(worktreeRoot, "docs/domains/governance/authority/GOAL.md"))).toBe(true);
+    expect(fs.existsSync(path.join(mainRoot, "docs/domains/governance/authority/GOAL.md"))).toBe(true);
   });
 
   test("cwd inside a worktree resolves to the MAIN checkout root (the old behavior returned the worktree root)", () => {
@@ -198,7 +198,7 @@ describe("issue #666 — worktree-vs-main-checkout convergence", () => {
   test("a worktree whose gitdir pointer resolves to a NON-marker main tree throws (refuse loudly, never silently diverge)", () => {
     const { mainRoot, worktreeRoot } = makeMainAndWorktree();
     // Break the main checkout's marker: canonicalization now has no valid target.
-    fs.rmSync(path.join(mainRoot, "docs/authority/GOAL.md"));
+    fs.rmSync(path.join(mainRoot, "docs/domains/governance/authority/GOAL.md"));
     expect(() =>
       resolveEmberRepoRoot({ startDir: worktreeRoot, envRepoRoot: "", execPath: path.join(scratchDir, "nowhere", "bin.exe") }),
     ).toThrow(/worktree/i);
@@ -368,7 +368,7 @@ describe("PR954 round 2 — strict resolver: typed throws on malformed/unreadabl
 
   test("resolveEmberRepoRoot's existing worktree->non-marker-main throw is still CanonicalRootError (typed, not a bare Error)", () => {
     const { mainRoot, worktreeRoot } = makeMainAndWorktree();
-    fs.rmSync(path.join(mainRoot, "docs/authority/GOAL.md"));
+    fs.rmSync(path.join(mainRoot, "docs/domains/governance/authority/GOAL.md"));
     expect(() =>
       resolveEmberRepoRoot({ startDir: worktreeRoot, envRepoRoot: "", execPath: path.join(scratchDir, "nowhere", "bin.exe") }),
     ).toThrow(CanonicalRootError);

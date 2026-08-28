@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Emit post-resident-gate discovery receipts for the Ember goal.
 
 This script is intentionally data/static-source driven. It records the first
@@ -58,7 +61,7 @@ def inspect_bitnet_receipt(path: Path | None) -> dict[str, Any]:
 
 
 def build_benchmark_receipt(repo: Path, ts: str, source_path: Path | None, bitnet_receipt: Path | None) -> dict[str, Any]:
-    goal = repo / "docs/authority/GOAL.md"
+    goal = repo / "docs/domains/governance/authority/GOAL.md"
     d3_tasks = source_path or Path(
         r"<local-path>"
     )
@@ -236,7 +239,7 @@ def build_technique_receipt(
     benchmark_receipt_path: Path,
     technique_receipt_path: Path,
 ) -> dict[str, Any]:
-    goal = repo / "docs/authority/GOAL.md"
+    goal = repo / "docs/domains/governance/authority/GOAL.md"
     goal_text = goal.read_text(encoding="utf-8", errors="replace")
     compact_goal_text = " ".join(goal_text.split())
     required_markers = [
@@ -251,31 +254,31 @@ def build_technique_receipt(
     mined = [
         {
             "id": "receipt_conditioned_repair",
-            "source": "R12-R14 chronology in docs/authority/GOAL.md",
+            "source": "R12-R14 chronology in docs/domains/governance/authority/GOAL.md",
             "keep": "Failed fresh-transfer receipts must become training signals for the next proposer.",
             "forbidden_regression": "same-slice family patching or manual row-specific fixes",
         },
         {
             "id": "public_io_shape_growth",
-            "source": "R15 chronology in docs/authority/GOAL.md",
+            "source": "R15 chronology in docs/domains/governance/authority/GOAL.md",
             "keep": "Mine public examples into reusable candidate shapes selected by public tests only.",
             "forbidden_regression": "private-label leakage or fixed template victory laps",
         },
         {
             "id": "native_goal_organ_selection",
-            "source": "R16 chronology in docs/authority/GOAL.md",
+            "source": "R16 chronology in docs/domains/governance/authority/GOAL.md",
             "keep": "The native organ must select the next action from receipts; deletion must block or degrade selection.",
             "forbidden_regression": "Codex prose selecting the next loop after the fact",
         },
         {
             "id": "learned_proposer_policy",
-            "source": "R17 chronology in docs/authority/GOAL.md",
+            "source": "R17 chronology in docs/domains/governance/authority/GOAL.md",
             "keep": "A learned candidate-space policy must be integrated and deletion-sensitive even when it fails on fresh transfer.",
             "forbidden_regression": "unchanged prefix-policy reruns after a zero-score transfer",
         },
         {
             "id": "failure_as_next_loop",
-            "source": "docs/authority/GOAL.md lines around R17 blocker",
+            "source": "docs/domains/governance/authority/GOAL.md lines around R17 blocker",
             "keep": "A failed fresh row must become the next executable loop input, not a prose postmortem.",
             "forbidden_regression": "duration growth, readiness, or harness hardening unless the receipt names them as blockers",
         },

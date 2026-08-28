@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """TDD tests for merge_gate.py — mechanical merge gating."""
 
 import json
@@ -148,7 +151,7 @@ class TestMergeGateAssertion6:
     """Test assertion 6: coordinator-class paths cause REFUSE."""
 
     def test_refuse_goal_md(self):
-        """Refuse: docs/authority/GOAL.md touched."""
+        """Refuse: docs/domains/governance/authority/GOAL.md touched."""
         fixture_path = Path(__file__).parent / "fixtures/merge_gate/pr_refuse_goal_md.json"
         with open(fixture_path) as f:
             fixture = json.load(f)
@@ -159,7 +162,7 @@ class TestMergeGateAssertion6:
 
         assert not result.passed
         assert result.refuse_reason == "COORDINATOR-REQUIRED"
-        assert any("docs/authority/GOAL.md" in str(item.get("details", "")) for item in result.checklist)
+        assert any("docs/domains/governance/authority/GOAL.md" in str(item.get("details", "")) for item in result.checklist)
 
     def test_refuse_docs_spec(self):
         """Refuse: docs/spec/* touched."""
@@ -307,7 +310,7 @@ class TestMergeGatePathClassification:
         from merge_gate import has_coordinator_paths
 
         coordinator_paths = [
-            "docs/authority/GOAL.md",
+            "docs/domains/governance/authority/GOAL.md",
             "docs/authority/INVARIANT.md",
             "docs/spec/inference.md",
             "scripts/cbase_bootstrap.py",

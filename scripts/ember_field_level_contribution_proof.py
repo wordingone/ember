@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Field-level contribution proof protocol for Ember's connected cycle.
 
 This receipt is intentionally fail-closed. It distinguishes three things that
@@ -210,8 +213,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md"),
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md"),
         "audited_evidence": evidence,
         "closest_known_prior_comparison": closest_prior,
         "material_difference_over_prior": material_difference,

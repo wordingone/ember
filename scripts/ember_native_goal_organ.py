@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room native goal organ for Ember.
 
 The organ is an executable local mechanism: it parses the current goal packet,
@@ -63,7 +66,7 @@ def extract_first_code(text: str) -> str:
 
 
 def parse_goal(repo: Path) -> dict[str, Any]:
-    path = repo / "docs/authority/GOAL.md"
+    path = repo / "docs/domains/governance/authority/GOAL.md"
     text = read_text(path)
     extracted = {
         "current_blocker": extract_bullet(text, "Current blocker"),
@@ -117,7 +120,7 @@ def select_blocker(goal: dict[str, Any], full_parity: dict[str, Any]) -> dict[st
     return {
         "selected_blocker": "native_goal_organ" if not blockers else "native_goal_organ_blocked",
         "selection_basis": [
-            "docs/authority/GOAL.md Current Blocker Packet",
+            "docs/domains/governance/authority/GOAL.md Current Blocker Packet",
             "full parity surface_matrix.native_goal_organ",
             "non-Ember executor ablation requirement",
         ],

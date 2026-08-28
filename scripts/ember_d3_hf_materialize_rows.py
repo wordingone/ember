@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Materialize a frozen D3-Gym row slice from the Hugging Face Dataset Viewer."""
 from __future__ import annotations
 
@@ -71,8 +74,8 @@ def build_receipt(*, repo: Path, out: Path, offset: int, length: int, timeout_se
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md") if (repo / "docs/authority/GOAL.md").exists() else None,
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md") if (repo / "docs/domains/governance/authority/GOAL.md").exists() else None,
         "dataset": DATASET,
         "config": CONFIG,
         "split": SPLIT,

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Build receipts/INDEX.jsonl and receipts/CLAIMS.md from receipts/**/*.json.
 
@@ -6,7 +9,7 @@ Additive, read-only w.r.t. the receipts corpus: it never renames, moves, or
 deletes a receipt. Every field in the index is one already present in the
 receipt's own JSON schema (ticket / ts / issue / verdict / pass, plus any key
 whose name contains "claim" or "condition") — this script does not invent a
-semantic mapping onto docs/authority/GOAL.md board conditions, since receipt payloads can
+semantic mapping onto docs/domains/governance/authority/GOAL.md board conditions, since receipt payloads can
 legitimately contain unrelated substrings that collide with condition IDs
 (e.g. SMILES ring-closure labels "C1".."C4" inside dataset-preview fields).
 

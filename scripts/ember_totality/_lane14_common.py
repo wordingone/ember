@@ -13,7 +13,7 @@ Two independent concerns live here:
 
   resolve_in_tree()   -- "reachable from the execution tree" (R8 finding:
                           "C4/C5 internally-consistent receipts, binding
-                          artifacts off-tree"; docs/authority/GOAL.md's Execution-surface
+                          artifacts off-tree"; docs/domains/governance/authority/GOAL.md's Execution-surface
                           row: "Imports owed FROM the live tree ... anti-gaming
                           S10"). A path that exists on disk elsewhere on this
                           machine but outside the probe's resolved ROOT is an
@@ -236,7 +236,7 @@ def check_path_sha_pairs(cand, root):
         if on_disk is None:
             return False, total, (
                 f"{field}: {path_key}={claimed_path!r} resolves OFF-TREE/missing "
-                f"under root ({redact_root(root)}) -- converges with docs/authority/GOAL.md's "
+                f"under root ({redact_root(root)}) -- converges with docs/domains/governance/authority/GOAL.md's "
                 "Execution-surface 'Imports owed FROM the live tree' row "
                 "(anti-gaming S10 import debt); cannot verify in-tree"
             )

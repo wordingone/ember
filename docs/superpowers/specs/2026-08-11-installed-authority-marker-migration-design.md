@@ -2,7 +2,7 @@
 
 ## Problem
 
-An Ember desktop installation upgraded from the legacy authority layout can retain the installer-owned root `GOAL.md` while the current installer also writes `docs/authority/GOAL.md`. The runtime source-root resolver requires exactly one authority marker, so the admitted installed executable refuses before opening its Windows Terminal UI.
+An Ember desktop installation upgraded from the legacy authority layout can retain the installer-owned root `GOAL.md` while the current installer also writes `docs/domains/governance/authority/GOAL.md`. The runtime source-root resolver requires exactly one authority marker, so the admitted installed executable refuses before opening its Windows Terminal UI.
 
 ## Design
 
@@ -13,7 +13,7 @@ Keep the strict runtime resolver unchanged. During `Install-StableFiles`, migrat
 - Reject a marker reached through any symlink, junction, or reparse component.
 - Reject a canonical destination that is non-file or crosses a reparse component; reopen its exact raw bytes after atomic publication.
 - If it contains any other bytes, refuse without deleting or replacing it.
-- Continue creating the git-less `tools/ember-cli` marker directory and canonical `docs/authority/GOAL.md`.
+- Continue creating the git-less `tools/ember-cli` marker directory and canonical `docs/domains/governance/authority/GOAL.md`.
 - Complete all other stable-file writes before the marker transition. Publish the canonical marker atomically, remove the legacy marker last, and restore the prior canonical state if deletion fails.
 
 This preserves the one-authority invariant, makes upgrades self-contained, and never treats foreign bytes as installer-owned.

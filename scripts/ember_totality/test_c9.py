@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """C9 -- Hardest-core-first -- executable status probe (TDD).
 
 Authoritative condition (<<external>>/state/<spec>, C9):
@@ -17,7 +20,7 @@ Authoritative condition (<<external>>/state/<spec>, C9):
 
 This file is a STATUS PROBE, not a unit test: it always exits 0 and prints a
 single line by REALLY inspecting state under the resolved root. It never
-hardcodes the verdict. C9 is a STANDING PROCESS-INVARIANT (docs/authority/GOAL.md �4.0(9)),
+hardcodes the verdict. C9 is a STANDING PROCESS-INVARIANT (docs/domains/governance/authority/GOAL.md �4.0(9)),
 not a STATE-condition: it never prints RED/GREEN/UNEVALUABLE. It renders one
 of AUDIT-OK / AUDIT-INCIDENT (a cadence audit from the goalforge-clear epoch)
 or, pre-epoch (no operator-acceptance object exists yet), AUDIT-PENDING-EPOCH
@@ -79,7 +82,7 @@ def _find_epoch(root: str):
     acceptance object (docs/spec/operator-acceptance-v1.md schema
     acceptance/v1, scope goalforge-clear, stored at
     receipts/acceptance/goalforge-clear-<date>.json), or (None, None) if no
-    epoch has been recorded yet. docs/authority/GOAL.md �4.0(9): the epoch is the operator
+    epoch has been recorded yet. docs/domains/governance/authority/GOAL.md �4.0(9): the epoch is the operator
     acceptance of this goal; C9 is a process-invariant with no meaning before
     it exists."""
     acc_dir = os.path.join(root, "receipts", "acceptance")
@@ -270,7 +273,7 @@ def scan(root: str, min_ts: "str | None") -> "tuple[str, str]":
 def main() -> int:
     """Resolve the epoch, run scan() in the appropriate window, and relabel
     the raw RED/GREEN/UNEVALUABLE finding against the
-    AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH contract (docs/authority/GOAL.md �4.0(9))
+    AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH contract (docs/domains/governance/authority/GOAL.md �4.0(9))
     before printing."""
     root = _find_root()
     if root is None:
@@ -289,7 +292,7 @@ def main() -> int:
             "goalforge-clear operator-acceptance object exists yet at "
             "receipts/acceptance/goalforge-clear-*.json (schema "
             "acceptance/v1); this is NOT an audit verdict, pre-epoch "
-            "history is OUT OF AUDIT SCOPE per docs/authority/GOAL.md �4.0(9), the actual "
+            "history is OUT OF AUDIT SCOPE per docs/domains/governance/authority/GOAL.md �4.0(9), the actual "
             "status is never RED/GREEN/UNEVALUABLE for this row]"
         )
         return 0
