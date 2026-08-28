@@ -3,6 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -825,6 +826,99 @@ class ColoringContractTests(unittest.TestCase):
         self.assertEqual(
             sorted(item for carrier in carriers for item in carrier["touch_set_ids"]),
             sorted(graph["nodes"]),
+        )
+
+
+class ReceiptCompilerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.output = Path(self.temp.name) / "receipt.json"
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_unexecuted_leg_is_skip_never_pass(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "red_row")
+        row = compiler.red_row("linux_cpu", executed=False, reason="runner absent")
+        self.assertEqual(row["status"], "SKIP")
+        self.assertEqual(row["reason"], "runner absent")
+
+    def test_missing_domain_api_remains_fail(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "adjudicate_red_leg")
+        row = compiler.adjudicate_red_leg(
+            "direct_chain", returncode=2, failure_class="DOMAIN_API_ABSENT"
+        )
+        self.assertEqual(row["status"], "FAIL")
+        self.assertEqual(row["failure_class"], "DOMAIN_API_ABSENT")
+
+    def test_existing_destination_refuses_overwrite(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "write_no_overwrite_receipt")
+        self.output.write_text("owned", encoding="utf-8")
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.write_no_overwrite_receipt(self.output, {"k": 1})
+        self.assertEqual(raised.exception.code, "OUTPUT_EXISTS")
+
+    def test_baseline_preflight_refuses_existing_stream_sibling(self) -> None:
+        compiler = load_compiler()
+        sibling = self.output.parent / "linux.stdout"
+        sibling.write_text("owned", encoding="utf-8")
+        paths = compiler._baseline_stream_paths(self.output, ["linux"])
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler._refuse_existing_outputs(
+                [self.output] + [path for pair in paths.values() for path in pair]
+            )
+        self.assertEqual(raised.exception.code, "OUTPUT_EXISTS")
+
+    def test_write_receipt_uses_raw_and_self_conventions(self) -> None:
+        compiler = load_compiler()
+        raw_sha, self_sha = compiler.write_no_overwrite_receipt(
+            self.output, {"schema_version": "fixture", "k": 1}
+        )
+        raw = self.output.read_bytes()
+        payload = json.loads(raw)
+        self.assertTrue(raw.endswith(b"\n"))
+        self.assertEqual(raw_sha, hashlib.sha256(raw).hexdigest())
+        self.assertEqual(self_sha, payload["self_sha256"])
+        self.assertEqual(self_sha, compiler.derive_self_sha256(payload))
+
+    def test_mutated_receipt_self_refuses_before_recompute(self) -> None:
+        compiler = load_compiler()
+        compiler.write_no_overwrite_receipt(
+            self.output, {"schema_version": "fixture", "k": 1}
+        )
+        payload = json.loads(self.output.read_text(encoding="utf-8"))
+        payload["k"] = 2
+        self.output.write_bytes(compiler.canonical_json(payload) + b"\n")
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.verify_receipt(ROOT, POLICY_PATH, self.output)
+        self.assertEqual(raised.exception.code, "RECEIPT_SELF_MISMATCH")
+
+    def test_compile_receipt_is_deterministic_and_verifies_from_source(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "compile_receipt", "verify_receipt")
+        policy = policy_fixture()
+        red_matrix = [compiler.red_row("fixture", executed=False, reason="not requested")]
+        first = compiler.compile_receipt(ROOT, policy, red_matrix)
+        second = compiler.compile_receipt(ROOT, policy, red_matrix)
+        self.assertEqual(compiler.canonical_json(first), compiler.canonical_json(second))
+        self.assertEqual(
+            first["declared_host_envelope"]["identity_rule"],
+            "EMBER_PROJECT_IDENTITY_IS_HARDWARE_INDEPENDENT",
+        )
+        self.assertEqual(first["verifier_cost_contract"]["gate_placement"], "PR_WAVE")
+        self.assertEqual(
+            first["consumer_reference_bound"]["regex_sha256"],
+            hashlib.sha256(compiler._REFERENCE_RE.pattern.encode("utf-8")).hexdigest(),
+        )
+        compiler.write_no_overwrite_receipt(self.output, first)
+        verdict = compiler.verify_receipt(ROOT, POLICY_PATH, self.output)
+        self.assertEqual(verdict["result"], "PASS")
+        self.assertEqual(
+            verdict["self_sha256"],
+            json.loads(self.output.read_text(encoding="utf-8"))["self_sha256"],
         )
 
 

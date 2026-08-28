@@ -11,6 +11,7 @@ mutate external roots, authorize execution, or establish model/capability credit
 from __future__ import annotations
 
 import ast
+import argparse
 import fnmatch
 import hashlib
 import json
@@ -18,8 +19,12 @@ import re
 import subprocess
 import sys
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
+
+
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
 SCHEMA_VERSION = "ember-domain-authority-policy-v1"
@@ -243,6 +248,7 @@ def _git(repo: Path, *args: str) -> bytes:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        creationflags=_NO_WINDOW,
     )
     if result.returncode:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
@@ -1683,3 +1689,396 @@ def verify_coloring_certificate(
             raise ArchitectureMapError("K_MINUS_ONE_NOT_PROVEN", "certificate differs from recomputation")
         raise ArchitectureMapError("COLORING_CERTIFICATE_MISMATCH", "witness differs from recomputation")
     return recomputed
+
+
+RECEIPT_SCHEMA_VERSION = "ember-issue1962-c3-a-map-and-k-v1"
+RECEIPT_CLAIM_BOUNDARY = (
+    "ARCHITECTURE_CENSUS_CONFLICT_GRAPH_AND_EXACT_MINIMUM_CARRIER_PROOF_ONLY; "
+    "NO_SOURCE_CUTOVER_NO_RUNTIME_EXECUTION_NO_PARENT_CLOSURE_CREDIT"
+)
+DECLARED_HOST_ENVELOPE = {
+    "contract_issue": "#1866",
+    "language": "on the current declared host (specs recorded at the public host-envelope document)",
+    "identity_rule": "EMBER_PROJECT_IDENTITY_IS_HARDWARE_INDEPENDENT",
+    "revalidation_trigger": "CURRENT_HOST_HARDWARE_OR_SOFTWARE_ENVELOPE_CHANGE",
+}
+VERIFIER_COST_CONTRACT = {
+    "gate_placement": "PR_WAVE",
+    "recomputation_required": True,
+    "task4_measured_basis": {
+        "focused_exact_replay_seconds": 13.438,
+        "full_suite_seconds": 24.512,
+        "basis": "TASK4_CURRENT_HEAD_RUNS_BEFORE_TASK5",
+    },
+    "measured_seconds_recorded_by": "TASK6_EXECUTION_CUSTODY_RECEIPT",
+}
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def red_row(
+    leg_id: str,
+    *,
+    executed: bool,
+    reason: str | None = None,
+    command_argv: Sequence[str] = (),
+    started_at: str | None = None,
+    stopped_at: str | None = None,
+    returncode: int | None = None,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    failure_class: str | None = None,
+    claim_boundary: str = "S1_BASELINE_ONLY_NO_ARCHITECTURE_GREEN_CREDIT",
+) -> dict[str, object]:
+    """Build one honest S1 row; an unexecuted row is always SKIP."""
+
+    _require(bool(leg_id), "MALFORMED_RED_LEG", "missing leg_id")
+    argv = [str(item) for item in command_argv]
+    if not executed:
+        _require(bool(reason), "MALFORMED_RED_LEG", f"{leg_id}: SKIP requires reason")
+        status = "SKIP"
+        returncode = None
+        failure_class = None
+    else:
+        _require(returncode is not None, "MALFORMED_RED_LEG", f"{leg_id}: missing returncode")
+        status = "PASS" if returncode == 0 else "FAIL"
+        if status == "FAIL":
+            _require(bool(failure_class), "MALFORMED_RED_LEG", f"{leg_id}: FAIL requires class")
+    row: dict[str, object] = {
+        "leg_id": leg_id,
+        "status": status,
+        "executed": executed,
+        "command_argv_sha256": _sha256_bytes(canonical_json(argv)),
+        "started_at": started_at,
+        "stopped_at": stopped_at,
+        "returncode": returncode,
+        "stdout_sha256": _sha256_bytes(stdout),
+        "stderr_sha256": _sha256_bytes(stderr),
+        "failure_class": failure_class,
+        "claim_boundary": claim_boundary,
+    }
+    if reason is not None:
+        row["reason"] = reason
+    return row
+
+
+def adjudicate_red_leg(
+    leg_id: str,
+    *,
+    returncode: int,
+    failure_class: str | None = None,
+    command_argv: Sequence[str] = (),
+    started_at: str | None = None,
+    stopped_at: str | None = None,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+) -> dict[str, object]:
+    """Adjudicate an executed S1 command without converting failure to green."""
+
+    return red_row(
+        leg_id,
+        executed=True,
+        command_argv=command_argv,
+        started_at=started_at,
+        stopped_at=stopped_at,
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+        failure_class=failure_class,
+    )
+
+
+def run_red_matrix(
+    profiles: Sequence[Mapping[str, object]],
+    *,
+    timeout_seconds: float = 120.0,
+) -> dict[str, object]:
+    """Execute a bounded caller-declared S1 matrix and preserve exact streams."""
+
+    rows: list[dict[str, object]] = []
+    streams: dict[str, dict[str, bytes]] = {}
+    for profile in profiles:
+        leg_id = str(profile.get("leg_id", ""))
+        argv_value = profile.get("argv")
+        if argv_value is None:
+            rows.append(
+                red_row(
+                    leg_id,
+                    executed=False,
+                    reason=str(profile.get("reason") or "runner absent"),
+                )
+            )
+            continue
+        _require(isinstance(argv_value, list) and bool(argv_value), "MALFORMED_RED_LEG", leg_id)
+        argv = [str(item) for item in argv_value]
+        started_at = _utc_now()
+        try:
+            result = subprocess.run(
+                argv,
+                cwd=str(profile["cwd"]) if profile.get("cwd") else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout_seconds,
+                check=False,
+                creationflags=_NO_WINDOW,
+            )
+            returncode = result.returncode
+            stdout = result.stdout
+            stderr = result.stderr
+            failure_class = None if returncode == 0 else str(profile.get("failure_class") or "COMMAND_FAILED")
+        except subprocess.TimeoutExpired as exc:
+            returncode = 124
+            stdout = exc.stdout or b""
+            stderr = exc.stderr or b""
+            failure_class = "COMMAND_TIMEOUT"
+        stopped_at = _utc_now()
+        rows.append(
+            adjudicate_red_leg(
+                leg_id,
+                returncode=returncode,
+                failure_class=failure_class,
+                command_argv=argv,
+                started_at=started_at,
+                stopped_at=stopped_at,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        )
+        streams[leg_id] = {"stdout": stdout, "stderr": stderr}
+    return {"rows": rows, "streams": streams}
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def compile_receipt(
+    repo: Path,
+    policy: Mapping[str, Any],
+    red_matrix: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    """Compile the full source-bound census, graph, exact K proof, and carriers."""
+
+    repo = repo.resolve()
+    validate_policy(policy)
+    paths = tracked_paths(repo)
+    path_rows = classify_paths(paths, policy)
+    census = discover_consumers(repo, path_rows)
+    dependencies = build_dependency_graph(census["rows"], policy)
+    typed_roots = validate_typed_roots(policy)
+    package_authorities = validate_package_authorities(repo, policy)
+    touch_sets = build_touch_sets(path_rows, census["rows"])
+    conflict_graph = build_conflict_graph(touch_sets, policy["reviewability"])
+    precedence = build_touch_set_precedence(touch_sets, dependencies)
+    graph = {**conflict_graph, "precedence": precedence}
+    max_states = int(policy["reviewability"]["max_exact_search_states"])
+    coloring = solve_minimum_coloring(
+        graph["nodes"],
+        [tuple(edge) for edge in graph["edges"]],
+        [tuple(edge) for edge in precedence],
+        max_states=max_states,
+        node_weights=graph["node_weights"],
+        capacities=graph["capacities"],
+    )
+    verify_coloring_certificate(graph, coloring, max_states)
+    carriers = build_carrier_specs(touch_sets, coloring, graph["capacities"])
+    policy_path = repo / "manifests" / "architecture" / "domain-authority-v1.json"
+    schema_path = repo / "schemas" / "architecture" / "domain-authority-v1.schema.json"
+    compiler_path = repo / "scripts" / "architecture_map.py"
+    red_rows = [dict(row) for row in red_matrix]
+    for row in red_rows:
+        _require(row.get("status") in {"PASS", "FAIL", "SKIP"}, "MALFORMED_RED_LEG", str(row.get("leg_id")))
+    return {
+        "schema_version": RECEIPT_SCHEMA_VERSION,
+        "goal_id": GOAL_ID,
+        "workstream_id": WORKSTREAM_ID,
+        "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
+        "claim_boundary": RECEIPT_CLAIM_BOUNDARY,
+        "declared_host_envelope": DECLARED_HOST_ENVELOPE,
+        "consumer_reference_bound": {
+            "regex": _REFERENCE_RE.pattern,
+            "regex_sha256": _sha256_bytes(_REFERENCE_RE.pattern.encode("utf-8")),
+            "text_suffixes": sorted(_TEXT_SUFFIXES),
+        },
+        "verifier_cost_contract": VERIFIER_COST_CONTRACT,
+        "source": {
+            **git_identity(repo),
+            "compiler_sha256": _file_sha256(compiler_path),
+            "policy_sha256": _file_sha256(policy_path),
+            "schema_sha256": _file_sha256(schema_path),
+        },
+        "census": {
+            "tracked_path_count": len(paths),
+            "classified_path_count": len(path_rows),
+            "consumer_count": len(census["rows"]),
+            "finding_count": len(census["findings"]),
+            "class_counts": census["class_counts"],
+            "paths_sha256": canonical_sha256(paths),
+            "classification_sha256": canonical_sha256(path_rows),
+            "consumers_sha256": canonical_sha256(census["rows"]),
+            "findings_sha256": canonical_sha256(census["findings"]),
+        },
+        "typed_roots": typed_roots,
+        "package_authorities": package_authorities,
+        "dependency_graph": dependencies,
+        "touch_sets": touch_sets,
+        "conflict_graph": graph,
+        "coloring": coloring,
+        "k": coloring["k"],
+        "carriers": carriers,
+        "red_matrix": red_rows,
+        "red_summary": {
+            status: sum(1 for row in red_rows if row.get("status") == status)
+            for status in ("PASS", "FAIL", "SKIP")
+        },
+        "max_states": max_states,
+    }
+
+
+def derive_self_sha256(receipt: Mapping[str, object]) -> str:
+    payload = dict(receipt)
+    payload.pop("self_sha256", None)
+    return _sha256_bytes(canonical_json(payload))
+
+
+def write_no_overwrite_receipt(
+    path: Path,
+    receipt: Mapping[str, object],
+) -> tuple[str, str]:
+    """Write canonical receipt bytes exactly once and return raw/self hashes."""
+
+    if path.exists():
+        raise ArchitectureMapError("OUTPUT_EXISTS", str(path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = dict(receipt)
+    payload["self_sha256"] = derive_self_sha256(payload)
+    raw = canonical_json(payload) + b"\n"
+    with path.open("xb") as handle:
+        handle.write(raw)
+    return _sha256_bytes(raw), str(payload["self_sha256"])
+
+
+def _baseline_stream_paths(output: Path, leg_ids: Sequence[str]) -> dict[str, tuple[Path, Path]]:
+    paths: dict[str, tuple[Path, Path]] = {}
+    for leg_id in leg_ids:
+        safe = re.sub(r"[^A-Za-z0-9_.-]", "-", leg_id)
+        paths[leg_id] = (
+            output.parent / f"{safe}.stdout",
+            output.parent / f"{safe}.stderr",
+        )
+    return paths
+
+
+def _refuse_existing_outputs(paths: Sequence[Path]) -> None:
+    existing = [str(path) for path in paths if path.exists()]
+    if existing:
+        raise ArchitectureMapError("OUTPUT_EXISTS", existing[0])
+
+
+def verify_receipt(
+    repo: Path,
+    policy_path: Path,
+    receipt_path: Path,
+) -> dict[str, object]:
+    """Re-open exact bytes, verify self, and recompute every terminal field."""
+
+    raw = receipt_path.read_bytes()
+    try:
+        supplied = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ArchitectureMapError("RECEIPT_UNREADABLE", str(receipt_path)) from exc
+    _require(isinstance(supplied, dict), "RECEIPT_UNREADABLE", "root must be object")
+    expected_self = derive_self_sha256(supplied)
+    if supplied.get("self_sha256") != expected_self:
+        raise ArchitectureMapError("RECEIPT_SELF_MISMATCH", str(receipt_path))
+    expected_raw = canonical_json(supplied) + b"\n"
+    if raw != expected_raw:
+        raise ArchitectureMapError("RECEIPT_RAW_MISMATCH", str(receipt_path))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    recomputed = compile_receipt(repo, policy, supplied.get("red_matrix", []))
+    comparable = dict(supplied)
+    comparable.pop("self_sha256", None)
+    if canonical_json(comparable) != canonical_json(recomputed):
+        raise ArchitectureMapError("RECEIPT_RECOMPUTE_MISMATCH", str(receipt_path))
+    verify_coloring_certificate(
+        supplied["conflict_graph"],
+        supplied["coloring"],
+        int(supplied["max_states"]),
+    )
+    return {
+        "result": "PASS",
+        "raw_sha256": _sha256_bytes(raw),
+        "self_sha256": expected_self,
+        "commit_sha": supplied["source"]["commit_sha"],
+        "k": supplied["k"],
+    }
+
+
+def _load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    baseline = subparsers.add_parser("baseline")
+    baseline.add_argument("--profiles", type=Path, required=True)
+    baseline.add_argument("--output", type=Path, required=True)
+    baseline.add_argument("--timeout-seconds", type=float, default=120.0)
+    compile_parser = subparsers.add_parser("compile")
+    compile_parser.add_argument("--repo", type=Path, required=True)
+    compile_parser.add_argument("--policy", type=Path, required=True)
+    compile_parser.add_argument("--red-matrix", type=Path, required=True)
+    compile_parser.add_argument("--output", type=Path, required=True)
+    verify_parser = subparsers.add_parser("verify")
+    verify_parser.add_argument("--repo", type=Path, required=True)
+    verify_parser.add_argument("--policy", type=Path, required=True)
+    verify_parser.add_argument("--receipt", type=Path, required=True)
+    args = parser.parse_args(argv)
+    if args.command == "baseline":
+        profiles = _load_json(args.profiles)
+        _require(isinstance(profiles, list), "MALFORMED_RED_MATRIX", "profiles root")
+        leg_ids = [str(profile.get("leg_id", "")) for profile in profiles]
+        stream_paths = _baseline_stream_paths(args.output, leg_ids)
+        _refuse_existing_outputs(
+            [args.output]
+            + [path for pair in stream_paths.values() for path in pair]
+        )
+        result = run_red_matrix(profiles, timeout_seconds=args.timeout_seconds)
+        rows = result["rows"]
+        output = {"schema_version": "ember-issue1962-s1-red-matrix-v1", "rows": rows}
+        for leg_id, streams in result["streams"].items():
+            stdout_path, stderr_path = stream_paths[leg_id]
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            with stdout_path.open("xb") as handle:
+                handle.write(streams["stdout"])
+            with stderr_path.open("xb") as handle:
+                handle.write(streams["stderr"])
+        raw_sha, self_sha = write_no_overwrite_receipt(args.output, output)
+        print(json.dumps({"result": "COMPLETE", "raw_sha256": raw_sha, "self_sha256": self_sha}, sort_keys=True))
+        return 0
+    if args.command == "compile":
+        policy = _load_json(args.policy)
+        red_payload = _load_json(args.red_matrix)
+        red_rows = red_payload.get("rows", red_payload) if isinstance(red_payload, dict) else red_payload
+        receipt = compile_receipt(args.repo, policy, red_rows)
+        raw_sha, self_sha = write_no_overwrite_receipt(args.output, receipt)
+        print(json.dumps({"result": "COMPLETE", "raw_sha256": raw_sha, "self_sha256": self_sha, "k": receipt["k"]}, sort_keys=True))
+        return 0
+    verdict = verify_receipt(args.repo, args.policy, args.receipt)
+    print(json.dumps(verdict, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
