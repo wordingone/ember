@@ -1,0 +1,13 @@
+{
+  "attention_heads": 4,
+  "gradient_checkpointing": false,
+  "hidden_size": 32,
+  "image_input_shape": [
+    48,
+    48,
+    3
+  ],
+  "image_token_id": 31998,
+  "layers": 1,
+  "vocab_size": 32000
+}
