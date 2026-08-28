@@ -61,10 +61,10 @@ External roots are input-only inventory and are never cleanup scope.
 The Python backend remains `setuptools==84.0.0` from wheel
 `setuptools-84.0.0-py3-none-any.whl` with SHA-256
 `51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670`.
-The sdist `setuptools-84.0.0.tar.gz` with SHA-256
-`f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73`
-and every substitute refuse. Rust and TypeScript/Bun declarations and replayable lock
-authorities are explicit inputs to the same map.
+That exact wheel is the sole admissible backend artifact. Every substitute, including
+an sdist, refuses as `HASH_MISMATCH_REFUSED` or `ONLY_BINARY_REFUSED`. Rust and
+TypeScript/Bun declarations and replayable lock authorities are explicit inputs to the
+same map.
 
 ## Census compiler
 
@@ -140,4 +140,3 @@ Generation is read-only with respect to source and external roots. A failed cens
 proof writes no terminal receipt. Preparatory declarations may be reverted as one
 carrier; preserved RED and graph evidence remain immutable. No source cutover occurs in
 #1962, so there is no partial old layout to restore.
-
