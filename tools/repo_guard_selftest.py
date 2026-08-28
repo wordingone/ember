@@ -56,7 +56,6 @@ GUARD_SUPPORT_FILES = [
     "scripts/receipt_check.py",
     "tools/frozen-receipt-exceptions.json",
     "docs/authority/INVARIANT.md",
-    "docs/authority/GOAL.md",
     "docs/authority/STATE.md",
     "docs/authority/GOVERNANCE.md",
     "README.md",
@@ -87,13 +86,41 @@ GUARD_SUPPORT_FILES = [
     "scripts/train_multimodal_v0.py",
 ]
 
+GOAL_SUPPORT_CANDIDATES = (
+    "GOAL.md",
+    "docs/authority/GOAL.md",
+    "docs/domains/governance/authority/GOAL.md",
+)
+
 
 def sha256_lower(word: str) -> str:
     return hashlib.sha256(word.strip().lower().encode("utf-8")).hexdigest()
 
 
+def resolve_goal_support_file(root: Path, *, tracked: bool) -> str:
+    """Apply repo-guard's exactly-one old/new/domain GOAL resolution rule."""
+    if tracked:
+        present = [
+            rel
+            for rel in GOAL_SUPPORT_CANDIDATES
+            if subprocess.run(
+                ["git", "-C", str(root), "ls-files", "--error-unmatch", rel],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+            == 0
+        ]
+    else:
+        present = [rel for rel in GOAL_SUPPORT_CANDIDATES if (root / rel).is_file()]
+    assert len(present) == 1, (
+        f"expected exactly one canonical GOAL support file under {root}, found {present}"
+    )
+    return present[0]
+
+
 def make_fixture(branch: str = "fix/selftest") -> Path:
-    """A minimal fixture repo: one docs/authority/GOAL.md, the real guard support files, on a
+    """A minimal fixture repo: one domains governance GOAL, the real guard support files, on a
     guard-legal branch name, with nothing else tracked. Callers add more files
     before calling commit_fixture()."""
     tmp = Path(tempfile.mkdtemp(prefix="repo_guard_selftest_"))
@@ -102,6 +129,10 @@ def make_fixture(branch: str = "fix/selftest") -> Path:
         dst = tmp / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO_ROOT / rel, dst)
+    goal_rel = resolve_goal_support_file(REPO_ROOT, tracked=True)
+    goal_dst = tmp / goal_rel
+    goal_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(REPO_ROOT / goal_rel, goal_dst)
     for rel in (
         "scripts/conv_c03_muon_ns3_live.py",
         "scripts/timeshare_pretrain.py",
@@ -444,9 +475,11 @@ def test_green_clean_fixture():
 def test_green_canonical_authority_paths():
     tmp = make_fixture("fix/selftest-migrated-authority")
     try:
-        for name in ("GOAL.md", "INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md", "STATE.md"):
+        for name in ("INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md", "STATE.md"):
             assert not (tmp / name).exists()
             assert (tmp / "docs" / "authority" / name).is_file()
+        goal_rel = resolve_goal_support_file(tmp, tracked=False)
+        assert goal_rel in GOAL_SUPPORT_CANDIDATES
         commit_fixture(tmp)
         rc, output = run_guard(tmp)
         assert rc == 0, output
@@ -463,12 +496,13 @@ def test_green_canonical_authority_paths():
 def test_green_domain_goal_authority_path():
     tmp = make_fixture("fix/selftest-domain-goal-authority")
     try:
-        old_goal = tmp / "docs" / "authority" / "GOAL.md"
+        old_goal = tmp / resolve_goal_support_file(tmp, tracked=False)
         domain_goal = (
             tmp / "docs" / "domains" / "governance" / "authority" / "GOAL.md"
         )
-        domain_goal.parent.mkdir(parents=True)
-        old_goal.replace(domain_goal)
+        if old_goal != domain_goal:
+            domain_goal.parent.mkdir(parents=True)
+            old_goal.replace(domain_goal)
         # This test isolates repo-guard's structural path leg. Full semantic
         # authority tolerance is covered by test_authority_conservation.py.
         (tmp / "scripts" / "verify_authority_conservation.py").write_text(
@@ -490,8 +524,10 @@ def test_red_both_migrated_goal_authority_paths():
         domain_goal = (
             tmp / "docs" / "domains" / "governance" / "authority" / "GOAL.md"
         )
-        domain_goal.parent.mkdir(parents=True)
-        shutil.copyfile(legacy_goal, domain_goal)
+        source_goal = tmp / resolve_goal_support_file(tmp, tracked=False)
+        duplicate_goal = legacy_goal if source_goal != legacy_goal else domain_goal
+        duplicate_goal.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_goal, duplicate_goal)
         # Keep this deliberate-red leg specific to duplicate path detection.
         (tmp / "scripts" / "verify_authority_conservation.py").write_text(
             "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
@@ -518,7 +554,12 @@ def test_red_duplicate_authority_path():
             "REDACTIONS.md",
             "STATE.md",
         ):
-            shutil.copyfile(authority / name, tmp / name)
+            source = (
+                tmp / resolve_goal_support_file(tmp, tracked=False)
+                if name == "GOAL.md"
+                else authority / name
+            )
+            shutil.copyfile(source, tmp / name)
         commit_fixture(tmp)
         rc, output = run_guard(tmp)
         assert rc != 0, output
@@ -1351,18 +1392,19 @@ def test_green_pr_merge_excludes_live_base_squash_commit():
 
         commit_fixture(tmp)
         stale_event_base = git("rev-parse", "HEAD")
+        goal_rel = resolve_goal_support_file(tmp, tracked=True)
         git("checkout", "-q", "-b", "fix/pr-safe")
         (tmp / "docs" / "pr-note.md").write_bytes(b"branch-authored change\n")
         commit("safe branch change")
 
         git("checkout", "-q", "master")
-        (tmp / "docs/authority/GOAL.md").write_bytes(b"live-base authority update\n")
+        (tmp / goal_rel).write_bytes(b"live-base authority update\n")
         (tmp / "receipts").mkdir(exist_ok=True)
         (tmp / "receipts" / "live-base-note.md").write_bytes(
             b"already reviewed before squash\n"
         )
         commit("squashed live-base goal and evidence")
-        git("checkout", stale_event_base, "--", "docs/authority/GOAL.md")
+        git("checkout", stale_event_base, "--", goal_rel)
         commit("restore frozen goal authority")
         git("-c", "user.email=selftest@example.invalid", "-c",
             "user.name=selftest", "merge", "-q", "--no-ff", "fix/pr-safe",
@@ -1396,8 +1438,9 @@ def test_red_pr_merge_still_rejects_branch_goal_evidence_commit():
 
         commit_fixture(tmp)
         stale_event_base = git("rev-parse", "HEAD")
+        goal_rel = resolve_goal_support_file(tmp, tracked=True)
         git("checkout", "-q", "-b", "fix/pr-bad")
-        (tmp / "docs/authority/GOAL.md").write_bytes(b"branch authority update\n")
+        (tmp / goal_rel).write_bytes(b"branch authority update\n")
         (tmp / "receipts").mkdir(exist_ok=True)
         (tmp / "receipts" / "branch-note.md").write_bytes(
             b"branch evidence update\n"
