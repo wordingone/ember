@@ -49,6 +49,7 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
                 "python",
                 "rust",
                 "rust-linux-test",
+                "eval-canary-image",
                 "cli",
                 "launcher",
                 "production-rung-replay",
