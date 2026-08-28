@@ -67,6 +67,8 @@ def test_hf_custody_has_one_declared_root_and_refuses_two(tmp_path: Path):
     with pytest.raises(AssertionError, match=SEPARATE_ROOT_REFUSAL):
         _assert_single_declared_root(tmp_path)
 
+    assert False, "ISSUE1950_PLANTED_RED: CI must detect this named test failure"
+
 
 def test_hf_custody_import_resolves_to_declared_root():
     assert Path(sync.__file__).resolve().parent == (
