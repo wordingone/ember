@@ -574,32 +574,42 @@ STATE_REL=""
 for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTIONS.md STATE.md; do
   OLD_REL="$AUTHORITY_NAME"
   NEW_REL="docs/authority/$AUTHORITY_NAME"
+  DOMAIN_REL=""
+  [ "$AUTHORITY_NAME" = "GOAL.md" ] && DOMAIN_REL="docs/domains/governance/authority/GOAL.md"
   OLD_PRESENT=0
   NEW_PRESENT=0
+  DOMAIN_PRESENT=0
   git ls-files --error-unmatch "$OLD_REL" >/dev/null 2>&1 && OLD_PRESENT=1
   git ls-files --error-unmatch "$NEW_REL" >/dev/null 2>&1 && NEW_PRESENT=1
-  AUTHORITY_COUNT=$((OLD_PRESENT + NEW_PRESENT))
+  [ -n "$DOMAIN_REL" ] && git ls-files --error-unmatch "$DOMAIN_REL" >/dev/null 2>&1 && DOMAIN_PRESENT=1
+  AUTHORITY_COUNT=$((OLD_PRESENT + NEW_PRESENT + DOMAIN_PRESENT))
   if [ "$AUTHORITY_COUNT" -ne 1 ]; then
-    fail "authority-paths" "$AUTHORITY_NAME must exist at exactly one of '$OLD_REL' or '$NEW_REL' (found $AUTHORITY_COUNT)"
+    if [ -n "$DOMAIN_REL" ]; then
+      fail "authority-paths" "$AUTHORITY_NAME must exist at exactly one of '$OLD_REL', '$NEW_REL', or '$DOMAIN_REL' (found $AUTHORITY_COUNT)"
+    else
+      fail "authority-paths" "$AUTHORITY_NAME must exist at exactly one of '$OLD_REL' or '$NEW_REL' (found $AUTHORITY_COUNT)"
+    fi
     AUTHORITY_PATHS_OK=0
   elif [ "$OLD_PRESENT" -eq 1 ]; then
     [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$OLD_REL"
     [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$OLD_REL"
-  else
+  elif [ "$NEW_PRESENT" -eq 1 ]; then
     [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$NEW_REL"
     [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$NEW_REL"
+  else
+    [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$DOMAIN_REL"
   fi
 done
 if [ "$AUTHORITY_PATHS_OK" -eq 1 ]; then
   ok "authority-paths" "each authority document has exactly one canonical old-or-new path"
 fi
 
-GOALN="$(git ls-files | grep -cE '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md)$')"
+GOALN="$(git ls-files | grep -cE '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md|docs/domains/governance/authority/GOAL[^/]*\.md)$')"
 if [ "$GOALN" -eq 1 ] && [ -n "$GOAL_REL" ]; then
   ok "goal-doc" "exactly one ($GOAL_REL)"
 else
   fail "goal-doc" "found $GOALN GOAL*.md files across canonical authority locations; exactly one is allowed"
-  git ls-files | grep -E '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md)$' | sed 's/^/      /'
+  git ls-files | grep -E '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md|docs/domains/governance/authority/GOAL[^/]*\.md)$' | sed 's/^/      /'
 fi
 
 # ---- 5. no duplicate/overlapping top-level directories -------------------
@@ -703,12 +713,12 @@ if [ -n "$RANGE" ]; then
   BAD=""
   for c in $(git rev-list "$RANGE" 2>/dev/null); do
     files="$(git show --name-only --format= "$c")"
-    if echo "$files" | grep -qE '^(GOAL\.md|docs/authority/GOAL\.md)$' && echo "$files" | grep -qE '^receipts/'; then
+    if echo "$files" | grep -qE '^(GOAL\.md|docs/authority/GOAL\.md|docs/domains/governance/authority/GOAL\.md)$' && echo "$files" | grep -qE '^receipts/'; then
       BAD="$BAD $c"
     fi
   done
   if [ -n "$BAD" ]; then
-    fail "goal/evidence" "commit(s) edit both docs/authority/GOAL.md and receipts/ in one change:$BAD"
+    fail "goal/evidence" "commit(s) edit a canonical GOAL.md and receipts/ in one change:$BAD"
   else
     ok "goal/evidence" "no goal+evidence co-commits in $RANGE"
   fi
