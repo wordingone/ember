@@ -172,10 +172,9 @@ jobs:
       - name: Run complete Rust test suite on Linux
         run: cargo test --locked --no-fail-fast
   eval-canary-image:
-    # ISSUE1948_FROZEN_TIMEOUT_SECONDS: pending-first-green
-    # This first carrier head measures the exact positive-plus-negative-matrix
-    # process. The same PR must replace the marker with 3x measured wall,
-    # rounded up to the next second, before merge.
+    # ISSUE1948_FROZEN_TIMEOUT_SECONDS: 4
+    # ISSUE1948_MEASURING_RUN_URL: https://github.com/wordingone/ember/actions/runs/33141228761/job/98752316520
+    # The enforcing timeout is ceil(3 * 1.173608766 measured wall seconds).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -201,6 +200,8 @@ jobs:
           wheel="${wheels[0]}"
           wheel_name="$(basename "${wheel}")"
           wheel_sha256="$(sha256sum "${wheel}" | cut -d' ' -f1)"
+          test "${wheel_name}" = "torch-2.10.0+cpu-cp310-cp310-manylinux_2_28_x86_64.whl"
+          test "${wheel_sha256}" = "a280ffaea7b9c828e0c1b9b3bd502d9b6a649dc9416997b69b84544bd469f215"
           echo "TORCH_WHEEL_PATH=${wheel}" >> "${GITHUB_ENV}"
           echo "TORCH_WHEEL_FILENAME=${wheel_name}" >> "${GITHUB_ENV}"
           echo "TORCH_WHEEL_SHA256=${wheel_sha256}" >> "${GITHUB_ENV}"
@@ -215,7 +216,9 @@ jobs:
           python -B tests/test_eval_canary_ci_job.py -v
       - name: Measure exact positive plus full negative matrix and print terminal receipt
         run: |
-          python -B tools/ember-restart-3b/eval_canary_image.py \
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+          GITHUB_SHA="$(git rev-parse HEAD)" timeout 4s python -B tools/ember-restart-3b/eval_canary_image.py \
             --fixture-root tests/ember_restart_model/fixtures/eval-canary-image-v1 \
             --run-suite \
             --torch-wheel-filename "${TORCH_WHEEL_FILENAME}" \
