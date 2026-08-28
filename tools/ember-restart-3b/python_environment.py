@@ -16,6 +16,8 @@ import math
 import os
 import platform
 import re
+import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -78,6 +80,26 @@ _EXPECTED_PIP_OPTIONS = [
     "--extra-index-url",
     _EXPECTED_INDEX_LOCATOR,
 ]
+_RESOLVER_BYPASS_DISTRIBUTIONS = ("peft", "transformers", "trl", "unsloth")
+_RESOLVER_BYPASS_REQUIREMENTS = (
+    "peft==0.18.1",
+    "transformers @ git+https://github.com/huggingface/transformers.git@5d9bce2548fc6fa70d0e38e7999a29bedaa4feeb",
+    "trl==0.24.0",
+    "unsloth==2026.2.1",
+)
+_RESOLVER_BYPASS_REASON = (
+    "manifest-preserved metadata conflict: unsloth 2026.2.1 caps transformers "
+    "at <=4.57.6 while the fixed VCS pin reports 5.8.0.dev0"
+)
+_PIP_CHECK_DISPOSITION = "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT"
+_PIP_ENVIRONMENT_CONDITIONING = {
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "core.longpaths",
+    "GIT_CONFIG_VALUE_0": "true",
+    "GIT_TERMINAL_PROMPT": "0",
+}
+_PIP_SHORT_TEMP_PARENT = Path("B:/tmp")
+_PIP_SHORT_TEMP_RE = re.compile(r"^B:\\tmp\\ember-pip-[0-9a-f]{8}$", re.IGNORECASE)
 _VERSION_RE = re.compile(r"^[0-9][A-Za-z0-9.+_-]*$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -254,26 +276,99 @@ def build_install_receipt(
         raise EnvironmentContractError("install receipt must contain the three frozen stages")
     if any(type(row.get("exit_code")) is not int for row in rows):
         raise EnvironmentContractError("install receipt stage exit code is malformed")
-    common_keys = {"id", "exit_code", "duration_seconds", "executed_argv", "executed_argv_sha256"}
+    common_keys = {"id", "result", "exit_code", "duration_seconds", "commands"}
+    environment_keys = common_keys | {
+        "resolver_bypass_rows", "pip_check_disposition",
+        "pip_check_disclosed_conflict_lines",
+    }
     backend_keys = common_keys | {
         "requirements_sha256", "report_sha256", "artifact_filename", "artifact_sha256",
         "artifact_requires_python", "manifest_artifact_sha256", "artifact_matches_manifest",
         "host_conditioned_local_wheel",
     }
-    if set(rows[0]) != common_keys or set(rows[1]) != backend_keys or set(rows[2]) != common_keys:
+    if set(rows[0]) != environment_keys or set(rows[1]) != backend_keys or set(rows[2]) != common_keys:
         raise EnvironmentContractError("install receipt stage keys are not closed")
+    expected_command_ids = {
+        "environment_packages": ["resolved_core", "exact_pin_no_deps_tail", "post_install_pip_check"],
+        "build_backend": ["build_backend"],
+        "local_editable": ["local_editable"],
+    }
+    command_keys = {
+        "id", "exit_code", "duration_seconds", "executed_argv", "executed_argv_sha256",
+        "stdout_filename", "stdout_sha256", "stdout_bytes",
+        "stderr_filename", "stderr_sha256", "stderr_bytes",
+        "environment_conditioning",
+        "temporary_directory_custody",
+    }
     for row in rows:
         if (
             not isinstance(row.get("duration_seconds"), (int, float))
             or not math.isfinite(float(row["duration_seconds"]))
             or float(row["duration_seconds"]) < 0
-            or not isinstance(row.get("executed_argv"), list)
-            or not _SHA256_RE.fullmatch(str(row.get("executed_argv_sha256", "")))
+            or not isinstance(row.get("commands"), list)
+            or [command.get("id") for command in row["commands"]]
+            != expected_command_ids[row["id"]]
         ):
             raise EnvironmentContractError("install receipt stage evidence is malformed")
+        for command in row["commands"]:
+            if (
+                not isinstance(command, dict)
+                or set(command) != command_keys
+                or type(command.get("exit_code")) is not int
+                or not isinstance(command.get("duration_seconds"), (int, float))
+                or not math.isfinite(float(command["duration_seconds"]))
+                or float(command["duration_seconds"]) < 0
+                or not isinstance(command.get("executed_argv"), list)
+                or not _SHA256_RE.fullmatch(str(command.get("executed_argv_sha256", "")))
+                or not isinstance(command.get("stdout_filename"), str)
+                or not _SHA256_RE.fullmatch(str(command.get("stdout_sha256", "")))
+                or type(command.get("stdout_bytes")) is not int
+                or int(command["stdout_bytes"]) < 0
+                or not isinstance(command.get("stderr_filename"), str)
+                or not _SHA256_RE.fullmatch(str(command.get("stderr_sha256", "")))
+                or type(command.get("stderr_bytes")) is not int
+                or int(command["stderr_bytes"]) < 0
+                or command.get("environment_conditioning") != _PIP_ENVIRONMENT_CONDITIONING
+                or not isinstance(command.get("temporary_directory_custody"), dict)
+                or set(command["temporary_directory_custody"]) != {
+                    "path", "deleted_in_finally", "leak_count",
+                }
+                or not _PIP_SHORT_TEMP_RE.fullmatch(
+                    str(command["temporary_directory_custody"].get("path", ""))
+                )
+                or command["temporary_directory_custody"].get("deleted_in_finally") is not True
+                or command["temporary_directory_custody"].get("leak_count") != 0
+            ):
+                raise EnvironmentContractError("install command evidence is malformed")
+    environment = rows[0]
+    if (
+        environment.get("result") != "PASS_WITH_DISCLOSED_METADATA_CONFLICT"
+        or environment.get("exit_code") != 0
+        or environment.get("pip_check_disposition") != _PIP_CHECK_DISPOSITION
+        or not isinstance(environment.get("resolver_bypass_rows"), list)
+        or not isinstance(environment.get("pip_check_disclosed_conflict_lines"), list)
+        or [command["exit_code"] for command in environment["commands"]] != [0, 0, 1]
+    ):
+        raise EnvironmentContractError("environment package stage disclosure is malformed")
+    expected_bypass_rows = [
+        {"distribution": distribution, "requirement": requirement, "reason": _RESOLVER_BYPASS_REASON}
+        for distribution, requirement in zip(
+            _RESOLVER_BYPASS_DISTRIBUTIONS, _RESOLVER_BYPASS_REQUIREMENTS, strict=True,
+        )
+    ]
+    if environment["resolver_bypass_rows"] != expected_bypass_rows:
+        raise EnvironmentContractError("resolver bypass disclosure differs from frozen tail")
+    pip_check_lines = environment["pip_check_disclosed_conflict_lines"]
+    validate_disclosed_pip_check(
+        exit_code=1,
+        stdout=("\n".join(pip_check_lines) + "\n").encode("utf-8"),
+        stderr=b"",
+    )
     backend = rows[1]
     if (
-        backend.get("artifact_filename") != _SETUPTOOLS_WHEEL
+        backend.get("result") != "PASS"
+        or backend.get("exit_code") != 0
+        or backend.get("artifact_filename") != _SETUPTOOLS_WHEEL
         or backend.get("artifact_sha256") != _SETUPTOOLS_SHA256
         or backend.get("artifact_requires_python") != _SETUPTOOLS_REQUIRES_PYTHON
         or backend.get("manifest_artifact_sha256") != _SETUPTOOLS_SHA256
@@ -281,6 +376,8 @@ def build_install_receipt(
         or not _SHA256_RE.fullmatch(str(backend.get("report_sha256", "")))
     ):
         raise EnvironmentContractError("install receipt backend artifact differs from manifest")
+    if rows[2].get("result") != "PASS" or rows[2].get("exit_code") != 0:
+        raise EnvironmentContractError("local editable stage is not PASS")
     return _self_hashed({
         "schema_version": INSTALL_RECEIPT_SCHEMA_VERSION,
         "result": "PASS" if all(row["exit_code"] == 0 for row in rows) else "FAIL",
@@ -324,6 +421,19 @@ def load_install_receipt(path: Path) -> dict[str, Any]:
         pyproject_sha256=str(value.get("identity", {}).get("pyproject_sha256", "")),
         stages=stages,
     )
+    for stage in stages:
+        for command in stage["commands"]:
+            for stream_name in ("stdout", "stderr"):
+                filename = command[f"{stream_name}_filename"]
+                if Path(filename).name != filename:
+                    raise EnvironmentContractError("install stage log filename is not local")
+                log_path = path.parent / filename
+                if (
+                    not log_path.is_file()
+                    or log_path.stat().st_size != command[f"{stream_name}_bytes"]
+                    or _sha256_path(log_path) != command[f"{stream_name}_sha256"]
+                ):
+                    raise EnvironmentContractError("install stage log differs from receipt")
     return value
 
 
@@ -890,6 +1000,62 @@ def build_install_argv(
     ]
 
 
+def build_environment_install_plan(
+    manifest: Mapping[str, Any], *, python_executable: str,
+    cache_dir: Path | None = None,
+) -> dict[str, Any]:
+    validate_manifest_shape(manifest)
+    default_rows = [row for row in manifest["packages"] if row["install_by_default"]]
+    bypass_rows = [
+        row for row in default_rows
+        if _normalized_distribution(row["distribution"]) in _RESOLVER_BYPASS_DISTRIBUTIONS
+    ]
+    if tuple(_normalized_distribution(row["distribution"]) for row in bypass_rows) != _RESOLVER_BYPASS_DISTRIBUTIONS:
+        raise EnvironmentContractError("resolver bypass rows differ from frozen manifest order")
+    if tuple(row["requirement"] for row in bypass_rows) != _RESOLVER_BYPASS_REQUIREMENTS:
+        raise EnvironmentContractError("resolver bypass requirements differ from frozen pins")
+    core_rows = [row for row in default_rows if row not in bypass_rows]
+    cache_options = ["--cache-dir", str(cache_dir)] if cache_dir is not None else []
+    base = [
+        python_executable, "-m", "pip", "install",
+        *manifest["pip_options"], *cache_options,
+    ]
+    return {
+        "resolved_core_argv": [*base, *(row["requirement"] for row in core_rows)],
+        "exact_pin_no_deps_argv": [
+            *base, "--no-deps", *(row["requirement"] for row in bypass_rows),
+        ],
+        "pip_check_argv": [python_executable, "-m", "pip", "check"],
+        "resolver_bypass_rows": [
+            {
+                "distribution": row["distribution"],
+                "requirement": row["requirement"],
+                "reason": _RESOLVER_BYPASS_REASON,
+            }
+            for row in bypass_rows
+        ],
+    }
+
+
+def validate_disclosed_pip_check(
+    *, exit_code: int, stdout: bytes, stderr: bytes,
+) -> dict[str, Any]:
+    text = (stdout + stderr).decode("utf-8", errors="strict")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    allowed_prefixes = ("peft 0.18.1 ", "trl 0.24.0 ", "unsloth 2026.2.1 ")
+    if exit_code != 1 or not lines or any(
+        not line.lower().startswith(allowed_prefixes)
+        or "transformers" not in line.lower()
+        or "5.8.0.dev0" not in line.lower()
+        for line in lines
+    ):
+        raise EnvironmentContractError("pip check differs from the one disclosed metadata conflict")
+    return {
+        "pip_check_disposition": _PIP_CHECK_DISPOSITION,
+        "pip_check_disclosed_conflict_lines": lines,
+    }
+
+
 def _default_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -916,7 +1082,8 @@ def _parser() -> argparse.ArgumentParser:
     install = sub.add_parser(
         "install", help="run all three hash-governed install stages",
         description=(
-            "One command runs: existing manifest packages; the exact setuptools wheel via "
+            "One command runs: manifest packages as a resolvable core plus a disclosed exact-pin "
+            "no-deps tail and closed pip-check classification; the exact setuptools wheel via "
             "pip --require-hashes and a named --report; then the local editable src package "
             "with --no-deps --no-build-isolation. An explicit no-overwrite --receipt is required."
         ),
@@ -926,7 +1093,7 @@ def _parser() -> argparse.ArgumentParser:
         "--backend-wheel", type=Path,
         help="optional host-conditioned wheel; exact manifest filename and sha256 are mandatory",
     )
-    sub.add_parser("print-install-command", help="print the exact pip argv")
+    sub.add_parser("print-install-command", help="print the exact staged pip plan")
     return parser
 
 
@@ -937,6 +1104,7 @@ def _sha256_path(path: Path) -> str:
 def _sanitized_argv(
     argv: Sequence[str], *, root: Path, requirements_path: Path | None = None,
     report_path: Path | None = None, wheel_path: Path | None = None,
+    cache_path: Path | None = None,
 ) -> list[str]:
     substitutions = {
         str(root): "<repo>",
@@ -949,16 +1117,104 @@ def _sanitized_argv(
     if wheel_path is not None:
         substitutions[str(wheel_path)] = "<manifest-bound-wheel>"
         substitutions[wheel_path.as_uri()] = "<manifest-bound-wheel>"
+    if cache_path is not None:
+        substitutions[str(cache_path)] = "<receipt-pip-cache>"
     return [substitutions.get(str(token), str(token)) for token in argv]
 
 
-def _run_pip(argv: Sequence[str], *, root: Path) -> tuple[int, float]:
+def _run_pip(
+    argv: Sequence[str], *, root: Path,
+) -> tuple[int, float, bytes, bytes, dict[str, Any]]:
     started = time.perf_counter()
-    completed = subprocess.run(
-        list(argv), cwd=root, check=False, shell=False,
-        creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+    environment = os.environ.copy()
+    environment.update(_PIP_ENVIRONMENT_CONDITIONING)
+    _PIP_SHORT_TEMP_PARENT.mkdir(parents=True, exist_ok=True)
+    short_temp = _PIP_SHORT_TEMP_PARENT / f"ember-pip-{secrets.token_hex(4)}"
+    short_temp.mkdir(exist_ok=False)
+    environment.update({
+        "TMP": str(short_temp), "TEMP": str(short_temp), "TMPDIR": str(short_temp),
+    })
+    cleanup_error = ""
+    completed: subprocess.CompletedProcess[bytes]
+    try:
+        completed = subprocess.run(
+            list(argv), cwd=root, check=False, shell=False,
+            capture_output=True, env=environment,
+            creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+        )
+    finally:
+        try:
+            shutil.rmtree(short_temp)
+        except OSError as error:
+            cleanup_error = f"short pip temp cleanup failed: {type(error).__name__}: {error}\n"
+    deleted = not short_temp.exists()
+    leak_count = 0 if deleted else 1 + sum(1 for _ in short_temp.rglob("*"))
+    exit_code = int(completed.returncode)
+    stderr = bytes(completed.stderr)
+    if not deleted:
+        exit_code = exit_code or 74
+        stderr += cleanup_error.encode("utf-8", errors="replace")
+    return (
+        exit_code, time.perf_counter() - started,
+        bytes(completed.stdout), stderr,
+        {
+            "path": str(short_temp),
+            "deleted_in_finally": deleted,
+            "leak_count": leak_count,
+        },
     )
-    return int(completed.returncode), time.perf_counter() - started
+
+
+def _stage_log_paths(receipt_path: Path, stage_id: str) -> tuple[Path, Path]:
+    stem = receipt_path.stem + "-" + stage_id.replace("_", "-")
+    return (
+        receipt_path.with_name(stem + ".stdout.log"),
+        receipt_path.with_name(stem + ".stderr.log"),
+    )
+
+
+def _write_stage_logs_no_replace(
+    receipt_path: Path, stage_id: str, stdout: bytes, stderr: bytes,
+) -> dict[str, Any]:
+    stdout_path, stderr_path = _stage_log_paths(receipt_path, stage_id)
+    try:
+        with stdout_path.open("xb") as stream:
+            stream.write(stdout)
+        with stderr_path.open("xb") as stream:
+            stream.write(stderr)
+    except FileExistsError as error:
+        raise FileExistsError("install stage log custody is no-overwrite") from error
+    return {
+        "stdout_filename": stdout_path.name,
+        "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+        "stdout_bytes": len(stdout),
+        "stderr_filename": stderr_path.name,
+        "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
+        "stderr_bytes": len(stderr),
+    }
+
+
+def _run_pip_command(
+    *, receipt_path: Path, command_id: str, argv: Sequence[str], root: Path,
+    requirements_path: Path | None = None, report_path: Path | None = None,
+    wheel_path: Path | None = None,
+    cache_path: Path | None = None,
+) -> tuple[dict[str, Any], bytes, bytes]:
+    exit_code, duration, stdout, stderr, temp_custody = _run_pip(argv, root=root)
+    evidence = {
+        "id": command_id,
+        "exit_code": exit_code,
+        "duration_seconds": duration,
+        "executed_argv": _sanitized_argv(
+            argv, root=root, requirements_path=requirements_path,
+            report_path=report_path, wheel_path=wheel_path, cache_path=cache_path,
+        ),
+        "executed_argv_sha256": hashlib.sha256(_canonical(list(argv))).hexdigest(),
+        "environment_conditioning": dict(_PIP_ENVIRONMENT_CONDITIONING),
+        "temporary_directory_custody": temp_custody,
+        **_write_stage_logs_no_replace(receipt_path, command_id, stdout, stderr),
+    }
+    return evidence, stdout, stderr
 
 
 def _validate_backend_report(path: Path, manifest: Mapping[str, Any]) -> dict[str, str]:
@@ -1041,12 +1297,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
     validate_repository_contract(root=root, manifest=manifest)
-    install_argv = build_install_argv(
-        manifest,
-        python_executable=sys.executable,
-    )
     if args.command == "print-install-command":
-        print(subprocess.list2cmdline(install_argv))
+        print(json.dumps(
+            build_environment_install_plan(manifest, python_executable=sys.executable),
+            sort_keys=True,
+        ))
         return 0
     validate_observed_environment(manifest)
     receipt_path = args.receipt.resolve()
@@ -1055,6 +1310,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise FileExistsError("install receipt custody is no-overwrite")
     if report_path.exists():
         raise FileExistsError("build backend report custody is no-overwrite")
+    for command_id in (
+        "resolved_core", "exact_pin_no_deps_tail", "post_install_pip_check",
+        "build_backend", "local_editable",
+    ):
+        if any(path.exists() for path in _stage_log_paths(receipt_path, command_id)):
+            raise FileExistsError("install stage log custody is no-overwrite")
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     wheel_path = args.backend_wheel.resolve(strict=True) if args.backend_wheel is not None else None
     if wheel_path is not None and (
@@ -1068,19 +1329,81 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pyproject_sha256": _sha256_path(pyproject_path),
     }
     stages: list[dict[str, Any]] = []
-    exit_code, duration = _run_pip(install_argv, root=root)
-    stages.append({
-        "id": "environment_packages", "exit_code": exit_code,
-        "duration_seconds": duration,
-        "executed_argv": _sanitized_argv(install_argv, root=root),
-        "executed_argv_sha256": hashlib.sha256(_canonical(install_argv)).hexdigest(),
-    })
-    if exit_code != 0:
+    environment_plan = build_environment_install_plan(
+        manifest, python_executable=sys.executable,
+        cache_dir=receipt_path.parent / "pip-cache",
+    )
+    environment_commands: list[dict[str, Any]] = []
+    core_command, _stdout, _stderr = _run_pip_command(
+        receipt_path=receipt_path, command_id="resolved_core",
+        argv=environment_plan["resolved_core_argv"], root=root,
+        cache_path=receipt_path.parent / "pip-cache",
+    )
+    environment_commands.append(core_command)
+    if core_command["exit_code"] != 0:
+        stages.append({
+            "id": "environment_packages", "result": "FAIL",
+            "exit_code": core_command["exit_code"],
+            "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
+            "commands": environment_commands,
+            "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+        })
         write_install_receipt_no_replace(
             receipt_path,
             build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
         )
-        return exit_code
+        return int(core_command["exit_code"])
+    tail_command, _stdout, _stderr = _run_pip_command(
+        receipt_path=receipt_path, command_id="exact_pin_no_deps_tail",
+        argv=environment_plan["exact_pin_no_deps_argv"], root=root,
+        cache_path=receipt_path.parent / "pip-cache",
+    )
+    environment_commands.append(tail_command)
+    if tail_command["exit_code"] != 0:
+        stages.append({
+            "id": "environment_packages", "result": "FAIL",
+            "exit_code": tail_command["exit_code"],
+            "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
+            "commands": environment_commands,
+            "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+        })
+        write_install_receipt_no_replace(
+            receipt_path,
+            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+        )
+        return int(tail_command["exit_code"])
+    pip_check_command, pip_check_stdout, pip_check_stderr = _run_pip_command(
+        receipt_path=receipt_path, command_id="post_install_pip_check",
+        argv=environment_plan["pip_check_argv"], root=root,
+    )
+    environment_commands.append(pip_check_command)
+    try:
+        pip_check_disclosure = validate_disclosed_pip_check(
+            exit_code=int(pip_check_command["exit_code"]),
+            stdout=pip_check_stdout, stderr=pip_check_stderr,
+        )
+    except EnvironmentContractError as error:
+        stages.append({
+            "id": "environment_packages", "result": "FAIL", "exit_code": 1,
+            "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
+            "commands": environment_commands,
+            "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+            "pip_check_classification_error": str(error),
+        })
+        write_install_receipt_no_replace(
+            receipt_path,
+            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+        )
+        return 1
+    stages.append({
+        "id": "environment_packages",
+        "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT",
+        "exit_code": 0,
+        "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
+        "commands": environment_commands,
+        "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+        **pip_check_disclosure,
+    })
 
     with tempfile.TemporaryDirectory(prefix="ember-build-authority-", dir=receipt_path.parent) as directory:
         requirements_path = Path(directory) / "build-requirements.txt"
@@ -1094,16 +1417,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             requirements_path=requirements_path,
             report_path=report_path,
         )
-        exit_code, duration = _run_pip(backend_argv, root=root)
-        if exit_code != 0:
+        backend_command, _stdout, _stderr = _run_pip_command(
+            receipt_path=receipt_path, command_id="build_backend",
+            argv=backend_argv, root=root, requirements_path=requirements_path,
+            report_path=report_path, wheel_path=wheel_path,
+        )
+        if backend_command["exit_code"] != 0:
             stages.append({
-                "id": "build_backend", "exit_code": exit_code,
-                "duration_seconds": duration,
-                "executed_argv": _sanitized_argv(
-                    backend_argv, root=root, requirements_path=requirements_path,
-                    report_path=report_path, wheel_path=wheel_path,
-                ),
-                "executed_argv_sha256": hashlib.sha256(_canonical(backend_argv)).hexdigest(),
+                "id": "build_backend", "result": "FAIL",
+                "exit_code": backend_command["exit_code"],
+                "duration_seconds": backend_command["duration_seconds"],
+                "commands": [backend_command],
                 "requirements_sha256": _sha256_path(requirements_path),
                 "report_sha256": _sha256_path(report_path) if report_path.is_file() else None,
             })
@@ -1111,16 +1435,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 receipt_path,
                 build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="build_backend"),
             )
-            return exit_code
+            return int(backend_command["exit_code"])
         observed_artifact = _validate_backend_report(report_path, build_manifest)
         stages.append({
-            "id": "build_backend", "exit_code": exit_code,
-            "duration_seconds": duration,
-            "executed_argv": _sanitized_argv(
-                backend_argv, root=root, requirements_path=requirements_path,
-                report_path=report_path, wheel_path=wheel_path,
-            ),
-            "executed_argv_sha256": hashlib.sha256(_canonical(backend_argv)).hexdigest(),
+            "id": "build_backend", "result": "PASS", "exit_code": 0,
+            "duration_seconds": backend_command["duration_seconds"],
+            "commands": [backend_command],
             "requirements_sha256": _sha256_path(requirements_path),
             "report_sha256": _sha256_path(report_path),
             **observed_artifact,
@@ -1130,19 +1450,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         })
 
     local_argv = build_local_install_argv(sys.executable)
-    exit_code, duration = _run_pip(local_argv, root=root)
+    local_command, _stdout, _stderr = _run_pip_command(
+        receipt_path=receipt_path, command_id="local_editable",
+        argv=local_argv, root=root,
+    )
     stages.append({
-        "id": "local_editable", "exit_code": exit_code,
-        "duration_seconds": duration,
-        "executed_argv": _sanitized_argv(local_argv, root=root),
-        "executed_argv_sha256": hashlib.sha256(_canonical(local_argv)).hexdigest(),
+        "id": "local_editable", "result": "PASS" if local_command["exit_code"] == 0 else "FAIL",
+        "exit_code": local_command["exit_code"],
+        "duration_seconds": local_command["duration_seconds"],
+        "commands": [local_command],
     })
-    if exit_code != 0:
+    if local_command["exit_code"] != 0:
         write_install_receipt_no_replace(
             receipt_path,
             build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="local_editable"),
         )
-        return exit_code
+        return int(local_command["exit_code"])
     receipt = build_install_receipt(
         **identity_hashes,
         stages=stages,
