@@ -104,7 +104,8 @@ _PIP_SHORT_TEMP_RE = re.compile(r"^B:\\tmp\\ember-pip-[0-9a-f]{8}$", re.IGNORECA
 _COMPLETION_REQUIREMENTS = (
     "typer==0.24.0", "diffusers==0.35.2", "hf-transfer==0.1.9",
     "torchvision==0.25.0+cu126", "tyro==1.0.8", "unsloth-zoo==2026.2.1",
-    "wheel==0.45.1", "xformers==0.0.35",
+    "wheel==0.45.1", "xformers==0.0.35", "cut-cross-entropy==25.1.1",
+    "msgspec==0.20.0",
 )
 _UNSLOTH_ZOO_TRANSFORMERS_REQUIREMENT = (
     "transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,"

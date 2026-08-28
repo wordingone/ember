@@ -24,7 +24,8 @@ SETUPTOOLS_SHA256 = "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b
 COMPLETION_REQUIREMENTS = [
     "typer==0.24.0", "diffusers==0.35.2", "hf-transfer==0.1.9",
     "torchvision==0.25.0+cu126", "tyro==1.0.8", "unsloth-zoo==2026.2.1",
-    "wheel==0.45.1", "xformers==0.0.35",
+    "wheel==0.45.1", "xformers==0.0.35", "cut-cross-entropy==25.1.1",
+    "msgspec==0.20.0",
 ]
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 OUTPUT_EVIDENCE = {
@@ -190,6 +191,17 @@ def test_environment_stage_splits_resolvable_core_and_disclosed_exact_pin_tail()
         plan["completion_resolver_argv"].index("--report") + 1
     ] == "B:\\custody\\completion-report.json"
     assert plan["pip_check_argv"] == ["python.exe", "-m", "pip", "check"]
+
+
+def test_completion_closes_all_run5_missing_distributions_in_resolver_core() -> None:
+    manifest = python_environment.load_manifest(ROOT / "manifests" / "python-environment-v1.json")
+    build_manifest = load_build_manifest()
+    plan = python_environment.build_environment_install_plan(
+        manifest, build_manifest=build_manifest, python_executable="python.exe",
+    )
+    for requirement in ("cut-cross-entropy==25.1.1", "msgspec==0.20.0"):
+        assert requirement in plan["completion_resolver_argv"]
+        assert requirement not in plan["exact_pin_no_deps_argv"]
 
 
 def test_completion_versions_are_exactly_verified() -> None:

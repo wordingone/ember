@@ -25,6 +25,8 @@
     {"distribution": "tyro", "version": "1.0.8", "requirement": "tyro==1.0.8", "resolver_mode": "resolver_core", "transformers_requirement": null},
     {"distribution": "unsloth-zoo", "version": "2026.2.1", "requirement": "unsloth-zoo==2026.2.1", "resolver_mode": "exact_pin_no_deps_tail", "transformers_requirement": "transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3"},
     {"distribution": "wheel", "version": "0.45.1", "requirement": "wheel==0.45.1", "resolver_mode": "resolver_core", "transformers_requirement": null},
-    {"distribution": "xformers", "version": "0.0.35", "requirement": "xformers==0.0.35", "resolver_mode": "resolver_core", "transformers_requirement": null}
+    {"distribution": "xformers", "version": "0.0.35", "requirement": "xformers==0.0.35", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "cut-cross-entropy", "version": "25.1.1", "requirement": "cut-cross-entropy==25.1.1", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "msgspec", "version": "0.20.0", "requirement": "msgspec==0.20.0", "resolver_mode": "resolver_core", "transformers_requirement": null}
   ]
 }
