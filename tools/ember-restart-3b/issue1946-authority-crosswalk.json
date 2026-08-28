@@ -1,0 +1,22 @@
+{
+  "artifacts": [
+    {"path": "receipts/fp33-e4-profiler-20260612T032739Z.json", "role": "fp33_profiler"},
+    {"path": "receipts/c04-batched-ns5-bench-20260613T134925Z.json", "role": "c04_muon_bf16ns5_qat"},
+    {"path": "receipts/fp32-l6-compile-ab-20260612T215844Z.json", "role": "eager_compile"},
+    {"path": "receipts/cuda-graph-ab-20260612T071112Z.json", "role": "cuda_graph"},
+    {"path": "receipts/ember-02-r1-exits/r1-e8-20260805T172055Z.json", "role": "r1_e8"},
+    {"path": "receipts/ember-restart-3b/energy-proxy-logger-smoke-v1.json", "role": "energy"}
+  ],
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02B",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  },
+  "issue1413_predecessor": {
+    "comment_id": 5384896677,
+    "density_selection_receipt_sha256": "6c9dc7b0fdb69a9fdb51db3d83ac903c4cacb4f188dab7ea84de5a73ddb913e6",
+    "raw_sha256": "0fec9d663e2b17b3224789fe119a15b4c5dd04bc8a07cf0ced81cb953c5e95e2",
+    "self_sha256": "1e57ae6ad0a0a3c6306c3a3ac2330fa5915a70f9f645f1999eb93d7972c22eb9"
+  },
+  "schema_version": "ember-issue1946-authority-crosswalk-v1"
+}

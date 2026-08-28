@@ -13,6 +13,7 @@ import json
 import math
 import sys
 import tempfile
+import time
 import unittest
 import weakref
 from pathlib import Path
@@ -1288,6 +1289,120 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertEqual(len(result["single_record_reference_losses"]), 2)
         for reference, packed in zip(result["single_record_reference_losses"], result["losses"], strict=True):
             self.assertLess(abs(reference - packed) / abs(reference), 0.01)
+
+    def test_complete_update_timer_charges_the_data_readiness_stall(self) -> None:
+        """Break caught: the governed timer opens after per-update data/reference readiness."""
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=1, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="reasoning", sample_id=f"stall-{index}") for index in range(2)]
+
+        class TwoRecordSelection:
+            receipt = {"selected_record_count": 2}
+
+            def iter_from(self, cursor: object = None):
+                del cursor
+                for index, record in enumerate(records):
+                    yield record, {
+                        "selection_receipt_sha256": "f" * 64,
+                        "selected_ordinal": index + 1,
+                    }
+
+        model = UnifiedDecoder(config, genesis_seed=1946)
+        try:
+            result = pretrain.run_packed_selection_pretraining_segment(
+                model=model,
+                optimizer=torch.optim.AdamW(model.parameters(), lr=1e-3),
+                selection=TwoRecordSelection(),
+                config=config,
+                device=torch.device("cpu"),
+                pack_records=2,
+                checkpoint_every=1,
+                checkpoint_callback=lambda _step, _state: None,
+                complete_update_data_stall_seconds=0.05,
+                measure_complete_update_cuda_events=True,
+            )
+        except TypeError as error:
+            self.fail(f"complete-update timing API is missing: {error}")
+        self.assertGreaterEqual(result["step_timings_seconds"][0], 0.05)
+        self.assertEqual(
+            result["complete_update_timing_boundary"],
+            {
+                "opens_before": ["data_readiness", "reference_forward"],
+                "closes_after": ["optimizer_step", "mandatory_synchronization", "charged_checkpoint", "telemetry"],
+                "data_stall_seconds": 0.05,
+                "data_readiness_mode": "PREPARED_BEFORE_GOVERNED_WALL",
+            },
+        )
+        phase_row = result["complete_update_phase_timings_seconds"][0]
+        self.assertEqual(
+            set(phase_row),
+            {
+                "data_readiness",
+                "reference_forward",
+                "forward",
+                "backward",
+                "gradient_clipping",
+                "optimizer",
+                "mandatory_synchronization",
+                "telemetry_checkpoint",
+                "explicit_remainder",
+            },
+        )
+        self.assertGreaterEqual(sum(phase_row.values()) / result["step_timings_seconds"][0], 0.99)
+        self.assertEqual(result["complete_update_cuda_event_seconds"], [None])
+
+    def test_complete_update_timer_charges_actual_pack_decode(self) -> None:
+        """Break caught: #1946 pre-decodes every GPU pack before the governed wall opens."""
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=1, attention_heads=4, vocab_size=64)
+        records = [self._record(config, expert="reasoning", sample_id=f"decode-{index}") for index in range(4)]
+
+        class FourRecordSelection:
+            receipt = {"selected_record_count": 4}
+
+            def iter_from(self, cursor: object = None):
+                del cursor
+                for index, record in enumerate(records):
+                    yield record, {
+                        "selection_receipt_sha256": "f" * 64,
+                        "selected_ordinal": index + 1,
+                    }
+
+        original_decode = pretrain.decode_owned_packed_batch
+        live_batches: list[weakref.ReferenceType[dict[str, object]]] = []
+
+        class WeakBatch(dict[str, object]):
+            pass
+
+        def delayed_decode(*args: object, **kwargs: object) -> dict[str, object]:
+            if live_batches:
+                self.assertIsNone(live_batches[-1](), "more than one decoded pack remained live")
+            time.sleep(0.05)
+            decoded = WeakBatch(original_decode(*args, **kwargs))
+            live_batches.append(weakref.ref(decoded))
+            return decoded
+
+        model = UnifiedDecoder(config, genesis_seed=1946)
+        with patch.object(pretrain, "decode_owned_packed_batch", side_effect=delayed_decode):
+            result = pretrain.run_packed_selection_pretraining_segment(
+                model=model,
+                optimizer=torch.optim.AdamW(model.parameters(), lr=1e-3),
+                selection=FourRecordSelection(),
+                config=config,
+                device=torch.device("cpu"),
+                pack_records=2,
+                checkpoint_every=1,
+                checkpoint_callback=lambda _step, _state: None,
+                stream_complete_update_data_readiness=True,
+            )
+
+        self.assertGreaterEqual(
+            result["complete_update_phase_timings_seconds"][0]["data_readiness"],
+            0.05,
+        )
+        self.assertGreaterEqual(result["step_timings_seconds"][0], 0.05)
+        self.assertEqual(
+            result["complete_update_timing_boundary"]["data_readiness_mode"],
+            "STREAMED_INSIDE_GOVERNED_WALL",
+        )
 
     def test_packed_selection_refuses_a_partial_terminal_pack(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
