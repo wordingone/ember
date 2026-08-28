@@ -324,6 +324,23 @@
       "compatibility": null
     },
     {
+      "distribution": "pyarrow",
+      "version": "22.0.0",
+      "requirement": "pyarrow==22.0.0",
+      "imports": [
+        "pyarrow"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
       "distribution": "requests",
       "version": "2.32.5",
       "requirement": "requests==2.32.5",
