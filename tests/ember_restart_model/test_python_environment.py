@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools" / "ember-restart-3b" / "python_environment.py"
 MANIFEST = ROOT / "manifests" / "python-environment-v1.json"
@@ -230,6 +229,7 @@ def test_install_command_isolated_from_shell_local_pip_state() -> None:
 
 def test_install_refuses_environment_drift_before_pip(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     subprocess_called = False
 
@@ -256,7 +256,10 @@ def test_install_refuses_environment_drift_before_pip(
         python_environment.EnvironmentContractError,
         match="observed environment mismatch",
     ):
-        python_environment.main(["--root", str(ROOT), "install"])
+        python_environment.main([
+            "--root", str(ROOT), "install",
+            "--receipt", str(tmp_path / "install-receipt.json"),
+        ])
     assert subprocess_called is False
 
 

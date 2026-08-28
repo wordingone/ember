@@ -2,24 +2,38 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Validate and install Ember's measured direct Python environment."""
+"""Validate or run Ember's one-command three-stage Python environment install."""
 
 from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import importlib.metadata
+import importlib.util
 import json
+import math
 import os
-from pathlib import Path
 import platform
 import re
 import subprocess
 import sys
-from typing import Any, Mapping, Sequence
-
+import tempfile
+import time
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+from urllib.parse import unquote, urlparse
 
 SCHEMA_VERSION = "ember-python-environment-v1"
+BUILD_SCHEMA_VERSION = "ember-python-environment-build-v1"
+INSTALL_RECEIPT_SCHEMA_VERSION = "ember-python-environment-install-receipt-v1"
+NEGATIVE_RECEIPT_SCHEMA_VERSION = "ember-python-environment-negative-receipt-v1"
+_SETUPTOOLS_VERSION = "84.0.0"
+_SETUPTOOLS_REQUIREMENT = "setuptools==84.0.0"
+_SETUPTOOLS_WHEEL = "setuptools-84.0.0-py3-none-any.whl"
+_SETUPTOOLS_SHA256 = "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670"
+_SETUPTOOLS_REQUIRES_PYTHON = ">=3.10"
 AUTHORITY_MARKER = (
     "Python dependency authority: manifests/python-environment-v1.json"
 )
@@ -89,6 +103,10 @@ def _reject_duplicate_object_keys(
     return result
 
 
+def _reject_json_constant(value: str) -> None:
+    raise EnvironmentContractError(f"non-finite JSON constant is forbidden: {value}")
+
+
 def _require_exact_keys(
     value: Mapping[str, Any],
     expected: set[str],
@@ -136,12 +154,261 @@ def load_manifest(path: Path) -> dict[str, Any]:
         payload = json.loads(
             text,
             object_pairs_hook=_reject_duplicate_object_keys,
+            parse_constant=_reject_json_constant,
         )
     except json.JSONDecodeError as exc:
         raise EnvironmentContractError(f"manifest is malformed JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise EnvironmentContractError("manifest root must be an object")
     return payload
+
+
+def load_build_manifest(path: Path) -> dict[str, Any]:
+    return load_manifest(path)
+
+
+def validate_build_manifest_shape(manifest: Mapping[str, Any]) -> None:
+    expected = {
+        "schema_version": BUILD_SCHEMA_VERSION,
+        "goal_id": "EMBER-02",
+        "workstream_id": "EMBER-02B",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+        "environment": {"implementation": "CPython", "python_version": "3.10.11"},
+        "backend": {
+            "distribution": "setuptools",
+            "version": _SETUPTOOLS_VERSION,
+            "requirement": _SETUPTOOLS_REQUIREMENT,
+            "artifact": {
+                "filename": _SETUPTOOLS_WHEEL,
+                "sha256": _SETUPTOOLS_SHA256,
+                "requires_python": _SETUPTOOLS_REQUIRES_PYTHON,
+            },
+        },
+    }
+    if dict(manifest) != expected:
+        raise EnvironmentContractError("build manifest must bind the fixed setuptools wheel")
+
+
+def build_backend_requirement_bytes(
+    manifest: Mapping[str, Any], *, artifact_uri: str | None = None,
+) -> bytes:
+    validate_build_manifest_shape(manifest)
+    requirement = artifact_uri or str(manifest["backend"]["requirement"])
+    return f"{requirement} --hash=sha256:{_SETUPTOOLS_SHA256}\n".encode()
+
+
+def build_backend_install_argv(
+    manifest: Mapping[str, Any], *, python_executable: str,
+    requirements_path: Path, report_path: Path,
+) -> list[str]:
+    validate_build_manifest_shape(manifest)
+    return [
+        python_executable, "-m", "pip", "install", "--isolated", "--no-cache-dir",
+        "--index-url", _PRIMARY_INDEX_LOCATOR, "--force-reinstall", "--no-deps",
+        "--only-binary=:all:", "--require-hashes", "--report", str(report_path),
+        "-r", str(requirements_path),
+    ]
+
+
+def build_local_install_argv(python_executable: str) -> list[str]:
+    return [
+        python_executable, "-m", "pip", "install", "--no-deps",
+        "--no-build-isolation", "-e", ".",
+    ]
+
+
+def _canonical(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _self_hashed(value: Mapping[str, Any]) -> dict[str, Any]:
+    result = dict(value)
+    result["self_sha256"] = hashlib.sha256(_canonical(result)).hexdigest()
+    return result
+
+
+def _verify_self_hash(value: Mapping[str, Any], label: str) -> dict[str, Any]:
+    result = dict(value)
+    claimed = result.pop("self_sha256", None)
+    if not isinstance(claimed, str) or not _SHA256_RE.fullmatch(claimed):
+        raise EnvironmentContractError(f"{label} self hash is malformed")
+    if hashlib.sha256(_canonical(result)).hexdigest() != claimed:
+        raise EnvironmentContractError(f"{label} self hash differs")
+    result["self_sha256"] = claimed
+    return result
+
+
+def build_install_receipt(
+    *, legacy_manifest_sha256: str, build_manifest_sha256: str,
+    pyproject_sha256: str, stages: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    for label, value in (
+        ("legacy manifest", legacy_manifest_sha256),
+        ("build manifest", build_manifest_sha256),
+        ("pyproject", pyproject_sha256),
+    ):
+        if not _SHA256_RE.fullmatch(value):
+            raise EnvironmentContractError(f"{label} hash must be lowercase 64hex")
+    rows = [dict(stage) for stage in stages]
+    if [row.get("id") for row in rows] != ["environment_packages", "build_backend", "local_editable"]:
+        raise EnvironmentContractError("install receipt must contain the three frozen stages")
+    if any(type(row.get("exit_code")) is not int for row in rows):
+        raise EnvironmentContractError("install receipt stage exit code is malformed")
+    common_keys = {"id", "exit_code", "duration_seconds", "executed_argv", "executed_argv_sha256"}
+    backend_keys = common_keys | {
+        "requirements_sha256", "report_sha256", "artifact_filename", "artifact_sha256",
+        "artifact_requires_python", "manifest_artifact_sha256", "artifact_matches_manifest",
+        "host_conditioned_local_wheel",
+    }
+    if set(rows[0]) != common_keys or set(rows[1]) != backend_keys or set(rows[2]) != common_keys:
+        raise EnvironmentContractError("install receipt stage keys are not closed")
+    for row in rows:
+        if (
+            not isinstance(row.get("duration_seconds"), (int, float))
+            or not math.isfinite(float(row["duration_seconds"]))
+            or float(row["duration_seconds"]) < 0
+            or not isinstance(row.get("executed_argv"), list)
+            or not _SHA256_RE.fullmatch(str(row.get("executed_argv_sha256", "")))
+        ):
+            raise EnvironmentContractError("install receipt stage evidence is malformed")
+    backend = rows[1]
+    if (
+        backend.get("artifact_filename") != _SETUPTOOLS_WHEEL
+        or backend.get("artifact_sha256") != _SETUPTOOLS_SHA256
+        or backend.get("artifact_requires_python") != _SETUPTOOLS_REQUIRES_PYTHON
+        or backend.get("manifest_artifact_sha256") != _SETUPTOOLS_SHA256
+        or backend.get("artifact_matches_manifest") is not True
+        or not _SHA256_RE.fullmatch(str(backend.get("report_sha256", "")))
+    ):
+        raise EnvironmentContractError("install receipt backend artifact differs from manifest")
+    return _self_hashed({
+        "schema_version": INSTALL_RECEIPT_SCHEMA_VERSION,
+        "result": "PASS" if all(row["exit_code"] == 0 for row in rows) else "FAIL",
+        "identity": {
+            "legacy_manifest_sha256": legacy_manifest_sha256,
+            "build_manifest_sha256": build_manifest_sha256,
+            "pyproject_sha256": pyproject_sha256,
+        },
+        "stages": rows,
+    })
+
+
+def write_install_receipt_no_replace(path: Path, receipt: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps(dict(receipt), sort_keys=True, indent=2, allow_nan=False).encode("utf-8") + b"\n"
+    try:
+        with path.open("xb") as stream:
+            stream.write(raw)
+    except FileExistsError as error:
+        raise FileExistsError("install receipt custody is no-overwrite") from error
+
+
+def load_install_receipt(path: Path) -> dict[str, Any]:
+    value = load_manifest(path)
+    value = _verify_self_hash(value, "install receipt")
+    if set(value) != {"schema_version", "result", "identity", "stages", "self_sha256"}:
+        raise EnvironmentContractError("install receipt keys are not closed")
+    if value.get("schema_version") != INSTALL_RECEIPT_SCHEMA_VERSION or value.get("result") != "PASS":
+        raise EnvironmentContractError("install receipt is not a terminal PASS")
+    stages = value.get("stages")
+    identity = value.get("identity")
+    if not isinstance(identity, dict) or set(identity) != {
+        "legacy_manifest_sha256", "build_manifest_sha256", "pyproject_sha256",
+    }:
+        raise EnvironmentContractError("install receipt identity keys are not closed")
+    if not isinstance(stages, list):
+        raise EnvironmentContractError("install receipt stages are malformed")
+    build_install_receipt(
+        legacy_manifest_sha256=str(value.get("identity", {}).get("legacy_manifest_sha256", "")),
+        build_manifest_sha256=str(value.get("identity", {}).get("build_manifest_sha256", "")),
+        pyproject_sha256=str(value.get("identity", {}).get("pyproject_sha256", "")),
+        stages=stages,
+    )
+    return value
+
+
+def build_install_failure_receipt(
+    *, legacy_manifest_sha256: str, build_manifest_sha256: str,
+    pyproject_sha256: str, stages: Sequence[Mapping[str, Any]], failed_stage: str,
+) -> dict[str, Any]:
+    if failed_stage not in {"environment_packages", "build_backend", "local_editable"}:
+        raise EnvironmentContractError("install failure stage is invalid")
+    identity = {
+        "legacy_manifest_sha256": legacy_manifest_sha256,
+        "build_manifest_sha256": build_manifest_sha256,
+        "pyproject_sha256": pyproject_sha256,
+    }
+    if any(not _SHA256_RE.fullmatch(str(value)) for value in identity.values()):
+        raise EnvironmentContractError("install failure identity is malformed")
+    rows = [dict(row) for row in stages]
+    if not rows or rows[-1].get("id") != failed_stage or rows[-1].get("exit_code") in {None, 0}:
+        raise EnvironmentContractError("install failure receipt does not bind the failed stage")
+    return _self_hashed({
+        "schema_version": INSTALL_RECEIPT_SCHEMA_VERSION,
+        "result": "FAIL",
+        "identity": identity,
+        "failed_stage": failed_stage,
+        "stages": rows,
+    })
+
+
+def build_negative_receipt(
+    *, negative_id: str, failure_class: str, exit_code: int, restored: bool,
+) -> dict[str, Any]:
+    allowed = {
+        "SUBSTITUTED_BACKEND_ARTIFACT": "HASH_MISMATCH_REFUSED",
+        "SDIST_SUBSTITUTION": "ONLY_BINARY_REFUSED",
+        "LOCAL_PACKAGE_ABSENT": "LOCAL_EDITABLE_MISSING",
+    }
+    if allowed.get(negative_id) != failure_class or type(exit_code) is not int or exit_code == 0 or restored is not True:
+        raise EnvironmentContractError("negative receipt does not prove one restored expected refusal")
+    return _self_hashed({
+        "schema_version": NEGATIVE_RECEIPT_SCHEMA_VERSION,
+        "result": "EXPECTED_REFUSAL",
+        "negative_id": negative_id,
+        "failure_class": failure_class,
+        "exit_code": exit_code,
+        "restored": restored,
+    })
+
+
+def validate_negative_receipt(receipt: Mapping[str, Any]) -> None:
+    value = _verify_self_hash(receipt, "negative receipt")
+    expected = build_negative_receipt(
+        negative_id=str(value.get("negative_id")),
+        failure_class=str(value.get("failure_class")),
+        exit_code=int(value.get("exit_code", 0)),
+        restored=value.get("restored") is True,
+    )
+    if expected != value:
+        raise EnvironmentContractError("negative receipt fields differ")
+
+
+def verify_packaging_installation(root: Path, build_manifest: Mapping[str, Any]) -> dict[str, str]:
+    validate_build_manifest_shape(build_manifest)
+    if importlib.metadata.version("setuptools") != _SETUPTOOLS_VERSION:
+        raise EnvironmentContractError("backend_exact_version leg failed")
+    distribution = importlib.metadata.distribution("ember")
+    direct_text = distribution.read_text("direct_url.json")
+    if not isinstance(direct_text, str):
+        raise EnvironmentContractError("local_direct_url_editable leg failed")
+    direct = json.loads(direct_text, object_pairs_hook=_reject_duplicate_object_keys)
+    parsed = urlparse(str(direct.get("url", "")))
+    path_text = unquote(parsed.path)
+    if re.fullmatch(r"/[A-Za-z]:/.*", path_text):
+        path_text = path_text[1:]
+    direct_root = Path(path_text).resolve()
+    if parsed.scheme != "file" or direct_root != root.resolve() or direct.get("dir_info", {}).get("editable") is not True:
+        raise EnvironmentContractError("local_direct_url_editable leg failed")
+    spec = importlib.util.find_spec("ember")
+    expected_module = (root / "src" / "ember" / "__init__.py").resolve()
+    if spec is None or not isinstance(spec.origin, str) or Path(spec.origin).resolve() != expected_module:
+        raise EnvironmentContractError("local_module_src_resolution leg failed")
+    return {
+        "backend_exact_version": "PASS",
+        "local_direct_url_editable": "PASS",
+        "local_module_src_resolution": "PASS",
+    }
 
 
 def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
@@ -636,18 +903,113 @@ def _parser() -> argparse.ArgumentParser:
         help="Ember repository root (default: script parent repository)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    verify = sub.add_parser("verify", help="validate repository/import authority")
+    verify = sub.add_parser(
+        "verify", help="validate repository/import authority",
+        description=(
+            "Validate repository authority. With --check-installed, an explicit "
+            "--install-receipt is required and backend, hash receipt, editable direct_url, "
+            "and src/ember resolution are checked."
+        ),
+    )
     verify.add_argument("--check-installed", action="store_true")
-    sub.add_parser("install", help="install the exact measured direct environment")
+    verify.add_argument("--install-receipt", type=Path)
+    install = sub.add_parser(
+        "install", help="run all three hash-governed install stages",
+        description=(
+            "One command runs: existing manifest packages; the exact setuptools wheel via "
+            "pip --require-hashes and a named --report; then the local editable src package "
+            "with --no-deps --no-build-isolation. An explicit no-overwrite --receipt is required."
+        ),
+    )
+    install.add_argument("--receipt", type=Path, required=True)
+    install.add_argument(
+        "--backend-wheel", type=Path,
+        help="optional host-conditioned wheel; exact manifest filename and sha256 are mandatory",
+    )
     sub.add_parser("print-install-command", help="print the exact pip argv")
     return parser
 
 
+def _sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _sanitized_argv(
+    argv: Sequence[str], *, root: Path, requirements_path: Path | None = None,
+    report_path: Path | None = None, wheel_path: Path | None = None,
+) -> list[str]:
+    substitutions = {
+        str(root): "<repo>",
+        str(Path(sys.executable)): Path(sys.executable).name,
+    }
+    if requirements_path is not None:
+        substitutions[str(requirements_path)] = "<generated-build-requirements>"
+    if report_path is not None:
+        substitutions[str(report_path)] = "<backend-report>"
+    if wheel_path is not None:
+        substitutions[str(wheel_path)] = "<manifest-bound-wheel>"
+        substitutions[wheel_path.as_uri()] = "<manifest-bound-wheel>"
+    return [substitutions.get(str(token), str(token)) for token in argv]
+
+
+def _run_pip(argv: Sequence[str], *, root: Path) -> tuple[int, float]:
+    started = time.perf_counter()
+    completed = subprocess.run(
+        list(argv), cwd=root, check=False, shell=False,
+        creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+    )
+    return int(completed.returncode), time.perf_counter() - started
+
+
+def _validate_backend_report(path: Path, manifest: Mapping[str, Any]) -> dict[str, str]:
+    if not path.is_file():
+        raise EnvironmentContractError("build backend pip report is absent")
+    report = load_manifest(path)
+    installs = report.get("install")
+    if not isinstance(installs, list) or len(installs) != 1 or not isinstance(installs[0], dict):
+        raise EnvironmentContractError("build backend pip report must contain exactly one install row")
+    row = installs[0]
+    metadata = row.get("metadata")
+    download = row.get("download_info")
+    if not isinstance(metadata, dict) or not isinstance(download, dict):
+        raise EnvironmentContractError("build backend pip report row is malformed")
+    archive = download.get("archive_info")
+    hashes = archive.get("hashes") if isinstance(archive, dict) else None
+    observed_sha = hashes.get("sha256") if isinstance(hashes, dict) else None
+    if observed_sha is None and isinstance(archive, dict):
+        raw_hash = archive.get("hash")
+        observed_sha = raw_hash.removeprefix("sha256=") if isinstance(raw_hash, str) else None
+    url_name = Path(urlparse(str(download.get("url", ""))).path).name
+    if (
+        _normalized_distribution(str(metadata.get("name", ""))) != "setuptools"
+        or str(metadata.get("version", "")) != _SETUPTOOLS_VERSION
+        or str(metadata.get("requires_python", "")) != _SETUPTOOLS_REQUIRES_PYTHON
+        or url_name != _SETUPTOOLS_WHEEL
+        or observed_sha != _SETUPTOOLS_SHA256
+    ):
+        raise EnvironmentContractError("build backend pip report differs from fixed manifest artifact")
+    return {
+        "artifact_filename": url_name,
+        "artifact_sha256": str(observed_sha),
+        "artifact_requires_python": str(metadata["requires_python"]),
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
     root = args.root.resolve()
-    manifest = load_manifest(root / "manifests" / "python-environment-v1.json")
+    manifest_path = root / "manifests" / "python-environment-v1.json"
+    build_manifest_path = root / "tools" / "ember-restart-3b" / "python-environment-build-v1.json"
+    pyproject_path = root / "pyproject.toml"
+    manifest = load_manifest(manifest_path)
+    build_manifest = load_build_manifest(build_manifest_path)
+    validate_build_manifest_shape(build_manifest)
     if args.command == "verify":
+        if args.check_installed and args.install_receipt is None:
+            parser.error("verify --check-installed requires --install-receipt PATH")
+        if not args.check_installed and args.install_receipt is not None:
+            parser.error("verify --install-receipt requires --check-installed")
         versions = (
             current_installed_versions(manifest)
             if args.check_installed
@@ -664,6 +1026,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 manifest,
                 current_installed_sources(manifest),
             )
+            receipt = load_install_receipt(args.install_receipt.resolve(strict=True))
+            expected_identity = {
+                "legacy_manifest_sha256": _sha256_path(manifest_path),
+                "build_manifest_sha256": _sha256_path(build_manifest_path),
+                "pyproject_sha256": _sha256_path(pyproject_path),
+            }
+            if receipt.get("identity") != expected_identity:
+                raise EnvironmentContractError("install receipt identity differs from repository authority")
+            result["packaging_installation"] = verify_packaging_installation(root, build_manifest)
+            result["install_receipt_self_sha256"] = receipt["self_sha256"]
         result["installed_versions_checked"] = versions is not None
         result["installed_sources_checked"] = versions is not None
         print(json.dumps(result, sort_keys=True))
@@ -677,8 +1049,111 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(subprocess.list2cmdline(install_argv))
         return 0
     validate_observed_environment(manifest)
-    completed = subprocess.run(install_argv, cwd=root, check=False)
-    return int(completed.returncode)
+    receipt_path = args.receipt.resolve()
+    report_path = receipt_path.with_name(receipt_path.stem + "-backend-report.json")
+    if receipt_path.exists():
+        raise FileExistsError("install receipt custody is no-overwrite")
+    if report_path.exists():
+        raise FileExistsError("build backend report custody is no-overwrite")
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    wheel_path = args.backend_wheel.resolve(strict=True) if args.backend_wheel is not None else None
+    if wheel_path is not None and (
+        wheel_path.name != _SETUPTOOLS_WHEEL or _sha256_path(wheel_path) != _SETUPTOOLS_SHA256
+    ):
+        raise EnvironmentContractError("host-conditioned wheel differs from fixed manifest artifact")
+
+    identity_hashes = {
+        "legacy_manifest_sha256": _sha256_path(manifest_path),
+        "build_manifest_sha256": _sha256_path(build_manifest_path),
+        "pyproject_sha256": _sha256_path(pyproject_path),
+    }
+    stages: list[dict[str, Any]] = []
+    exit_code, duration = _run_pip(install_argv, root=root)
+    stages.append({
+        "id": "environment_packages", "exit_code": exit_code,
+        "duration_seconds": duration,
+        "executed_argv": _sanitized_argv(install_argv, root=root),
+        "executed_argv_sha256": hashlib.sha256(_canonical(install_argv)).hexdigest(),
+    })
+    if exit_code != 0:
+        write_install_receipt_no_replace(
+            receipt_path,
+            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+        )
+        return exit_code
+
+    with tempfile.TemporaryDirectory(prefix="ember-build-authority-", dir=receipt_path.parent) as directory:
+        requirements_path = Path(directory) / "build-requirements.txt"
+        artifact_uri = wheel_path.as_uri() if wheel_path is not None else None
+        requirements_path.write_bytes(
+            build_backend_requirement_bytes(build_manifest, artifact_uri=artifact_uri)
+        )
+        backend_argv = build_backend_install_argv(
+            build_manifest,
+            python_executable=sys.executable,
+            requirements_path=requirements_path,
+            report_path=report_path,
+        )
+        exit_code, duration = _run_pip(backend_argv, root=root)
+        if exit_code != 0:
+            stages.append({
+                "id": "build_backend", "exit_code": exit_code,
+                "duration_seconds": duration,
+                "executed_argv": _sanitized_argv(
+                    backend_argv, root=root, requirements_path=requirements_path,
+                    report_path=report_path, wheel_path=wheel_path,
+                ),
+                "executed_argv_sha256": hashlib.sha256(_canonical(backend_argv)).hexdigest(),
+                "requirements_sha256": _sha256_path(requirements_path),
+                "report_sha256": _sha256_path(report_path) if report_path.is_file() else None,
+            })
+            write_install_receipt_no_replace(
+                receipt_path,
+                build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="build_backend"),
+            )
+            return exit_code
+        observed_artifact = _validate_backend_report(report_path, build_manifest)
+        stages.append({
+            "id": "build_backend", "exit_code": exit_code,
+            "duration_seconds": duration,
+            "executed_argv": _sanitized_argv(
+                backend_argv, root=root, requirements_path=requirements_path,
+                report_path=report_path, wheel_path=wheel_path,
+            ),
+            "executed_argv_sha256": hashlib.sha256(_canonical(backend_argv)).hexdigest(),
+            "requirements_sha256": _sha256_path(requirements_path),
+            "report_sha256": _sha256_path(report_path),
+            **observed_artifact,
+            "manifest_artifact_sha256": _SETUPTOOLS_SHA256,
+            "artifact_matches_manifest": observed_artifact["artifact_sha256"] == _SETUPTOOLS_SHA256,
+            "host_conditioned_local_wheel": wheel_path is not None,
+        })
+
+    local_argv = build_local_install_argv(sys.executable)
+    exit_code, duration = _run_pip(local_argv, root=root)
+    stages.append({
+        "id": "local_editable", "exit_code": exit_code,
+        "duration_seconds": duration,
+        "executed_argv": _sanitized_argv(local_argv, root=root),
+        "executed_argv_sha256": hashlib.sha256(_canonical(local_argv)).hexdigest(),
+    })
+    if exit_code != 0:
+        write_install_receipt_no_replace(
+            receipt_path,
+            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="local_editable"),
+        )
+        return exit_code
+    receipt = build_install_receipt(
+        **identity_hashes,
+        stages=stages,
+    )
+    write_install_receipt_no_replace(receipt_path, receipt)
+    print(json.dumps({
+        "status": "PASS", "receipt": str(args.receipt),
+        "receipt_self_sha256": receipt["self_sha256"],
+        "backend_report_sha256": stages[1]["report_sha256"],
+    }, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":

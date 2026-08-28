@@ -1,0 +1,20 @@
+{
+  "schema_version": "ember-python-environment-build-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "environment": {
+    "implementation": "CPython",
+    "python_version": "3.10.11"
+  },
+  "backend": {
+    "distribution": "setuptools",
+    "version": "84.0.0",
+    "requirement": "setuptools==84.0.0",
+    "artifact": {
+      "filename": "setuptools-84.0.0-py3-none-any.whl",
+      "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+      "requires_python": ">=3.10"
+    }
+  }
+}
