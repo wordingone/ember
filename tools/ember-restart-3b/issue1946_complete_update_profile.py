@@ -12,6 +12,8 @@ import math
 import os
 import statistics
 import subprocess
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,15 @@ _PHASES = {
     "mandatory_synchronization",
     "telemetry_checkpoint",
     "explicit_remainder",
+}
+_WALL_OWNERS = {
+    "data", "projection", "attention", "mlp_routing", "norm_rope_residual", "loss",
+    "backward", "gradient_clipping", "optimizer", "precision",
+    "launch_graph_synchronization", "checkpoint", "telemetry", "explicit_remainder",
+}
+_FORWARD_OWNERS = {
+    "projection", "attention", "mlp_routing", "norm_rope_residual", "loss",
+    "precision", "launch_graph_synchronization",
 }
 _INSTRUMENTS = {"profiler", "allocator", "power", "event", "identity", "receipt"}
 _AUTHORITY = {
@@ -68,27 +79,26 @@ def gpu_covariate() -> dict[str, object]:
     """Read one exact physical-GPU row without opening a Windows console."""
 
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
-    completed = subprocess.run(
-        [
-            "nvidia-smi",
-            "--query-gpu=uuid,clocks.sm,clocks.mem,temperature.gpu,power.draw,memory.used,memory.total",
-            "--format=csv,noheader,nounits",
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-        shell=False,
-        creationflags=creationflags,
-    )
+    def query(fields: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["nvidia-smi", f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
+            text=True, capture_output=True, check=False, shell=False, creationflags=creationflags,
+        )
+
+    base_fields = "uuid,clocks.sm,clocks.mem,temperature.gpu,power.draw,memory.used,memory.total"
+    completed = query(base_fields + ",total_energy_consumption")
+    energy_supported = completed.returncode == 0
+    if not energy_supported:
+        completed = query(base_fields)
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or "nvidia-smi GPU covariate query failed")
     rows = [row.strip() for row in completed.stdout.splitlines() if row.strip()]
     if len(rows) != 1:
         raise RuntimeError("#1946 requires exactly one governed physical GPU")
     fields = [field.strip() for field in rows[0].split(",")]
-    if len(fields) != 7:
+    if len(fields) != (8 if energy_supported else 7):
         raise RuntimeError("nvidia-smi GPU covariate row is malformed")
-    return {
+    result = {
         "gpu_uuid": fields[0],
         "sm_clock_mhz": int(float(fields[1])),
         "memory_clock_mhz": int(float(fields[2])),
@@ -97,6 +107,107 @@ def gpu_covariate() -> dict[str, object]:
         "memory_used_mib": float(fields[5]),
         "memory_total_mib": float(fields[6]),
     }
+    if energy_supported:
+        try:
+            result["total_energy_mj"] = int(float(fields[7]))
+        except ValueError:
+            energy_supported = False
+    return result
+
+
+def energy_counter_delta_joules(start_mj: float, end_mj: float) -> float:
+    start = float(start_mj)
+    end = float(end_mj)
+    if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end < start:
+        raise ValueError("total-energy counter must be finite, nonnegative, and monotonic")
+    return (end - start) / 1000.0
+
+
+def trapezoidal_energy_joules(samples: Sequence[tuple[float, float]]) -> float:
+    rows = [(float(timestamp), float(power)) for timestamp, power in samples]
+    if len(rows) < 2:
+        raise ValueError("energy fallback requires at least two fixed-interval samples")
+    if any(not math.isfinite(t) or not math.isfinite(p) or p < 0 for t, p in rows):
+        raise ValueError("energy samples must be finite with nonnegative power")
+    if any(right[0] <= left[0] for left, right in zip(rows, rows[1:])):
+        raise ValueError("energy sample timestamps must be strictly monotonic")
+    return sum(
+        (right_time - left_time) * (left_power + right_power) / 2.0
+        for (left_time, left_power), (right_time, right_power) in zip(rows, rows[1:])
+    )
+
+
+class BoardEnergyTracker:
+    """Per-update NVML energy deltas with a fixed-interval power fallback."""
+
+    def __init__(self, *, interval_seconds: float = 0.25) -> None:
+        if not math.isfinite(interval_seconds) or interval_seconds <= 0:
+            raise ValueError("energy sampling interval must be positive")
+        self.interval_seconds = float(interval_seconds)
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._samples: list[tuple[float, float]] = []
+        self._last_row: dict[str, object] | None = None
+        self._last_time: float | None = None
+        self._error: BaseException | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            raise RuntimeError("energy tracker was already started")
+        row = gpu_covariate()
+        now = time.perf_counter()
+        self._last_row = row
+        self._last_time = now
+        self._samples = [(now, float(row["power_w"]))]
+        self._thread = threading.Thread(target=self._sample_loop, name="issue1946-energy", daemon=True)
+        self._thread.start()
+
+    def _sample_loop(self) -> None:
+        while not self._stop.wait(self.interval_seconds):
+            try:
+                row = gpu_covariate()
+                sample = (time.perf_counter(), float(row["power_w"]))
+                with self._lock:
+                    self._samples.append(sample)
+            except BaseException as error:  # surfaced synchronously at the next boundary
+                self._error = error
+                return
+
+    def capture_update(self) -> dict[str, object]:
+        if self._last_row is None or self._last_time is None:
+            raise RuntimeError("energy tracker was not started")
+        if self._error is not None:
+            raise RuntimeError("fixed-interval board-energy sampler failed") from self._error
+        row = gpu_covariate()
+        now = time.perf_counter()
+        previous_counter = self._last_row.get("total_energy_mj")
+        current_counter = row.get("total_energy_mj")
+        if previous_counter is not None and current_counter is not None:
+            joules = energy_counter_delta_joules(float(previous_counter), float(current_counter))
+            method = "NVML_TOTAL_ENERGY_COUNTER_DELTA"
+        else:
+            with self._lock:
+                samples = [sample for sample in self._samples if sample[0] >= self._last_time]
+            boundary_samples = [(self._last_time, float(self._last_row["power_w"])), *samples, (now, float(row["power_w"]))]
+            deduplicated = [boundary_samples[0]]
+            for sample in boundary_samples[1:]:
+                if sample[0] > deduplicated[-1][0]:
+                    deduplicated.append(sample)
+            joules = trapezoidal_energy_joules(deduplicated)
+            method = "FIXED_INTERVAL_TRAPEZOID"
+        self._last_row = row
+        self._last_time = now
+        with self._lock:
+            self._samples = [(now, float(row["power_w"]))]
+        return {**row, "board_energy_joules": joules, "energy_measurement_method": method}
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=max(1.0, 4 * self.interval_seconds))
+            if self._thread.is_alive():
+                raise RuntimeError("fixed-interval board-energy sampler did not stop")
 
 
 def _canonical(value: object) -> bytes:
@@ -238,7 +349,11 @@ def load_authority_crosswalk(repo_root: Path, path: Path) -> dict[str, object]:
         artifact = (repo_root / relative).resolve(strict=True)
         if not artifact.is_relative_to(repo_root.resolve(strict=True)):
             raise ValueError("authority crosswalk artifact escapes the repository")
-        reopened.append({**dict(row), "raw_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()})
+        declared = _require_sha(row.get("raw_sha256"), f"{row.get('role')} declared raw hash")
+        computed = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        if computed != declared:
+            raise ValueError(f"{row.get('role')} declared raw hash mismatch")
+        reopened.append({**dict(row), "declared_raw_sha256": declared, "computed_raw_sha256": computed})
     return {
         "schema_version": crosswalk["schema_version"],
         "authority": dict(crosswalk["authority"]),
@@ -258,6 +373,47 @@ def _phases(value: Mapping[str, object], update_seconds: float) -> tuple[dict[st
     if fraction < 0.99 or fraction > 1.01:
         raise ValueError("complete-update attribution must cover 99 to 101 percent of wall")
     return row, fraction
+
+
+def derive_wall_owner_rows(
+    phase_seconds: Sequence[Mapping[str, object]],
+    forward_owner_device_time_us: Mapping[str, object],
+    *,
+    forward_unmapped_device_time_us: float,
+) -> list[dict[str, float]]:
+    if set(forward_owner_device_time_us) != _FORWARD_OWNERS:
+        raise ValueError("kernel trace must use the closed forward-owner set")
+    weights = {owner: float(forward_owner_device_time_us[owner]) for owner in _FORWARD_OWNERS}
+    unmapped = float(forward_unmapped_device_time_us)
+    if any(not math.isfinite(v) or v < 0 for v in weights.values()) or not math.isfinite(unmapped) or unmapped < 0:
+        raise ValueError("kernel-to-owner device-time weights must be finite and nonnegative")
+    denominator = sum(weights.values()) + unmapped
+    if denominator <= 0:
+        raise ValueError("kernel-to-owner device-time evidence must be positive")
+    result = []
+    for raw_phase in phase_seconds:
+        if set(raw_phase) != _PHASES:
+            raise ValueError("phase row must use the closed attribution owner set")
+        phase = {key: float(raw_phase[key]) for key in _PHASES}
+        if any(not math.isfinite(v) or v < 0 for v in phase.values()):
+            raise ValueError("phase timing values must be finite and nonnegative")
+        forward_wall = phase["reference_forward"] + phase["forward"]
+        row = {owner: 0.0 for owner in _WALL_OWNERS}
+        row["data"] = phase["data_readiness"]
+        for owner, weight in weights.items():
+            row[owner] = forward_wall * weight / denominator
+        row["backward"] = phase["backward"]
+        row["gradient_clipping"] = phase["gradient_clipping"]
+        row["optimizer"] = phase["optimizer"]
+        row["launch_graph_synchronization"] += phase["mandatory_synchronization"]
+        row["checkpoint"] = 0.0
+        row["telemetry"] = phase["telemetry_checkpoint"]
+        row["explicit_remainder"] = phase["explicit_remainder"] + forward_wall * unmapped / denominator
+        direct_total = sum(phase.values())
+        if direct_total <= 0 or not 0.99 <= sum(row.values()) / direct_total <= 1.01:
+            raise ValueError("derived wall owners must cover 99 to 101 percent of direct wall")
+        result.append(row)
+    return result
 
 
 def build_preflight_receipt(
@@ -302,6 +458,7 @@ def build_arm_receipt(
     allocator_rows: Sequence[Mapping[str, object]],
     power_rows: Sequence[Mapping[str, object]],
     kernel_trace: Mapping[str, object],
+    checkpoint_cadence: Mapping[str, object],
 ) -> dict[str, object]:
     if policy not in {"WHOLE_LAYER_RECOMPUTE", "DISABLED_EVERY_LAYER"}:
         raise ValueError("profile arm must use one of the two frozen recompute policies")
@@ -309,13 +466,19 @@ def build_arm_receipt(
         "execution_source_commit", "parameter_sha256", "optimizer_initial_state_sha256",
         "cpu_rng_state_sha256", "cuda_rng_state_sha256", "config_sha256",
         "seed", "initial_cursor", "selection_receipt_sha256",
+        "stream_manifest_sha256", "stream_build_receipt_sha256", "tokenizer_sha256",
+        "execution_record_order_sha256", "execution_tokens_sha256",
     }
     if set(identity) != expected_identity:
         raise ValueError("profile arm identity must use its closed fields")
     _require_sha(identity["execution_source_commit"], "execution source commit", length=40)
     _require_sha(identity["parameter_sha256"], "parameter identity")
     _require_sha(identity["selection_receipt_sha256"], "selection receipt")
-    for key in ("optimizer_initial_state_sha256", "cpu_rng_state_sha256", "cuda_rng_state_sha256", "config_sha256"):
+    for key in (
+        "optimizer_initial_state_sha256", "cpu_rng_state_sha256", "cuda_rng_state_sha256",
+        "config_sha256", "stream_manifest_sha256", "stream_build_receipt_sha256",
+        "tokenizer_sha256", "execution_record_order_sha256", "execution_tokens_sha256",
+    ):
         _require_sha(identity[key], key)
     if type(identity["seed"]) is not int or identity["initial_cursor"] != 0:
         raise ValueError("profile arm requires a fixed integer seed and cursor zero")
@@ -334,31 +497,64 @@ def build_arm_receipt(
     layer_count = kernel_trace.get("layer_count")
     if type(layer_count) is not int or layer_count < 1:
         raise ValueError("kernel trace must bind the exact positive layer count")
+    owner_weights = kernel_trace.get("forward_owner_device_time_us")
+    if not isinstance(owner_weights, Mapping):
+        raise ValueError("kernel trace must bind forward-owner device-time evidence")
+    derived_owner_rows = derive_wall_owner_rows(
+        [item[0] for item in phases_and_fractions],
+        owner_weights,
+        forward_unmapped_device_time_us=float(kernel_trace.get("forward_unmapped_device_time_us", -1)),
+    )
+    if dict(checkpoint_cadence) != {
+        "in_measured_window": "NONE",
+        "checkpoint_every_updates": 65,
+        "callback_identity": "NO_OP",
+        "final_callback_timed": False,
+    }:
+        raise ValueError("checkpoint cadence must disclose the frozen no-checkpoint measured window")
     measured = timings[16:]
-    measured_sorted = sorted(measured)
-    p10 = measured_sorted[math.ceil(0.10 * len(measured_sorted)) - 1]
-    p90 = measured_sorted[math.ceil(0.90 * len(measured_sorted)) - 1]
+    governed = timings[24:]
+    governed_sorted = sorted(governed)
+    p10 = governed_sorted[math.ceil(0.10 * len(governed_sorted)) - 1]
+    p90 = governed_sorted[math.ceil(0.90 * len(governed_sorted)) - 1]
     peak_allocated = max(int(row["allocated"]) for row in allocator_rows)
     peak_reserved = max(int(row["reserved"]) for row in allocator_rows)
     peak_workspace = max(int(row["workspace"]) for row in allocator_rows)
     peak_graph_pool = max(int(row["graph_pool"]) for row in allocator_rows)
     peak_fragmentation = max(int(row["fragmentation"]) for row in allocator_rows)
-    energy = [float(row["power_w"]) * seconds for row, seconds in zip(power_rows, timings, strict=True)]
+    energy_methods = {row.get("energy_measurement_method") for row in power_rows}
+    if len(energy_methods) != 1 or next(iter(energy_methods)) not in {
+        "NVML_TOTAL_ENERGY_COUNTER_DELTA", "FIXED_INTERVAL_TRAPEZOID",
+    }:
+        raise ValueError("power rows must use one governed board-energy measurement method")
+    energy_method = str(next(iter(energy_methods)))
+    energy = [float(row["board_energy_joules"]) for row in power_rows]
+    if any(not math.isfinite(value) or value < 0 for value in energy):
+        raise ValueError("board energy rows must be finite and nonnegative")
     compute_factor = 8 if policy == "WHOLE_LAYER_RECOMPUTE" else 6
     active_parameters = 1_725_232_640
-    median_seconds = statistics.median(measured)
+    median_seconds = statistics.median(governed)
+    profiler_seconds = timings[16:24]
     return _self_hashed({
         "schema_version": "ember-issue1946-complete-update-arm-v1",
         "result": "PASS",
         "claim_boundary": "CURRENT_AUDIO64_SYSTEMS_MEASUREMENT_ONLY",
         "policy": policy,
         "identity": dict(identity),
-        "counts": {"complete_updates": 64, "warmup": 16, "measured": 48, "profiler": 8},
+        "counts": {"complete_updates": 64, "warmup": 16, "measured": 48, "profiler": 8, "governed_nonprofiled": 40},
         "update_seconds": timings,
         "warmup_update_seconds": timings[:16],
         "measured_update_seconds": measured,
+        "governed_nonprofiled_update_indexes": list(range(24, 64)),
+        "governed_nonprofiled_update_seconds": governed,
+        "profiler_instrumented_update_seconds": profiler_seconds,
+        "profiler_overhead_seconds": [
+            {"index": index, "seconds": timings[index], "delta_vs_nonprofiled_median_seconds": timings[index] - median_seconds}
+            for index in profiler
+        ],
         "complete_update_distribution_seconds": {"p10": p10, "median": median_seconds, "p90": p90},
         "phase_seconds": [item[0] for item in phases_and_fractions],
+        "derived_wall_owner_rows": derived_owner_rows,
         "attribution_fraction_min": min(item[1] for item in phases_and_fractions),
         "profiler_update_indexes": profiler,
         "allocator_rows": [dict(row) for row in allocator_rows],
@@ -374,6 +570,8 @@ def build_arm_receipt(
             "peak_fragmentation_bytes": peak_fragmentation,
         },
         "board_energy_joules_per_update": energy,
+        "energy_measurement_method": energy_method,
+        "checkpoint_cadence": dict(checkpoint_cadence),
         "implied_20k_required_tflops": compute_factor * active_parameters * 20_000 / 1e12,
         "measured_compute_tflops": compute_factor * active_parameters * 960 / median_seconds / 1e12,
         "fallbacks": [],
@@ -472,7 +670,7 @@ def build_comparison_receipt(
     warmup_median = statistics.median(warmups)
     mad = statistics.median(abs(value - warmup_median) for value in warmups)
     frozen_r = max(0.01, 3.0 * 1.4826 * mad / warmup_median)
-    median_a = statistics.median(float(value) for value in left["measured_update_seconds"])
+    median_a = statistics.median(float(value) for value in left["governed_nonprofiled_update_seconds"])
     if right.get("schema_version") == "ember-issue1946-complete-update-arm-oom-v1":
         return _self_hashed({
             "schema_version": "ember-issue1946-recompute-comparison-v1",
@@ -498,21 +696,21 @@ def build_comparison_receipt(
                 "measured_vram_gap_bytes": right["measured_vram_gap_bytes"],
             },
         })
-    median_b = statistics.median(float(value) for value in right["measured_update_seconds"])
+    median_b = statistics.median(float(value) for value in right["governed_nonprofiled_update_seconds"])
     improvement = (median_a - median_b) / median_a
     removable_by_owner = {
         owner: max(
             0.0,
             (
-                statistics.median(float(row[owner]) for row in left["phase_seconds"][16:])
-                - statistics.median(float(row[owner]) for row in right["phase_seconds"][16:])
+                statistics.median(float(row[owner]) for row in left["derived_wall_owner_rows"][24:])
+                - statistics.median(float(row[owner]) for row in right["derived_wall_owner_rows"][24:])
             ) * 1000.0,
         )
-        for owner in sorted(_PHASES)
+        for owner in sorted(_WALL_OWNERS)
     }
     first_owner = max(
-        _PHASES,
-        key=lambda owner: statistics.median(float(row[owner]) for row in left["phase_seconds"][16:]),
+        _WALL_OWNERS,
+        key=lambda owner: statistics.median(float(row[owner]) for row in left["derived_wall_owner_rows"][24:]),
     )
     return _self_hashed({
         "schema_version": "ember-issue1946-recompute-comparison-v1",
