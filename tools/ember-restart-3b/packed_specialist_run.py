@@ -28,6 +28,7 @@ from checkpoint_artifacts import (
 )
 from model import RestartDecoderConfig, UnifiedDecoder
 from issue1946_complete_update_profile import (
+    BoardEnergyTracker,
     build_arm_receipt as build_issue1946_arm_receipt,
     build_comparison_receipt as build_issue1946_comparison_receipt,
     build_oom_arm_receipt as build_issue1946_oom_arm_receipt,
@@ -40,7 +41,14 @@ from issue1946_complete_update_profile import (
     verified_execution_source_commit,
 )
 from parameter_counter import measure_parameter_counts
-from pretrain import CensusBoundStage2Executor, run_packed_selection_pretraining_segment
+from pretrain import (
+    COMPLETE_UPDATE_BACKWARD_MARKER,
+    COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+    COMPLETE_UPDATE_GRADIENT_CLIPPING_MARKER,
+    COMPLETE_UPDATE_OPTIMIZER_MARKER,
+    CensusBoundStage2Executor,
+    run_packed_selection_pretraining_segment,
+)
 from run_vertical_slice import (
     _COUNTER_SUCCESS_RECEIPT,
     _atomic_json,
@@ -94,6 +102,60 @@ _FP8_INSTALLATION_KEYS = {
     "schema_version", "scope", "layer_indexes", "installed_sites", "sites", "fallbacks",
 }
 _FP8_INSTALLATION_SCOPE = "final_decoder_layer_shared_swiglu_down_4h_to_h"
+_ISSUE1946_FORWARD_OWNERS = (
+    "projection", "attention", "mlp_routing", "norm_rope_residual", "loss",
+    "precision", "launch_graph_synchronization",
+)
+
+
+def _issue1946_event_inside_marker(event: object, marker: str) -> bool:
+    parent = getattr(event, "cpu_parent", None)
+    while parent is not None:
+        if str(getattr(parent, "key", "")) == marker:
+            return True
+        parent = getattr(parent, "cpu_parent", None)
+    return False
+
+
+def _issue1946_forward_owner(name: str, shapes: object, *, hidden: int, vocab_size: int) -> str | None:
+    lowered = name.lower()
+    if any(needle in lowered for needle in ("cross_entropy", "log_softmax", "nll_loss")):
+        return "loss"
+    if any(needle in lowered for needle in ("layer_norm", "rms_norm", "rotary", "rope", "residual")):
+        return "norm_rope_residual"
+    if any(needle in lowered for needle in ("autocast", "convert", "_to_copy", "cast")):
+        return "precision"
+    if any(needle in lowered for needle in ("synchronize", "cuda_graph", "launch")):
+        return "launch_graph_synchronization"
+    if not any(needle in lowered for needle in ("mm", "linear", "matmul")):
+        return None
+    dimensions: set[int] = set()
+
+    def visit(value: object) -> None:
+        if type(value) is int:
+            dimensions.add(value)
+        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            for item in value:
+                visit(item)
+
+    visit(shapes)
+    if vocab_size in dimensions:
+        return "projection"
+    if 4 * hidden in dimensions or 8 * hidden in dimensions:
+        return "mlp_routing"
+    if 3 * hidden in dimensions or hidden in dimensions:
+        return "attention"
+    return "projection"
+
+
+def _issue1946_safety_margin_failure_bytes(error: MemoryError) -> tuple[int, int]:
+    match = re.search(r"requires (\d+) bytes but only (\d+) are free", str(error))
+    if match is None:
+        raise RuntimeError("all-off safety refusal did not expose required/free bytes") from error
+    required_bytes, free_bytes = (int(value) for value in match.groups())
+    if required_bytes <= free_bytes or free_bytes <= 0:
+        raise RuntimeError("all-off safety refusal required/free evidence is inconsistent") from error
+    return required_bytes, free_bytes
 
 
 def _canonical(value: object) -> bytes:
@@ -1297,6 +1359,12 @@ def run_issue1946_profile(
         build_receipt_path=args.stream_build_receipt.resolve(strict=True),
         build_receipt_sha256=args.stream_build_receipt_sha256,
     )
+    stream_manifest = json.loads(args.stream_manifest.read_bytes())
+    tokenizer_binding = stream_manifest.get("tokenizer")
+    tokenizer_sha256 = _require_sha(
+        tokenizer_binding.get("sha256") if isinstance(tokenizer_binding, Mapping) else None,
+        "#1946 tokenizer",
+    )
     selected_count = getattr(selection, "receipt", {}).get("selected_record_count")
     if selected_count != 4096:
         raise ValueError("#1946 requires the exact 4096-record bound selection")
@@ -1314,6 +1382,7 @@ def run_issue1946_profile(
     thermal_before = gpu_covariate()
     preflight_binding: dict[str, str] | None = None
     arm_a_binding: dict[str, object] | None = None
+    arm_a: dict[str, object] | None = None
     if mode == "issue1946-arm-a":
         preflight_receipt, preflight_raw_sha256 = _load_self_hashed_json(
             args.preflight_receipt, "#1946 preflight receipt",
@@ -1353,10 +1422,50 @@ def run_issue1946_profile(
     model: UnifiedDecoder | None = None
     optimizer: torch.optim.Optimizer | None = None
     try:
-        config, model, optimizer, governor, memory = _allocate_runtime(
-            repo_root=repo_root,
-            seed=args.seed,
-        )
+        try:
+            config, model, optimizer, governor, memory = _allocate_runtime(
+                repo_root=repo_root,
+                seed=args.seed,
+            )
+        except MemoryError as error:
+            if mode != "issue1946-arm-b" or arm_a is None:
+                raise
+            required_bytes, free_bytes = _issue1946_safety_margin_failure_bytes(error)
+            safety_receipt = build_issue1946_oom_arm_receipt(
+                identity=arm_a["identity"],
+                completed_updates=0,
+                peak_demand_bytes=required_bytes,
+                ceiling_bytes=free_bytes,
+                first_temperature_c=float(thermal_before["temperature_c"]),
+                error_class="SAFETY_MARGIN_FAILURE",
+            )
+            unsigned = dict(safety_receipt)
+            unsigned.pop("self_sha256")
+            safety_receipt = {
+                **unsigned,
+                "runtime_custody": {
+                    "canonical_disk_budget_runner": canonical_runner,
+                    "b_floor_preflight": b_floor,
+                    "process_id": os.getpid(),
+                    "fresh_process_and_cuda_context_required": True,
+                    "gpu_uuid": thermal_before["gpu_uuid"],
+                    "thermal_before_allocation": thermal_before,
+                    "accounting_spec_sha256": accounting["raw_sha256"],
+                    "authority_crosswalk": authority_crosswalk,
+                    "density_source_commit": args.source_commit,
+                    **(arm_a_binding or {}),
+                },
+            }
+            safety_receipt["self_sha256"] = hashlib.sha256(_canonical(safety_receipt)).hexdigest()
+            raw_sha256, self_sha256 = _write_json_no_replace(output_path, safety_receipt)
+            return {
+                "result": "ISSUE1946_VALID_ALL_OFF_SAFETY_MARGIN_FAILURE",
+                "mode": mode,
+                "receipt_path": str(output_path),
+                "receipt_raw_sha256": raw_sha256,
+                "receipt_self_sha256": self_sha256,
+                "measured_vram_gap_bytes": safety_receipt["measured_vram_gap_bytes"],
+            }
         if mode == "issue1946-arm-b":
             config = dataclasses.replace(config, gradient_checkpointing=False)
             model.config = config
@@ -1376,18 +1485,36 @@ def run_issue1946_profile(
         allocator_rows: list[dict[str, object]] = []
         power_rows: list[dict[str, object]] = []
         observed_kernel_rows: list[dict[str, object]] = []
+        forward_owner_device_time_us = {owner: 0.0 for owner in _ISSUE1946_FORWARD_OWNERS}
+        forward_unmapped_device_time_us = 0.0
         profiler_indexes = [0] if mode == "issue1946-preflight" else list(range(16, 24))
 
         def trace_ready(profiler: Any) -> None:
+            nonlocal forward_unmapped_device_time_us
             profiler.export_chrome_trace(str(trace_path))
             for event in profiler.events():
                 name = str(event.key)
+                self_device_time_us = float(getattr(event, "self_device_time_total", 0.0))
+                inside_forward = _issue1946_event_inside_marker(
+                    event, COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+                )
+                owner = _issue1946_forward_owner(
+                    name, event.input_shapes, hidden=int(config.hidden_size), vocab_size=int(config.vocab_size),
+                ) if inside_forward and self_device_time_us > 0 else None
+                if inside_forward and self_device_time_us > 0:
+                    if owner is None:
+                        forward_unmapped_device_time_us += self_device_time_us
+                    else:
+                        forward_owner_device_time_us[owner] += self_device_time_us
                 if any(marker in name for marker in ("mm", "addmm", "linear")):
                     observed_kernel_rows.append({
                         "kernel": name,
                         "input_shapes": event.input_shapes,
                         "cpu_time_us": float(event.cpu_time_total),
                         "device_time_us": float(getattr(event, "device_time_total", 0.0)),
+                        "self_device_time_us": self_device_time_us,
+                        "inside_forward_loss_marker": inside_forward,
+                        "forward_owner": owner,
                     })
 
         wait_updates = 0 if mode == "issue1946-preflight" else 16
@@ -1414,10 +1541,12 @@ def run_issue1946_profile(
                 "graph_pool": int(stats.get("graph_pool_reserved_bytes.all.current", 0)),
                 "fragmentation": max(0, reserved - allocated),
             })
-            power_rows.append(gpu_covariate())
+            power_rows.append(energy_tracker.capture_update())
             profiler.step()
 
         torch.cuda.reset_peak_memory_stats()
+        energy_tracker = BoardEnergyTracker(interval_seconds=0.25)
+        energy_tracker.start()
         profiler.start()
         oom_error: torch.OutOfMemoryError | None = None
         segment: dict[str, object] | None = None
@@ -1442,7 +1571,10 @@ def run_issue1946_profile(
             except torch.OutOfMemoryError as error:
                 oom_error = error
         finally:
-            profiler.stop()
+            try:
+                profiler.stop()
+            finally:
+                energy_tracker.stop()
         if oom_error is not None:
             if mode != "issue1946-arm-b":
                 raise oom_error
@@ -1466,6 +1598,11 @@ def run_issue1946_profile(
                     "seed": args.seed,
                     "initial_cursor": 0,
                     "selection_receipt_sha256": density["selection_receipt_sha256"],
+                    "stream_manifest_sha256": args.stream_manifest_sha256,
+                    "stream_build_receipt_sha256": args.stream_build_receipt_sha256,
+                    "tokenizer_sha256": tokenizer_sha256,
+                    "execution_record_order_sha256": execution["execution_record_order_sha256"],
+                    "execution_tokens_sha256": execution["execution_tokens_sha256"],
                 },
                 completed_updates=len(power_rows),
                 peak_demand_bytes=peak_demand_bytes,
@@ -1506,6 +1643,8 @@ def run_issue1946_profile(
             raise RuntimeError("#1946 profiler did not flush its immutable trace")
         if not observed_kernel_rows:
             raise RuntimeError("#1946 profiler trace contains no actual material linear kernel event")
+        if sum(forward_owner_device_time_us.values()) + forward_unmapped_device_time_us <= 0:
+            raise RuntimeError("#1946 profiler trace contains no forward-marker device-time evidence")
         trace_sha256 = _sha256_path(trace_path)
         hidden = int(config.hidden_size)
         material_shapes = [
@@ -1521,6 +1660,19 @@ def run_issue1946_profile(
             "layer_count": int(config.layers),
             "material_linear_shapes": material_shapes,
             "observed_kernels": observed_kernel_rows,
+            "forward_owner_device_time_us": forward_owner_device_time_us,
+            "forward_unmapped_device_time_us": forward_unmapped_device_time_us,
+            "owner_weight_provenance": {
+                "source_rows": "PROFILER_INSTRUMENTED_ONLY",
+                "update_indexes": profiler_indexes,
+                "marker": COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+                "deduplication_metric": "self_device_time_total",
+                "excluded_markers": [
+                    COMPLETE_UPDATE_BACKWARD_MARKER,
+                    COMPLETE_UPDATE_GRADIENT_CLIPPING_MARKER,
+                    COMPLETE_UPDATE_OPTIMIZER_MARKER,
+                ],
+            },
         }
         identity = {
             "execution_source_commit": execution_source_commit,
@@ -1532,6 +1684,11 @@ def run_issue1946_profile(
             "seed": args.seed,
             "initial_cursor": 0,
             "selection_receipt_sha256": density["selection_receipt_sha256"],
+            "stream_manifest_sha256": args.stream_manifest_sha256,
+            "stream_build_receipt_sha256": args.stream_build_receipt_sha256,
+            "tokenizer_sha256": tokenizer_sha256,
+            "execution_record_order_sha256": execution["execution_record_order_sha256"],
+            "execution_tokens_sha256": execution["execution_tokens_sha256"],
         }
         if mode == "issue1946-preflight":
             event_seconds = segment["complete_update_cuda_event_seconds"][0]
@@ -1570,6 +1727,12 @@ def run_issue1946_profile(
                 allocator_rows=allocator_rows,
                 power_rows=power_rows,
                 kernel_trace=kernel_trace,
+                checkpoint_cadence={
+                    "in_measured_window": "NONE",
+                    "checkpoint_every_updates": packs + 1,
+                    "callback_identity": "NO_OP",
+                    "final_callback_timed": False,
+                },
             )
             receipt["runtime_custody"] = {
                 "canonical_disk_budget_runner": canonical_runner,

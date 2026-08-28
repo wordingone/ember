@@ -47,6 +47,12 @@ _DISPATCH_CUSTODY_ENV = (
     "EMBER_LAB_DISPATCH_DAEMON_PID",
     "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES",
 )
+COMPLETE_UPDATE_REFERENCE_FORWARD_MARKER = "ember.complete_update.reference_forward"
+COMPLETE_UPDATE_FORWARD_LOSS_MARKER = "ember.complete_update.forward_loss"
+COMPLETE_UPDATE_BACKWARD_MARKER = "ember.complete_update.backward"
+COMPLETE_UPDATE_GRADIENT_CLIPPING_MARKER = "ember.complete_update.gradient_clipping"
+COMPLETE_UPDATE_OPTIMIZER_MARKER = "ember.complete_update.optimizer"
+COMPLETE_UPDATE_TELEMETRY_MARKER = "ember.complete_update.telemetry"
 
 
 def _eager_forward_loss_backward(
@@ -1616,22 +1622,25 @@ def run_packed_selection_pretraining_segment(
             ))
         phase_row["data_readiness"] += time.perf_counter() - phase_started
         phase_started = time.perf_counter()
-        reference_loss = (
-            float(packed_single_record_reference_loss(
-                model, _packed_records, config, device=device,
-            ).detach().cpu())
-            if measure_single_record_reference else None
-        )
+        with torch.profiler.record_function(COMPLETE_UPDATE_REFERENCE_FORWARD_MARKER):
+            reference_loss = (
+                float(packed_single_record_reference_loss(
+                    model, _packed_records, config, device=device,
+                ).detach().cpu())
+                if measure_single_record_reference else None
+            )
         phase_row["reference_forward"] += time.perf_counter() - phase_started
         phase_started = time.perf_counter()
         optimizer.zero_grad(set_to_none=(stage2_executor is None))
         phase_row["gradient_clipping"] += time.perf_counter() - phase_started
         if stage2_executor is None:
             phase_started = time.perf_counter()
-            loss = packed_eager_loss(model, batch, config)
+            with torch.profiler.record_function(COMPLETE_UPDATE_FORWARD_LOSS_MARKER):
+                loss = packed_eager_loss(model, batch, config)
             phase_row["forward"] += time.perf_counter() - phase_started
             phase_started = time.perf_counter()
-            loss.backward()
+            with torch.profiler.record_function(COMPLETE_UPDATE_BACKWARD_MARKER):
+                loss.backward()
             phase_row["backward"] += time.perf_counter() - phase_started
         else:
             cursor_identity = hashlib.sha256(json.dumps({
@@ -1641,7 +1650,8 @@ def run_packed_selection_pretraining_segment(
                 "pack_ordinal": pack_ordinal,
             }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
             phase_started = time.perf_counter()
-            loss = stage2_executor.forward_loss_backward(batch, cursor_identity=cursor_identity)
+            with torch.profiler.record_function(COMPLETE_UPDATE_BACKWARD_MARKER):
+                loss = stage2_executor.forward_loss_backward(batch, cursor_identity=cursor_identity)
             phase_row["backward"] += time.perf_counter() - phase_started
         if not torch.isfinite(loss):
             raise RuntimeError("packed selection stopped on non-finite loss")
@@ -1651,15 +1661,17 @@ def run_packed_selection_pretraining_segment(
                 raise RuntimeError("packed BF16 loss exceeds the unchanged single-record one-percent tolerance")
             single_record_reference_losses.append(reference_loss)
         phase_started = time.perf_counter()
-        grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        with torch.profiler.record_function(COMPLETE_UPDATE_GRADIENT_CLIPPING_MARKER):
+            grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         phase_row["gradient_clipping"] += time.perf_counter() - phase_started
         phase_started = time.perf_counter()
-        if stage2_executor is not None:
-            stage2_executor.assert_optimizer_membership()
-            stage2_executor.before_optimizer_step()
-        optimizer.step()
-        if stage2_executor is not None:
-            stage2_executor.after_optimizer_step()
+        with torch.profiler.record_function(COMPLETE_UPDATE_OPTIMIZER_MARKER):
+            if stage2_executor is not None:
+                stage2_executor.assert_optimizer_membership()
+                stage2_executor.before_optimizer_step()
+            optimizer.step()
+            if stage2_executor is not None:
+                stage2_executor.after_optimizer_step()
         phase_row["optimizer"] += time.perf_counter() - phase_started
         phase_started = time.perf_counter()
         if cuda_step_stopped is not None:
@@ -1675,44 +1687,45 @@ def run_packed_selection_pretraining_segment(
             complete_update_cuda_event_seconds.append(None)
         phase_row["mandatory_synchronization"] += time.perf_counter() - phase_started
         phase_started = time.perf_counter()
-        true_tokens = int(batch["true_source_tokens"])
-        processed_tokens = int(batch["processed_padded_tokens"])
-        true_tokens_seen += true_tokens
-        processed_tokens_seen += processed_tokens
-        records_consumed += pack_records
-        pack_ordinal += 1
-        global_step = initial_global_step + local_pack + 1
-        losses.append(float(loss.detach().cpu()))
-        cursor = {
-            "schema_version": "ember-specialist-packed-training-cursor-v1",
-            "shard": "PACKED_SELECTION:" + str(end_cursor["selection_receipt_sha256"])[:12],
-            "record_index": records_consumed,
-            "packed_selection_cursor": end_cursor,
-            "global_step": global_step,
-            "tokens_seen": true_tokens_seen,
-            "processed_tokens_seen": processed_tokens_seen,
-            "pack_ordinal": pack_ordinal,
-            "records_consumed": records_consumed,
-            "pack_records": pack_records,
-        }
-        last_result = {
-            "step": global_step, "global_step": global_step, "losses": list(losses),
-            "tokens_seen": true_tokens_seen, "processed_tokens_seen": processed_tokens_seen,
-            "data_cursor": cursor, "active_expert": batch["active_expert"],
-            "record_order_sha256": batch["record_order_sha256"],
-            "tokens_sha256": batch["tokens_sha256"],
-        }
-        if progress_callback is not None:
-            provisional_elapsed = time.perf_counter() - step_started
-            progress_callback({
-                "step": global_step, "total_steps": planned_records // pack_records,
-                "loss": losses[-1], "step_ms": provisional_elapsed * 1000.0,
-                "tokens_consumed": true_tokens, "processed_tokens": processed_tokens,
-                "records_consumed": pack_records, "grad_norm": float(grad_norm_tensor),
-            })
-        if global_step % checkpoint_every == 0:
-            checkpoint_callback(global_step, last_result)
-            last_checkpoint_step = global_step
+        with torch.profiler.record_function(COMPLETE_UPDATE_TELEMETRY_MARKER):
+            true_tokens = int(batch["true_source_tokens"])
+            processed_tokens = int(batch["processed_padded_tokens"])
+            true_tokens_seen += true_tokens
+            processed_tokens_seen += processed_tokens
+            records_consumed += pack_records
+            pack_ordinal += 1
+            global_step = initial_global_step + local_pack + 1
+            losses.append(float(loss.detach().cpu()))
+            cursor = {
+                "schema_version": "ember-specialist-packed-training-cursor-v1",
+                "shard": "PACKED_SELECTION:" + str(end_cursor["selection_receipt_sha256"])[:12],
+                "record_index": records_consumed,
+                "packed_selection_cursor": end_cursor,
+                "global_step": global_step,
+                "tokens_seen": true_tokens_seen,
+                "processed_tokens_seen": processed_tokens_seen,
+                "pack_ordinal": pack_ordinal,
+                "records_consumed": records_consumed,
+                "pack_records": pack_records,
+            }
+            last_result = {
+                "step": global_step, "global_step": global_step, "losses": list(losses),
+                "tokens_seen": true_tokens_seen, "processed_tokens_seen": processed_tokens_seen,
+                "data_cursor": cursor, "active_expert": batch["active_expert"],
+                "record_order_sha256": batch["record_order_sha256"],
+                "tokens_sha256": batch["tokens_sha256"],
+            }
+            if progress_callback is not None:
+                provisional_elapsed = time.perf_counter() - step_started
+                progress_callback({
+                    "step": global_step, "total_steps": planned_records // pack_records,
+                    "loss": losses[-1], "step_ms": provisional_elapsed * 1000.0,
+                    "tokens_consumed": true_tokens, "processed_tokens": processed_tokens,
+                    "records_consumed": pack_records, "grad_norm": float(grad_norm_tensor),
+                })
+            if global_step % checkpoint_every == 0:
+                checkpoint_callback(global_step, last_result)
+                last_checkpoint_step = global_step
         phase_row["telemetry_checkpoint"] += time.perf_counter() - phase_started
         # The boundary closes only after synchronization, telemetry, and any
         # checkpoint charged to this cadence have returned.
