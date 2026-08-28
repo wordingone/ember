@@ -1,0 +1,102 @@
+{
+  "schema_version": "ember-domain-authority-policy-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "owners": [
+    "Model",
+    "Data",
+    "Training",
+    "Evaluation",
+    "Runtime",
+    "Lab",
+    "Infrastructure",
+    "Governance"
+  ],
+  "dispositions": [
+    "MOVE",
+    "RETAIN_STABLE",
+    "MERGE",
+    "ARCHIVE",
+    "EXTERNALIZE",
+    "DELETE_REDUNDANT",
+    "DEFERRED_DEPENDENCY"
+  ],
+  "path_rules": [
+    {"id": "git-hooks", "include": [".githooks/**"], "exclude": [], "owner": "Infrastructure", "disposition": "MOVE", "touch_set_id": "infrastructure-git-hooks"},
+    {"id": "github-workflows", "include": [".github/**"], "exclude": [], "owner": "Infrastructure", "disposition": "MOVE", "touch_set_id": "infrastructure-github-workflows"},
+    {"id": "artifacts-stable", "include": ["artifacts/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-stable-artifacts"},
+    {"id": "assets", "include": ["assets/**"], "exclude": [], "owner": "Lab", "disposition": "MOVE", "touch_set_id": "lab-assets"},
+    {"id": "baseline-stable", "include": ["baseline/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-stable-baseline"},
+    {"id": "configs", "include": ["configs/**"], "exclude": [], "owner": "Model", "disposition": "MOVE", "touch_set_id": "model-configs"},
+    {"id": "data-deferred", "include": ["data/**", "src/ember/data/**"], "exclude": [], "owner": "Data", "disposition": "DEFERRED_DEPENDENCY", "touch_set_id": "data-current", "deferral_id": "data-1581"},
+    {"id": "docs", "include": ["docs/**"], "exclude": [], "owner": "Governance", "disposition": "MOVE", "touch_set_id": "governance-docs"},
+    {"id": "manifests-stable", "include": ["manifests/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-stable-manifests"},
+    {"id": "notes-archive", "include": ["notes/**"], "exclude": [], "owner": "Governance", "disposition": "ARCHIVE", "touch_set_id": "governance-notes"},
+    {"id": "receipts-stable", "include": ["receipts/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-stable-receipts"},
+    {"id": "runtime", "include": ["runtime/**"], "exclude": [], "owner": "Runtime", "disposition": "MOVE", "touch_set_id": "runtime-current"},
+    {"id": "schemas", "include": ["schemas/**"], "exclude": [], "owner": "Governance", "disposition": "MOVE", "touch_set_id": "governance-schemas"},
+    {"id": "scratch-external", "include": ["scratch/**"], "exclude": [], "owner": "Infrastructure", "disposition": "EXTERNALIZE", "touch_set_id": "infrastructure-scratch"},
+    {"id": "scripts", "include": ["scripts/**"], "exclude": [], "owner": "Governance", "disposition": "MOVE", "touch_set_id": "governance-script-census"},
+    {"id": "source-root", "include": ["src/ember/__init__.py"], "exclude": [], "owner": "Infrastructure", "disposition": "MOVE", "touch_set_id": "infrastructure-python-package"},
+    {"id": "state-external", "include": ["state/**"], "exclude": [], "owner": "Lab", "disposition": "EXTERNALIZE", "touch_set_id": "lab-state"},
+    {"id": "tests", "include": ["tests/**"], "exclude": [], "owner": "Governance", "disposition": "MOVE", "touch_set_id": "governance-tests"},
+    {"id": "tokenizer", "include": ["tokenizer/**"], "exclude": [], "owner": "Model", "disposition": "MOVE", "touch_set_id": "model-tokenizer"},
+    {"id": "tools", "include": ["tools/**"], "exclude": [], "owner": "Infrastructure", "disposition": "MOVE", "touch_set_id": "infrastructure-tools"},
+    {"id": "root-infrastructure", "include": [".gitattributes", ".gitignore", "Ember.cmd", "pyproject.toml"], "exclude": [], "owner": "Infrastructure", "disposition": "MOVE", "touch_set_id": "infrastructure-root-declarations"},
+    {"id": "root-governance", "include": ["AGENTS.md", "autonomy-ladder-state.json", "kernel-v1.0.manifest", "LICENSE", "README.md"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-root-authority"}
+  ],
+  "typed_roots": [
+    {"id": "source", "type": "absolute-directory", "resolution": "explicit-argument", "external_input_only": false},
+    {"id": "application_state", "type": "absolute-directory", "resolution": "explicit-profile", "external_input_only": true},
+    {"id": "data", "type": "absolute-directory", "resolution": "explicit-argument", "external_input_only": true},
+    {"id": "model_checkpoint", "type": "absolute-directory", "resolution": "explicit-argument", "external_input_only": true},
+    {"id": "cache", "type": "absolute-directory", "resolution": "explicit-profile", "external_input_only": true},
+    {"id": "evidence", "type": "absolute-directory", "resolution": "explicit-argument", "external_input_only": true},
+    {"id": "worktree", "type": "absolute-directory", "resolution": "explicit-profile", "external_input_only": true}
+  ],
+  "public_interfaces": [
+    {"owner": "Model", "target_namespace": "ember.model", "status": "TARGET_DECLARED"},
+    {"owner": "Data", "target_namespace": "ember.data", "status": "DEFERRED_DEPENDENCY", "deferral_id": "data-1581"},
+    {"owner": "Training", "target_namespace": "ember.training", "status": "TARGET_DECLARED"},
+    {"owner": "Evaluation", "target_namespace": "ember.evaluation", "status": "DEFERRED_DEPENDENCY", "deferral_id": "evaluation-api"},
+    {"owner": "Runtime", "target_namespace": "ember.runtime", "status": "TARGET_DECLARED"},
+    {"owner": "Lab", "target_namespace": "ember.lab", "status": "TARGET_DECLARED"},
+    {"owner": "Infrastructure", "target_namespace": "ember.infrastructure", "status": "TARGET_DECLARED"},
+    {"owner": "Governance", "target_namespace": "ember.governance", "status": "TARGET_DECLARED"}
+  ],
+  "package_authorities": [
+    {"id": "python-package", "path": "pyproject.toml", "ecosystem": "python", "role": "package", "expected_blob_oid": "5dff8625f8ccafd6f3ec863208852c6efb724d2e"},
+    {"id": "rust-package", "path": "runtime/ember-lab/Cargo.toml", "ecosystem": "rust", "role": "package", "expected_blob_oid": "ce10026394de0f3fe6e0ff011b4540f8dd4321e2"},
+    {"id": "rust-lock", "path": "runtime/ember-lab/Cargo.lock", "ecosystem": "rust", "role": "lock", "expected_blob_oid": "40831a42fbb62a148d60e846b7d81b1c560595ef"},
+    {"id": "bun-package", "path": "tools/ember-cli/src/package.json", "ecosystem": "bun", "role": "package", "expected_blob_oid": "b8f43d6d5cb7be7aee4974e70fcf2661112802a0"},
+    {"id": "bun-lock", "path": "tools/ember-cli/src/bun.lock", "ecosystem": "bun", "role": "lock", "expected_blob_oid": "d4a7830867e6205deb1a002a90ace656563db97c"}
+  ],
+  "backend_authority": {
+    "name": "setuptools",
+    "version": "84.0.0",
+    "artifact": "setuptools-84.0.0-py3-none-any.whl",
+    "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+    "substitution_failures": ["HASH_MISMATCH_REFUSED", "ONLY_BINARY_REFUSED"]
+  },
+  "allowed_dependencies": [
+    ["Model", "Infrastructure"], ["Model", "Governance"],
+    ["Data", "Model"], ["Data", "Infrastructure"], ["Data", "Governance"],
+    ["Training", "Model"], ["Training", "Data"], ["Training", "Infrastructure"], ["Training", "Governance"],
+    ["Evaluation", "Model"], ["Evaluation", "Data"], ["Evaluation", "Runtime"], ["Evaluation", "Infrastructure"], ["Evaluation", "Governance"],
+    ["Runtime", "Model"], ["Runtime", "Training"], ["Runtime", "Infrastructure"], ["Runtime", "Governance"],
+    ["Lab", "Model"], ["Lab", "Data"], ["Lab", "Training"], ["Lab", "Evaluation"], ["Lab", "Runtime"], ["Lab", "Infrastructure"], ["Lab", "Governance"],
+    ["Governance", "Infrastructure"]
+  ],
+  "deferrals": [
+    {"id": "data-1581", "owner": "Data", "issue": 1581, "predicate": "admitted identities terminal and independently reviewed", "evidence_selector": "issue1581-data-plane-terminal-v1", "failure_state": "DATA_CARRIER_MEMBERSHIP_DEFERRED"},
+    {"id": "evaluation-api", "owner": "Evaluation", "issue": 1947, "predicate": "Evaluation public API terminal and independently reviewed", "evidence_selector": "c2-e-real-or-later-public-api-v1", "failure_state": "EVALUATION_CARRIER_MEMBERSHIP_DEFERRED"}
+  ],
+  "reviewability": {
+    "algorithm": "stable-exact-branch-and-bound-v1",
+    "max_exact_search_states": 1000000,
+    "max_paths_per_carrier": 64,
+    "max_consumers_per_carrier": 128,
+    "tie_break": "lexicographic-stable-carrier-id"
+  }
+}
