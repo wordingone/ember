@@ -156,6 +156,9 @@ AUTHORITY_DOCUMENT_NAMES = (
     "STATE.md",
 )
 AUTHORITY_DIRECTORY = PurePosixPath("docs/authority")
+DOMAIN_GOAL_AUTHORITY_PATH = PurePosixPath(
+    "docs/domains/governance/authority/GOAL.md"
+)
 FORBIDDEN_MODEL_SIGNALS = [
     "weights",
     "outputs",
@@ -292,11 +295,12 @@ def sha256(path: Path) -> str:
 def authority_relative_path(root: Path, name: str) -> str:
     if name not in AUTHORITY_DOCUMENT_NAMES:
         raise ValueError(f"unknown authority document: {name}")
-    old_rel = PurePosixPath(name)
-    new_rel = AUTHORITY_DIRECTORY / name
+    candidates = [PurePosixPath(name), AUTHORITY_DIRECTORY / name]
+    if name == "GOAL.md":
+        candidates.append(DOMAIN_GOAL_AUTHORITY_PATH)
     present = [
         rel.as_posix()
-        for rel in (old_rel, new_rel)
+        for rel in candidates
         if (root / rel).exists() or (root / rel).is_symlink()
     ]
     if len(present) > 1:
@@ -305,8 +309,8 @@ def authority_relative_path(root: Path, name: str) -> str:
         )
     if not present:
         raise ValueError(
-            f"canonical authority document {name} is absent from both "
-            f"{old_rel.as_posix()} and {new_rel.as_posix()}"
+            f"canonical authority document {name} is absent from all canonical "
+            f"locations: {', '.join(rel.as_posix() for rel in candidates)}"
         )
     selected = root / present[0]
     if not selected.is_file() or selected.is_symlink():
@@ -321,9 +325,16 @@ def authority_path(root: Path, name: str) -> Path:
 
 
 def canonical_authority_reference(root: Path, name: str) -> str:
-    new_rel = (AUTHORITY_DIRECTORY / name).as_posix()
-    if (root / new_rel).is_file() and not (root / name).is_file():
-        return new_rel
+    candidates = [AUTHORITY_DIRECTORY / name]
+    if name == "GOAL.md":
+        candidates.append(DOMAIN_GOAL_AUTHORITY_PATH)
+    present = [
+        rel.as_posix()
+        for rel in candidates
+        if (root / rel).is_file() and not (root / rel).is_symlink()
+    ]
+    if len(present) == 1 and not (root / name).exists():
+        return present[0]
     return name
 
 
@@ -2528,7 +2539,7 @@ def check_changed_artifact_bindings(
             raise OSError(shown.stderr.strip() or f"cannot read {object_name}")
         return shown.stdout
 
-    migration_pairs = (
+    common_migration_pairs = (
         ("docs/ember-authority-matrix.md", "docs/authority/ember-authority-matrix.md"),
         ("docs/ember-completeness.md", "docs/contracts/ember-completeness.md"),
         ("docs/registry-dispatch-gate-spec-v0.md", "docs/contracts/registry-dispatch-gate-spec-v0.md"),
@@ -2547,7 +2558,18 @@ def check_changed_artifact_bindings(
         ("INVARIANT.md", "docs/authority/INVARIANT.md"),
         ("REDACTIONS.md", "docs/authority/REDACTIONS.md"),
         ("STATE.md", "docs/authority/STATE.md"),
-        ("GOAL.md", "docs/authority/GOAL.md"),
+    )
+
+    migration_pair_sets = (
+        (*common_migration_pairs, ("GOAL.md", "docs/authority/GOAL.md")),
+        (
+            *common_migration_pairs,
+            ("GOAL.md", "docs/domains/governance/authority/GOAL.md"),
+            (
+                "docs/authority/GOAL.md",
+                "docs/domains/governance/authority/GOAL.md",
+            ),
+        ),
     )
 
     def exact_path_migration_only(normalized: str, staged_text: str) -> bool:
@@ -2568,19 +2590,31 @@ def check_changed_artifact_bindings(
         )
         if prior.returncode != 0 or prior.stdout == staged_text:
             return False
-        transformed = prior.stdout
-        sentinels: dict[str, str] = {}
-        for index, (_, destination) in enumerate(migration_pairs):
-            sentinel = f"__EMBER_AUTHORITY_PATH_{index}__"
-            if sentinel in transformed:
-                return False
-            transformed = transformed.replace(destination, sentinel)
-            sentinels[sentinel] = destination
-        for source, destination in migration_pairs:
-            transformed = transformed.replace(source, destination)
-        for sentinel, destination in sentinels.items():
-            transformed = transformed.replace(sentinel, destination)
-        return transformed == staged_text
+        for migration_pairs in migration_pair_sets:
+            transformed = prior.stdout
+            destination_sentinels: dict[str, str] = {}
+            for index, (_, destination) in enumerate(migration_pairs):
+                sentinel = f"__EMBER_AUTHORITY_DESTINATION_{index}__"
+                if sentinel in transformed:
+                    return False
+                transformed = transformed.replace(destination, sentinel)
+                destination_sentinels[sentinel] = destination
+            source_sentinels: dict[str, str] = {}
+            for index, (source, destination) in enumerate(sorted(
+                migration_pairs, key=lambda pair: len(pair[0]), reverse=True
+            )):
+                sentinel = f"__EMBER_AUTHORITY_SOURCE_{index}__"
+                if sentinel in transformed:
+                    return False
+                transformed = transformed.replace(source, sentinel)
+                source_sentinels[sentinel] = destination
+            for sentinel, destination in source_sentinels.items():
+                transformed = transformed.replace(sentinel, destination)
+            for sentinel, destination in destination_sentinels.items():
+                transformed = transformed.replace(sentinel, destination)
+            if transformed == staged_text:
+                return True
+        return False
 
     for rel in sorted(changed_paths):
         normalized = rel.replace("\\", "/")

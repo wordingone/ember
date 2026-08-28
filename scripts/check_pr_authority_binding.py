@@ -32,22 +32,22 @@ def load_goal_binding(root: Path) -> tuple[str, str, tuple[str, ...]]:
     text = authority_path(root, "GOAL.md").read_text(encoding="utf-8")
     match = POLICY_RE.search(text)
     if not match:
-        raise ValueError("docs/authority/GOAL.md EMBER_AUTHORITY_V1 block missing")
+        raise ValueError("canonical GOAL.md EMBER_AUTHORITY_V1 block missing")
     policy = json.loads(match.group(1))
     goal = policy.get("active_goal_id")
     outcome = policy.get("next_executed_outcome")
     workstreams = policy.get("active_workstream_ids")
     if not isinstance(goal, str) or not goal:
-        raise ValueError("docs/authority/GOAL.md active_goal_id missing")
+        raise ValueError("canonical GOAL.md active_goal_id missing")
     if not isinstance(outcome, str) or not outcome:
-        raise ValueError("docs/authority/GOAL.md next_executed_outcome missing")
+        raise ValueError("canonical GOAL.md next_executed_outcome missing")
     if (
         not isinstance(workstreams, list)
         or not workstreams
         or not all(isinstance(item, str) and item for item in workstreams)
         or len(set(workstreams)) != len(workstreams)
     ):
-        raise ValueError("docs/authority/GOAL.md active_workstream_ids invalid")
+        raise ValueError("canonical GOAL.md active_workstream_ids invalid")
     return goal, outcome, tuple(workstreams)
 
 
@@ -64,15 +64,15 @@ def validate_pr_body(
     if len(goals) != 1:
         errors.append("goal_id must appear exactly once")
     elif goals[0] != active_goal:
-        errors.append("goal_id does not match docs/authority/GOAL.md")
+        errors.append("goal_id does not match canonical GOAL.md")
     if len(outcomes) != 1:
         errors.append("next_executed_outcome must appear exactly once")
     elif outcomes[0] != expected_outcome:
-        errors.append("next_executed_outcome does not match docs/authority/GOAL.md")
+        errors.append("next_executed_outcome does not match canonical GOAL.md")
     if len(workstreams) != 1:
         errors.append("workstream_id must appear exactly once")
     elif workstreams[0] not in set(allowed_workstreams):
-        errors.append("workstream_id is not allowed by docs/authority/GOAL.md")
+        errors.append("workstream_id is not allowed by canonical GOAL.md")
     return errors
 
 
