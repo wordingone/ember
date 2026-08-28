@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c5c_readout.py -- C5(c) W-statistic readout grammar (issue #628; spec refs:
 issue #123 comment 4929556629 "C5 mechanism-readout pre-registration v1" (the
 SUPERSEDED two-point marginal-CI grammar) and issue #123 comment 4928342201
@@ -6,7 +9,7 @@ SUPERSEDED two-point marginal-CI grammar) and issue #123 comment 4928342201
 cluster-resampled bootstrap, B=10000, rng_seed=20260709). CPU-only: no model
 loads, no GPU, no torch import.
 
-docs/authority/GOAL.md C5(c): "a receipted scaling trend shows the gap to the dense control
+docs/domains/governance/authority/GOAL.md C5(c): "a receipted scaling trend shows the gap to the dense control
 WIDENING with scale -- a shrinking gap is the toy-model failure state, named."
 
 DEFECT (independent-audit disposition, issue #628, reproduced verbatim below):

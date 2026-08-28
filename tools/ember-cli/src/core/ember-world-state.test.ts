@@ -1,7 +1,7 @@
 // core/ember-world-state.test.ts — regression coverage for the monitor.pctComplete field-read
 // bug: the adapter previously read summary.pct_complete (which does not exist on a real
 // totality-board receipt) and always defaulted to 0, while the real value lives nested at
-// summary.completion_math.pct_complete. Builds a fixture goalforge root (docs/authority/GOAL.md, debt ledger,
+// summary.completion_math.pct_complete. Builds a fixture goalforge root (docs/domains/governance/authority/GOAL.md, debt ledger,
 // one board receipt) and points buildEmberWorldState() at it via EMBER_GOALFORGE_ROOT override.
 
 // goal_id: EMBER-02
@@ -40,7 +40,7 @@ async function makeFixtureRoot(receiptSummary: Record<string, unknown>): Promise
   await mkdir(boardDir, { recursive: true });
   await mkdir(join(root, "docs", "ledgers"), { recursive: true });
   await mkdir(join(root, "docs", "authority"), { recursive: true });
-  await writeFile(join(root, "docs/authority/GOAL.md"), FIXTURE_GOAL);
+  await writeFile(join(root, "docs/domains/governance/authority/GOAL.md"), FIXTURE_GOAL);
   await writeFile(join(root, "docs", "ledgers", "ember-debt-ledger.md"), FIXTURE_LEDGER);
   const receipt = {
     ts: "20260703T120000Z",

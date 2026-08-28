@@ -121,7 +121,7 @@ export async function runWorldStateTurn(argsLine: string): Promise<string> {
   // hasn't pointed this command at a contract tree -- see core/ember-world-state.ts's
   // GOALFORGE_ROOT contract.
   if (!GOALFORGE_ROOT) {
-    return "world-state source not configured -- set EMBER_GOALFORGE_ROOT to the goalforge contract tree's path to enable /cockpit (monitor/understand/interact over docs/authority/GOAL.md, the debt ledger, and totality-board receipts).";
+    return "world-state source not configured -- set EMBER_GOALFORGE_ROOT to the goalforge contract tree's path to enable /cockpit (monitor/understand/interact over docs/domains/governance/authority/GOAL.md, the debt ledger, and totality-board receipts).";
   }
 
   const [cmd, ...rest] = argsLine.trim().split(/\s+/);

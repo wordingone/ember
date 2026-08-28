@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Clean-room goal-mode bootstrap adapter for Ember's the predecessor CLI resident harness.
 
 This is the first executable adapter surface for the clean-room resident
 harness precondition. It does not import the predecessor CLI code. It implements the
-minimum native control loop required by docs/authority/GOAL.md: parse the current blocker
+minimum native control loop required by docs/domains/governance/authority/GOAL.md: parse the current blocker
 packet, read receipts, select the load-bearing blocker, compile the next bounded
 command, expose a resident action channel, write a receipt, and prove deletion
 of those parts blocks the adapter.
@@ -150,7 +153,7 @@ def select_blocker(goal_parse: dict[str, Any], inventory: dict[str, Any]) -> dic
         "selected_blocker": selected,
         "decision": decision,
         "selection_basis": [
-            "docs/authority/GOAL.md Current Blocker Packet",
+            "docs/domains/governance/authority/GOAL.md Current Blocker Packet",
             "inventory next_missing_precondition",
             "non-killable clean-room the predecessor CLI precondition",
         ],
@@ -188,7 +191,7 @@ def build_receipt(
     launch_shim: Path,
 ) -> dict[str, Any]:
     adapter_path = Path(__file__).resolve()
-    goal_parse = parse_current_blocker_packet(repo / "docs/authority/GOAL.md")
+    goal_parse = parse_current_blocker_packet(repo / "docs/domains/governance/authority/GOAL.md")
     inventory = inspect_inventory(inventory_receipt)
     cleanroom = inspect_cleanroom_boundary(adapter_path, launch_shim, inventory)
     blocker = select_blocker(goal_parse, inventory)

@@ -24,7 +24,7 @@ Two repo laws are enforced AT WRITE TIME (a limit is real only when it
 is always enforced where the bytes are made, not in a later gate):
 
 - authority binding: every row carries goal_id / workstream_id /
-  next_executed_outcome exactly as docs/authority/GOAL.md declares them (leg 4 of
+  next_executed_outcome exactly as docs/domains/governance/authority/GOAL.md declares them (leg 4 of
   verify_authority_conservation.py binds .jsonl artifacts row-wise);
 - no absolute local filesystem paths in any row string (repo-guard
   [paths]): run roots are recorded as the portable
@@ -68,10 +68,10 @@ REGISTRY_REL = "receipts/run-attempts.jsonl"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTCOMES = ("running", "completed", "failed", "aborted", "killed")
 TELEMETRY_SOURCE = "ember-restart-3b"
-# Authority binding (verified against docs/authority/GOAL.md by the trusted kernel; a
+# Authority binding (verified against docs/domains/governance/authority/GOAL.md by the trusted kernel; a
 # drifted copy fails the guard, which is the enforcement).
 GOAL_ID = "EMBER-02"
-# docs/authority/GOAL.md workstream_path_scopes: scripts/ and receipts/ (non-restart-3b
+# docs/domains/governance/authority/GOAL.md workstream_path_scopes: scripts/ and receipts/ (non-restart-3b
 # prefixes) are EMBER-02A territory; only tools/ember-restart-3b/ is 02B.
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = (
@@ -151,7 +151,7 @@ def validate_row(row: Any) -> list[str]:
     if row.get("workstream_id") != WORKSTREAM_ID:
         defects.append(f"workstream_id must be {WORKSTREAM_ID!r} (authority leg 4)")
     if row.get("next_executed_outcome") != NEXT_EXECUTED_OUTCOME:
-        defects.append("next_executed_outcome drifted from docs/authority/GOAL.md's declared outcome")
+        defects.append("next_executed_outcome drifted from docs/domains/governance/authority/GOAL.md's declared outcome")
     if row.get("outcome") not in OUTCOMES:
         defects.append(f"outcome {row.get('outcome')!r} not in {OUTCOMES}")
     if not _nonempty_str(row.get("run_root_ref")):

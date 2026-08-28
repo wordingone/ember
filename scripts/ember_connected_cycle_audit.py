@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Audit whether Ember's current receipt chain proves the connected field-level goal."""
 from __future__ import annotations
 
@@ -129,8 +132,8 @@ def build_audit(args: argparse.Namespace) -> dict[str, Any]:
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md"),
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md"),
         "audited_receipts": evidence,
         "zero_cost_contract_ok": zero_cost,
         "positive_delta_deletion_checks": {"d3_generalization": d3_ok, "sab_completion": sab_ok, "sab_stronger_transfer": transfer_ok},

@@ -661,7 +661,7 @@ def validate_invariant_config(config: dict[str, Any]) -> None:
     if not config.get("goal_file"):
         raise SystemExit(
             "LOOP_REFUSE: 'goal_file' path absent from config. "
-            "The loop will not start without docs/authority/GOAL.md path (sp5 §5 invariant)."
+            "The loop will not start without docs/domains/governance/authority/GOAL.md path (sp5 §5 invariant)."
         )
 
 
@@ -757,7 +757,7 @@ class NCKEventLoop:
 
     Config keys:
       governor         : {vram_fraction, margin_gib_floor, pace_s_per_step}  (placeholder)
-      goal_file        : path to docs/authority/GOAL.md (boot-time invariant check)
+      goal_file        : path to docs/domains/governance/authority/GOAL.md (boot-time invariant check)
       heartbeat_file   : path to touch every tick
       journal_path     : path to nck-journal.jsonl
       gate_notes_dir   : dir for write_gate_note output

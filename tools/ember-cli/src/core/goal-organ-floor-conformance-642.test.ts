@@ -12,8 +12,8 @@
 // FLOOR SOURCE: the six frozen clauses enumerated in issue #642's body, which
 // are the audit-scoped restatement of docs/contracts/goal-mode-mechanism.md ("Selection
 // and persistence" -> clauses 1-2, "Continuation loop" -> clauses 3-6). The
-// 2026-07-10 draft of this file also cited "docs/authority/GOAL.md §6"; that citation is
-// retired here because docs/authority/GOAL.md §6 on current master is "Clean genesis and
+// 2026-07-10 draft of this file also cited "docs/domains/governance/authority/GOAL.md §6"; that citation is
+// retired here because docs/domains/governance/authority/GOAL.md §6 on current master is "Clean genesis and
 // frozen-reference boundary", which has nothing to do with the goal organ.
 // docs/contracts/goal-mode-mechanism.md is the sole document floor.
 //

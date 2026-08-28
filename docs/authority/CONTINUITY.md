@@ -12,8 +12,8 @@ mechanism_erasure=forbidden
 
 ## Resume order
 
-1. Read docs/authority/INVARIANT.md and verify its SHA256 against docs/authority/GOAL.md.
-2. Read docs/authority/GOAL.md, including EMBER_AUTHORITY_V1.
+1. Read docs/authority/INVARIANT.md and verify its SHA256 against docs/domains/governance/authority/GOAL.md.
+2. Read docs/domains/governance/authority/GOAL.md, including EMBER_AUTHORITY_V1.
 3. Read the operator-owned durable goal selection when available.
 4. Read docs/authority/CONTINUITY.md for exact artifact identities and maturity;
    docs/authority/STATE.md is only its compatibility pointer.
@@ -75,7 +75,7 @@ creation and sufficient pretraining of the owned clean-genesis network of at
 least 3,000,000,000 total parameters through the ember-owned-rung-v1 admission
 contract, owned-checkpoint-bound evaluation, and serving through explicitly
 admitted seats, inside the EMBER-02A/02B/02C workstream scopes of
-docs/authority/GOAL.md. The
+docs/domains/governance/authority/GOAL.md. The
 blocked operations remain denied regardless of goal state. The next executable
 command becomes runnable only when its prerequisite receipts exist; running it
 earlier must fail closed.
@@ -164,7 +164,7 @@ information.
 # Ember identity and artifact state
 
 This file resolves object identity. It does not establish model birth,
-capability, lineage admissibility, or goal completion. `docs/authority/GOAL.md` is the highest
+capability, lineage admissibility, or goal completion. `docs/domains/governance/authority/GOAL.md` is the highest
 amendable authority; `docs/authority/CONTINUITY.md` records the current work cursor.
 
 An object is **current and addressable** only when it has a row below. Every
@@ -245,7 +245,7 @@ the closed claim boundary and at least one explicit `caveat:` in evidence.
 | kaggle-emotion-classifier-result | benchmark_result | receipt-sha256:9abba7c0dd0f832998e8de99159835680819cb072f44f8e9746c24b5a5c333d3 | historical_only | not_applicable | not_applicable | sklearn_naive_bayes | none | receipts/ember-mvp/trained-external-heldout-wheel-20260618/arm-c-trained-benchmark-20260618T152822Z.json; not an Ember-model result |
 | d3-code-artifact-result | benchmark_result | receipt-sha256:ac3be7d4bb8064de9d1722335a41367d847d66919279c6a8b370014d0275f383 | historical_only | not_applicable | not_applicable | external_code_artifact_loop | none | representative D3-Gym A/B/C/Deleted program result; not owned-model capability |
 | arcade-random-smoke-result | benchmark_result | receipt-sha256:931b3a608c6bf1911bb0ffaa56797014d8ea9a38be475297df9864d6c631a237 | historical_only | not_applicable | not_applicable | random_control | none | 25 games at 200 steps, zero wins; not the preregistered 1000-step floor |
-| ember-target | model_target | uninstantiated:ember-owned-30-35b-unified-sparse | target | 30000000001 | 0 | owned | none | docs/authority/GOAL.md; target identity only, no model claim |
+| ember-target | model_target | uninstantiated:ember-owned-30-35b-unified-sparse | target | 30000000001 | 0 | owned | none | docs/domains/governance/authority/GOAL.md; target identity only, no model claim |
 | ember-owned-rung-v1-contract | admission_contract | source:scripts/ember_restart/contract.py@8b0d684e9e289aa66a7c18217b71bfaecab1e642 | research_prototype | not_applicable | not_applicable | local_fail_closed_validator | none | docs/ember-restart/integration-contract-v1.md and scripts/ember_restart/contract.py; candidate/admission boundary only |
 
 The seven-task frozen evaluation suite is custody, not seven results. The

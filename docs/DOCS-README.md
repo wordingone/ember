@@ -23,6 +23,10 @@ kind of thing it is, not by when it was written.
 These directories describe what is true and in force today. If a document here conflicts
 with something in `archive/`, this wins.
 
+- **[`architecture/`](architecture/)** — repository architecture and domain-boundary
+  definitions, including the domain-authority contract.
+- **[`domains/`](domains/)** — domain-owned documentation. The governance domain contains
+  the canonical governance authority, anatomy, custody, audit, and historical surfaces.
 - **[`spec/`](spec/)** — frozen specifications: preregistrations, protocol definitions,
   eval-suite freezes, growth-chain and scale specs. Start with
   [`spec/conditions-v1.md`](spec/conditions-v1.md),
@@ -31,7 +35,7 @@ with something in `archive/`, this wins.
   [`spec/ember02-preregistration-v1.md`](spec/ember02-preregistration-v1.md).
 - **[`authority/`](authority/)** — the six canonical authority documents plus the
   authority-conservation matrix. Start with [`authority/INVARIANT.md`](authority/INVARIANT.md),
-  then [`authority/GOAL.md`](authority/GOAL.md), and use
+  then [`authority/GOAL.md`](domains/governance/authority/GOAL.md), and use
   [`authority/CONTINUITY.md`](authority/CONTINUITY.md) for the current execution cursor.
 - **[`contracts/`](contracts/)** — the hash-pinned subordinate contracts and protocols,
   including the floor, goal-clear, goal-mode, completeness, and dispatch-gate surfaces.
@@ -40,8 +44,8 @@ with something in `archive/`, this wins.
 - **[`anatomy/`](anatomy/)** — the numbered system-anatomy set (`00_INDEX.md` through
   `15_TECHNICAL_REPORT.md`): constitution and authority, repo topology, model architecture,
   training pipeline, evaluation, the governor, tooling, receipts, the runbook. Start with
-  [`anatomy/00_INDEX.md`](anatomy/00_INDEX.md) and
-  [`anatomy/01_CONSTITUTION_AND_AUTHORITY.md`](anatomy/01_CONSTITUTION_AND_AUTHORITY.md).
+  [`anatomy/00_INDEX.md`](domains/governance/anatomy/00_INDEX.md) and
+  [`anatomy/01_CONSTITUTION_AND_AUTHORITY.md`](domains/governance/anatomy/01_CONSTITUTION_AND_AUTHORITY.md).
 - **[`charter/`](charter/)** — standing contracts and protocols that govern *how* work is
   done here: reproducibility requirements, technique-ownership contracts, doc-freshness
   protocol, the GitHub work system. Start with
@@ -55,7 +59,7 @@ with something in `archive/`, this wins.
   matrix lives at [`authority/ember-authority-matrix.md`](authority/ember-authority-matrix.md).
 - **[`design/`](design/)** — architecture and design decisions on the current line: the
   actual stack, the SOTA-stack floor, inference-to-training translation, the C-FED
-  federation design. Start with [`design/the-actual-stack.md`](design/the-actual-stack.md)
+  federation design. Start with [`design/the-actual-stack.md`](domains/governance/design/the-actual-stack.md)
   and [`design/sota-stack-floor.md`](design/sota-stack-floor.md).
 - **[`ember-restart/`](ember-restart/)** — the 3B restart line: protocols, conventions, the
   governed runner, multimodal config, the integration contract. Start with
@@ -63,9 +67,9 @@ with something in `archive/`, this wins.
   [`ember-restart/ember-restart-3b-governed-runner-v1.md`](ember-restart/ember-restart-3b-governed-runner-v1.md).
 - **[`custody/`](custody/)** — custody dispositions, branch manifests, deletion receipts,
   and the HF-custody sync note: what happened to which branch, checkpoint, or dataset, and
-  under what authority. Start with [`custody/branch-inventory.md`](custody/branch-inventory.md).
+  under what authority. Start with [`custody/branch-inventory.md`](domains/governance/custody/branch-inventory.md).
   The wave-031 disposition record lives here too
-  ([`custody/custody-disposition-20260731-wave031.md`](custody/custody-disposition-20260731-wave031.md)),
+  ([`custody/custody-disposition-20260731-wave031.md`](domains/governance/custody/custody-disposition-20260731-wave031.md)),
   and the original disposition is
   [`custody/custody-disposition-20260708.md`](custody/custody-disposition-20260708.md).
 
@@ -80,7 +84,7 @@ with something in `archive/`, this wins.
   deploy acceptance, live-board checks, TUI resize/bisect receipts). Start with
   [`verification/ember-cli-deploy-250-acceptance-20260706.md`](verification/ember-cli-deploy-250-acceptance-20260706.md).
 - **[`audit/`](audit/)** — point-in-time authority and mandate audits. Start with
-  [`audit/issue-35-authority-supersession-crosswalk.md`](audit/issue-35-authority-supersession-crosswalk.md).
+  [`audit/issue-35-authority-supersession-crosswalk.md`](domains/governance/audit/issue-35-authority-supersession-crosswalk.md).
 - **[`roadmap/`](roadmap/)** — the milestone roadmap, EMBER-00 through EMBER-11. Start with
   [`roadmap/README.md`](roadmap/README.md).
 - **[`operator/`](operator/)** — operator-facing reference: commands and how to operate the
@@ -111,7 +115,7 @@ deleting the trail. If you are deciding what to do next, do not cite `archive/` 
   `ember-restart/` superseded it.
 - **[`archive/goal/`](archive/goal/)** — superseded goal archives: prior full goal-archive
   snapshots and coverage matrices, retained for provenance. For the live goal, read the
-  live [`authority/GOAL.md`](authority/GOAL.md), not anything under here.
+  live [`authority/GOAL.md`](domains/governance/authority/GOAL.md), not anything under here.
 
 ## Two filenames that deliberately resolve to one document
 

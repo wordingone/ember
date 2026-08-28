@@ -129,7 +129,7 @@ def test_completion_receipt_declares_one_active_workstream() -> None:
 
 
 def test_completion_subject_goal_id_is_ember01_and_distinct_from_active_goal_id() -> None:
-    # goal_id must stay the active-authority goal per docs/authority/GOAL.md's
+    # goal_id must stay the active-authority goal per docs/domains/governance/authority/GOAL.md's
     # required_future_artifact_fields binding rule (same value
     # verify_ember00_completion.py's receipt stamps for the same reason) --
     # this is not the field the 2026-08-01 cert adjudication flagged.
@@ -149,7 +149,7 @@ def test_completion_receipt_payload_stamps_goal_id_and_subject_separately(
     'completion_subject_goal_id' -- the field did not exist."""
     selection = tmp_path / "selection.md"
     selection.write_text(
-        f"active_goal_path: {REPO_ROOT / 'docs/authority/GOAL.md'}\n", encoding="utf-8"
+        f"active_goal_path: {REPO_ROOT / 'docs/domains/governance/authority/GOAL.md'}\n", encoding="utf-8"
     )
     receipt = tmp_path / "receipt.json"
     subprocess.run(
@@ -185,7 +185,7 @@ def test_receipt_top_level_keys_match_the_launch_consumer_exactly(
 
     selection = tmp_path / "selection.md"
     selection.write_text(
-        f"active_goal_path: {REPO_ROOT / 'docs/authority/GOAL.md'}\n", encoding="utf-8"
+        f"active_goal_path: {REPO_ROOT / 'docs/domains/governance/authority/GOAL.md'}\n", encoding="utf-8"
     )
     receipt = tmp_path / "receipt.json"
     subprocess.run(

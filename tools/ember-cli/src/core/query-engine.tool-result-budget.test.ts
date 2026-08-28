@@ -1,9 +1,12 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/query-engine.tool-result-budget.test.ts — issue #157 Leg 1: an oversized tool
 // result must never enter the conversation whole. A large Read/Bash/Grep/etc. output can
 // push the follow-up model call's prefill past n_ctx; depending on the server that either
 // errors (already handled by the callModel try/catch) or silently wedges the connection
 // with no tokens generating (receipt: receipts/operator-sessions/
-// session-20260705T234943Z.jsonl -- 46,634-byte docs/authority/GOAL.md read vs an 8192-token n_ctx slot,
+// session-20260705T234943Z.jsonl -- 46,634-byte docs/domains/governance/authority/GOAL.md read vs an 8192-token n_ctx slot,
 // GPU idle, spinner alive >4min). query() must truncate every tool_result content string
 // to a bounded budget, head+tail with an explicit marker, applied uniformly at the single
 // assembly seam so every tool is covered -- not per-tool patches.

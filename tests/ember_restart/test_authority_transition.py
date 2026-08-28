@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _policy() -> dict:
-    text = (ROOT / "docs/authority/GOAL.md").read_text(encoding="utf-8")
+    text = (ROOT / "docs/domains/governance/authority/GOAL.md").read_text(encoding="utf-8")
     match = re.search(
         r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->",
         text,

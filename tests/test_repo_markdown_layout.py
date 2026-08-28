@@ -45,7 +45,12 @@ def test_docs_root_markdown_has_only_docs_readme() -> None:
 def test_every_authority_document_has_only_its_approved_path() -> None:
     for name in AUTHORITY_NAMES:
         assert not (ROOT / name).exists()
-        assert (ROOT / "docs" / "authority" / name).is_file()
+        if name == "GOAL.md":
+            assert (
+                ROOT / "docs" / "domains" / "governance" / "authority" / name
+            ).is_file()
+        else:
+            assert (ROOT / "docs" / "authority" / name).is_file()
 
 
 def test_loose_docs_use_the_approved_labeled_destinations() -> None:
@@ -66,7 +71,8 @@ def test_docs_map_links_every_top_level_directory() -> None:
 def test_moved_markdown_documents_have_no_dangling_relative_links() -> None:
     moved = {
         "docs/DOCS-README.md",
-        *(f"docs/authority/{name}" for name in AUTHORITY_NAMES),
+        "docs/domains/governance/authority/GOAL.md",
+        *(f"docs/authority/{name}" for name in AUTHORITY_NAMES if name != "GOAL.md"),
         *APPROVED_DOC_PATHS,
     }
     failures = []
@@ -80,4 +86,4 @@ def test_moved_markdown_documents_have_no_dangling_relative_links() -> None:
                 continue
             if not (document.parent / target).resolve().exists():
                 failures.append(f"{relative} -> {target}")
-    assert failures == []
+    assert failures == [], failures

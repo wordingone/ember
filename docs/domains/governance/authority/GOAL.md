@@ -1,6 +1,6 @@
 # EMBER - Constitution
 
-docs/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/authority/GOAL.md is the
+docs/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/domains/governance/authority/GOAL.md is the
 highest amendable authority. Lower-precedence files may implement and test it;
 they cannot reduce, defer, replace, or reinterpret it.
 
@@ -113,12 +113,12 @@ they cannot reduce, defer, replace, or reinterpret it.
     "unrecovered_direct_names_minimum": 2
   },
   "conservation_hashes": {
-    "authority_matrix_sha256": "CACB09B1CD16B3272DBE0EB0D35DC0B5B334B74F791D1ADE4BFC651F93C9F4DB",
+    "authority_matrix_sha256": "E2948C71EDD8B44EAF75F771BFA261025033F7EB876A7D4C77420180C158E556",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "0BB1BD8B6D2A312248956DFF732A3E485CD7E5E9029D2ED8CC2ADC9A3F19C077",
+      "docs/authority/CONTINUITY.md": "FB75FBCDD39C9ABA855D16CA92353E2948CF15CAE41FE8EFBF9368C1EC2E0077",
       "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
-      "README.md": "BB9A21222456FD712F941678901BE1EE3FC6B0E7138C5111D67B49A2FB0E7FD1",
-      "docs/authority/ember-authority-matrix.md": "CACB09B1CD16B3272DBE0EB0D35DC0B5B334B74F791D1ADE4BFC651F93C9F4DB",
+      "README.md": "F17174BD1BBB5224AA1677A2689D60AA075403C4DEEE8E81AE9B90EA1734ECCF",
+      "docs/authority/ember-authority-matrix.md": "E2948C71EDD8B44EAF75F771BFA261025033F7EB876A7D4C77420180C158E556",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
       "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
       "docs/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
@@ -147,7 +147,7 @@ they cannot reduce, defer, replace, or reinterpret it.
     15000000000,
     27000000001
   ],
-  "highest_amendable_authority": "docs/authority/GOAL.md",
+  "highest_amendable_authority": "docs/domains/governance/authority/GOAL.md",
   "invariant_sha256": "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6",
   "lineage": {
     "borrowed_models_role": "frozen_reference_only",
@@ -265,7 +265,7 @@ they cannot reduce, defer, replace, or reinterpret it.
 ## Public roadmap hierarchy
 
 The complete milestone decomposition is published at
-[`docs/roadmap/README.md`](../roadmap/README.md). It has exactly four
+[`docs/roadmap/README.md`](../../../roadmap/README.md). It has exactly four
 surfaces: this constitutional goal, twelve version-controlled milestone
 contracts, one non-authoritative execution graph, and concrete GitHub
 issues/pull requests. The decomposition and tracking surfaces cannot reduce,
@@ -491,7 +491,7 @@ every current model, checkpoint, backend, and benchmark class.
 
 Evidence and historical artifacts never become authority. Subordinate contracts
 carry the machine-checked conservation header and fail closed on contradiction.
-Precedence is docs/authority/INVARIANT.md, then docs/authority/GOAL.md, then named subordinate contracts,
+Precedence is docs/authority/INVARIANT.md, then docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
 then implementation and evidence, then history.
 
 No completion claim is valid unless the primitive, model, organism, body, and

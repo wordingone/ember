@@ -41,7 +41,7 @@ def write_authority(root: Path) -> tuple[str, str]:
     matrix.write_text(
         "| discrepancy | disposition | enforced by | evidence/open question |\n"
         "|---|---|---|---|\n"
-        "| D-001 | ENFORCED | docs/authority/GOAL.md | identity |\n"
+        "| D-001 | ENFORCED | docs/domains/governance/authority/GOAL.md | identity |\n"
         "| D-002 | HISTORICAL_ONLY | docs/authority/STATE.md | history |\n",
         encoding="utf-8",
     )

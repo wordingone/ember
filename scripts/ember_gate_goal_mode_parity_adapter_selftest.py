@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Selftest for the clean-room the predecessor CLI goal-mode bootstrap adapter."""
 from __future__ import annotations
 
@@ -19,7 +22,7 @@ def main() -> int:
         root = Path(td)
         repo = root / "repo"
         inv = repo / "receipts" / "ember-preloop-resident-gate" / "inventory.json"
-        goal = repo / "docs/authority/GOAL.md"
+        goal = repo / "docs/domains/governance/authority/GOAL.md"
         shim = repo / "tools" / "reference-goal-mode" / "launch.ps1"
 
         _write(

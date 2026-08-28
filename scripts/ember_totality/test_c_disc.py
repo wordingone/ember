@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_disc.py -- STATUS PROBE for Ember goal condition C-DISC.
 
 Registry text: docs/spec/conditions-v1.md sec 4.2 C-DISC (gh issue #94, Class-2 unwatched-
 mandate recon rank #1, docs/audit/class2-unwatched-mandates-recon-20260704.md #3). R: GOAL
 sec 8's program-level disconfirmation triggers (the project's own "central conjecture false"
 kill signal -- EARNED_GROWTH, H0_CEILING, B2_BOOTSTRAP) are machine-evaluated on every board
-run, never prose-only. "A trigger with no evaluator is prose" (docs/authority/GOAL.md's own words) -- before
-this CHK, zero code referenced BOOTSTRAP_FAIL or the escalation-object path outside docs/authority/GOAL.md's
+run, never prose-only. "A trigger with no evaluator is prose" (docs/domains/governance/authority/GOAL.md's own words) -- before
+this CHK, zero code referenced BOOTSTRAP_FAIL or the escalation-object path outside docs/domains/governance/authority/GOAL.md's
 own text (docs/audit/class2-unwatched-mandates-recon-20260704.md #3, blast-radius rank #1).
 
 CHK enforced here: `disconfirmation_leg.run_disconfirmation_leg(ROOT)` subprocess-executes

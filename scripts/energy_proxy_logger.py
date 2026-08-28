@@ -126,7 +126,7 @@ SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization
 RECEIPT_WORKSTREAM_ID = "EMBER-02B"
 """The workstream this logger's RECEIPTS bind to -- not the one this script binds to.
 
-docs/authority/GOAL.md gives `receipts/ember-restart-3b/` to EMBER-02B exclusively (mode "only"),
+docs/domains/governance/authority/GOAL.md gives `receipts/ember-restart-3b/` to EMBER-02B exclusively (mode "only"),
 while EMBER-02A is "all_except" that prefix. This script lives at
 scripts/energy_proxy_logger.py, outside the exclusive prefixes, so the file header
 is EMBER-02A; the receipts it writes land inside them, and the authority

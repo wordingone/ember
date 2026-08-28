@@ -448,7 +448,7 @@ def write_valid_fixture(root: Path) -> None:
 |---|---|---|---|---:|---:|---|---|---|
 | owned-rung2 | checkpoint | sha256:owned-rung2 | historical_only | 2195000000 | 12550144 | disconnected_owned_server | none | historical receipt |
 | qwen-reference | backend | model:qwen-reference | borrowed_reference | 27000000000 | unknown | qwen | none | explicit reference seat |
-| ember-target | model_target | uninstantiated:ember-target | target | 30000000001 | 0 | owned | none | docs/authority/GOAL.md |
+| ember-target | model_target | uninstantiated:ember-target | target | 30000000001 | 0 | owned | none | docs/domains/governance/authority/GOAL.md |
 """
     (root / "STATE.md").write_text(
         "Current artifact identity and maturity state: [CONTINUITY.md](CONTINUITY.md), "
@@ -590,6 +590,8 @@ def test_duplicate_governing_surface_migration_is_rejected(tmp_path: Path) -> No
 def migrate_authority_fixture(root: Path) -> None:
     authority = root / "docs" / "authority"
     authority.mkdir(parents=True, exist_ok=True)
+    goal_authority = root / "docs" / "domains" / "governance" / "authority"
+    goal_authority.mkdir(parents=True, exist_ok=True)
     for name in (
         "GOAL.md",
         "INVARIANT.md",
@@ -598,12 +600,13 @@ def migrate_authority_fixture(root: Path) -> None:
         "REDACTIONS.md",
         "STATE.md",
     ):
-        (root / name).replace(authority / name)
+        destination = goal_authority / name if name == "GOAL.md" else authority / name
+        (root / name).replace(destination)
 
     matrix_path = root / "docs" / "authority" / "ember-authority-matrix.md"
     matrix_path.write_text(
         matrix_path.read_text(encoding="utf-8").replace(
-            "| ENFORCED | GOAL.md |", "| ENFORCED | docs/authority/GOAL.md |"
+            "| ENFORCED | GOAL.md |", "| ENFORCED | docs/domains/governance/authority/GOAL.md |"
         ),
         encoding="utf-8",
     )
@@ -632,12 +635,12 @@ def migrate_authority_fixture(root: Path) -> None:
         json.dumps(crosswalk, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
-    goal_path = authority / "GOAL.md"
+    goal_path = goal_authority / "GOAL.md"
     text = goal_path.read_text(encoding="utf-8")
     match = re.search(r"<!--\s*EMBER_AUTHORITY_V1\s*\r?\n(.*?)\r?\n-->", text, re.DOTALL)
     assert match is not None
     policy = json.loads(match.group(1))
-    policy["highest_amendable_authority"] = "docs/authority/GOAL.md"
+    policy["highest_amendable_authority"] = "docs/domains/governance/authority/GOAL.md"
     policy["required_governing_surfaces"] = [
         f"docs/authority/{rel}"
         if rel in {"GOVERNANCE.md", "CONTINUITY.md"}
@@ -671,7 +674,11 @@ def test_migrated_authority_fixture_passes(tmp_path: Path) -> None:
 ))
 def test_duplicate_authority_path_is_rejected(tmp_path: Path, name: str) -> None:
     write_valid_fixture(tmp_path)
-    migrated = tmp_path / "docs" / "authority" / name
+    migrated = (
+        tmp_path / "docs" / "domains" / "governance" / "authority" / name
+        if name == "GOAL.md"
+        else tmp_path / "docs" / "authority" / name
+    )
     migrated.parent.mkdir(parents=True, exist_ok=True)
     migrated.write_bytes((tmp_path / name).read_bytes())
 
@@ -1686,28 +1693,7 @@ def test_staged_exact_authority_path_migration_does_not_mint_new_authority(
     git_fixture(tmp_path, "commit", "-m", "fixture")
 
     control.write_text(
-        'GOAL_PATH = "docs/authority/GOAL.md"\n', encoding="utf-8"
-    )
-    git_fixture(tmp_path, "add", "scripts/legacy_path_consumer.py")
-    result = run_verifier(tmp_path, extra_args=("--staged",))
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_staged_legacy_to_domain_goal_path_migration_does_not_mint_new_authority(
-    tmp_path: Path,
-) -> None:
-    write_valid_fixture(tmp_path)
-    git_fixture(tmp_path, "init")
-    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
-    git_fixture(tmp_path, "config", "user.name", "fixture")
-    control = tmp_path / "scripts" / "legacy_path_consumer.py"
-    control.write_text('GOAL_PATH = "docs/authority/GOAL.md"\n', encoding="utf-8")
-    git_fixture(tmp_path, "add", ".")
-    git_fixture(tmp_path, "commit", "-m", "fixture")
-
-    control.write_text(
-        'GOAL_PATH = "docs/domains/governance/authority/GOAL.md"\n',
-        encoding="utf-8",
+        'GOAL_PATH = "docs/domains/governance/authority/GOAL.md"\n', encoding="utf-8"
     )
     git_fixture(tmp_path, "add", "scripts/legacy_path_consumer.py")
     result = run_verifier(tmp_path, extra_args=("--staged",))
@@ -1727,7 +1713,7 @@ def test_staged_authority_path_migration_rejects_mixed_behavior_change(
     git_fixture(tmp_path, "commit", "-m", "fixture")
 
     control.write_text(
-        'GOAL_PATH = "docs/authority/GOAL.md"\nprint("new behavior")\n',
+        'GOAL_PATH = "docs/domains/governance/authority/GOAL.md"\nprint("new behavior")\n',
         encoding="utf-8",
     )
     git_fixture(tmp_path, "add", "scripts/legacy_path_consumer.py")

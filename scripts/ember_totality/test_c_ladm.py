@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_ladm.py — STATUS PROBE for Ember goal condition C-LADM.
 
-Registry text: docs/spec/conditions-v1.md sec 4.2 C-LADM (docs/authority/GOAL.md sec 1 item 1, "sec-1-1").
+Registry text: docs/spec/conditions-v1.md sec 4.2 C-LADM (docs/domains/governance/authority/GOAL.md sec 1 item 1, "sec-1-1").
 R: the verified-episode LEDGER admission rules -- world-provided ground truth (verifier
 verdict recorded), no self-admitted episodes, matched-control pool membership -- actually
 hold on every admitted row, not merely asserted in prose. Board CHK for the trust boundary
@@ -33,7 +36,7 @@ Rules enforced (recon dossier sec3, frozen 2026-07-04) and their mechanization:
      exception for the 1,909 seed rows (ledger-schema-v3.md: `receipt` absent + `origin`
      containing "seed" => the blanket receipt receipts/t3-seed-20260610T021308Z.json
      covers them; a naive "assert receipt present" would falsely RED these legitimate rows).
-  5. matched-control pool membership (docs/authority/GOAL.md sec1 item1 "matched control" adversary class;
+  5. matched-control pool membership (docs/domains/governance/authority/GOAL.md sec1 item1 "matched control" adversary class;
      math-core-v1.md sec5b's C = matched-control update class) -- MACHINE-CHECKED, partial:
      every non-seed-origin episode's `task` has >=1 same-task row in control_pool.jsonl.
      What this CANNOT check from ledger data alone: whether a specific capability CLAIM's

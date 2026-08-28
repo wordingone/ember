@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Emit a no-secret authorization receipt for ScienceAgentBench paid visual judging."""
 from __future__ import annotations
 
@@ -72,7 +75,7 @@ def build_receipt(
         blocked_reasons.append("paid_visual_judge_budget_note_missing")
 
     ready = not blocked_reasons
-    goal_path = repo / "docs/authority/GOAL.md"
+    goal_path = repo / "docs/domains/governance/authority/GOAL.md"
     receipt = {
         "ticket": TICKET,
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),

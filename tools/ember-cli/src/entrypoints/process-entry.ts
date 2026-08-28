@@ -1530,7 +1530,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   };
 
   // The interactive TUI is the operator-seat surface (#154): its cwd is where the agent's
-  // Read/Bash tools resolve docs/authority/GOAL.md and everything else. process.cwd() alone is not
+  // Read/Bash tools resolve docs/domains/governance/authority/GOAL.md and everything else. process.cwd() alone is not
   // reliable here under a compiled binary launched from an arbitrary directory (#172) --
   // resolve the real repo root (env var / cwd-walk / exe-path-walk). If none of those
   // anchors find an Ember checkout, resolveEmberSourceRootOrCwd preserves the typed

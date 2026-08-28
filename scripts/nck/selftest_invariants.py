@@ -96,8 +96,8 @@ def _make_fixture_tree(tmp: str) -> dict:
                                 "pace_s_per_step": 0.05}}, f)
     paths["governor_cfg"] = gov_cfg
 
-    # docs/authority/GOAL.md
-    goal = os.path.join(tmp, "docs/authority/GOAL.md")
+    # docs/domains/governance/authority/GOAL.md
+    goal = os.path.join(tmp, "docs/domains/governance/authority/GOAL.md")
     with open(goal, "w", encoding="utf-8", newline="\n") as f:
         f.write(
             "# GOAL (fixture)\n\n"
@@ -160,13 +160,13 @@ def case_b_tampered_file(tmp: str) -> tuple[bool, str]:
     paths = _make_fixture_tree(tmp)
     manifest_path, baseline_path = _build_manifest(tmp, paths)
 
-    # Tamper the docs/authority/GOAL.md after the manifest was built
+    # Tamper the docs/domains/governance/authority/GOAL.md after the manifest was built
     with open(paths["goal"], "a", encoding="utf-8", newline="\n") as f:
         f.write("\n[TAMPERED LINE]\n")
 
     try:
         verify_at_boot(manifest_path=manifest_path, baseline_path=baseline_path)
-        return False, "verify_at_boot should have refused tampered docs/authority/GOAL.md"
+        return False, "verify_at_boot should have refused tampered docs/domains/governance/authority/GOAL.md"
     except SystemExit as exc:
         msg = str(exc)
         if "INVARIANT_REFUSE" not in msg:
@@ -174,8 +174,8 @@ def case_b_tampered_file(tmp: str) -> tuple[bool, str]:
         # The path must be named in the refusal
         goal_rel = os.path.relpath(paths["goal"], tmp)
         # The error names the abs path or the label; check for either
-        if "docs/authority/GOAL.md" not in msg and "goal" not in msg.lower():
-            return False, f"refusal does not name docs/authority/GOAL.md: {msg[:300]}"
+        if "docs/domains/governance/authority/GOAL.md" not in msg and "goal" not in msg.lower():
+            return False, f"refusal does not name docs/domains/governance/authority/GOAL.md: {msg[:300]}"
         return True, "tampered file detected + path named in refusal"
 
 

@@ -51,7 +51,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file_
 # anything -- a latent probe defect if it were ever reached first.
 _NC_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 # The §4 condition-bullet prose now lives in docs/spec/conditions-v1.md (the
-# canonical registry, docs/authority/GOAL.md §4 header); docs/authority/GOAL.md itself is tried too (its §4
+# canonical registry, docs/domains/governance/authority/GOAL.md §4 header); docs/domains/governance/authority/GOAL.md itself is tried too (its §4
 # may inline amendments/bullets directly). Order = most-authoritative first.
 # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial legacy
 # "<spec>" last-resort candidate: a literal bracketed placeholder never exists
@@ -68,7 +68,7 @@ _NC_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 def _goal_files_for(root: str) -> list[str]:
     return [
         os.path.join(root, "docs", "spec", "conditions-v1.md"),
-        os.path.join(root, "docs/authority/GOAL.md"),
+        os.path.join(root, "docs/domains/governance/authority/GOAL.md"),
     ]
 
 # Invalid-token whose REAL match -> RED (does-NOT-count); negative assertion.

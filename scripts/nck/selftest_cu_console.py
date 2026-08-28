@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """selftest_cu_console.py — CU console surface selftest (Closes #262).
 
 Cases:
@@ -46,7 +49,7 @@ def _base_config(tmp: str) -> dict:
             "margin_gib_floor": 1.0,
             "pace_s_per_step": 0.05,
         },
-        "goal_file": os.path.join(tmp, "docs/authority/GOAL.md"),
+        "goal_file": os.path.join(tmp, "docs/domains/governance/authority/GOAL.md"),
         "heartbeat_file": os.path.join(tmp, "nck-heartbeat.txt"),
         "journal_path": os.path.join(tmp, "nck-journal.jsonl"),
         "gate_notes_dir": os.path.join(tmp, "gate-notes"),

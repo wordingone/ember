@@ -61,7 +61,7 @@ progress bars are never completion evidence.
   [docs/roadmap/certificates/EMBER-01.md](docs/roadmap/certificates/EMBER-01.md).
   The certificate credits no model, no training, and no capability to EMBER-01.
 - **EMBER-02 — three-billion-parameter foundation birth** is the active goal
-  (`docs/authority/GOAL.md`; execution boundary in
+  (`docs/domains/governance/authority/GOAL.md`; execution boundary in
   [docs/authority/CONTINUITY.md](docs/authority/CONTINUITY.md)). It is not
   complete; no current checkpoint is an admissible Ember model.
 
@@ -86,7 +86,7 @@ selection.
 ## Read next
 
 - docs/authority/INVARIANT.md - unamendable identity
-- docs/authority/GOAL.md - complete project and machine contract
+- docs/domains/governance/authority/GOAL.md - complete project and machine contract
 - docs/roadmap/README.md - public milestone decomposition and completion certificates
 - docs/authority/STATE.md - compatibility pointer only; exact artifact identities and maturity live in docs/authority/CONTINUITY.md
 - docs/contracts/goal-clear-protocol.md - proof required for completion

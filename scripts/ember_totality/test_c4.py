@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Totality status-probe for Ember goal condition C4 (Before/after).
 
@@ -51,7 +54,7 @@ requirements, ARTIFACT REACHABILITY:
   (i) every "<field>_path"/"<field>_sha256" pair present on the candidate
       block must resolve to an in-tree file (resolve_in_tree) whose sha256
       matches the claimed value -- an off-tree/unreachable path FAILS the
-      receipt outright (named per the docs/authority/GOAL.md Execution-surface imports-owed
+      receipt outright (named per the docs/domains/governance/authority/GOAL.md Execution-surface imports-owed
       row, anti-gaming S10 import debt), no more trust-the-string pass.
   (ii) when the trace artifact resolves, its OWN recorded
       pre_neural_parameter_hash/post_neural_parameter_hash fields (if

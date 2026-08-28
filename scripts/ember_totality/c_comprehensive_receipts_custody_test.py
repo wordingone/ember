@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c_comprehensive_receipts_custody_test.py -- Canonical receipts/ custody (TDD for issue #400).
 
 Two-run test verifying NO new untracked files under canonical receipts/ after consecutive
@@ -64,8 +67,8 @@ def test_comprehensive_receipts_custody():
             docs_dst = repo / "docs"
             shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
 
-        # Create minimal docs/authority/GOAL.md
-        goal_path = repo / "docs/authority/GOAL.md"
+        # Create minimal docs/domains/governance/authority/GOAL.md
+        goal_path = repo / "docs/domains/governance/authority/GOAL.md"
         if not goal_path.exists():
             goal_path.write_text("# GOAL\n\nMinimal GOAL for testing.\n")
 

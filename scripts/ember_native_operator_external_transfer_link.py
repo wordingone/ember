@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Native-operator external-transfer link receipt for Ember.
 
 This links the current connected-cycle blocker to a fresh external D3 action:
@@ -117,8 +120,8 @@ def build_receipt(args: argparse.Namespace) -> dict[str, Any]:
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md"),
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md"),
         "audit_receipt": str(audit_path),
         "audit_receipt_sha256": sha256_file(audit_path),
         "native_goal_receipt": str(native_goal_path),

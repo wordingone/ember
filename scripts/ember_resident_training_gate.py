@@ -124,7 +124,7 @@ def code_vs_docs_metric(repo: Path, changed_paths: list[Path]) -> dict[str, Any]
 
 def inspect_goal_authority(repo: Path) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
-    goal_path = repo / "docs/authority/GOAL.md"
+    goal_path = repo / "docs/domains/governance/authority/GOAL.md"
     goal_markers = [
         "Authority And Precedence",
         "Current Blocker Packet",
@@ -151,7 +151,7 @@ def inspect_goal_authority(repo: Path) -> tuple[dict[str, Any], list[str]]:
         head = text[:2000]
         markers_present = {
             "superseded": "SUPERSEDED" in head,
-            "sole_active_goal": "docs/authority/GOAL.md is the sole active goal file" in head,
+            "sole_active_goal": "docs/domains/governance/authority/GOAL.md is the sole active goal file" in head,
             "scope_not_reduced": "no scope is reduced" in head,
             "resident_gate": "resident_training_gate_status=PASS" in head,
         }
@@ -169,11 +169,11 @@ def inspect_goal_authority(repo: Path) -> tuple[dict[str, Any], list[str]]:
 
     return {
         "status": "PASS" if not errors else "BLOCKED",
-        "goal_path": "docs/authority/GOAL.md",
+        "goal_path": "docs/domains/governance/authority/GOAL.md",
         "goal_sha256": _sha256(goal_path) if goal_path.exists() else None,
         "required_goal_markers": goal_markers,
         "superseded_parallel_specs": superseded_rows,
-        "one_goal_file_rule": "docs/authority/GOAL.md is the only active Ember goal/control document; superseded docs are imported history, not clearance surfaces.",
+        "one_goal_file_rule": "docs/domains/governance/authority/GOAL.md is the only active Ember goal/control document; superseded docs are imported history, not clearance surfaces.",
     }, errors
 
 def _extract_abstract(abs_html_path: Path) -> str:
@@ -1108,7 +1108,7 @@ def build_gate_receipt(
     changed_paths: list[Path],
     full_parity_receipt: Path | None = None,
 ) -> dict[str, Any]:
-    goal_path = repo / "docs/authority/GOAL.md"
+    goal_path = repo / "docs/domains/governance/authority/GOAL.md"
     debt_path = repo / "docs/ledgers/ember-debt-ledger.md"
     errors: list[str] = []
     if not goal_path.exists():
@@ -1281,7 +1281,7 @@ def write_gate_receipt(out_path: Path, receipt: dict[str, Any]) -> None:
 
 
 def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
-    """Builds the hermetic fixture repo (docs/authority/GOAL.md, floor contracts, clean-room
+    """Builds the hermetic fixture repo (docs/domains/governance/authority/GOAL.md, floor contracts, clean-room
     harness files, papers index, full-parity receipt) under root. Shared by
     selftest() and test_ember_resident_training_gate_econ.py so both exercise
     the real build_gate_receipt() codepath against one fixture definition
@@ -1292,7 +1292,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
     (repo / "scripts" / "nck").mkdir(parents=True)
     (repo / "receipts").mkdir()
     for rel, content in {
-        "docs/authority/GOAL.md": (
+        "docs/domains/governance/authority/GOAL.md": (
             "Authority And Precedence\nCurrent Blocker Packet\nresident_training_gate_status\n"
             "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
             "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
@@ -1307,7 +1307,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "mechanism_erasure=forbidden\n"
             "-->\n\n"
             "# Ember model-birth and rung floor (fixture mirror)\n\n"
-            "This file is subordinate to docs/authority/GOAL.md. It contains no deferral ledger and no\n"
+            "This file is subordinate to docs/domains/governance/authority/GOAL.md. It contains no deferral ledger and no\n"
             "smaller launch vehicle.\n\n"
             "## Birth floor\n\n"
             "- at least 3,000,000,000 total unique stored neural parameters;\n"
@@ -1328,8 +1328,8 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "No modality, mechanism family, benchmark obligation, or whole-stack requirement\n"
             "can be deferred out of the foundation model.\n"
         ),
-        "docs/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\ndocs/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-        "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
         "docs/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
         "docs/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
@@ -1618,7 +1618,7 @@ def main() -> int:
         Path("scripts/ember_resident_training_gate.py"),
         Path("scripts/ember_resident_training_gate_selftest.py"),
         Path("docs/ledgers/ember-debt-ledger.md"),
-        Path("docs/authority/GOAL.md"),
+        Path("docs/domains/governance/authority/GOAL.md"),
     ]
     receipt = build_gate_receipt(
         repo,

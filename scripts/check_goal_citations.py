@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_goal_citations.py — standing citation gate for the goalforge rebuild.
 
 Extracts every path-like reference to docs/, scripts/, receipts/, configs/,
-config/, or paper/ found in docs/authority/GOAL.md, docs/roadmap/PROBLEMS.md, and every file in
+config/, or paper/ found in docs/domains/governance/authority/GOAL.md, docs/roadmap/PROBLEMS.md, and every file in
 docs/spec/, then verifies each one exists under the repo root.
 
 Reference shapes recognized (per spec):
@@ -105,7 +108,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "citation_allowlist.txt"
 RECEIPTS_DIR = REPO_ROOT / "receipts"
 
-SOURCE_FILES = ["docs/authority/GOAL.md", "docs/roadmap/PROBLEMS.md"]
+SOURCE_FILES = ["docs/domains/governance/authority/GOAL.md", "docs/roadmap/PROBLEMS.md"]
 SOURCE_GLOB_DIRS = ["docs/spec"]
 
 PREFIXES = ("baseline/", "docs/", "scripts/", "receipts/", "configs/", "config/", "paper/")
@@ -903,7 +906,7 @@ def run_selftest():
         check("wrap-join resolves split backtick-span ref across a hard line break",
               len(r1b["wrap_joined"]) == 1)
 
-        # docs/authority/GOAL.md's actual ASCII box-diagram shape: the fragment is followed
+        # docs/domains/governance/authority/GOAL.md's actual ASCII box-diagram shape: the fragment is followed
         # on the SAME line by an unrelated table cell, and the true
         # continuation sits at the SAME column on the next line.
         text1d = (
@@ -1084,7 +1087,7 @@ def run_selftest():
         check("multiple §-refs within window of one @-path all bind to it and all resolve",
               rj["checked"] == 3 and len(rj["missing"]) == 0)
 
-        # (k) guard 1 — real-corpus false positive (docs/authority/GOAL.md 2026-07-02): a
+        # (k) guard 1 — real-corpus false positive (docs/domains/governance/authority/GOAL.md 2026-07-02): a
         # repeated bare §<n> that was already TIGHT-bound to an EARLIER path
         # must not be reattributed to a more-recent, different path just
         # because it's nearer. other-target-v1.md has §A but no §1.

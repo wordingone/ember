@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_ind.py -- STATUS PROBE for Ember goal condition C-IND.
 
-Condition (authoritative, docs/authority/GOAL.md §1 item 6 / §4.0 amendment 10;
+Condition (authoritative, docs/domains/governance/authority/GOAL.md §1 item 6 / §4.0 amendment 10;
 docs/spec/operator-independence-v1.md is the full contract):
 
   C-IND -- operator-independence proof surface. R: the actual goal's completion

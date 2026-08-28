@@ -13,8 +13,8 @@ beginning with a recognized status token, and exits 0. The status is
 determined by the probe really inspecting state under its resolved root —
 never hardcoded here.
 
-Outcome contract (docs/authority/GOAL.md §4.1 amendment 2026-07-02; extended 2026-07-02 for
-the registry semantics split, docs/authority/GOAL.md §4.0(9)):
+Outcome contract (docs/domains/governance/authority/GOAL.md §4.1 amendment 2026-07-02; extended 2026-07-02 for
+the registry semantics split, docs/domains/governance/authority/GOAL.md §4.0(9)):
 
   STATE-conditions (every registry id except the process invariants) are THREE-VALUED:
     GREEN        a real receipt/artifact was found and satisfies the CHK.
@@ -27,7 +27,7 @@ the registry semantics split, docs/authority/GOAL.md §4.0(9)):
                  "couldn't look" are exactly the ambiguity this outcome
                  exists to kill.
 
-  STANDING PROCESS-INVARIANT rows (C0, C9, C15 — docs/authority/GOAL.md §4.0(9)) are NEVER
+  STANDING PROCESS-INVARIANT rows (C0, C9, C15 — docs/domains/governance/authority/GOAL.md §4.0(9)) are NEVER
   GREEN/RED/UNEVALUABLE. They render one of:
     AUDIT-OK             a cadence audit from the epoch (the goalforge-clear
                           operator-acceptance object's ts) found no
@@ -38,7 +38,7 @@ the registry semantics split, docs/authority/GOAL.md §4.0(9)):
                           at receipts/acceptance/goalforge-clear-*.json) —
                           pre-epoch history is OUT OF AUDIT SCOPE, so these
                           rows are neither OK nor INCIDENT, and NEVER RED.
-  Completion math (per docs/authority/GOAL.md §4.0(9)/conditions-v1.md §4.4) is computed
+  Completion math (per docs/domains/governance/authority/GOAL.md §4.0(9)/conditions-v1.md §4.4) is computed
   over the STATE-conditions ONLY: complete iff every STATE-condition is
   GREEN AND zero unresolved post-epoch AUDIT-INCIDENT rows exist. AUDIT rows
   are cadence-audit results, never completion conjuncts, never a GREEN.
@@ -59,12 +59,12 @@ layout (repo root — receipts/docs/etc. live directly under it), then the
 legacy nested <external-state> layout some older trees used. See
 docs/spec/engineering-contracts-v1.md §9.
 
-Invariant-integrity gate (docs/authority/GOAL.md §8/§5 item 9/§12, added 2026-07-02): every
+Invariant-integrity gate (docs/domains/governance/authority/GOAL.md §8/§5 item 9/§12, added 2026-07-02): every
 totality receipt carries an `invariant_checksum` block — sha256 over the
-frozen invariant-set I's canonical files (gate semantics, governor, docs/authority/GOAL.md,
+frozen invariant-set I's canonical files (gate semantics, governor, docs/domains/governance/authority/GOAL.md,
 receipts discipline, evaluation suite M, enforcement layer), compared against
 a pinned value when one exists. No pinned manifest exists yet (kernel
-unfired, freeze-onset per docs/authority/GOAL.md §12) — the receipt records the computed
+unfired, freeze-onset per docs/domains/governance/authority/GOAL.md §12) — the receipt records the computed
 hashes with `pinned: null, status: "pre-freeze-baseline"`; this run BECOMES
 the baseline record rather than comparing against one.
 
@@ -213,7 +213,7 @@ ORDER = [
     "C-OBS", "C-ANAT", "C-SCALE", "C-E2B", "C-IND", "C-PROC", "C-LEGIB", "C-SURFACE2", "C-ENF", "C-MILE", "C-DISC", "C-LADM", "C-AUTO", "C-MANIFEST", "C-TALLY",
 ]
 
-# STANDING PROCESS-INVARIANT rows (docs/authority/GOAL.md §4.0(9)): never STATE-conditions,
+# STANDING PROCESS-INVARIANT rows (docs/domains/governance/authority/GOAL.md §4.0(9)): never STATE-conditions,
 # never RED/GREEN/UNEVALUABLE, excluded from STATE-conditions-only completion
 # math and counted separately as cadence-audit results.
 PROCESS_INVARIANTS = {"C0", "C9", "C15"}
@@ -233,22 +233,22 @@ ID_RE = re.compile(r"^(C\([−-]?1\)|C-[A-Z0-9]+|C[0-9]+)")
 # env-provided root is auditable from the receipt alone.
 ARTIFACT_ROOT_SOURCE_RE = re.compile(r"\[artifact_root_source=(env|repo-root)\]")
 
-# --- Invariant-integrity gate (docs/authority/GOAL.md §8/§5 item 9/§12) --------------------
-# I-members per docs/authority/GOAL.md §5 item 9's PINNED I-manifest (pinned 2026-07-02,
+# --- Invariant-integrity gate (docs/domains/governance/authority/GOAL.md §8/§5 item 9/§12) --------------------
+# I-members per docs/domains/governance/authority/GOAL.md §5 item 9's PINNED I-manifest (pinned 2026-07-02,
 # commit 509b426, R8b review of this runner's builder-selected baseline --
 # see docs/goalforge-debate-ledger.md row R8b). This bracket is now the
-# authority: docs/authority/GOAL.md's own text says "the totality runner's machine copy
+# authority: docs/domains/governance/authority/GOAL.md's own text says "the totality runner's machine copy
 # must match it, mismatch = incident." I_MEMBERS below is that machine copy,
 # hand-synced to the bracket; MANIFEST_SYNC_CHECK below re-derives the
-# bracket from docs/authority/GOAL.md's live text every run and compares, so a future edit
+# bracket from docs/domains/governance/authority/GOAL.md's live text every run and compares, so a future edit
 # to either side that isn't mirrored in the other shows up as a receipt
 # finding, not a silent drift.
-GOAL_MD_PATH = os.path.join(REPO_ROOT, "docs/authority/GOAL.md")
+GOAL_MD_PATH = os.path.join(REPO_ROOT, "docs/domains/governance/authority/GOAL.md")
 LEDGER_PATH = os.path.join(REPO_ROOT, "docs", "goalforge-debate-ledger.md")
 
 I_MEMBERS = {
     # = T0's clock-resetting set (§6): the checksum history IS the stability
-    # clock's mechanical evidence (docs/authority/GOAL.md §5 item 9).
+    # clock's mechanical evidence (docs/domains/governance/authority/GOAL.md §5 item 9).
     "gate_semantics": [
         "docs/spec/math-core-v1.md",
         "docs/spec/bootstrap-v1.md",
@@ -256,10 +256,10 @@ I_MEMBERS = {
     ],
     "governor": ["scripts/governor.py"],
     # + conditions-v1.md (registry body) + operator-acceptance-v1.md (consent
-    # schema) -- both change the bar without touching docs/authority/GOAL.md itself (R7 H1's
+    # schema) -- both change the bar without touching docs/domains/governance/authority/GOAL.md itself (R7 H1's
     # laundering pattern, closed at the hash layer).
     "goal_md": [
-        "docs/authority/GOAL.md",
+        "docs/domains/governance/authority/GOAL.md",
         "docs/spec/conditions-v1.md",
         "docs/spec/operator-acceptance-v1.md",
     ],
@@ -271,7 +271,7 @@ I_MEMBERS = {
         "scripts/receipt_semantic_check.py",
     ],
     # EXTENDS to M's item/data files the day they materialize (dated
-    # expectation per docs/authority/GOAL.md §5 item 9 -- not yet applicable, no such files
+    # expectation per docs/domains/governance/authority/GOAL.md §5 item 9 -- not yet applicable, no such files
     # exist on disk).
     "evaluation_suite_m": ["docs/spec/evaluation-v1.md"],
     # The EXECUTABLE walls, not just their descriptions -- hashing only prose
@@ -321,7 +321,7 @@ def _package_py_files(repo_root, rel_dir):
 
 BUCKET_NAMES = list(I_MEMBERS.keys())
 
-# Narrow parser for docs/authority/GOAL.md §5 item 9's fixed prose shape:
+# Narrow parser for docs/domains/governance/authority/GOAL.md §5 item 9's fixed prose shape:
 #   "bucket_name = item + item + item (parenthetical rationale); ..."
 # repeated per bucket, closed by "Each file in exactly ONE bucket." This is
 # not a general prose parser -- it is scoped to this one frozen bracket, and
@@ -345,7 +345,7 @@ def parse_pinned_manifest_bracket(goal_md_text):
         m = _MANIFEST_ANCHOR_RE.search(goal_md_text)
         if not m:
             return None, ("MANIFEST_ANCHOR_NOT_FOUND: could not locate the "
-                           "pinned I-manifest bracket text in docs/authority/GOAL.md §5 "
+                           "pinned I-manifest bracket text in docs/domains/governance/authority/GOAL.md §5 "
                            "item 9 (anchor phrase missing or reworded)")
         body = m.group(1)
         segments = re.split(r";\s*", body)
@@ -369,7 +369,7 @@ def parse_pinned_manifest_bracket(goal_md_text):
                 if token.endswith("/ package"):
                     items.append(("PACKAGE", token[:-len("/ package")].strip().rstrip("/")))
                     continue
-                if token.startswith("scripts/") or token == "docs/authority/GOAL.md":
+                if token.startswith("scripts/") or token == "docs/domains/governance/authority/GOAL.md":
                     items.append(("FILE", token))
                 elif token.endswith(".md") or token.endswith(".json"):
                     items.append(("FILE", f"docs/spec/{token}"))
@@ -386,10 +386,10 @@ def parse_pinned_manifest_bracket(goal_md_text):
 
 
 def manifest_sync_check(repo_root):
-    """Compare this runner's I_MEMBERS (the machine copy) against docs/authority/GOAL.md
+    """Compare this runner's I_MEMBERS (the machine copy) against docs/domains/governance/authority/GOAL.md
     §5 item 9's live pinned bracket text. Returns a dict describing the
     result; NEVER raises and NEVER aborts the run -- a mismatch is an
-    incident recorded in the receipt (docs/authority/GOAL.md §5 item 9: "mismatch =
+    incident recorded in the receipt (docs/domains/governance/authority/GOAL.md §5 item 9: "mismatch =
     incident"), per the do-not-abort instruction for invariant-manifest
     drift (distinct from the registry-sync close condition, which does
     abort)."""
@@ -398,7 +398,7 @@ def manifest_sync_check(repo_root):
             goal_text = fh.read()
     except OSError as exc:
         return {"matched": False, "parsed_ok": False,
-                "incident": f"MANIFEST_SYNC_UNREADABLE: cannot read docs/authority/GOAL.md: {exc!r}",
+                "incident": f"MANIFEST_SYNC_UNREADABLE: cannot read docs/domains/governance/authority/GOAL.md: {exc!r}",
                 "diff": {}}
 
     parsed, reason = parse_pinned_manifest_bracket(goal_text)
@@ -425,7 +425,7 @@ def manifest_sync_check(repo_root):
         return {
             "matched": False, "parsed_ok": True,
             "incident": (
-                "MANIFEST_DRIFT: this runner's I_MEMBERS diverges from docs/authority/GOAL.md "
+                "MANIFEST_DRIFT: this runner's I_MEMBERS diverges from docs/domains/governance/authority/GOAL.md "
                 "§5 item 9's pinned bracket -- invariant-manifest drift is a "
                 "finding, not a crash; see 'diff' for the exact bucket-level "
                 "disagreement"
@@ -549,7 +549,7 @@ def _git_verify_enumeration(repo_root, decl, i_file_rel_paths):
 def compute_invariant_checksum(repo_root, ts):
     """Build the invariant_checksum receipt block: per-file sha256 for every
     I-member's canonical file(s) (bucket file lists expanded from the pinned
-    docs/authority/GOAL.md §5 item 9 manifest, package buckets globbed dynamically), a
+    docs/domains/governance/authority/GOAL.md §5 item 9 manifest, package buckets globbed dynamically), a
     per-member combined hash, a top-level combined hash, the pinned-vs-
     machine-copy manifest_sync result, and authorization_pairing (null
     pre-clear steady state when the combined hash didn't change; when a
@@ -606,7 +606,7 @@ def compute_invariant_checksum(repo_root, ts):
         "row R8b (2026-07-02, I-manifest pinning). Post-clear, any "
         "I-member baseline change must PAIR with an operator-acceptance "
         "object or a §12 clear->fire repair receipt in this field "
-        "(docs/authority/GOAL.md §5 item 9); a flip without pairing is "
+        "(docs/domains/governance/authority/GOAL.md §5 item 9); a flip without pairing is "
         "invalid_unauthorized_invariant_change. This field is null "
         "pre-clear by design, not by omission."
     )
@@ -668,11 +668,11 @@ def compute_invariant_checksum(repo_root, ts):
 
     return {
         "mapping_source": (
-            "docs/authority/GOAL.md §5 item 9's PINNED I-manifest (pinned 2026-07-02, "
+            "docs/domains/governance/authority/GOAL.md §5 item 9's PINNED I-manifest (pinned 2026-07-02, "
             "commit 509b426, docs/goalforge-debate-ledger.md row R8b) -- "
             "this is the authority; I_MEMBERS in ember_totality_spec.py is "
             "the hand-synced machine copy, verified against the live "
-            "docs/authority/GOAL.md text every run (see manifest_sync below)."
+            "docs/domains/governance/authority/GOAL.md text every run (see manifest_sync below)."
         ),
         "manifest_sync": sync,
         "members": members,
@@ -683,12 +683,12 @@ def compute_invariant_checksum(repo_root, ts):
         "authorization_pairing_note": authorization_pairing_note,
         "note": (
             "No pinned checksum VALUE exists yet (kernel unfired, "
-            "freeze-onset per docs/authority/GOAL.md §12) -- this run's hashes BECOME the "
+            "freeze-onset per docs/domains/governance/authority/GOAL.md §12) -- this run's hashes BECOME the "
             "baseline record; they are not compared against a prior hash "
             "pin. The FILE MANIFEST itself (which files belong to which "
             "bucket) IS pinned as of 2026-07-02 and is checked every run "
             "via manifest_sync above. Post freeze-onset, any I-member edit "
-            "must flag a manifest change on the very next run (docs/authority/GOAL.md §12)."
+            "must flag a manifest change on the very next run (docs/domains/governance/authority/GOAL.md §12)."
         ),
     }
 
@@ -1228,7 +1228,7 @@ def main():
         if r["condition"] in PROCESS_INVARIANTS and r["status"] not in AUDIT_STATUSES:
             r["reason"] = (
                 f"[RUNNER RECLASSIFIED from {r['status']}] {r['reason']} "
-                "-- process-invariant rows (C0/C9/C15, docs/authority/GOAL.md §4.0(9)) may "
+                "-- process-invariant rows (C0/C9/C15, docs/domains/governance/authority/GOAL.md §4.0(9)) may "
                 "never carry a STATE-condition status; treated as "
                 "AUDIT-PENDING-EPOCH pending investigation of the probe fault"
             )
@@ -1387,7 +1387,7 @@ def main():
             "finding_count": len(quarantine_findings),
             "findings": quarantine_findings,
         },
-        # Separate block for the 3 STANDING PROCESS-INVARIANT rows (docs/authority/GOAL.md
+        # Separate block for the 3 STANDING PROCESS-INVARIANT rows (docs/domains/governance/authority/GOAL.md
         # §4.0(9)), distinct from the unified `rows` array above -- they are
         # cadence-audit results (AUDIT-OK/AUDIT-INCIDENT/AUDIT-PENDING-EPOCH),
         # never STATE-condition completion conjuncts.
@@ -1414,11 +1414,11 @@ def main():
                 "pct_complete": pct_green,
                 "note": (
                     "Completion is computed over the "
-                    f"{state_total} STATE-conditions ONLY (docs/authority/GOAL.md §4.0(9) / "
+                    f"{state_total} STATE-conditions ONLY (docs/domains/governance/authority/GOAL.md §4.0(9) / "
                     "conditions-v1.md §4.4): complete iff every "
                     "STATE-condition is GREEN AND zero unresolved post-epoch "
                     "AUDIT-INCIDENT rows exist. UNEVALUABLE counts as RED for "
-                    "STATE-condition completion math (docs/authority/GOAL.md §4.1 amendment "
+                    "STATE-condition completion math (docs/domains/governance/authority/GOAL.md §4.1 amendment "
                     "2026-07-02) but is never reported as an evaluated "
                     "failure. The 3 STANDING PROCESS-INVARIANT rows "
                     f"({sorted(PROCESS_INVARIANTS)}) are cadence-audit "

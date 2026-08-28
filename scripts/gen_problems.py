@@ -138,7 +138,7 @@ def main():
             "id": cid, "norm": cn, "title": c.get("title", cid),
             "tier": c.get("tier", "frontier"), "sev": sev, "own": own,
             "rank_hint": c.get("rank_hint", 50), "root": c.get("root_cause", []),
-            "deffile": c.get("defining_file", "docs/authority/GOAL.md"), "meaning": fold(c.get("meaning")),
+            "deffile": c.get("defining_file", "docs/domains/governance/authority/GOAL.md"), "meaning": fold(c.get("meaning")),
             "compound": c.get("compound", []), "proof": c.get("proof"),
             "state": state, "state_note": state_note, "breason": breason,
         })
