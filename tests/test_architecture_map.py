@@ -56,6 +56,11 @@ def one_rule(
         "owner": "Governance",
         "disposition": disposition,
         "touch_set_id": f"touch-{rule_id}",
+        "rollback_unit_strategy": (
+            "NOT_A_SWITCH"
+            if disposition in {"RETAIN_STABLE", "DEFERRED_DEPENDENCY"}
+            else "PER_AUTHORITATIVE_SWITCH_TARGET"
+        ),
     }
     if deferral_id is not None:
         row["deferral_id"] = deferral_id
@@ -155,6 +160,7 @@ class ClassificationTests(unittest.TestCase):
                     "disposition": "RETAIN_STABLE",
                     "rule_id": "receipts-stable",
                     "touch_set_id": "governance-stable-receipts",
+                    "rollback_unit_strategy": "NOT_A_SWITCH",
                     "deferral_id": None,
                 },
                 {
@@ -163,6 +169,7 @@ class ClassificationTests(unittest.TestCase):
                     "disposition": "MOVE",
                     "rule_id": "scripts",
                     "touch_set_id": "governance-script-census",
+                    "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET",
                     "deferral_id": None,
                 },
             ],
@@ -474,6 +481,351 @@ class CensusContractTests(unittest.TestCase):
 
         self.assertEqual(graph["nodes"], policy["owners"])
         self.assertEqual(graph["edges"], sorted(graph["edges"]))
+
+
+class ColoringFailureTests(unittest.TestCase):
+    def test_capacity_blind_k_minus_one_certificate_refuses(self) -> None:
+        compiler = load_compiler()
+        graph = {
+            "nodes": ["a", "b"],
+            "edges": [],
+            "precedence": [],
+            "node_weights": {
+                "a": {"path_count": 1, "consumers": ["a-1", "a-2", "a-3"]},
+                "b": {"path_count": 1, "consumers": ["b-1", "b-2", "b-3"]},
+            },
+            "capacities": {"max_paths_per_carrier": 64, "max_consumers_per_carrier": 5},
+        }
+        result = compiler.solve_minimum_coloring(
+            graph["nodes"], [], [], max_states=100, node_weights=graph["node_weights"], capacities=graph["capacities"]
+        )
+        altered = {**result, "capacity_sha256": compiler.canonical_sha256({})}
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.verify_coloring_certificate(graph, altered, max_states=100)
+
+        self.assertEqual(raised.exception.code, "COLORING_CERTIFICATE_MISMATCH")
+
+    def test_oversized_atomic_touch_set_refuses(self) -> None:
+        compiler = load_compiler()
+        touch_sets = [
+            {"id": "too-large", "paths": ["a.py", "b.py"], "consumers": []},
+        ]
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.build_conflict_graph(
+                touch_sets,
+                {"max_paths_per_carrier": 1, "max_consumers_per_carrier": 10},
+            )
+
+        self.assertEqual(raised.exception.code, "OVERSIZED_ATOMIC_TOUCH_SET")
+        self.assertIn("too-large", raised.exception.detail)
+
+    def test_altered_graph_or_k_refuses(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "solve_minimum_coloring", "verify_coloring_certificate")
+        graph = {
+            "nodes": ["a", "b"],
+            "edges": [["a", "b"]],
+            "precedence": [],
+        }
+        result = compiler.solve_minimum_coloring(
+            graph["nodes"], [("a", "b")], [], max_states=100
+        )
+        altered = {
+            **result,
+            "graph_sha256": "0" * 64,
+        }
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.verify_coloring_certificate(graph, altered, max_states=100)
+
+        self.assertEqual(raised.exception.code, "COLORING_CERTIFICATE_MISMATCH")
+
+    def test_invalid_k_minus_one_unsat_certificate_refuses(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "solve_minimum_coloring", "verify_coloring_certificate")
+        graph = {
+            "nodes": ["a", "b"],
+            "edges": [["a", "b"]],
+            "precedence": [],
+        }
+        result = compiler.solve_minimum_coloring(
+            graph["nodes"], [("a", "b")], [], max_states=100
+        )
+        altered = {
+            **result,
+            "k_minus_one_unsat": {**result["k_minus_one_unsat"], "complete_exhaustion": False},
+        }
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.verify_coloring_certificate(graph, altered, max_states=100)
+
+        self.assertEqual(raised.exception.code, "K_MINUS_ONE_NOT_PROVEN")
+
+    def test_exact_search_budget_exceeded_refuses_without_heuristic(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "solve_minimum_coloring")
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.solve_minimum_coloring(
+                ["a", "b", "c"],
+                [("a", "b"), ("b", "c"), ("a", "c")],
+                [],
+                max_states=1,
+            )
+
+        self.assertEqual(raised.exception.code, "EXACT_COLORING_BUDGET_EXCEEDED")
+
+
+class ColoringContractTests(unittest.TestCase):
+    def test_disconnected_capacity_packing_is_exact_and_certified(self) -> None:
+        compiler = load_compiler()
+        consumers = {
+            "a": [f"a-{index:03d}" for index in range(115)],
+            "b": [f"b-{index:03d}" for index in range(115)],
+        }
+        capacities = {
+            "max_paths_per_carrier": 64,
+            "max_consumers_per_carrier": 128,
+            "consumer_counting_rule": "UNIQUE_CONSUMER_PATHS_PER_CARRIER",
+        }
+
+        result = compiler.solve_minimum_coloring(
+            ["a", "b"],
+            [],
+            [],
+            max_states=100,
+            node_weights={
+                node: {"path_count": 1, "consumers": rows}
+                for node, rows in consumers.items()
+            },
+            capacities=capacities,
+        )
+
+        self.assertEqual(result["algorithm"], "stable-exact-branch-and-bound-v1")
+        self.assertEqual(result["k"], 2)
+        self.assertNotEqual(result["assignment"]["a"], result["assignment"]["b"])
+        self.assertEqual(result["decomposition"]["component_count"], 2)
+        self.assertEqual(result["decomposition"]["packing_item_count"], 2)
+        self.assertEqual(result["k_minus_one_unsat"]["proof_kind"], "GLOBAL_PACKING_EXHAUSTION")
+
+    def test_cross_component_precedence_refuses_decomposition(self) -> None:
+        compiler = load_compiler()
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.solve_minimum_coloring(
+                ["a", "b"], [], [("a", "b")], max_states=100
+            )
+
+        self.assertEqual(raised.exception.code, "CROSS_COMPONENT_PRECEDENCE")
+
+    def test_nonconflicting_nodes_over_capacity_require_two_colors(self) -> None:
+        compiler = load_compiler()
+        weights = {
+            "a": {"path_count": 1, "consumers": ["a-1", "a-2", "a-3"]},
+            "b": {"path_count": 1, "consumers": ["b-1", "b-2", "b-3"]},
+        }
+        capacities = {"max_paths_per_carrier": 64, "max_consumers_per_carrier": 5}
+
+        result = compiler.solve_minimum_coloring(
+            ["a", "b"], [], [], max_states=100, node_weights=weights, capacities=capacities
+        )
+
+        self.assertEqual(result["k"], 2)
+        self.assertNotEqual(result["assignment"]["a"], result["assignment"]["b"])
+        self.assertEqual(result["k_minus_one_unsat"]["proof_kind"], "GLOBAL_PACKING_EXHAUSTION")
+    def test_shared_consumer_creates_conflict_edge(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "build_conflict_graph")
+        touch_sets = [
+            {"id": "a", "paths": ["src/a.py"], "consumers": ["tests/shared.py"]},
+            {"id": "b", "paths": ["src/b.py"], "consumers": ["tests/shared.py"]},
+        ]
+
+        graph = compiler.build_conflict_graph(
+            touch_sets,
+            {"max_paths_per_carrier": 20, "max_consumers_per_carrier": 20},
+        )
+
+        self.assertIn(["a", "b"], graph["edges"])
+
+    def test_dependency_precedence_orders_carriers(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "solve_minimum_coloring")
+
+        result = compiler.solve_minimum_coloring(
+            ["a", "b"], [("a", "b")], [("a", "b")], max_states=100
+        )
+
+        self.assertLess(result["assignment"]["a"], result["assignment"]["b"])
+
+    def test_reverse_lexical_precedence_remains_satisfiable(self) -> None:
+        compiler = load_compiler()
+
+        result = compiler.solve_minimum_coloring(
+            ["a", "b"], [("a", "b")], [("b", "a")], max_states=100
+        )
+
+        self.assertEqual(result["k"], 2)
+        self.assertLess(result["assignment"]["b"], result["assignment"]["a"])
+
+    def test_touch_sets_are_stable_and_preserve_consumers(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "build_touch_sets")
+        path_rows = [
+            {"path": "src/b.py", "owner": "Model", "disposition": "MOVE", "touch_set_id": "model", "rollback_unit_strategy": "EXPLICIT_KEY", "rollback_unit_key": "model-pair"},
+            {"path": "src/a.py", "owner": "Model", "disposition": "MOVE", "touch_set_id": "model", "rollback_unit_strategy": "EXPLICIT_KEY", "rollback_unit_key": "model-pair"},
+        ]
+        consumers = [
+            {"consumer_path": "tests/z.py", "target": "src/a.py", "touch_set_id": "model"},
+            {"consumer_path": "tests/z.py", "target": "src/b.py", "touch_set_id": "model"},
+        ]
+
+        result = compiler.build_touch_sets(path_rows, consumers)
+
+        self.assertEqual(result[0]["paths"], ["src/a.py", "src/b.py"])
+        self.assertEqual(result[0]["consumers"], ["tests/z.py"])
+
+    def test_retain_stable_and_deferred_paths_are_not_nodes(self) -> None:
+        compiler = load_compiler()
+        path_rows = [
+            {"path": "receipts/a.json", "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "stable", "rollback_unit_strategy": "NOT_A_SWITCH"},
+            {"path": "data/a.json", "owner": "Data", "disposition": "DEFERRED_DEPENDENCY", "touch_set_id": "data", "rollback_unit_strategy": "NOT_A_SWITCH"},
+            {"path": "scripts/a.py", "owner": "Governance", "disposition": "MOVE", "touch_set_id": "scripts", "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET"},
+        ]
+
+        result = compiler.build_touch_sets(path_rows, [])
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["paths"], ["scripts/a.py"])
+
+    def test_hub_consumer_does_not_fuse_authoritative_targets(self) -> None:
+        compiler = load_compiler()
+        path_rows = [
+            {"path": "scripts/a.py", "owner": "Governance", "disposition": "MOVE", "touch_set_id": "scripts", "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET"},
+            {"path": "scripts/b.py", "owner": "Governance", "disposition": "MOVE", "touch_set_id": "scripts", "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET"},
+        ]
+        consumers = [
+            {"consumer_path": "tests/hub.py", "target": "scripts/a.py", "touch_set_id": "tests"},
+            {"consumer_path": "tests/hub.py", "target": "scripts/b.py", "touch_set_id": "tests"},
+        ]
+
+        first = compiler.build_touch_sets(path_rows, consumers)
+        second = compiler.build_touch_sets(list(reversed(path_rows)), list(reversed(consumers)))
+        graph = compiler.build_conflict_graph(
+            first,
+            {"max_paths_per_carrier": 64, "max_consumers_per_carrier": 128},
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 2)
+        self.assertEqual(first[0]["consumers"], ["tests/hub.py"])
+        self.assertEqual(first[1]["consumers"], ["tests/hub.py"])
+        self.assertEqual(graph["edges"], [[first[0]["id"], first[1]["id"]]])
+
+    def test_owner_dependency_becomes_target_before_source_precedence(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "build_touch_set_precedence")
+        touch_sets = [
+            {"id": "model", "owner": "Model"},
+            {"id": "training", "owner": "Training"},
+        ]
+        dependencies = {"nodes": ["Model", "Training"], "edges": [["Training", "Model"]]}
+
+        result = compiler.build_touch_set_precedence(touch_sets, dependencies)
+
+        self.assertEqual(result, [["model", "training"]])
+
+    def test_carrier_specs_are_ordered_and_complete(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "build_carrier_specs")
+        touch_sets = [
+            {"id": "a", "paths": ["a.py"], "consumers": []},
+            {"id": "b", "paths": ["b.py"], "consumers": ["tests/b.py"]},
+        ]
+        coloring = {"k": 2, "assignment": {"a": 1, "b": 0}}
+
+        result = compiler.build_carrier_specs(
+            touch_sets,
+            coloring,
+            {"max_paths_per_carrier": 64, "max_consumers_per_carrier": 128},
+        )
+
+        self.assertEqual([row["carrier_id"] for row in result], ["carrier-001", "carrier-002"])
+        self.assertEqual(result[0]["touch_set_ids"], ["b"])
+        self.assertEqual(result[1]["touch_set_ids"], ["a"])
+        self.assertEqual(result[0]["path_count"], 1)
+        self.assertEqual(result[0]["unique_consumer_count"], 1)
+        self.assertTrue(result[0]["within_capacity"])
+
+    def test_carrier_specs_refuse_capacity_overrun(self) -> None:
+        compiler = load_compiler()
+        touch_sets = [
+            {"id": "a", "paths": ["a.py"], "consumers": ["tests/a.py"]},
+            {"id": "b", "paths": ["b.py"], "consumers": ["tests/b.py"]},
+        ]
+
+        with self.assertRaises(compiler.ArchitectureMapError) as raised:
+            compiler.build_carrier_specs(
+                touch_sets,
+                {"k": 1, "assignment": {"a": 0, "b": 0}},
+                {"max_paths_per_carrier": 1, "max_consumers_per_carrier": 10},
+            )
+
+        self.assertEqual(raised.exception.code, "CARRIER_CAPACITY_EXCEEDED")
+
+    def test_equivalent_colorings_choose_lexicographic_assignment(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "solve_minimum_coloring")
+
+        result = compiler.solve_minimum_coloring(["b", "a"], [], [], max_states=100)
+
+        self.assertEqual(list(result["assignment"]), ["a", "b"])
+        self.assertEqual(result["assignment"], {"a": 0, "b": 0})
+
+    def test_two_runs_are_byte_identical(self) -> None:
+        compiler = load_compiler()
+        require_functions(compiler, "solve_minimum_coloring")
+        args = (["c", "a", "b"], [("a", "b"), ("b", "c")], [("a", "c")])
+
+        first = compiler.solve_minimum_coloring(*args, max_states=1000)
+        second = compiler.solve_minimum_coloring(*args, max_states=1000)
+
+        self.assertEqual(compiler.canonical_json(first), compiler.canonical_json(second))
+
+    def test_current_tree_exact_coloring_and_carriers_verify(self) -> None:
+        compiler = load_compiler()
+        policy = policy_fixture()
+        path_rows = compiler.classify_paths(compiler.tracked_paths(ROOT), policy)
+        census = compiler.discover_consumers(ROOT, path_rows)
+        dependencies = compiler.build_dependency_graph(census["rows"], policy)
+        touch_sets = compiler.build_touch_sets(path_rows, census["rows"])
+        conflict_graph = compiler.build_conflict_graph(touch_sets, policy["reviewability"])
+        precedence = compiler.build_touch_set_precedence(touch_sets, dependencies)
+        graph = {**conflict_graph, "precedence": precedence}
+
+        coloring = compiler.solve_minimum_coloring(
+            graph["nodes"],
+            [tuple(edge) for edge in graph["edges"]],
+            [tuple(edge) for edge in precedence],
+            max_states=policy["reviewability"]["max_exact_search_states"],
+            node_weights=graph["node_weights"],
+            capacities=graph["capacities"],
+        )
+        verified = compiler.verify_coloring_certificate(
+            graph,
+            coloring,
+            max_states=policy["reviewability"]["max_exact_search_states"],
+        )
+        carriers = compiler.build_carrier_specs(touch_sets, coloring, graph["capacities"])
+
+        self.assertEqual(verified, coloring)
+        self.assertEqual(len(carriers), coloring["k"])
+        self.assertEqual(
+            sorted(item for carrier in carriers for item in carrier["touch_set_ids"]),
+            sorted(graph["nodes"]),
+        )
 
 
 if __name__ == "__main__":
