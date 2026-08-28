@@ -1,0 +1,102 @@
+{
+  "authority_scope": "MECHANICS_CANARY_ONLY",
+  "canary_id": "EVAL-CANARY-IMAGE-V1",
+  "checkpoint": {
+    "file": "checkpoint.pt",
+    "sha256": "1df4efc430ba13e7474707e8c71ceb5c2d8bef0385fbd48f02b3e55842eef168",
+    "tensor_hashes": {
+      "audio_projector.linear.weight": "5a4d1f09711b595810b8c08201fff12f6d6e8a714f4c4243c81d769c01390a7d",
+      "final_norm.weight": "084f3764506e4524b4aa7ee738aebd2757f284fc2aee90f3a048e40a29544415",
+      "image_projector.linear.weight": "8cd57ba5d7157d4af4229046c96524b64d3ff0d92c7d2c1b74c9d41f72c70964",
+      "layers.0.attention.k_norm.weight": "cf38948c7117c3192dd3952d13914e1c5214e8b7bbd80d8bedc3fc4c3d4fb97b",
+      "layers.0.attention.output.weight": "7e5d96b5fc387bf409d5c19c24ceb2589aa11630cc21e42463595da69e7b77d5",
+      "layers.0.attention.q_norm.weight": "04e527aba2c305ea8efa6c7fc3af6c276ac4cc7bcff04817c3418c704807f529",
+      "layers.0.attention.qkv.weight": "79a07517edf0d67c226fdaeb9518fcee6c7c1fbd54a78009d1d88d8d25480c4d",
+      "layers.0.experts.audio.down.weight": "09b10a53efa2c6c8aecfb68fbf8df597c4a16321197ffd79a64ba0f8432d61ef",
+      "layers.0.experts.audio.up_gate.weight": "6dc3080a5c97f7661b5597e035b221c6bd58df673f5ec0062e86f9629c6ed4ff",
+      "layers.0.experts.reasoning.down.weight": "809102b8b18cbd72f0a5ac7c49ecaa609467216c1f9a0965fe626746b5345f49",
+      "layers.0.experts.reasoning.up_gate.weight": "43abe3da867e740d26e3a9a220edadd131698de01213607519a6ca6358e16509",
+      "layers.0.experts.tool.down.weight": "edbafa5661a5e1f4046d18e4b52111a946733d4d56c775c9eee41d4ad4f7622b",
+      "layers.0.experts.tool.up_gate.weight": "99fffcc7faecc0cfa18e3fb2fcad38b333ea9f522d200ea0640c07fc2c8bed0f",
+      "layers.0.experts.vision.down.weight": "ab81144f8e71931c394465c26fc86fe120ea46bbc17368f9d477bfd49a8c8eec",
+      "layers.0.experts.vision.up_gate.weight": "830896fb000e82e8358e559f0d6024a5dc9d4343a8e15ecb3a42af4f98c6e779",
+      "layers.0.pre_attention_norm.weight": "5289fac26b34e0bd933de68a858dba189cff05ec0a3818ffdea5daa52f89d07d",
+      "layers.0.pre_ffn_norm.weight": "6b5eaef88e8537358ce918aafae8fe633e602ad35b2ea42bf0cf608b7d3fc21e",
+      "layers.0.shared_ffn.down.weight": "88ef240ab2f56e62dd26a08abab9c3976938c441ae92248b772c2a24020d5a01",
+      "layers.0.shared_ffn.up_gate.weight": "e35bdbaeb3d2e4afb818e5d31df24462d00b9839be3364554e6257ed7580cbe0",
+      "lm_head.weight": "625585a948cd6cfcb4b1059768aadd8fa049b01c165217896e780c54d2ffa030",
+      "token_embedding.weight": "9fe135983159a98ba9d9e3a12f76362136274a8b95c255fd16c7dacbad250ad3"
+    }
+  },
+  "config": {
+    "file": "config.json",
+    "sha256": "05692cecf35ad979920c4740bd157e3b4655ae6870b348ab82125897861d3b0a",
+    "vocab_size": 32000
+  },
+  "declared_deletion_paths": [],
+  "items": [
+    {
+      "asset": "image-00.ppm",
+      "asset_sha256": "8bfcdece7f35bd582535ea0d7d9d98f32c2d4d0112e19bf457ead508554e50c6",
+      "gold_label": "even",
+      "item_id": "canary-image-00",
+      "split": "canary"
+    },
+    {
+      "asset": "image-01.ppm",
+      "asset_sha256": "4ee8c00422a53a20164632a50c7dc62bee16e5892b98a921e93f135db85e2fd2",
+      "gold_label": "odd",
+      "item_id": "canary-image-01",
+      "split": "canary"
+    },
+    {
+      "asset": "image-02.ppm",
+      "asset_sha256": "c595fae9ecc18b9e8c0ddef5d2e4e4b794b61f0f85112060afeb78b41700fe6b",
+      "gold_label": "even",
+      "item_id": "canary-image-02",
+      "split": "canary"
+    },
+    {
+      "asset": "image-03.ppm",
+      "asset_sha256": "2570077728f232f213dab1d63bd03743261b7d9a0527ea7925350bd8cf5cf3b0",
+      "gold_label": "odd",
+      "item_id": "canary-image-03",
+      "split": "canary"
+    },
+    {
+      "asset": "image-04.ppm",
+      "asset_sha256": "ca487630184fdfa1553433e7884451f68949c816d35a8cee829c23a2d9162f38",
+      "gold_label": "even",
+      "item_id": "canary-image-04",
+      "split": "canary"
+    },
+    {
+      "asset": "image-05.ppm",
+      "asset_sha256": "3d32c9ea729a6e7b0bb4bd29b6b5458a454049bfed96a85a6760d28326380378",
+      "gold_label": "odd",
+      "item_id": "canary-image-05",
+      "split": "canary"
+    },
+    {
+      "asset": "image-06.ppm",
+      "asset_sha256": "dce24419b5d91382c2da74df2d7ec4a18e0c377a5c6697ca58892f79c4315bd8",
+      "gold_label": "even",
+      "item_id": "canary-image-06",
+      "split": "canary"
+    },
+    {
+      "asset": "image-07.ppm",
+      "asset_sha256": "5236fa03e3c4d1a9e12053fc718fe9d905da7e26f43bdd08e81cf3050f250218",
+      "gold_label": "odd",
+      "item_id": "canary-image-07",
+      "split": "canary"
+    }
+  ],
+  "license": "CC0-1.0",
+  "seed": 1948,
+  "tokenizer": {
+    "file": "tokenizer/tokenizer.json",
+    "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
+    "vocab_size": 32000
+  }
+}
