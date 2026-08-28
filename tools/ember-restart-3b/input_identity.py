@@ -250,3 +250,197 @@ def emit_integration_receipt(
             raise InputIdentityError("wrong_identity", "input admission receipt hash is malformed")
         receipt["input_admission_receipt_sha256"] = admission_receipt_sha256
     return receipt
+
+
+def _verified_catalog_import_receipt(raw: bytes, *, expected_export_sha256: str | None = None) -> dict[str, Any]:
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InputIdentityError("catalog_receipt_drift", "catalog import receipt is unreadable") from exc
+    if not isinstance(value, dict) or value.get("schema_version") != "ember-data-catalog-import-receipt-v1" or value.get("result") != "PASS":
+        raise InputIdentityError("catalog_receipt_drift", "catalog import receipt is not PASS")
+    claimed = value.pop("self_sha256", None)
+    if claimed != _sha256_bytes(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")):
+        raise InputIdentityError("catalog_receipt_drift", "catalog import receipt self hash is invalid")
+    value["self_sha256"] = claimed
+    if expected_export_sha256 is not None and value.get("canonical_export_sha256") != expected_export_sha256:
+        raise InputIdentityError("catalog_receipt_drift", "catalog import receipt does not bind the canonical export")
+    return value
+
+
+def resolve_catalog_training_datasets(
+    *,
+    catalog_export_raw: bytes,
+    dataset_import_receipt_raw: bytes,
+    consumer_import_receipt_raw: bytes,
+    expected_dataset_id: str,
+) -> dict[str, Any]:
+    """Resolve the exact catalog-derived train dataset consumed by certified preflight."""
+
+    catalog_export_sha256 = _sha256_bytes(catalog_export_raw)
+    _verified_catalog_import_receipt(dataset_import_receipt_raw)
+    _verified_catalog_import_receipt(
+        consumer_import_receipt_raw, expected_export_sha256=catalog_export_sha256
+    )
+    try:
+        catalog = json.loads(catalog_export_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InputIdentityError("catalog_receipt_drift", "canonical catalog export is unreadable") from exc
+    records = catalog.get("records") if isinstance(catalog, dict) else None
+    edges = catalog.get("edges") if isinstance(catalog, dict) else None
+    if not isinstance(records, list) or not isinstance(edges, list):
+        raise InputIdentityError("catalog_receipt_drift", "canonical catalog export schema is invalid")
+    if json.dumps(catalog, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    ) != catalog_export_raw:
+        raise InputIdentityError("catalog_receipt_drift", "canonical catalog export bytes have drifted")
+    admitted_datasets = {
+        row["id"]: row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "dataset_version"
+        and row.get("state") == "admitted"
+        and isinstance(row.get("id"), str)
+    }
+    consumer_dataset_edges = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "consumer_dataset"
+        and edge.get("to_id") in admitted_datasets
+        and isinstance(edge.get("from_id"), str)
+    ]
+    if len(consumer_dataset_edges) != 1:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog must derive one exact admitted dataset consumer binding",
+        )
+    derived_dataset_id = consumer_dataset_edges[0]["to_id"]
+    if expected_dataset_id != derived_dataset_id:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "caller dataset identity does not equal the catalog-derived identity",
+        )
+    dataset = admitted_datasets[derived_dataset_id]
+    consumer_id = consumer_dataset_edges[0]["from_id"]
+    consumer_records = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "consumer_attempt"
+        and row.get("id") == consumer_id
+        and row.get("state") in {"admitted", "completed"}
+    ]
+    if len(consumer_records) != 1:
+        raise InputIdentityError(
+            "catalog_dataset_substitution", "catalog-derived consumer attempt is absent"
+        )
+    membership_ids = {
+        edge["to_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "version_membership"
+        and edge.get("from_id") == derived_dataset_id
+        and isinstance(edge.get("to_id"), str)
+    }
+    memberships = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "membership"
+        and row.get("id") in membership_ids
+    ]
+    if len(memberships) != len(membership_ids) or not memberships or any(
+        row.get("split") != "train" or row.get("admission_state") != "admitted"
+        for row in memberships
+    ):
+        raise InputIdentityError("catalog_dataset_substitution", "catalog dataset is not exclusively admitted train data")
+    membership_object_edges = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "membership_object"
+        and edge.get("from_id") in membership_ids
+        and isinstance(edge.get("to_id"), str)
+    ]
+    if len(membership_object_edges) != len(membership_ids) or {
+        edge["from_id"] for edge in membership_object_edges
+    } != membership_ids:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "each catalog membership must bind one immutable object",
+        )
+    object_ids = {edge["to_id"] for edge in membership_object_edges}
+    object_records = {
+        row["id"]: row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "immutable_object"
+        and row.get("id") in object_ids
+        and row.get("custody_state") == "available"
+    }
+    if set(object_records) != object_ids or any(
+        row.get("id") != f"sha256:{row.get('sha256')}" for row in object_records.values()
+    ):
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog train objects are absent or not available under their hashes",
+        )
+    evaluation_ids = {
+        edge["to_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "consumer_evaluation"
+        and edge.get("from_id") == consumer_id
+        and isinstance(edge.get("to_id"), str)
+    }
+    if len(evaluation_ids) != 1:
+        raise InputIdentityError("catalog_dataset_substitution", "catalog consumer lacks one evaluation-isolation binding")
+    evaluation_object_ids = {
+        edge["to_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "evaluation_object"
+        and edge.get("from_id") in evaluation_ids
+        and isinstance(edge.get("to_id"), str)
+    }
+    if len(evaluation_object_ids) != 1:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog evaluation isolation lacks one immutable object",
+        )
+    if object_ids.intersection(evaluation_object_ids):
+        raise InputIdentityError("catalog_dataset_substitution", "train objects overlap the protected evaluation identity")
+    dataset_receipt_id = f"sha256:{_sha256_bytes(dataset_import_receipt_raw)}"
+    receipt_records = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "receipt"
+        and row.get("id") == dataset_receipt_id
+        and row.get("sha256") == dataset_receipt_id.removeprefix("sha256:")
+        and row.get("state") == "accepted"
+    ]
+    consumer_receipt_edges = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "consumer_receipt"
+        and edge.get("from_id") == consumer_id
+        and edge.get("to_id") == dataset_receipt_id
+    ]
+    if len(receipt_records) != 1 or len(consumer_receipt_edges) != 1:
+        raise InputIdentityError(
+            "catalog_receipt_drift",
+            "dataset import receipt is not the catalog-derived consumer receipt",
+        )
+    return {
+        "dataset_id": derived_dataset_id,
+        "dataset_manifest_sha256": dataset["manifest_sha256"],
+        "catalog_export_sha256": catalog_export_sha256,
+        "consumer_attempt_id": consumer_id,
+        "split": "train",
+        "object_count": len(object_ids),
+        "object_set_sha256": _sha256_bytes(json.dumps(sorted(object_ids), separators=(",", ":")).encode("utf-8")),
+        "protected_eval_item_admission": False,
+    }
