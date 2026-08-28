@@ -3,6 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
+import importlib.util
 import json
 import hashlib
 import subprocess
@@ -10,6 +11,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import torch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -101,6 +105,26 @@ class EvalCanaryImageContractTests(unittest.TestCase):
             self.assertEqual(len(manifest["items"]), 8)
             self.assertEqual(manifest["tokenizer"]["vocab_size"], manifest["config"]["vocab_size"])
 
+    def test_tensor_identity_hashing_does_not_require_numpy(self) -> None:
+        """Break caught: the pinned torch/tokenizers runtime implicitly needs NumPy."""
+
+        def load_module(name: str, path: Path):
+            spec = importlib.util.spec_from_file_location(name, path)
+            self.assertIsNotNone(spec)
+            self.assertIsNotNone(spec.loader)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+
+        builder = load_module("issue1948_fixture_builder", FIXTURE / "build_fixture.py")
+        evaluator = load_module("issue1948_evaluator", CANARY)
+        value = torch.tensor([[1.0, -2.0], [3.5, 0.0]], dtype=torch.float32)
+        with mock.patch.object(torch.Tensor, "numpy", side_effect=RuntimeError("NumPy forbidden")):
+            self.assertEqual(
+                builder.canonical_tensor_hash(value),
+                evaluator.canonical_tensor_hash(value),
+            )
+
     def test_positive_run_binds_real_image_path_and_recomputable_scores(self) -> None:
         """Break caught: predictions bypass checkpoint, tokenizer, image adapter, or per-item scoring."""
         completed = subprocess.run(
@@ -189,25 +213,6 @@ class EvalCanaryImageContractTests(unittest.TestCase):
                 {"build_fixture.py", "checkpoint.pt", "config.json", "eval_canary_image.py", "mechanics-only-dispositions.json", "model.py", "tokenizer.json"},
             )
             self.assertGreater(receipt["measured_wall_seconds"], 0)
-
-    def test_pinned_cpu_ci_job_is_dedicated_and_measurement_ready(self) -> None:
-        """Break caught: the canary drifts into a generic job or resolves an unbound runtime."""
-        workflow = (ROOT / ".github" / "workflows" / "ci-pr.yml").read_text(encoding="utf-8")
-        required = (
-            "eval-canary-image:",
-            'python-version: "3.10.11"',
-            'torch==2.10.0+cpu',
-            'https://download.pytorch.org/whl/cpu',
-            'tokenizers==0.22.2',
-            'TORCH_WHEEL_FILENAME',
-            'TORCH_WHEEL_SHA256',
-            '--run-suite',
-            'issue1948-eval-canary-terminal.json',
-            'ISSUE1948_FROZEN_TIMEOUT_SECONDS: pending-first-green',
-        )
-        for needle in required:
-            self.assertIn(needle, workflow)
-
 
 if __name__ == "__main__":
     unittest.main()

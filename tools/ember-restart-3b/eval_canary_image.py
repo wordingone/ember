@@ -56,7 +56,7 @@ def sha256_bytes(payload: bytes) -> str:
 
 def canonical_tensor_hash(tensor: torch.Tensor) -> str:
     value = tensor.detach().cpu().contiguous()
-    raw = value.view(torch.uint8).numpy().tobytes()
+    raw = bytes(value.view(torch.uint8).reshape(-1).tolist())
     header = json.dumps(
         {"dtype": str(value.dtype), "shape": list(value.shape)},
         sort_keys=True,
