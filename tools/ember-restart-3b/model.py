@@ -27,6 +27,19 @@ import torch.utils.checkpoint as checkpoint_utils
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
 
+def _swiglu_product(up: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
+    """The exact eager SwiGLU pointwise expression used by every expert."""
+
+    return F.silu(gate) * up
+
+
+_FUSED_SWIGLU_PRODUCT = torch.compile(
+    _swiglu_product,
+    fullgraph=True,
+    dynamic=True,
+)
+
+
 @dataclass(frozen=True)
 class MultimodalSpan:
     """An explicit contiguous multimodal span and its attention policy.\n\n    ``isolated`` is an authorized optional raw-modality policy: raw modality tokens attend bidirectionally inside their own span but cannot read prior text, while later decoder tokens retain causal access to that span.\n    ``causal`` and ``bidirectional`` remain independently selectable.\n    """
@@ -306,7 +319,22 @@ class SwiGLUExpert(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
-        return self.down(F.silu(gate) * up)
+        return self.down(_swiglu_product(up, gate))
+
+    def forward_fused(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """Fuse only the shared-FFN SiLU/multiply site on CUDA.
+
+        CPU and meta paths remain eager for portable construction, tests, and
+        immediate rollback. The active-expert path continues to call forward().
+        """
+
+        up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
+        product = (
+            _FUSED_SWIGLU_PRODUCT(up, gate)
+            if hidden_states.device.type == "cuda"
+            else _swiglu_product(up, gate)
+        )
+        return self.down(product)
 
 
 class _DecoderLayer(nn.Module):
@@ -320,7 +348,7 @@ class _DecoderLayer(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
         hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
-        hidden_states = hidden_states + self.shared_ffn(self.pre_ffn_norm(hidden_states))
+        hidden_states = hidden_states + self.shared_ffn.forward_fused(self.pre_ffn_norm(hidden_states))
         if active_expert == "shared":
             return hidden_states
         return hidden_states + self.experts[active_expert](self.pre_ffn_norm(hidden_states))
