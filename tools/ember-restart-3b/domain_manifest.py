@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 RETIRED_BOOTSTRAP_ARTIFACT = "owned-clean-curriculum-128-v1"
@@ -55,6 +55,124 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def load_bulk_domain_connector_receipt(
+    *,
+    receipt_path: Path,
+    expected_receipt_sha256: str,
+    source_id: str,
+    expected_source_selector: str,
+    expected_license_text_sha256: str,
+    domain: str,
+    split: str,
+) -> dict[str, Any]:
+    """Project one immutable bulk connector receipt without durable host paths."""
+
+    if not _is_sha256(expected_receipt_sha256) or _sha256(receipt_path) != expected_receipt_sha256:
+        raise ValueError("bulk domain connector receipt bytes do not match the frozen identity")
+    try:
+        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("bulk domain connector receipt must be readable JSON") from error
+    if not isinstance(payload, dict) or payload.get("schema") != "corpus-connector-receipt-v1":
+        raise ValueError("bulk domain connector receipt schema is not admitted")
+    if not isinstance(source_id, str) or not source_id or not isinstance(domain, str) or not domain:
+        raise ValueError("bulk domain catalog source and domain identities are required")
+    if split != "train":
+        raise ValueError("this front unit admits train-role identities only")
+    canonical_url = payload.get("canonical_url")
+    license_text = payload.get("license")
+    fetched_at = payload.get("fetched_at")
+    source_selector = payload.get("source_id")
+    dest_root = payload.get("dest_root")
+    manifest_sha256 = payload.get("sha256_manifest")
+    files = payload.get("files")
+    if (
+        not isinstance(canonical_url, str)
+        or not canonical_url.startswith("https://")
+        or not isinstance(license_text, str)
+        or not license_text
+        or not isinstance(fetched_at, str)
+        or not fetched_at
+        or not isinstance(source_selector, str)
+        or not source_selector
+        or not isinstance(dest_root, str)
+        or not dest_root
+        or not _is_sha256(manifest_sha256)
+        or not isinstance(files, list)
+        or not files
+    ):
+        raise ValueError("bulk domain connector authority is incomplete")
+    if (
+        not _is_sha256(expected_license_text_sha256)
+        or hashlib.sha256(license_text.encode("utf-8")).hexdigest()
+        != expected_license_text_sha256
+    ):
+        raise ValueError("bulk domain connector license does not match the frozen authority")
+    if source_selector != expected_source_selector:
+        raise ValueError("bulk domain connector source selector does not match the frozen authority")
+    custody_root = Path(dest_root)
+    if not custody_root.is_absolute() or not custody_root.is_dir():
+        raise ValueError("bulk domain connector custody root is unavailable")
+    custody_root = custody_root.resolve()
+    normalized_files: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    total_bytes = 0
+    for entry in files:
+        if not isinstance(entry, dict) or set(entry) != {"path", "bytes", "sha256"}:
+            raise ValueError("bulk domain connector file row has a closed-schema violation")
+        relative = entry.get("path")
+        byte_count = entry.get("bytes")
+        digest = entry.get("sha256")
+        if not isinstance(relative, str) or not relative:
+            raise ValueError("bulk domain connector file path is missing")
+        normalized = PurePosixPath(relative.replace("\\", "/"))
+        if (
+            normalized.is_absolute()
+            or ".." in normalized.parts
+            or any(":" in part for part in normalized.parts)
+            or normalized.as_posix() in seen_paths
+        ):
+            raise ValueError("bulk domain connector file path is unsafe or duplicated")
+        if isinstance(byte_count, bool) or not isinstance(byte_count, int) or byte_count <= 0 or not _is_sha256(digest):
+            raise ValueError("bulk domain connector file identity is malformed")
+        seen_paths.add(normalized.as_posix())
+        total_bytes += byte_count
+        physical = (custody_root / Path(*normalized.parts)).resolve()
+        try:
+            physical.relative_to(custody_root)
+        except ValueError as error:
+            raise ValueError("bulk domain connector physical file escapes custody") from error
+        if (
+            not physical.is_file()
+            or physical.stat().st_size != byte_count
+            or _sha256(physical) != digest
+        ):
+            raise ValueError("bulk domain connector physical file identity has drifted")
+        normalized_files.append({"path": normalized.as_posix(), "bytes": byte_count, "sha256": digest})
+    if payload.get("total_bytes") != total_bytes:
+        raise ValueError("bulk domain connector byte total does not match its files")
+    derived_manifest_sha256 = hashlib.sha256(
+        "\n".join(sorted(row["sha256"] for row in normalized_files)).encode("utf-8")
+    ).hexdigest()
+    if manifest_sha256 != derived_manifest_sha256:
+        raise ValueError("bulk domain connector manifest hash is not derived from its file rows")
+    normalized_files.sort(key=lambda row: (row["path"], row["sha256"]))
+    return {
+        "source_id": source_id,
+        "source_selector": source_selector,
+        "domain": domain,
+        "split": split,
+        "canonical_url": canonical_url,
+        "license": license_text,
+        "license_text_sha256": hashlib.sha256(license_text.encode("utf-8")).hexdigest(),
+        "fetched_at": fetched_at,
+        "manifest_sha256": manifest_sha256,
+        "receipt_sha256": expected_receipt_sha256,
+        "total_bytes": total_bytes,
+        "files": normalized_files,
+    }
 
 
 def load_domain_training_manifest(*, manifest_path: Path, repo_root: Path) -> dict[str, Any]:
