@@ -2,20 +2,26 @@
 
 **Purpose:** Enforce that public-facing documentation in the ember repository remains accurate, reachable, and up-to-date.
 
-**Enforcement:** Every PR touching `scripts/`, `configs/`, or top-level command-line interfaces must pass the freshness check before merge. The check runs as a local merge-gate.
+**Enforcement:** Every pull request and every push to master runs two deterministic named gates:
+`scripts/check_docs_freshness.py --front-door` and
+`scripts/gen_readme_status.py --check --generated-status`. The unscoped commands remain local
+full-audit tools and retain their branch-inventory, claims-index, and wall-age checks.
 
 ## What the checker verifies
 
 The `scripts/check_docs_freshness.py` script enforces four categories of correctness:
 
-### 1. Backtick path references resolve
-Every path quoted in backticks in `README.md` and `docs/**/*.md` must exist in the repository tree. Example:
+### 1. Front-door path references resolve
+Every path candidate in `README.md` and `docs/authority/CONTINUITY.md`, whether backticked or
+plain prose, must match the exact case of a path returned by `git ls-files`. An untracked local
+file cannot mask a defect. Example:
 
 ```markdown
 Run `scripts/receipt_check.py --all` to validate receipts.
 ```
 
-The checker verifies that `scripts/receipt_check.py` exists.
+The checker verifies that `scripts/receipt_check.py` is tracked with exact case. Its frozen prose
+grammar covers `.py`, `.md`, `.json`, `.txt`, `.sh`, `.yml`, `.yaml`, `.toml`, and `.ps1`.
 
 **Defect class:** `broken_path_reference`
 
@@ -38,12 +44,14 @@ python scripts/build_claims_index.py
 
 **Defect class:** `missing_claims_index`
 
-### 4. README state marker is recent
-The README.md header contains a machine-readable marker: `<!-- state-as-of: YYYY-MM-DD -->`. This marker must be ≤ 1 day old (e.g., if today is 2026-07-06, the marker must be 2026-07-05 or later).
+### 4. CONTINUITY state marker is recent
+`docs/authority/CONTINUITY.md` contains the machine-readable marker
+`<!-- state-as-of: YYYY-MM-DD -->`. The full audit requires it to be at most one day old. The
+deterministic merge gate checks placement and uniqueness without consulting wall-clock time.
 
 **When to update:** Before opening a PR, refresh the marker:
 ```markdown
-<!-- state-as-of: 2026-07-06 | board-receipt: ... -->
+<!-- state-as-of: 2026-07-06 -->
 ```
 
 **Defect class:** `stale_state_marker`
@@ -63,10 +71,11 @@ python scripts/check_docs_freshness.py --selftest
 
 ## Merge-gate integration
 
-The check runs before merge on every PR:
+Both scoped checks run before merge and again on master:
 
 ```bash
-python scripts/check_docs_freshness.py
+python scripts/check_docs_freshness.py --front-door
+python scripts/gen_readme_status.py --check --generated-status
 # Exits 0 if clean, 1 if defects found
 ```
 
@@ -74,11 +83,11 @@ python scripts/check_docs_freshness.py
 
 ## Debt ledger and deferral
 
-If a PR introduces a docs defect but the defect is not in the PR's scope, the author may:
+If a PR encounters debt outside the deterministic front-door scope, the author may:
 
 1. File an issue describing the defect
 2. Reference that issue in the PR body as "docs debt: #NNN"
-3. The merge-gate passes if the defect is pre-existing (not introduced by the PR)
+3. Keep the debt out of the scoped surfaces; there is no pre-existing-defect bypass in either gate
 
 **Example PR body:**
 ```
@@ -93,21 +102,19 @@ Adds 3 new scripts for the C14 experiment suite.
 
 ## Protocol for docs that can't be regenerated
 
-Some documents (e.g., internal notes, research artifacts) may be genuinely out-of-tree and not indexed. These should:
-
-1. Live in `docs/research/` or similar subdirectories (not `docs/`)
-2. Be exempted from the reachability check by their directory name
-3. Be marked with a comment if they reference files that may not exist in the public repo
+The front-door grammar has exactly four exclusions: URL spans, the
+`EMBER_CONSERVATION_V1` header, angle/path-to placeholders, and a line carrying the explicit
+allow-unresolved pragma. There is no directory-wide research exemption.
 
 Example:
 ```markdown
-<!-- internal: references local benchmark data not committed to public repo -->
+<!-- docs-freshness: allow-unresolved -->
 ## My Experiment
 
 Ran on a local data corpus at `/mnt/local/...`
 ```
 
-The checker exempts `docs/research/` from reachability enforcement.
+Every pragma use is enumerated in the scoped gate output and requires review.
 
 ## Escalation
 

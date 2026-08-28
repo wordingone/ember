@@ -89,48 +89,52 @@ def test_current_subject_is_one_closed_machine_readable_identity() -> None:
     assert all(not Path(path).is_absolute() for path in subject["evidence_paths"])
 
 
-def test_readme_and_continuity_are_generated_from_current_subject() -> None:
+def test_continuity_is_the_only_generated_current_subject_surface() -> None:
     module = load_generator()
     payload = module.load_current_subject(CURRENT_SUBJECT)
     module.validate_current_subject_evidence(payload, REPO_ROOT)
     block = module.render_current_subject_block(payload)
 
     assert "optimizer state (custody-only, public bytes absent)" in block
-    assert block in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert block not in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert block in (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
 
 
-def test_readme_human_summary_agrees_with_current_subject() -> None:
+def test_readme_has_no_mutable_current_subject_summary() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    continuity = (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
 
     assert "approximately 2.195B owned checkpoint" not in readme
-    assert "3.839B allocated, unique, trainable, and served" in readme
-    assert "1.021B active and episode-trainable parameters" in readme
+    assert "3.839B allocated, unique, trainable, and served" not in readme
+    assert "1.021B active and episode-trainable parameters" not in readme
+    assert "3839161856` unique" in continuity
+    assert "1020589568` active" in continuity
 
 
 def test_subject_surface_mismatches_fail_closed(tmp_path: Path) -> None:
     module = load_generator()
     payload = module.load_current_subject(CURRENT_SUBJECT)
-    readme = tmp_path / "README.md"
     continuity = tmp_path / "docs/authority/CONTINUITY.md"
     continuity.parent.mkdir(parents=True, exist_ok=True)
-    readme.write_text((REPO_ROOT / "README.md").read_text(encoding="utf-8"), encoding="utf-8")
     continuity.write_text(
         (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 
-    readme.write_text(
-        readme.read_text(encoding="utf-8").replace(
+    continuity.write_text(
+        continuity.read_text(encoding="utf-8").replace(
             payload["subject"]["checkpoint_manifest_sha256"], "a" * 64, 1
         ),
         encoding="utf-8",
     )
-    assert not module.subject_surfaces_current(payload, readme, continuity)
+    assert not module.subject_surfaces_current(payload, continuity)
 
-    readme.write_text((REPO_ROOT / "README.md").read_text(encoding="utf-8"), encoding="utf-8")
+    continuity.write_text(
+        (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     payload["subject"]["token_cursor"]["tokens_seen"] = 1024
-    assert not module.subject_surfaces_current(payload, readme, continuity)
+    assert not module.subject_surfaces_current(payload, continuity)
 
 
 def test_current_subject_schema_rejects_missing_optimizer_and_extra_fields(

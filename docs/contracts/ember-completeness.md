@@ -127,7 +127,7 @@ pieces" with the source named:
 | C-EFF | S1 | Efficiency keystone measured and closed | Efficiency closure receipt with measured throughput, MFU, token projection | efficiency-closure receipts | planned |
 | C-BASE | S1 | Owned growable seed exists (not frozen) | From-scratch owned pilot checkpoint with growth operator interface | checkpoint-seed receipts | planned |
 | C(−1) | S7 | Spend annex — 4 receipts missing api_spend_usd | Spend declarations for missing receipts | spend-annex documentation | planned |
-| C0 | S6 | Process invariant: freshness contract | README state-as-of marker matches actual state | freshness monitoring receipts | planned |
+| C0 | S6 | Process invariant: freshness contract | CONTINUITY state-as-of marker matches actual state | freshness monitoring receipts | planned |
 | C-PORT | S3 | Predecessor-CLI port complete | Clean-room port with NCK-E2E proofs | port verification receipts | planned |
 | C-FED | S3 | Federation surface (inter-founder coordination) | Mailbox routing and coordination surface | federation routing receipts | planned |
 | C-GROW | S1 | Growth operator executes function-preserving transforms | Growth chain receipts and verification | growth chain receipts | planned |
