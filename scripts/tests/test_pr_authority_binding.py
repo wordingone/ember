@@ -86,6 +86,52 @@ def test_goal_binding_accepts_migrated_authority_path(tmp_path: Path) -> None:
     assert load_goal_binding(tmp_path) == (GOAL, OUTCOME, WORKSTREAMS)
 
 
+def test_goal_binding_accepts_domain_authority_path(tmp_path: Path) -> None:
+    from check_pr_authority_binding import load_goal_binding
+
+    authority = tmp_path / "docs" / "domains" / "governance" / "authority"
+    authority.mkdir(parents=True)
+    (authority / "GOAL.md").write_text(
+        "<!-- EMBER_AUTHORITY_V1\n"
+        + json.dumps(
+            {
+                "active_goal_id": GOAL,
+                "next_executed_outcome": OUTCOME,
+                "active_workstream_ids": list(WORKSTREAMS),
+            }
+        )
+        + "\n-->\n",
+        encoding="utf-8",
+    )
+
+    assert load_goal_binding(tmp_path) == (GOAL, OUTCOME, WORKSTREAMS)
+
+
+def test_goal_binding_rejects_both_migrated_authority_paths(tmp_path: Path) -> None:
+    from check_pr_authority_binding import load_goal_binding
+
+    legacy = tmp_path / "docs" / "authority"
+    domain = tmp_path / "docs" / "domains" / "governance" / "authority"
+    legacy.mkdir(parents=True)
+    domain.mkdir(parents=True)
+    payload = (
+        "<!-- EMBER_AUTHORITY_V1\n"
+        + json.dumps(
+            {
+                "active_goal_id": GOAL,
+                "next_executed_outcome": OUTCOME,
+                "active_workstream_ids": list(WORKSTREAMS),
+            }
+        )
+        + "\n-->\n"
+    )
+    (legacy / "GOAL.md").write_text(payload, encoding="utf-8")
+    (domain / "GOAL.md").write_text(payload, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate canonical authority document"):
+        load_goal_binding(tmp_path)
+
+
 def test_goal_binding_rejects_duplicate_authority_paths(tmp_path: Path) -> None:
     from check_pr_authority_binding import load_goal_binding
 
@@ -130,9 +176,9 @@ def test_missing_or_duplicate_fields_fail() -> None:
 
 def test_wrong_goal_or_outcome_fails() -> None:
     body = f"goal_id: EMBER-00\nnext_executed_outcome: {OUTCOME}\n"
-    assert "goal_id does not match docs/authority/GOAL.md" in validate_pr_body(body, GOAL, OUTCOME)
+    assert "goal_id does not match canonical GOAL.md" in validate_pr_body(body, GOAL, OUTCOME)
     body = f"goal_id: {GOAL}\nnext_executed_outcome: TBD\n"
-    assert "next_executed_outcome does not match docs/authority/GOAL.md" in validate_pr_body(
+    assert "next_executed_outcome does not match canonical GOAL.md" in validate_pr_body(
         body, GOAL, OUTCOME
     )
 
@@ -152,7 +198,7 @@ def test_unknown_or_duplicate_child_workstream_fails() -> None:
         "workstream_id: EMBER-99Z\n"
         f"next_executed_outcome: {OUTCOME}\n"
     )
-    assert "workstream_id is not allowed by docs/authority/GOAL.md" in validate_pr_body(
+    assert "workstream_id is not allowed by canonical GOAL.md" in validate_pr_body(
         unknown, GOAL, OUTCOME, WORKSTREAMS
     )
     duplicate = (

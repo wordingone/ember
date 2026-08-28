@@ -460,6 +460,51 @@ def test_green_canonical_authority_paths():
         cleanup(tmp)
 
 
+def test_green_domain_goal_authority_path():
+    tmp = make_fixture("fix/selftest-domain-goal-authority")
+    try:
+        old_goal = tmp / "docs" / "authority" / "GOAL.md"
+        domain_goal = (
+            tmp / "docs" / "domains" / "governance" / "authority" / "GOAL.md"
+        )
+        domain_goal.parent.mkdir(parents=True)
+        old_goal.replace(domain_goal)
+        # This test isolates repo-guard's structural path leg. Full semantic
+        # authority tolerance is covered by test_authority_conservation.py.
+        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+            "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
+        )
+        commit_fixture(tmp)
+        rc, output = run_guard(tmp)
+        assert rc == 0, output
+        assert "ok   [authority-paths]" in output, output
+        assert "ok   [goal-doc] exactly one (docs/domains/governance/authority/GOAL.md)" in output, output
+    finally:
+        cleanup(tmp)
+
+
+def test_red_both_migrated_goal_authority_paths():
+    tmp = make_fixture("fix/selftest-duplicate-migrated-goal-authority")
+    try:
+        legacy_goal = tmp / "docs" / "authority" / "GOAL.md"
+        domain_goal = (
+            tmp / "docs" / "domains" / "governance" / "authority" / "GOAL.md"
+        )
+        domain_goal.parent.mkdir(parents=True)
+        shutil.copyfile(legacy_goal, domain_goal)
+        # Keep this deliberate-red leg specific to duplicate path detection.
+        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+            "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
+        )
+        commit_fixture(tmp)
+        rc, output = run_guard(tmp)
+        assert rc != 0, output
+        assert "FAIL [authority-paths]" in output, output
+        assert "FAIL [goal-doc]" in output, output
+    finally:
+        cleanup(tmp)
+
+
 def test_red_duplicate_authority_path():
     tmp = make_fixture("fix/selftest-duplicate-authority")
     try:

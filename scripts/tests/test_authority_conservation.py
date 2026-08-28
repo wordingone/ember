@@ -1693,6 +1693,27 @@ def test_staged_exact_authority_path_migration_does_not_mint_new_authority(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_staged_legacy_to_domain_goal_path_migration_does_not_mint_new_authority(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    control = tmp_path / "scripts" / "legacy_path_consumer.py"
+    control.write_text('GOAL_PATH = "docs/authority/GOAL.md"\n', encoding="utf-8")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    control.write_text(
+        'GOAL_PATH = "docs/domains/governance/authority/GOAL.md"\n',
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", "scripts/legacy_path_consumer.py")
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_staged_authority_path_migration_rejects_mixed_behavior_change(
     tmp_path: Path,
 ) -> None:
