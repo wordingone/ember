@@ -69,12 +69,12 @@ and gets no repo.
 
 One repo exists under the account today: **`wordingone/ember-custody`**, and it
 is **public**. It is the mirror-only custody-inventory sync from issue #1308
-(`scripts/hf_custody/`, `docs/custody/hf-sync.md`) — a different surface with a
+(`src/ember/data/hf_custody/`, `docs/custody/hf-sync.md`) — a different surface with a
 different purpose. It is **not** renamed, folded in, or otherwise touched by
 this convention. No `ember-corpus-*` repo exists yet.
 
 `hf_fetch.py` is a **download** connector (hub -> local) and is not the
-publication path; the only upload code in the repo is `scripts/hf_custody/sync.py`.
+publication path; the only upload code in the repo is `src/ember/data/hf_custody/sync.py`.
 Naming/layout logic therefore belongs on the publication side, not in
 `hf_fetch.py`.
 

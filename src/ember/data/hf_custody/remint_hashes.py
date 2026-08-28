@@ -6,7 +6,7 @@
 UPLOAD_ALLOWED content_hash values from a size-only census construction to
 sync.py's content-based one (issue #1308, 2026-08-02).
 
-BACKGROUND: a live --dry-run of scripts/hf_custody/sync.py against the real
+BACKGROUND: a live --dry-run of src/ember/data/hf_custody/sync.py against the real
 Workstream A inventory refused ALL 8 UPLOAD_ALLOWED rows with sha256_mismatch.
 The census's "sha256_filelist_manifest" turned out to hash only relative
 paths and file SIZES (sync.compute_sizeonly_manifest) — never file content.
@@ -49,7 +49,7 @@ stdout, and written to disk when --receipt-path is given (or --write
 implies a default receipt path next to the inventory file, timestamped).
 
 CLI:
-    python -m scripts.hf_custody.remint_hashes --inventory PATH [--write]
+    python -m ember.data.hf_custody.remint_hashes --inventory PATH [--write]
                                                 [--receipt-path PATH]
 """
 from __future__ import annotations

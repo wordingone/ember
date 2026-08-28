@@ -2,7 +2,7 @@
 
 Receipted, mirror-only sync of Workstream A's HF-custody inventory to the
 `wordingone/ember-custody` Hugging Face dataset repo. Code lives under
-`scripts/hf_custody/`: `sync.py`, `receipts.py`, `pin.py`, `remint_hashes.py`.
+`src/ember/data/hf_custody/`: `sync.py`, `receipts.py`, `pin.py`, `remint_hashes.py`.
 Tests: `tests/test_hf_custody_sync.py`, `tests/test_remint_hashes.py`.
 
 ## 2026-08-02 root-cause note: the census hash was never content-based
@@ -20,7 +20,7 @@ an upload-integrity gate. `sync.compute_filelist_manifest` (hashes actual
 file bytes) is the correct gate and is what this tool has always used for
 verification; the census values were simply never comparable to it.
 
-Resolution (operator ruling, `scripts/hf_custody/remint_hashes.py`,
+Resolution (operator ruling, `src/ember/data/hf_custody/remint_hashes.py`,
 2026-08-02): every `UPLOAD_ALLOWED` row's `content_hash` in
 `inventory-v1.jsonl` was re-minted from the size-only census value to
 `compute_filelist_manifest`'s content-based value, ONLY after confirming
@@ -145,13 +145,13 @@ immediately before each row's upload would close the window.
 ## Running it
 
 ```
-python -m scripts.hf_custody.sync \
+python -m ember.data.hf_custody.sync \
     --inventory <path-to-hf-custody-inventory>.jsonl \
     --repo-id wordingone/ember-custody \
     --receipts-path receipts/hf-custody/sync-<ts>.jsonl
     # dry-run: prints one JSON receipt line per row, uploads nothing
 
-python -m scripts.hf_custody.sync \
+python -m ember.data.hf_custody.sync \
     --inventory <path-to-hf-custody-inventory>.jsonl \
     --repo-id wordingone/ember-custody \
     --execute \
@@ -159,13 +159,13 @@ python -m scripts.hf_custody.sync \
     # real run: verifies EVERY eligible row first (whole-run fail-closed),
     # then uploads only if all of them pass
 
-python -m scripts.hf_custody.pin --receipts receipts/hf-custody/sync-<ts>.jsonl
+python -m ember.data.hf_custody.pin --receipts receipts/hf-custody/sync-<ts>.jsonl
     # prints hf://datasets/<repo>@<revision> for every completed upload
 ```
 
 ## Receipt schema
 
-One JSON object per line, append-only (`scripts/hf_custody/receipts.py`),
+One JSON object per line, append-only (`src/ember/data/hf_custody/receipts.py`),
 appended immediately as each row's outcome is produced:
 
 | field | meaning |
@@ -227,13 +227,13 @@ never used as this tool's actual upload-integrity gate — `sync_row`/
 ## `remint_hashes.py` — one-time inventory hash re-mint (record of what ran)
 
 ```
-python -m scripts.hf_custody.remint_hashes \
+python -m ember.data.hf_custody.remint_hashes \
     --inventory <path-to-hf-custody-inventory>.jsonl
     # dry preview: for every UPLOAD_ALLOWED row, confirms the size-only
     # recompute matches the existing content_hash, prints + writes a
     # remint receipt JSON, touches nothing on disk
 
-python -m scripts.hf_custody.remint_hashes \
+python -m ember.data.hf_custody.remint_hashes \
     --inventory <path-to-hf-custody-inventory>.jsonl \
     --write
     # actually rewrites the inventory: on a size-only MATCH, moves the old
