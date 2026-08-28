@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""tests/test_remint_hashes.py — offline coverage for scripts/hf_custody/remint_hashes.py.
+"""Offline coverage for ember.data.hf_custody.remint_hashes.
 
 Covers the per-row STOP rule: a row only gets reminted if its size-only
 recompute confirms the existing content_hash; a mismatch leaves that row
@@ -10,15 +10,19 @@ byte-for-byte untouched and reported, never guessed at.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
 
-from hf_custody import remint_hashes, sync  # noqa: E402
+from ember.data.hf_custody import remint_hashes, sync
+
+
+def test_remint_hashes_import_resolves_to_declared_root():
+    assert Path(remint_hashes.__file__).resolve().parent == (
+        ROOT / "src" / "ember" / "data" / "hf_custody"
+    ).resolve()
 
 
 def _write_dataset_dir(root: Path, files: dict[str, bytes]) -> None:

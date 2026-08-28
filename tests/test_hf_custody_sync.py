@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""tests/test_hf_custody_sync.py — offline coverage for scripts/hf_custody (issue #1308).
+"""Offline coverage for ember.data.hf_custody (issue #1308).
 
 Fully offline: huggingface_hub.HfApi is monkeypatched to a fake that never
 touches the network. No test in this file may pass if a real HTTP call is made.
@@ -29,18 +29,49 @@ Also covers issue #1313 (PR #1311 re-review nits N1/N4):
 from __future__ import annotations
 
 import json
-import sys
+import shutil
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
 
-from hf_custody import pin, receipts, sync  # noqa: E402
+from ember.data.hf_custody import pin, receipts, sync
 
 VALID_REVISION = "a" * 40
 OTHER_VALID_REVISION = "b" * 40
+SEPARATE_ROOT_REFUSAL = "HF_CUSTODY_SEPARATE_ROOT_REFUSED"
+
+
+def _assert_single_declared_root(root: Path) -> None:
+    declared = root / "src" / "ember" / "data" / "hf_custody"
+    legacy = root / "scripts" / "hf_custody"
+    declared_present = (declared / "__init__.py").is_file()
+    legacy_present = (legacy / "__init__.py").is_file()
+    if not declared_present or legacy_present:
+        failure_class = (
+            "declared_and_legacy_python_packages_present"
+            if declared_present and legacy_present
+            else "declared_python_package_missing"
+        )
+        raise AssertionError(f"{SEPARATE_ROOT_REFUSAL}: {failure_class}")
+
+
+def test_hf_custody_has_one_declared_root_and_refuses_two(tmp_path: Path):
+    _assert_single_declared_root(ROOT)
+    declared = tmp_path / "src" / "ember" / "data" / "hf_custody"
+    legacy = tmp_path / "scripts" / "hf_custody"
+    shutil.copytree(ROOT / "src" / "ember" / "data" / "hf_custody", declared)
+    shutil.copytree(declared, legacy)
+
+    with pytest.raises(AssertionError, match=SEPARATE_ROOT_REFUSAL):
+        _assert_single_declared_root(tmp_path)
+
+
+def test_hf_custody_import_resolves_to_declared_root():
+    assert Path(sync.__file__).resolve().parent == (
+        ROOT / "src" / "ember" / "data" / "hf_custody"
+    ).resolve()
 
 
 # ---------------------------------------------------------------------------
