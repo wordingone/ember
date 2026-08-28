@@ -21,6 +21,11 @@ SPEC.loader.exec_module(python_environment)
 
 BUILD_MANIFEST = ROOT / "tools" / "ember-restart-3b" / "python-environment-build-v1.json"
 SETUPTOOLS_SHA256 = "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670"
+COMPLETION_REQUIREMENTS = [
+    "typer==0.24.0", "diffusers==0.35.2", "hf-transfer==0.1.9",
+    "torchvision==0.25.0+cu126", "tyro==1.0.8", "unsloth-zoo==2026.2.1",
+    "wheel==0.45.1", "xformers==0.0.35",
+]
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 OUTPUT_EVIDENCE = {
     "stdout_filename": "stage.stdout.log", "stdout_sha256": EMPTY_SHA256,
@@ -51,6 +56,7 @@ def command_evidence(command_id: str, *, exit_code: int = 0) -> dict[str, object
 
 BYPASS_ROWS = python_environment.build_environment_install_plan(
     python_environment.load_manifest(ROOT / "manifests" / "python-environment-v1.json"),
+    build_manifest=python_environment.load_build_manifest(BUILD_MANIFEST),
     python_executable="python.exe",
 )["resolver_bypass_rows"]
 
@@ -99,6 +105,23 @@ def test_build_manifest_is_closed_to_the_one_exact_backend_wheel() -> None:
                 "requires_python": ">=3.10",
             },
         },
+        "runtime_dependency_completion": [
+            {
+                "distribution": requirement.split("==", 1)[0],
+                "version": requirement.split("==", 1)[1],
+                "requirement": requirement,
+                "resolver_mode": (
+                    "exact_pin_no_deps_tail"
+                    if requirement.startswith("unsloth-zoo==") else "resolver_core"
+                ),
+                "transformers_requirement": (
+                    "transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,"
+                    "!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3"
+                    if requirement.startswith("unsloth-zoo==") else None
+                ),
+            }
+            for requirement in COMPLETION_REQUIREMENTS
+        ],
     }
     substituted = json.loads(json.dumps(manifest))
     substituted["backend"]["artifact"]["sha256"] = "0" * 64
@@ -133,30 +156,66 @@ def test_backend_requirement_and_pip_argv_are_hash_enforced_and_report_bound(tmp
 
 def test_environment_stage_splits_resolvable_core_and_disclosed_exact_pin_tail() -> None:
     manifest = python_environment.load_manifest(ROOT / "manifests" / "python-environment-v1.json")
+    build_manifest = load_build_manifest()
     plan = python_environment.build_environment_install_plan(
-        manifest, python_executable="python.exe", cache_dir=Path("B:/custody/pip-cache"),
+        manifest, build_manifest=build_manifest,
+        python_executable="python.exe", cache_dir=Path("B:/custody/pip-cache"),
+        completion_report_path=Path("B:/custody/completion-report.json"),
     )
     tail = plan["resolver_bypass_rows"]
-    assert [row["distribution"] for row in tail] == ["peft", "transformers", "trl", "unsloth"]
-    assert all("unsloth 2026.2.1 caps transformers" in row["reason"] for row in tail)
+    assert [row["distribution"] for row in tail] == [
+        "peft", "transformers", "trl", "unsloth", "unsloth-zoo",
+    ]
+    assert all(
+        "excludes the fixed transformers 5.8.0.dev0" in row["reason"]
+        for row in tail[:-1]
+    )
+    assert tail[-1]["reason"] == (
+        "host dist-info transformers requirement: "
+        "transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,"
+        "!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3"
+    )
     assert "--no-deps" in plan["exact_pin_no_deps_argv"]
     assert plan["resolved_core_argv"][plan["resolved_core_argv"].index("--cache-dir") + 1] == "B:\\custody\\pip-cache"
     for row in tail:
         assert row["requirement"] in plan["exact_pin_no_deps_argv"]
         assert row["requirement"] not in plan["resolved_core_argv"]
+    for requirement in COMPLETION_REQUIREMENTS:
+        target = (
+            plan["exact_pin_no_deps_argv"]
+            if requirement.startswith("unsloth-zoo==") else plan["completion_resolver_argv"]
+        )
+        assert requirement in target
+    assert plan["completion_resolver_argv"][
+        plan["completion_resolver_argv"].index("--report") + 1
+    ] == "B:\\custody\\completion-report.json"
     assert plan["pip_check_argv"] == ["python.exe", "-m", "pip", "check"]
+
+
+def test_completion_versions_are_exactly_verified() -> None:
+    manifest = load_build_manifest()
+    observed = {
+        row["distribution"]: row["version"]
+        for row in manifest["runtime_dependency_completion"]
+    }
+    python_environment.validate_completion_versions(manifest, observed)
+    observed["xformers"] = "0.0.34"
+    with pytest.raises(python_environment.EnvironmentContractError, match="completion version mismatch"):
+        python_environment.validate_completion_versions(manifest, observed)
 
 
 def test_pip_check_accepts_only_the_one_disclosed_metadata_conflict() -> None:
     expected = (
         b"unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, "
         b"but you have transformers 5.8.0.dev0.\n"
+        b"unsloth_zoo 2026.2.1 has requirement transformers<=4.57.6, "
+        b"but you have transformers 5.8.0.dev0.\n"
     )
     result = python_environment.validate_disclosed_pip_check(
         exit_code=1, stdout=expected, stderr=b"",
     )
     assert result["pip_check_disposition"] == "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT"
-    assert result["pip_check_disclosed_conflict_lines"] == [expected.decode().strip()]
+    assert result["pip_check_disclosed_conflict_lines"] == expected.decode().splitlines()
     with pytest.raises(python_environment.EnvironmentContractError):
         python_environment.validate_disclosed_pip_check(
             exit_code=1, stdout=expected + b"another 1.0 has requirement missing>=2\n", stderr=b"",
@@ -166,9 +225,11 @@ def test_pip_check_accepts_only_the_one_disclosed_metadata_conflict() -> None:
 def test_explicit_receipt_is_no_overwrite_self_hashed_and_binds_report(tmp_path: Path) -> None:
     report = tmp_path / "backend-report.json"
     report.write_text('{"install":[]}', encoding="utf-8")
+    completion_report = tmp_path / "completion-report.json"
+    completion_report.write_text('{"install":[]}', encoding="utf-8")
     receipt_path = tmp_path / "install-receipt.json"
     stages = [
-        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 3.0, "commands": [command_evidence("resolved_core"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": ["unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, but you have transformers 5.8.0.dev0."]},
+        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 3.0, "commands": [command_evidence("resolved_core"), command_evidence("completion_resolver"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "completion_report_filename": completion_report.name, "completion_report_sha256": hashlib.sha256(completion_report.read_bytes()).hexdigest(), "resolver_governed_subdependencies": [], "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": ["unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, but you have transformers 5.8.0.dev0."]},
         {"id": "build_backend", "result": "PASS", "exit_code": 0, "duration_seconds": 1.0, "commands": [command_evidence("build_backend")], "requirements_sha256": "6" * 64, "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(), "artifact_filename": "setuptools-84.0.0-py3-none-any.whl", "artifact_sha256": SETUPTOOLS_SHA256, "artifact_requires_python": ">=3.10", "manifest_artifact_sha256": SETUPTOOLS_SHA256, "artifact_matches_manifest": True, "host_conditioned_local_wheel": False},
         {"id": "local_editable", "result": "PASS", "exit_code": 0, "duration_seconds": 1.0, "commands": [command_evidence("local_editable")]},
     ]
@@ -286,15 +347,14 @@ def test_install_command_runs_three_stages_and_hashes_named_report(
         calls.append(list(argv))
         if "--report" in argv:
             report_path = Path(argv[argv.index("--report") + 1])
-            report_path.write_text(json.dumps({
-                "install": [{
+            installs = [] if "completion-report" in report_path.name else [{
                     "metadata": {"name": "setuptools", "version": "84.0.0", "requires_python": ">=3.10"},
                     "download_info": {
                         "url": "https://files.pythonhosted.org/packages/setuptools-84.0.0-py3-none-any.whl",
                         "archive_info": {"hashes": {"sha256": SETUPTOOLS_SHA256}},
                     },
-                }],
-            }), encoding="utf-8")
+                }]
+            report_path.write_text(json.dumps({"install": installs}), encoding="utf-8")
         if argv[-2:] == ["pip", "check"]:
             return SimpleNamespace(
                 returncode=1,
@@ -312,7 +372,7 @@ def test_install_command_runs_three_stages_and_hashes_named_report(
     assert python_environment.main([
         "--root", str(ROOT), "install", "--receipt", str(receipt_path),
     ]) == 0
-    assert len(calls) == 5
+    assert len(calls) == 6
     receipt = python_environment.load_install_receipt(receipt_path)
     report_path = tmp_path / "install-backend-report.json"
     assert receipt["stages"][1]["report_sha256"] == hashlib.sha256(report_path.read_bytes()).hexdigest()
@@ -361,8 +421,10 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
 ) -> None:
     report = tmp_path / "report.json"
     report.write_text("{}", encoding="utf-8")
+    completion_report = tmp_path / "completion-report.json"
+    completion_report.write_text('{"install":[]}', encoding="utf-8")
     stages = [
-        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 0.3, "commands": [command_evidence("resolved_core"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": ["unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, but you have transformers 5.8.0.dev0."]},
+        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 0.3, "commands": [command_evidence("resolved_core"), command_evidence("completion_resolver"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "completion_report_filename": completion_report.name, "completion_report_sha256": hashlib.sha256(completion_report.read_bytes()).hexdigest(), "resolver_governed_subdependencies": [], "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": ["unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, but you have transformers 5.8.0.dev0."]},
         {"id": "build_backend", "result": "PASS", "exit_code": 0, "duration_seconds": 0.1, "commands": [command_evidence("build_backend")], "requirements_sha256": "9" * 64, "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(), "artifact_filename": "setuptools-84.0.0-py3-none-any.whl", "artifact_sha256": SETUPTOOLS_SHA256, "artifact_requires_python": ">=3.10", "manifest_artifact_sha256": SETUPTOOLS_SHA256, "artifact_matches_manifest": True, "host_conditioned_local_wheel": False},
         {"id": "local_editable", "result": "PASS", "exit_code": 0, "duration_seconds": 0.1, "commands": [command_evidence("local_editable")]},
     ]
@@ -376,6 +438,14 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
     write_receipt_logs(tmp_path, stages)
     python_environment.write_install_receipt_no_replace(receipt_path, receipt)
     monkeypatch.setattr(python_environment, "current_installed_versions", lambda _manifest: {})
+    monkeypatch.setattr(
+        python_environment,
+        "current_completion_versions",
+        lambda manifest: {
+            row["distribution"]: row["version"]
+            for row in manifest["runtime_dependency_completion"]
+        },
+    )
     monkeypatch.setattr(python_environment, "current_installed_sources", lambda _manifest: {})
     monkeypatch.setattr(python_environment, "validate_repository_contract", lambda **_kwargs: {"status": "PASS"})
     monkeypatch.setattr(python_environment, "validate_observed_environment", lambda _manifest: None)

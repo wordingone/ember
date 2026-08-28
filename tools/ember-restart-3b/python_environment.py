@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Validate or run Ember's one-command three-stage Python environment install."""
+"""Run Ember's three-stage install from composed v1 + 02B-completion authority."""
 
 from __future__ import annotations
 
@@ -80,16 +80,17 @@ _EXPECTED_PIP_OPTIONS = [
     "--extra-index-url",
     _EXPECTED_INDEX_LOCATOR,
 ]
-_RESOLVER_BYPASS_DISTRIBUTIONS = ("peft", "transformers", "trl", "unsloth")
+_RESOLVER_BYPASS_DISTRIBUTIONS = ("peft", "transformers", "trl", "unsloth", "unsloth-zoo")
 _RESOLVER_BYPASS_REQUIREMENTS = (
     "peft==0.18.1",
     "transformers @ git+https://github.com/huggingface/transformers.git@5d9bce2548fc6fa70d0e38e7999a29bedaa4feeb",
     "trl==0.24.0",
     "unsloth==2026.2.1",
+    "unsloth-zoo==2026.2.1",
 )
 _RESOLVER_BYPASS_REASON = (
-    "manifest-preserved metadata conflict: unsloth 2026.2.1 caps transformers "
-    "at <=4.57.6 while the fixed VCS pin reports 5.8.0.dev0"
+    "manifest-preserved metadata conflict: exact tail metadata excludes the fixed "
+    "transformers 5.8.0.dev0 VCS pin"
 )
 _PIP_CHECK_DISPOSITION = "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT"
 _PIP_ENVIRONMENT_CONDITIONING = {
@@ -100,6 +101,15 @@ _PIP_ENVIRONMENT_CONDITIONING = {
 }
 _PIP_SHORT_TEMP_PARENT = Path("B:/tmp")
 _PIP_SHORT_TEMP_RE = re.compile(r"^B:\\tmp\\ember-pip-[0-9a-f]{8}$", re.IGNORECASE)
+_COMPLETION_REQUIREMENTS = (
+    "typer==0.24.0", "diffusers==0.35.2", "hf-transfer==0.1.9",
+    "torchvision==0.25.0+cu126", "tyro==1.0.8", "unsloth-zoo==2026.2.1",
+    "wheel==0.45.1", "xformers==0.0.35",
+)
+_UNSLOTH_ZOO_TRANSFORMERS_REQUIREMENT = (
+    "transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,"
+    "!=4.55.0,!=4.55.1,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3"
+)
 _VERSION_RE = re.compile(r"^[0-9][A-Za-z0-9.+_-]*$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -206,9 +216,31 @@ def validate_build_manifest_shape(manifest: Mapping[str, Any]) -> None:
                 "requires_python": _SETUPTOOLS_REQUIRES_PYTHON,
             },
         },
+        "runtime_dependency_completion": [
+            {
+                "distribution": requirement.split("==", 1)[0],
+                "version": requirement.split("==", 1)[1],
+                "requirement": requirement,
+                "resolver_mode": (
+                    "exact_pin_no_deps_tail"
+                    if requirement.startswith("unsloth-zoo==") else "resolver_core"
+                ),
+                "transformers_requirement": (
+                    _UNSLOTH_ZOO_TRANSFORMERS_REQUIREMENT
+                    if requirement.startswith("unsloth-zoo==") else None
+                ),
+            }
+            for requirement in _COMPLETION_REQUIREMENTS
+        ],
     }
     if dict(manifest) != expected:
         raise EnvironmentContractError("build manifest must bind the fixed setuptools wheel")
+
+
+def _resolver_bypass_reason(distribution: str) -> str:
+    if _normalized_distribution(distribution) == "unsloth-zoo":
+        return "host dist-info transformers requirement: " + _UNSLOTH_ZOO_TRANSFORMERS_REQUIREMENT
+    return _RESOLVER_BYPASS_REASON
 
 
 def build_backend_requirement_bytes(
@@ -279,7 +311,8 @@ def build_install_receipt(
     common_keys = {"id", "result", "exit_code", "duration_seconds", "commands"}
     environment_keys = common_keys | {
         "resolver_bypass_rows", "pip_check_disposition",
-        "pip_check_disclosed_conflict_lines",
+        "pip_check_disclosed_conflict_lines", "completion_report_filename",
+        "completion_report_sha256", "resolver_governed_subdependencies",
     }
     backend_keys = common_keys | {
         "requirements_sha256", "report_sha256", "artifact_filename", "artifact_sha256",
@@ -289,7 +322,10 @@ def build_install_receipt(
     if set(rows[0]) != environment_keys or set(rows[1]) != backend_keys or set(rows[2]) != common_keys:
         raise EnvironmentContractError("install receipt stage keys are not closed")
     expected_command_ids = {
-        "environment_packages": ["resolved_core", "exact_pin_no_deps_tail", "post_install_pip_check"],
+        "environment_packages": [
+            "resolved_core", "completion_resolver", "exact_pin_no_deps_tail",
+            "post_install_pip_check",
+        ],
         "build_backend": ["build_backend"],
         "local_editable": ["local_editable"],
     }
@@ -347,17 +383,24 @@ def build_install_receipt(
         or environment.get("pip_check_disposition") != _PIP_CHECK_DISPOSITION
         or not isinstance(environment.get("resolver_bypass_rows"), list)
         or not isinstance(environment.get("pip_check_disclosed_conflict_lines"), list)
-        or [command["exit_code"] for command in environment["commands"]] != [0, 0, 1]
+        or [command["exit_code"] for command in environment["commands"]] != [0, 0, 0, 1]
+        or not isinstance(environment.get("completion_report_filename"), str)
+        or not _SHA256_RE.fullmatch(str(environment.get("completion_report_sha256", "")))
     ):
         raise EnvironmentContractError("environment package stage disclosure is malformed")
     expected_bypass_rows = [
-        {"distribution": distribution, "requirement": requirement, "reason": _RESOLVER_BYPASS_REASON}
+        {
+            "distribution": distribution,
+            "requirement": requirement,
+            "reason": _resolver_bypass_reason(distribution),
+        }
         for distribution, requirement in zip(
             _RESOLVER_BYPASS_DISTRIBUTIONS, _RESOLVER_BYPASS_REQUIREMENTS, strict=True,
         )
     ]
     if environment["resolver_bypass_rows"] != expected_bypass_rows:
         raise EnvironmentContractError("resolver bypass disclosure differs from frozen tail")
+    _validate_completion_census(environment.get("resolver_governed_subdependencies"))
     pip_check_lines = environment["pip_check_disclosed_conflict_lines"]
     validate_disclosed_pip_check(
         exit_code=1,
@@ -434,6 +477,18 @@ def load_install_receipt(path: Path) -> dict[str, Any]:
                     or _sha256_path(log_path) != command[f"{stream_name}_sha256"]
                 ):
                     raise EnvironmentContractError("install stage log differs from receipt")
+    environment = stages[0]
+    completion_filename = environment["completion_report_filename"]
+    if Path(completion_filename).name != completion_filename:
+        raise EnvironmentContractError("completion report filename is not local")
+    completion_path = path.parent / completion_filename
+    if (
+        not completion_path.is_file()
+        or _sha256_path(completion_path) != environment["completion_report_sha256"]
+        or _completion_census_from_report(completion_path)
+        != environment["resolver_governed_subdependencies"]
+    ):
+        raise EnvironmentContractError("completion report differs from receipt")
     return value
 
 
@@ -833,6 +888,35 @@ def current_installed_versions(manifest: Mapping[str, Any]) -> dict[str, str]:
     return versions
 
 
+def validate_completion_versions(
+    build_manifest: Mapping[str, Any], installed_versions: Mapping[str, str],
+) -> None:
+    validate_build_manifest_shape(build_manifest)
+    normalized = {
+        _normalized_distribution(name): version
+        for name, version in installed_versions.items()
+    }
+    for row in build_manifest["runtime_dependency_completion"]:
+        actual = normalized.get(_normalized_distribution(row["distribution"]))
+        if actual != row["version"]:
+            raise EnvironmentContractError(
+                "completion version mismatch for "
+                f"{row['distribution']}: expected {row['version']}, got {actual}"
+            )
+
+
+def current_completion_versions(build_manifest: Mapping[str, Any]) -> dict[str, str]:
+    validate_build_manifest_shape(build_manifest)
+    versions: dict[str, str] = {}
+    for row in build_manifest["runtime_dependency_completion"]:
+        distribution = row["distribution"]
+        try:
+            versions[distribution] = importlib.metadata.version(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return versions
+
+
 def current_installed_sources(
     manifest: Mapping[str, Any],
 ) -> dict[str, dict[str, Any] | None]:
@@ -1001,13 +1085,22 @@ def build_install_argv(
 
 
 def build_environment_install_plan(
-    manifest: Mapping[str, Any], *, python_executable: str,
-    cache_dir: Path | None = None,
+    manifest: Mapping[str, Any], *, build_manifest: Mapping[str, Any], python_executable: str,
+    cache_dir: Path | None = None, completion_report_path: Path | None = None,
 ) -> dict[str, Any]:
     validate_manifest_shape(manifest)
+    validate_build_manifest_shape(build_manifest)
     default_rows = [row for row in manifest["packages"] if row["install_by_default"]]
+    completion_rows = list(build_manifest["runtime_dependency_completion"])
+    completion_core_rows = [
+        row for row in completion_rows if row["resolver_mode"] == "resolver_core"
+    ]
+    completion_tail_rows = [
+        row for row in completion_rows if row["resolver_mode"] == "exact_pin_no_deps_tail"
+    ]
+    combined_rows = [*default_rows, *completion_tail_rows]
     bypass_rows = [
-        row for row in default_rows
+        row for row in combined_rows
         if _normalized_distribution(row["distribution"]) in _RESOLVER_BYPASS_DISTRIBUTIONS
     ]
     if tuple(_normalized_distribution(row["distribution"]) for row in bypass_rows) != _RESOLVER_BYPASS_DISTRIBUTIONS:
@@ -1022,6 +1115,11 @@ def build_environment_install_plan(
     ]
     return {
         "resolved_core_argv": [*base, *(row["requirement"] for row in core_rows)],
+        "completion_resolver_argv": [
+            *base,
+            *(["--report", str(completion_report_path)] if completion_report_path else []),
+            *(row["requirement"] for row in completion_core_rows),
+        ],
         "exact_pin_no_deps_argv": [
             *base, "--no-deps", *(row["requirement"] for row in bypass_rows),
         ],
@@ -1030,11 +1128,48 @@ def build_environment_install_plan(
             {
                 "distribution": row["distribution"],
                 "requirement": row["requirement"],
-                "reason": _RESOLVER_BYPASS_REASON,
+                "reason": _resolver_bypass_reason(row["distribution"]),
             }
             for row in bypass_rows
         ],
     }
+
+
+def _validate_completion_census(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        raise EnvironmentContractError("completion resolver census is malformed")
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, dict) or set(raw) != {"distribution", "version"}:
+            raise EnvironmentContractError("completion resolver census row is malformed")
+        distribution = _normalized_distribution(str(raw.get("distribution", "")))
+        version = str(raw.get("version", ""))
+        if distribution in seen or not _DIST_RE.fullmatch(distribution) or not _VERSION_RE.fullmatch(version):
+            raise EnvironmentContractError("completion resolver census row is invalid")
+        seen.add(distribution)
+        rows.append({"distribution": distribution, "version": version})
+    if rows != sorted(rows, key=lambda row: row["distribution"]):
+        raise EnvironmentContractError("completion resolver census is not sorted")
+    return rows
+
+
+def _completion_census_from_report(path: Path) -> list[dict[str, str]]:
+    report = load_manifest(path)
+    installs = report.get("install")
+    if not isinstance(installs, list):
+        raise EnvironmentContractError("completion pip report install rows are malformed")
+    rows = []
+    for install in installs:
+        metadata = install.get("metadata") if isinstance(install, dict) else None
+        if not isinstance(metadata, dict):
+            raise EnvironmentContractError("completion pip report metadata is malformed")
+        rows.append({
+            "distribution": _normalized_distribution(str(metadata.get("name", ""))),
+            "version": str(metadata.get("version", "")),
+        })
+    rows.sort(key=lambda row: row["distribution"])
+    return _validate_completion_census(rows)
 
 
 def validate_disclosed_pip_check(
@@ -1042,7 +1177,10 @@ def validate_disclosed_pip_check(
 ) -> dict[str, Any]:
     text = (stdout + stderr).decode("utf-8", errors="strict")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    allowed_prefixes = ("peft 0.18.1 ", "trl 0.24.0 ", "unsloth 2026.2.1 ")
+    allowed_prefixes = (
+        "peft 0.18.1 ", "trl 0.24.0 ", "unsloth 2026.2.1 ",
+        "unsloth-zoo 2026.2.1 ", "unsloth_zoo 2026.2.1 ",
+    )
     if exit_code != 1 or not lines or any(
         not line.lower().startswith(allowed_prefixes)
         or "transformers" not in line.lower()
@@ -1082,8 +1220,10 @@ def _parser() -> argparse.ArgumentParser:
     install = sub.add_parser(
         "install", help="run all three hash-governed install stages",
         description=(
-            "One command runs: manifest packages as a resolvable core plus a disclosed exact-pin "
-            "no-deps tail and closed pip-check classification; the exact setuptools wheel via "
+            "One command composes read-only v1 authority, exact 02B completion rows, and a "
+            "receipted census of resolver-governed completion subdependencies; then runs the "
+            "resolvable core, completion resolver, disclosed exact-pin no-deps tail, and closed "
+            "pip-check classification; the exact setuptools wheel follows via "
             "pip --require-hashes and a named --report; then the local editable src package "
             "with --no-deps --no-build-isolation. An explicit no-overwrite --receipt is required."
         ),
@@ -1271,12 +1411,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.check_installed
             else None
         )
+        completion_versions = (
+            current_completion_versions(build_manifest)
+            if args.check_installed
+            else None
+        )
         result = validate_repository_contract(
             root=root,
             manifest=manifest,
             installed_versions=versions,
         )
         if versions is not None:
+            assert completion_versions is not None
+            validate_completion_versions(build_manifest, completion_versions)
             validate_observed_environment(manifest)
             validate_installed_sources(
                 manifest,
@@ -1293,25 +1440,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             result["packaging_installation"] = verify_packaging_installation(root, build_manifest)
             result["install_receipt_self_sha256"] = receipt["self_sha256"]
         result["installed_versions_checked"] = versions is not None
+        result["completion_versions_checked"] = completion_versions is not None
         result["installed_sources_checked"] = versions is not None
         print(json.dumps(result, sort_keys=True))
         return 0
     validate_repository_contract(root=root, manifest=manifest)
     if args.command == "print-install-command":
         print(json.dumps(
-            build_environment_install_plan(manifest, python_executable=sys.executable),
+            build_environment_install_plan(
+                manifest, build_manifest=build_manifest, python_executable=sys.executable,
+            ),
             sort_keys=True,
         ))
         return 0
     validate_observed_environment(manifest)
     receipt_path = args.receipt.resolve()
     report_path = receipt_path.with_name(receipt_path.stem + "-backend-report.json")
+    completion_report_path = receipt_path.with_name(
+        receipt_path.stem + "-completion-report.json"
+    )
     if receipt_path.exists():
         raise FileExistsError("install receipt custody is no-overwrite")
     if report_path.exists():
         raise FileExistsError("build backend report custody is no-overwrite")
+    if completion_report_path.exists():
+        raise FileExistsError("completion report custody is no-overwrite")
     for command_id in (
-        "resolved_core", "exact_pin_no_deps_tail", "post_install_pip_check",
+        "resolved_core", "completion_resolver", "exact_pin_no_deps_tail",
+        "post_install_pip_check",
         "build_backend", "local_editable",
     ):
         if any(path.exists() for path in _stage_log_paths(receipt_path, command_id)):
@@ -1330,8 +1486,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     stages: list[dict[str, Any]] = []
     environment_plan = build_environment_install_plan(
-        manifest, python_executable=sys.executable,
+        manifest, build_manifest=build_manifest, python_executable=sys.executable,
         cache_dir=receipt_path.parent / "pip-cache",
+        completion_report_path=completion_report_path,
     )
     environment_commands: list[dict[str, Any]] = []
     core_command, _stdout, _stderr = _run_pip_command(
@@ -1353,6 +1510,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
         )
         return int(core_command["exit_code"])
+    completion_command, _stdout, _stderr = _run_pip_command(
+        receipt_path=receipt_path, command_id="completion_resolver",
+        argv=environment_plan["completion_resolver_argv"], root=root,
+        report_path=completion_report_path,
+        cache_path=receipt_path.parent / "pip-cache",
+    )
+    environment_commands.append(completion_command)
+    if completion_command["exit_code"] != 0:
+        stages.append({
+            "id": "environment_packages", "result": "FAIL",
+            "exit_code": completion_command["exit_code"],
+            "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
+            "commands": environment_commands,
+            "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+        })
+        write_install_receipt_no_replace(
+            receipt_path,
+            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+        )
+        return int(completion_command["exit_code"])
+    completion_census = _completion_census_from_report(completion_report_path)
     tail_command, _stdout, _stderr = _run_pip_command(
         receipt_path=receipt_path, command_id="exact_pin_no_deps_tail",
         argv=environment_plan["exact_pin_no_deps_argv"], root=root,
@@ -1366,6 +1544,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
             "commands": environment_commands,
             "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+            "completion_report_filename": completion_report_path.name,
+            "completion_report_sha256": _sha256_path(completion_report_path),
+            "resolver_governed_subdependencies": completion_census,
         })
         write_install_receipt_no_replace(
             receipt_path,
@@ -1388,6 +1569,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
             "commands": environment_commands,
             "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+            "completion_report_filename": completion_report_path.name,
+            "completion_report_sha256": _sha256_path(completion_report_path),
+            "resolver_governed_subdependencies": completion_census,
             "pip_check_classification_error": str(error),
         })
         write_install_receipt_no_replace(
@@ -1402,6 +1586,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "duration_seconds": sum(row["duration_seconds"] for row in environment_commands),
         "commands": environment_commands,
         "resolver_bypass_rows": environment_plan["resolver_bypass_rows"],
+        "completion_report_filename": completion_report_path.name,
+        "completion_report_sha256": _sha256_path(completion_report_path),
+        "resolver_governed_subdependencies": completion_census,
         **pip_check_disclosure,
     })
 

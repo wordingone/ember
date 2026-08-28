@@ -16,5 +16,15 @@
       "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
       "requires_python": ">=3.10"
     }
-  }
+  },
+  "runtime_dependency_completion": [
+    {"distribution": "typer", "version": "0.24.0", "requirement": "typer==0.24.0", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "diffusers", "version": "0.35.2", "requirement": "diffusers==0.35.2", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "hf-transfer", "version": "0.1.9", "requirement": "hf-transfer==0.1.9", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "torchvision", "version": "0.25.0+cu126", "requirement": "torchvision==0.25.0+cu126", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "tyro", "version": "1.0.8", "requirement": "tyro==1.0.8", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "unsloth-zoo", "version": "2026.2.1", "requirement": "unsloth-zoo==2026.2.1", "resolver_mode": "exact_pin_no_deps_tail", "transformers_requirement": "transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3"},
+    {"distribution": "wheel", "version": "0.45.1", "requirement": "wheel==0.45.1", "resolver_mode": "resolver_core", "transformers_requirement": null},
+    {"distribution": "xformers", "version": "0.0.35", "requirement": "xformers==0.0.35", "resolver_mode": "resolver_core", "transformers_requirement": null}
+  ]
 }
