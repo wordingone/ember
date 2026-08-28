@@ -2,12 +2,12 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""gen_readme_status.py — regenerate README.md's board-status block from the newest totality receipt.
+"""Regenerate CONTINUITY.md's mutable status from the newest totality receipt.
 
 Reads the newest ember-totality-*.json under a receipts-totality directory (lexicographic sort of
 the ts-stamped filename == chronological order) and rewrites everything between the
-<!-- BOARD-STATUS-BEGIN --> / <!-- BOARD-STATUS-END --> markers in README.md with: the receipt
-id, its ts, counts by status, and a one-line legend. This makes a stale README count structurally
+<!-- BOARD-STATUS-BEGIN --> / <!-- BOARD-STATUS-END --> markers in CONTINUITY.md with: the receipt
+id, its ts, counts by status, and a one-line legend. This makes a stale continuity count structurally
 impossible for whatever receipt tree the script was pointed at -- the block can only ever say
 what the newest receipt in THAT tree says.
 
@@ -22,15 +22,17 @@ the newest receipt the script could see.
 Board-run playbook:
   - A board-run lane with a live data tree runs this against that tree BEFORE committing anything:
     `python scripts/gen_readme_status.py --data-root /path/to/live/receipts-totality --check`
-    to see whether README would change, then without --check to render it, then reviews the diff.
+    to see whether generated continuity status would change, then renders and reviews the diff.
   - Run this script as the last step of every totality board run against the tree that will
-    actually be committed, so README never drifts from what ships in the same commit.
-  - If README changes as a result, land it as its own docs PR through the normal stop-at-open
+    actually be committed, so continuity never drifts from what ships in the same commit.
+  - If continuity changes as a result, land it as its own docs PR through the normal stop-at-open
     review flow -- this script never commits or pushes on its own.
 
 CLI:
-  python scripts/gen_readme_status.py            # regenerate README.md from the in-repo tree
-  python scripts/gen_readme_status.py --check     # exit 1 if README.md would change (CI use)
+  python scripts/gen_readme_status.py            # regenerate continuity from the in-repo tree
+  python scripts/gen_readme_status.py --check     # exit 1 if generated status would change
+  python scripts/gen_readme_status.py --check --generated-status
+                                                  # deterministic merge-gate scope
   python scripts/gen_readme_status.py --data-root /path/to/receipts-totality
                                                   # point at a different (e.g. live/uncommitted)
                                                   # receipts-totality directory instead
@@ -114,13 +116,13 @@ def validate_receipt_freshness(ts, *, max_age_days, now=None):
     return captured_at
 
 
-def bind_state_as_of(readme, receipt_ts):
+def bind_state_as_of(continuity, receipt_ts):
     captured_at = _receipt_datetime(receipt_ts)
-    markers = STATE_AS_OF_PATTERN.findall(readme)
+    markers = STATE_AS_OF_PATTERN.findall(continuity)
     if len(markers) != 1:
-        raise ValueError("README must contain exactly one state-as-of marker")
+        raise ValueError("CONTINUITY.md must contain exactly one state-as-of marker")
     marker = f"<!-- state-as-of: {captured_at.date().isoformat()} -->"
-    return STATE_AS_OF_PATTERN.sub(marker, readme, count=1)
+    return STATE_AS_OF_PATTERN.sub(marker, continuity, count=1)
 
 
 def newest_receipt_path(data_root):
@@ -514,23 +516,13 @@ def _replace_marked(text, begin, end, block, surface):
     return pattern.sub(lambda _: block, text, count=1)
 
 
-def subject_surfaces_current(payload, readme_path, continuity_path):
+def subject_surfaces_current(payload, continuity_path):
     block = render_current_subject_block(payload)
     try:
-        with open(readme_path, "r", encoding="utf-8") as stream:
-            readme = stream.read()
         with open(continuity_path, "r", encoding="utf-8") as stream:
             continuity = stream.read()
         return (
             _replace_marked(
-                readme,
-                SUBJECT_BEGIN_MARKER,
-                SUBJECT_END_MARKER,
-                block,
-                "README.md",
-            )
-            == readme
-            and _replace_marked(
                 continuity,
                 SUBJECT_BEGIN_MARKER,
                 SUBJECT_END_MARKER,
@@ -548,7 +540,15 @@ def main():
     parser.add_argument(
         "--check",
         action="store_true",
-        help="exit 1 if README.md's board-status block is not already current (no write)",
+        help="exit 1 if generated continuity status is not current (no write)",
+    )
+    parser.add_argument(
+        "--generated-status",
+        action="store_true",
+        help=(
+            "with --check, verify deterministic generated status only; bypass branch-inventory "
+            "distance and receipt wall-age checks"
+        ),
     )
     parser.add_argument(
         "--data-root",
@@ -559,7 +559,7 @@ def main():
             "data tree to render against a receipt not yet committed here."
         ),
     )
-    parser.add_argument("--readme", default=README_PATH)
+    parser.add_argument("--readme", default=README_PATH, help=argparse.SUPPRESS)
     parser.add_argument("--continuity", default=CONTINUITY_PATH)
     parser.add_argument("--subject-manifest", default=CURRENT_SUBJECT_PATH)
     parser.add_argument("--branch-inventory", default=BRANCH_INVENTORY_PATH)
@@ -592,7 +592,7 @@ def main():
         "--receipt-max-age-days",
         type=int,
         default=1,
-        help="maximum age of the selected board receipt in normal README generation",
+        help="maximum age of the selected board receipt in normal continuity generation",
     )
     parser.add_argument(
         "--require-merge",
@@ -606,15 +606,19 @@ def main():
     )
     args = parser.parse_args()
 
-    try:
-        check_inventory(
-            manifest_path=Path(args.branch_inventory),
-            continuity_path=Path(args.continuity),
-            repo_path=Path(ROOT),
-            max_age_days=args.branch_inventory_max_age_days,
-        )
-    except BranchInventoryError as exc:
-        raise SystemExit(f"gen_readme_status: branch inventory is invalid: {exc}") from exc
+    if args.generated_status and not args.check:
+        parser.error("--generated-status requires --check")
+
+    if not args.generated_status:
+        try:
+            check_inventory(
+                manifest_path=Path(args.branch_inventory),
+                continuity_path=Path(args.continuity),
+                repo_path=Path(ROOT),
+                max_age_days=args.branch_inventory_max_age_days,
+            )
+        except BranchInventoryError as exc:
+            raise SystemExit(f"gen_readme_status: branch inventory is invalid: {exc}") from exc
     receipt_path = newest_receipt_path(args.data_root)
     block = render_block(
         receipt_path,
@@ -623,58 +627,49 @@ def main():
         allow_unchained=args.allow_unchained_receipt,
         repo_root=ROOT,
         required_commits=args.require_merge,
-        receipt_max_age_days=args.receipt_max_age_days,
+        receipt_max_age_days=(None if args.generated_status else args.receipt_max_age_days),
     )
 
     with open(args.readme, "r", encoding="utf-8") as f:
         readme = f.read()
 
-    pattern = re.compile(re.escape(BEGIN_MARKER) + r".*?" + re.escape(END_MARKER), re.DOTALL)
-    if not pattern.search(readme):
-        raise SystemExit(
-            f"gen_readme_status: README.md is missing the {BEGIN_MARKER} ... {END_MARKER} markers"
-        )
-    new_readme = pattern.sub(lambda _: block, readme, count=1)
-    receipt_ts = Path(receipt_path).stem.removeprefix("ember-totality-")
-    new_readme = bind_state_as_of(new_readme, receipt_ts)
-
     subject = load_current_subject(args.subject_manifest)
     validate_current_subject_evidence(subject, ROOT)
     subject_block = render_current_subject_block(subject)
-    new_readme = _replace_marked(
-        new_readme,
-        SUBJECT_BEGIN_MARKER,
-        SUBJECT_END_MARKER,
-        subject_block,
-        "README.md",
-    )
     with open(args.continuity, "r", encoding="utf-8") as stream:
         continuity = stream.read()
     new_continuity = _replace_marked(
         continuity,
+        BEGIN_MARKER,
+        END_MARKER,
+        block,
+        "docs/authority/CONTINUITY.md",
+    )
+    receipt_ts = Path(receipt_path).stem.removeprefix("ember-totality-")
+    new_continuity = bind_state_as_of(new_continuity, receipt_ts)
+    new_continuity = _replace_marked(
+        new_continuity,
         SUBJECT_BEGIN_MARKER,
         SUBJECT_END_MARKER,
         subject_block,
         "docs/authority/CONTINUITY.md",
     )
 
-    if new_readme == readme and new_continuity == continuity:
+    if new_continuity == continuity:
         print(
-            "README.md board-status and current-subject surfaces already current "
+            "docs/authority/CONTINUITY.md generated status is current "
             f"({os.path.basename(receipt_path)})."
         )
         return 0
 
     if args.check:
-        print("README.md or docs/authority/CONTINUITY.md generated status is STALE.")
+        print("docs/authority/CONTINUITY.md generated status is STALE.")
         return 1
 
-    with open(args.readme, "w", encoding="utf-8", newline="\n") as f:
-        f.write(new_readme)
     with open(args.continuity, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(new_continuity)
     print(
-        "README.md and docs/authority/CONTINUITY.md status surfaces regenerated from "
+        "docs/authority/CONTINUITY.md status regenerated from "
         f"{os.path.basename(receipt_path)} and {os.path.basename(args.subject_manifest)}."
     )
     return 0

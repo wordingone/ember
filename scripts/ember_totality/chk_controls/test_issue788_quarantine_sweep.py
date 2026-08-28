@@ -19,7 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.ember_totality import quarantine_sweep
 
 
-def _load_readme_renderer():
+def _load_continuity_renderer():
     path = REPO_ROOT / "scripts" / "gen_readme_status.py"
     spec = importlib.util.spec_from_file_location("issue788_gen_readme_status", path)
     module = importlib.util.module_from_spec(spec)
@@ -99,7 +99,7 @@ class Issue788QuarantineSweepTests(unittest.TestCase):
         self.assertEqual("GREEN", rows[1]["status"])
 
     def test_renderer_refuses_stale_fallback_when_exact_suffix_exists(self):
-        renderer = _load_readme_renderer()
+        renderer = _load_continuity_renderer()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             normal = root / "ember-totality-20990101T000000Z.json"
@@ -114,7 +114,7 @@ class Issue788QuarantineSweepTests(unittest.TestCase):
         self.assertIn("INVALID.quarantine", str(caught.exception))
 
     def test_renderer_ignores_benign_filename_containing_quarantine_word(self):
-        renderer = _load_readme_renderer()
+        renderer = _load_continuity_renderer()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             normal = root / "ember-totality-20990101T000000Z.json"
