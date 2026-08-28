@@ -41,8 +41,10 @@ Only the label and SHA-256 enter the receipt. Capture performs no Git mutation,
 force push, merge, branch deletion, or worktree retirement.
 
 `scripts/gen_readme_status.py` verifies the receipt, its generated
-`CONTINUITY.md` table, and the seven-day freshness bound before any continuity
-refresh. The check binds the receipt to the live master or its bounded three-commit
+`docs/authority/CONTINUITY.md` table, and the seven-day freshness bound before
+any ordinary continuity refresh. The deterministic `--check --generated-status`
+merge gate verifies only generated status and deliberately bypasses this
+branch-distance leg. The ordinary check binds the receipt to the live master or its bounded three-commit
 introduction chain, so the next master advance makes it stale. A missing,
 tampered, or stale inventory therefore stops the refresh.
 

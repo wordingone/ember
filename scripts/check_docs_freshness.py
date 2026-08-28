@@ -6,10 +6,10 @@
 Deterministic documentation freshness checker for ember.
 
 Enforces:
-1. All backtick-quoted paths in README.md + docs/**/*.md resolve in tree
+1. Frozen-grammar path candidates in the selected front-door surface resolve in tracked tree
 2. scripts/README.md inventory matches actual scripts/**/*.py
 3. CLAIMS.md/INDEX.jsonl up-to-date (regeneratable without diff)
-4. README state-as-of marker <= 1 day old
+4. CONTINUITY state-as-of marker <= 1 day old
 
 Exit: 0 = clean, 1 = defects found
 Mode: --fix-report outputs defect markdown; normal mode outputs table
@@ -17,7 +17,9 @@ Mode: --fix-report outputs defect markdown; normal mode outputs table
 
 import importlib.util
 import re
+import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
 
@@ -28,11 +30,131 @@ except ModuleNotFoundError as exc:
         raise
     from ember_cli_spec_policy import SpecPolicyError, load_spec_nodes
 
+
+PATH_EXTENSIONS = r"py|md|json|txt|sh|yml|yaml|toml|ps1"
+BACKTICK_PATH_PATTERN = re.compile(
+    rf"`([a-zA-Z0-9_./\-]+\.(?:{PATH_EXTENSIONS}))`"
+)
+PROSE_PATH_PATTERN = re.compile(
+    rf"(?<![\w/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\."
+    rf"(?:{PATH_EXTENSIONS}))(?![\w/])"
+)
+URL_PATTERN = re.compile(r"https?://\S+")
+ALLOW_UNRESOLVED_PRAGMA = "<!-- docs-freshness: allow-unresolved -->"
+CONSERVATION_BEGIN_MARKER = "<!-- EMBER_CONSERVATION_V1"
+BOARD_BEGIN_MARKER = "<!-- BOARD-STATUS-BEGIN -->"
+BOARD_END_MARKER = "<!-- BOARD-STATUS-END -->"
+SUBJECT_BEGIN_MARKER = "<!-- CURRENT-SUBJECT-BEGIN -->"
+SUBJECT_END_MARKER = "<!-- CURRENT-SUBJECT-END -->"
+STATE_AS_OF_PATTERN = re.compile(r"<!-- state-as-of:\s*\d{4}-\d{2}-\d{2}\s*-->")
+
+
+@dataclass
+class CandidateExtraction:
+    paths: set[str]
+    pragma_lines: list[int]
+    occurrences: list[tuple[str, int]]
+
+
+def _inside_angle_placeholder(line: str, start: int, end: int) -> bool:
+    left = line.rfind("<", 0, start + 1)
+    left_close = line.rfind(">", 0, start + 1)
+    return left > left_close and line.find(">", end) >= 0
+
+
+def extract_path_candidates(text: str) -> CandidateExtraction:
+    """Extract the frozen union of backtick and prose repository path candidates."""
+    paths: set[str] = set()
+    pragma_lines: list[int] = []
+    occurrences: list[tuple[str, int]] = []
+    in_conservation = False
+    for line_number, original in enumerate(text.splitlines(), 1):
+        if CONSERVATION_BEGIN_MARKER in original:
+            in_conservation = True
+        if in_conservation:
+            if "-->" in original:
+                in_conservation = False
+            continue
+        if ALLOW_UNRESOLVED_PRAGMA in original:
+            pragma_lines.append(line_number)
+            continue
+        line = URL_PATTERN.sub("", original)
+        matches = []
+        for pattern in (BACKTICK_PATH_PATTERN, PROSE_PATH_PATTERN):
+            for match in pattern.finditer(line):
+                matches.append((match.group(1), match.start(1), match.end(1)))
+        seen_on_line = set()
+        for value, start, end in matches:
+            if value in seen_on_line or value.startswith("path/to/"):
+                continue
+            if start > 0 and line[start - 1] == "\\":
+                continue
+            if _inside_angle_placeholder(line, start, end):
+                continue
+            seen_on_line.add(value)
+            paths.add(value)
+            occurrences.append((value, line_number))
+    return CandidateExtraction(paths, pragma_lines, occurrences)
+
 class DocsFreshnessChecker:
     def __init__(self, repo_root=None):
         self.repo = Path(repo_root or '.')
         self.defects = []
         self.warnings = []
+        self.pragma_uses = []
+        self.reference_census = {}
+        self._tracked_paths = None
+
+    def tracked_paths(self):
+        """Return the exact case-sensitive path set tracked by Git at this tree."""
+        if self._tracked_paths is None:
+            try:
+                completed = subprocess.run(
+                    ["git", "-C", str(self.repo), "ls-files", "-z"],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+            except (OSError, subprocess.CalledProcessError) as exc:
+                raise RuntimeError(f"git ls-files failed for {self.repo}: {exc}") from exc
+            self._tracked_paths = {
+                item.decode("utf-8")
+                for item in completed.stdout.split(b"\0")
+                if item
+            }
+        return set(self._tracked_paths)
+
+    def unresolved_paths(self, candidates):
+        tracked = self.tracked_paths()
+        return set(candidates) - tracked
+
+    def check_references(self, relative_paths):
+        """Check frozen-grammar references against the case-sensitive tracked tree."""
+        tracked = self.tracked_paths()
+        for relative in relative_paths:
+            text = (self.repo / relative).read_text(encoding="utf-8")
+            extraction = extract_path_candidates(text)
+            self.reference_census[relative] = {
+                "unique": len(extraction.paths),
+                "occurrences": len(extraction.occurrences),
+            }
+            self.pragma_uses.extend(
+                {"file": relative, "line": line} for line in extraction.pragma_lines
+            )
+            reported = set()
+            for candidate, line in extraction.occurrences:
+                if candidate in tracked or candidate in reported:
+                    continue
+                reported.add(candidate)
+                self.defects.append({
+                    'file': relative,
+                    'defect_class': 'broken_path_reference',
+                    'path': candidate,
+                    'line': line,
+                    'description': (
+                        f"Path `{candidate}` is not tracked with exact case at this tree"
+                    ),
+                })
 
     def check_ember_cli_specs(self):
         """Validate the complete ember-cli spec-node surface fail closed."""
@@ -47,20 +169,39 @@ class DocsFreshnessChecker:
 
     def check_readme_references(self):
         """Check that all path references in README resolve."""
-        readme = (self.repo / "README.md").read_text()
+        self.check_references(["README.md"])
 
-        # Extract backtick paths: `path/to/file.py`, `path/to/file.md`, etc.
-        backtick_paths = re.findall(r'`([a-zA-Z0-9_./\-]+\.(?:py|md|json|txt|sh))`', readme)
+    def check_front_door_references(self):
+        self.check_references(["README.md", "docs/authority/CONTINUITY.md"])
 
-        for path_str in backtick_paths:
-            full_path = self.repo / path_str
-            if not full_path.exists():
+    def check_front_door_marker_coherence(self):
+        readme = (self.repo / "README.md").read_text(encoding="utf-8")
+        continuity = (
+            self.repo / "docs" / "authority" / "CONTINUITY.md"
+        ).read_text(encoding="utf-8")
+        expected = (
+            ("state-as-of", STATE_AS_OF_PATTERN, 0, 1),
+            ("board begin", BOARD_BEGIN_MARKER, 0, 1),
+            ("board end", BOARD_END_MARKER, 0, 1),
+            ("current subject begin", SUBJECT_BEGIN_MARKER, 0, 1),
+            ("current subject end", SUBJECT_END_MARKER, 0, 1),
+        )
+        for label, marker, readme_count, continuity_count in expected:
+            if hasattr(marker, "findall"):
+                actual_readme = len(marker.findall(readme))
+                actual_continuity = len(marker.findall(continuity))
+            else:
+                actual_readme = readme.count(marker)
+                actual_continuity = continuity.count(marker)
+            if (actual_readme, actual_continuity) != (readme_count, continuity_count):
                 self.defects.append({
-                    'file': 'README.md',
-                    'defect_class': 'broken_path_reference',
-                    'path': path_str,
-                    'line': 'backtick',
-                    'description': f"Path `{path_str}` does not exist"
+                    'file': 'README.md + docs/authority/CONTINUITY.md',
+                    'defect_class': 'mutable_marker_misplaced',
+                    'description': (
+                        f"{label} count is README={actual_readme}, "
+                        f"CONTINUITY={actual_continuity}; expected "
+                        f"README={readme_count}, CONTINUITY={continuity_count}"
+                    ),
                 })
 
     def check_scripts_inventory(self):
@@ -154,17 +295,19 @@ class DocsFreshnessChecker:
             })
 
     def check_readme_state_marker(self):
-        """Check that README.md state-as-of marker is recent."""
-        readme = (self.repo / "README.md").read_text()
+        """Check that CONTINUITY.md state-as-of marker is recent."""
+        continuity = (
+            self.repo / "docs" / "authority" / "CONTINUITY.md"
+        ).read_text(encoding="utf-8")
 
         # Extract state-as-of: YYYY-MM-DD
-        marker_match = re.search(r'state-as-of:\s*(\d{4}-\d{2}-\d{2})', readme)
+        marker_match = re.search(r'state-as-of:\s*(\d{4}-\d{2}-\d{2})', continuity)
         if not marker_match:
             self.defects.append({
-                'file': 'README.md',
+                'file': 'docs/authority/CONTINUITY.md',
                 'defect_class': 'missing_state_marker',
                 'line': 'header',
-                'description': 'No state-as-of marker in README (<!-- state-as-of: YYYY-MM-DD -->)'
+                'description': 'No state-as-of marker in CONTINUITY.md (<!-- state-as-of: YYYY-MM-DD -->)'
             })
             return
 
@@ -175,7 +318,7 @@ class DocsFreshnessChecker:
 
         if days_old > 1:
             self.defects.append({
-                'file': 'README.md',
+                'file': 'docs/authority/CONTINUITY.md',
                 'defect_class': 'stale_state_marker',
                 'marker_date': marker_date_str,
                 'days_old': days_old,
@@ -222,6 +365,11 @@ class DocsFreshnessChecker:
         self.check_docs_reachability()
         self.check_ember_cli_specs()
 
+    def run_front_door_checks(self):
+        """Run only deterministic front-door checks suitable for merge CI."""
+        self.check_front_door_references()
+        self.check_front_door_marker_coherence()
+
     def report_defects(self, fix_report=False):
         """Print defects as markdown or table."""
         if fix_report:
@@ -253,7 +401,6 @@ class DocsFreshnessChecker:
 def run_selftests():
     """Run self-tests on planted fixtures."""
     import tempfile
-    import shutil
 
     print("Running DOCS_FRESHNESS_SELFTEST fixtures...")
 
@@ -263,7 +410,7 @@ def run_selftests():
 
         # Create minimal structure
         (tmpdir / "scripts").mkdir()
-        (tmpdir / "docs").mkdir()
+        (tmpdir / "docs" / "authority").mkdir(parents=True)
         (tmpdir / "receipts").mkdir()
 
         # Create README.md with broken reference
@@ -275,8 +422,11 @@ See `docs/NONEXISTENT.md` for details.
 
 See `scripts/test.py` for the harness.
 
-<!-- state-as-of: 2026-07-06 -->
 """)
+        (tmpdir / "docs" / "authority" / "CONTINUITY.md").write_text(
+            "<!-- state-as-of: 2026-07-06 -->\n",
+            encoding="utf-8",
+        )
 
         # Create actual script
         (tmpdir / "scripts" / "test.py").write_text("pass")
@@ -285,6 +435,16 @@ See `scripts/test.py` for the harness.
         # Create scripts/README.md with incomplete inventory
         scripts_readme = tmpdir / "scripts" / "README.md"
         scripts_readme.write_text("| test.py |\n")
+
+        subprocess.run(["git", "init", "-q", str(tmpdir)], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(tmpdir), "add", "README.md", "scripts/test.py",
+                "scripts/test2.py", "scripts/README.md",
+                "docs/authority/CONTINUITY.md",
+            ],
+            check=True,
+        )
 
         # Test 1: Should detect broken reference
         checker = DocsFreshnessChecker(tmpdir)
@@ -314,11 +474,36 @@ if __name__ == "__main__":
     parser.add_argument("--selftest", action="store_true", help="Run selftests")
     parser.add_argument("--fix-report", action="store_true", help="Output as markdown defect report")
     parser.add_argument("--repo", type=str, default=".", help="Repository root")
+    parser.add_argument(
+        "--front-door",
+        action="store_true",
+        help=(
+            "run deterministic README/CONTINUITY reference and marker-placement checks only"
+        ),
+    )
     args = parser.parse_args()
 
     if args.selftest:
         sys.exit(run_selftests())
 
     checker = DocsFreshnessChecker(args.repo)
-    checker.run_all_checks()
+    if args.front_door:
+        checker.run_front_door_checks()
+        census = ", ".join(
+            f"{surface}:unique={row['unique']}:occurrences={row['occurrences']}"
+            for surface, row in sorted(checker.reference_census.items())
+        )
+        unresolved = sum(
+            row.get("defect_class") == "broken_path_reference"
+            for row in checker.defects
+        )
+        print(
+            f"DOCS_FRESHNESS_REFERENCE_CENSUS {census} unresolved={unresolved}"
+        )
+        rows = ", ".join(
+            f"{row['file']}:{row['line']}" for row in checker.pragma_uses
+        ) or "none"
+        print(f"DOCS_FRESHNESS_PRAGMA_CENSUS count={len(checker.pragma_uses)} rows={rows}")
+    else:
+        checker.run_all_checks()
     sys.exit(checker.report_defects(fix_report=args.fix_report))

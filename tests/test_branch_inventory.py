@@ -232,6 +232,8 @@ def test_continuity_refresh_invokes_inventory_gate():
     source = (REPO_ROOT / "scripts" / "gen_readme_status.py").read_text(encoding="utf-8")
     assert "check_inventory(" in source
     assert "--branch-inventory-max-age-days" in source
+    assert "--generated-status" in source
+    assert "if not args.generated_status:" in source
 
 def test_file_set_content_hash_tamper_fails():
     module = _module()

@@ -142,7 +142,7 @@ class TreeProvenanceTests(unittest.TestCase):
             registry.assert_not_called()
             self.assertFalse(receipt_dir.exists())
 
-    def test_readme_renderer_refuses_stale_without_same_opt_out(self) -> None:
+    def test_continuity_renderer_refuses_stale_without_same_opt_out(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             receipt_path = Path(td) / "ember-totality-20990101T000000Z.json"
             receipt_path.write_text(
@@ -172,7 +172,7 @@ class TreeProvenanceTests(unittest.TestCase):
             self.assertIn("ARCHAEOLOGY_ONLY", block)
             self.assertIn("tree_is_stale=true", block)
 
-    def test_readme_renderer_rejects_forged_current_provenance(self) -> None:
+    def test_continuity_renderer_rejects_forged_current_provenance(self) -> None:
         forged = {
             "run_tree_sha": "a" * 40,
             "remote_master_sha": "b" * 40,
@@ -276,7 +276,7 @@ class TreeProvenanceTests(unittest.TestCase):
         )
         self.assertEqual(accepted, state)
 
-    def test_readme_renderer_requires_explicit_merge_in_board_source(self) -> None:
+    def test_continuity_renderer_requires_explicit_merge_in_board_source(self) -> None:
         initial_sha = _git(self.run, "rev-parse", "HEAD")
         state = tree_provenance.inspect_and_enforce(self.run)
         required_merge = self._advance_remote()

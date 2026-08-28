@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Fail-closed properties of the README board-status generator.
+"""Fail-closed properties of the CONTINUITY board-status generator.
 
 Each test here was RED against the generator as it stood at master
 1619621a8aeacb70b45887c52040f18b54618f04, where an unbound receipt rendered as
