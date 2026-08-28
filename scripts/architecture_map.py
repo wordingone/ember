@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+import hashlib
 import json
 import re
 import subprocess
+import sys
 import warnings
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
@@ -123,6 +125,26 @@ def validate_policy(policy: Mapping[str, Any]) -> None:
         _require(row.get("owner") in OWNERS, "MALFORMED_PATH_RULE", rule_id)
         _require(row.get("disposition") in DISPOSITIONS, "MALFORMED_PATH_RULE", rule_id)
         _require(isinstance(row.get("touch_set_id"), str) and bool(row["touch_set_id"]), "MALFORMED_PATH_RULE", rule_id)
+        strategy = row.get("rollback_unit_strategy")
+        _require(
+            strategy in {"PER_AUTHORITATIVE_SWITCH_TARGET", "EXPLICIT_KEY", "NOT_A_SWITCH"},
+            "MALFORMED_PATH_RULE",
+            f"{rule_id}: rollback_unit_strategy",
+        )
+        is_switch = row.get("disposition") not in {"RETAIN_STABLE", "DEFERRED_DEPENDENCY"}
+        _require(
+            strategy != "NOT_A_SWITCH" if is_switch else strategy == "NOT_A_SWITCH",
+            "MALFORMED_PATH_RULE",
+            f"{rule_id}: rollback strategy/disposition mismatch",
+        )
+        if strategy == "EXPLICIT_KEY":
+            _require(
+                isinstance(row.get("rollback_unit_key"), str) and bool(row["rollback_unit_key"]),
+                "MALFORMED_PATH_RULE",
+                f"{rule_id}: rollback_unit_key",
+            )
+        else:
+            _require("rollback_unit_key" not in row, "MALFORMED_PATH_RULE", f"{rule_id}: unexpected rollback_unit_key")
         if row.get("disposition") == "DEFERRED_DEPENDENCY":
             deferral_id = row.get("deferral_id")
             _require(isinstance(deferral_id, str) and bool(deferral_id), "UNDECLARED_DEFERRAL", str(deferral_id))
@@ -207,7 +229,9 @@ def classify_paths(
                 "disposition": rule["disposition"],
                 "rule_id": rule["id"],
                 "touch_set_id": rule["touch_set_id"],
+                "rollback_unit_strategy": rule["rollback_unit_strategy"],
                 "deferral_id": deferral_id,
+                **({"rollback_unit_key": rule["rollback_unit_key"]} if "rollback_unit_key" in rule else {}),
             }
         )
     return rows
@@ -664,3 +688,998 @@ def discover_consumers(
         "findings": findings,
         "class_counts": dict(sorted(class_counts.items())),
     }
+
+
+def build_touch_sets(
+    path_rows: Sequence[Mapping[str, object]],
+    consumers: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Derive stable switch-target components; stable/deferred paths remain context."""
+
+    switch_dispositions = {"MOVE", "MERGE", "ARCHIVE", "EXTERNALIZE", "DELETE_REDUNDANT"}
+    grouped: dict[tuple[str, str], dict[str, object]] = {}
+    path_to_group: dict[str, tuple[str, str]] = {}
+    for row in path_rows:
+        disposition = str(row.get("disposition", ""))
+        if disposition not in switch_dispositions:
+            continue
+        touch_set_id = str(row.get("touch_set_id", ""))
+        _require(bool(touch_set_id), "MALFORMED_TOUCH_SET", str(row.get("path", "")))
+        path = str(row.get("path", ""))
+        strategy = str(row.get("rollback_unit_strategy", ""))
+        if strategy == "PER_AUTHORITATIVE_SWITCH_TARGET":
+            rollback_key = path
+        elif strategy == "EXPLICIT_KEY":
+            rollback_key = str(row.get("rollback_unit_key", ""))
+            _require(bool(rollback_key), "MALFORMED_TOUCH_SET", f"{path}: rollback_unit_key")
+        else:
+            raise ArchitectureMapError("MALFORMED_TOUCH_SET", f"{path}: {strategy}")
+        grouping_key = (touch_set_id, rollback_key)
+        path_to_group[path] = grouping_key
+        item = grouped.setdefault(
+            grouping_key,
+            {
+                "namespace": touch_set_id,
+                "rollback_unit_key": rollback_key,
+                "owner": str(row["owner"]),
+                "disposition": disposition,
+                "paths": [],
+                "consumers": [],
+            },
+        )
+        _require(item["owner"] == row["owner"], "TOUCH_SET_OWNER_MISMATCH", touch_set_id)
+        _require(
+            item["disposition"] == row["disposition"],
+            "TOUCH_SET_DISPOSITION_MISMATCH",
+            touch_set_id,
+        )
+        item["paths"].append(path)
+
+    for row in consumers:
+        grouping_key = path_to_group.get(str(row.get("target", "")))
+        if grouping_key is not None:
+            grouped[grouping_key]["consumers"].append(str(row["consumer_path"]))
+
+    result: list[dict[str, object]] = []
+    for grouping_key in sorted(grouped):
+        item = grouped[grouping_key]
+        paths = sorted(set(item["paths"]))
+        result.append(
+            {
+                "id": f"{item['namespace']}::{paths[0]}",
+                "namespace": item["namespace"],
+                "rollback_unit_key": item["rollback_unit_key"],
+                "owner": item["owner"],
+                "disposition": item["disposition"],
+                "paths": paths,
+                "consumers": sorted(set(item["consumers"])),
+            }
+        )
+    return sorted(result, key=lambda row: str(row["id"]))
+
+
+def build_conflict_graph(
+    touch_sets: Sequence[Mapping[str, object]],
+    reviewability: Mapping[str, object],
+) -> dict[str, object]:
+    """Build the exact pairwise carrier-conflict graph from atomic touch sets."""
+
+    max_paths = reviewability.get("max_paths_per_carrier")
+    max_consumers = reviewability.get("max_consumers_per_carrier")
+    _require(
+        isinstance(max_paths, int) and not isinstance(max_paths, bool) and max_paths > 0,
+        "MALFORMED_REVIEWABILITY",
+        "max_paths_per_carrier",
+    )
+    _require(
+        isinstance(max_consumers, int)
+        and not isinstance(max_consumers, bool)
+        and max_consumers > 0,
+        "MALFORMED_REVIEWABILITY",
+        "max_consumers_per_carrier",
+    )
+    by_id: dict[str, Mapping[str, object]] = {}
+    for row in touch_sets:
+        touch_set_id = str(row.get("id", ""))
+        _require(bool(touch_set_id), "MALFORMED_TOUCH_SET", "missing id")
+        _require(touch_set_id not in by_id, "DUPLICATE_TOUCH_SET", touch_set_id)
+        path_count = len(set(map(str, row.get("paths", []))))
+        consumer_count = len(set(map(str, row.get("consumers", []))))
+        if path_count > max_paths or consumer_count > max_consumers:
+            raise ArchitectureMapError(
+                "OVERSIZED_ATOMIC_TOUCH_SET",
+                f"{touch_set_id}: paths={path_count}/{max_paths} consumers={consumer_count}/{max_consumers}",
+            )
+        by_id[touch_set_id] = row
+
+    reasons: list[dict[str, object]] = []
+    edges: list[list[str]] = []
+    ids = sorted(by_id)
+    for index, left_id in enumerate(ids):
+        left = by_id[left_id]
+        left_paths = set(map(str, left.get("paths", [])))
+        left_consumers = set(map(str, left.get("consumers", [])))
+        for right_id in ids[index + 1 :]:
+            right = by_id[right_id]
+            right_paths = set(map(str, right.get("paths", [])))
+            right_consumers = set(map(str, right.get("consumers", [])))
+            shared_paths = sorted(left_paths & right_paths)
+            shared_consumers = sorted(left_consumers & right_consumers)
+            combined_paths = len(left_paths | right_paths)
+            combined_consumers = len(left_consumers | right_consumers)
+            pair_reasons: list[str] = []
+            if shared_paths:
+                pair_reasons.append("SHARED_PATH")
+            if shared_consumers:
+                pair_reasons.append("SHARED_CONSUMER")
+            if pair_reasons:
+                edges.append([left_id, right_id])
+                reasons.append(
+                    {
+                        "edge": [left_id, right_id],
+                        "reasons": pair_reasons,
+                        "shared_paths": shared_paths,
+                        "shared_consumers": shared_consumers,
+                        "combined_path_count": combined_paths,
+                        "combined_consumer_count": combined_consumers,
+                    }
+                )
+    return {
+        "nodes": ids,
+        "edges": edges,
+        "edge_reasons": reasons,
+        "node_weights": {
+            touch_set_id: {
+                "path_count": len(set(map(str, by_id[touch_set_id].get("paths", [])))),
+                "consumers": sorted(set(map(str, by_id[touch_set_id].get("consumers", [])))),
+            }
+            for touch_set_id in ids
+        },
+        "capacities": {
+            "max_paths_per_carrier": max_paths,
+            "max_consumers_per_carrier": max_consumers,
+            "consumer_counting_rule": "UNIQUE_CONSUMER_PATHS_PER_CARRIER",
+        },
+    }
+
+
+def build_touch_set_precedence(
+    touch_sets: Sequence[Mapping[str, object]],
+    dependency_graph: Mapping[str, object],
+) -> list[list[str]]:
+    """Order every dependency target touch set before its dependent touch sets."""
+
+    by_owner: dict[str, list[str]] = {}
+    known_ids: set[str] = set()
+    for row in touch_sets:
+        touch_set_id = str(row.get("id", ""))
+        owner = str(row.get("owner", ""))
+        _require(bool(touch_set_id) and bool(owner), "MALFORMED_TOUCH_SET", repr(row))
+        _require(touch_set_id not in known_ids, "DUPLICATE_TOUCH_SET", touch_set_id)
+        known_ids.add(touch_set_id)
+        by_owner.setdefault(owner, []).append(touch_set_id)
+    for ids in by_owner.values():
+        ids.sort()
+
+    raw_edges = dependency_graph.get("edges")
+    _require(isinstance(raw_edges, list), "MALFORMED_DEPENDENCY_GRAPH", "edges")
+    precedence: set[tuple[str, str]] = set()
+    for raw_edge in raw_edges:
+        _require(
+            isinstance(raw_edge, list) and len(raw_edge) == 2,
+            "MALFORMED_DEPENDENCY_GRAPH",
+            repr(raw_edge),
+        )
+        source_owner, target_owner = map(str, raw_edge)
+        for target_id in by_owner.get(target_owner, []):
+            for source_id in by_owner.get(source_owner, []):
+                if target_id != source_id:
+                    precedence.add((target_id, source_id))
+    result = [list(edge) for edge in sorted(precedence)]
+    if _cycle_path(sorted(known_ids), [tuple(edge) for edge in result]) is not None:
+        raise ArchitectureMapError("PRECEDENCE_CYCLE", repr(result))
+    return result
+
+
+def build_carrier_specs(
+    touch_sets: Sequence[Mapping[str, object]],
+    coloring: Mapping[str, object],
+    capacities: Mapping[str, object] | None = None,
+) -> list[dict[str, object]]:
+    """Render one ordered, complete carrier membership row per used color."""
+
+    assignment = coloring.get("assignment")
+    k = coloring.get("k")
+    _require(isinstance(assignment, dict), "MALFORMED_COLORING", "assignment")
+    _require(isinstance(k, int) and not isinstance(k, bool) and k >= 0, "MALFORMED_COLORING", "k")
+    max_paths = None
+    max_consumers = None
+    if capacities is not None:
+        max_paths = capacities.get("max_paths_per_carrier")
+        max_consumers = capacities.get("max_consumers_per_carrier")
+        _require(
+            isinstance(max_paths, int) and not isinstance(max_paths, bool) and max_paths > 0,
+            "MALFORMED_CAPACITY_CONTRACT",
+            "max paths",
+        )
+        _require(
+            isinstance(max_consumers, int)
+            and not isinstance(max_consumers, bool)
+            and max_consumers > 0,
+            "MALFORMED_CAPACITY_CONTRACT",
+            "max consumers",
+        )
+    by_id = {str(row.get("id", "")): row for row in touch_sets}
+    _require(set(assignment) == set(by_id), "INCOMPLETE_CARRIER_MEMBERSHIP", repr(sorted(set(by_id) ^ set(assignment))))
+    carriers: list[dict[str, object]] = []
+    for color in range(k):
+        member_ids = sorted(
+            touch_set_id
+            for touch_set_id, assigned_color in assignment.items()
+            if assigned_color == color
+        )
+        _require(bool(member_ids), "EMPTY_CARRIER_COLOR", str(color))
+        paths = sorted(
+            {
+                str(path)
+                for touch_set_id in member_ids
+                for path in by_id[touch_set_id].get("paths", [])
+            }
+        )
+        consumers = sorted(
+            {
+                str(path)
+                for touch_set_id in member_ids
+                for path in by_id[touch_set_id].get("consumers", [])
+            }
+        )
+        within_capacity = (
+            max_paths is None
+            or (len(paths) <= max_paths and len(consumers) <= max_consumers)
+        )
+        if not within_capacity:
+            raise ArchitectureMapError(
+                "CARRIER_CAPACITY_EXCEEDED",
+                f"color={color} paths={len(paths)}/{max_paths} consumers={len(consumers)}/{max_consumers}",
+            )
+        carriers.append(
+            {
+                "carrier_id": f"carrier-{color + 1:03d}",
+                "color": color,
+                "touch_set_ids": member_ids,
+                "paths": paths,
+                "consumers": consumers,
+                "path_count": len(paths),
+                "unique_consumer_count": len(consumers),
+                "within_capacity": within_capacity,
+            }
+        )
+    return carriers
+
+
+def _normalized_coloring_graph(
+    nodes: Sequence[str],
+    edges: Sequence[tuple[str, str]],
+    precedence: Sequence[tuple[str, str]],
+) -> tuple[list[str], list[tuple[str, str]], list[tuple[str, str]]]:
+    ordered_nodes = sorted(set(map(str, nodes)))
+    _require(len(ordered_nodes) == len(nodes), "DUPLICATE_COLORING_NODE", repr(list(nodes)))
+    known = set(ordered_nodes)
+
+    def normalize_pairs(
+        pairs: Sequence[tuple[str, str]], code: str
+    ) -> list[tuple[str, str]]:
+        result: set[tuple[str, str]] = set()
+        for raw_left, raw_right in pairs:
+            left, right = str(raw_left), str(raw_right)
+            _require(left in known and right in known, code, f"{left} -> {right}")
+            _require(left != right, code, f"self edge {left}")
+            result.add((left, right))
+        return sorted(result)
+
+    normalized_edges = [tuple(sorted(pair)) for pair in normalize_pairs(edges, "MALFORMED_CONFLICT_EDGE")]
+    normalized_edges = sorted(set(normalized_edges))
+    normalized_precedence = normalize_pairs(precedence, "MALFORMED_PRECEDENCE_EDGE")
+    if _cycle_path(ordered_nodes, normalized_precedence) is not None:
+        raise ArchitectureMapError("PRECEDENCE_CYCLE", repr(normalized_precedence))
+    return ordered_nodes, normalized_edges, normalized_precedence
+
+
+def _color_search(
+    nodes: Sequence[str],
+    edges: Sequence[tuple[str, str]],
+    precedence: Sequence[tuple[str, str]],
+    k: int,
+    budget: dict[str, int],
+    node_weights: Mapping[str, Mapping[str, object]],
+    capacities: Mapping[str, object] | None,
+    seed_clique: Sequence[str] = (),
+) -> dict[str, int] | None:
+    required_recursion_limit = len(nodes) + 256
+    if sys.getrecursionlimit() < required_recursion_limit:
+        sys.setrecursionlimit(required_recursion_limit)
+    adjacent = {node: set() for node in nodes}
+    for left, right in edges:
+        adjacent[left].add(right)
+        adjacent[right].add(left)
+    before = {node: set() for node in nodes}
+    after = {node: set() for node in nodes}
+    for left, right in precedence:
+        after[left].add(right)
+        before[right].add(left)
+    indegree = {node: len(before[node]) for node in nodes}
+    ready = sorted(node for node in nodes if indegree[node] == 0)
+    topological: list[str] = []
+    while ready:
+        node = ready.pop(0)
+        topological.append(node)
+        for child in sorted(after[node]):
+            indegree[child] -= 1
+            if indegree[child] == 0:
+                ready.append(child)
+                ready.sort()
+    _require(len(topological) == len(nodes), "PRECEDENCE_CYCLE", repr(list(precedence)))
+    minimum_color = {node: 0 for node in nodes}
+    for node in topological:
+        for child in after[node]:
+            minimum_color[child] = max(minimum_color[child], minimum_color[node] + 1)
+    successor_depth = {node: 0 for node in nodes}
+    for node in reversed(topological):
+        for child in after[node]:
+            successor_depth[node] = max(successor_depth[node], successor_depth[child] + 1)
+    if any(minimum_color[node] + successor_depth[node] >= k for node in nodes):
+        budget["explored"] += 1
+        if budget["explored"] > budget["maximum"]:
+            raise ArchitectureMapError(
+                "EXACT_COLORING_BUDGET_EXCEEDED",
+                f"maximum={budget['maximum']} explored={budget['explored']}",
+            )
+        return None
+    assignment: dict[str, int] = {}
+    color_path_counts = [0 for _ in range(k)]
+    color_consumers: list[set[str]] = [set() for _ in range(k)]
+    max_paths = int(capacities["max_paths_per_carrier"]) if capacities is not None else None
+    max_consumers = int(capacities["max_consumers_per_carrier"]) if capacities is not None else None
+    _require(len(seed_clique) <= k, "MALFORMED_CLIQUE_SEED", f"{len(seed_clique)} > {k}")
+    for color, node in enumerate(seed_clique):
+        _require(node in adjacent and node not in assignment, "MALFORMED_CLIQUE_SEED", node)
+        _require(
+            all(tuple(sorted((node, prior))) in set(edges) for prior in assignment),
+            "MALFORMED_CLIQUE_SEED",
+            f"not a clique: {node}",
+        )
+        weight = node_weights[node]
+        path_count = int(weight["path_count"])
+        consumers = set(map(str, weight["consumers"]))
+        _require(max_paths is None or path_count <= max_paths, "MALFORMED_CLIQUE_SEED", node)
+        _require(max_consumers is None or len(consumers) <= max_consumers, "MALFORMED_CLIQUE_SEED", node)
+        assignment[node] = color
+        color_path_counts[color] = path_count
+        color_consumers[color] = consumers
+
+    def visit(index: int) -> dict[str, int] | None:
+        budget["explored"] += 1
+        if budget["explored"] > budget["maximum"]:
+            raise ArchitectureMapError(
+                "EXACT_COLORING_BUDGET_EXCEEDED",
+                f"maximum={budget['maximum']} explored={budget['explored']}",
+            )
+        if len(assignment) == len(nodes):
+            return dict(assignment)
+        if precedence:
+            node = nodes[index]
+        else:
+            unassigned = (candidate for candidate in nodes if candidate not in assignment)
+            node = min(
+                unassigned,
+                key=lambda candidate: (
+                    -len(
+                        {
+                            assignment[neighbor]
+                            for neighbor in adjacent[candidate]
+                            if neighbor in assignment
+                        }
+                    ),
+                    -len(adjacent[candidate]),
+                    candidate,
+                ),
+            )
+        maximum_color = k - 1 - successor_depth[node]
+        if precedence:
+            # Precedence gives colors an absolute order, so ordinary color-label
+            # symmetry breaking is unsound: a lexically later predecessor may need
+            # color zero while the first lexical node takes color one.
+            candidate_colors = range(minimum_color[node], maximum_color + 1)
+        else:
+            # With no precedence, unused color labels are interchangeable. Admit
+            # only the next unused label; this removes permutations but no coloring.
+            used = set(assignment.values())
+            symmetric_maximum = min(maximum_color, len(used))
+            candidate_colors = range(minimum_color[node], symmetric_maximum + 1)
+        for color in candidate_colors:
+            if any(assignment.get(neighbor) == color for neighbor in adjacent[node]):
+                continue
+            if any(assignment.get(parent, -1) >= color for parent in before[node]):
+                continue
+            if any(
+                child in assignment and color >= assignment[child]
+                for child in after[node]
+            ):
+                continue
+            weight = node_weights[node]
+            path_count = int(weight["path_count"])
+            consumers = set(map(str, weight["consumers"]))
+            if max_paths is not None and color_path_counts[color] + path_count > max_paths:
+                continue
+            if max_consumers is not None and len(color_consumers[color] | consumers) > max_consumers:
+                continue
+            assignment[node] = color
+            prior_consumers = color_consumers[color]
+            color_path_counts[color] += path_count
+            color_consumers[color] = prior_consumers | consumers
+            witness = visit(index + 1)
+            if witness is not None:
+                return witness
+            color_path_counts[color] -= path_count
+            color_consumers[color] = prior_consumers
+            assignment.pop(node)
+        return None
+
+    return visit(0)
+
+
+def _coloring_hash(value: object) -> str:
+    return hashlib.sha256(canonical_json(value)).hexdigest()
+
+
+def canonical_sha256(value: object) -> str:
+    """Public canonical hash helper for graph/certificate consumers."""
+
+    return _coloring_hash(value)
+
+
+def _normalize_capacity_contract(
+    nodes: Sequence[str],
+    node_weights: Mapping[str, Mapping[str, object]] | None,
+    capacities: Mapping[str, object] | None,
+) -> tuple[dict[str, dict[str, object]], dict[str, object] | None]:
+    if node_weights is None and capacities is None:
+        return (
+            {node: {"path_count": 0, "consumers": []} for node in nodes},
+            None,
+        )
+    _require(node_weights is not None and capacities is not None, "MALFORMED_CAPACITY_CONTRACT", "weights/capacities pair")
+    _require(set(node_weights) == set(nodes), "MALFORMED_CAPACITY_CONTRACT", "node weight coverage")
+    max_paths = capacities.get("max_paths_per_carrier")
+    max_consumers = capacities.get("max_consumers_per_carrier")
+    _require(isinstance(max_paths, int) and not isinstance(max_paths, bool) and max_paths > 0, "MALFORMED_CAPACITY_CONTRACT", "max paths")
+    _require(isinstance(max_consumers, int) and not isinstance(max_consumers, bool) and max_consumers > 0, "MALFORMED_CAPACITY_CONTRACT", "max consumers")
+    normalized: dict[str, dict[str, object]] = {}
+    for node in nodes:
+        row = node_weights[node]
+        path_count = row.get("path_count")
+        consumers = row.get("consumers")
+        _require(isinstance(path_count, int) and not isinstance(path_count, bool) and 0 <= path_count <= max_paths, "OVERSIZED_ATOMIC_TOUCH_SET", node)
+        _require(isinstance(consumers, list), "MALFORMED_CAPACITY_CONTRACT", node)
+        normalized_consumers = sorted(set(map(str, consumers)))
+        _require(len(normalized_consumers) <= max_consumers, "OVERSIZED_ATOMIC_TOUCH_SET", node)
+        normalized[node] = {"path_count": path_count, "consumers": normalized_consumers}
+    normalized_capacities = {
+        "max_paths_per_carrier": max_paths,
+        "max_consumers_per_carrier": max_consumers,
+        "consumer_counting_rule": str(
+            capacities.get("consumer_counting_rule", "UNIQUE_CONSUMER_PATHS_PER_CARRIER")
+        ),
+    }
+    _require(
+        normalized_capacities["consumer_counting_rule"] == "UNIQUE_CONSUMER_PATHS_PER_CARRIER",
+        "MALFORMED_CAPACITY_CONTRACT",
+        "consumer_counting_rule",
+    )
+    return normalized, normalized_capacities
+
+
+def _deterministic_dsatur_witness(
+    nodes: Sequence[str],
+    edges: Sequence[tuple[str, str]],
+    node_weights: Mapping[str, Mapping[str, object]],
+    capacities: Mapping[str, object] | None,
+) -> dict[str, int]:
+    """Construct a deterministic capacity-valid upper witness without claiming optimality."""
+
+    adjacent = {node: set() for node in nodes}
+    for left, right in edges:
+        adjacent[left].add(right)
+        adjacent[right].add(left)
+    assignment: dict[str, int] = {}
+    unassigned = set(nodes)
+    color_path_counts: list[int] = []
+    color_consumers: list[set[str]] = []
+    max_paths = int(capacities["max_paths_per_carrier"]) if capacities is not None else None
+    max_consumers = int(capacities["max_consumers_per_carrier"]) if capacities is not None else None
+    while unassigned:
+        node = min(
+            unassigned,
+            key=lambda candidate: (
+                -len({assignment[n] for n in adjacent[candidate] if n in assignment}),
+                -len(adjacent[candidate]),
+                candidate,
+            ),
+        )
+        forbidden = {assignment[neighbor] for neighbor in adjacent[node] if neighbor in assignment}
+        path_count = int(node_weights[node]["path_count"])
+        consumers = set(map(str, node_weights[node]["consumers"]))
+        chosen: int | None = None
+        for color in range(len(color_path_counts)):
+            if color in forbidden:
+                continue
+            if max_paths is not None and color_path_counts[color] + path_count > max_paths:
+                continue
+            if max_consumers is not None and len(color_consumers[color] | consumers) > max_consumers:
+                continue
+            chosen = color
+            break
+        if chosen is None:
+            chosen = len(color_path_counts)
+            color_path_counts.append(0)
+            color_consumers.append(set())
+        assignment[node] = chosen
+        color_path_counts[chosen] += path_count
+        color_consumers[chosen] |= consumers
+        unassigned.remove(node)
+    return {node: assignment[node] for node in nodes}
+
+
+COLORING_ALGORITHM = "stable-exact-branch-and-bound-v1"
+
+
+def _solve_minimum_coloring_monolithic(
+    nodes: Sequence[str],
+    edges: Sequence[tuple[str, str]],
+    precedence: Sequence[tuple[str, str]],
+    max_states: int,
+    node_weights: Mapping[str, Mapping[str, object]] | None = None,
+    capacities: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Return the exact lexicographically stable minimum carrier coloring."""
+
+    _require(
+        isinstance(max_states, int) and not isinstance(max_states, bool) and max_states > 0,
+        "MALFORMED_COLORING_BUDGET",
+        repr(max_states),
+    )
+    ordered_nodes, normalized_edges, normalized_precedence = _normalized_coloring_graph(
+        nodes, edges, precedence
+    )
+    normalized_weights, normalized_capacities = _normalize_capacity_contract(
+        ordered_nodes, node_weights, capacities
+    )
+    graph_payload = {"nodes": ordered_nodes, "edges": [list(edge) for edge in normalized_edges]}
+    precedence_payload = [list(edge) for edge in normalized_precedence]
+    graph_sha256 = _coloring_hash(graph_payload)
+    precedence_sha256 = _coloring_hash(precedence_payload)
+    capacity_payload = {
+        "node_weights": normalized_weights,
+        "capacities": normalized_capacities,
+    }
+    capacity_sha256 = _coloring_hash(capacity_payload)
+    if not ordered_nodes:
+        return {
+            "algorithm": COLORING_ALGORITHM,
+            "k": 0,
+            "assignment": {},
+            "graph_sha256": graph_sha256,
+            "precedence_sha256": precedence_sha256,
+            "capacity_sha256": capacity_sha256,
+            "explored_states": 0,
+            "k_minus_one_unsat": {
+                "k": -1,
+                "complete_exhaustion": True,
+                "explored_states": 0,
+                "graph_sha256": graph_sha256,
+                "precedence_sha256": precedence_sha256,
+                "capacity_sha256": capacity_sha256,
+                "algorithm": COLORING_ALGORITHM,
+            },
+        }
+
+    minimum_k = 1
+    previous_unsat: dict[str, object] | None = None
+    edge_set = set(normalized_edges)
+    consumer_nodes: dict[str, list[str]] = {}
+    for node, weight in normalized_weights.items():
+        for consumer in weight["consumers"]:
+            consumer_nodes.setdefault(str(consumer), []).append(node)
+    clique_witness: list[str] = []
+    clique_consumer: str | None = None
+    for consumer, raw_members in sorted(consumer_nodes.items()):
+        members = sorted(raw_members)
+        if len(members) <= len(clique_witness):
+            continue
+        if all(
+            tuple(sorted((left, right))) in edge_set
+            for index, left in enumerate(members)
+            for right in members[index + 1 :]
+        ):
+            clique_witness = members
+            clique_consumer = consumer
+    conflict_clique_bound = max(1, len(clique_witness))
+    if normalized_capacities is not None:
+        total_paths = sum(int(row["path_count"]) for row in normalized_weights.values())
+        total_consumer_slots = sum(len(row["consumers"]) for row in normalized_weights.values())
+        path_bound = (total_paths + int(normalized_capacities["max_paths_per_carrier"]) - 1) // int(
+            normalized_capacities["max_paths_per_carrier"]
+        )
+        consumer_bound = (
+            total_consumer_slots + int(normalized_capacities["max_consumers_per_carrier"]) - 1
+        ) // int(normalized_capacities["max_consumers_per_carrier"])
+        minimum_k = max(1, path_bound, consumer_bound, conflict_clique_bound)
+        if minimum_k > 1:
+            previous_unsat = {
+                "k": minimum_k - 1,
+                "complete_exhaustion": True,
+                "proof_kind": (
+                    "CONFLICT_CLIQUE_ROOT_BOUND"
+                    if conflict_clique_bound > max(path_bound, consumer_bound)
+                    else "CAPACITY_ROOT_BOUND"
+                ),
+                "explored_states": 1,
+                "path_lower_bound": path_bound,
+                "consumer_lower_bound": consumer_bound,
+                "conflict_clique_lower_bound": conflict_clique_bound,
+                "conflict_clique_consumer": clique_consumer,
+                "conflict_clique_nodes_sha256": _coloring_hash(clique_witness),
+                "graph_sha256": graph_sha256,
+                "precedence_sha256": precedence_sha256,
+                "capacity_sha256": capacity_sha256,
+                "algorithm": COLORING_ALGORITHM,
+            }
+    total_explored = 0
+    if not normalized_precedence:
+        upper_witness = _deterministic_dsatur_witness(
+            ordered_nodes,
+            normalized_edges,
+            normalized_weights,
+            normalized_capacities,
+        )
+        upper_k = max(upper_witness.values(), default=-1) + 1
+        if upper_k == minimum_k:
+            if previous_unsat is None:
+                previous_unsat = {
+                    "k": 0,
+                    "complete_exhaustion": True,
+                    "explored_states": 0,
+                    "graph_sha256": graph_sha256,
+                    "precedence_sha256": precedence_sha256,
+                    "capacity_sha256": capacity_sha256,
+                    "algorithm": COLORING_ALGORITHM,
+                }
+            return {
+                "algorithm": COLORING_ALGORITHM,
+                "k": upper_k,
+                "assignment": upper_witness,
+                "graph_sha256": graph_sha256,
+                "precedence_sha256": precedence_sha256,
+                "capacity_sha256": capacity_sha256,
+                "explored_states": len(ordered_nodes) + 1,
+                "k_minus_one_unsat": previous_unsat,
+            }
+    for k in range(minimum_k, len(ordered_nodes) + 1):
+        budget = {"explored": 0, "maximum": max_states - total_explored}
+        if budget["maximum"] <= 0:
+            raise ArchitectureMapError(
+                "EXACT_COLORING_BUDGET_EXCEEDED",
+                f"maximum={max_states} explored={total_explored}",
+            )
+        witness = _color_search(
+            ordered_nodes,
+            normalized_edges,
+            normalized_precedence,
+            k,
+            budget,
+            normalized_weights,
+            normalized_capacities,
+            clique_witness if not normalized_precedence and len(clique_witness) <= k else (),
+        )
+        total_explored += budget["explored"]
+        if witness is not None:
+            if previous_unsat is None:
+                previous_unsat = {
+                    "k": 0,
+                    "complete_exhaustion": True,
+                    "explored_states": 0,
+                    "graph_sha256": graph_sha256,
+                    "precedence_sha256": precedence_sha256,
+                    "capacity_sha256": capacity_sha256,
+                    "algorithm": COLORING_ALGORITHM,
+                }
+            return {
+                "algorithm": COLORING_ALGORITHM,
+                "k": k,
+                "assignment": {node: witness[node] for node in ordered_nodes},
+                "graph_sha256": graph_sha256,
+                "precedence_sha256": precedence_sha256,
+                "capacity_sha256": capacity_sha256,
+                "explored_states": total_explored,
+                "k_minus_one_unsat": previous_unsat,
+            }
+        previous_unsat = {
+            "k": k,
+            "complete_exhaustion": True,
+            "explored_states": budget["explored"],
+            "graph_sha256": graph_sha256,
+            "precedence_sha256": precedence_sha256,
+            "capacity_sha256": capacity_sha256,
+            "algorithm": COLORING_ALGORITHM,
+        }
+    raise ArchitectureMapError("COLORING_INTERNAL_ERROR", "finite graph has no coloring")
+
+
+def _conflict_components(
+    nodes: Sequence[str], edges: Sequence[tuple[str, str]]
+) -> list[list[str]]:
+    adjacent = {node: set() for node in nodes}
+    for left, right in edges:
+        adjacent[left].add(right)
+        adjacent[right].add(left)
+    unseen = set(nodes)
+    components: list[list[str]] = []
+    while unseen:
+        root = min(unseen)
+        stack = [root]
+        unseen.remove(root)
+        component: list[str] = []
+        while stack:
+            node = stack.pop()
+            component.append(node)
+            for neighbor in sorted(adjacent[node], reverse=True):
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    stack.append(neighbor)
+        components.append(sorted(component))
+    return sorted(components, key=lambda rows: rows[0])
+
+
+def solve_minimum_coloring(
+    nodes: Sequence[str],
+    edges: Sequence[tuple[str, str]],
+    precedence: Sequence[tuple[str, str]],
+    max_states: int,
+    node_weights: Mapping[str, Mapping[str, object]] | None = None,
+    capacities: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Exactly color conflict components, then exactly capacity-pack their classes."""
+
+    _require(
+        isinstance(max_states, int) and not isinstance(max_states, bool) and max_states > 0,
+        "MALFORMED_COLORING_BUDGET",
+        repr(max_states),
+    )
+    ordered_nodes, normalized_edges, normalized_precedence = _normalized_coloring_graph(
+        nodes, edges, precedence
+    )
+    normalized_weights, normalized_capacities = _normalize_capacity_contract(
+        ordered_nodes, node_weights, capacities
+    )
+    if not ordered_nodes:
+        result = _solve_minimum_coloring_monolithic(
+            ordered_nodes,
+            normalized_edges,
+            normalized_precedence,
+            max_states,
+            normalized_weights if normalized_capacities is not None else None,
+            normalized_capacities,
+        )
+        result["decomposition"] = {
+            "component_count": 0,
+            "packing_item_count": 0,
+            "precedence_edge_component_locality": True,
+            "components": [],
+        }
+        return result
+
+    graph_payload = {"nodes": ordered_nodes, "edges": [list(edge) for edge in normalized_edges]}
+    precedence_payload = [list(edge) for edge in normalized_precedence]
+    capacity_payload = {
+        "node_weights": normalized_weights,
+        "capacities": normalized_capacities,
+    }
+    graph_sha256 = _coloring_hash(graph_payload)
+    precedence_sha256 = _coloring_hash(precedence_payload)
+    capacity_sha256 = _coloring_hash(capacity_payload)
+
+    components = _conflict_components(ordered_nodes, normalized_edges)
+    component_index = {
+        node: index for index, component in enumerate(components) for node in component
+    }
+    for left, right in normalized_precedence:
+        if component_index[left] != component_index[right]:
+            raise ArchitectureMapError(
+                "CROSS_COMPONENT_PRECEDENCE",
+                f"{left} -> {right}",
+            )
+
+    explored = 0
+    component_results: list[dict[str, object]] = []
+    node_to_item: dict[str, str] = {}
+    item_component: dict[str, int] = {}
+    item_weights: dict[str, dict[str, object]] = {}
+    packing_edges: list[tuple[str, str]] = []
+    packing_precedence: set[tuple[str, str]] = set()
+    for index, component in enumerate(components):
+        component_set = set(component)
+        component_edges = [
+            edge for edge in normalized_edges if edge[0] in component_set
+        ]
+        component_precedence = [
+            edge for edge in normalized_precedence if edge[0] in component_set
+        ]
+        remaining = max_states - explored
+        if remaining <= 0:
+            raise ArchitectureMapError(
+                "EXACT_COLORING_BUDGET_EXCEEDED",
+                f"maximum={max_states} explored={explored}",
+            )
+        component_result = _solve_minimum_coloring_monolithic(
+            component,
+            component_edges,
+            component_precedence,
+            remaining,
+            (
+                {node: normalized_weights[node] for node in component}
+                if normalized_capacities is not None
+                else None
+            ),
+            normalized_capacities,
+        )
+        explored += int(component_result["explored_states"])
+        component_id = component[0]
+        class_ids: list[str] = []
+        for color in range(int(component_result["k"])):
+            class_id = f"{component_id}::component-{index + 1:04d}-class-{color + 1:04d}"
+            class_ids.append(class_id)
+            item_component[class_id] = index
+            members = sorted(
+                node
+                for node in component
+                if component_result["assignment"][node] == color
+            )
+            for node in members:
+                node_to_item[node] = class_id
+            item_weights[class_id] = {
+                "path_count": sum(
+                    int(normalized_weights[node]["path_count"]) for node in members
+                ),
+                "consumers": sorted(
+                    {
+                        consumer
+                        for node in members
+                        for consumer in normalized_weights[node]["consumers"]
+                    }
+                ),
+            }
+        for left_index, left in enumerate(class_ids):
+            for right in class_ids[left_index + 1 :]:
+                packing_edges.append((left, right))
+        for left, right in component_precedence:
+            left_item, right_item = node_to_item[left], node_to_item[right]
+            if left_item != right_item:
+                packing_precedence.add((left_item, right_item))
+        component_results.append(
+            {
+                "component_id": component_id,
+                "node_count": len(component),
+                "nodes_sha256": _coloring_hash(component),
+                "k": component_result["k"],
+                "explored_states": component_result["explored_states"],
+                "certificate_sha256": _coloring_hash(component_result),
+                "k_minus_one_unsat": component_result["k_minus_one_unsat"],
+            }
+        )
+
+    item_ids = sorted(item_weights)
+    for left_index, left in enumerate(item_ids):
+        left_consumers = set(map(str, item_weights[left]["consumers"]))
+        for right in item_ids[left_index + 1 :]:
+            if item_component[left] != item_component[right]:
+                _require(
+                    left_consumers.isdisjoint(set(map(str, item_weights[right]["consumers"]))),
+                    "CROSS_COMPONENT_CONSUMER",
+                    f"{left} <> {right}",
+                )
+
+    remaining = max_states - explored
+    if remaining <= 0:
+        raise ArchitectureMapError(
+            "EXACT_COLORING_BUDGET_EXCEEDED",
+            f"maximum={max_states} explored={explored}",
+        )
+    packing = _solve_minimum_coloring_monolithic(
+        item_ids,
+        sorted(packing_edges),
+        sorted(packing_precedence),
+        remaining,
+        item_weights if normalized_capacities is not None else None,
+        normalized_capacities,
+    )
+    explored += int(packing["explored_states"])
+    assignment = {
+        node: int(packing["assignment"][node_to_item[node]]) for node in ordered_nodes
+    }
+    component_lower_bound = max(int(row["k"]) for row in component_results)
+    if int(packing["k"]) > component_lower_bound:
+        global_unsat = {
+            "k": int(packing["k"]) - 1,
+            "complete_exhaustion": True,
+            "proof_kind": "GLOBAL_PACKING_EXHAUSTION",
+            "packing_certificate": packing["k_minus_one_unsat"],
+        }
+    else:
+        binding = next(
+            row for row in component_results if int(row["k"]) == component_lower_bound
+        )
+        global_unsat = {
+            "k": int(packing["k"]) - 1,
+            "complete_exhaustion": True,
+            "proof_kind": "BINDING_COMPONENT_EXHAUSTION",
+            "binding_component_id": binding["component_id"],
+            "component_certificate": binding["k_minus_one_unsat"],
+        }
+    global_unsat.update(
+        {
+            "graph_sha256": graph_sha256,
+            "precedence_sha256": precedence_sha256,
+            "capacity_sha256": capacity_sha256,
+            "algorithm": COLORING_ALGORITHM,
+        }
+    )
+    return {
+        "algorithm": COLORING_ALGORITHM,
+        "k": packing["k"],
+        "assignment": assignment,
+        "graph_sha256": graph_sha256,
+        "precedence_sha256": precedence_sha256,
+        "capacity_sha256": capacity_sha256,
+        "explored_states": explored,
+        "k_minus_one_unsat": global_unsat,
+        "decomposition": {
+            "component_count": len(components),
+            "packing_item_count": len(item_ids),
+            "precedence_edge_component_locality": True,
+            "components": component_results,
+            "packing_certificate_sha256": _coloring_hash(packing),
+        },
+    }
+
+
+def verify_coloring_certificate(
+    graph: Mapping[str, object],
+    supplied: Mapping[str, object],
+    max_states: int,
+) -> dict[str, object]:
+    """Recompute both the witness and K-1 exhaustion certificate exactly."""
+
+    unsat = supplied.get("k_minus_one_unsat")
+    if not isinstance(unsat, dict) or unsat.get("complete_exhaustion") is not True:
+        raise ArchitectureMapError("K_MINUS_ONE_NOT_PROVEN", "complete_exhaustion is not true")
+    nodes = graph.get("nodes")
+    edges = graph.get("edges")
+    precedence = graph.get("precedence", [])
+    node_weights = graph.get("node_weights")
+    capacities = graph.get("capacities")
+    _require(isinstance(nodes, list), "MALFORMED_CONFLICT_GRAPH", "nodes")
+    _require(isinstance(edges, list), "MALFORMED_CONFLICT_GRAPH", "edges")
+    _require(isinstance(precedence, list), "MALFORMED_CONFLICT_GRAPH", "precedence")
+    recomputed = solve_minimum_coloring(
+        nodes,
+        edges,
+        precedence,
+        max_states,
+        node_weights=node_weights if isinstance(node_weights, dict) else None,
+        capacities=capacities if isinstance(capacities, dict) else None,
+    )
+    if canonical_json(recomputed) != canonical_json(dict(supplied)):
+        if canonical_json(recomputed["k_minus_one_unsat"]) != canonical_json(unsat):
+            raise ArchitectureMapError("K_MINUS_ONE_NOT_PROVEN", "certificate differs from recomputation")
+        raise ArchitectureMapError("COLORING_CERTIFICATE_MISMATCH", "witness differs from recomputation")
+    return recomputed
