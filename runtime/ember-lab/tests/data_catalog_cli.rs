@@ -3,7 +3,8 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use ember_lab::Daemon;
-use serde_json::Value;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -63,4 +64,224 @@ fn data_catalog_status_uses_the_current_ember_lab_cli_authority() {
         .and_then(Value::as_array)
         .unwrap()
         .is_empty());
+}
+
+fn minimal_manifest_bytes() -> Vec<u8> {
+    let object_sha = "b".repeat(64);
+    let receipt_sha = "c".repeat(64);
+    serde_json::to_vec(&json!({
+        "schema_version": "ember-data-catalog-manifest-v1",
+        "records": [
+            {
+                "kind": "source",
+                "id": "source:issue1581:test",
+                "canonical_url": "https://example.test/issue1581",
+                "revision": "v1",
+                "license_text_sha256": "a".repeat(64),
+                "license_verdict": "accepted",
+                "access_class": "public",
+                "acquired_at_ms": 1,
+                "refusal_reason": null
+            },
+            {
+                "kind": "immutable_object",
+                "id": format!("sha256:{object_sha}"),
+                "sha256": object_sha,
+                "byte_count": 123,
+                "media_type": "application/pdf",
+                "locator": format!("sha256/bb/{object_sha}"),
+                "custody_state": "available"
+            },
+            {
+                "kind": "receipt",
+                "id": format!("sha256:{receipt_sha}"),
+                "sha256": receipt_sha,
+                "producing_authority": "corpus_connector",
+                "receipt_class": "acquisition",
+                "observed_at_ms": 2,
+                "state": "accepted"
+            }
+        ],
+        "edges": [
+            {"kind":"source_object","from_kind":"source","from_id":"source:issue1581:test","to_kind":"immutable_object","to_id":format!("sha256:{object_sha}"),"ordinal":0,"payload":{}},
+            {"kind":"object_receipt","from_kind":"immutable_object","from_id":format!("sha256:{object_sha}"),"to_kind":"receipt","to_id":format!("sha256:{receipt_sha}"),"ordinal":0,"payload":{}}
+        ]
+    }))
+    .unwrap()
+}
+
+fn sha256(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+#[test]
+fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt() {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let first_receipt = root.join("first-receipt.json");
+    let second_receipt = root.join("second-receipt.json");
+    fs::write(&manifest, minimal_manifest_bytes()).unwrap();
+
+    let run = |receipt: &PathBuf| {
+        Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+            .args([
+                "data-catalog-import",
+                "--db",
+                db.to_str().unwrap(),
+                "--manifest",
+                manifest.to_str().unwrap(),
+                "--receipt",
+                receipt.to_str().unwrap(),
+                "--source-commit",
+                "1234567890abcdef1234567890abcdef12345678",
+            ])
+            .output()
+            .unwrap()
+    };
+
+    let first = run(&first_receipt);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first_payload: Value = serde_json::from_slice(&fs::read(&first_receipt).unwrap()).unwrap();
+    assert_eq!(
+        first_payload["schema_version"],
+        "ember-data-catalog-import-receipt-v1"
+    );
+    assert_eq!(first_payload["result"], "PASS");
+    assert_eq!(first_payload["inserted_records"], 3);
+    assert_eq!(first_payload["inserted_edges"], 2);
+    assert_eq!(
+        first_payload["source_commit"],
+        "1234567890abcdef1234567890abcdef12345678"
+    );
+    let mut without_self = first_payload.clone();
+    let claimed_self = without_self
+        .as_object_mut()
+        .unwrap()
+        .remove("self_sha256")
+        .unwrap();
+    assert_eq!(
+        claimed_self,
+        sha256(&serde_json::to_vec(&without_self).unwrap())
+    );
+
+    let second = run(&second_receipt);
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let second_payload: Value =
+        serde_json::from_slice(&fs::read(&second_receipt).unwrap()).unwrap();
+    assert_eq!(second_payload["inserted_records"], 0);
+    assert_eq!(second_payload["inserted_edges"], 0);
+    assert_eq!(
+        second_payload["canonical_export_sha256"],
+        first_payload["canonical_export_sha256"]
+    );
+    assert_eq!(
+        second_payload["canonical_manifest_sha256"],
+        first_payload["canonical_manifest_sha256"]
+    );
+
+    let overwrite = run(&second_receipt);
+    assert!(!overwrite.status.success());
+    assert_eq!(
+        fs::read(&second_receipt).unwrap(),
+        serde_json::to_vec_pretty(&second_payload).unwrap()
+    );
+}
+
+#[test]
+fn preexisting_import_receipt_refuses_before_catalog_mutation() {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    fs::write(&manifest, minimal_manifest_bytes()).unwrap();
+    fs::write(&receipt, b"do not overwrite").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+        .args([
+            "data-catalog-import",
+            "--db",
+            db.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--receipt",
+            receipt.to_str().unwrap(),
+            "--source-commit",
+            "1234567890abcdef1234567890abcdef12345678",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_eq!(fs::read(&receipt).unwrap(), b"do not overwrite");
+
+    let daemon = Daemon::open(&db).unwrap();
+    assert_eq!(
+        daemon.export_data_catalog_manifest().unwrap(),
+        br#"{"edges":[],"records":[],"schema_version":"ember-data-catalog-manifest-v1"}"#
+    );
+}
+
+#[test]
+fn invalid_source_commit_refuses_before_receipt_or_catalog_creation() {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    fs::write(&manifest, minimal_manifest_bytes()).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+        .args([
+            "data-catalog-import",
+            "--db",
+            db.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--receipt",
+            receipt.to_str().unwrap(),
+            "--source-commit",
+            "NOT-A-COMMIT",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(!receipt.exists());
+    assert!(!db.exists());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("--source-commit must be a lowercase 40-hex SHA"));
+}
+
+#[test]
+fn invalid_manifest_removes_reserved_receipt_without_reporting_pass() {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("manifest.json");
+    let receipt = root.join("receipt.json");
+    fs::write(&manifest, br#"{"schema_version":"wrong"}"#).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+        .args([
+            "data-catalog-import",
+            "--db",
+            db.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--receipt",
+            receipt.to_str().unwrap(),
+            "--source-commit",
+            "1234567890abcdef1234567890abcdef12345678",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert!(!receipt.exists());
 }
