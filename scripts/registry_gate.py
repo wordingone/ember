@@ -169,7 +169,7 @@ def check_dispatch_authority(
     if authority.get("goal_id") != active_goal:
         return False, "goal_id does not match the active goal"
     if authority.get("next_executed_outcome") != next_executed_outcome:
-        return False, "next_executed_outcome does not match docs/authority/GOAL.md"
+        return False, "next_executed_outcome does not match docs/domains/governance/authority/GOAL.md"
     if artifact_class == "borrowed_reference":
         if authority.get("execution_authority") != "reference_only":
             return False, "borrowed reference execution_authority must be reference_only"
@@ -205,13 +205,13 @@ def check_dispatch_authority(
 
 
 def load_goal_policy(root: Path = ROOT) -> dict:
-    text = (root / "docs/authority/GOAL.md").read_text(encoding="utf-8")
+    text = (root / "docs/domains/governance/authority/GOAL.md").read_text(encoding="utf-8")
     match = POLICY_RE.search(text)
     if not match:
-        raise ValueError("docs/authority/GOAL.md EMBER_AUTHORITY_V1 block missing")
+        raise ValueError("docs/domains/governance/authority/GOAL.md EMBER_AUTHORITY_V1 block missing")
     policy = json.loads(match.group(1))
     if not isinstance(policy, dict):
-        raise ValueError("docs/authority/GOAL.md authority policy must be an object")
+        raise ValueError("docs/domains/governance/authority/GOAL.md authority policy must be an object")
     return policy
 
 
@@ -220,7 +220,7 @@ def load_goal_binding(root: Path = ROOT) -> tuple[str, str]:
     active_goal = policy.get("active_goal_id")
     outcome = policy.get("next_executed_outcome")
     if not isinstance(active_goal, str) or not isinstance(outcome, str):
-        raise ValueError("docs/authority/GOAL.md active goal binding missing")
+        raise ValueError("docs/domains/governance/authority/GOAL.md active goal binding missing")
     return active_goal, outcome
 
 
@@ -253,7 +253,7 @@ def main() -> int:
         active_goal = policy.get("active_goal_id")
         next_outcome = policy.get("next_executed_outcome")
         if not isinstance(active_goal, str) or not isinstance(next_outcome, str):
-            raise ValueError("docs/authority/GOAL.md active goal binding missing")
+            raise ValueError("docs/domains/governance/authority/GOAL.md active goal binding missing")
     except Exception as exc:  # fail-closed
         print(f"REGISTRY_GATE FAIL (fail-closed): {exc}")
         return 1

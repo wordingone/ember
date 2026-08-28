@@ -109,8 +109,8 @@ def build_blocked_receipt(
         "ticket": "EMBER-SCIENCEAGENTBENCH-ARTIFACT-MATERIALIZATION",
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md") if (repo / "docs/authority/GOAL.md").exists() else None,
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md") if (repo / "docs/domains/governance/authority/GOAL.md").exists() else None,
         "sha_convention": SHA_CONVENTION,
         "sources": {
             "github_readme_url": GITHUB_README_URL,

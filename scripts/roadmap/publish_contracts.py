@@ -94,7 +94,7 @@ TRANSLATIONS = {
 
 PUBLIC_INTRO = """\
 > **Public milestone contract.** This document is the version-controlled,
-> public form of the canonical milestone. `docs/authority/GOAL.md` remains the higher
+> public form of the canonical milestone. `docs/domains/governance/authority/GOAL.md` remains the higher
 > authority. GitHub milestones and issues only track work against this
 > contract.
 >

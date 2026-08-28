@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_scale.py — STATUS PROBE for Ember goal condition C-SCALE (the APEX).
 
 Registry text: docs/spec/conditions-v1.md §4.2 C-SCALE. R: the self-modification
@@ -29,7 +32,7 @@ wants to satisfy C-SCALE lands on it).
 
 DISCIPLINE: status probe — always exits 0, prints exactly ONE line, decides
 every branch by reading real bytes on disk, hardcodes no verdict. Three-valued
-per docs/authority/GOAL.md §4.1: RED / GREEN / UNEVALUABLE(env). Receipt-absent is RED
+per docs/domains/governance/authority/GOAL.md §4.1: RED / GREEN / UNEVALUABLE(env). Receipt-absent is RED
 (satisfying artifact genuinely ABSENT — the probe looked and the answer is
 no), never UNEVALUABLE; UNEVALUABLE is reserved for the probe being unable to
 look at all.

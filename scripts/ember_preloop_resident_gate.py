@@ -106,7 +106,7 @@ def extract_abstract(abs_html_path: Path) -> str:
 
 
 def inspect_goal(repo: Path) -> dict[str, Any]:
-    path = repo / "docs/authority/GOAL.md"
+    path = repo / "docs/domains/governance/authority/GOAL.md"
     text = read_text(path)
     markers = {
         "current_blocker_packet": "Current Blocker Packet" in text,

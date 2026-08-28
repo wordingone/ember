@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Totality status-probe for Ember goal condition C5 (Positive delta).
 
@@ -37,7 +40,7 @@ R8: "C4/C5 internally-consistent receipts, binding artifacts off-tree, n=2".
 Two new requirements (mirrors the sibling C4 hardening, same underlying
 resident_training_candidate manifest schema): ARTIFACT REACHABILITY -- every
 "<field>_path"/"<field>_sha256" pair on the candidate block must resolve
-in-tree and hash-verify (an off-tree path FAILS, named per the docs/authority/GOAL.md
+in-tree and hash-verify (an off-tree path FAILS, named per the docs/domains/governance/authority/GOAL.md
 Execution-surface imports-owed row / anti-gaming S10 import debt) -- and
 sample-recompute -- at least one row's b_score/c_score must recompute from
 its own best_reward_table, where the receipt carries that structure.

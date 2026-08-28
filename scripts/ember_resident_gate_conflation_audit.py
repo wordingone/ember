@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Audit resident-training PASS labels against full resident-harness parity."""
 from __future__ import annotations
 
@@ -72,8 +75,8 @@ def build_receipt(
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md") if (repo / "docs/authority/GOAL.md").exists() else None,
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md") if (repo / "docs/domains/governance/authority/GOAL.md").exists() else None,
         "resident_training_receipt_path": str(resident_receipt_path),
         "resident_training_receipt_sha256": sha256_file(resident_receipt_path),
         "resident_training_verdict": resident_verdict,

@@ -139,8 +139,8 @@ def build_admission_receipt(*, repo: Path, frontier_root: Path, out: Path) -> di
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "sha_convention": SHA_CONVENTION,
         "repo": str(repo),
-        "goal_path": str(repo / "docs/authority/GOAL.md"),
-        "goal_source_sha256": sha256_file(repo / "docs/authority/GOAL.md") if (repo / "docs/authority/GOAL.md").exists() else None,
+        "goal_path": str(repo / "docs/domains/governance/authority/GOAL.md"),
+        "goal_source_sha256": sha256_file(repo / "docs/domains/governance/authority/GOAL.md") if (repo / "docs/domains/governance/authority/GOAL.md").exists() else None,
         "sources": {
             "github": PAPERBENCH_GITHUB,
             "arxiv": PAPERBENCH_ARXIV,

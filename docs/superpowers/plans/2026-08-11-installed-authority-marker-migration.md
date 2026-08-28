@@ -28,7 +28,7 @@
 
 **Interfaces:**
 - Consumes: `Install-StableFiles([string]$Root)` and the self-test's real `Invoke-Deploy` boundary.
-- Produces: an upgraded install containing only `docs/authority/GOAL.md`, or a refused install that preserves foreign root marker bytes.
+- Produces: an upgraded install containing only `docs/domains/governance/authority/GOAL.md`, or a refused install that preserves foreign root marker bytes.
 
 - [ ] **Step 1: Write the failing upgrade tests**
 

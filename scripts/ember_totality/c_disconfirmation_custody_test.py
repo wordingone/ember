@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_disconfirmation_custody.py -- Disconfirmation probe receipts custody (TDD for issue #387).
 
 Two-run test verifying no new untracked files under canonical receipts/ after consecutive
@@ -353,14 +356,14 @@ def test_disconfirmation_custody():
         scripts_dst = repo / "scripts"
         shutil.copytree(scripts_src, scripts_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
 
-        # Copy docs (for docs/authority/GOAL.md and spec files)
+        # Copy docs (for docs/domains/governance/authority/GOAL.md and spec files)
         docs_src = REPO_ROOT / "docs"
         if docs_src.exists():
             docs_dst = repo / "docs"
             shutil.copytree(docs_src, docs_dst, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
 
-        # Create minimal docs/authority/GOAL.md if missing
-        goal_path = repo / "docs/authority/GOAL.md"
+        # Create minimal docs/domains/governance/authority/GOAL.md if missing
+        goal_path = repo / "docs/domains/governance/authority/GOAL.md"
         if not goal_path.exists():
             goal_path.write_text("# GOAL\n\nMinimal GOAL for testing disconfirmation.\n")
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c15.py — STATUS PROBE for Ember goal condition C15.
 
 C15 (from <<external>>/state/<spec>, §4.2):
@@ -25,7 +28,7 @@ from the gate receipt's own fields.
 DISCIPLINE: this is a STATUS PROBE. It ALWAYS exits 0. It prints exactly one
 line determined by really inspecting the receipts under the resolved root.
 Nothing is hardcoded to a verdict; every branch is decided by reading real
-bytes on disk. C15 is a STANDING PROCESS-INVARIANT (docs/authority/GOAL.md §4.0(9)), not a
+bytes on disk. C15 is a STANDING PROCESS-INVARIANT (docs/domains/governance/authority/GOAL.md §4.0(9)), not a
 STATE-condition: it never prints RED/GREEN. It renders one of AUDIT-OK /
 AUDIT-INCIDENT (a cadence audit from the goalforge-clear epoch) or, pre-epoch
 (no operator-acceptance object exists yet), AUDIT-PENDING-EPOCH — never RED.
@@ -89,7 +92,7 @@ def _find_epoch(root: str) -> tuple[str | None, str | None]:
     acceptance object (docs/spec/operator-acceptance-v1.md schema
     acceptance/v1, scope goalforge-clear, stored at
     receipts/acceptance/goalforge-clear-<date>.json), or (None, None) if no
-    epoch has been recorded yet. docs/authority/GOAL.md §4.0(9): the epoch is the operator
+    epoch has been recorded yet. docs/domains/governance/authority/GOAL.md §4.0(9): the epoch is the operator
     acceptance of this goal; C15 is a process-invariant with no meaning
     before it exists."""
     acc_dir = os.path.join(root, "receipts", "acceptance")
@@ -438,7 +441,7 @@ def scan(root: str, min_ts: "str | None") -> tuple[str, str]:
 def main() -> int:
     """Resolve the epoch, run scan() in the appropriate window, and relabel
     the raw RED/GREEN finding against the AUDIT-OK/AUDIT-INCIDENT/
-    AUDIT-PENDING-EPOCH contract (docs/authority/GOAL.md §4.0(9)) before printing."""
+    AUDIT-PENDING-EPOCH contract (docs/domains/governance/authority/GOAL.md §4.0(9)) before printing."""
     root = _resolve_root()
     if root is None:
         print("AUDIT-PENDING-EPOCH state root not found under any of "
@@ -456,7 +459,7 @@ def main() -> int:
             "goalforge-clear operator-acceptance object exists yet at "
             "receipts/acceptance/goalforge-clear-*.json (schema "
             "acceptance/v1); this is NOT an audit verdict, pre-epoch "
-            "history is OUT OF AUDIT SCOPE per docs/authority/GOAL.md §4.0(9), the actual "
+            "history is OUT OF AUDIT SCOPE per docs/domains/governance/authority/GOAL.md §4.0(9), the actual "
             "status is never RED/GREEN for this row]"
         )
         return 0

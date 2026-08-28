@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_legib.py — STATUS PROBE for Ember goal condition C-LEGIB.
 
 Registry text: docs/spec/conditions-v1.md §4.2 C-LEGIB (gh issue #13,
@@ -267,7 +270,7 @@ def main():
 
     emit("GREEN", "C-LEGIB CHK satisfied: entry map covers every top-level directory with a "
                   "one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and "
-                  "scripts/check_goal_citations.py exits 0 (docs/authority/GOAL.md: the repo is legible to a "
+                  "scripts/check_goal_citations.py exits 0 (docs/domains/governance/authority/GOAL.md: the repo is legible to a "
                   "fresh reader with no prior session context)")
 
 
