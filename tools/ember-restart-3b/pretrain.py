@@ -1432,6 +1432,9 @@ def run_packed_selection_pretraining_segment(
     stage2_executor: CensusBoundStage2Executor | None = None,
     measurement_preparation_regions_per_signature: int = 0,
     measure_single_record_reference: bool = False,
+    complete_update_data_stall_seconds: float = 0.0,
+    measure_complete_update_cuda_events: bool = False,
+    stream_complete_update_data_readiness: bool = False,
 ) -> dict[str, Any]:
     """Train fixed same-expert packs while advancing the exact underlying selection cursor."""
 
@@ -1456,6 +1459,19 @@ def run_packed_selection_pretraining_segment(
         raise ValueError("packed Stage-2 requires measurement preparation")
     if type(measure_single_record_reference) is not bool:
         raise ValueError("packed single-record reference flag must be boolean")
+    if type(measure_complete_update_cuda_events) is not bool:
+        raise ValueError("packed CUDA-event timing flag must be boolean")
+    if type(stream_complete_update_data_readiness) is not bool:
+        raise ValueError("packed complete-update data-readiness mode must be boolean")
+    if stream_complete_update_data_readiness and measurement_preparation_regions_per_signature:
+        raise ValueError("streamed complete-update data readiness cannot pre-capture prepared batches")
+    if (
+        not isinstance(complete_update_data_stall_seconds, (int, float))
+        or isinstance(complete_update_data_stall_seconds, bool)
+        or not math.isfinite(float(complete_update_data_stall_seconds))
+        or complete_update_data_stall_seconds < 0.0
+    ):
+        raise ValueError("complete-update data stall seconds must be finite and nonnegative")
     if stage2_executor is not None and measure_single_record_reference:
         raise ValueError("packed Stage-2 arm cannot mint the BF16 reference trajectory")
     receipt = getattr(selection, "receipt", None)
@@ -1475,8 +1491,8 @@ def run_packed_selection_pretraining_segment(
 
     model.train()
     iterator = iter(iter_from(initial_selection_cursor))
-    prepared_packs: list[tuple[list[dict[str, Any]], dict[str, object], dict[str, Any]]] = []
-    for _ in range(planned_records // pack_records):
+
+    def next_pack() -> tuple[list[dict[str, Any]], dict[str, object], dict[str, Any]]:
         packed_records: list[dict[str, Any]] = []
         end_cursor: dict[str, object] | None = None
         for _ in range(pack_records):
@@ -1490,13 +1506,17 @@ def run_packed_selection_pretraining_segment(
             end_cursor = dict(item[1])
         if end_cursor is None:
             raise RuntimeError("packed selection retained no end cursor")
-        prepared_packs.append((
+        return (
             packed_records,
             end_cursor,
             decode_owned_packed_batch(
                 packed_records, config, device=device, expected_records=pack_records,
             ),
-        ))
+        )
+
+    prepared_packs: list[tuple[list[dict[str, Any]], dict[str, object], dict[str, Any]]] = []
+    if not stream_complete_update_data_readiness:
+        prepared_packs = [next_pack() for _ in range(planned_records // pack_records)]
     measurement_preparation = {
         "regions_per_signature": 0,
         "signature_count": 0,
@@ -1556,28 +1576,63 @@ def run_packed_selection_pretraining_segment(
     losses: list[float] = []
     single_record_reference_losses: list[float] = []
     step_timings_seconds: list[float] = []
+    complete_update_phase_timings_seconds: list[dict[str, float]] = []
+    complete_update_cuda_event_seconds: list[float | None] = []
     true_tokens_seen = initial_tokens_seen
     processed_tokens_seen = initial_processed_tokens_seen
     records_consumed = start_ordinal
     pack_ordinal = initial_pack_ordinal
     last_result: dict[str, Any] | None = None
     last_checkpoint_step: int | None = None
-    for local_pack, (_packed_records, end_cursor, batch) in enumerate(prepared_packs):
+    for local_pack in range(planned_records // pack_records):
+        # This is the governed complete-update boundary. It deliberately opens
+        # before per-update data readiness and the optional reference forward.
+        step_started = time.perf_counter()
+        cuda_step_started = torch.cuda.Event(enable_timing=True) if device.type == "cuda" and measure_complete_update_cuda_events else None
+        cuda_step_stopped = torch.cuda.Event(enable_timing=True) if device.type == "cuda" and measure_complete_update_cuda_events else None
+        if cuda_step_started is not None:
+            cuda_step_started.record()
+        phase_row = {
+            "data_readiness": 0.0,
+            "reference_forward": 0.0,
+            "forward": 0.0,
+            "backward": 0.0,
+            "gradient_clipping": 0.0,
+            "optimizer": 0.0,
+            "mandatory_synchronization": 0.0,
+            "telemetry_checkpoint": 0.0,
+            "explicit_remainder": 0.0,
+        }
+        phase_started = step_started
+        if complete_update_data_stall_seconds:
+            time.sleep(float(complete_update_data_stall_seconds))
+        if stream_complete_update_data_readiness:
+            _packed_records, end_cursor, batch = next_pack()
+        else:
+            _packed_records, end_cursor, batch = prepared_packs[local_pack]
         if signature_observer is not None:
             signature_observer(training_step_signature(
                 batch, gradient_checkpointing=bool(config.gradient_checkpointing),
             ))
+        phase_row["data_readiness"] += time.perf_counter() - phase_started
+        phase_started = time.perf_counter()
         reference_loss = (
             float(packed_single_record_reference_loss(
                 model, _packed_records, config, device=device,
             ).detach().cpu())
             if measure_single_record_reference else None
         )
-        step_started = time.perf_counter()
+        phase_row["reference_forward"] += time.perf_counter() - phase_started
+        phase_started = time.perf_counter()
         optimizer.zero_grad(set_to_none=(stage2_executor is None))
+        phase_row["gradient_clipping"] += time.perf_counter() - phase_started
         if stage2_executor is None:
+            phase_started = time.perf_counter()
             loss = packed_eager_loss(model, batch, config)
+            phase_row["forward"] += time.perf_counter() - phase_started
+            phase_started = time.perf_counter()
             loss.backward()
+            phase_row["backward"] += time.perf_counter() - phase_started
         else:
             cursor_identity = hashlib.sha256(json.dumps({
                 "selection_cursor": end_cursor,
@@ -1585,7 +1640,9 @@ def run_packed_selection_pretraining_segment(
                 "tokens_seen": true_tokens_seen,
                 "pack_ordinal": pack_ordinal,
             }, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+            phase_started = time.perf_counter()
             loss = stage2_executor.forward_loss_backward(batch, cursor_identity=cursor_identity)
+            phase_row["backward"] += time.perf_counter() - phase_started
         if not torch.isfinite(loss):
             raise RuntimeError("packed selection stopped on non-finite loss")
         if reference_loss is not None:
@@ -1593,17 +1650,31 @@ def run_packed_selection_pretraining_segment(
             if abs(packed_loss - reference_loss) / max(abs(reference_loss), 1e-12) >= 0.01:
                 raise RuntimeError("packed BF16 loss exceeds the unchanged single-record one-percent tolerance")
             single_record_reference_losses.append(reference_loss)
+        phase_started = time.perf_counter()
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        phase_row["gradient_clipping"] += time.perf_counter() - phase_started
+        phase_started = time.perf_counter()
         if stage2_executor is not None:
             stage2_executor.assert_optimizer_membership()
             stage2_executor.before_optimizer_step()
         optimizer.step()
         if stage2_executor is not None:
             stage2_executor.after_optimizer_step()
+        phase_row["optimizer"] += time.perf_counter() - phase_started
+        phase_started = time.perf_counter()
+        if cuda_step_stopped is not None:
+            cuda_step_stopped.record()
         if device.type == "cuda":
             torch.cuda.synchronize(device)
-        elapsed = time.perf_counter() - step_started
-
+            complete_update_cuda_event_seconds.append(
+                float(cuda_step_started.elapsed_time(cuda_step_stopped)) / 1000.0
+                if cuda_step_started is not None and cuda_step_stopped is not None
+                else None
+            )
+        else:
+            complete_update_cuda_event_seconds.append(None)
+        phase_row["mandatory_synchronization"] += time.perf_counter() - phase_started
+        phase_started = time.perf_counter()
         true_tokens = int(batch["true_source_tokens"])
         processed_tokens = int(batch["processed_padded_tokens"])
         true_tokens_seen += true_tokens
@@ -1612,7 +1683,6 @@ def run_packed_selection_pretraining_segment(
         pack_ordinal += 1
         global_step = initial_global_step + local_pack + 1
         losses.append(float(loss.detach().cpu()))
-        step_timings_seconds.append(elapsed)
         cursor = {
             "schema_version": "ember-specialist-packed-training-cursor-v1",
             "shard": "PACKED_SELECTION:" + str(end_cursor["selection_receipt_sha256"])[:12],
@@ -1633,15 +1703,26 @@ def run_packed_selection_pretraining_segment(
             "tokens_sha256": batch["tokens_sha256"],
         }
         if progress_callback is not None:
+            provisional_elapsed = time.perf_counter() - step_started
             progress_callback({
                 "step": global_step, "total_steps": planned_records // pack_records,
-                "loss": losses[-1], "step_ms": elapsed * 1000.0,
+                "loss": losses[-1], "step_ms": provisional_elapsed * 1000.0,
                 "tokens_consumed": true_tokens, "processed_tokens": processed_tokens,
                 "records_consumed": pack_records, "grad_norm": float(grad_norm_tensor),
             })
         if global_step % checkpoint_every == 0:
             checkpoint_callback(global_step, last_result)
             last_checkpoint_step = global_step
+        phase_row["telemetry_checkpoint"] += time.perf_counter() - phase_started
+        # The boundary closes only after synchronization, telemetry, and any
+        # checkpoint charged to this cadence have returned.
+        elapsed = time.perf_counter() - step_started
+        phase_row["explicit_remainder"] = max(0.0, elapsed - sum(phase_row.values()))
+        step_timings_seconds.append(elapsed)
+        complete_update_phase_timings_seconds.append(phase_row)
+        if stream_complete_update_data_readiness:
+            # Do not let the next pack overlap this pack's decoded device tensors.
+            del batch, _packed_records, loss, reference_loss
     if last_result is None:
         raise ValueError("packed selection requires at least one complete pack")
     if last_checkpoint_step != last_result["global_step"]:
@@ -1652,6 +1733,8 @@ def run_packed_selection_pretraining_segment(
         "tokens_seen": true_tokens_seen, "processed_tokens_seen": processed_tokens_seen,
         "data_cursor": dict(last_result["data_cursor"]),
         "step_timings_seconds": step_timings_seconds,
+        "complete_update_phase_timings_seconds": complete_update_phase_timings_seconds,
+        "complete_update_cuda_event_seconds": complete_update_cuda_event_seconds,
         "tokens_per_second": ((true_tokens_seen - initial_tokens_seen) / elapsed_total if elapsed_total else 0.0),
         "processed_tokens_per_second": ((processed_tokens_seen - initial_processed_tokens_seen) / elapsed_total if elapsed_total else 0.0),
         "single_record_reference_losses": (
@@ -1659,6 +1742,16 @@ def run_packed_selection_pretraining_segment(
         ),
         "measurement_preparation": measurement_preparation,
         "stage2_runtime": stage2_executor.receipt() if stage2_executor is not None else None,
+        "complete_update_timing_boundary": {
+            "opens_before": ["data_readiness", "reference_forward"],
+            "closes_after": ["optimizer_step", "mandatory_synchronization", "charged_checkpoint", "telemetry"],
+            "data_stall_seconds": float(complete_update_data_stall_seconds),
+            "data_readiness_mode": (
+                "STREAMED_INSIDE_GOVERNED_WALL"
+                if stream_complete_update_data_readiness
+                else "PREPARED_BEFORE_GOVERNED_WALL"
+            ),
+        },
     }
 
 

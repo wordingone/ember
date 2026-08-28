@@ -23,6 +23,7 @@ from model import RestartDecoderConfig
 from packed_specialist_run import (
     active_route_optimizer_sha256,
     active_route_parameter_sha256,
+    all_parameter_sha256,
     build_packed_arm_receipt,
     build_packed_comparison,
     build_packed_graph_bf16_diagnostic_receipt,
@@ -32,10 +33,24 @@ from packed_specialist_run import (
     prepare_packed_execution_slice,
     release_first_runtime_for_resume,
     run_durable_resume_leg,
+    run_issue1946_profile,
 )
 
 
 class PackedSpecialistRunTests(unittest.TestCase):
+    def test_issue1946_runner_binds_every_required_instrument_before_live_arms(self) -> None:
+        source = inspect.getsource(run_issue1946_profile)
+        for required in (
+            "gpu_covariate",
+            "torch.profiler.profile",
+            "all_parameter_sha256",
+            "complete_update_cuda_event_seconds",
+            "complete_update_phase_timings_seconds",
+            "build_issue1946_preflight_receipt",
+            "build_issue1946_arm_receipt",
+        ):
+            self.assertIn(required, source)
+
     def test_graph_bf16_diagnostic_is_nonpromotable_and_requires_exact_mechanisms(self) -> None:
         segment = {
             "steps": 2,
@@ -435,12 +450,14 @@ class PackedSpecialistRunTests(unittest.TestCase):
         model = __import__("model").UnifiedDecoder(config, genesis_seed=1413)
         model._activate_expert("audio")
         before = active_route_parameter_sha256(model)
+        all_before = all_parameter_sha256(model)
         with torch.no_grad():
             next(
                 parameter for name, parameter in model.named_parameters()
                 if ".experts.reasoning." in name
             ).add_(1)
         self.assertEqual(before, active_route_parameter_sha256(model))
+        self.assertNotEqual(all_before, all_parameter_sha256(model))
         selected = [
             parameter for name, parameter in model.named_parameters()
             if ".experts." not in name or ".experts.audio." in name

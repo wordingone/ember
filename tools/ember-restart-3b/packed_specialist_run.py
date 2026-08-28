@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import gc
 import hashlib
 import json
@@ -26,6 +27,18 @@ from checkpoint_artifacts import (
     write_checkpoint_artifacts,
 )
 from model import RestartDecoderConfig, UnifiedDecoder
+from issue1946_complete_update_profile import (
+    build_arm_receipt as build_issue1946_arm_receipt,
+    build_comparison_receipt as build_issue1946_comparison_receipt,
+    build_oom_arm_receipt as build_issue1946_oom_arm_receipt,
+    build_preflight_receipt as build_issue1946_preflight_receipt,
+    gpu_covariate,
+    load_accounting_spec as load_issue1946_accounting_spec,
+    load_authority_crosswalk as load_issue1946_authority_crosswalk,
+    validate_arm_a_receipt as validate_issue1946_arm_a_receipt,
+    validate_preflight_receipt as validate_issue1946_preflight_receipt,
+    verified_execution_source_commit,
+)
 from parameter_counter import measure_parameter_counts
 from pretrain import CensusBoundStage2Executor, run_packed_selection_pretraining_segment
 from run_vertical_slice import (
@@ -554,6 +567,21 @@ def _write_json_no_replace(path: Path, value: Mapping[str, object]) -> tuple[str
     return hashlib.sha256(raw).hexdigest(), str(payload["self_sha256"])
 
 
+def _load_self_hashed_json(path: Path, label: str) -> tuple[dict[str, object], str]:
+    raw = path.resolve(strict=True).read_bytes()
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"{label} is not valid JSON") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    unsigned = dict(value)
+    claimed = unsigned.pop("self_sha256", None)
+    if not isinstance(claimed, str) or hashlib.sha256(_canonical(unsigned)).hexdigest() != claimed:
+        raise ValueError(f"{label} self hash is invalid")
+    return value, hashlib.sha256(raw).hexdigest()
+
+
 def require_b_execution_floor() -> dict[str, object]:
     """Enforce the integration-side 255 GiB pre-write guard above the runner's 250 GiB floor."""
 
@@ -613,6 +641,19 @@ def active_route_parameter_sha256(model: UnifiedDecoder) -> str:
     if not selected:
         raise RuntimeError("packed active-route parameter set is empty")
     for name, parameter in sorted(selected):
+        digest.update(name.encode("utf-8"))
+        _hash_tensor(digest, parameter)
+    return digest.hexdigest()
+
+
+def all_parameter_sha256(model: UnifiedDecoder) -> str:
+    """Hash every model parameter byte in stable name order for matched-arm genesis."""
+
+    parameters = sorted(model.named_parameters())
+    if not parameters:
+        raise RuntimeError("packed model parameter set is empty")
+    digest = hashlib.sha256()
+    for name, parameter in parameters:
         digest.update(name.encode("utf-8"))
         _hash_tensor(digest, parameter)
     return digest.hexdigest()
@@ -1204,6 +1245,373 @@ def run_formal_packed_arm(
             torch.cuda.empty_cache()
 
 
+def run_issue1946_profile(
+    args: argparse.Namespace, *, mode: str,
+) -> dict[str, object]:
+    """Run the fixed one-update preflight or one fresh-process 64-update arm."""
+
+    if mode not in {"issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b"}:
+        raise ValueError("unknown #1946 profile mode")
+    if args.live is not True:
+        raise RuntimeError("#1946 profile execution requires explicit --live")
+    repo_root = args.repo_root.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    canonical_runner, custody_root = _canonical_disk_budget_runner_authority()
+    if not artifact_root.is_relative_to(custody_root):
+        raise ValueError("#1946 artifact root escapes canonical runner custody")
+    output_name = {
+        "issue1946-preflight": "issue1946-instrument-preflight.json",
+        "issue1946-arm-a": "issue1946-arm-a-recompute-on.json",
+        "issue1946-arm-b": "issue1946-arm-b-recompute-off.json",
+    }[mode]
+    output_path = artifact_root / output_name
+    trace_path = output_path.with_suffix(".profiler-trace.json")
+    if output_path.exists() or trace_path.exists():
+        raise FileExistsError("#1946 profile output custody is no-overwrite")
+    b_floor = require_b_execution_floor()
+    config_path = repo_root / "configs" / "ember-restart-3b.json"
+    config_sha256 = _sha256_path(config_path)
+    accounting_path = repo_root / "tools" / "ember-restart-3b" / "issue1946-complete-update-accounting.json"
+    accounting = load_issue1946_accounting_spec(accounting_path)
+    execution_source_commit = verified_execution_source_commit(
+        repo_root, args.execution_source_commit,
+    )
+    authority_crosswalk = load_issue1946_authority_crosswalk(
+        repo_root,
+        repo_root / "tools" / "ember-restart-3b" / "issue1946-authority-crosswalk.json",
+    )
+    density, _authority = load_packed_activation_authority(
+        census_path=args.census,
+        expected_census_raw_sha256=args.census_raw_sha256,
+        expected_census_self_sha256=args.census_self_sha256,
+        density_path=args.density,
+        expected_density_raw_sha256=args.density_raw_sha256,
+        expected_density_self_sha256=args.density_self_sha256,
+        source_commit=args.source_commit,
+        model_config_sha256=config_sha256,
+    )
+    selection = _open_selection(
+        repo_root=repo_root,
+        manifest_path=args.stream_manifest.resolve(strict=True),
+        manifest_sha256=args.stream_manifest_sha256,
+        build_receipt_path=args.stream_build_receipt.resolve(strict=True),
+        build_receipt_sha256=args.stream_build_receipt_sha256,
+    )
+    selected_count = getattr(selection, "receipt", {}).get("selected_record_count")
+    if selected_count != 4096:
+        raise ValueError("#1946 requires the exact 4096-record bound selection")
+    packs = 1 if mode == "issue1946-preflight" else 64
+    execution = prepare_packed_execution_slice(
+        selection=selection,
+        config=RestartDecoderConfig.from_contract(config_path),
+        device=torch.device("cpu"),
+        packs=packs,
+    )
+    if execution["start_selected_ordinal"] != 0 or execution["record_count"] != packs * 64:
+        raise ValueError("#1946 execution must start at cursor zero without replay")
+    if execution["pack_signatures"][0] != density["pack_signature_sha256"]:
+        raise ValueError("#1946 execution does not begin on the census-bound audio-64 pack")
+    thermal_before = gpu_covariate()
+    preflight_binding: dict[str, str] | None = None
+    arm_a_binding: dict[str, object] | None = None
+    if mode == "issue1946-arm-a":
+        preflight_receipt, preflight_raw_sha256 = _load_self_hashed_json(
+            args.preflight_receipt, "#1946 preflight receipt",
+        )
+        preflight = validate_issue1946_preflight_receipt(
+            preflight_receipt,
+            execution_source_commit=execution_source_commit,
+            accounting_spec_sha256=accounting["raw_sha256"],
+            gpu_uuid=str(thermal_before["gpu_uuid"]),
+        )
+        preflight_binding = {
+            "preflight_raw_sha256": preflight_raw_sha256,
+            "preflight_self_sha256": str(preflight["self_sha256"]),
+        }
+    if mode == "issue1946-arm-b":
+        arm_a_receipt, arm_a_raw_sha256 = _load_self_hashed_json(
+            args.arm_a_receipt, "#1946 Arm A receipt",
+        )
+        arm_a = validate_issue1946_arm_a_receipt(
+            arm_a_receipt,
+            execution_source_commit=execution_source_commit,
+            gpu_uuid=str(thermal_before["gpu_uuid"]),
+            current_process_id=os.getpid(),
+        )
+        first_warmup_temperature_c = float(arm_a["power_rows"][0]["temperature_c"])
+        if float(thermal_before["temperature_c"]) > first_warmup_temperature_c + 2.0:
+            raise RuntimeError("arm B thermal re-baseline gate is not yet satisfied")
+        arm_a_custody = arm_a["runtime_custody"]
+        arm_a_binding = {
+            "arm_a_raw_sha256": arm_a_raw_sha256,
+            "arm_a_self_sha256": str(arm_a["self_sha256"]),
+            "preflight_raw_sha256": str(arm_a_custody["preflight_raw_sha256"]),
+            "preflight_self_sha256": str(arm_a_custody["preflight_self_sha256"]),
+            "arm_a_process_id": int(arm_a_custody["process_id"]),
+        }
+
+    model: UnifiedDecoder | None = None
+    optimizer: torch.optim.Optimizer | None = None
+    try:
+        config, model, optimizer, governor, memory = _allocate_runtime(
+            repo_root=repo_root,
+            seed=args.seed,
+        )
+        if mode == "issue1946-arm-b":
+            config = dataclasses.replace(config, gradient_checkpointing=False)
+            model.config = config
+        expected_checkpointing = mode != "issue1946-arm-b"
+        if bool(model.config.gradient_checkpointing) is not expected_checkpointing:
+            raise RuntimeError("#1946 recompute policy did not bind every layer")
+        parameter_sha256 = all_parameter_sha256(model)
+        if optimizer.state:
+            raise RuntimeError("#1946 arm optimizer state was not reset")
+        optimizer_initial_state_sha256 = hashlib.sha256(_canonical({
+            "implementation": type(optimizer).__qualname__,
+            "defaults": optimizer.defaults,
+            "state_entry_count": 0,
+        })).hexdigest()
+        cpu_rng_state_sha256 = hashlib.sha256(torch.get_rng_state().numpy().tobytes()).hexdigest()
+        cuda_rng_state_sha256 = hashlib.sha256(torch.cuda.get_rng_state(0).cpu().numpy().tobytes()).hexdigest()
+        allocator_rows: list[dict[str, object]] = []
+        power_rows: list[dict[str, object]] = []
+        observed_kernel_rows: list[dict[str, object]] = []
+        profiler_indexes = [0] if mode == "issue1946-preflight" else list(range(16, 24))
+
+        def trace_ready(profiler: Any) -> None:
+            profiler.export_chrome_trace(str(trace_path))
+            for event in profiler.events():
+                name = str(event.key)
+                if any(marker in name for marker in ("mm", "addmm", "linear")):
+                    observed_kernel_rows.append({
+                        "kernel": name,
+                        "input_shapes": event.input_shapes,
+                        "cpu_time_us": float(event.cpu_time_total),
+                        "device_time_us": float(getattr(event, "device_time_total", 0.0)),
+                    })
+
+        wait_updates = 0 if mode == "issue1946-preflight" else 16
+        active_updates = 1 if mode == "issue1946-preflight" else 8
+        profiler = torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            schedule=torch.profiler.schedule(wait=wait_updates, warmup=0, active=active_updates, repeat=1),
+            on_trace_ready=trace_ready,
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=False,
+        )
+
+        def update_telemetry(_row: Mapping[str, object]) -> None:
+            stats = torch.cuda.memory_stats()
+            allocated = int(torch.cuda.memory_allocated())
+            reserved = int(torch.cuda.memory_reserved())
+            allocator_rows.append({
+                "allocated": allocated,
+                "reserved": reserved,
+                "peak_allocated": int(torch.cuda.max_memory_allocated()),
+                "peak_reserved": int(torch.cuda.max_memory_reserved()),
+                "workspace": int(stats.get("active_bytes.all.current", allocated)) - allocated,
+                "graph_pool": int(stats.get("graph_pool_reserved_bytes.all.current", 0)),
+                "fragmentation": max(0, reserved - allocated),
+            })
+            power_rows.append(gpu_covariate())
+            profiler.step()
+
+        torch.cuda.reset_peak_memory_stats()
+        profiler.start()
+        oom_error: torch.OutOfMemoryError | None = None
+        segment: dict[str, object] | None = None
+        try:
+            try:
+                segment = run_packed_selection_pretraining_segment(
+                    model=model,
+                    optimizer=optimizer,
+                    selection=selection,
+                    config=config,
+                    device=torch.device("cuda"),
+                    pack_records=64,
+                    checkpoint_every=packs + 1,
+                    checkpoint_callback=lambda _step, _state: None,
+                    progress_callback=update_telemetry,
+                    max_packs=packs,
+                    measure_single_record_reference=True,
+                    complete_update_data_stall_seconds=(0.1 if mode == "issue1946-preflight" else 0.0),
+                    measure_complete_update_cuda_events=True,
+                    stream_complete_update_data_readiness=True,
+                )
+            except torch.OutOfMemoryError as error:
+                oom_error = error
+        finally:
+            profiler.stop()
+        if oom_error is not None:
+            if mode != "issue1946-arm-b":
+                raise oom_error
+            match = re.search(r"Tried to allocate ([0-9.]+) (KiB|MiB|GiB)", str(oom_error))
+            if match is None:
+                raise RuntimeError("all-off OOM did not expose the attempted allocation size") from oom_error
+            scale = {"KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}[match.group(2)]
+            requested_bytes = math.ceil(float(match.group(1)) * scale)
+            ceiling_bytes = int(memory["device_free_bytes"]) - int(memory["runtime_reserve_bytes"])
+            peak_demand_bytes = int(torch.cuda.max_memory_reserved()) + requested_bytes
+            if peak_demand_bytes <= ceiling_bytes:
+                raise RuntimeError("all-off OOM demand/ceiling evidence is internally inconsistent") from oom_error
+            oom_receipt = build_issue1946_oom_arm_receipt(
+                identity={
+                    "execution_source_commit": execution_source_commit,
+                    "parameter_sha256": parameter_sha256,
+                    "optimizer_initial_state_sha256": optimizer_initial_state_sha256,
+                    "cpu_rng_state_sha256": cpu_rng_state_sha256,
+                    "cuda_rng_state_sha256": cuda_rng_state_sha256,
+                    "config_sha256": config_sha256,
+                    "seed": args.seed,
+                    "initial_cursor": 0,
+                    "selection_receipt_sha256": density["selection_receipt_sha256"],
+                },
+                completed_updates=len(power_rows),
+                peak_demand_bytes=peak_demand_bytes,
+                ceiling_bytes=ceiling_bytes,
+                first_temperature_c=float(power_rows[0]["temperature_c"] if power_rows else thermal_before["temperature_c"]),
+                error_class="torch.OutOfMemoryError",
+            )
+            oom_unsigned = dict(oom_receipt)
+            oom_unsigned.pop("self_sha256")
+            oom_receipt = {
+                **oom_unsigned,
+                "runtime_custody": {
+                    "canonical_disk_budget_runner": canonical_runner,
+                    "b_floor_preflight": b_floor,
+                    "process_id": os.getpid(),
+                    "fresh_process_and_cuda_context_required": True,
+                    "gpu_uuid": thermal_before["gpu_uuid"],
+                    "thermal_before_allocation": thermal_before,
+                    "accounting_spec_sha256": accounting["raw_sha256"],
+                    "authority_crosswalk": authority_crosswalk,
+                    "density_source_commit": args.source_commit,
+                    **(arm_a_binding or {}),
+                },
+            }
+            oom_receipt["self_sha256"] = hashlib.sha256(_canonical(oom_receipt)).hexdigest()
+            raw_sha256, self_sha256 = _write_json_no_replace(output_path, oom_receipt)
+            return {
+                "result": "ISSUE1946_VALID_ALL_OFF_OOM",
+                "mode": mode,
+                "receipt_path": str(output_path),
+                "receipt_raw_sha256": raw_sha256,
+                "receipt_self_sha256": self_sha256,
+                "measured_vram_gap_bytes": oom_receipt["measured_vram_gap_bytes"],
+            }
+        if segment is None:
+            raise RuntimeError("#1946 segment returned no result")
+        if not trace_path.exists():
+            raise RuntimeError("#1946 profiler did not flush its immutable trace")
+        if not observed_kernel_rows:
+            raise RuntimeError("#1946 profiler trace contains no actual material linear kernel event")
+        trace_sha256 = _sha256_path(trace_path)
+        hidden = int(config.hidden_size)
+        material_shapes = [
+            {"owner": "attention_qkv", "fprop": [64, 15, hidden, 3 * hidden], "dgrad": [64, 15, 3 * hidden, hidden], "wgrad": [hidden, 64 * 15, 3 * hidden]},
+            {"owner": "attention_output", "fprop": [64, 15, hidden, hidden], "dgrad": [64, 15, hidden, hidden], "wgrad": [hidden, 64 * 15, hidden]},
+            {"owner": "shared_and_audio_swiglu_up_gate", "fprop": [64, 15, hidden, 8 * hidden], "dgrad": [64, 15, 8 * hidden, hidden], "wgrad": [hidden, 64 * 15, 8 * hidden]},
+            {"owner": "shared_and_audio_swiglu_down", "fprop": [64, 15, 4 * hidden, hidden], "dgrad": [64, 15, hidden, 4 * hidden], "wgrad": [4 * hidden, 64 * 15, hidden]},
+            {"owner": "language_head", "fprop": [64, 15, hidden, int(config.vocab_size)], "dgrad": [64, 15, int(config.vocab_size), hidden], "wgrad": [hidden, 64 * 15, int(config.vocab_size)]},
+        ]
+        kernel_trace = {
+            "sha256": trace_sha256,
+            "path": trace_path.name,
+            "layer_count": int(config.layers),
+            "material_linear_shapes": material_shapes,
+            "observed_kernels": observed_kernel_rows,
+        }
+        identity = {
+            "execution_source_commit": execution_source_commit,
+            "parameter_sha256": parameter_sha256,
+            "optimizer_initial_state_sha256": optimizer_initial_state_sha256,
+            "cpu_rng_state_sha256": cpu_rng_state_sha256,
+            "cuda_rng_state_sha256": cuda_rng_state_sha256,
+            "config_sha256": config_sha256,
+            "seed": args.seed,
+            "initial_cursor": 0,
+            "selection_receipt_sha256": density["selection_receipt_sha256"],
+        }
+        if mode == "issue1946-preflight":
+            event_seconds = segment["complete_update_cuda_event_seconds"][0]
+            receipt = build_issue1946_preflight_receipt(
+                identity={
+                    "execution_source_commit": execution_source_commit,
+                    "accounting_spec_sha256": accounting["raw_sha256"],
+                },
+                update_seconds=float(segment["step_timings_seconds"][0]),
+                phase_seconds=segment["complete_update_phase_timings_seconds"][0],
+                injected_data_stall_seconds=0.1,
+                instruments={
+                    "profiler": {"status": "PASS", "trace_sha256": trace_sha256},
+                    "allocator": {"status": "PASS", "row": allocator_rows[0]},
+                    "power": {"status": "PASS", "row": power_rows[0]},
+                    "event": {"status": "PASS", "cuda_event_seconds": event_seconds},
+                    "identity": {"status": "PASS", "parameter_sha256": parameter_sha256},
+                    "receipt": {"status": "PASS", "no_overwrite": True},
+                },
+            )
+            unsigned = dict(receipt)
+            unsigned.pop("self_sha256")
+            receipt = {
+                **unsigned,
+                "authority_crosswalk": authority_crosswalk,
+                "complete_update_timing_boundary": segment["complete_update_timing_boundary"],
+            }
+            receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+        else:
+            receipt = build_issue1946_arm_receipt(
+                policy="WHOLE_LAYER_RECOMPUTE" if mode == "issue1946-arm-a" else "DISABLED_EVERY_LAYER",
+                identity=identity,
+                update_seconds=segment["step_timings_seconds"],
+                phase_seconds=segment["complete_update_phase_timings_seconds"],
+                profiler_update_indexes=profiler_indexes,
+                allocator_rows=allocator_rows,
+                power_rows=power_rows,
+                kernel_trace=kernel_trace,
+            )
+            receipt["runtime_custody"] = {
+                "canonical_disk_budget_runner": canonical_runner,
+                "b_floor_preflight": b_floor,
+                "process_id": os.getpid(),
+                "fresh_process_and_cuda_context_required": True,
+                "gpu_uuid": thermal_before["gpu_uuid"],
+                "governor": governor,
+                "memory_preflight": memory,
+                "thermal_before_allocation": thermal_before,
+                "execution_record_order_sha256": execution["execution_record_order_sha256"],
+                "execution_tokens_sha256": execution["execution_tokens_sha256"],
+                "accounting_spec_sha256": accounting["raw_sha256"],
+                "authority_crosswalk": authority_crosswalk,
+                "density_source_commit": args.source_commit,
+                "cuda_event_seconds": segment["complete_update_cuda_event_seconds"],
+                "complete_update_timing_boundary": segment["complete_update_timing_boundary"],
+                **(preflight_binding or {}),
+                **(arm_a_binding or {}),
+            }
+            unsigned = dict(receipt)
+            unsigned.pop("self_sha256")
+            receipt = dict(unsigned)
+            receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+        raw_sha256, self_sha256 = _write_json_no_replace(output_path, receipt)
+        return {
+            "result": "ISSUE1946_PROFILE_COMPLETE",
+            "mode": mode,
+            "receipt_path": str(output_path),
+            "receipt_raw_sha256": raw_sha256,
+            "receipt_self_sha256": self_sha256,
+            "profiler_trace_sha256": trace_sha256,
+            "arm_a_first_warmup_temperature_c": (power_rows[0]["temperature_c"] if mode == "issue1946-arm-a" else None),
+        }
+    finally:
+        del optimizer
+        del model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
 def preflight_packed_runtime(args: argparse.Namespace) -> dict[str, object]:
     """CPU-only closure of exact execution and authority inputs."""
 
@@ -1309,16 +1717,33 @@ def main() -> int:
     for name in (
         "durable-preflight", "formal-preflight", "durable-bf16",
         "bf16", "stage2", "diagnostic-graph-bf16",
+        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
     ):
         child = subparsers.add_parser(name)
         _add_runtime_arguments(
             child,
             packs=name in {"formal-preflight", "bf16", "stage2", "diagnostic-graph-bf16"},
         )
+        if name.startswith("issue1946-"):
+            child.add_argument("--execution-source-commit", required=True)
+        else:
+            child.set_defaults(execution_source_commit=None)
+        if name == "issue1946-arm-a":
+            child.add_argument("--preflight-receipt", type=Path, required=True)
+        else:
+            child.set_defaults(preflight_receipt=None)
+        if name == "issue1946-arm-b":
+            child.add_argument("--arm-a-receipt", type=Path, required=True)
+        else:
+            child.set_defaults(arm_a_receipt=None)
     compare = subparsers.add_parser("compare")
     compare.add_argument("--baseline", type=Path, required=True)
     compare.add_argument("--accelerated", type=Path, required=True)
     compare.add_argument("--output", type=Path, required=True)
+    issue1946_compare = subparsers.add_parser("issue1946-compare")
+    issue1946_compare.add_argument("--arm-a", type=Path, required=True)
+    issue1946_compare.add_argument("--arm-b", type=Path, required=True)
+    issue1946_compare.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command in {"durable-preflight", "formal-preflight"}:
         if args.artifact_root is not None or args.live:
@@ -1336,6 +1761,28 @@ def main() -> int:
             accelerated=args.command == "stage2",
             diagnostic_graph_bf16=args.command == "diagnostic-graph-bf16",
         )
+    elif args.command in {"issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b"}:
+        if args.artifact_root is None:
+            parser.error(f"{args.command} requires --artifact-root")
+        result = run_issue1946_profile(args, mode=args.command)
+    elif args.command == "issue1946-compare":
+        if args.output.exists():
+            parser.error("issue1946 comparison output is no-overwrite")
+        arm_a_raw = args.arm_a.read_bytes()
+        arm_b_raw = args.arm_b.read_bytes()
+        comparison_receipt = build_issue1946_comparison_receipt(
+            json.loads(arm_a_raw),
+            json.loads(arm_b_raw),
+            arm_a_raw_sha256=hashlib.sha256(arm_a_raw).hexdigest(),
+        )
+        comparison_receipt["arm_a_raw_sha256"] = hashlib.sha256(arm_a_raw).hexdigest()
+        comparison_receipt["arm_b_raw_sha256"] = hashlib.sha256(arm_b_raw).hexdigest()
+        unsigned = dict(comparison_receipt)
+        unsigned.pop("self_sha256")
+        comparison_receipt = dict(unsigned)
+        comparison_receipt["self_sha256"] = hashlib.sha256(_canonical(comparison_receipt)).hexdigest()
+        _write_json_no_replace(args.output, comparison_receipt)
+        result = comparison_receipt
     else:
         result = compare_packed_paths(args.baseline, args.accelerated, args.output)
     print(json.dumps(result, sort_keys=True))
