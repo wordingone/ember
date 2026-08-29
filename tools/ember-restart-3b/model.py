@@ -348,7 +348,7 @@ class _DecoderLayer(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
         hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
-        hidden_states = hidden_states + self.shared_ffn.forward_fused(self.pre_ffn_norm(hidden_states))
+        hidden_states = hidden_states + self.shared_ffn(self.pre_ffn_norm(hidden_states))
         if active_expert == "shared":
             return hidden_states
         return hidden_states + self.experts[active_expert](self.pre_ffn_norm(hidden_states))
