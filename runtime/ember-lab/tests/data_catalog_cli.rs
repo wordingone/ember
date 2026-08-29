@@ -110,6 +110,76 @@ fn minimal_manifest_bytes() -> Vec<u8> {
     .unwrap()
 }
 
+fn heldout_manifest_bytes() -> Vec<u8> {
+    let object_sha = "b".repeat(64);
+    let receipt_sha = "c".repeat(64);
+    let manifest_sha = "d".repeat(64);
+    serde_json::to_vec(&json!({
+        "schema_version": "ember-data-catalog-manifest-v1",
+        "records": [
+            {
+                "kind": "source",
+                "id": "source:candidate-mathematics-heldout-0",
+                "canonical_url": "https://example.test/issue1581-heldout",
+                "revision": "v1",
+                "license_text_sha256": "a".repeat(64),
+                "license_verdict": "accepted",
+                "access_class": "public",
+                "acquired_at_ms": 1,
+                "refusal_reason": null
+            },
+            {
+                "kind": "immutable_object",
+                "id": format!("sha256:{object_sha}"),
+                "sha256": object_sha,
+                "byte_count": 123,
+                "media_type": "text/plain; charset=utf-8",
+                "locator": format!("sha256/bb/{object_sha}"),
+                "custody_state": "available"
+            },
+            {
+                "kind": "receipt",
+                "id": format!("sha256:{receipt_sha}"),
+                "sha256": receipt_sha,
+                "producing_authority": "corpus_connector",
+                "receipt_class": "acquisition",
+                "observed_at_ms": 2,
+                "state": "accepted"
+            },
+            {
+                "kind": "dataset_version",
+                "id": format!("dataset:issue1581-bulk-heldout:{manifest_sha}"),
+                "name": "issue1581-bulk-heldout-front",
+                "manifest_sha256": manifest_sha,
+                "created_at_ms": 3,
+                "version_class": "genesis",
+                "state": "admitted"
+            },
+            {
+                "kind": "membership",
+                "id": format!("membership:candidate-mathematics-heldout-0:{object_sha}"),
+                "domain": "mathematics",
+                "register": "L4",
+                "split": "heldout",
+                "tokenizer_sha256": "e".repeat(64),
+                "shard_id": format!("shard:sha256:{object_sha}"),
+                "window_start": 0,
+                "window_end": 123,
+                "exact_sha256": object_sha,
+                "near_dedup_cluster": format!("sha256:{object_sha}"),
+                "admission_state": "admitted"
+            }
+        ],
+        "edges": [
+            {"kind":"source_object","from_kind":"source","from_id":"source:candidate-mathematics-heldout-0","to_kind":"immutable_object","to_id":format!("sha256:{object_sha}"),"ordinal":0,"payload":{}},
+            {"kind":"object_receipt","from_kind":"immutable_object","from_id":format!("sha256:{object_sha}"),"to_kind":"receipt","to_id":format!("sha256:{receipt_sha}"),"ordinal":0,"payload":{}},
+            {"kind":"version_membership","from_kind":"dataset_version","from_id":format!("dataset:issue1581-bulk-heldout:{manifest_sha}"),"to_kind":"membership","to_id":format!("membership:candidate-mathematics-heldout-0:{object_sha}"),"ordinal":0,"payload":{}},
+            {"kind":"membership_object","from_kind":"membership","from_id":format!("membership:candidate-mathematics-heldout-0:{object_sha}"),"to_kind":"immutable_object","to_id":format!("sha256:{object_sha}"),"ordinal":0,"payload":{}}
+        ]
+    }))
+    .unwrap()
+}
+
 fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -206,6 +276,48 @@ fn data_catalog_import_is_no_overwrite_and_idempotent_with_a_self_hashed_receipt
         fs::read(&second_receipt).unwrap(),
         serde_json::to_vec_pretty(&second_payload).unwrap()
     );
+}
+
+#[test]
+fn data_catalog_import_accepts_split_honest_heldout_membership() {
+    let root = sandbox();
+    let db = root.join("ember-lab.sqlite3");
+    let manifest = root.join("heldout-manifest.json");
+    let receipt = root.join("heldout-receipt.json");
+    let export = root.join("heldout-export.json");
+    fs::write(&manifest, heldout_manifest_bytes()).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ember-lab"))
+        .args([
+            "data-catalog-import",
+            "--db",
+            db.to_str().unwrap(),
+            "--manifest",
+            manifest.to_str().unwrap(),
+            "--receipt",
+            receipt.to_str().unwrap(),
+            "--export",
+            export.to_str().unwrap(),
+            "--source-commit",
+            "1234567890abcdef1234567890abcdef12345678",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let exported: Value = serde_json::from_slice(&fs::read(&export).unwrap()).unwrap();
+    let memberships = exported["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["kind"] == "membership")
+        .collect::<Vec<_>>();
+    assert_eq!(memberships.len(), 1);
+    assert_eq!(memberships[0]["split"], "heldout");
 }
 
 #[test]

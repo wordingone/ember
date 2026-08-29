@@ -1114,7 +1114,10 @@ fn validate_record(value: &Value) -> Result<()> {
                 matches!(value, "L3" | "L4" | "L5" | "experience")
             })?;
             required_string(row, "split", "membership record", |value| {
-                matches!(value, "train" | "validation" | "test" | "protected_eval")
+                matches!(
+                    value,
+                    "train" | "heldout" | "validation" | "test" | "protected_eval"
+                )
             })?;
             required_sha(row, "tokenizer_sha256", "membership record")?;
             required_sha(row, "exact_sha256", "membership record")?;
