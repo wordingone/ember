@@ -15,6 +15,7 @@ import stat
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -30,6 +31,8 @@ from tools.corpus_connectors import receipt as connector_receipt  # noqa: E402
 
 
 SCHEMA = "ember-pdf-tree-extraction-receipt-v2"
+COMPOSITE_AUTHORITY_SCHEMA = "ember-pdf-composite-connector-authority-v1"
+COMPOSITE_SPEC_SCHEMA = "ember-pdf-composite-authority-spec-v1"
 EXCLUSION_SCHEMA = "ember-pdf-tree-exclusion-set-v1"
 DERIVED_CONNECTOR = "_manifests/derived-connector-receipt.json"
 TRANSFORM_RECEIPT = "_manifests/pdf-tree-extraction-receipt.json"
@@ -190,6 +193,126 @@ def _require_outside_custody(path: Path, custody_root: Path, label: str) -> None
     raise PdfTreeExtractionRefusal(f"{label} must be outside connector custody")
 
 
+def _require_outside_custodies(path: Path, custody_roots: tuple[Path, ...], label: str) -> None:
+    for custody_root in custody_roots:
+        _require_outside_custody(path, custody_root, label)
+
+
+def _component_rows(receipt_path: Path, receipt_sha256: str) -> tuple[dict[str, Any], Path, list[dict[str, Any]]]:
+    raw, payload = _read_json(receipt_path, "composite component receipt")
+    if _HEX.fullmatch(receipt_sha256) is None or _sha256(raw) != receipt_sha256:
+        raise PdfTreeExtractionRefusal("composite component receipt bytes changed")
+    if payload.get("schema") == "corpus-connector-receipt-v1":
+        root_value = payload.get("dest_root")
+        files = payload.get("files")
+    elif payload.get("schema_version") == "issue1581-row2-delta-fetch-v1":
+        claimed = payload.get("self_sha256")
+        body = dict(payload)
+        body.pop("self_sha256", None)
+        if claimed != _sha256(_canonical(body)):
+            raise PdfTreeExtractionRefusal("composite delta receipt self-hash changed")
+        root_value = payload.get("custody")
+        files = payload.get("files")
+    else:
+        raise PdfTreeExtractionRefusal("composite component receipt schema is not admitted")
+    if not isinstance(root_value, str) or not root_value or not isinstance(files, list) or not files:
+        raise PdfTreeExtractionRefusal("composite component authority is incomplete")
+    root = Path(root_value)
+    if _is_reparse_or_symlink(root) or not root.is_dir():
+        raise PdfTreeExtractionRefusal("composite component custody is unavailable")
+    reopened: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in files:
+        if not isinstance(item, dict):
+            raise PdfTreeExtractionRefusal("composite component file row is malformed")
+        relative = _normalize_relative(item.get("path"))
+        size = item.get("bytes")
+        digest = item.get("sha256")
+        if relative in seen:
+            raise PdfTreeExtractionRefusal("composite component contains duplicate paths")
+        seen.add(relative)
+        path = _regular_contained(root, relative, "composite source PDF")
+        if (
+            not relative.lower().endswith(".pdf")
+            or not isinstance(size, int)
+            or isinstance(size, bool)
+            or size <= 0
+            or not isinstance(digest, str)
+            or _HEX.fullmatch(digest) is None
+            or path.stat().st_size != size
+            or _sha256_file(path) != digest
+        ):
+            raise PdfTreeExtractionRefusal("composite source PDF identity changed")
+        reopened.append({"path": relative, "bytes": size, "sha256": digest, "source_path": path})
+    physical_pdfs = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() == ".pdf"
+    }
+    if physical_pdfs != seen:
+        raise PdfTreeExtractionRefusal("composite component PDF set differs from its receipt")
+    reopened.sort(key=lambda row: row["path"])
+    return payload, root, reopened
+
+
+def build_composite_connector_authority(*, spec_raw: bytes) -> bytes:
+    """Seal a path-bearing multi-custody authority with a path-free file-set identity."""
+    try:
+        spec = json.loads(spec_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise PdfTreeExtractionRefusal("composite authority spec must be strict JSON") from error
+    if not isinstance(spec, dict) or set(spec) != {
+        "schema_version", "source", "source_id", "canonical_url", "license", "revision", "components"
+    } or spec.get("schema_version") != COMPOSITE_SPEC_SCHEMA:
+        raise PdfTreeExtractionRefusal("composite authority spec schema is not closed")
+    components = spec.get("components")
+    if not isinstance(components, list) or len(components) < 2:
+        raise PdfTreeExtractionRefusal("composite authority requires at least two components")
+    sealed_components: list[dict[str, Any]] = []
+    union: dict[str, dict[str, Any]] = {}
+    fetched_values: list[str] = []
+    for component in components:
+        if not isinstance(component, dict) or set(component) != {"receipt_path", "receipt_sha256"}:
+            raise PdfTreeExtractionRefusal("composite component binding is malformed")
+        receipt_path = Path(component["receipt_path"])
+        payload, root, rows = _component_rows(receipt_path, component["receipt_sha256"])
+        fetched_at = payload.get("fetched_at")
+        if not isinstance(fetched_at, str) or not fetched_at:
+            raise PdfTreeExtractionRefusal("composite component fetched_at is missing")
+        fetched_values.append(fetched_at)
+        for row in rows:
+            if row["path"] in union:
+                raise PdfTreeExtractionRefusal("composite component path sets overlap")
+            union[row["path"]] = {key: row[key] for key in ("path", "bytes", "sha256")}
+        sealed_components.append({
+            "receipt_path": str(receipt_path),
+            "receipt_sha256": component["receipt_sha256"],
+            "receipt_schema": payload.get("schema") or payload.get("schema_version"),
+            "custody_root": str(root),
+            "file_count": len(rows),
+            "files": [{key: row[key] for key in ("path", "bytes", "sha256")} for row in rows],
+        })
+    ordered = [union[path] for path in sorted(union)]
+    authority: dict[str, Any] = {
+        "schema": COMPOSITE_AUTHORITY_SCHEMA,
+        "result": "VERIFIED",
+        "source": spec["source"],
+        "source_id": spec["source_id"],
+        "canonical_url": spec["canonical_url"],
+        "license": spec["license"],
+        "revision": spec["revision"],
+        "connector": {"name": "composite_pdf_authority", "version": "v1"},
+        "fetched_at": max(fetched_values),
+        "components": sealed_components,
+        "file_count": len(ordered),
+        "total_bytes": sum(row["bytes"] for row in ordered),
+        "sha256_manifest": _sha256("\n".join(sorted(row["sha256"] for row in ordered)).encode("utf-8")),
+        "path_set_sha256": _sha256(_canonical(ordered)),
+    }
+    authority["self_sha256"] = _sha256(_canonical(authority))
+    return _canonical(authority)
+
+
 def _canonical_license(value: Any) -> str:
     if value in {
         "CC0-1.0",
@@ -211,12 +334,74 @@ def _source_tree(
     connector_receipt_sha256: str,
     *,
     max_files: int,
-) -> tuple[dict[str, Any], Path, list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], tuple[Path, ...], list[dict[str, Any]]]:
     if _HEX.fullmatch(connector_receipt_sha256) is None:
         raise PdfTreeExtractionRefusal("connector receipt hash is invalid")
     raw, receipt = _read_json(Path(connector_receipt), "connector receipt")
     if _sha256(raw) != connector_receipt_sha256:
         raise PdfTreeExtractionRefusal("connector receipt bytes do not match the bound hash")
+    if receipt.get("schema") == COMPOSITE_AUTHORITY_SCHEMA:
+        claimed = receipt.get("self_sha256")
+        body = dict(receipt)
+        body.pop("self_sha256", None)
+        if claimed != _sha256(_canonical(body)) or receipt.get("result") != "VERIFIED":
+            raise PdfTreeExtractionRefusal("composite authority self-hash does not rederive")
+        components = receipt.get("components")
+        if not isinstance(components, list) or len(components) < 2:
+            raise PdfTreeExtractionRefusal("composite authority components are incomplete")
+        reopened: list[dict[str, Any]] = []
+        roots: list[Path] = []
+        seen: set[str] = set()
+        for component in components:
+            if not isinstance(component, dict):
+                raise PdfTreeExtractionRefusal("composite authority component is malformed")
+            payload, root, rows = _component_rows(
+                Path(component.get("receipt_path", "")), component.get("receipt_sha256", "")
+            )
+            expected = {
+                "receipt_path": component.get("receipt_path"),
+                "receipt_sha256": component.get("receipt_sha256"),
+                "receipt_schema": payload.get("schema") or payload.get("schema_version"),
+                "custody_root": str(root),
+                "file_count": len(rows),
+                "files": [{key: row[key] for key in ("path", "bytes", "sha256")} for row in rows],
+            }
+            if component != expected:
+                raise PdfTreeExtractionRefusal("composite authority component binding changed")
+            for row in rows:
+                if row["path"] in seen:
+                    raise PdfTreeExtractionRefusal("composite component path sets overlap")
+                seen.add(row["path"])
+                reopened.append(row)
+            roots.append(root)
+        reopened.sort(key=lambda row: row["path"])
+        if len(reopened) > max_files:
+            raise PdfTreeExtractionRefusal("connector PDF count exceeds the closed bound")
+        public = {
+            "schema": "corpus-connector-receipt-v1",
+            "source": receipt.get("source"),
+            "source_id": receipt.get("source_id"),
+            "canonical_url": receipt.get("canonical_url"),
+            "license": receipt.get("license"),
+            "revision": receipt.get("revision"),
+            "connector": receipt.get("connector"),
+            "fetched_at": receipt.get("fetched_at"),
+            "files": [{key: row[key] for key in ("path", "bytes", "sha256")} for row in reopened],
+            "total_bytes": sum(row["bytes"] for row in reopened),
+            "sha256_manifest": _sha256("\n".join(sorted(row["sha256"] for row in reopened)).encode("utf-8")),
+            "license_evidence": "composite authority binds exact component receipt raw hashes",
+            "l3_statement": "deterministic authority union only; no model-mediated selection",
+            "notes": f"component_receipt_sha256={','.join(row['receipt_sha256'] for row in components)}",
+        }
+        if (
+            receipt.get("file_count") != len(reopened)
+            or receipt.get("total_bytes") != public["total_bytes"]
+            or receipt.get("sha256_manifest") != public["sha256_manifest"]
+            or receipt.get("path_set_sha256")
+            != _sha256(_canonical(public["files"]))
+        ):
+            raise PdfTreeExtractionRefusal("composite authority union does not rederive")
+        return public, tuple(roots), reopened
     if receipt.get("schema") != "corpus-connector-receipt-v1":
         raise PdfTreeExtractionRefusal("connector receipt schema is invalid")
     if not isinstance(max_files, int) or isinstance(max_files, bool) or max_files <= 0:
@@ -266,7 +451,7 @@ def _source_tree(
     if receipt.get("sha256_manifest") != manifest:
         raise PdfTreeExtractionRefusal("connector receipt manifest does not rederive")
     reopened.sort(key=lambda item: item["path"])
-    return receipt, root, reopened
+    return receipt, (root,), reopened
 
 
 def _positive_bound(label: str, value: int) -> int:
@@ -584,7 +769,7 @@ def census_pdf_tree_refusals(
     source, source_root, source_files = _source_tree(
         Path(connector_receipt), connector_receipt_sha256, max_files=max_files
     )
-    _require_outside_custody(report_path, source_root, "census report")
+    _require_outside_custodies(report_path, source_root, "census report")
     started_at = datetime.now(timezone.utc).isoformat()
     started = time.monotonic()
     rows: list[dict[str, Any]] = []
@@ -857,6 +1042,253 @@ def _verify_at(
         raise PdfTreeExtractionRefusal("PDF tree output custody contains missing or extra paths")
 
 
+def produce_pdf_tree_receipt_one_pass(
+    *,
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+    census_report: Path,
+    output_dir: Path,
+    workers: int,
+    max_files: int = DEFAULT_MAX_FILES,
+    max_pages: int = pdf_to_utf8.DEFAULT_MAX_PAGES,
+    max_decoded_content_bytes: int = pdf_to_utf8.DEFAULT_MAX_DECODED_CONTENT_BYTES,
+    max_output_bytes: int = pdf_to_utf8.DEFAULT_MAX_OUTPUT_BYTES,
+    max_total_pages: int = DEFAULT_MAX_TOTAL_PAGES,
+    max_total_decoded_content_bytes: int = DEFAULT_MAX_TOTAL_DECODED_CONTENT_BYTES,
+    max_total_output_bytes: int = DEFAULT_MAX_TOTAL_OUTPUT_BYTES,
+) -> dict[str, Any]:
+    """Extract once, sealing independently checkable census and transform receipts."""
+    output_dir = Path(output_dir).absolute()
+    census_report = Path(census_report).absolute()
+    if output_dir.exists() or output_dir.is_symlink():
+        raise PdfTreeExtractionRefusal("output directory already exists")
+    if census_report.exists() or census_report.is_symlink():
+        raise PdfTreeExtractionRefusal("census report already exists")
+    if not isinstance(workers, int) or isinstance(workers, bool) or not 1 <= workers <= 8:
+        raise PdfTreeExtractionRefusal("workers must be an integer from 1 through 8")
+    for path, label in ((output_dir.parent, "output parent"), (census_report.parent, "census report parent")):
+        if _is_reparse_or_symlink(path) or not path.is_dir():
+            raise PdfTreeExtractionRefusal(f"{label} must be a regular non-reparse directory")
+    for label, value in (
+        ("max_files", max_files),
+        ("max_pages", max_pages),
+        ("max_decoded_content_bytes", max_decoded_content_bytes),
+        ("max_output_bytes", max_output_bytes),
+        ("max_total_pages", max_total_pages),
+        ("max_total_decoded_content_bytes", max_total_decoded_content_bytes),
+        ("max_total_output_bytes", max_total_output_bytes),
+    ):
+        _positive_bound(label, value)
+    source, source_roots, source_files = _source_tree(
+        Path(connector_receipt), connector_receipt_sha256, max_files=max_files
+    )
+    _require_outside_custodies(census_report, source_roots, "census report")
+    _require_outside_custodies(output_dir, source_roots, "output directory")
+    extractor = _extractor_identity(
+        max_files=max_files,
+        max_pages=max_pages,
+        max_decoded_content_bytes=max_decoded_content_bytes,
+        max_output_bytes=max_output_bytes,
+        max_total_pages=max_total_pages,
+        max_total_decoded_content_bytes=max_total_decoded_content_bytes,
+        max_total_output_bytes=max_total_output_bytes,
+    )
+    started_at = datetime.now(timezone.utc).isoformat()
+    started = time.monotonic()
+    staging = output_dir.with_name(f".{output_dir.name}.staging-{uuid.uuid4().hex}")
+    staging.mkdir()
+
+    def extract(item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        try:
+            output_bytes, pages, decoded, audit = _extract_one(
+                item["source_path"],
+                max_pages=max_pages,
+                max_decoded_content_bytes=max_decoded_content_bytes,
+                max_output_bytes=max_output_bytes,
+            )
+            output_path = f"documents/{item['path']}.txt"
+            _write_exclusive(staging / Path(output_path), output_bytes)
+            census_row = {
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "result": "PASS",
+                "pages": pages,
+                "decoded_content_bytes": decoded,
+                "output_bytes": len(output_bytes),
+                "output_sha256": _sha256(output_bytes),
+                **audit,
+            }
+            transform_row = {
+                key: value for key, value in census_row.items() if key != "result"
+            }
+            transform_row["output_path"] = output_path
+            return census_row, transform_row
+        except PdfTreeExtractionRefusal as error:
+            detail = str(error)
+            return ({
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "result": "REFUSED",
+                "refusal_class": _refusal_class(detail),
+                "detail": detail,
+            }, None)
+        except MemoryError:
+            raise
+        except Exception as error:
+            detail = f"{type(error).__name__}: {error!s}"[:320]
+            return ({
+                "source_path": item["path"],
+                "source_bytes": item["bytes"],
+                "source_sha256": item["sha256"],
+                "result": "REFUSED",
+                "refusal_class": "UNWRAPPED_EXTRACTOR_ERROR",
+                "exception_class": type(error).__name__,
+                "detail": detail,
+            }, None)
+
+    published = False
+    try:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="pdf-tree") as executor:
+            results = list(executor.map(extract, source_files))
+        census_rows = [row for row, _ in results]
+        transform_rows = [row for _, row in results if row is not None]
+        refusal_count = sum(row["result"] == "REFUSED" for row in census_rows)
+        census: dict[str, Any] = {
+            "schema": "ember-pdf-tree-refusal-census-v1",
+            "result": "PASS" if refusal_count == 0 else "REFUSED",
+            "claim_boundary": (
+                "one-pass extraction refusal census; no admission, training, result, capability, "
+                "or issue-closure credit"
+            ),
+            "started_at": started_at,
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "elapsed_seconds": time.monotonic() - started,
+            "source": {
+                "connector_receipt_sha256": connector_receipt_sha256,
+                "source": source.get("source"),
+                "source_id": source.get("source_id"),
+                "revision": source.get("revision"),
+                "license": source.get("license"),
+                "file_count": len(source_files),
+                "total_bytes": sum(item["bytes"] for item in source_files),
+                "manifest_sha256": source.get("sha256_manifest"),
+            },
+            "extractor": extractor,
+            "files": census_rows,
+            "totals": {
+                "file_count": len(census_rows),
+                "pass_count": len(census_rows) - refusal_count,
+                "refusal_count": refusal_count,
+            },
+        }
+        census["receipt_sha256"] = _sha256(_canonical(census))
+        census_raw = (json.dumps(census, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        _write_exclusive(census_report, census_raw)
+        if refusal_count:
+            raise PdfTreeExtractionRefusal("one-pass refusal census is nonzero; transform not published")
+
+        total_pages = sum(row["pages"] for row in transform_rows)
+        total_decoded = sum(row["decoded_content_bytes"] for row in transform_rows)
+        total_output = sum(row["output_bytes"] for row in transform_rows)
+        if (
+            total_pages > max_total_pages
+            or total_decoded > max_total_decoded_content_bytes
+            or total_output > max_total_output_bytes
+        ):
+            raise PdfTreeExtractionRefusal("PDF tree aggregate extraction exceeds the closed bound")
+        census_binding, exclusions, included_files = _load_census_binding(
+            census_report=census_report,
+            census_report_sha256=_sha256(census_raw),
+            connector_receipt_sha256=connector_receipt_sha256,
+            source_files=source_files,
+            expected_extractor=extractor,
+            census_producer_sha256=extractor["producer_sha256"],
+        )
+        if len(included_files) != len(source_files):
+            raise PdfTreeExtractionRefusal("one-pass census partition changed")
+        derived_at = datetime.now(timezone.utc).isoformat()
+        derived_files = sorted(
+            [
+                {"path": row["output_path"], "bytes": row["output_bytes"], "sha256": row["output_sha256"]}
+                for row in transform_rows
+            ],
+            key=lambda row: row["path"],
+        )
+        derived = {
+            **source,
+            "source": "derived_pdf_text_custody",
+            "source_id": f"{source.get('source_id')}+pdf-tree-text-v2",
+            "license": _canonical_license(source.get("license")),
+            "license_evidence": "deterministic one-pass PDF-to-UTF-8 derivation with bound census",
+            "revision": f"{source.get('revision')}+pdf-tree-text-v2",
+            "files": derived_files,
+            "total_bytes": total_output,
+            "sha256_manifest": _sha256("\n".join(sorted(row["sha256"] for row in derived_files)).encode("utf-8")),
+            "fetched_at": derived_at,
+            "connector": {"name": "pdf_tree_to_utf8", "version": "v2-one-pass"},
+            "l3_statement": "deterministic local derivation; no network fetch and no model-mediated selection",
+            "dest_root": str(output_dir),
+            "notes": f"ONE_PASS original_connector_receipt_sha256={connector_receipt_sha256}; files={len(transform_rows)}",
+        }
+        derived_raw = (json.dumps(derived, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        _write_exclusive(staging / DERIVED_CONNECTOR, derived_raw)
+        receipt: dict[str, Any] = {
+            "schema": SCHEMA,
+            "result": "VERIFIED",
+            "claim_boundary": "deterministic one-pass PDF-tree-to-UTF-8 transform only; no admission, training, result, capability, or issue-closure credit",
+            "source": {
+                "connector_receipt_sha256": connector_receipt_sha256,
+                "connector": source.get("connector"),
+                "source": source.get("source"),
+                "source_id": source.get("source_id"),
+                "canonical_url": source.get("canonical_url"),
+                "revision": source.get("revision"),
+                "license": source.get("license"),
+                "license_spdx": _canonical_license(source.get("license")),
+                "file_count": len(source_files),
+                "total_bytes": sum(item["bytes"] for item in source_files),
+                "manifest_sha256": source.get("sha256_manifest"),
+            },
+            "extractor": extractor,
+            "census": census_binding,
+            "exclusions": exclusions,
+            "files": transform_rows,
+            "totals": {
+                "source_file_count": len(source_files),
+                "file_count": len(transform_rows),
+                "excluded_file_count": 0,
+                "source_bytes": sum(item["bytes"] for item in source_files),
+                "excluded_source_bytes": 0,
+                "output_bytes": total_output,
+                "pages": total_pages,
+                "decoded_content_bytes": total_decoded,
+            },
+            "derived_connector": {
+                "path": DERIVED_CONNECTOR,
+                "sha256": _sha256(derived_raw),
+                "manifest_sha256": derived["sha256_manifest"],
+            },
+        }
+        receipt["receipt_sha256"] = _sha256(_canonical(receipt))
+        receipt_raw = (json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        _write_exclusive(staging / TRANSFORM_RECEIPT, receipt_raw)
+        _validate_transform_shape(receipt)
+        for row in transform_rows:
+            stored = _regular_contained(staging, row["output_path"], "extracted UTF-8 output")
+            if stored.stat().st_size != row["output_bytes"] or _sha256_file(stored) != row["output_sha256"]:
+                raise PdfTreeExtractionRefusal("one-pass stored output changed before publication")
+        os.rename(staging, output_dir)
+        published = True
+        if _sha256_file(output_dir / TRANSFORM_RECEIPT) != _sha256(receipt_raw):
+            raise PdfTreeExtractionRefusal("published one-pass receipt changed on reopen")
+        return receipt
+    except BaseException:
+        shutil.rmtree(output_dir if published else staging, ignore_errors=True)
+        raise
+
+
 def produce_pdf_tree_receipt(
     *,
     connector_receipt: Path,
@@ -902,7 +1334,7 @@ def produce_pdf_tree_receipt(
         max_total_decoded_content_bytes=max_total_decoded_content_bytes,
         max_total_output_bytes=max_total_output_bytes,
     )
-    _require_outside_custody(Path(census_report), source_root, "census report")
+    _require_outside_custodies(Path(census_report), source_root, "census report")
     census, exclusions, included_files = _load_census_binding(
         census_report=Path(census_report),
         census_report_sha256=census_report_sha256,
@@ -1082,13 +1514,35 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--exclusion-set", type=Path)
     parser.add_argument("--exclusion-set-sha256")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--one-pass", action="store_true")
+    parser.add_argument("--workers", type=int, default=1)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.census_report is not None and args.output_dir is None:
+    if args.one_pass:
+        if (
+            args.output_dir is None
+            or args.census_report is None
+            or args.census_report_sha256 is not None
+            or args.census_producer_sha256 is not None
+            or args.exclusion_set is not None
+            or args.exclusion_set_sha256 is not None
+            or args.verify
+        ):
+            parser.error("--one-pass requires only --census-report, --output-dir, and optional --workers")
+        receipt = produce_pdf_tree_receipt_one_pass(
+            connector_receipt=args.connector_receipt,
+            connector_receipt_sha256=args.connector_receipt_sha256,
+            census_report=args.census_report,
+            output_dir=args.output_dir,
+            workers=args.workers,
+        )
+    elif args.workers != 1:
+        parser.error("--workers is only valid with --one-pass")
+    elif args.census_report is not None and args.output_dir is None:
         if (
             args.census_report_sha256 is not None
             or args.census_producer_sha256 is not None
