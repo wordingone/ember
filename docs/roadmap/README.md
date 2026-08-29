@@ -5,8 +5,8 @@ creating a competing authority surface.
 
 ## One hierarchy, four surfaces
 
-1. [`INVARIANT.md`](../../INVARIANT.md) is Ember's unamendable identity and
-   [`GOAL.md`](../../GOAL.md) is its highest amendable authority.
+1. [`INVARIANT.md`](../authority/INVARIANT.md) is Ember's unamendable identity and
+   [`GOAL.md`](../domains/governance/authority/GOAL.md) is its highest amendable authority.
 2. The twelve [milestone contracts](milestones/) are the authoritative
    decomposition beneath `GOAL.md`.
 3. [`execution-graph.json`](execution-graph.json) records current scheduling,

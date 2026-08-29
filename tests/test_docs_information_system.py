@@ -1,0 +1,344 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = REPO_ROOT / "scripts" / "docs_information_system.py"
+PYTHON_ENVIRONMENT_SCRIPT = (
+    REPO_ROOT / "tools" / "ember-restart-3b" / "python_environment.py"
+)
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location("docs_information_system", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_python_environment_module():
+    spec = importlib.util.spec_from_file_location(
+        "issue1967_python_environment", PYTHON_ENVIRONMENT_SCRIPT
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def metadata_fixture() -> dict:
+    return {
+        "schema_version": "ember-doc-metadata-v1",
+        "documents": [
+            {
+                "path": "README.md",
+                "title": "Ember",
+                "summary": "Project entry",
+                "domain": "Governance",
+                "document_type": "entry",
+                "status": "normative",
+                "authority_class": "GOVERNED_NORMATIVE",
+                "audience": ["new-user"],
+                "canonical_id": "ember.entry.root",
+                "owner": "Governance",
+                "supersedes": [],
+            },
+            {
+                "path": "docs/start.md",
+                "title": "Start",
+                "summary": "Safe start",
+                "domain": "Lab",
+                "document_type": "guide",
+                "status": "current",
+                "authority_class": "CURRENT_GUIDANCE",
+                "audience": ["operator"],
+                "canonical_id": "ember.guide.start",
+                "owner": "Lab",
+                "supersedes": [],
+            },
+        ],
+    }
+
+
+def test_metadata_refuses_missing_path_and_duplicate_id(tmp_path: Path) -> None:
+    module = load_module()
+    write(tmp_path / "README.md", "# Ember\n")
+    manifest = metadata_fixture()
+    manifest["documents"][1]["canonical_id"] = "ember.entry.root"
+
+    with pytest.raises(module.DocsInfoError, match="DUPLICATE_CANONICAL_ID"):
+        module.validate_metadata(tmp_path, manifest)
+
+    manifest["documents"][1]["canonical_id"] = "ember.guide.start"
+    with pytest.raises(module.DocsInfoError, match="DOCUMENT_PATH_MISSING"):
+        module.validate_metadata(tmp_path, manifest)
+
+    del manifest["documents"][1]["authority_class"]
+    with pytest.raises(module.DocsInfoError, match="METADATA_ROW_SCHEMA_INVALID"):
+        module.validate_metadata(tmp_path, manifest)
+
+
+def test_generated_index_is_deterministic_and_detects_drift(tmp_path: Path) -> None:
+    module = load_module()
+    write(tmp_path / "README.md", "# Ember\n")
+    write(tmp_path / "docs/start.md", "# Start\n")
+    manifest = metadata_fixture()
+
+    first = module.render_index(manifest)
+    second = module.render_index(json.loads(json.dumps(manifest)))
+
+    assert first == second
+    assert "ember.entry.root" in first
+    assert "ember.guide.start" in first
+
+
+def test_claim_map_rehashes_sources_and_refuses_stale(tmp_path: Path) -> None:
+    module = load_module()
+    source = tmp_path / "docs/source.md"
+    write(source, "authority bytes\n")
+    write(tmp_path / "README.md", "# Test document\n")
+    digest = module.sha256_file(source)
+    claim_map = {
+        "schema_version": "ember-doc-claim-source-map-v1",
+        "anchors": {"ember.claim.identity": "ember.claim.identity"},
+        "claims": [
+            {
+                "claim_id": "ember.claim.identity",
+                "document": "README.md",
+                "source_class": "AUTHORITY_DERIVED",
+                "status": "current",
+                "sources": [{"path": "docs/source.md", "sha256": digest}],
+            }
+        ],
+    }
+
+    write(tmp_path / "README.md", '<a id="ember.claim.identity"></a>\n# Test document\n')
+
+    module.validate_claim_map(tmp_path, claim_map)
+    write(tmp_path / "README.md", "# Anchor removed\n")
+    with pytest.raises(module.DocsInfoError, match="CLAIM_ANCHOR_MISSING"):
+        module.validate_claim_map(tmp_path, claim_map)
+    write(tmp_path / "README.md", '<a id="ember.claim.identity"></a>\n# Test document\n')
+    write(source, "changed bytes\n")
+    with pytest.raises(module.DocsInfoError, match="STALE_CLAIM_SOURCE"):
+        module.validate_claim_map(tmp_path, claim_map)
+
+
+def test_readme_guard_requires_conservation_and_bounded_intro(tmp_path: Path) -> None:
+    module = load_module()
+    readme = tmp_path / "README.md"
+    write(readme, "# Ember\nplain language\n")
+    with pytest.raises(module.DocsInfoError, match="CONSERVATION_BLOCK_MISSING"):
+        module.validate_readme(readme)
+
+    write(
+        readme,
+        "<!-- EMBER_CONSERVATION_V1\nmechanism_erasure=forbidden\n-->\n"
+        "# Ember\nA bounded project introduction.\n",
+    )
+    module.validate_readme(readme)
+
+
+def test_prose_path_scanner_keeps_full_nested_path(tmp_path: Path) -> None:
+    module = load_module()
+    write(tmp_path / "docs/domains/runtime/README.md", "# Runtime\n")
+    write(tmp_path / "docs/map.md", "Read docs/domains/runtime/README.md.\n")
+    rows = [{"path": "docs/map.md", "status": "current"}]
+    counts = module.validate_references(tmp_path, rows, [])
+    assert counts["prose_paths"] == 1
+
+
+def test_bad_public_command_is_terminal_red(tmp_path: Path) -> None:
+    module = load_module()
+    commands = {
+        "schema_version": "ember-public-command-replay-v1",
+        "commands": [
+            {
+                "id": "bad",
+                "argv": [sys.executable, "-c", "raise SystemExit(7)"],
+                "cwd": ".",
+                "requirements": {"cpu": True, "gpu": False, "network": False},
+            }
+        ],
+    }
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_FAILED"):
+        module.run_public_commands(tmp_path, commands)
+
+
+def test_command_manifest_binds_276_row_census_to_four_command_subset() -> None:
+    module = load_module()
+    commands = {
+        "schema_version": "ember-public-command-replay-v1",
+        "filing_time_census": {"command_rows": 275},
+        "governed_subset": {
+            "authority_artifact_sha256": "c2eee97ca0ea1f24ef80f5a0a128ac48b88a0632c5a9b774f735648eb8c4fe54",
+            "authority_artifact_lines": [242, 249],
+            "selection": "FOUR_FINAL_PUBLIC_ENTRY_COMMANDS",
+        },
+        "commands": [],
+    }
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_CENSUS_DENOMINATOR_INVALID"):
+        module.validate_commands_manifest(commands)
+
+
+def test_bootstrap_public_command_requires_explicit_no_overwrite_receipt() -> None:
+    module = load_module()
+    commands = json.loads(
+        (REPO_ROOT / "manifests/documentation/public-commands-v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    bootstrap = next(row for row in commands["commands"] if row["id"] == "bootstrap-python")
+    bootstrap["argv"] = [
+        "python",
+        "tools/ember-restart-3b/python_environment.py",
+        "install",
+    ]
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_REQUIRED_RECEIPT_MISSING"):
+        module.validate_commands_manifest(commands)
+
+
+def test_readme_preserves_python_environment_authority_contract() -> None:
+    environment = load_python_environment_module()
+    manifest = environment.load_manifest(
+        REPO_ROOT / "manifests/python-environment-v1.json"
+    )
+    environment.validate_prose_authority(REPO_ROOT, manifest)
+
+
+def test_question_destination_refuses_unknown_canonical_id(tmp_path: Path) -> None:
+    module = load_module()
+    rows = metadata_fixture()["documents"]
+    instrument = {
+        "instrument_sha256": "frozen",
+        "questions": [
+            {"question_id": f"Q{i}", "question": f"Question {i}"} for i in range(1, 9)
+        ],
+    }
+    routes = {
+        "schema_version": "ember-reader-question-destinations-v1",
+        "instrument_sha256": "frozen",
+        "routes": [
+            {
+                "question_id": f"Q{i}",
+                "question": f"Question {i}",
+                "canonical_destination_id": "ember.entry.root",
+            }
+            for i in range(1, 9)
+        ],
+    }
+    routes["routes"][7]["canonical_destination_id"] = "ember.missing"
+    with pytest.raises(module.DocsInfoError, match="QUESTION_DESTINATION_UNKNOWN:Q8"):
+        module.validate_question_destinations(tmp_path, routes, rows, instrument)
+
+
+def test_frozen_reader_source_requires_canonical_disposition(tmp_path: Path) -> None:
+    module = load_module()
+    write(tmp_path / "README.md", "# Root\n")
+    write(tmp_path / "docs/start.md", "# Start\n")
+    write(tmp_path / "docs/canonical.md", "# Canonical\n")
+    rows = metadata_fixture()["documents"]
+    instrument = {
+        "instrument_sha256": "frozen",
+        "questions": [
+            {
+                "question_id": f"Q{i}",
+                "question": f"Question {i}",
+                "answer_key": {"public_sources": ["docs/retired.md"]},
+            }
+            for i in range(1, 9)
+        ],
+    }
+    mapping = {
+        "schema_version": "ember-reader-question-destinations-v1",
+        "instrument_sha256": "frozen",
+        "source_dispositions": [],
+        "routes": [
+            {
+                "question_id": f"Q{i}",
+                "question": f"Question {i}",
+                "canonical_destination_id": "ember.entry.root",
+            }
+            for i in range(1, 9)
+        ],
+    }
+    with pytest.raises(module.DocsInfoError, match="READER_PUBLIC_SOURCE_UNRESOLVED"):
+        module.validate_question_destinations(tmp_path, mapping, rows, instrument)
+    mapping["source_dispositions"] = [
+        {
+            "source": "docs/retired.md",
+            "canonical_source": "docs/canonical.md",
+            "disposition": "RETIRED_WITH_CANONICAL_DISPOSITION",
+        }
+    ]
+    module.validate_question_destinations(tmp_path, mapping, rows, instrument)
+
+
+def test_terminal_receipt_is_self_hashed_and_no_overwrite(tmp_path: Path) -> None:
+    module = load_module()
+    output = tmp_path / "receipt.json"
+    finalized = module.write_final_receipt(output, {"result": "PASS", "count": 2})
+    assert finalized["self_sha256"] == module.sha256_bytes(
+        module.canonical_json({"result": "PASS", "count": 2})
+    )
+    with pytest.raises(module.DocsInfoError, match="OUTPUT_EXISTS_REFUSED"):
+        module.write_final_receipt(output, {"result": "PASS", "count": 2})
+
+
+def test_reader_study_requires_exactly_two_eligible_complete_passes() -> None:
+    module = load_module()
+    questions = [f"Q{i}" for i in range(1, 9)]
+    study = {
+        "schema_version": "ember-doc-reader-study-v1",
+        "instrument_sha256": "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b",
+        "questions": questions,
+        "readers": [
+            {
+                "reader_id": "reader-a",
+                "eligible": True,
+                "authored_prose": False,
+                "answers": {question: {"materially_correct": True} for question in questions},
+                "unexplained_blocking_terms": [],
+                "elapsed_seconds": 120,
+            },
+            {
+                "reader_id": "reader-b",
+                "eligible": True,
+                "authored_prose": False,
+                "answers": {question: {"materially_correct": True} for question in questions},
+                "unexplained_blocking_terms": [],
+                "elapsed_seconds": 150,
+            },
+        ],
+    }
+
+    receipt = module.score_reader_study(study)
+    assert receipt["result"] == "PASS"
+    assert receipt["correct_answers"] == 16
+    study["readers"][1]["answers"]["Q8"]["materially_correct"] = False
+    with pytest.raises(module.DocsInfoError, match="READER_STUDY_INCOMPLETE"):
+        module.score_reader_study(study)
+
+
+def test_checked_in_information_system_is_terminal_green() -> None:
+    module = load_module()
+    receipt = module.check_repository(REPO_ROOT, run_commands=False)
+    assert receipt["result"] == "PASS"
+    assert receipt["metadata_document_count"] >= 12
+    assert receipt["claim_count"] >= 8
