@@ -205,6 +205,176 @@ def test_projects_two_bulk_rows_into_one_path_free_admitted_train_dataset(
     assert {row["admission_state"] for row in memberships} == {"admitted"}
 
 
+def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
+    tmp_path: Path,
+) -> None:
+    connector_path, connector_sha = write_connector(
+        tmp_path,
+        source="candidate-mathematics-heldout-0",
+        domain="mathematics",
+        files=[("heldout.pdf.txt", b"heldout text")],
+    )
+    row = load_bulk_domain_connector_receipt(
+        receipt_path=connector_path,
+        expected_receipt_sha256=connector_sha,
+        source_id="candidate-mathematics-heldout-0",
+        expected_source_selector="candidate-mathematics-heldout-0",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="mathematics",
+        split="heldout",
+    )
+    manifest_raw = build_dataset_catalog_manifest(
+        rows=[row], tokenizer_sha256="4" * 64, created_at_ms=1
+    )
+    manifest = json.loads(manifest_raw)
+    dataset = next(row for row in manifest["records"] if row["kind"] == "dataset_version")
+    memberships = [row for row in manifest["records"] if row["kind"] == "membership"]
+    assert dataset["id"].startswith("dataset:issue1581-bulk-heldout:")
+    assert dataset["name"] == "issue1581-bulk-heldout-front"
+    assert {row["split"] for row in memberships} == {"heldout"}
+    objects = [row for row in manifest["records"] if row["kind"] == "immutable_object"]
+    assert {row["media_type"] for row in objects} == {"text/plain; charset=utf-8"}
+
+    mislabeled = dict(row)
+    mislabeled["split"] = "train"
+    with pytest.raises(ValueError, match="source identity split"):
+        build_dataset_catalog_manifest(
+            rows=[mislabeled], tokenizer_sha256="4" * 64, created_at_ms=1
+        )
+
+    first_receipt = import_receipt(
+        manifest_raw=manifest_raw,
+        canonical_export=manifest_raw,
+        inserted_records=len(manifest["records"]),
+        inserted_edges=len(manifest["edges"]),
+    )
+    e_matrix = canonical(
+        {
+            "schema_version": "ember-issue1581-slot-e-matrix-definition-v1",
+            "rows": [
+                {
+                    "row_id": "candidate-mathematics-heldout-0",
+                    "state": "ABSENT",
+                }
+            ],
+        }
+    )
+    consumer_fragment = build_consumer_catalog_fragment(
+        catalog_export_raw=manifest_raw,
+        first_import_receipt_raw=first_receipt,
+        dataset_id=dataset["id"],
+        e_matrix_packet_raw=e_matrix,
+        source_commit="1" * 40,
+        model_sha256="5" * 64,
+        checkpoint_sha256="6" * 64,
+        tokenizer_sha256="4" * 64,
+        config_sha256="7" * 64,
+        evaluator_sha256="8" * 64,
+    )
+    combined = json.loads(manifest_raw)
+    fragment = json.loads(consumer_fragment)
+    combined["records"].extend(fragment["records"])
+    combined["edges"].extend(fragment["edges"])
+    shared_object_id = next(
+        row["id"] for row in combined["records"] if row["kind"] == "immutable_object"
+    )
+    combined["records"].append(
+        {
+            "kind": "source",
+            "id": "source:unrelated-mathematics-heldout-9",
+            "license_verdict": "accepted",
+        }
+    )
+    combined["edges"].append(
+        {
+            "kind": "source_object",
+            "from_kind": "source",
+            "from_id": "source:unrelated-mathematics-heldout-9",
+            "to_kind": "immutable_object",
+            "to_id": shared_object_id,
+            "ordinal": 0,
+            "payload": {},
+        }
+    )
+    combined_raw = canonical(combined)
+    consumer_receipt = import_receipt(
+        manifest_raw=consumer_fragment,
+        canonical_export=combined_raw,
+        inserted_records=len(fragment["records"]),
+        inserted_edges=len(fragment["edges"]),
+    )
+    resolved = resolve_catalog_training_datasets(
+        catalog_export_raw=combined_raw,
+        dataset_import_receipt_raw=first_receipt,
+        consumer_import_receipt_raw=consumer_receipt,
+        expected_dataset_id=dataset["id"],
+        expected_split="heldout",
+    )
+    assert resolved["split"] == "heldout"
+    assert resolved["source_ids"] == ["candidate-mathematics-heldout-0"]
+    assert resolved["protected_eval_item_admission"] is False
+    revalidation = revalidate_e_matrix_catalog_bindings(
+        e_matrix_packet_raw=e_matrix, resolved_identity=resolved
+    )
+    row = revalidation["rows"][0]
+    assert row["row_id"] == "candidate-mathematics-heldout-0"
+    assert row["state"] == "PRESENT"
+    assert row["catalog_dataset_binding"] == "PRESENT"
+    assert row["catalog_dataset_split"] == "heldout"
+    assert "catalog_train_dataset_binding" not in row
+    assert row["protected"] is False
+    assert row["protected_eval_admission_satisfied"] is False
+
+    wrong_slot = canonical(
+        {
+            "schema_version": "ember-issue1581-slot-e-matrix-definition-v1",
+            "rows": [{"row_id": "candidate-mathematics-heldout-1", "state": "ABSENT"}],
+        }
+    )
+    with pytest.raises(ValueError, match="slot row does not match"):
+        revalidate_e_matrix_catalog_bindings(
+            e_matrix_packet_raw=wrong_slot, resolved_identity=resolved
+        )
+
+    multi_row = canonical(
+        {
+            "schema_version": "ember-issue1581-slot-e-matrix-definition-v1",
+            "rows": [
+                {"row_id": "candidate-mathematics-heldout-0", "state": "ABSENT"},
+                {"row_id": "candidate-mathematics-heldout-1", "state": "ABSENT"},
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="exactly one absent slot row"):
+        revalidate_e_matrix_catalog_bindings(
+            e_matrix_packet_raw=multi_row, resolved_identity=resolved
+        )
+
+    replay_receipt = import_receipt(
+        manifest_raw=manifest_raw,
+        canonical_export=manifest_raw,
+        inserted_records=0,
+        inserted_edges=0,
+    )
+    terminal = json.loads(
+        finalize_catalog_admission(
+            projection_manifest_raw=manifest_raw,
+            first_import_receipt_raw=first_receipt,
+            replay_import_receipt_raw=replay_receipt,
+            first_catalog_export_raw=manifest_raw,
+            replay_catalog_export_raw=manifest_raw,
+            consumer_fragment_raw=consumer_fragment,
+            consumer_import_receipt_raw=consumer_receipt,
+            final_catalog_export_raw=combined_raw,
+            e_matrix_packet_raw=e_matrix,
+            e_matrix_revalidation_raw=canonical(revalidation),
+            expected_dataset_id=dataset["id"],
+        )
+    )
+    assert terminal["result"] == "PASS"
+    assert terminal["protected_eval_item_admission"] is False
+
+
 def test_consumer_reopens_only_catalog_derived_train_identity_and_preserves_eval_isolation(
     tmp_path: Path,
 ) -> None:
