@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import sys
@@ -22,6 +23,9 @@ sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import training_acceleration
 from model import MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
+
+
+W2_SCOPE = "final_decoder_layer_shared_and_selected_expert_swiglu_down_4h_to_h"
 
 
 def _disabled_contract() -> dict[str, object]:
@@ -181,6 +185,166 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
                 self.assertIsInstance(expert.down, torch.nn.Linear)
         with self.assertRaisesRegex(RuntimeError, "already installed"):
             training_acceleration.install_fp8_down_projections(model, allow_test_device=True)
+
+    @staticmethod
+    def _w2_model() -> UnifiedDecoder:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=14, attention_heads=2, vocab_size=16,
+        )
+        return UnifiedDecoder(config, genesis_seed=1945).to(dtype=torch.bfloat16)
+
+    @staticmethod
+    def _model_identity(model: UnifiedDecoder) -> tuple[object, ...]:
+        return (
+            tuple(model.state_dict()),
+            tuple((name, id(parameter)) for name, parameter in model.named_parameters()),
+            tuple((name, tensor.detach().clone()) for name, tensor in model.state_dict().items()),
+            tuple((name, id(module), type(module)) for name, module in model.named_modules()),
+        )
+
+    def _assert_model_identity(self, expected: tuple[object, ...], model: UnifiedDecoder) -> None:
+        actual = self._model_identity(model)
+        self.assertEqual(actual[0], expected[0])
+        self.assertEqual(actual[1], expected[1])
+        self.assertEqual(actual[3], expected[3])
+        self.assertEqual(len(actual[2]), len(expected[2]))
+        for (actual_name, actual_tensor), (expected_name, expected_tensor) in zip(actual[2], expected[2]):
+            self.assertEqual(actual_name, expected_name)
+            self.assertTrue(torch.equal(actual_tensor, expected_tensor))
+
+    def test_w2_scope_refuses_non_fourteen_layer_model_before_mutation(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=2, attention_heads=2, vocab_size=16,
+        )
+        model = UnifiedDecoder(config, genesis_seed=1945).to(dtype=torch.bfloat16)
+        before = self._model_identity(model)
+        with self.assertRaisesRegex(ValueError, "exactly 14 decoder layers"):
+            training_acceleration.install_fp8_down_projections(
+                model, installation_scope=W2_SCOPE, allow_test_device=True,
+            )
+        self._assert_model_identity(before, model)
+
+    def test_w2_scope_refuses_expert_key_drift_before_mutation(self) -> None:
+        for mutation in ("missing", "extra", "renamed"):
+            with self.subTest(mutation=mutation):
+                model = self._w2_model()
+                experts = model.layers[13].experts
+                if mutation == "missing":
+                    del experts["tool"]
+                elif mutation == "extra":
+                    experts["extra"] = copy.deepcopy(experts["tool"])
+                else:
+                    renamed = experts["tool"]
+                    del experts["tool"]
+                    experts["renamed"] = renamed
+                before = self._model_identity(model)
+                with self.assertRaisesRegex(ValueError, "exact expert keys"):
+                    training_acceleration.install_fp8_down_projections(
+                        model, installation_scope=W2_SCOPE, allow_test_device=True,
+                    )
+                self._assert_model_identity(before, model)
+
+    def test_w2_scope_refuses_malformed_or_preinstalled_expert_before_mutation(self) -> None:
+        for mutation in ("wrong_type", "preinstalled"):
+            with self.subTest(mutation=mutation):
+                model = self._w2_model()
+                target = model.layers[13].experts["reasoning"]
+                if mutation == "wrong_type":
+                    target.down = torch.nn.Identity()
+                else:
+                    target.down = training_acceleration.DynamicFp8DownProjection.from_linear(
+                        target.down, kernel=Fp8DownProjectionTests._fake_scaled_mm,
+                        allow_test_device=True,
+                    )
+                before = self._model_identity(model)
+                with self.assertRaisesRegex((ValueError, RuntimeError), "expert down projection"):
+                    training_acceleration.install_fp8_down_projections(
+                        model, installation_scope=W2_SCOPE, allow_test_device=True,
+                    )
+                self._assert_model_identity(before, model)
+
+    def test_w2_scope_accepts_only_supported_mixed_state(self) -> None:
+        model = self._w2_model()
+        shared = model.layers[13].shared_ffn
+        shared.down = training_acceleration.DynamicFp8DownProjection.from_linear(
+            shared.down, kernel=Fp8DownProjectionTests._fake_scaled_mm,
+            allow_test_device=True,
+        )
+        receipt = training_acceleration.install_fp8_down_projections(
+            model, installation_scope=W2_SCOPE,
+            kernel=Fp8DownProjectionTests._fake_scaled_mm, allow_test_device=True,
+        )
+        self.assertEqual(receipt["installed_sites"], 5)
+        self.assertEqual(receipt["newly_installed_sites"], 4)
+        self.assertEqual(len(tuple(training_acceleration.iter_fp8_down_projections(model))), 5)
+
+    def test_w2_scope_fresh_install_is_exact_and_default_receipt_is_unchanged(self) -> None:
+        default_model = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=2, attention_heads=2, vocab_size=16,
+        )
+        default_receipt = training_acceleration.install_fp8_down_projections(
+            UnifiedDecoder(default_model, genesis_seed=1945).to(dtype=torch.bfloat16),
+            allow_test_device=True,
+        )
+        self.assertEqual(default_receipt, {
+            "schema_version": "ember-fp8-down-projection-installation-v2",
+            "scope": "final_decoder_layer_shared_swiglu_down_4h_to_h",
+            "layer_indexes": [1],
+            "installed_sites": 1,
+            "sites": ["layers.1.shared_ffn.down"],
+            "fallbacks": 0,
+        })
+
+        model = self._w2_model()
+        state_keys = tuple(model.state_dict())
+        receipt = training_acceleration.install_fp8_down_projections(
+            model, installation_scope=W2_SCOPE,
+            kernel=Fp8DownProjectionTests._fake_scaled_mm, allow_test_device=True,
+        )
+        expected_sites = ["layers.13.shared_ffn.down"] + [
+            f"layers.13.experts.{name}.down" for name in ("vision", "audio", "reasoning", "tool")
+        ]
+        self.assertEqual(tuple(model.state_dict()), state_keys)
+        self.assertEqual(receipt["scope"], W2_SCOPE)
+        self.assertEqual(receipt["layer_indexes"], [13])
+        self.assertEqual(receipt["installed_sites"], 5)
+        self.assertEqual(receipt["newly_installed_sites"], 5)
+        self.assertEqual(receipt["sites"], expected_sites)
+        self.assertEqual(receipt["fallbacks"], 0)
+
+    def test_w2_scope_refresh_and_routed_dispatch_evidence_are_grouped(self) -> None:
+        model = self._w2_model()
+        installation = training_acceleration.install_fp8_down_projections(
+            model, installation_scope=W2_SCOPE,
+            kernel=Fp8DownProjectionTests._fake_scaled_mm, allow_test_device=True,
+        )
+        sites = dict(model.named_modules())
+        reasoning = sites["layers.13.experts.reasoning.down"]
+        with torch.no_grad():
+            reasoning.weight.add_(1)
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 1)
+        self.assertEqual(reasoning.kernel_receipt()["weight_refreshes"], 2)
+
+        ids = torch.tensor([[1, 2]], dtype=torch.int64)
+        for expert in ("vision", "audio", "reasoning", "tool"):
+            model(ids, active_expert=expert)
+        groups = training_acceleration.fp8_installation_group_receipt(model, installation)
+        self.assertEqual(groups["existing_shared"]["installed_sites"], 1)
+        self.assertEqual(groups["new_active_expert"]["installed_sites"], 4)
+        self.assertEqual(groups["existing_shared"]["dispatches"], 4)
+        self.assertEqual(groups["new_active_expert"]["dispatches"], 4)
+        self.assertEqual(groups["existing_shared"]["fallbacks"], 0)
+        self.assertEqual(groups["new_active_expert"]["fallbacks"], 0)
+        self.assertEqual(groups["existing_shared"]["weight_refreshes"], 1)
+        self.assertEqual(groups["new_active_expert"]["weight_refreshes"], 5)
+
+        with torch.no_grad():
+            for site in training_acceleration.iter_fp8_down_projections(model):
+                site.weight.add_(1)
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 5)
+        groups = training_acceleration.fp8_installation_group_receipt(model, installation)
+        self.assertEqual(groups["existing_shared"]["weight_refreshes"], 2)
+        self.assertEqual(groups["new_active_expert"]["weight_refreshes"], 9)
 
     def test_post_optimizer_refresh_touches_only_stale_fp8_sites(self) -> None:
         config = RestartDecoderConfig.small_for_tests(

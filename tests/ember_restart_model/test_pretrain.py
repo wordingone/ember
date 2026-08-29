@@ -36,6 +36,9 @@ from specialist_stream import (
 from verify_capability_record import expected_receipt
 
 
+W2_SCOPE = "final_decoder_layer_shared_and_selected_expert_swiglu_down_4h_to_h"
+
+
 class PretrainingSegmentTests(unittest.TestCase):
     def test_optimizer_step_event_is_authored_by_the_trainer_process(self) -> None:
         queries: list[tuple[int, str, str]] = []
@@ -580,6 +583,90 @@ class PretrainingSegmentTests(unittest.TestCase):
         with patch.object(pretrain, "refresh_fp8_after_optimizer_step") as refresh:
             self.assertEqual(executor.after_optimizer_step(), 0)
         refresh.assert_not_called()
+
+    def test_stage2_executor_forwards_explicit_w2_installation_scope(self) -> None:
+        class FakeAuthority:
+            registry = object()
+
+        class FakeBackend:
+            preparation_regions_per_signature = 4
+
+            @staticmethod
+            def capture(region: object) -> object:
+                del region
+                return object()
+
+            @staticmethod
+            def warmup(region: object, zero_grad: object) -> None:
+                del region, zero_grad
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=14, attention_heads=2, vocab_size=16,
+        )
+        model = UnifiedDecoder(config, genesis_seed=1945).to(dtype=torch.bfloat16)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        with patch.object(
+            pretrain,
+            "install_fp8_down_projections",
+            return_value={"installed_sites": 5},
+        ) as install:
+            pretrain.CensusBoundStage2Executor(
+                model=model,
+                optimizer=optimizer,
+                config=config,
+                authority=FakeAuthority(),
+                graph_backend=FakeBackend(),
+                allow_test_device=True,
+                fp8_installation_scope=W2_SCOPE,
+            )
+        install.assert_called_once_with(
+            model,
+            kernel=None,
+            allow_test_device=True,
+            installation_scope=W2_SCOPE,
+        )
+
+    def test_stage2_w2_runtime_receipt_separates_shared_and_active_expert_groups(self) -> None:
+        class FakeRegistry:
+            census_sha256 = "c" * 64
+
+        class FakeAuthority:
+            registry = FakeRegistry()
+            census_raw_sha256 = "a" * 64
+            census_self_sha256 = "b" * 64
+
+        class FakeBackend:
+            preparation_regions_per_signature = 4
+
+            @staticmethod
+            def capture(region: object) -> object:
+                del region
+                return object()
+
+            @staticmethod
+            def warmup(region: object, zero_grad: object) -> None:
+                del region, zero_grad
+
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=14, attention_heads=2, vocab_size=16,
+        )
+        model = UnifiedDecoder(config, genesis_seed=1945).to(dtype=torch.bfloat16)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+        executor = pretrain.CensusBoundStage2Executor(
+            model=model,
+            optimizer=optimizer,
+            config=config,
+            authority=FakeAuthority(),
+            graph_backend=FakeBackend(),
+            fp8_kernel=self._fake_scaled_mm,
+            allow_test_device=True,
+            fp8_installation_scope=W2_SCOPE,
+        )
+        groups = executor.receipt()["fp8_site_groups"]
+        self.assertEqual(groups["existing_shared"]["installed_sites"], 1)
+        self.assertEqual(groups["new_active_expert"]["installed_sites"], 4)
+        self.assertEqual(groups["existing_shared"]["dispatches"], 0)
+        self.assertEqual(groups["new_active_expert"]["dispatches"], 0)
 
     def test_graph_only_sync_diagnostic_places_barrier_before_optimizer(self) -> None:
         executor = object.__new__(pretrain.CensusBoundStage2Executor)
