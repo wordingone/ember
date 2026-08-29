@@ -232,7 +232,7 @@ def test_question_destination_refuses_unknown_canonical_id(tmp_path: Path) -> No
         ],
     }
     routes = {
-        "schema_version": "ember-reader-question-destinations-v1",
+        "schema_version": "ember-reader-question-destinations-v2",
         "instrument_sha256": "frozen",
         "routes": [
             {
@@ -266,7 +266,7 @@ def test_frozen_reader_source_requires_canonical_disposition(tmp_path: Path) -> 
         ],
     }
     mapping = {
-        "schema_version": "ember-reader-question-destinations-v1",
+        "schema_version": "ember-reader-question-destinations-v2",
         "instrument_sha256": "frozen",
         "source_dispositions": [],
         "routes": [
@@ -305,12 +305,12 @@ def test_reader_study_requires_exactly_two_eligible_complete_passes() -> None:
     module = load_module()
     questions = [f"Q{i}" for i in range(1, 9)]
     study = {
-        "schema_version": "ember-doc-reader-study-v1",
-        "instrument_sha256": "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b",
+        "schema_version": "ember-doc-reader-study-v2",
+        "instrument_sha256": module.READER_INSTRUMENT_SHA256,
         "questions": questions,
         "readers": [
             {
-                "reader_id": "reader-a",
+                "reader_id": "reader-v2-a",
                 "eligible": True,
                 "authored_prose": False,
                 "answers": {question: {"materially_correct": True} for question in questions},
@@ -318,7 +318,7 @@ def test_reader_study_requires_exactly_two_eligible_complete_passes() -> None:
                 "elapsed_seconds": 120,
             },
             {
-                "reader_id": "reader-b",
+                "reader_id": "reader-v2-b",
                 "eligible": True,
                 "authored_prose": False,
                 "answers": {question: {"materially_correct": True} for question in questions},
@@ -334,6 +334,68 @@ def test_reader_study_requires_exactly_two_eligible_complete_passes() -> None:
     study["readers"][1]["answers"]["Q8"]["materially_correct"] = False
     with pytest.raises(module.DocsInfoError, match="READER_STUDY_INCOMPLETE"):
         module.score_reader_study(study)
+
+
+def test_v2_reader_study_refuses_v1_schema_hash_and_reader_id_reuse(monkeypatch) -> None:
+    module = load_module()
+    questions = [f"Q{i}" for i in range(1, 9)]
+    study = {
+        "schema_version": "ember-doc-reader-study-v2",
+        "instrument_sha256": module.READER_INSTRUMENT_SHA256,
+        "questions": questions,
+        "readers": [
+            {
+                "reader_id": "reader-v2-a",
+                "eligible": True,
+                "authored_prose": False,
+                "answers": {question: {"materially_correct": True} for question in questions},
+                "unexplained_blocking_terms": [],
+                "elapsed_seconds": 1,
+            },
+            {
+                "reader_id": "reader-v2-b",
+                "eligible": True,
+                "authored_prose": False,
+                "answers": {question: {"materially_correct": True} for question in questions},
+                "unexplained_blocking_terms": [],
+                "elapsed_seconds": 1,
+            },
+        ],
+    }
+    for field, stale in (
+        ("schema_version", "ember-doc-reader-study-v1"),
+        ("instrument_sha256", "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b"),
+    ):
+        candidate = json.loads(json.dumps(study))
+        candidate[field] = stale
+        with pytest.raises(module.DocsInfoError):
+            module.score_reader_study(candidate)
+    assert module.PREDECESSOR_READER_ID_SHA256S == {
+        "c66bd342cb4e5e1432c2eb601d2f2ce784aff6da5b15f14e10e3c0e0f4facfd7",
+        "58e1156648c53a55ce490437ee7a1cec562ad37b8cf3bf343faa2db81ab840d4",
+    }
+    predecessor_id = "predecessor-reader-a"
+    monkeypatch.setattr(
+        module,
+        "PREDECESSOR_READER_ID_SHA256S",
+        {module.sha256_bytes(predecessor_id.encode("utf-8"))},
+    )
+    study["readers"][0]["reader_id"] = predecessor_id
+    with pytest.raises(module.DocsInfoError, match="READER_ID_REUSE_REFUSED"):
+        module.score_reader_study(study)
+
+
+def test_v2_reader_instrument_hashes_rederive_and_q3_is_atomic() -> None:
+    module = load_module()
+    instrument = json.loads(
+        (REPO_ROOT / "manifests/documentation/reader-study-instrument-v2.json").read_bytes()
+    )
+    module.validate_reader_instrument(REPO_ROOT, instrument)
+    questions = {row["question_id"]: row["question"] for row in instrument["questions"]}
+    assert questions["Q3"] == (
+        "State Ember's certified current model/training status, then state the full EMBER-02 "
+        "target including approximate parameter range, modalities, reasoning, and structured-tool role."
+    )
 
 
 def test_checked_in_information_system_is_terminal_green() -> None:
