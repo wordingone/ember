@@ -44,6 +44,10 @@ jobs:
         run: python -B scripts/check_docs_freshness.py --front-door
       - name: Verify generated continuity status
         run: python -B scripts/gen_readme_status.py --check --generated-status
+      - name: Verify canonical documentation information system
+        run: |
+          python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py
+          python -B scripts/docs_information_system.py check --root .
   ember-lab:
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -8,89 +8,96 @@ mechanism_erasure=forbidden
 
 # Ember
 
-Ember is a clean-genesis sovereign foundation intelligence, a local
-foundation-model creation primitive, a continuously improving organism, its
-ember-cli body, and a general local AI laboratory. The target is an owned
-30-35B sparse unified text-image-audio decoder with native reasoning and
-structured tool use, created and operated on one 24 GiB GPU.
+<a id="ember.claim.identity"></a>
+<a id="ember.claim.problem"></a>
+Ember is a complete local foundation-intelligence project: a clean-genesis model-creation
+primitive, a continuously improving organism, the ember-cli operator body, and a general local AI
+laboratory. It addresses the problem of creating and operating owned foundation intelligence on a
+consumer-GPU-scale system while making every learned, executed, and evaluated claim traceable to
+public evidence. Borrowed learned or evaluative signals do not enter the target lineage.
 
-For a fresh context, start with [docs/guides/START-HERE.md](docs/guides/START-HERE.md).
+<a id="ember.claim.maturity"></a>
+<a id="ember.claim.target"></a>
+Ember has a certified custody and experiment spine, but no current checkpoint is an admitted Ember
+model. The governing target remains a sufficiently trained sparse unified text-image-audio decoder
+with native reasoning and structured tool use. Designed, implemented, executed, measured,
+independently reproduced, and admitted are different maturity states; documentation never upgrades
+one into another.
 
-## Install the measured Python environment
+Start with the [first-reader route](docs/guides/START-HERE.md), or use the
+[documentation map](docs/DOCS-README.md) to choose a route by task, audience, or technical domain.
 
-Python dependency authority: manifests/python-environment-v1.json
+## Architecture
 
-From the repository root, install the exact direct Python environment measured
-for Ember:
+The adopted domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and
+Governance. Lab integrates experiments across the declared domain interfaces; it does not replace
+their authority. Infrastructure and Governance are cross-cutting. The
+[system overview](docs/architecture/system-overview.md) explains the boundaries, dependencies, and
+implemented-versus-designed state, and the [domain index](docs/DOCS-README.md#technical-domains)
+links each canonical overview.
 
-    python tools/ember-restart-3b/python_environment.py install
+## Inspect or install
 
-The manifest records CPython, CUDA-wheel index, exact direct-package versions,
-the pinned Transformers source commit, import-to-distribution mappings, and
-guarded optional integrations. The default install excludes the exact ARC-AGI
-feature pins because their upstream wheel declares Python 3.12 or newer while
-the measured Ember interpreter is Python 3.10. Validate the repository contract
-and the current interpreter without installing anything:
+Python dependency authority: manifests/python-environment-v1.json. The machine-readable contract is
+[`manifests/python-environment-v1.json`](manifests/python-environment-v1.json). From the repository
+root, install the measured direct environment:
 
-    python tools/ember-restart-3b/python_environment.py verify --check-installed
+```text
+python tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
+```
 
-Rust remains authoritative in
-[`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and the
-ember-cli TypeScript package remains authoritative in
-[`tools/ember-cli/src/package.json`](tools/ember-cli/src/package.json). This
-measured contract is not yet a claim that a fresh clean environment was
-independently installed.
+This requires a supported Windows Python environment and network access for dependencies; it does
+not require model weights or a GPU. Rust package authority remains
+[`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and ember-cli package authority
+remains [`tools/ember-cli/src/package.json`](tools/ember-cli/src/package.json). See the
+[start guide](docs/guides/START-HERE.md) before using operator or training surfaces.
 
-## Current truth
+## Verify safely
 
-Mutable board, checkpoint, and receipt-date status is generated only in
-[docs/authority/CONTINUITY.md](docs/authority/CONTINUITY.md), where it remains
-bound to its source receipts and manifests.
+The smallest safe default is CPU-only authority verification from the repository root:
 
-## Roadmap status
+```text
+python scripts/verify_authority_conservation.py --root .
+```
 
-The twelve-milestone decomposition and its public contracts live in
-[docs/roadmap/README.md](docs/roadmap/README.md). Milestone completion is
-claimed only through a public certificate record under
-[docs/roadmap/certificates/](docs/roadmap/certificates/); issue counts and
-progress bars are never completion evidence.
+For a smaller demonstration of receipt semantics, run:
 
-- **EMBER-01 — custody, identity, and experiment spine: CERTIFIED 2026-08-05.**
-  Nine of nine certificate legs resolved-true, zero unresolved failures, bound
-  to public commit `323be9da58a7527f3526d4a9a839ae2b5765bfd1`. Record:
-  [docs/roadmap/certificates/EMBER-01.md](docs/roadmap/certificates/EMBER-01.md).
-  The certificate credits no model, no training, and no capability to EMBER-01.
-- **EMBER-02 — three-billion-parameter foundation birth** is the active goal
-  (`docs/domains/governance/authority/GOAL.md`; execution boundary in
-  [docs/authority/CONTINUITY.md](docs/authority/CONTINUITY.md)). It is not
-  complete; no current checkpoint is an admissible Ember model.
+```text
+python scripts/receipt_check.py --selftest
+```
 
-## Non-negotiable model floor
+These checks require no credentials, weights, or GPU and grant no model capability. The
+[verification guide](docs/guides/VERIFY.md) records expected results and the complete four-command
+public replay set.
 
-The first model and every 3B, 7B, 15B, and >27B rung are sufficiently trained
-native text-image-audio models with reasoning and structured tool use. The
-headline hypothesis is Verified Expert Accretion. Borrowed learned or evaluative
-signals never enter the lineage. Negative evidence preserves research families
-and later synergy tests.
+## Current truth and roadmap
 
-## Verify the authority tree
+<a id="ember.claim.mutable-state-owner"></a>
+Exact mutable state lives in
+[`docs/authority/CONTINUITY.md`](docs/authority/CONTINUITY.md). This README links to that owner and
+does not duplicate its rapidly changing identities. Public milestone contracts and certificates
+live under the [roadmap](docs/roadmap/README.md); a certificate, not a progress bar, carries a
+completion claim.
 
-Run:
+## Documentation routes
 
-    python scripts/verify_authority_conservation.py --root .
-    python -m pytest -q scripts/tests/test_authority_conservation.py
+- Understand the project: [system overview](docs/architecture/system-overview.md) and
+  [glossary](docs/GLOSSARY.md).
+- Use or inspect it: [start guide](docs/guides/START-HERE.md).
+- Verify evidence: [verification guide](docs/guides/VERIFY.md) and
+  [reproducibility charter](docs/charter/REPRODUCIBILITY.md).
+- Operate it: [operator documentation](docs/operator/README.md).
+- Audit authority: [continuity](docs/authority/CONTINUITY.md),
+  [invariant](docs/authority/INVARIANT.md), and
+  [governance](docs/authority/GOVERNANCE.md).
+- Browse every current entry document: [generated canonical index](docs/INDEX.md).
 
-A local landing or dispatch check also supplies the operator-owned durable goal
-selection.
+## Contributing
 
-## Read next
+Use the [canonical contribution route](docs/contributing.md). Contributions must preserve public
+source identity, replay their documented commands, and separate implementation evidence from model
+or campaign claims.
 
-- docs/authority/INVARIANT.md - unamendable identity
-- docs/domains/governance/authority/GOAL.md - complete project and machine contract
-- docs/roadmap/README.md - public milestone decomposition and completion certificates
-- docs/authority/STATE.md - compatibility pointer only; exact artifact identities and maturity live in docs/authority/CONTINUITY.md
-- docs/contracts/goal-clear-protocol.md - proof required for completion
-- docs/authority/ember-authority-matrix.md - D-001 through D-062 conservation matrix
-- docs/contracts/ember-completeness.md - preserved legacy M/C manifest and diagnostic tally input
-- docs/authority/CONTINUITY.md - exact current artifact identities, maturity, execution boundary, and resume order
-- docs/authority/GOVERNANCE.md - authority, provenance, and landing rules
+## License
+
+See [LICENSE](LICENSE).
