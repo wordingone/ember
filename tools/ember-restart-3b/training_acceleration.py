@@ -40,6 +40,11 @@ _KERNEL_RECEIPT_KEYS = {
     "weight_refreshes", "dispatches", "fallbacks",
 }
 _FP8_INSTALLATION_SCOPE = "final_decoder_layer_shared_swiglu_down_4h_to_h"
+_FP8_W2_INSTALLATION_SCOPE = (
+    "final_decoder_layer_shared_and_selected_expert_swiglu_down_4h_to_h"
+)
+_FP8_W2_EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
+_FP8_W2_FINAL_LAYER_INDEX = 13
 _CHECKPOINT_IDENTITY_KEYS = {
     "graph_signature_sha256", "fp8_kernel_receipt_sha256", "checkpoint_region_sha256",
 }
@@ -792,14 +797,28 @@ def install_fp8_down_projections(
     *,
     kernel: ScaledMmKernel | None = None,
     allow_test_device: bool = False,
+    installation_scope: str | None = None,
 ) -> dict[str, object]:
-    """Replace the one declared, route-stable final shared down site in-place."""
+    """Install the default shared site or the explicit W2 selected-expert treatment."""
+
+    treatment = installation_scope == _FP8_W2_INSTALLATION_SCOPE
+    if installation_scope not in (None, _FP8_INSTALLATION_SCOPE, _FP8_W2_INSTALLATION_SCOPE):
+        raise ValueError("issue #1945 FP8 installation scope is not recognized")
 
     layers = getattr(model, "layers", None)
     if not isinstance(layers, nn.ModuleList) or not layers:
         raise ValueError("issue #1413 FP8 installation requires decoder layers")
     final_layer_index = len(layers) - 1
+    if treatment and (
+        len(layers) != _FP8_W2_FINAL_LAYER_INDEX + 1
+        or final_layer_index != _FP8_W2_FINAL_LAYER_INDEX
+    ):
+        raise ValueError("issue #1945 W2 requires exactly 14 decoder layers with layer 13 final")
+    if treatment and tuple(getattr(layers[final_layer_index], "experts", {})) != _FP8_W2_EXPERT_NAMES:
+        raise ValueError("issue #1945 W2 requires exact expert keys in canonical order")
+
     targets: list[tuple[str, nn.Module, nn.Linear]] = []
+    existing_target_names: list[str] = []
     for index, layer in enumerate(layers):
         shared = getattr(layer, "shared_ffn", None)
         experts = getattr(layer, "experts", None)
@@ -813,27 +832,95 @@ def install_fp8_down_projections(
         for name, owner in candidates:
             down = getattr(owner, "down", None)
             if isinstance(down, DynamicFp8DownProjection):
+                supported_existing_shared = (
+                    treatment
+                    and index == final_layer_index
+                    and owner is shared
+                    and name == f"layers.{_FP8_W2_FINAL_LAYER_INDEX}.shared_ffn.down"
+                )
+                if supported_existing_shared:
+                    existing_target_names.append(name)
+                    continue
+                if treatment and index == final_layer_index and owner is not shared:
+                    raise RuntimeError("issue #1945 W2 expert down projection is already installed")
                 raise RuntimeError("issue #1413 FP8 down projections are already installed")
             if not isinstance(down, nn.Linear):
+                if treatment and index == final_layer_index and owner is not shared:
+                    raise ValueError("issue #1945 W2 expert down projection is not linear")
                 raise ValueError("issue #1413 FP8 site is not a linear down projection")
-            if index == final_layer_index and owner is shared:
+            if index == final_layer_index and (owner is shared or treatment):
                 targets.append((name, owner, down))
-    if len(targets) != 1:
-        raise RuntimeError("issue #1413 FP8 scope must resolve exactly one final shared down projection")
-    for _name, owner, down in targets:
-        owner.down = DynamicFp8DownProjection.from_linear(
-            down,
-            kernel=kernel,
-            allow_test_device=allow_test_device,
+    expected_total = 5 if treatment else 1
+    if len(targets) + len(existing_target_names) != expected_total:
+        raise RuntimeError(
+            f"issue #1945 W2 scope must resolve exactly {expected_total} final down projections"
+            if treatment
+            else "issue #1413 FP8 scope must resolve exactly one final shared down projection"
         )
-    return {
+    if not treatment and len(targets) != 1:
+        raise RuntimeError("issue #1413 FP8 scope must resolve exactly one final shared down projection")
+    replacements = [
+        (
+            owner,
+            DynamicFp8DownProjection.from_linear(
+                down,
+                kernel=kernel,
+                allow_test_device=allow_test_device,
+            ),
+        )
+        for _name, owner, down in targets
+    ]
+    for owner, replacement in replacements:
+        owner.down = replacement
+    receipt = {
         "schema_version": "ember-fp8-down-projection-installation-v2",
-        "scope": _FP8_INSTALLATION_SCOPE,
+        "scope": _FP8_W2_INSTALLATION_SCOPE if treatment else _FP8_INSTALLATION_SCOPE,
         "layer_indexes": [final_layer_index],
-        "installed_sites": len(targets),
-        "sites": [name for name, _owner, _down in targets],
+        "installed_sites": expected_total,
+        "sites": [
+            f"layers.{final_layer_index}.shared_ffn.down",
+            *(
+                f"layers.{final_layer_index}.experts.{name}.down"
+                for name in _FP8_W2_EXPERT_NAMES
+            ),
+        ] if treatment else [name for name, _owner, _down in targets],
         "fallbacks": 0,
     }
+    if treatment:
+        receipt["newly_installed_sites"] = len(targets)
+    return receipt
+
+
+def fp8_installation_group_receipt(
+    model: nn.Module,
+    installation_receipt: Mapping[str, object],
+) -> dict[str, dict[str, object]]:
+    """Return W2-only live counters separated by shared and selected-expert sites."""
+
+    if installation_receipt.get("scope") != _FP8_W2_INSTALLATION_SCOPE:
+        raise ValueError("issue #1945 grouped FP8 evidence requires the explicit W2 scope")
+    named_modules = dict(model.named_modules())
+    groups = {
+        "existing_shared": [f"layers.{_FP8_W2_FINAL_LAYER_INDEX}.shared_ffn.down"],
+        "new_active_expert": [
+            f"layers.{_FP8_W2_FINAL_LAYER_INDEX}.experts.{name}.down"
+            for name in _FP8_W2_EXPERT_NAMES
+        ],
+    }
+    result: dict[str, dict[str, object]] = {}
+    for group_name, paths in groups.items():
+        modules = [named_modules.get(path) for path in paths]
+        if any(not isinstance(module, DynamicFp8DownProjection) for module in modules):
+            raise RuntimeError("issue #1945 W2 grouped FP8 site identity drifted")
+        receipts = [module.kernel_receipt() for module in modules if module is not None]
+        result[group_name] = {
+            "installed_sites": len(paths),
+            "sites": paths,
+            "dispatches": sum(int(item["dispatches"]) for item in receipts),
+            "fallbacks": sum(int(item["fallbacks"]) for item in receipts),
+            "weight_refreshes": sum(int(item["weight_refreshes"]) for item in receipts),
+        }
+    return result
 
 
 def refresh_fp8_after_optimizer_step(model: nn.Module) -> int:
