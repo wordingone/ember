@@ -1943,6 +1943,24 @@ struct ProtectiveStopContext {
 }
 
 #[cfg(windows)]
+fn classify_protective_checkpoint_request_error(
+    job_id: &str,
+    pid: u32,
+    error: EmberLabError,
+) -> EmberLabError {
+    match error {
+        EmberLabError::Io(io_error) if matches!(io_error.raw_os_error(), Some(5 | 32 | 33)) => {
+            EmberLabError::ProcessControlUncertain {
+                job_id: job_id.into(),
+                pid,
+                detail: format!("protective checkpoint request custody is contended: {io_error}"),
+            }
+        }
+        other => other,
+    }
+}
+
+#[cfg(windows)]
 impl ProtectiveStopContext {
     fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>> {
         self.db.lock().map_err(|_| EmberLabError::Poisoned)
@@ -2268,7 +2286,9 @@ impl ProtectiveStopContext {
         });
         let request_bytes = serde_json::to_vec_pretty(&request)?;
         let request_sha256 = hash_bytes(&request_bytes);
-        atomic_replace(&checkpoint_request_path, &request_bytes)?;
+        atomic_replace(&checkpoint_request_path, &request_bytes).map_err(|error| {
+            classify_protective_checkpoint_request_error(job_id, row.pid, error)
+        })?;
 
         let deadline = Instant::now() + checkpoint_grace;
         let mut checkpoint_result = "GRACE_EXPIRED";

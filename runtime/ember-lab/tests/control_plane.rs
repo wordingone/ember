@@ -9,7 +9,7 @@ use ember_lab::{
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -5245,7 +5245,7 @@ fn concurrent_protective_owned_stop_records_the_named_loser() {
     daemon
         .acquire_lease("concurrent-protected-resource", "concurrent-protected-job")
         .unwrap();
-    daemon
+    let started = daemon
         .start_job(
             JobSpec::new(
                 "concurrent-protected-job",
@@ -5290,11 +5290,16 @@ fn concurrent_protective_owned_stop_records_the_named_loser() {
         .iter()
         .find_map(|result| result.as_ref().err())
         .expect("one concurrent caller must lose the ownership fence");
+    let named_loser = matches!(
+        loser,
+        EmberLabError::InvalidTransition { .. } | EmberLabError::ProcessControlUncertain { .. }
+    ) || matches!(
+        loser,
+        EmberLabError::ProcessUnavailable { job_id, pid }
+            if job_id == "concurrent-protected-job" && *pid == started.pid
+    );
     assert!(
-        matches!(
-            loser,
-            EmberLabError::InvalidTransition { .. } | EmberLabError::ProcessControlUncertain { .. }
-        ),
+        named_loser,
         "concurrent loser must return a named ownership error, got {loser:?}"
     );
     let authorizing_events: i64 = rusqlite::Connection::open(&db)
@@ -5333,6 +5338,86 @@ fn concurrent_protective_owned_stop_records_the_named_loser() {
         daemon.lease_owner("concurrent-protected-resource").unwrap(),
         None
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn locked_protective_checkpoint_request_returns_named_uncertainty() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let root = sandbox("protective-owned-stop-request-contention");
+    let db = root.join("ember-lab.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon =
+        Daemon::open_with_resource_guard_seed_without_monitor(&db, Ok(test_host_capacity()))
+            .unwrap();
+    daemon
+        .bind_identity("request-contention-job", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("request-contention-resource", "request-contention-job")
+        .unwrap();
+    let started = daemon
+        .start_job(
+            JobSpec::new(
+                "request-contention-job",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "request-contention-resource",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "120000"),
+        )
+        .unwrap();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE resource_guard_state
+             SET admission_state='frozen', reason='physical_available_below_survival_floor',
+                 observed_at_ms=1234, oracle_evidence_required=1,
+                 observation_json='{\"result\":\"SURVIVAL_FLOOR_BREACH\"}'
+             WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+
+    let protective_key = format!("{:x}", Sha256::digest(b"request-contention-job"));
+    let request_path = db.with_file_name("ember-lab.sqlite3.logs").join(format!(
+        "{protective_key}.protective-checkpoint-request.json"
+    ));
+    fs::write(&request_path, b"locked request custody").unwrap();
+    let locked_request = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(0)
+        .open(&request_path)
+        .unwrap();
+
+    let error = daemon
+        .protective_owned_stop("request-contention-job", Duration::from_millis(100))
+        .unwrap_err();
+    assert!(
+        matches!(
+            &error,
+            EmberLabError::ProcessControlUncertain { job_id, pid, detail }
+                if job_id == "request-contention-job"
+                    && *pid == started.pid
+                    && detail.contains("checkpoint request custody")
+        ),
+        "checkpoint request contention must be named ownership uncertainty, got {error:?}"
+    );
+    let failed_events: i64 = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM events
+             WHERE job_id='request-contention-job'
+               AND kind='protective_owned_stop_failed'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(failed_events, 1);
+    drop(locked_request);
 }
 
 #[cfg(windows)]
