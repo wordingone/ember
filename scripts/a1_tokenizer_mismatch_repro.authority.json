@@ -1,0 +1,10 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "scripts/a1_tokenizer_mismatch_repro.py",
+  "artifact_sha256": "b38f15efe36e8d335781e42268219451e6c826bcfecda8c6717f427e6bfd6f07",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

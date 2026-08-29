@@ -193,7 +193,7 @@ is actually resident on the GPU at any given time.
 **Grade: STRONG** (issue #487).
 
 **Check it yourself:**
-- `scripts/cockpit_watchdog.py` — the standing liveness watchdog (issue #362): composed predicate
+- `src/ember/governance/scripts/cockpit_watchdog.py` — the standing liveness watchdog (issue #362): composed predicate
   over window/process/VRAM-tenant residency, report-only, one receipt row + one heartbeat row per
   cycle (module docstring, read in full for the exact composed-state logic).
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json`'s `server_contention` block

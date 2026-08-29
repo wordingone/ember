@@ -72,7 +72,7 @@ def test_token_shards_bind_loadable_tokenizer_and_sanitized_public_receipts() ->
             "sha256": sha256(FREEZE),
         },
         "tokenizer_json": {
-            "path": "tokenizer/tokenizer.json",
+            "path": "domains/model/tokenizer/tokenizer.json",
             "sha256": sha256(TOKENIZER),
         },
     }

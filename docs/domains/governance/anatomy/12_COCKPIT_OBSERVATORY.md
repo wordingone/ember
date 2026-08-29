@@ -29,7 +29,7 @@ no-silent-steer path holds. It explicitly does not touch training/GPU.
 
 ## Probe hardening (test_c_obs.py, issue #749 cure)
 
-The probe (`scripts/ember_totality/test_c_obs.py`) was hardened after a
+The probe (`src/ember/governance/scripts/ember_totality/test_c_obs.py`) was hardened after a
 disclosed weakness: pre-cure, its (a) worldstate-binding and (d) proof-pack
 checks were pure keyword/prose scans over any evidence-subdir file — a
 hand-authored `.md`/`.json` containing the right words satisfied the CHK

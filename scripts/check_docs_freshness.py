@@ -261,7 +261,7 @@ class DocsFreshnessChecker:
         # Build the expected bytes in memory. Freshness validation must never
         # rewrite the evidence it is validating.
         try:
-            builder_path = self.repo / "scripts" / "build_claims_index.py"
+            builder_path = self.repo / "src" / "ember" / "governance" / "scripts" / "build_claims_index.py"
             spec = importlib.util.spec_from_file_location(
                 "ember_claims_index_builder",
                 builder_path,

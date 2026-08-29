@@ -54,7 +54,7 @@ RUNTIME_FILES = {
     "scripts/ember_restart/prediction_contract.py",
     "scripts/ember_restart_eval_checkpoint_consumer.py",
     "scripts/ember_restart_eval_raw_forward.py",
-    "tokenizer/tokenizer.json",
+    "domains/model/tokenizer/tokenizer.json",
     "tools/ember-restart-3b/batch.py",
     "tools/ember-restart-3b/checkpoint_artifacts.py",
     "tools/ember-restart-3b/infer.py",
@@ -259,7 +259,7 @@ def resolve_development_seat(
         resolved[field] = (path, _require_file_hash(path, binding["sha256"], label))
     for field, relative in (
         ("model_config", "configs/ember-restart-3b.json"),
-        ("tokenizer", "tokenizer/tokenizer.json"),
+        ("tokenizer", "domains/model/tokenizer/tokenizer.json"),
         ("server", "tools/ember-restart-3b/serve_owned_openai.py"),
     ):
         if resolved[field] != resolved_runtime[relative]:

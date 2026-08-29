@@ -32,7 +32,7 @@ N/A -- never assumed):
     W (out_features, in_features), s = W.abs().amax(dim=1, keepdim=True)
     .clamp(min=1e-8) / 127.0 -- one scale per OUTPUT ROW (a "channel" =
     one output neuron), int8 grid (256 levels, +-127 after clamp). This is
-    DIFFERENT from scripts/ember_bitnet_core.py's absmean_scale (per-
+    DIFFERENT from src/ember/governance/scripts/ember_bitnet_core.py's absmean_scale (per-
     TENSOR, ternary {-1,0,+1} BitNet b1.58 path) -- that track (C15
     bitnet-vs-dense comparison) has no full-scale (368M+) checkpoint
     receipted in this repo snapshot (only receipts/ember-tiny-bitnet-

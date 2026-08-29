@@ -54,7 +54,7 @@ outside this recon's scope.
 **07-03 status:** unchecked.
 
 **TODAY'S status: PARTIALLY ADDRESSED, same un-wired shape as the dominant hole before its own
-cure.** `scripts/check_milestone_reconciliation.py` exists (landed 2026-07-01, predates the
+cure.** `src/ember/governance/scripts/check_milestone_reconciliation.py` exists (landed 2026-07-01, predates the
 audit — so the audit correctly flagged it as unwatched even though the checker itself already
 existed) and produces a receipt (commit `462bbe7`: "milestone-reconciliation checker + receipt
 (PASS 55/0/0/0)"). It is **not** in `ember_totality_spec.py`'s `ORDER`/`FILENAME_ID` — no `test_c_*.py`

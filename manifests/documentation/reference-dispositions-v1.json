@@ -1725,77 +1725,77 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 80,
       "target": "docs/launch-target-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 169,
       "target": "docs/scripts",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 177,
       "target": "state/activity-ledger.jsonl",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 177,
       "target": "state/activity/activity-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 177,
       "target": "tools/ember-cli/src/components/activity-pane.ts",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 190,
       "target": "receipts/ember-m10-surface3/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 191,
       "target": "receipts/ember-m10-surface3/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 192,
       "target": "receipts/.p5_dryrun_tmp/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 192,
       "target": "receipts/.rung2-event-cache/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/deletion-manifest-20260708.md",
+      "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
       "line": 229,
       "target": "docs/scripts",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/hygiene/issue-1450-scratch-reference-scan-v1.md",
+      "document": "docs/domains/governance/hygiene/issue-1450-scratch-reference-scan-v1.md",
       "line": 34,
       "target": "scratch/rung2-optstate",
       "visible_classification": "reference"
@@ -1844,7 +1844,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/drafts/nc2-recipe-stack-draft.md",
+      "document": "docs/domains/governance/research/drafts/nc2-recipe-stack-draft.md",
       "line": 273,
       "target": "receipts/ledger/evaluation",
       "visible_classification": "reference"
@@ -1872,63 +1872,63 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/ember-artificial-physiology-closed-boundary-addendum-20260801.md",
+      "document": "docs/domains/governance/research/ember-artificial-physiology-closed-boundary-addendum-20260801.md",
       "line": 437,
       "target": "state/dynamics",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 17,
       "target": "docs/get-started/fine-tuning-llms-guide",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 22,
       "target": "docs/source/unsloth_integration.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 27,
       "target": "docs/get-started/fine-tuning-llms-guide",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 47,
       "target": "docs/get-started/reinforcement-learning-rl-guide/fp16-vs-bf16-for-rl",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 120,
       "target": "tools/quantize/README.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 170,
       "target": "docs/get-started/fine-tuning-llms-guide",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 171,
       "target": "docs/source/unsloth_integration.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/external-stack/unsloth-inference.md",
+      "document": "docs/domains/governance/research/external-stack/unsloth-inference.md",
       "line": 183,
       "target": "tools/quantize/README.md",
       "visible_classification": "reference"
@@ -2845,7 +2845,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/rung2-grow-spec-v1.md",
+      "document": "docs/domains/governance/spec/rung2-grow-spec-v1.md",
       "line": 3,
       "target": "docs/dossier/rung2-growth-ladder-dossier-v1.md",
       "visible_classification": "reference"

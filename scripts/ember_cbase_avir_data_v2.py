@@ -15,7 +15,7 @@ Closes all four defects from the REJECT verdict:
 HARD RULES:
   - TRAIN-ONLY FIREWALL: raises on any heldout id (h0xx). Checked at entry +
     per-iteration. Heldout ids must never enter corpus or be readable into it.
-  - Frozen tokenizer: nc-ladder/tokenizer/tokenizer.json, SHA256 2c557e7f...,
+  - Frozen tokenizer: nc-ladder/domains/model/tokenizer/tokenizer.json, SHA256 2c557e7f...,
     vocab 32000. All token ids must be < 32000.
   - No GPU, no daemon — CPU only.
   - Do NOT edit timeshare_pretrain.py or ember_avir_harness.py (read-only deps).

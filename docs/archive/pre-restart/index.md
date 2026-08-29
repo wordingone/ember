@@ -44,7 +44,7 @@ Live chain (each step fail-closed on the previous step's receipt):
 5. **Governed dispatch** — `scripts/timeshare_pretrain.py --live` under the
    resource governor (VRAM fraction cap + margin assert + decode pacer).
 6. **Checkpoint floor probes** — frozen protocol in
-   `scripts/fp23_probe_prereg.py` (bar: ≥1.0 verified L1 episode per
+   `src/ember/governance/scripts/fp23_probe_prereg.py` (bar: ≥1.0 verified L1 episode per
    governed minute at the 2B checkpoint; one retry at 4B); executed by
    `scripts/fp24_verdict.py`; the kill path additionally requires a
    receipted curriculum-synthesis attempt (`scripts/fp29_kill_synthesis_gate.py`).

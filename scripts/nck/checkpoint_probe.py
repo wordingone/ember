@@ -580,7 +580,7 @@ def main() -> int:
           f"{probe_stats['probe_wall_s']}s wall")
 
     commit_sha = _get_commit_sha()
-    protocol_sha = _get_file_commit_sha("scripts/fp23_probe_prereg.py")
+    protocol_sha = _get_file_commit_sha("src/ember/governance/scripts/fp23_probe_prereg.py")
     harness_sha = _get_file_commit_sha("scripts/nck/checkpoint_probe.py")
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 

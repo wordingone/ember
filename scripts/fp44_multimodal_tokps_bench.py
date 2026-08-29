@@ -8,7 +8,7 @@ on the production multimodal backbone: LlamaForCausalLM with v0 dims (c03:
 hidden=1024, layers=20, heads=16, vocab=32000, seq=1024, bfloat16, CUDA).
 
 This is the tok/s lever that closes fp-44 ≤1-day-bar arithmetic and finalizes
-the optimizer pick per docs/design/fp44-multimodal-optimizer-decision.md.
+the optimizer pick per docs/domains/governance/design/fp44-multimodal-optimizer-decision.md.
 
 Short bench: WARMUP=3 + TIMED=200 steps. Does not trip long-run interlock.
 

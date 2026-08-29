@@ -38,7 +38,7 @@ gain (C7 operator load-bearing + C14 neural resident + C8
 contribution-deletion) demonstrated at a non-toy operating point reached by
 measured growth (C-GROW) from the owned seed (C-BASE), dense-undismissable at
 matched active-compute budget against the dense scaling-law frontier
-projection. `scripts/ember_c_scale_s3_producer.py` is the producer script
+projection. `src/ember/governance/scripts/ember_c_scale_s3_producer.py` is the producer script
 referenced by the last board render's C-SCALE row.
 
 ## Current gaps — honestly stated

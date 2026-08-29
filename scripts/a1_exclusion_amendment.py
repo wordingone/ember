@@ -177,7 +177,7 @@ def main() -> int:
             "name": "refs #193 v2 (ADOPTED AS SPEC via #593 / PR #603)",
             "window_tokens": 13,
             "tokenizer": {
-                "path": "tokenizer/tokenizer.json",
+                "path": "domains/model/tokenizer/tokenizer.json",
                 "sha256": "6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d",
                 "encode_semantics": "added-token-matching-disabled-v1; 21/31755 "
                                      "vocab-absent merges dropped in-memory "

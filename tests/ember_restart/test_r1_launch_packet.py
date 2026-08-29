@@ -340,7 +340,7 @@ def _fixture(
             "ticket": "TOKEN-SHARDS-V0",
             "shards": [{"name": "shard-00000.bin", "sha256": "0" * 64, "n_tokens": 2}],
             "premises": {
-                "tokenizer_json": {"path": "tokenizer/tokenizer.json", "sha256": _sha(tokenizer)}
+                "tokenizer_json": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": _sha(tokenizer)}
             },
             "total_stream_tokens": 2,
         },
