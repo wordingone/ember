@@ -457,6 +457,95 @@ def test_consumer_reopens_only_catalog_derived_train_identity_and_preserves_eval
     assert resolved["protected_eval_item_admission"] is False
     assert resolved["object_count"] == 1
 
+    historical = json.loads(combined_raw)
+    historical_dataset_id = "dataset:historical:" + "9" * 64
+    historical_consumer_id = "attempt:historical:" + "a" * 64
+    historical["records"].extend(
+        [
+            {
+                **next(
+                    item
+                    for item in historical["records"]
+                    if item["kind"] == "dataset_version"
+                ),
+                "id": historical_dataset_id,
+            },
+            {
+                **next(
+                    item
+                    for item in historical["records"]
+                    if item["kind"] == "consumer_attempt"
+                ),
+                "id": historical_consumer_id,
+                "run_attempt_id": historical_consumer_id,
+            },
+        ]
+    )
+    historical["edges"].append(
+        {
+            "kind": "consumer_dataset",
+            "from_kind": "consumer_attempt",
+            "from_id": historical_consumer_id,
+            "to_kind": "dataset_version",
+            "to_id": historical_dataset_id,
+            "ordinal": 0,
+            "payload": {},
+        }
+    )
+    historical_raw = canonical(historical)
+    historical_receipt = import_receipt(
+        manifest_raw=consumer_fragment,
+        canonical_export=historical_raw,
+        inserted_records=2,
+        inserted_edges=1,
+    )
+    historical_resolved = resolve_catalog_training_datasets(
+        catalog_export_raw=historical_raw,
+        dataset_import_receipt_raw=first_receipt,
+        consumer_import_receipt_raw=historical_receipt,
+        expected_dataset_id=dataset_id,
+    )
+    assert historical_resolved["dataset_id"] == dataset_id
+
+    duplicate = json.loads(historical_raw)
+    duplicate_consumer_id = "attempt:duplicate:" + "b" * 64
+    duplicate["records"].append(
+        {
+            **next(
+                item
+                for item in duplicate["records"]
+                if item["kind"] == "consumer_attempt"
+            ),
+            "id": duplicate_consumer_id,
+            "run_attempt_id": duplicate_consumer_id,
+        }
+    )
+    duplicate["edges"].append(
+        {
+            "kind": "consumer_dataset",
+            "from_kind": "consumer_attempt",
+            "from_id": duplicate_consumer_id,
+            "to_kind": "dataset_version",
+            "to_id": dataset_id,
+            "ordinal": 0,
+            "payload": {},
+        }
+    )
+    duplicate_raw = canonical(duplicate)
+    duplicate_receipt = import_receipt(
+        manifest_raw=consumer_fragment,
+        canonical_export=duplicate_raw,
+        inserted_records=1,
+        inserted_edges=1,
+    )
+    with pytest.raises(InputIdentityError, match="catalog_dataset_substitution"):
+        resolve_catalog_training_datasets(
+            catalog_export_raw=duplicate_raw,
+            dataset_import_receipt_raw=first_receipt,
+            consumer_import_receipt_raw=duplicate_receipt,
+            expected_dataset_id=dataset_id,
+        )
+
     revalidation = revalidate_e_matrix_catalog_bindings(
         e_matrix_packet_raw=e_matrix, resolved_identity=resolved
     )

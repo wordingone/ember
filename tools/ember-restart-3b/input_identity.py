@@ -311,7 +311,8 @@ def resolve_catalog_training_datasets(
         for edge in edges
         if isinstance(edge, dict)
         and edge.get("kind") == "consumer_dataset"
-        and edge.get("to_id") in admitted_datasets
+        and edge.get("to_id") == expected_dataset_id
+        and expected_dataset_id in admitted_datasets
         and isinstance(edge.get("from_id"), str)
     ]
     if len(consumer_dataset_edges) != 1:
