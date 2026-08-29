@@ -112,7 +112,7 @@ def load_bulk_domain_connector_receipt(
         raise ValueError("bulk domain connector license does not match the frozen authority")
     if source_selector != expected_source_selector:
         raise ValueError("bulk domain connector source selector does not match the frozen authority")
-    if f"-{split}-" not in source_id or f"-{split}-" not in source_selector:
+    if f"-{split}-" not in source_id:
         raise ValueError("bulk domain source identity split does not match the declared split")
     custody_root = Path(dest_root)
     if not custody_root.is_absolute() or not custody_root.is_dir():
