@@ -122,6 +122,157 @@ def _rewrite_census_extractor(
 
 
 class PdfTreeToUtf8Tests(unittest.TestCase):
+    def test_composite_authority_reopens_exact_disjoint_union_and_refuses_overlap(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "first").mkdir()
+            (root / "second").mkdir()
+            first_receipt, first_sha, _ = _write_tree_fixture(root / "first")
+            second_receipt, second_sha, _ = _write_tree_fixture(root / "second")
+            second_payload = json.loads(second_receipt.read_bytes())
+            for row in second_payload["files"]:
+                old_path = Path(second_payload["dest_root"]) / row["path"]
+                row["path"] = f"delta/{row['path']}"
+                new_path = Path(second_payload["dest_root"]) / row["path"]
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                old_path.replace(new_path)
+            second_payload["sha256_manifest"] = _sha256(
+                "\n".join(sorted(row["sha256"] for row in second_payload["files"])).encode()
+            )
+            second_payload = {
+                "schema_version": "issue1581-row2-delta-fetch-v1",
+                "custody": second_payload["dest_root"],
+                "fetched_at": second_payload["fetched_at"],
+                "files": [
+                    {**row, "arxiv_id": f"fixture-{index}", "version": "v1"}
+                    for index, row in enumerate(second_payload["files"])
+                ],
+                "go_mail_ids": [1],
+                "purpose": "fixture delta",
+                "source": "fixture",
+                "total_bytes": second_payload["total_bytes"],
+            }
+            second_payload["self_sha256"] = _sha256(_canonical(second_payload))
+            second_receipt.write_bytes(_canonical(second_payload))
+            second_sha = _sha256(second_receipt.read_bytes())
+            spec = _canonical(
+                {
+                    "schema_version": "ember-pdf-composite-authority-spec-v1",
+                    "source": "arxiv",
+                    "source_id": "fixture:composite",
+                    "canonical_url": "https://export.arxiv.org/api/query",
+                    "license": "CC-BY-4.0",
+                    "revision": "fixture",
+                    "components": [
+                        {"receipt_path": str(first_receipt), "receipt_sha256": first_sha},
+                        {"receipt_path": str(second_receipt), "receipt_sha256": second_sha},
+                    ],
+                }
+            )
+
+            authority_raw = module.build_composite_connector_authority(spec_raw=spec)
+            authority_path = root / "composite-authority.json"
+            authority_path.write_bytes(authority_raw)
+            _, roots, files = module._source_tree(
+                authority_path, _sha256(authority_raw), max_files=10
+            )
+            self.assertEqual(len(roots), 2)
+            self.assertEqual(
+                [row["path"] for row in files],
+                [
+                    "alpha/document.pdf",
+                    "beta/document.pdf",
+                    "delta/alpha/document.pdf",
+                    "delta/beta/document.pdf",
+                ],
+            )
+
+            overlapping = json.loads(spec)
+            overlapping["components"][1] = dict(overlapping["components"][0])
+            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "overlap"):
+                module.build_composite_connector_authority(spec_raw=_canonical(overlapping))
+
+    def test_one_pass_parallel_transform_extracts_each_pdf_once_and_orders_receipts(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census = root / "one-pass-census.json"
+            output = root / "output"
+            original = module._extract_one
+            calls: list[str] = []
+
+            def counted(path: Path, **kwargs: object):
+                calls.append(path.name)
+                return original(path, **kwargs)
+
+            with patch.object(module, "_extract_one", side_effect=counted):
+                receipt = module.produce_pdf_tree_receipt_one_pass(
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                    census_report=census,
+                    output_dir=output,
+                    workers=2,
+                )
+
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(
+                [row["source_path"] for row in json.loads(census.read_bytes())["files"]],
+                ["alpha/document.pdf", "beta/document.pdf"],
+            )
+            self.assertEqual(
+                [row["source_path"] for row in receipt["files"]],
+                ["alpha/document.pdf", "beta/document.pdf"],
+            )
+            self.assertTrue((output / "documents/alpha/document.pdf.txt").is_file())
+            self.assertTrue((output / "documents/beta/document.pdf.txt").is_file())
+
+    def test_one_pass_refusal_publishes_complete_census_but_no_transform(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(
+                root, empty_second=True
+            )
+            census = root / "one-pass-census.json"
+            output = root / "output"
+            with self.assertRaisesRegex(module.PdfTreeExtractionRefusal, "refusal census"):
+                module.produce_pdf_tree_receipt_one_pass(
+                    connector_receipt=connector_receipt,
+                    connector_receipt_sha256=connector_sha256,
+                    census_report=census,
+                    output_dir=output,
+                    workers=2,
+                )
+            self.assertEqual(json.loads(census.read_bytes())["totals"]["refusal_count"], 1)
+            self.assertFalse(output.exists())
+
+    def test_cli_exposes_bounded_one_pass_workers(self) -> None:
+        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            connector_receipt, connector_sha256, _ = _write_tree_fixture(root)
+            census = root / "one-pass-census.json"
+            output = root / "output"
+            with redirect_stdout(io.StringIO()) as stdout:
+                result = module.main(
+                    [
+                        "--connector-receipt", str(connector_receipt),
+                        "--connector-receipt-sha256", connector_sha256,
+                        "--census-report", str(census),
+                        "--output-dir", str(output),
+                        "--one-pass",
+                        "--workers", "2",
+                    ]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(json.loads(stdout.getvalue())["result"], "VERIFIED")
+
     def test_exact_cc0_license_identity_transforms_and_normalizes(self) -> None:
         from tools.corpus_connectors import pdf_tree_to_utf8 as module
 
