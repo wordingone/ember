@@ -45,6 +45,20 @@ class RestartDecoderModelTests(unittest.TestCase):
         self.assertEqual(image(torch.randn(1, 48, 48, 3)).shape, (1, self.config.hidden_size))
         self.assertEqual(audio(torch.randn(1, 640)).shape, (1, self.config.hidden_size))
 
+    def test_rejected_compiled_swiglu_route_is_not_production_reachable(self) -> None:
+        config = dataclasses.replace(self.config, gradient_checkpointing=False)
+        model = UnifiedDecoder(config)
+        model.eval()
+        ids = torch.tensor([[1, 2, 3, 4]])
+        for layer in model.layers:
+            with patch.object(
+                layer.shared_ffn,
+                "forward_fused",
+                side_effect=AssertionError("rejected compiled SwiGLU route was reached"),
+            ):
+                logits = model(ids, active_expert="shared")
+                self.assertTrue(torch.isfinite(logits).all())
+
     def test_mixed_raw_image_audio_forward(self) -> None:
         model = UnifiedDecoder(self.config)
         ids = torch.tensor([[1, self.config.image_token_id, 2, self.config.audio_token_id]])
