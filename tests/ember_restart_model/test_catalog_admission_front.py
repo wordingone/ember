@@ -205,6 +205,109 @@ def test_projects_two_bulk_rows_into_one_path_free_admitted_train_dataset(
     assert {row["admission_state"] for row in memberships} == {"admitted"}
 
 
+def test_projection_deduplicates_repeated_same_source_object_memberships(
+    tmp_path: Path,
+) -> None:
+    repeated_path, repeated_sha = write_connector(
+        tmp_path / "repeated",
+        source="candidate-mathematics-train-0",
+        domain="mathematics",
+        files=[
+            ("a.pdf", b"same-payload"),
+            ("b.pdf", b"same-payload"),
+            ("c.pdf", b"distinct-payload"),
+        ],
+    )
+    repeated_row = load_bulk_domain_connector_receipt(
+        receipt_path=repeated_path,
+        expected_receipt_sha256=repeated_sha,
+        source_id="candidate-mathematics-train-0",
+        expected_source_selector="candidate-mathematics-train-0",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="mathematics",
+        split="train",
+    )
+    shared_path, shared_sha = write_connector(
+        tmp_path / "shared-across-sources",
+        source="candidate-statistics-train-0",
+        domain="statistics",
+        files=[("shared.pdf", b"same-payload")],
+    )
+    shared_row = load_bulk_domain_connector_receipt(
+        receipt_path=shared_path,
+        expected_receipt_sha256=shared_sha,
+        source_id="candidate-statistics-train-0",
+        expected_source_selector="candidate-statistics-train-0",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="statistics",
+        split="train",
+    )
+    manifest = json.loads(
+        build_dataset_catalog_manifest(
+            rows=[repeated_row, shared_row],
+            tokenizer_sha256="4" * 64,
+            created_at_ms=1,
+        )
+    )
+
+    record_identities = [(row["kind"], row["id"]) for row in manifest["records"]]
+    edge_identities = [
+        (
+            row["kind"],
+            row["from_kind"],
+            row["from_id"],
+            row["to_kind"],
+            row["to_id"],
+            row["ordinal"],
+        )
+        for row in manifest["edges"]
+    ]
+    assert len(record_identities) == len(set(record_identities))
+    assert len(edge_identities) == len(set(edge_identities))
+    memberships = [row for row in manifest["records"] if row["kind"] == "membership"]
+    assert len(memberships) == 3
+    assert len([row for row in manifest["records"] if row["kind"] == "immutable_object"]) == 2
+    shared_digest = sha256(b"same-payload")
+    assert {
+        row["id"] for row in memberships if row["exact_sha256"] == shared_digest
+    } == {
+        f"membership:candidate-mathematics-train-0:{shared_digest}",
+        f"membership:candidate-statistics-train-0:{shared_digest}",
+    }
+
+    unique_path, unique_sha = write_connector(
+        tmp_path / "unique",
+        source="candidate-mathematics-train-0",
+        domain="mathematics",
+        files=[("a.pdf", b"same-payload"), ("c.pdf", b"distinct-payload")],
+    )
+    unique_row = load_bulk_domain_connector_receipt(
+        receipt_path=unique_path,
+        expected_receipt_sha256=unique_sha,
+        source_id="candidate-mathematics-train-0",
+        expected_source_selector="candidate-mathematics-train-0",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="mathematics",
+        split="train",
+    )
+    unique_manifest = json.loads(
+        build_dataset_catalog_manifest(
+            rows=[unique_row, shared_row],
+            tokenizer_sha256="4" * 64,
+            created_at_ms=1,
+        )
+    )
+    repeated_dataset_id = next(
+        row["id"] for row in manifest["records"] if row["kind"] == "dataset_version"
+    )
+    unique_dataset_id = next(
+        row["id"]
+        for row in unique_manifest["records"]
+        if row["kind"] == "dataset_version"
+    )
+    assert repeated_dataset_id != unique_dataset_id
+
+
 def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
     tmp_path: Path,
 ) -> None:

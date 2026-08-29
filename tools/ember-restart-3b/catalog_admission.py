@@ -125,6 +125,7 @@ def build_dataset_catalog_manifest(
     ]
     edges: list[dict[str, Any]] = []
     objects: dict[str, int] = {}
+    memberships: set[str] = set()
     membership_ordinal = 0
     for row in ordered_rows:
         source_record_id = f"source:{row['source_id']}"
@@ -176,6 +177,9 @@ def build_dataset_catalog_manifest(
                     }
                 )
             membership_id = f"membership:{row['source_id']}:{digest}"
+            if membership_id in memberships:
+                continue
+            memberships.add(membership_id)
             records.append(
                 {
                     "kind": "membership",
