@@ -79,8 +79,8 @@ def load_bulk_domain_connector_receipt(
         raise ValueError("bulk domain connector receipt schema is not admitted")
     if not isinstance(source_id, str) or not source_id or not isinstance(domain, str) or not domain:
         raise ValueError("bulk domain catalog source and domain identities are required")
-    if split != "train":
-        raise ValueError("this front unit admits train-role identities only")
+    if split not in {"train", "heldout"}:
+        raise ValueError("bulk domain split must be train or heldout")
     canonical_url = payload.get("canonical_url")
     license_text = payload.get("license")
     fetched_at = payload.get("fetched_at")
@@ -112,6 +112,8 @@ def load_bulk_domain_connector_receipt(
         raise ValueError("bulk domain connector license does not match the frozen authority")
     if source_selector != expected_source_selector:
         raise ValueError("bulk domain connector source selector does not match the frozen authority")
+    if f"-{split}-" not in source_id or f"-{split}-" not in source_selector:
+        raise ValueError("bulk domain source identity split does not match the declared split")
     custody_root = Path(dest_root)
     if not custody_root.is_absolute() or not custody_root.is_dir():
         raise ValueError("bulk domain connector custody root is unavailable")
@@ -150,7 +152,17 @@ def load_bulk_domain_connector_receipt(
             or _sha256(physical) != digest
         ):
             raise ValueError("bulk domain connector physical file identity has drifted")
-        normalized_files.append({"path": normalized.as_posix(), "bytes": byte_count, "sha256": digest})
+        media_type = (
+            "text/plain; charset=utf-8"
+            if normalized.as_posix().lower().endswith(".txt")
+            else "application/pdf"
+        )
+        normalized_files.append({
+            "path": normalized.as_posix(),
+            "bytes": byte_count,
+            "sha256": digest,
+            "media_type": media_type,
+        })
     if payload.get("total_bytes") != total_bytes:
         raise ValueError("bulk domain connector byte total does not match its files")
     derived_manifest_sha256 = hashlib.sha256(

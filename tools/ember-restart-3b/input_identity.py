@@ -274,8 +274,12 @@ def resolve_catalog_training_datasets(
     dataset_import_receipt_raw: bytes,
     consumer_import_receipt_raw: bytes,
     expected_dataset_id: str,
+    expected_split: str = "train",
 ) -> dict[str, Any]:
-    """Resolve the exact catalog-derived train dataset consumed by certified preflight."""
+    """Resolve one exact split-honest catalog dataset consumed by certified preflight."""
+
+    if expected_split not in {"train", "heldout"}:
+        raise InputIdentityError("catalog_dataset_substitution", "catalog dataset split is not admitted")
 
     catalog_export_sha256 = _sha256_bytes(catalog_export_raw)
     _verified_catalog_import_receipt(dataset_import_receipt_raw)
@@ -351,10 +355,10 @@ def resolve_catalog_training_datasets(
         and row.get("id") in membership_ids
     ]
     if len(memberships) != len(membership_ids) or not memberships or any(
-        row.get("split") != "train" or row.get("admission_state") != "admitted"
+        row.get("split") != expected_split or row.get("admission_state") != "admitted"
         for row in memberships
     ):
-        raise InputIdentityError("catalog_dataset_substitution", "catalog dataset is not exclusively admitted train data")
+        raise InputIdentityError("catalog_dataset_substitution", "catalog dataset does not match the exact admitted split")
     membership_object_edges = [
         edge
         for edge in edges
@@ -384,7 +388,48 @@ def resolve_catalog_training_datasets(
     ):
         raise InputIdentityError(
             "catalog_dataset_substitution",
-            "catalog train objects are absent or not available under their hashes",
+            "catalog objects are absent or not available under their hashes",
+        )
+    source_object_pairs = {
+        (edge["from_id"], edge["to_id"])
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "source_object"
+        and isinstance(edge.get("from_id"), str)
+        and edge["from_id"].startswith("source:")
+        and isinstance(edge.get("to_id"), str)
+    }
+    source_record_ids = set()
+    for edge in membership_object_edges:
+        object_digest = edge["to_id"].removeprefix("sha256:")
+        membership_id = edge["from_id"]
+        prefix = "membership:"
+        suffix = f":{object_digest}"
+        if not membership_id.startswith(prefix) or not membership_id.endswith(suffix):
+            raise InputIdentityError(
+                "catalog_dataset_substitution",
+                "catalog membership does not encode its exact source/object binding",
+            )
+        source_id = membership_id[len(prefix) : -len(suffix)]
+        source_record_id = f"source:{source_id}"
+        if (source_record_id, edge["to_id"]) not in source_object_pairs:
+            raise InputIdentityError(
+                "catalog_dataset_substitution",
+                "catalog dataset objects do not derive from exact source/object edges",
+            )
+        source_record_ids.add(source_record_id)
+    source_records = {
+        row["id"]
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "source"
+        and row.get("id") in source_record_ids
+        and row.get("license_verdict") == "accepted"
+    }
+    if source_records != source_record_ids:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog source/object edges do not resolve accepted sources",
         )
     evaluation_ids = {
         edge["to_id"]
@@ -410,7 +455,7 @@ def resolve_catalog_training_datasets(
             "catalog evaluation isolation lacks one immutable object",
         )
     if object_ids.intersection(evaluation_object_ids):
-        raise InputIdentityError("catalog_dataset_substitution", "train objects overlap the protected evaluation identity")
+        raise InputIdentityError("catalog_dataset_substitution", "catalog objects overlap the protected evaluation identity")
     dataset_receipt_id = f"sha256:{_sha256_bytes(dataset_import_receipt_raw)}"
     receipt_records = [
         row
@@ -439,7 +484,10 @@ def resolve_catalog_training_datasets(
         "dataset_manifest_sha256": dataset["manifest_sha256"],
         "catalog_export_sha256": catalog_export_sha256,
         "consumer_attempt_id": consumer_id,
-        "split": "train",
+        "split": expected_split,
+        "source_ids": sorted(
+            source_id.removeprefix("source:") for source_id in source_record_ids
+        ),
         "object_count": len(object_ids),
         "object_set_sha256": _sha256_bytes(json.dumps(sorted(object_ids), separators=(",", ":")).encode("utf-8")),
         "protected_eval_item_admission": False,

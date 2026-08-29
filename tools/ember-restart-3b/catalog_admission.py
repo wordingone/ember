@@ -72,7 +72,7 @@ def _sorted_manifest(
 def build_dataset_catalog_manifest(
     *, rows: list[dict[str, Any]], tokenizer_sha256: str, created_at_ms: int
 ) -> bytes:
-    """Build one admitted train dataset from content-addressed connector rows."""
+    """Build one admitted split-honest dataset from content-addressed connector rows."""
 
     tokenizer_sha256 = _require_sha(tokenizer_sha256, "tokenizer identity")
     if (
@@ -85,6 +85,12 @@ def build_dataset_catalog_manifest(
     ordered_rows = sorted(rows, key=lambda row: row["source_id"])
     if len({row["source_id"] for row in ordered_rows}) != len(ordered_rows):
         raise ValueError("catalog source identities must be unique")
+    splits = {row.get("split") for row in ordered_rows}
+    if len(splits) != 1 or next(iter(splits)) not in {"train", "heldout"}:
+        raise ValueError("catalog rows must contain one admitted split")
+    split = next(iter(splits))
+    if any(f"-{split}-" not in row["source_id"] for row in ordered_rows):
+        raise ValueError("catalog source identity split does not match the declared split")
     identity_rows = [
         {
             "source_id": row["source_id"],
@@ -94,19 +100,23 @@ def build_dataset_catalog_manifest(
             "supporting_receipt_sha256": row.get("supporting_receipt_sha256", []),
             "manifest_sha256": row["manifest_sha256"],
             "files": [
-                {"bytes": item["bytes"], "sha256": item["sha256"]}
+                {
+                    "bytes": item["bytes"],
+                    "sha256": item["sha256"],
+                    "media_type": item["media_type"],
+                }
                 for item in row["files"]
             ],
         }
         for row in ordered_rows
     ]
     dataset_manifest_sha256 = _sha256(_canonical(identity_rows))
-    dataset_id = f"dataset:issue1581-bulk-train:{dataset_manifest_sha256}"
+    dataset_id = f"dataset:issue1581-bulk-{split}:{dataset_manifest_sha256}"
     records: list[dict[str, Any]] = [
         {
             "kind": "dataset_version",
             "id": dataset_id,
-            "name": "issue1581-bulk-train-front",
+            "name": f"issue1581-bulk-{split}-front",
             "manifest_sha256": dataset_manifest_sha256,
             "created_at_ms": created_at_ms,
             "version_class": "genesis",
@@ -160,7 +170,7 @@ def build_dataset_catalog_manifest(
                         "id": f"sha256:{digest}",
                         "sha256": digest,
                         "byte_count": byte_count,
-                        "media_type": "application/pdf",
+                        "media_type": item["media_type"],
                         "locator": f"sha256/{digest[:2]}/{digest}",
                         "custody_state": "available",
                     }
@@ -172,7 +182,7 @@ def build_dataset_catalog_manifest(
                     "id": membership_id,
                     "domain": row["domain"],
                     "register": "L4",
-                    "split": "train",
+                    "split": split,
                     "tokenizer_sha256": tokenizer_sha256,
                     "shard_id": f"shard:sha256:{digest}",
                     "window_start": 0,
@@ -406,11 +416,49 @@ def revalidate_e_matrix_catalog_bindings(
     *, e_matrix_packet_raw: bytes, resolved_identity: dict[str, Any]
 ) -> dict[str, Any]:
     packet = json.loads(e_matrix_packet_raw)
+    if packet.get("schema_version") == "ember-issue1581-slot-e-matrix-definition-v1":
+        rows = packet.get("rows")
+        if (
+            set(packet) != {"schema_version", "rows"}
+            or not isinstance(rows, list)
+            or len(rows) != 1
+            or not isinstance(rows[0], dict)
+            or set(rows[0]) != {"row_id", "state"}
+            or rows[0].get("state") != "ABSENT"
+        ):
+            raise ValueError("slot E-MATRIX requires exactly one absent slot row")
+        source_ids = resolved_identity.get("source_ids")
+        if not isinstance(source_ids, list) or len(source_ids) != 1:
+            raise ValueError("catalog must derive exactly one slot from source/object edges")
+        expected_slot_id = source_ids[0]
+        if rows[0].get("row_id") != expected_slot_id:
+            raise ValueError("slot row does not match the catalog-derived slot identity")
+        return {
+            "schema_version": "ember-issue1581-slot-e-matrix-revalidation-v1",
+            "catalog_export_sha256": resolved_identity["catalog_export_sha256"],
+            "expected_slot_id": expected_slot_id,
+            "rows": [
+                {
+                    "row_id": expected_slot_id,
+                    "state": "PRESENT",
+                    "catalog_dataset_binding": "PRESENT",
+                    "catalog_dataset_id": resolved_identity["dataset_id"],
+                    "catalog_dataset_split": resolved_identity["split"],
+                    "protected": False,
+                    "protected_eval_admission_satisfied": False,
+                }
+            ],
+        }
     rows = []
     for original in packet.get("rows", []):
         row = dict(original)
-        row["catalog_train_dataset_binding"] = "PRESENT"
-        row["catalog_train_dataset_id"] = resolved_identity["dataset_id"]
+        split = resolved_identity["split"]
+        row["catalog_dataset_binding"] = "PRESENT"
+        row["catalog_dataset_id"] = resolved_identity["dataset_id"]
+        row["catalog_dataset_split"] = split
+        if split == "train":
+            row["catalog_train_dataset_binding"] = "PRESENT"
+            row["catalog_train_dataset_id"] = resolved_identity["dataset_id"]
         row["protected_eval_admission_satisfied"] = False
         rows.append(row)
     return {
@@ -556,6 +604,11 @@ def finalize_catalog_admission(
         dataset_import_receipt_raw=first_import_receipt_raw,
         consumer_import_receipt_raw=consumer_import_receipt_raw,
         expected_dataset_id=expected_dataset_id,
+        expected_split=(
+            "heldout"
+            if expected_dataset_id.startswith("dataset:issue1581-bulk-heldout:")
+            else "train"
+        ),
     )
     expected_revalidation = revalidate_e_matrix_catalog_bindings(
         e_matrix_packet_raw=e_matrix_packet_raw,
@@ -677,6 +730,11 @@ def main(argv: list[str] | None = None) -> int:
                 dataset_import_receipt_raw=_read(arguments.dataset_import_receipt),
                 consumer_import_receipt_raw=_read(arguments.consumer_import_receipt),
                 expected_dataset_id=arguments.dataset_id,
+                expected_split=(
+                    "heldout"
+                    if arguments.dataset_id.startswith("dataset:issue1581-bulk-heldout:")
+                    else "train"
+                ),
             )
             output = _canonical(
                 revalidate_e_matrix_catalog_bindings(
