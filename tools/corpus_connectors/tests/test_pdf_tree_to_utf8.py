@@ -228,6 +228,9 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
 
             self.assertEqual(receipt["result"], "VERIFIED")
             self.assertEqual(receipt["source"]["file_count"], 2)
+            self.assertEqual(receipt["extractor"]["extractor_semantics_version"], "v2")
+            self.assertTrue(all(row["extractor_semantics_version"] == "v2" for row in receipt["files"]))
+            self.assertTrue(all(row["sanitized_pages"] == [] for row in receipt["files"]))
             self.assertEqual(
                 [row["output_path"] for row in receipt["files"]],
                 ["documents/alpha/document.pdf.txt", "documents/beta/document.pdf.txt"],

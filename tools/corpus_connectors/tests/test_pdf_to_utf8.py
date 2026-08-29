@@ -9,6 +9,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 
 def _sha256(data: bytes) -> str:
@@ -77,6 +79,74 @@ class PdfToUtf8Tests(unittest.TestCase):
         module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
         self.assertEqual(module.normalize_extracted_text(" A \r\nCafe\u0301\r\n\r\n"), " A\nCaf\u00e9\n")
 
+    def test_v2_repairs_surrogate_pairs_and_escapes_only_isolated_units(self) -> None:
+        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        repaired, paired, escaped = module.repair_extracted_surrogates(
+            "pair=\ud83d\ude00 isolated=\ud800 literal=\\uD800"
+        )
+        self.assertEqual(repaired, "pair=\U0001f600 isolated=\\uD800 literal=\\uD800")
+        self.assertEqual(paired, 1)
+        self.assertEqual(escaped, 1)
+
+    def test_v2_sanitizer_removes_only_exact_invalid_pgf_prefixes(self) -> None:
+        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        sanitized, removed = module.sanitize_invalid_pgf_content(
+            b"  obj @pgfcolorspaces bad\nnot obj @pgfcolorspaces keep\npagesize width bad\n"
+        )
+        self.assertEqual(sanitized, b"not obj @pgfcolorspaces keep\n")
+        self.assertEqual(removed, 2)
+
+    def test_v2_sanitizer_is_refusal_gated_and_receipts_triggered_pages(self) -> None:
+        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+
+        class FakePage:
+            def __init__(self, *, refuses_once: bool) -> None:
+                self.refuses_once = refuses_once
+                self.calls = 0
+                self.mutations = 0
+                self.contents = SimpleNamespace(
+                    get_data=lambda: b"obj @pgfcolorspaces bad\nBT (fine) Tj ET\n"
+                )
+
+            def get_contents(self):
+                return self.contents
+
+            def extract_text(self):
+                self.calls += 1
+                if self.refuses_once and self.calls == 1:
+                    raise ValueError("invalid elementary object starting with b'@'")
+                return "Recovered" if self.refuses_once else "Already valid"
+
+            def raw_get(self, _name):
+                return self.contents
+
+            def __setitem__(self, _name, value):
+                self.mutations += 1
+                self.contents = value
+
+        for refuses_once, expected_text, expected_triggered, expected_mutations in (
+            (True, b"Recovered\n", True, 2),
+            (False, b"Already valid\n", False, 0),
+        ):
+            with self.subTest(refuses_once=refuses_once):
+                page = FakePage(refuses_once=refuses_once)
+                fake_pypdf = SimpleNamespace(
+                    PdfReader=lambda *_args, _page=page, **kwargs: SimpleNamespace(pages=[_page])
+                )
+                with mock.patch.object(module, "_load_pypdf", return_value=fake_pypdf):
+                    output, pages, decoded, audit = module._extract_pdf(
+                        Path("ignored.pdf"),
+                        max_pages=4,
+                        max_decoded_content_bytes=1_000_000,
+                        max_output_bytes=1_000_000,
+                    )
+                self.assertEqual(output, expected_text)
+                self.assertEqual(pages, 1)
+                self.assertGreater(decoded, 0)
+                self.assertEqual(bool(audit["sanitized_pages"]), expected_triggered)
+                self.assertEqual(page.mutations, expected_mutations)
+                self.assertEqual(audit["extractor_semantics_version"], "v2")
+
     def test_produce_and_independently_verify_real_pdf(self) -> None:
         module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
         with tempfile.TemporaryDirectory() as td:
@@ -96,6 +166,10 @@ class PdfToUtf8Tests(unittest.TestCase):
             self.assertEqual(receipt["source"]["pdf_sha256"], _sha256(pdf_path.read_bytes()))
             self.assertEqual(receipt["extractor"]["pypdf_version"], "6.16.1")
             self.assertEqual(receipt["extractor"]["python_major_minor"], "3.10")
+            self.assertEqual(receipt["extractor"]["extractor_semantics_version"], "v2")
+            self.assertIs(receipt["extractor"]["reader_strict"], False)
+            self.assertEqual(receipt["output"]["extractor_semantics_version"], "v2")
+            self.assertEqual(receipt["output"]["sanitized_pages"], [])
             self.assertTrue(pdf_path.is_file(), "the immutable source PDF must be preserved")
             self.assertEqual(
                 module.verify_pdf_text_receipt(
