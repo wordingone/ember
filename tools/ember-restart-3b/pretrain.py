@@ -29,6 +29,7 @@ from training_acceleration import (
     ScaledMmKernel,
     Stage2ActivationAuthority,
     disabled_fp8_installation_receipt,
+    fp8_installation_group_receipt,
     install_fp8_down_projections,
     iter_fp8_down_projections,
     refresh_fp8_after_optimizer_step,
@@ -260,6 +261,7 @@ class CensusBoundStage2Executor:
         diagnostic_bf16_down: bool = False,
         diagnostic_eager_workspace: bool = False,
         diagnostic_pre_optimizer_sync: bool = False,
+        fp8_installation_scope: str | None = None,
     ) -> None:
         if type(diagnostic_bf16_down) is not bool or type(diagnostic_eager_workspace) is not bool:
             raise ValueError("Stage-2 diagnostic flags must be boolean")
@@ -284,7 +286,10 @@ class CensusBoundStage2Executor:
             disabled_fp8_installation_receipt()
             if diagnostic_bf16_down or diagnostic_eager_workspace
             else install_fp8_down_projections(
-                model, kernel=fp8_kernel, allow_test_device=allow_test_device,
+                model,
+                kernel=fp8_kernel,
+                allow_test_device=allow_test_device,
+                installation_scope=fp8_installation_scope,
             )
         )
         self.graph_pool = (
@@ -767,7 +772,7 @@ class CensusBoundStage2Executor:
             if self.graph_pool is None else self.graph_pool.receipt()
         )
         kernels = [site.kernel_receipt() for site in iter_fp8_down_projections(self.model)]
-        return {
+        receipt = {
             "schema_version": "ember-stage2-runtime-receipt-v1",
             "census_raw_sha256": self.authority.census_raw_sha256,
             "census_self_sha256": self.authority.census_self_sha256,
@@ -800,6 +805,11 @@ class CensusBoundStage2Executor:
             "kernel_receipts": kernels,
             "graph_receipt": graph,
         }
+        if "newly_installed_sites" in self.installation_receipt:
+            receipt["fp8_site_groups"] = fp8_installation_group_receipt(
+                self.model, self.installation_receipt,
+            )
+        return receipt
 
 
 def _verified_capabilities(record: Mapping[str, object], *, active_expert: str) -> set[str]:
