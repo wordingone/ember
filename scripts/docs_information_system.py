@@ -18,9 +18,23 @@ from typing import Any
 METADATA_PATH = Path("manifests/documentation/current-documents-v1.json")
 CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
 COMMANDS_PATH = Path("manifests/documentation/public-commands-v1.json")
-QUESTION_DESTINATIONS_PATH = Path("manifests/documentation/reader-question-destinations-v1.json")
+QUESTION_DESTINATIONS_PATH = Path("manifests/documentation/reader-question-destinations-v2.json")
 REFERENCE_DISPOSITIONS_PATH = Path("manifests/documentation/reference-dispositions-v1.json")
-READER_INSTRUMENT_PATH = Path("manifests/documentation/reader-study-instrument-v1.json")
+READER_INSTRUMENT_PATH = Path("manifests/documentation/reader-study-instrument-v2.json")
+READER_INSTRUMENT_V1_PATH = Path("manifests/documentation/reader-study-instrument-v1.json")
+READER_INSTRUMENT_SHA256 = "ccca620e2b8d5759f8aa89c7862baa0a25d7cac89f725ea45639c67ece3ab91e"
+PREDECESSOR_READER_ID_SHA256S = {
+    "c66bd342cb4e5e1432c2eb601d2f2ce784aff6da5b15f14e10e3c0e0f4facfd7",
+    "58e1156648c53a55ce490437ee7a1cec562ad37b8cf3bf343faa2db81ab840d4",
+}
+READER_INSTRUMENT_FIELDS = {
+    "questions",
+    "eligibility",
+    "sample_rule",
+    "rubric",
+    "threshold",
+    "freeze_rule",
+}
 DOMAIN_AUTHORITY_PATH = Path("manifests/architecture/domain-authority-v1.json")
 INDEX_PATH = Path("docs/INDEX.md")
 CONSERVATION_MARKER = "<!-- EMBER_CONSERVATION_V1"
@@ -68,6 +82,10 @@ class DocsInfoError(ValueError):
 
 def canonical_json(value: Any) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def canonical_compact(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -343,7 +361,7 @@ def validate_public_command_docs(root: Path, rows: list[dict[str, Any]]) -> None
 def validate_question_destinations(
     root: Path, mapping: dict[str, Any], rows: list[dict[str, Any]], instrument: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    if mapping.get("schema_version") != "ember-reader-question-destinations-v1":
+    if mapping.get("schema_version") != "ember-reader-question-destinations-v2":
         raise DocsInfoError("QUESTION_DESTINATION_SCHEMA_INVALID")
     if mapping.get("instrument_sha256") != instrument.get("instrument_sha256"):
         raise DocsInfoError("QUESTION_DESTINATION_INSTRUMENT_MISMATCH")
@@ -399,6 +417,53 @@ def validate_question_destinations(
                     f"READER_PUBLIC_SOURCE_UNRESOLVED:{question.get('question_id')}:{source}"
                 )
     return routes
+
+
+def validate_reader_instrument(root: Path, instrument: dict[str, Any]) -> None:
+    if set(instrument) != {
+        "authority",
+        "claim_boundary",
+        "eligibility",
+        "freeze_rule",
+        "instrument_sha256",
+        "questions",
+        "result",
+        "rubric",
+        "sample_rule",
+        "schema_version",
+        "self_sha256",
+        "threshold",
+    } or instrument.get("schema_version") != "ember-issue1951-reader-instrument-v2":
+        raise DocsInfoError("READER_INSTRUMENT_V2_SCHEMA_INVALID")
+    contract = {key: instrument[key] for key in READER_INSTRUMENT_FIELDS}
+    if instrument.get("instrument_sha256") != READER_INSTRUMENT_SHA256 or sha256_bytes(
+        canonical_compact(contract)
+    ) != READER_INSTRUMENT_SHA256:
+        raise DocsInfoError("READER_INSTRUMENT_V2_HASH_INVALID")
+    unsigned = dict(instrument)
+    claimed_self = unsigned.pop("self_sha256", None)
+    if claimed_self != sha256_bytes(canonical_compact(unsigned)):
+        raise DocsInfoError("READER_INSTRUMENT_V2_SELF_HASH_INVALID")
+    predecessor = load_json(root / READER_INSTRUMENT_V1_PATH)
+    expected_contract = {key: predecessor[key] for key in READER_INSTRUMENT_FIELDS}
+    expected_questions = json.loads(json.dumps(expected_contract["questions"]))
+    q3 = next(row for row in expected_questions if row.get("question_id") == "Q3")
+    q3["question"] = (
+        "State Ember's certified current model/training status, then state the full EMBER-02 "
+        "target including approximate parameter range, modalities, reasoning, and structured-tool role."
+    )
+    expected_contract["questions"] = expected_questions
+    if contract != expected_contract:
+        raise DocsInfoError("READER_INSTRUMENT_V2_SEMANTIC_DRIFT")
+    authority = instrument.get("authority")
+    if (
+        not isinstance(authority, dict)
+        or authority.get("predecessor_instrument_sha256")
+        != "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b"
+        or set(authority.get("excluded_predecessor_reader_id_sha256s", []))
+        != PREDECESSOR_READER_ID_SHA256S
+    ):
+        raise DocsInfoError("READER_INSTRUMENT_V2_PREDECESSOR_BINDING_INVALID")
 
 
 def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[dict[str, Any]]:
@@ -498,9 +563,9 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
 
 
 def score_reader_study(study: dict[str, Any]) -> dict[str, Any]:
-    if study.get("schema_version") != "ember-doc-reader-study-v1":
+    if study.get("schema_version") != "ember-doc-reader-study-v2":
         raise DocsInfoError("READER_STUDY_SCHEMA_INVALID")
-    if study.get("instrument_sha256") != "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b":
+    if study.get("instrument_sha256") != READER_INSTRUMENT_SHA256:
         raise DocsInfoError("READER_STUDY_INSTRUMENT_INVALID")
     questions = study.get("questions")
     readers = study.get("readers")
@@ -513,6 +578,10 @@ def score_reader_study(study: dict[str, Any]) -> dict[str, Any]:
     elapsed: dict[str, int] = {}
     for reader in readers:
         reader_id = reader.get("reader_id")
+        if not isinstance(reader_id, str) or not reader_id:
+            raise DocsInfoError("READER_ELIGIBILITY_INVALID")
+        if sha256_bytes(reader_id.encode("utf-8")) in PREDECESSOR_READER_ID_SHA256S:
+            raise DocsInfoError("READER_ID_REUSE_REFUSED")
         if not reader.get("eligible") or reader.get("authored_prose") or reader_id in reader_ids:
             raise DocsInfoError("READER_ELIGIBILITY_INVALID")
         reader_ids.add(reader_id)
@@ -527,7 +596,7 @@ def score_reader_study(study: dict[str, Any]) -> dict[str, Any]:
             correct += 1
         elapsed[str(reader_id)] = int(reader.get("elapsed_seconds", 0))
     return {
-        "schema_version": "ember-doc-reader-study-receipt-v1",
+        "schema_version": "ember-doc-reader-study-receipt-v2",
         "result": "PASS",
         "reader_count": 2,
         "question_count": 8,
@@ -556,6 +625,7 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
     references = validate_references(root, rows, retired)
     commands = validate_commands_manifest(commands_value)
     validate_public_command_docs(root, commands)
+    validate_reader_instrument(root, reader_instrument)
     destinations = validate_question_destinations(root, question_destinations, rows, reader_instrument)
     dispositions = validate_reference_dispositions(root, reference_dispositions)
     expected_index = render_index(metadata)
