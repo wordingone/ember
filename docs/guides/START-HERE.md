@@ -5,6 +5,33 @@ foundation-intelligence project, not only a model, trainer, service, or command-
 the [system overview](../architecture/system-overview.md) before interpreting a subsystem as the
 whole project.
 
+## First-reader facts
+
+- Ember is the complete clean-genesis sovereign foundation-intelligence project: the local
+  foundation-model creation primitive, continuously improving organism, `ember-cli` operator body,
+  and general local AI laboratory.
+- It addresses creating and operating owned local foundation intelligence on one consumer GPU.
+  Claims require verified public experience and receipts; borrowed learned or evaluative signals
+  are excluded from the target lineage.
+- `EMBER-01` is certified but grants no model-training or capability credit. `EMBER-02` is active,
+  and no current checkpoint is an admitted Ember model. The target is an approximately 30–35B
+  sparse unified text-image-audio decoder with native reasoning and structured-tool use.
+- The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
+  Lab integrates experiments across declared interfaces and does not replace domain authority.
+- Inspection starts at the root `README.md` and this canonical start page. On Windows, `Ember.cmd`
+  is the operator entry. Python uses `manifests/python-environment-v1.json`; Rust uses
+  `runtime/ember-lab/Cargo.toml`; `ember-cli` uses `tools/ember-cli/src/package.json`.
+- The smallest safe executable check is CPU-only authority verification from the repository root:
+  `python scripts/verify_authority_conservation.py --root .`. Success reports authority
+  conservation; it requires no credentials, weights, or GPU and grants no model capability.
+- Exact mutable current truth lives only in
+  [`docs/authority/CONTINUITY.md`](../authority/CONTINUITY.md); entry documentation links rather
+  than copying it. Public roadmap certificates, not prose or progress bars, carry completion.
+- Contribution and independent reproduction start at
+  [`docs/contributing.md`](../contributing.md) and the public
+  [reproducibility charter](../charter/REPRODUCIBILITY.md): bind an exact public source, replay
+  documented commands, and verify source identities and receipts without hidden or local evidence.
+
 ## Inspect the repository
 
 Begin at the root README, then use the [documentation map](../DOCS-README.md). The canonical mutable
