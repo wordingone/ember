@@ -1,0 +1,68 @@
+{
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "schema_version": "ember-issue1969-w1-launch-spec-v1",
+  "issue": 1969,
+  "campaign_parent": 1945,
+  "claim_boundary": "ONE_RENDERED_MLP_ROUTING_SHARED_FFN_WAVE_ONLY_NO_20K_OR_CAMPAIGN_COMPLETION",
+  "treatment": {
+    "owner_id": "mlp_routing",
+    "call_site": "model.shared_ffn",
+    "control": "SwiGLUExpert.forward_fused is process-locally rebound to SwiGLUExpert.forward",
+    "treatment": "merged compiled full-graph fused-equivalent shared-only path",
+    "treatment_id": "5fb3065b7cfa44355db3a897f63b78f0f85d8b55d7455b9ed19b56ae99887dd0"
+  },
+  "source": {
+    "merged_source_commit": "316a3045c1e4c280d4ecdbc44571d46b2ef751a7",
+    "implementation_head": "b7391828b6a6abe635c7ff55d2f5dc5572bf96ab",
+    "control_model_blob": "347f53dbf866bd5492556eb834064931583614c3",
+    "treatment_model_blob": "2c0c60d2bc8a8b5d62b6380422679ecffb7971fc",
+    "pretrain_blob": "003aa3b8191732314408f8188d9e2617edd7673a",
+    "training_acceleration_blob": "c9d2ff0dc9547e202ac2067c97adae490a0b534d"
+  },
+  "runner": {
+    "path": "tools/ember-restart-3b/packed_specialist_run.py",
+    "control_mode": "issue1946-arm-a",
+    "treatment_mode": "issue1946-arm-a",
+    "recompute_policy": "WHOLE_LAYER_RECOMPUTE",
+    "fresh_process_per_arm": true,
+    "order": ["control", "treatment"],
+    "dispatch_proof": {
+      "control_forward_fused_is_forward": true,
+      "control_fused_path_invocations": 0,
+      "treatment_fused_path_invocations_min": 1
+    }
+  },
+  "retention_rule": {
+    "minimum_relative_improvement": 0.01,
+    "mad_multiplier": 3.0,
+    "mad_consistency_constant": 1.4826,
+    "matched_loss_relative_tolerance_exclusive": 0.01
+  },
+  "resource_envelope": {
+    "wall_seconds_max": 1800,
+    "additional_process_commit_bytes_max": 25769803776,
+    "c_drive_writes_bytes_max": 0,
+    "b_drive_writes_bytes_max": 268435456,
+    "peak_reserved_vram_bytes_max": 23622320128,
+    "gpu": "RTX 4090"
+  },
+  "required_preflight_gates": [
+    "protected_eval",
+    "recovery",
+    "rollback",
+    "eager_fused_output_gradient_equivalence",
+    "resource_go"
+  ],
+  "predecessor_receipts": {
+    "issue1946_comparison_raw_sha256": "97d581146de6f0a6755f86decaaa26e5248c89183046a9179ad69f746e1f29f6",
+    "issue1946_comparison_self_sha256": "633a6fd6a897f6db592ae4cff1ebb448bfc96d34245c61e73f9fe06ad351ab83",
+    "t0_raw_sha256": "9a9d4af533e02eb0efcdaed750440b261ebad50a1f9e18a9bf2fb708036da0c7",
+    "t0_self_sha256": "d3bd8be43dd95259de004874eb8f4b399bbd25a901323d22b60add213b1a4461",
+    "t1_raw_sha256": "f3a9674b9913d9e28d0266450a696c7f31491c9d3c8bfe82b38cca85f30e9a19",
+    "t1_self_sha256": "d1323d128c3c92180596682de1e07fb61df7a5651ae78d87c5a1550f920c1d5c"
+  },
+  "terminal_receipt_schema": "c1-wave-rendered-owner-v1",
+  "retry_or_tuning_authorized": false
+}
