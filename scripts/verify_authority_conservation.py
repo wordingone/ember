@@ -156,12 +156,23 @@ AUTHORITY_DOCUMENT_NAMES = (
     "STATE.md",
 )
 AUTHORITY_DIRECTORY = PurePosixPath("docs/authority")
+AUTHORITY_DOMAIN_DIRECTORY = PurePosixPath("docs/domains/governance/authority")
 
 
 def authority_canonical_relative_path(name: str) -> PurePosixPath:
-    if name == "GOAL.md":
-        return PurePosixPath("docs/domains/governance/authority/GOAL.md")
+    if name in {"GOAL.md", "STATE.md"}:
+        return AUTHORITY_DOMAIN_DIRECTORY / name
     return AUTHORITY_DIRECTORY / name
+
+
+def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
+    old_rel = PurePosixPath(name)
+    canonical_rel = authority_canonical_relative_path(name)
+    if name == "STATE.md":
+        return (old_rel, AUTHORITY_DIRECTORY / name, canonical_rel)
+    return (old_rel, canonical_rel)
+
+
 FORBIDDEN_MODEL_SIGNALS = [
     "weights",
     "outputs",
@@ -298,11 +309,10 @@ def sha256(path: Path) -> str:
 def authority_relative_path(root: Path, name: str) -> str:
     if name not in AUTHORITY_DOCUMENT_NAMES:
         raise ValueError(f"unknown authority document: {name}")
-    old_rel = PurePosixPath(name)
-    new_rel = authority_canonical_relative_path(name)
+    candidates = authority_candidate_relative_paths(name)
     present = [
         rel.as_posix()
-        for rel in (old_rel, new_rel)
+        for rel in candidates
         if (root / rel).exists() or (root / rel).is_symlink()
     ]
     if len(present) > 1:
@@ -311,8 +321,8 @@ def authority_relative_path(root: Path, name: str) -> str:
         )
     if not present:
         raise ValueError(
-            f"canonical authority document {name} is absent from both "
-            f"{old_rel.as_posix()} and {new_rel.as_posix()}"
+            f"canonical authority document {name} is absent from "
+            + ", ".join(rel.as_posix() for rel in candidates)
         )
     selected = root / present[0]
     if not selected.is_file() or selected.is_symlink():
@@ -327,9 +337,13 @@ def authority_path(root: Path, name: str) -> Path:
 
 
 def canonical_authority_reference(root: Path, name: str) -> str:
-    new_rel = authority_canonical_relative_path(name).as_posix()
-    if (root / new_rel).is_file() and not (root / name).is_file():
-        return new_rel
+    canonical_rel = authority_canonical_relative_path(name).as_posix()
+    if (root / canonical_rel).is_file() and not (root / name).is_file():
+        return canonical_rel
+    if name == "STATE.md":
+        docs_rel = (AUTHORITY_DIRECTORY / name).as_posix()
+        if (root / docs_rel).is_file() and not (root / name).is_file():
+            return docs_rel
     return name
 
 
@@ -1788,7 +1802,7 @@ def check_state(root: Path, errors: list[dict[str, Any]]) -> None:
         return
     pointer_lines = [line.strip() for line in read_text(pointer_path).splitlines() if line.strip()]
     if len(pointer_lines) != 1 or "CONTINUITY.md" not in pointer_lines[0]:
-        errors.append(finding(6, "state.pointer_invalid", "docs/authority/STATE.md must be a one-line docs/authority/CONTINUITY.md pointer"))
+        errors.append(finding(6, "state.pointer_invalid", f"{authority_relative_path(root, 'STATE.md')} must be a one-line docs/authority/CONTINUITY.md pointer"))
     rows = parse_markdown_table(read_text(path), 9)
     if not rows:
         errors.append(finding(6, "state.identity_rows_missing", "no 9-column identity rows in docs/authority/CONTINUITY.md"))
@@ -2552,7 +2566,8 @@ def check_changed_artifact_bindings(
         ("GOVERNANCE.md", "docs/authority/GOVERNANCE.md"),
         ("INVARIANT.md", "docs/authority/INVARIANT.md"),
         ("REDACTIONS.md", "docs/authority/REDACTIONS.md"),
-        ("STATE.md", "docs/authority/STATE.md"),
+        ("STATE.md", "docs/domains/governance/authority/STATE.md"),
+        ("docs/authority/STATE.md", "docs/domains/governance/authority/STATE.md"),
         ("GOAL.md", "docs/domains/governance/authority/GOAL.md"),
     )
 

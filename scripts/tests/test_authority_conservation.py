@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 import json
 import re
 import shutil
@@ -21,6 +22,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VERIFIER = REPO_ROOT / "scripts" / "verify_authority_conservation.py"
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
+
+
+def load_verifier_module():
+    spec = importlib.util.spec_from_file_location("authority_verifier_under_test", VERIFIER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 GOVERNING_SURFACES = [
     "docs/contracts/goal-clear-protocol.md",
@@ -653,6 +662,41 @@ def migrate_authority_fixture(root: Path) -> None:
     hashes["docs/authority/ember-authority-matrix.md"] = matrix_digest.upper()
     policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest.upper()
     goal_path.write_text(render_goal(policy), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected"),
+    (
+        ("docs/authority/STATE.md", "docs/authority/STATE.md"),
+        (
+            "docs/domains/governance/authority/STATE.md",
+            "docs/domains/governance/authority/STATE.md",
+        ),
+    ),
+)
+def test_state_transition_path_accepts_one_candidate(
+    tmp_path: Path, relative_path: str, expected: str
+) -> None:
+    verifier = load_verifier_module()
+    path = tmp_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[CONTINUITY.md](CONTINUITY.md)\n", encoding="utf-8")
+
+    assert verifier.authority_relative_path(tmp_path, "STATE.md") == expected
+
+
+def test_state_transition_path_rejects_two_candidates(tmp_path: Path) -> None:
+    verifier = load_verifier_module()
+    for relative_path in (
+        "docs/authority/STATE.md",
+        "docs/domains/governance/authority/STATE.md",
+    ):
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[CONTINUITY.md](CONTINUITY.md)\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate canonical authority document STATE.md"):
+        verifier.authority_relative_path(tmp_path, "STATE.md")
 
 
 def test_migrated_authority_fixture_passes(tmp_path: Path) -> None:
