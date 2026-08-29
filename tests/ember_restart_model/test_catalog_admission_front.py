@@ -691,6 +691,49 @@ def test_bulk_connector_projection_reopens_files_and_refuses_authority_drift(
         )
 
 
+def test_bulk_connector_uses_catalog_source_id_for_split_authority(
+    tmp_path: Path,
+) -> None:
+    proofnet_selector = (
+        "zhangir-azerbayev/ProofNet@"
+        "509ad79710ed4f46ff5c282ed5640c1aa9ac3f30#partition-0-of-1"
+    )
+    connector_path, connector_sha = write_connector(
+        tmp_path,
+        source=proofnet_selector,
+        domain="mathematics",
+        files=[("proof.jsonl", b"owned proof row")],
+    )
+    common = {
+        "receipt_path": connector_path,
+        "expected_receipt_sha256": connector_sha,
+        "source_id": "candidate-mathematics-train-0",
+        "expected_source_selector": proofnet_selector,
+        "expected_license_text_sha256": sha256(b"CC-BY-4.0"),
+        "domain": "mathematics",
+        "split": "train",
+    }
+
+    row = load_bulk_domain_connector_receipt(**common)
+    assert row["source_id"] == "candidate-mathematics-train-0"
+    assert row["split"] == "train"
+
+    with pytest.raises(ValueError, match="source identity split"):
+        load_bulk_domain_connector_receipt(
+            **{**common, "source_id": "candidate-mathematics-heldout-0"}
+        )
+    with pytest.raises(ValueError, match="source selector"):
+        load_bulk_domain_connector_receipt(
+            **{**common, "expected_source_selector": "caller-substitution"}
+        )
+
+    payload = json.loads(connector_path.read_bytes())
+    payload["fetched_at"] = "2026-08-29T00:00:00Z"
+    connector_path.write_bytes(canonical(payload))
+    with pytest.raises(ValueError, match="frozen identity"):
+        load_bulk_domain_connector_receipt(**common)
+
+
 def test_projection_spec_is_closed_path_free_and_outputs_refuse_overwrite(
     tmp_path: Path,
 ) -> None:
