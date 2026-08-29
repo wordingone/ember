@@ -1,0 +1,21 @@
+{
+  "schema_version": "ember-public-command-replay-v1",
+  "filing_time_census": {
+    "command_rows": 276,
+    "raw_sha256": "373b3f52b0ff86959355fd26f13f43b756349238d646bb30b53de321ced98c87",
+    "self_sha256": "5e9426482589dce40df5ace38f152cbda6f327986100613560f80efecc29514c"
+  },
+  "governed_subset": {
+    "authority_url": "https://github.com/wordingone/ember/issues/1951#issuecomment-5447167077",
+    "authority_artifact_sha256": "c2eee97ca0ea1f24ef80f5a0a128ac48b88a0632c5a9b774f735648eb8c4fe54",
+    "authority_artifact_lines": [242, 249],
+    "selection": "FOUR_FINAL_PUBLIC_ENTRY_COMMANDS",
+    "disposition_of_other_272_rows": "Outside the retained PROGRAM final public entry-command subset; historical and deeper reference commands remain classified by their documents and earn no replay claim."
+  },
+  "commands": [
+    {"id":"bootstrap-python","argv":["python","tools/ember-restart-3b/python_environment.py","install","--receipt","state\\receipts\\python-environment-install-v1.json"],"cwd":".","requirements":{"cpu":true,"gpu":false,"network":true,"weights":false,"data":false,"credentials":false,"platform":"Windows"},"expected":{"returncode":0,"meaning":"measured direct Python environment installed with a no-overwrite receipt"}},
+    {"id":"verify-authority","argv":["python","scripts/verify_authority_conservation.py","--root","."],"cwd":".","requirements":{"cpu":true,"gpu":false,"network":false,"weights":false,"data":false,"credentials":false,"platform":"cross-platform Python"},"expected":{"returncode":0,"meaning":"authority conservation certificate passes"}},
+    {"id":"receipt-selftest","argv":["python","scripts/receipt_check.py","--selftest"],"cwd":".","requirements":{"cpu":true,"gpu":false,"network":false,"weights":false,"data":false,"credentials":false,"platform":"cross-platform Python"},"expected":{"returncode":0,"meaning":"receipt checker selftest sentinel emitted"}},
+    {"id":"verify-documentation","argv":["python","scripts/docs_information_system.py","check","--root","."],"cwd":".","requirements":{"cpu":true,"gpu":false,"network":false,"weights":false,"data":false,"credentials":false,"platform":"cross-platform Python"},"expected":{"returncode":0,"meaning":"documentation receipt result PASS"}}
+  ]
+}
