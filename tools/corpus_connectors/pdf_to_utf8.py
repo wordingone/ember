@@ -28,7 +28,21 @@ RECEIPT_NAME = "pdf-text-extraction-receipt.json"
 DEFAULT_MAX_PAGES = 4096
 DEFAULT_MAX_DECODED_CONTENT_BYTES = 512 * 1024 * 1024
 DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024 * 1024
+EXTRACTOR_SEMANTICS_VERSION = "v2"
 _HEX = re.compile(r"^[0-9a-f]{64}$")
+_PGF_INVALID_PREFIXES = (
+    b"obj @pgfcolorspaces ",
+    b"put @resources << /ColorSpace @pgfcolorspaces >>",
+    b"put @pgfcolorspaces <<  /pgfprgb [/Pattern /DeviceRGB]  >>",
+    b"pagesize width ",
+)
+_AUDIT_KEYS = {
+    "extractor_semantics_version",
+    "sanitized_pages",
+    "pgf_removed_line_count",
+    "surrogate_pair_count",
+    "escaped_surrogate_count",
+}
 
 
 class PdfExtractionRefusal(ValueError):
@@ -76,6 +90,83 @@ def normalize_extracted_text(text: str) -> str:
     normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
     normalized = "\n".join(line.rstrip() for line in normalized.split("\n"))
     return normalized.strip("\n") + "\n"
+
+
+def sanitize_invalid_pgf_content(raw: bytes) -> tuple[bytes, int]:
+    """Remove only the four frozen invalid PGF preamble line prefixes."""
+    lines = raw.splitlines(keepends=True)
+    kept = [line for line in lines if not line.strip().startswith(_PGF_INVALID_PREFIXES)]
+    return b"".join(kept), len(lines) - len(kept)
+
+
+def repair_extracted_surrogates(text: str) -> tuple[str, int, int]:
+    """Combine valid UTF-16 pairs and visibly escape only isolated units."""
+    output: list[str] = []
+    paired = escaped = 0
+    index = 0
+    while index < len(text):
+        codepoint = ord(text[index])
+        if 0xD800 <= codepoint <= 0xDBFF and index + 1 < len(text):
+            low = ord(text[index + 1])
+            if 0xDC00 <= low <= 0xDFFF:
+                output.append(chr(0x10000 + ((codepoint - 0xD800) << 10) + low - 0xDC00))
+                paired += 1
+                index += 2
+                continue
+        if 0xD800 <= codepoint <= 0xDFFF:
+            output.append(f"\\u{codepoint:04X}")
+            escaped += 1
+        else:
+            output.append(text[index])
+        index += 1
+    return "".join(output), paired, escaped
+
+
+def validate_extraction_audit(audit: dict[str, Any], *, page_count: int) -> None:
+    if not isinstance(audit, dict) or set(audit) != _AUDIT_KEYS:
+        raise PdfExtractionRefusal("PDF extraction v2 audit schema is not closed")
+    if audit.get("extractor_semantics_version") != EXTRACTOR_SEMANTICS_VERSION:
+        raise PdfExtractionRefusal("PDF extraction semantics identity changed")
+    for key in ("pgf_removed_line_count", "surrogate_pair_count", "escaped_surrogate_count"):
+        value = audit.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise PdfExtractionRefusal("PDF extraction v2 audit count is invalid")
+    pages = audit.get("sanitized_pages")
+    if not isinstance(pages, list):
+        raise PdfExtractionRefusal("PDF extraction sanitizer audit is invalid")
+    indexes: list[int] = []
+    removed_total = 0
+    for row in pages:
+        if not isinstance(row, dict) or set(row) != {
+            "page_index",
+            "removed_line_count",
+            "pre_sha256",
+            "post_sha256",
+        }:
+            raise PdfExtractionRefusal("PDF extraction sanitizer page audit is not closed")
+        index = row.get("page_index")
+        removed = row.get("removed_line_count")
+        pre = row.get("pre_sha256")
+        post = row.get("post_sha256")
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or index < 0
+            or index >= page_count
+            or not isinstance(removed, int)
+            or isinstance(removed, bool)
+            or removed <= 0
+            or not isinstance(pre, str)
+            or _HEX.fullmatch(pre) is None
+            or not isinstance(post, str)
+            or _HEX.fullmatch(post) is None
+            or pre == post
+        ):
+            raise PdfExtractionRefusal("PDF extraction sanitizer page audit is invalid")
+        indexes.append(index)
+        removed_total += removed
+    if indexes != sorted(set(indexes)) or audit.get("pgf_removed_line_count") != removed_total:
+        raise PdfExtractionRefusal("PDF extraction sanitizer totals do not rederive")
 
 
 def require_runtime_contract(*, python_major_minor: str, pypdf_version: str) -> None:
@@ -182,7 +273,7 @@ def _extract_pdf(
     max_pages: int,
     max_decoded_content_bytes: int,
     max_output_bytes: int,
-) -> tuple[bytes, int, int]:
+) -> tuple[bytes, int, int, dict[str, Any]]:
     for label, value in (
         ("max_pages", max_pages),
         ("max_decoded_content_bytes", max_decoded_content_bytes),
@@ -192,7 +283,7 @@ def _extract_pdf(
             raise PdfExtractionRefusal(f"{label} must be a positive integer")
     pypdf = _load_pypdf()
     try:
-        reader = pypdf.PdfReader(str(pdf_path), strict=True)
+        reader = pypdf.PdfReader(str(pdf_path), strict=False)
     except Exception as error:
         raise PdfExtractionRefusal("source PDF could not be parsed by the pinned extractor") from error
     page_count = len(reader.pages)
@@ -200,7 +291,8 @@ def _extract_pdf(
         raise PdfExtractionRefusal("source PDF page count exceeds the closed bound")
     decoded_total = 0
     page_text: list[str] = []
-    for page in reader.pages:
+    sanitized_pages: list[dict[str, Any]] = []
+    for page_index, page in enumerate(reader.pages):
         try:
             contents = page.get_contents()
             decoded = b"" if contents is None else contents.get_data()
@@ -211,14 +303,51 @@ def _extract_pdf(
             raise PdfExtractionRefusal("source PDF decoded content exceeds the closed bound")
         try:
             page_text.append(page.extract_text() or "")
-        except Exception as error:
-            raise PdfExtractionRefusal("source PDF text extraction failed without fallback") from error
-    output = normalize_extracted_text("\n".join(page_text)).encode("utf-8")
+        except Exception as initial_error:
+            sanitized, removed_lines = sanitize_invalid_pgf_content(decoded)
+            if removed_lines == 0:
+                raise PdfExtractionRefusal("source PDF text extraction failed without fallback") from initial_error
+            original = None
+            contents_name = None
+            try:
+                from pypdf.generic import DecodedStreamObject, NameObject
+
+                contents_name = NameObject("/Contents")
+                original = page.raw_get(contents_name)
+                replacement = DecodedStreamObject()
+                replacement.set_data(sanitized)
+                page[contents_name] = replacement
+                page_text.append(page.extract_text() or "")
+            except Exception as sanitized_error:
+                raise PdfExtractionRefusal(
+                    "source PDF text extraction failed after exact-prefix PGF repair"
+                ) from sanitized_error
+            finally:
+                if original is not None and contents_name is not None:
+                    page[contents_name] = original
+            sanitized_pages.append({
+                "page_index": page_index,
+                "removed_line_count": removed_lines,
+                "pre_sha256": _sha256(decoded),
+                "post_sha256": _sha256(sanitized),
+            })
+    repaired_text, surrogate_pair_count, escaped_surrogate_count = repair_extracted_surrogates(
+        "\n".join(page_text)
+    )
+    output = normalize_extracted_text(repaired_text).encode("utf-8")
     if not output.strip():
         raise PdfExtractionRefusal("source PDF extraction produced empty text")
     if len(output) > max_output_bytes:
         raise PdfExtractionRefusal("extracted output byte count exceeds the closed bound")
-    return output, page_count, decoded_total
+    audit = {
+        "extractor_semantics_version": EXTRACTOR_SEMANTICS_VERSION,
+        "sanitized_pages": sanitized_pages,
+        "pgf_removed_line_count": sum(row["removed_line_count"] for row in sanitized_pages),
+        "surrogate_pair_count": surrogate_pair_count,
+        "escaped_surrogate_count": escaped_surrogate_count,
+    }
+    validate_extraction_audit(audit, page_count=page_count)
+    return output, page_count, decoded_total, audit
 
 
 def _producer_sha256() -> str:
@@ -264,7 +393,7 @@ def produce_pdf_text_receipt(
     if _is_reparse_or_symlink(parent) or not parent.is_dir():
         raise PdfExtractionRefusal("output parent must be a regular non-reparse directory")
     source, pdf_path, entry = _source_pdf(Path(connector_receipt), connector_receipt_sha256)
-    output_bytes, pages, decoded_content_bytes = _extract_pdf(
+    output_bytes, pages, decoded_content_bytes, audit = _extract_pdf(
         pdf_path,
         max_pages=max_pages,
         max_decoded_content_bytes=max_decoded_content_bytes,
@@ -273,6 +402,8 @@ def produce_pdf_text_receipt(
     pypdf = _load_pypdf()
     extractor = {
         "normalization": NORMALIZATION,
+        "extractor_semantics_version": EXTRACTOR_SEMANTICS_VERSION,
+        "reader_strict": False,
         "producer_sha256": _producer_sha256(),
         "pypdf_version": PYPDF_VERSION,
         "pypdf_package_tree_sha256": _package_tree_sha256(pypdf),
@@ -306,6 +437,7 @@ def produce_pdf_text_receipt(
             "sha256": _sha256(output_bytes),
             "pages": pages,
             "decoded_content_bytes": decoded_content_bytes,
+            **audit,
         },
     }
     receipt["receipt_sha256"] = _sha256(_canonical_json(receipt))
@@ -360,6 +492,8 @@ def verify_pdf_text_receipt(
     extractor = receipt.get("extractor")
     if not isinstance(extractor, dict) or set(extractor) != {
         "normalization",
+        "extractor_semantics_version",
+        "reader_strict",
         "producer_sha256",
         "pypdf_version",
         "pypdf_package_tree_sha256",
@@ -376,6 +510,8 @@ def verify_pdf_text_receipt(
     expected_extractor = dict(extractor)
     if (
         extractor.get("normalization") != NORMALIZATION
+        or extractor.get("extractor_semantics_version") != EXTRACTOR_SEMANTICS_VERSION
+        or extractor.get("reader_strict") is not False
         or extractor.get("producer_sha256") != _producer_sha256()
         or extractor.get("pypdf_version") != PYPDF_VERSION
         or extractor.get("pypdf_package_tree_sha256") != _package_tree_sha256(pypdf)
@@ -385,7 +521,7 @@ def verify_pdf_text_receipt(
         or extractor.get("zero_fallback") is not True
     ):
         raise PdfExtractionRefusal("PDF extraction extractor identity changed")
-    output_bytes, pages, decoded_content_bytes = _extract_pdf(
+    output_bytes, pages, decoded_content_bytes, audit = _extract_pdf(
         pdf_path,
         max_pages=expected_extractor["max_pages"],
         max_decoded_content_bytes=expected_extractor["max_decoded_content_bytes"],
@@ -399,6 +535,7 @@ def verify_pdf_text_receipt(
         "sha256": _sha256(output_bytes),
         "pages": pages,
         "decoded_content_bytes": decoded_content_bytes,
+        **audit,
     }
     if output_claim != expected_output or stored_output != output_bytes:
         raise PdfExtractionRefusal("PDF extraction output does not match independent re-extraction")

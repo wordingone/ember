@@ -281,7 +281,7 @@ def _extract_one(
     max_pages: int,
     max_decoded_content_bytes: int,
     max_output_bytes: int,
-) -> tuple[bytes, int, int]:
+) -> tuple[bytes, int, int, dict[str, Any]]:
     try:
         return pdf_to_utf8._extract_pdf(
             path,
@@ -306,6 +306,8 @@ def _extractor_identity(
     pypdf = pdf_to_utf8._load_pypdf()
     return {
         "normalization": pdf_to_utf8.NORMALIZATION,
+        "extractor_semantics_version": pdf_to_utf8.EXTRACTOR_SEMANTICS_VERSION,
+        "reader_strict": False,
         "producer_sha256": _sha256_file(Path(__file__).resolve(strict=True)),
         "single_pdf_producer_sha256": _sha256_file(Path(pdf_to_utf8.__file__).resolve(strict=True)),
         "pypdf_version": pdf_to_utf8.PYPDF_VERSION,
@@ -424,8 +426,20 @@ def _load_census_binding(
                 "decoded_content_bytes",
                 "output_bytes",
                 "output_sha256",
+                "extractor_semantics_version",
+                "sanitized_pages",
+                "pgf_removed_line_count",
+                "surrogate_pair_count",
+                "escaped_surrogate_count",
             } or _HEX.fullmatch(row.get("output_sha256", "")) is None:
                 raise PdfTreeExtractionRefusal("census PASS row is not closed")
+            try:
+                pdf_to_utf8.validate_extraction_audit(
+                    {key: row[key] for key in pdf_to_utf8._AUDIT_KEYS},
+                    page_count=row["pages"],
+                )
+            except (KeyError, pdf_to_utf8.PdfExtractionRefusal) as error:
+                raise PdfTreeExtractionRefusal("census PASS extraction audit is invalid") from error
             included_files.append(item)
         elif row.get("result") == "REFUSED":
             allowed = {"source_path", "source_bytes", "source_sha256", "result", "refusal_class", "detail"}
@@ -449,6 +463,8 @@ def _load_census_binding(
         raise PdfTreeExtractionRefusal("census extractor identity is incomplete")
     identity_keys = {
         "normalization",
+        "extractor_semantics_version",
+        "reader_strict",
         "producer_sha256",
         "single_pdf_producer_sha256",
         "pypdf_version",
@@ -574,7 +590,7 @@ def census_pdf_tree_refusals(
     rows: list[dict[str, Any]] = []
     for item in source_files:
         try:
-            output, pages, decoded = _extract_one(
+            output, pages, decoded, audit = _extract_one(
                 item["source_path"],
                 max_pages=max_pages,
                 max_decoded_content_bytes=max_decoded_content_bytes,
@@ -589,6 +605,7 @@ def census_pdf_tree_refusals(
                 "decoded_content_bytes": decoded,
                 "output_bytes": len(output),
                 "output_sha256": _sha256(output),
+                **audit,
             })
         except PdfTreeExtractionRefusal as error:
             detail = str(error)
@@ -763,7 +780,7 @@ def _verify_at(
         output_path = f"documents/{item['path']}.txt"
         if claim.get("output_path") != output_path:
             raise PdfTreeExtractionRefusal("PDF tree output mapping changed")
-        output_bytes, pages, decoded = _extract_one(
+        output_bytes, pages, decoded, audit = _extract_one(
             item["source_path"],
             max_pages=extractor["max_pages"],
             max_decoded_content_bytes=extractor["max_decoded_content_bytes"],
@@ -778,6 +795,7 @@ def _verify_at(
             "output_sha256": _sha256(output_bytes),
             "pages": pages,
             "decoded_content_bytes": decoded,
+            **audit,
         }
         if claim != expected_claim:
             raise PdfTreeExtractionRefusal("PDF tree file receipt differs from re-extraction")
@@ -902,7 +920,7 @@ def produce_pdf_tree_receipt(
         rows: list[dict[str, Any]] = []
         total_pages = total_decoded = total_output = 0
         for item in included_files:
-            output_bytes, pages, decoded = _extract_one(
+            output_bytes, pages, decoded, audit = _extract_one(
                 item["source_path"],
                 max_pages=max_pages,
                 max_decoded_content_bytes=max_decoded_content_bytes,
@@ -928,6 +946,7 @@ def produce_pdf_tree_receipt(
                 "output_sha256": _sha256(output_bytes),
                 "pages": pages,
                 "decoded_content_bytes": decoded,
+                **audit,
             })
         derived_at = datetime.now(timezone.utc).isoformat()
         derived_files = [
@@ -938,20 +957,20 @@ def produce_pdf_tree_receipt(
         derived = {
             **source,
             "source": "derived_pdf_text_custody",
-            "source_id": f"{source.get('source_id')}+pdf-tree-text-v1",
+            "source_id": f"{source.get('source_id')}+pdf-tree-text-v2",
             "license": _canonical_license(source.get("license")),
             "license_evidence": (
                 "deterministic local PDF-to-UTF-8 derivation; exact original connector and transform "
                 "receipts are bound under _manifests"
             ),
-            "revision": f"{source.get('revision')}+pdf-tree-text-v1",
+            "revision": f"{source.get('revision')}+pdf-tree-text-v2",
             "files": derived_files,
             "total_bytes": total_output,
             "sha256_manifest": _sha256(
                 "\n".join(sorted(row["sha256"] for row in derived_files)).encode("utf-8")
             ),
             "fetched_at": derived_at,
-            "connector": {"name": "pdf_tree_to_utf8", "version": "v1"},
+            "connector": {"name": "pdf_tree_to_utf8", "version": "v2"},
             "l3_statement": "deterministic local derivation; no network fetch and no model-mediated selection",
             "dest_root": str(output_dir),
             "notes": (
