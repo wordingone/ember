@@ -116,14 +116,10 @@ def test_spec_freezes_same_mode_threshold_and_resource_envelope() -> None:
     assert spec["resource_envelope"]["c_drive_writes_bytes_max"] == 0
 
 
-def test_checked_in_training_source_blobs_match_the_frozen_spec() -> None:
+def test_rejected_treatment_spec_refuses_post_rollback_source() -> None:
     module = load_module()
-    observed = module.validate_source(ROOT, module.load_spec(SPEC_PATH))
-    assert observed == {
-        "model": "2c0c60d2bc8a8b5d62b6380422679ecffb7971fc",
-        "pretrain": "003aa3b8191732314408f8188d9e2617edd7673a",
-        "training_acceleration": "c9d2ff0dc9547e202ac2067c97adae490a0b534d",
-    }
+    with pytest.raises(ValueError, match=r"^SOURCE_BLOB_DRIFT:model$"):
+        module.validate_source(ROOT, module.load_spec(SPEC_PATH))
 
 
 def test_terminal_retains_only_above_frozen_control_noise_and_all_gates() -> None:
