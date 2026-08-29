@@ -575,7 +575,9 @@ for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTION
   OLD_REL="$AUTHORITY_NAME"
   NEW_REL="docs/authority/$AUTHORITY_NAME"
   DOMAIN_REL=""
-  [ "$AUTHORITY_NAME" = "GOAL.md" ] && DOMAIN_REL="docs/domains/governance/authority/GOAL.md"
+  if [ "$AUTHORITY_NAME" = "GOAL.md" ] || [ "$AUTHORITY_NAME" = "STATE.md" ]; then
+    DOMAIN_REL="docs/domains/governance/authority/$AUTHORITY_NAME"
+  fi
   OLD_PRESENT=0
   NEW_PRESENT=0
   DOMAIN_PRESENT=0
@@ -598,10 +600,11 @@ for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTION
     [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$NEW_REL"
   else
     [ "$AUTHORITY_NAME" = "GOAL.md" ] && GOAL_REL="$DOMAIN_REL"
+    [ "$AUTHORITY_NAME" = "STATE.md" ] && STATE_REL="$DOMAIN_REL"
   fi
 done
 if [ "$AUTHORITY_PATHS_OK" -eq 1 ]; then
-  ok "authority-paths" "each authority document has exactly one canonical old-or-new path"
+  ok "authority-paths" "each authority document has exactly one canonical old-or-new-or-domain path"
 fi
 
 GOALN="$(git ls-files | grep -cE '^(GOAL[^/]*\.md|docs/authority/GOAL[^/]*\.md|docs/domains/governance/authority/GOAL[^/]*\.md)$')"
