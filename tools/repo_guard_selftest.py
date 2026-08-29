@@ -493,6 +493,47 @@ def test_green_canonical_authority_paths():
         cleanup(tmp)
 
 
+def test_green_domain_state_authority_path():
+    tmp = make_fixture("fix/selftest-domain-state-authority")
+    try:
+        legacy_state = tmp / "docs" / "authority" / "STATE.md"
+        domain_state = (
+            tmp / "docs" / "domains" / "governance" / "authority" / "STATE.md"
+        )
+        domain_state.parent.mkdir(parents=True, exist_ok=True)
+        legacy_state.replace(domain_state)
+        commit_fixture(tmp)
+
+        rc, output = run_guard(tmp)
+
+        assert rc == 0, output
+        assert "ok   [authority-paths]" in output, output
+        assert "ok   [state] docs/domains/governance/authority/STATE.md" in output, output
+    finally:
+        cleanup(tmp)
+
+
+def test_red_duplicate_state_authority_paths():
+    tmp = make_fixture("fix/selftest-duplicate-domain-state-authority")
+    try:
+        legacy_state = tmp / "docs" / "authority" / "STATE.md"
+        domain_state = (
+            tmp / "docs" / "domains" / "governance" / "authority" / "STATE.md"
+        )
+        domain_state.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(legacy_state, domain_state)
+        commit_fixture(tmp)
+
+        rc, output = run_guard(tmp)
+
+        assert rc != 0, output
+        assert "FAIL [authority-paths]" in output, output
+        assert "STATE.md must exist at exactly one of" in output, output
+        assert "found 2" in output, output
+    finally:
+        cleanup(tmp)
+
+
 def test_green_domain_goal_authority_path():
     tmp = make_fixture("fix/selftest-domain-goal-authority")
     try:
