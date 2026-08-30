@@ -15,6 +15,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
+import catalog_admission as catalog_admission_module
+import input_identity as input_identity_module
+
 from catalog_admission import (
     build_consumer_catalog_fragment,
     build_dataset_catalog_manifest,
@@ -93,6 +96,55 @@ def import_receipt(
     }
     value["self_sha256"] = sha256(canonical(value))
     return canonical(value)
+
+
+def test_evaluation_consumer_cli_is_a_separate_command() -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        catalog_main(["evaluation-consumer", "--help"])
+    assert exit_info.value.code == 0
+
+
+def test_training_consumer_bytes_remain_frozen_and_evaluation_refuses_train() -> None:
+    manifest_raw = canonical(
+        {
+            "schema_version": "ember-data-catalog-manifest-v1",
+            "records": [
+                {
+                    "kind": "dataset_version",
+                    "id": "dataset:issue1581-bulk-train:" + "9" * 64,
+                    "state": "admitted",
+                }
+            ],
+            "edges": [],
+        }
+    )
+    receipt = import_receipt(
+        manifest_raw=manifest_raw,
+        canonical_export=manifest_raw,
+        inserted_records=1,
+        inserted_edges=1,
+    )
+    arguments = {
+        "catalog_export_raw": manifest_raw,
+        "first_import_receipt_raw": receipt,
+        "dataset_id": "dataset:issue1581-bulk-train:" + "9" * 64,
+        "e_matrix_packet_raw": canonical({"schema_version": "fixture", "rows": []}),
+        "source_commit": "1" * 40,
+        "model_sha256": "5" * 64,
+        "checkpoint_sha256": "6" * 64,
+        "tokenizer_sha256": "4" * 64,
+        "config_sha256": "7" * 64,
+        "evaluator_sha256": "8" * 64,
+    }
+    train_fragment = build_consumer_catalog_fragment(**arguments)
+    assert sha256(train_fragment) == (
+        "9d3358e5c759a7e5c0d1ac5f3422d531fe6e60325ed2b2c77eac5106288586b8"
+    )
+    build_evaluation_consumer = getattr(
+        catalog_admission_module, "build_evaluation_consumer_catalog_fragment"
+    )
+    with pytest.raises(ValueError, match="only heldout"):
+        build_evaluation_consumer(**arguments)
 
 
 @pytest.mark.parametrize("substituted_leg", ["projection", "consumer"])
@@ -311,6 +363,13 @@ def test_projection_deduplicates_repeated_same_source_object_memberships(
 def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
     tmp_path: Path,
 ) -> None:
+    build_evaluation_consumer = getattr(
+        catalog_admission_module, "build_evaluation_consumer_catalog_fragment", None
+    )
+    resolve_evaluation_dataset = getattr(
+        input_identity_module, "resolve_catalog_evaluation_dataset", None
+    )
+    assert callable(build_evaluation_consumer) and callable(resolve_evaluation_dataset)
     connector_path, connector_sha = write_connector(
         tmp_path,
         source="candidate-mathematics-heldout-0",
@@ -362,7 +421,7 @@ def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
             ],
         }
     )
-    consumer_fragment = build_consumer_catalog_fragment(
+    consumer_fragment = build_evaluation_consumer(
         catalog_export_raw=manifest_raw,
         first_import_receipt_raw=first_receipt,
         dataset_id=dataset["id"],
@@ -374,8 +433,41 @@ def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
         config_sha256="7" * 64,
         evaluator_sha256="8" * 64,
     )
+    disguised = json.loads(manifest_raw)
+    next(
+        item for item in disguised["records"] if item["kind"] == "membership"
+    )["split"] = "train"
+    disguised_raw = canonical(disguised)
+    disguised_receipt = import_receipt(
+        manifest_raw=disguised_raw,
+        canonical_export=disguised_raw,
+        inserted_records=len(disguised["records"]),
+        inserted_edges=len(disguised["edges"]),
+    )
+    with pytest.raises(ValueError, match="only heldout"):
+        build_evaluation_consumer(
+            **{
+                "catalog_export_raw": disguised_raw,
+                "first_import_receipt_raw": disguised_receipt,
+                "dataset_id": dataset["id"],
+            },
+            e_matrix_packet_raw=e_matrix,
+            source_commit="1" * 40,
+            model_sha256="5" * 64,
+            checkpoint_sha256="6" * 64,
+            tokenizer_sha256="4" * 64,
+            config_sha256="7" * 64,
+            evaluator_sha256="8" * 64,
+        )
     combined = json.loads(manifest_raw)
     fragment = json.loads(consumer_fragment)
+    protected_eval = next(
+        item for item in fragment["records"] if item["kind"] == "protected_eval"
+    )
+    assert protected_eval["ngram_ruling"] == "not_run"
+    assert protected_eval["near_dup_ruling"] == "not_run"
+    assert protected_eval["exclusion_reason"] is None
+    assert protected_eval["overlap_state"] == "isolated"
     combined["records"].extend(fragment["records"])
     combined["edges"].extend(fragment["edges"])
     shared_object_id = next(
@@ -406,7 +498,40 @@ def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
         inserted_records=len(fragment["records"]),
         inserted_edges=len(fragment["edges"]),
     )
-    resolved = resolve_catalog_training_datasets(
+    with pytest.raises(
+        InputIdentityError,
+        match="catalog_dataset_split_refused",
+    ):
+        resolve_catalog_training_datasets(
+            catalog_export_raw=combined_raw,
+            dataset_import_receipt_raw=first_receipt,
+            consumer_import_receipt_raw=consumer_receipt,
+            expected_dataset_id=dataset["id"],
+            expected_split="heldout",
+        )
+    with pytest.raises(TypeError, match="_required_split"):
+        resolve_catalog_training_datasets(
+            catalog_export_raw=combined_raw,
+            dataset_import_receipt_raw=first_receipt,
+            consumer_import_receipt_raw=consumer_receipt,
+            expected_dataset_id=dataset["id"],
+            expected_split="heldout",
+            _required_split="heldout",
+            _dataset_edge_kind="evaluation_dataset",
+            _attempt_record_kind="evaluation_attempt",
+            _attempt_evaluation_edge_kind="evaluation_definition",
+            _attempt_receipt_edge_kind="evaluation_import_receipt",
+        )
+    with pytest.raises(TypeError, match="_dataset_edge_kind"):
+        resolve_evaluation_dataset(
+            catalog_export_raw=combined_raw,
+            dataset_import_receipt_raw=first_receipt,
+            consumer_import_receipt_raw=consumer_receipt,
+            expected_dataset_id=dataset["id"],
+            expected_split="heldout",
+            _dataset_edge_kind="consumer_dataset",
+        )
+    resolved = resolve_evaluation_dataset(
         catalog_export_raw=combined_raw,
         dataset_import_receipt_raw=first_receipt,
         consumer_import_receipt_raw=consumer_receipt,
@@ -415,18 +540,187 @@ def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
     )
     assert resolved["split"] == "heldout"
     assert resolved["source_ids"] == ["candidate-mathematics-heldout-0"]
-    assert resolved["protected_eval_item_admission"] is False
+    assert resolved["protected_eval_item_admission"] is True
+
+    def assert_evaluation_binding_refused(value: dict[str, object]) -> None:
+        raw = canonical(value)
+        receipt = import_receipt(
+            manifest_raw=consumer_fragment,
+            canonical_export=raw,
+            inserted_records=0,
+            inserted_edges=0,
+        )
+        with pytest.raises(
+            InputIdentityError,
+            match="catalog_dataset_substitution|catalog_receipt_drift",
+        ):
+            resolve_evaluation_dataset(
+                catalog_export_raw=raw,
+                dataset_import_receipt_raw=first_receipt,
+                consumer_import_receipt_raw=receipt,
+                expected_dataset_id=dataset["id"],
+                expected_split="heldout",
+            )
+
+    for field, drifted_value in (
+        ("ngram_ruling", "accepted"),
+        ("near_dup_ruling", "refused"),
+        ("exclusion_reason", "fabricated exclusion"),
+        ("overlap_state", "unknown"),
+    ):
+        drifted_semantics = json.loads(combined_raw)
+        next(
+            record
+            for record in drifted_semantics["records"]
+            if record.get("kind") == "protected_eval"
+        )[field] = drifted_value
+        assert_evaluation_binding_refused(drifted_semantics)
+
+    duplicate_dataset_record = json.loads(combined_raw)
+    duplicate_dataset_record["records"].append(
+        dict(
+            next(
+                record
+                for record in duplicate_dataset_record["records"]
+                if record.get("kind") == "dataset_version"
+                and record.get("id") == dataset["id"]
+            )
+        )
+    )
+    assert_evaluation_binding_refused(duplicate_dataset_record)
+
+    duplicate_version_membership = json.loads(combined_raw)
+    duplicate_version_membership["edges"].append(
+        dict(
+            next(
+                edge
+                for edge in duplicate_version_membership["edges"]
+                if edge.get("kind") == "version_membership"
+                and edge.get("from_id") == dataset["id"]
+            )
+        )
+    )
+    assert_evaluation_binding_refused(duplicate_version_membership)
+
+    for record_kind in ("immutable_object", "source"):
+        duplicate_record = json.loads(combined_raw)
+        duplicate_record["records"].append(
+            dict(
+                next(
+                    record
+                    for record in duplicate_record["records"]
+                    if record.get("kind") == record_kind
+                )
+            )
+        )
+        assert_evaluation_binding_refused(duplicate_record)
+
+    duplicate_source_object = json.loads(combined_raw)
+    duplicate_source_object["edges"].append(
+        dict(
+            next(
+                edge
+                for edge in duplicate_source_object["edges"]
+                if edge.get("kind") == "source_object"
+            )
+        )
+    )
+    assert_evaluation_binding_refused(duplicate_source_object)
+
+    missing_evaluation_receipt = json.loads(combined_raw)
+    missing_evaluation_receipt["edges"] = [
+        edge
+        for edge in missing_evaluation_receipt["edges"]
+        if edge["kind"] != "evaluation_receipt"
+    ]
+    assert_evaluation_binding_refused(missing_evaluation_receipt)
+
+    duplicate_evaluation_receipt = json.loads(combined_raw)
+    duplicate_evaluation_receipt["edges"].append(
+        dict(
+            next(
+                edge
+                for edge in duplicate_evaluation_receipt["edges"]
+                if edge["kind"] == "evaluation_receipt"
+            )
+        )
+    )
+    assert_evaluation_binding_refused(duplicate_evaluation_receipt)
+
+    drifted_e_matrix_object = json.loads(combined_raw)
+    evaluation_object_id = next(
+        edge["to_id"]
+        for edge in drifted_e_matrix_object["edges"]
+        if edge["kind"] == "evaluation_object"
+    )
+    next(
+        record
+        for record in drifted_e_matrix_object["records"]
+        if record.get("kind") == "immutable_object"
+        and record.get("id") == evaluation_object_id
+    )["sha256"] = "0" * 64
+    assert_evaluation_binding_refused(drifted_e_matrix_object)
+
+    overlapped = json.loads(combined_raw)
+    next(
+        edge
+        for edge in overlapped["edges"]
+        if edge["kind"] == "evaluation_object"
+    )["to_id"] = shared_object_id
+    assert_evaluation_binding_refused(overlapped)
+
     revalidation = revalidate_e_matrix_catalog_bindings(
         e_matrix_packet_raw=e_matrix, resolved_identity=resolved
     )
+    cli_inputs = {
+        "catalog-export": combined_raw,
+        "dataset-import-receipt": first_receipt,
+        "consumer-import-receipt": consumer_receipt,
+        "e-matrix-packet": e_matrix,
+    }
+    cli_arguments = ["revalidate"]
+    for name, raw in cli_inputs.items():
+        path = tmp_path / f"cli-{name}.json"
+        path.write_bytes(raw)
+        cli_arguments.extend([f"--{name}", str(path)])
+    cli_output = tmp_path / "cli-e-matrix-revalidation.json"
+    cli_arguments.extend(
+        [
+            "--dataset-id",
+            dataset["id"],
+            "--output",
+            str(cli_output),
+        ]
+    )
+    assert catalog_main(cli_arguments) == 0
+    assert cli_output.read_bytes() == canonical(revalidation)
     row = revalidation["rows"][0]
     assert row["row_id"] == "candidate-mathematics-heldout-0"
     assert row["state"] == "PRESENT"
     assert row["catalog_dataset_binding"] == "PRESENT"
     assert row["catalog_dataset_split"] == "heldout"
     assert "catalog_train_dataset_binding" not in row
-    assert row["protected"] is False
-    assert row["protected_eval_admission_satisfied"] is False
+    assert row["protected"] is True
+    assert row["protected_eval_admission_satisfied"] is True
+
+    general_packet = canonical(
+        {
+            "schema_version": "ember-e-matrix-definition-v1",
+            "rows": [
+                {
+                    "row_id": "candidate-mathematics-heldout-0",
+                    "state": "PRESENT",
+                    "protected": False,
+                }
+            ],
+        }
+    )
+    general = revalidate_e_matrix_catalog_bindings(
+        e_matrix_packet_raw=general_packet, resolved_identity=resolved
+    )["rows"][0]
+    assert general["protected"] is True
+    assert general["protected_eval_admission_satisfied"] is True
+    assert "catalog_train_dataset_binding" not in general
 
     wrong_slot = canonical(
         {
@@ -475,7 +769,7 @@ def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
         )
     )
     assert terminal["result"] == "PASS"
-    assert terminal["protected_eval_item_admission"] is False
+    assert terminal["protected_eval_item_admission"] is True
 
 
 def test_consumer_reopens_only_catalog_derived_train_identity_and_preserves_eval_isolation(
