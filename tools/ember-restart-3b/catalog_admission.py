@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from domain_manifest import load_bulk_domain_connector_receipt
-from input_identity import resolve_catalog_training_datasets
+from input_identity import (
+    resolve_catalog_evaluation_dataset,
+    resolve_catalog_training_datasets,
+)
 
 
 def _canonical(value: object) -> bytes:
@@ -273,6 +276,144 @@ def _verified_import_receipt(
     return value
 
 
+def build_evaluation_consumer_catalog_fragment(
+    *,
+    catalog_export_raw: bytes,
+    first_import_receipt_raw: bytes,
+    dataset_id: str,
+    e_matrix_packet_raw: bytes,
+    source_commit: str,
+    model_sha256: str,
+    checkpoint_sha256: str,
+    tokenizer_sha256: str,
+    config_sha256: str,
+    evaluator_sha256: str,
+) -> bytes:
+    """Build a heldout-only evaluation consumer fragment."""
+
+    try:
+        catalog = json.loads(catalog_export_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("canonical catalog export is unreadable") from error
+    records = catalog.get("records") if isinstance(catalog, dict) else None
+    edges = catalog.get("edges") if isinstance(catalog, dict) else None
+    if not isinstance(records, list) or not isinstance(edges, list):
+        raise ValueError("canonical catalog export schema is invalid")
+    membership_ids = {
+        edge["to_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "version_membership"
+        and edge.get("from_id") == dataset_id
+        and isinstance(edge.get("to_id"), str)
+    }
+    memberships = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "membership"
+        and row.get("id") in membership_ids
+    ]
+    if (
+        dataset_id.startswith("dataset:issue1581-bulk-train:")
+        or not membership_ids
+        or len(memberships) != len(membership_ids)
+        or any(row.get("split") != "heldout" for row in memberships)
+    ):
+        raise ValueError("evaluation consumer admits only heldout datasets")
+    heldout_object_ids = {
+        edge["to_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "membership_object"
+        and edge.get("from_id") in membership_ids
+        and isinstance(edge.get("to_id"), str)
+    }
+    heldout_mapped_membership_ids = {
+        edge["from_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "membership_object"
+        and edge.get("from_id") in membership_ids
+        and isinstance(edge.get("to_id"), str)
+    }
+    train_membership_ids = {
+        row["id"]
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "membership"
+        and row.get("split") == "train"
+        and row.get("admission_state") == "admitted"
+        and isinstance(row.get("id"), str)
+    }
+    train_object_ids = {
+        edge["to_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "membership_object"
+        and edge.get("from_id") in train_membership_ids
+        and isinstance(edge.get("to_id"), str)
+    }
+    train_mapped_membership_ids = {
+        edge["from_id"]
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "membership_object"
+        and edge.get("from_id") in train_membership_ids
+        and isinstance(edge.get("to_id"), str)
+    }
+    if (
+        heldout_mapped_membership_ids != set(membership_ids)
+        or train_mapped_membership_ids != train_membership_ids
+        or not heldout_object_ids
+        or heldout_object_ids.intersection(train_object_ids)
+    ):
+        raise ValueError("evaluation dataset is absent or overlaps admitted train objects")
+    fragment = json.loads(
+        build_consumer_catalog_fragment(
+            catalog_export_raw=catalog_export_raw,
+            first_import_receipt_raw=first_import_receipt_raw,
+            dataset_id=dataset_id,
+            e_matrix_packet_raw=e_matrix_packet_raw,
+            source_commit=source_commit,
+            model_sha256=model_sha256,
+            checkpoint_sha256=checkpoint_sha256,
+            tokenizer_sha256=tokenizer_sha256,
+            config_sha256=config_sha256,
+            evaluator_sha256=evaluator_sha256,
+        )
+    )
+    attempt = next(
+        row for row in fragment["records"] if row.get("kind") == "consumer_attempt"
+    )
+    old_attempt_id = attempt["id"]
+    new_attempt_id = (
+        f"attempt:issue1581-catalog-evaluation:{_sha256(catalog_export_raw)}"
+    )
+    attempt["kind"] = "evaluation_attempt"
+    attempt["id"] = new_attempt_id
+    attempt["run_attempt_id"] = new_attempt_id
+    protected_eval = next(
+        row for row in fragment["records"] if row.get("kind") == "protected_eval"
+    )
+    protected_eval["ngram_ruling"] = "not_run"
+    protected_eval["near_dup_ruling"] = "not_run"
+    protected_eval["exclusion_reason"] = None
+    protected_eval["overlap_state"] = "isolated"
+    edge_kinds = {
+        "consumer_dataset": "evaluation_dataset",
+        "consumer_evaluation": "evaluation_definition",
+        "consumer_receipt": "evaluation_import_receipt",
+    }
+    for edge in fragment["edges"]:
+        if edge.get("from_id") != old_attempt_id:
+            continue
+        edge["from_id"] = new_attempt_id
+        edge["from_kind"] = "evaluation_attempt"
+        edge["kind"] = edge_kinds[edge["kind"]]
+    return _sorted_manifest(fragment["records"], fragment["edges"])
+
+
 def build_consumer_catalog_fragment(
     *,
     catalog_export_raw: bytes,
@@ -437,6 +578,7 @@ def revalidate_e_matrix_catalog_bindings(
         expected_slot_id = source_ids[0]
         if rows[0].get("row_id") != expected_slot_id:
             raise ValueError("slot row does not match the catalog-derived slot identity")
+        protected = resolved_identity["split"] == "heldout"
         return {
             "schema_version": "ember-issue1581-slot-e-matrix-revalidation-v1",
             "catalog_export_sha256": resolved_identity["catalog_export_sha256"],
@@ -448,8 +590,8 @@ def revalidate_e_matrix_catalog_bindings(
                     "catalog_dataset_binding": "PRESENT",
                     "catalog_dataset_id": resolved_identity["dataset_id"],
                     "catalog_dataset_split": resolved_identity["split"],
-                    "protected": False,
-                    "protected_eval_admission_satisfied": False,
+                    "protected": protected,
+                    "protected_eval_admission_satisfied": protected,
                 }
             ],
         }
@@ -463,7 +605,8 @@ def revalidate_e_matrix_catalog_bindings(
         if split == "train":
             row["catalog_train_dataset_binding"] = "PRESENT"
             row["catalog_train_dataset_id"] = resolved_identity["dataset_id"]
-        row["protected_eval_admission_satisfied"] = False
+        row["protected"] = split == "heldout"
+        row["protected_eval_admission_satisfied"] = split == "heldout"
         rows.append(row)
     return {
         "schema_version": "ember-issue1581-e-matrix-catalog-revalidation-v1",
@@ -545,6 +688,39 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
     )
 
 
+def _dataset_resolver_for_manifest(
+    manifest_raw: bytes, *, expected_dataset_id: str
+) -> tuple[Any, str]:
+    """Select train or evaluation resolution only from an exact catalog edge."""
+
+    try:
+        manifest = json.loads(manifest_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("catalog consumer manifest is unreadable") from error
+    edges = manifest.get("edges") if isinstance(manifest, dict) else None
+    if not isinstance(edges, list):
+        raise ValueError("catalog consumer manifest schema is invalid")
+    has_training_edge = any(
+        isinstance(edge, dict)
+        and edge.get("kind") == "consumer_dataset"
+        and edge.get("to_id") == expected_dataset_id
+        for edge in edges
+    )
+    has_evaluation_edge = any(
+        isinstance(edge, dict)
+        and edge.get("kind") == "evaluation_dataset"
+        and edge.get("to_id") == expected_dataset_id
+        for edge in edges
+    )
+    if has_training_edge == has_evaluation_edge:
+        raise ValueError(
+            "catalog consumer manifest must select exactly one dataset resolver"
+        )
+    if has_evaluation_edge:
+        return resolve_catalog_evaluation_dataset, "heldout"
+    return resolve_catalog_training_datasets, "train"
+
+
 def finalize_catalog_admission(
     *,
     projection_manifest_raw: bytes,
@@ -603,16 +779,15 @@ def finalize_catalog_admission(
     }
     if len(source_commits) != 1:
         raise ValueError("catalog import receipts do not share one source commit")
-    resolved = resolve_catalog_training_datasets(
+    resolver, expected_split = _dataset_resolver_for_manifest(
+        consumer_fragment_raw, expected_dataset_id=expected_dataset_id
+    )
+    resolved = resolver(
         catalog_export_raw=final_catalog_export_raw,
         dataset_import_receipt_raw=first_import_receipt_raw,
         consumer_import_receipt_raw=consumer_import_receipt_raw,
         expected_dataset_id=expected_dataset_id,
-        expected_split=(
-            "heldout"
-            if expected_dataset_id.startswith("dataset:issue1581-bulk-heldout:")
-            else "train"
-        ),
+        expected_split=expected_split,
     )
     expected_revalidation = revalidate_e_matrix_catalog_bindings(
         e_matrix_packet_raw=e_matrix_packet_raw,
@@ -642,7 +817,7 @@ def finalize_catalog_admission(
         "final_catalog_export_sha256": resolved["catalog_export_sha256"],
         "e_matrix_packet_raw_sha256": _sha256(e_matrix_packet_raw),
         "e_matrix_revalidation_raw_sha256": _sha256(e_matrix_revalidation_raw),
-        "protected_eval_item_admission": False,
+        "protected_eval_item_admission": resolved["protected_eval_item_admission"],
         "catalog_admission_source_sha256": _sha256(Path(__file__).read_bytes()),
     }
     payload["self_sha256"] = _sha256(_canonical(payload))
@@ -686,6 +861,18 @@ def main(argv: list[str] | None = None) -> int:
         consumer.add_argument(f"--{name}-sha256", required=True)
     consumer.add_argument("--output", required=True, type=Path)
 
+    evaluation_consumer = commands.add_parser("evaluation-consumer")
+    evaluation_consumer.add_argument("--catalog-export", required=True, type=Path)
+    evaluation_consumer.add_argument(
+        "--dataset-import-receipt", required=True, type=Path
+    )
+    evaluation_consumer.add_argument("--dataset-id", required=True)
+    evaluation_consumer.add_argument("--e-matrix-packet", required=True, type=Path)
+    evaluation_consumer.add_argument("--source-commit", required=True)
+    for name in ["model", "checkpoint", "tokenizer", "config", "evaluator"]:
+        evaluation_consumer.add_argument(f"--{name}-sha256", required=True)
+    evaluation_consumer.add_argument("--output", required=True, type=Path)
+
     revalidate = commands.add_parser("revalidate")
     revalidate.add_argument("--catalog-export", required=True, type=Path)
     revalidate.add_argument("--dataset-import-receipt", required=True, type=Path)
@@ -715,8 +902,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.command == "project":
             output = project_catalog_spec(spec_raw=_read(arguments.spec))
-        elif arguments.command == "consumer":
-            output = build_consumer_catalog_fragment(
+        elif arguments.command in {"consumer", "evaluation-consumer"}:
+            builder = (
+                build_evaluation_consumer_catalog_fragment
+                if arguments.command == "evaluation-consumer"
+                else build_consumer_catalog_fragment
+            )
+            output = builder(
                 catalog_export_raw=_read(arguments.catalog_export),
                 first_import_receipt_raw=_read(arguments.dataset_import_receipt),
                 dataset_id=arguments.dataset_id,
@@ -729,16 +921,16 @@ def main(argv: list[str] | None = None) -> int:
                 evaluator_sha256=arguments.evaluator_sha256,
             )
         elif arguments.command == "revalidate":
-            resolved = resolve_catalog_training_datasets(
-                catalog_export_raw=_read(arguments.catalog_export),
+            catalog_export_raw = _read(arguments.catalog_export)
+            resolver, expected_split = _dataset_resolver_for_manifest(
+                catalog_export_raw, expected_dataset_id=arguments.dataset_id
+            )
+            resolved = resolver(
+                catalog_export_raw=catalog_export_raw,
                 dataset_import_receipt_raw=_read(arguments.dataset_import_receipt),
                 consumer_import_receipt_raw=_read(arguments.consumer_import_receipt),
                 expected_dataset_id=arguments.dataset_id,
-                expected_split=(
-                    "heldout"
-                    if arguments.dataset_id.startswith("dataset:issue1581-bulk-heldout:")
-                    else "train"
-                ),
+                expected_split=expected_split,
             )
             output = _canonical(
                 revalidate_e_matrix_catalog_bindings(
