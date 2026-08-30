@@ -1150,7 +1150,7 @@ fn validate_record(value: &Value) -> Result<()> {
             required_sha(row, "test_set_sha256", "protected evaluation record")?;
             for key in ["ngram_ruling", "near_dup_ruling"] {
                 required_string(row, key, "protected evaluation record", |value| {
-                    matches!(value, "clear" | "excluded" | "refused")
+                    matches!(value, "clear" | "excluded" | "refused" | "not_run")
                 })?;
             }
             optional_string(row, "exclusion_reason", "protected evaluation record")?;
@@ -1158,17 +1158,37 @@ fn validate_record(value: &Value) -> Result<()> {
                 row,
                 "overlap_state",
                 "protected evaluation record",
-                |value| matches!(value, "disjoint" | "overlap_detected" | "unknown"),
+                |value| {
+                    matches!(
+                        value,
+                        "disjoint" | "isolated" | "overlap_detected" | "unknown"
+                    )
+                },
             )?;
             nonnegative_integer(row, "frozen_at_ms", "protected evaluation record")?;
-            let clean = string_value(row, "ngram_ruling", "protected evaluation record")?
-                == "clear"
-                && string_value(row, "near_dup_ruling", "protected evaluation record")? == "clear"
-                && string_value(row, "overlap_state", "protected evaluation record")? == "disjoint";
-            let exclusion_reason = row.get("exclusion_reason").and_then(Value::as_str);
-            if clean != exclusion_reason.is_none() {
+            let ngram_ruling = string_value(row, "ngram_ruling", "protected evaluation record")?;
+            let near_dup_ruling =
+                string_value(row, "near_dup_ruling", "protected evaluation record")?;
+            let overlap_state = string_value(row, "overlap_state", "protected evaluation record")?;
+            let clean = ngram_ruling == "clear"
+                && near_dup_ruling == "clear"
+                && overlap_state == "disjoint";
+            let not_run = ngram_ruling == "not_run"
+                && near_dup_ruling == "not_run"
+                && overlap_state == "isolated";
+            if (ngram_ruling == "not_run"
+                || near_dup_ruling == "not_run"
+                || overlap_state == "isolated")
+                && !not_run
+            {
                 return invalid(
-                    "protected evaluation exclusion_reason must be absent only for a fully disjoint clear ruling",
+                    "protected evaluation not_run rulings require the exact not_run/not_run/isolated tuple",
+                );
+            }
+            let exclusion_reason = row.get("exclusion_reason").and_then(Value::as_str);
+            if (clean || not_run) != exclusion_reason.is_none() {
+                return invalid(
+                    "protected evaluation exclusion_reason must be absent only for a fully disjoint clear ruling or an isolated not_run evaluation",
                 );
             }
         }
@@ -1391,6 +1411,7 @@ fn validate_edge_endpoints(records: &[Value], edges: &[Value]) -> Result<()> {
 
 fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()> {
     validate_receipt_supersession(records, edges)?;
+    validate_not_run_evaluation_consumers(records, edges)?;
     let mut admitted_training_objects = BTreeSet::new();
     let mut protected_evaluation_objects = BTreeSet::new();
     for record in records {
@@ -1568,6 +1589,58 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
         return invalid(format!(
             "admitted training membership overlaps protected evaluation object {overlap}"
         ));
+    }
+    Ok(())
+}
+
+fn validate_not_run_evaluation_consumers(records: &[Value], edges: &[Value]) -> Result<()> {
+    let admitted_training_memberships: Vec<&Map<String, Value>> = records
+        .iter()
+        .filter_map(Value::as_object)
+        .filter(|row| {
+            row.get("kind").and_then(Value::as_str) == Some("membership")
+                && row.get("split").and_then(Value::as_str) == Some("train")
+                && row.get("admission_state").and_then(Value::as_str) == Some("admitted")
+        })
+        .collect();
+    for record in records {
+        let row = object(record, "record")?;
+        if string_value(row, "kind", "record")? != "protected_eval"
+            || string_value(row, "ngram_ruling", "protected evaluation record")? != "not_run"
+        {
+            continue;
+        }
+        let id = string_value(row, "id", "protected evaluation record")?;
+        let consumers = incoming_sources(edges, "consumer_evaluation", "protected_eval", id)?;
+        require_exactly_one(
+            &consumers,
+            "not_run protected evaluation",
+            id,
+            "consumer_evaluation",
+        )?;
+        if !consumers[0].starts_with("attempt:issue1581-catalog-evaluation:") {
+            return invalid(format!(
+                "not_run protected evaluation {id} is not bound to an evaluation consumer"
+            ));
+        }
+        let evaluation_objects =
+            outgoing_targets(edges, "evaluation_object", "protected_eval", id)?;
+        require_exactly_one(
+            &evaluation_objects,
+            "not_run protected evaluation",
+            id,
+            "evaluation_object",
+        )?;
+        for membership in &admitted_training_memberships {
+            let membership_id = string_value(membership, "id", "membership record")?;
+            if outgoing_targets(edges, "membership_object", "membership", membership_id)?
+                .contains(&evaluation_objects[0])
+            {
+                return invalid(format!(
+                    "not_run protected evaluation {id} cannot be an admitted training object"
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -1875,5 +1948,114 @@ fn invalid<T>(detail: impl Into<String>) -> Result<T> {
 fn invalid_error(detail: impl Into<String>) -> EmberLabError {
     EmberLabError::InvalidDataCatalog {
         detail: detail.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn not_run_record() -> Value {
+        json!({
+            "kind": "protected_eval",
+            "id": "evaluation:heldout-not-run",
+            "frozen_manifest_sha256": "a".repeat(64),
+            "test_set_sha256": "a".repeat(64),
+            "ngram_ruling": "not_run",
+            "near_dup_ruling": "not_run",
+            "exclusion_reason": null,
+            "overlap_state": "isolated",
+            "frozen_at_ms": 0
+        })
+    }
+
+    fn edge(kind: &str, from_kind: &str, from_id: &str, to_kind: &str, to_id: &str) -> Value {
+        json!({
+            "kind": kind,
+            "from_kind": from_kind,
+            "from_id": from_id,
+            "to_kind": to_kind,
+            "to_id": to_id,
+            "ordinal": 0,
+            "payload": {}
+        })
+    }
+
+    #[test]
+    fn not_run_tuple_requires_an_evaluation_consumer() {
+        let record = not_run_record();
+        validate_record(&record).expect("the exact not_run/not_run/isolated tuple is valid");
+        let evaluation_edge = edge(
+            "consumer_evaluation",
+            "consumer_attempt",
+            "attempt:issue1581-catalog-evaluation:abc",
+            "protected_eval",
+            "evaluation:heldout-not-run",
+        );
+        let evaluation_object_edge = edge(
+            "evaluation_object",
+            "protected_eval",
+            "evaluation:heldout-not-run",
+            "immutable_object",
+            &format!("sha256:{}", "a".repeat(64)),
+        );
+        validate_not_run_evaluation_consumers(
+            std::slice::from_ref(&record),
+            &[evaluation_edge, evaluation_object_edge.clone()],
+        )
+        .expect("evaluation consumer may bind an isolated not_run record");
+
+        let training_edge = edge(
+            "consumer_evaluation",
+            "consumer_attempt",
+            "attempt:issue1581-catalog-preflight:abc",
+            "protected_eval",
+            "evaluation:heldout-not-run",
+        );
+        assert!(validate_not_run_evaluation_consumers(
+            std::slice::from_ref(&record),
+            &[training_edge, evaluation_object_edge]
+        )
+        .is_err());
+
+        let mut invalid_tuple = record;
+        invalid_tuple["overlap_state"] = json!("disjoint");
+        assert!(validate_record(&invalid_tuple).is_err());
+    }
+
+    #[test]
+    fn not_run_object_can_never_be_an_admitted_training_object() {
+        let record = not_run_record();
+        let membership = json!({
+            "kind": "membership",
+            "id": "membership:train",
+            "split": "train",
+            "admission_state": "admitted"
+        });
+        let object_id = format!("sha256:{}", "a".repeat(64));
+        let edges = vec![
+            edge(
+                "consumer_evaluation",
+                "consumer_attempt",
+                "attempt:issue1581-catalog-evaluation:abc",
+                "protected_eval",
+                "evaluation:heldout-not-run",
+            ),
+            edge(
+                "evaluation_object",
+                "protected_eval",
+                "evaluation:heldout-not-run",
+                "immutable_object",
+                &object_id,
+            ),
+            edge(
+                "membership_object",
+                "membership",
+                "membership:train",
+                "immutable_object",
+                &object_id,
+            ),
+        ];
+        assert!(validate_not_run_evaluation_consumers(&[record, membership], &edges).is_err());
     }
 }
