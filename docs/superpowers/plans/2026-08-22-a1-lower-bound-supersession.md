@@ -42,7 +42,7 @@ def test_amendment_binds_frozen_authority_and_executed_trigger(self):
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-Run through `scripts/owned_process.py` with `-p no:cacheprovider`.
+Run through `src/ember/governance/scripts/owned_process.py` with `-p no:cacheprovider`.
 Expected: FAIL because `docs/spec/ember02-a1-lower-bound-only-amendment-v2.json` does not exist.
 
 - [ ] **Step 3: Add the minimal closed amendment JSON**

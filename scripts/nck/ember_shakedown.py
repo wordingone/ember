@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp-6c ember seat binding — SHAKEDOWN receipt (#313).
 
 Binds the ember v0 checkpoint (step-00025000 by default; configurable via
@@ -56,7 +59,7 @@ from nck.replay_rig import (
 DEFAULT_CHECKPOINT_DIR = (
     REPO_ROOT.parent / "runs" / "v0-r1s1" / "checkpoints" / "step-00025000"
 )
-TOKENIZER_PATH = REPO_ROOT / "tokenizer" / "tokenizer.json"
+TOKENIZER_PATH = REPO_ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 MAX_NEW_TOKENS = 128
 DEVICE = "cpu"
 EOS_ID = 0  # <|endoftext|> — sole stop token for raw pretrain

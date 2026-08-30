@@ -336,7 +336,7 @@ def test_r2_compilation_is_tokenizer_and_compiler_bound() -> None:
 
 def test_real_r2_adapter_rederives_single_authority_and_refuses_hash_tamper() -> None:
     suite = ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
-    tokenizer = ROOT / "tokenizer/tokenizer.json"
+    tokenizer = ROOT / "domains/model/tokenizer/tokenizer.json"
     compiler = ROOT / "scripts/r1_cheap_probe_suite.py"
     suite_sha, tokenizer_sha, compiler_sha = (_sha(path.read_bytes()) for path in (suite, tokenizer, compiler))
     registry, meta = load_compiled_source_suite(

@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Generate the C-OBS observatory proof-pack receipt (condition C-OBS, docs/spec/conditions-v1.md
-S4.2/S4.4; probe scripts/ember_totality/test_c_obs.py, hardened by issue #749).
+S4.2/S4.4; probe src/ember/governance/scripts/ember_totality/test_c_obs.py, hardened by issue #749).
 
 This is the RECEIPT GENERATOR, never the probe. It does two things, both for real, never
 synthetic/hardcoded:

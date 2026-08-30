@@ -286,7 +286,7 @@ I_MEMBERS = {
         "docs/spec/engineering-contracts-v1.md",
         "scripts/check_goal_citations.py",
         "scripts/check_publication_gate.py",
-        "scripts/ember_tally.py",
+        "src/ember/governance/scripts/ember_tally.py",
         "scripts/ember_tally_checks.py",
     ],
 }

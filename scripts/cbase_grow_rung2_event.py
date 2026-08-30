@@ -38,7 +38,7 @@ Phases (--phase {preflight,b1,b1m,b2,b3,stabilize}):
                cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json
                (micro_batch=1, grad_accum_steps=8, checkpointing OFF with
                an effective_readback assertion), for the D1 fixed-FLOPs
-               floor of 491,520 tokens (docs/spec/rung2-grow-spec-v1.md:
+               floor of 491,520 tokens (docs/domains/governance/spec/rung2-grow-spec-v1.md:
                30 steps at batch=16/seq=1024 == the same token count at
                effective_batch=8/seq=1024 over 60 optimizer steps — same
                FLOPs, VRAM-proven shape; disclosed, not silently assumed).
@@ -125,7 +125,7 @@ STABILIZE_MICRO_BATCH_DEFAULT = 1
 STABILIZE_GRAD_ACCUM_STEPS_DEFAULT = 8
 STABILIZE_VRAM_ESTIMATE_GIB = 18.253  # same receipt's mb=1 calibration point
 STABILIZE_VRAM_KILL_PCT = 15.0
-D1_TOTAL_TOKENS = 491520  # docs/spec/rung2-grow-spec-v1.md D1 fixed-FLOPs floor
+D1_TOTAL_TOKENS = 491520  # docs/domains/governance/spec/rung2-grow-spec-v1.md D1 fixed-FLOPs floor
 D1_PROD_BATCH_EQUIV = 16
 D1_PROD_STEPS_EQUIV = 30
 D1_PROD_SEQ_EQUIV = 1024

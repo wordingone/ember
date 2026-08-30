@@ -2854,7 +2854,7 @@ def _run_loop_econ_multimodal(args) -> None:
 
     Sweeps B=[4,8] with AdamW baseline, Muon AB, and torch.compile AB on the
     StreamingMatchedPairLoader multimodal path using the local b-multi-1 sample.
-    Enumerates all 6 EFFICIENCY_LEVERS per H1 (docs/ledgers/hardest-problems-register-v1.md).
+    Enumerates all 6 EFFICIENCY_LEVERS per H1 (docs/domains/governance/ledgers/hardest-problems-register-v1.md).
     Config SHA bound to v0-multimodal-config.json (not the text pretrain config).
     """
     import hashlib as _hl

@@ -45,7 +45,10 @@ import sys
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+NC = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+GOVERNANCE_SCRIPTS = os.path.join(NC, "src", "ember", "governance", "scripts")
+sys.path.insert(0, GOVERNANCE_SCRIPTS)
 import fp23_probe_prereg as fp23                       # noqa: E402
 from fp28_v0_coverage import _ref                      # noqa: E402
 

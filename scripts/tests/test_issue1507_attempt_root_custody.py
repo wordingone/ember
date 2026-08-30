@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "governance" / "scripts"))
 import frontier_receipt  # noqa: E402
 import r1_exit_battery  # noqa: E402
 
@@ -44,7 +45,7 @@ def test_frontier_mint_refuses_non_genesis_before_writing(tmp_path: Path):
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "scripts" / "frontier_receipt.py"),
+            str(ROOT / "src" / "ember" / "governance" / "scripts" / "frontier_receipt.py"),
             "--run-root",
             str(tmp_path / "attempt-run"),
             "--predecessor",

@@ -14,6 +14,9 @@ import time
 import ctypes
 from pathlib import Path
 
+GOVERNANCE_SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "ember" / "governance" / "scripts"
+sys.path.insert(0, str(GOVERNANCE_SCRIPTS))
+
 import ember_gate_process_supervision as gate
 import owned_process
 
@@ -97,7 +100,7 @@ def main() -> int:
         cli = subprocess.run(
             [
                 sys.executable,
-                str(Path(__file__).with_name("owned_process.py")),
+                str(GOVERNANCE_SCRIPTS / "owned_process.py"),
                 "--timeout-seconds",
                 "5",
                 "--",
@@ -167,7 +170,7 @@ def main() -> int:
             assert not refused_marker.exists(), "useful work ran before containment was established"
 
             crash_pid_path = repo / "crash-descendant.pid"
-            scripts_dir = Path(__file__).resolve().parent
+            scripts_dir = GOVERNANCE_SCRIPTS
             crash_child_code = (
                 "import pathlib, sys, time; "
                 f"pathlib.Path({str(crash_pid_path)!r}).write_text(str(__import__('os').getpid()), encoding='utf-8'); "

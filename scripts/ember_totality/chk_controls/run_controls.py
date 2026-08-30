@@ -2429,7 +2429,7 @@ def preflight_check_probe_files():
         "test_c3.py",
         "test_c7.py",
         "test_c2.py",
-        "test_c_obs.py",
+        "src/ember/governance/scripts/ember_totality/test_c_obs.py",
         "test_c11.py",
         "test_c_scale.py",
         "test_c_e2b.py",
@@ -2446,7 +2446,7 @@ def preflight_check_probe_files():
 
     missing_files = []
     for probe_name in EXPECTED_PROBES:
-        probe_path = os.path.join(PROBES_DIR, probe_name)
+        probe_path = os.path.join(REPO_ROOT, probe_name) if "/" in probe_name else os.path.join(PROBES_DIR, probe_name)
         if not os.path.isfile(probe_path):
             missing_files.append(probe_name)
 
@@ -2639,8 +2639,8 @@ def main(argv=None):
     record("6 C2 git-anchor + non-self-labeled leak", "NEG verbatim gold leak, no marker-string used", "test_c2.py", c2_neg, "RED")
 
     c_obs_pos, c_obs_neg = build_c_obs()
-    record("7 C-OBS evidence-surface scoping", "POS four conjuncts as receipts/ artifacts", "test_c_obs.py", c_obs_pos, "GREEN")
-    record("7 C-OBS evidence-surface scoping", "NEG docs-only glowing prose, receipts/ absent (today's false-GREEN vector)", "test_c_obs.py", c_obs_neg, "RED")
+    record("7 C-OBS evidence-surface scoping", "POS four conjuncts as receipts/ artifacts", "src/ember/governance/scripts/ember_totality/test_c_obs.py", c_obs_pos, "GREEN")
+    record("7 C-OBS evidence-surface scoping", "NEG docs-only glowing prose, receipts/ absent (today's false-GREEN vector)", "src/ember/governance/scripts/ember_totality/test_c_obs.py", c_obs_neg, "RED")
 
     c_manifest_pos, c_manifest_neg = build_c_manifest()
     record("8 C-MANIFEST denominator regex + <20 floor", "POS 25 mixed-separator conditions, all 25 rowed", "test_c_manifest.py", c_manifest_pos, "GREEN")

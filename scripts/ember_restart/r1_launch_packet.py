@@ -59,7 +59,7 @@ EXIT_SOURCE_PATHS = {
     ),
     "E5": (
         "scripts/r1_exit_battery.py",
-        "scripts/frontier_receipt.py",
+        "src/ember/governance/scripts/frontier_receipt.py",
         "scripts/energy_proxy_logger.py",
     ),
     "E6": (

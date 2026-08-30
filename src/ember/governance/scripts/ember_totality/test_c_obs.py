@@ -63,6 +63,9 @@ import os
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[5]
+LEGACY_TOTALITY = REPO_ROOT / "scripts" / "ember_totality"
+sys.path.insert(0, str(LEGACY_TOTALITY))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import check_path_sha_pairs, resolve_in_tree  # noqa: E402
 
@@ -72,7 +75,7 @@ from _lane14_common import check_path_sha_pairs, resolve_in_tree  # noqa: E402
 # ---------------------------------------------------------------------------
 
 def _find_state_root() -> Path | None:
-    _repo_root = Path(__file__).resolve().parent.parent.parent
+    _repo_root = REPO_ROOT
     _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
     candidates = [
         Path(_env_root) if _env_root else None,

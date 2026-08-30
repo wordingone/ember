@@ -99,7 +99,7 @@ and in-repo Python.
 
 | File read | Role |
 |---|---|
-| `docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md` | Primary spec: resident form (§2), harness invariants (§3/§5), communicability (§4) |
+| `docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md` | Primary spec: resident form (§2), harness invariants (§3/§5), communicability (§4) |
 | `docs/archive/pre-restart/sp6-duty-battery-v0.md` | Duty battery spec: verb classes, selectivity episodes, episode families |
 | `docs/archive/pre-restart/sp6-duty-battery.jsonl` | 20 episode rows: event/expected_verb/target_pattern for the four families |
 | `docs/charter/nck-invariant-contract-v0.md` | 15 invariants: uniform tool interface (inv 5), dispatch (inv 6/7), state persistence (inv 12/13) |

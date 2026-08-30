@@ -22,7 +22,7 @@ into prose that outruns the receipts.
 | 00 | INDEX | this file |
 | 01 | CONSTITUTION_AND_AUTHORITY | `INVARIANT.md`, `GOAL.md`, `scripts/verify_authority_conservation.py` |
 | 02 | REPO_TOPOLOGY | directory layout, worktree lifecycle, repo-guard hooks |
-| 03 | MODEL_ARCHITECTURE | the c03 dense network + BitNet ternary twin (`scripts/timeshare_pretrain.py`, `scripts/ember_bitnet_core.py`) |
+| 03 | MODEL_ARCHITECTURE | the c03 dense network + BitNet ternary twin (`scripts/timeshare_pretrain.py`, `src/ember/governance/scripts/ember_bitnet_core.py`) |
 | 04 | TRAINING_PIPELINE | pretraining entry points, the resident/CPU launch paths, the in-run commit governor |
 | 05 | GROWTH_AND_SCALING | `scripts/ember_growth_harness.py`, the C-GROW mechanisms, C-SCALE |
 | 06 | EVALUATION_AND_BENCHMARKS | D3 native loop, the operator benchmark set, anti-gaming C1–C5 protocol |

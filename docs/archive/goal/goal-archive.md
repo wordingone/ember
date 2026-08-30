@@ -498,7 +498,7 @@ cutting away inherited execution clutter.
 ### Lost Ideas, Stubs, And Deferred Work To Reattach Deliberately
 
 - **Completeness manifest/tally.** `docs/contracts/ember-completeness.md` and
-  `scripts/ember_tally.py` remain the larger completion authority. MVP should
+  `src/ember/governance/scripts/ember_tally.py` remain the larger completion authority. MVP should
   add a tally row after the first loop proof, not wait for the whole tally
   system before executing the loop.
 - **Floor-contract rows.** `docs/contracts/ember-floor-contract.md` preserves launch
@@ -1655,7 +1655,7 @@ planned/known piece (id, subgoal, AC, test, receipt pointer, status). A
 planned piece absent from the manifest is itself a gate violation Ã¢â‚¬â€ planning
 and manifest-entry are the same act from now on.
 
-**TALLY:** `scripts/ember_tally.py` (eng) walks the manifest, verifies each
+**TALLY:** `src/ember/governance/scripts/ember_tally.py` (eng) walks the manifest, verifies each
 row's receipt exists AND passes its named check, emits
 `receipts/tally-<ts>.json` {total, implemented, pct, missing[]}. The tally
 receipt is the only completion authority; prose claims void. GOAL satisfied

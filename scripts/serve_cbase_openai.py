@@ -18,7 +18,7 @@ Startup requirements:
   - Config is INFERRED from checkpoint tensor shapes (post-grow; intermediate_size differs from seed).
   - Weight tying is DETECTED from the checkpoint (head.weight vs embed_tokens.weight), not assumed.
   - One-model-at-a-time guard: refuses --device cuda if :8082/health (27B reference) answers.
-  - Frozen training tokenizer loaded from <repo-root>/tokenizer/tokenizer.json.
+  - Frozen training tokenizer loaded from <repo-root>/domains/model/tokenizer/tokenizer.json.
   - Startup log + /health endpoint report inferred dims. A load receipt (checkpoint sha256,
     remap counts, tie detection, param count) is printed at startup and optionally written to
     --receipt-path.
@@ -62,7 +62,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKPOINT_PATH_DEFAULT = (
     REPO_ROOT / "models" / "cbase-grow-rung" / "rung2-event-grow-rung2-20260708-real" / "b1-snapshot" / "model.pt"
 )
-TOKENIZER_PATH_DEFAULT = REPO_ROOT / "tokenizer" / "tokenizer.json"
+TOKENIZER_PATH_DEFAULT = REPO_ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 MANIFEST_PATH_DEFAULT = CHECKPOINT_PATH_DEFAULT.parent / "manifest.json"
 
 PORT_DEFAULT = 8083

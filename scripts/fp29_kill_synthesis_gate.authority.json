@@ -1,0 +1,10 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "scripts/fp29_kill_synthesis_gate.py",
+  "artifact_sha256": "0677f4688a8edcc575fb9211ce2d0221ebb01fdbaec6371b994eb31742608392",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

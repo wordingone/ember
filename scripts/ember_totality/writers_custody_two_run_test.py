@@ -88,7 +88,7 @@ def test_writers_custody_two_run() -> bool:
     for run_number in (1, 2):
         print(f"\n--- RUN {run_number} ---")
         for label, script in (
-            ("milestone", "scripts/check_milestone_reconciliation.py"),
+            ("milestone", "src/ember/governance/scripts/check_milestone_reconciliation.py"),
             ("publication", "scripts/check_publication_gate.py"),
         ):
             stdout, exit_code = _run_writer_step(REPO_ROOT, script)

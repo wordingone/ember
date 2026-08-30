@@ -212,7 +212,7 @@ def _fixture(td):
     json.dump({"ticket": "FIXTURE-ASM", "ts": "20260101T000000Z"},
               open(f"{td}/receipts/fixture-assembly.json", "w"))
     json.dump({"vocab_size": 32000},
-              open(f"{td}/tokenizer/tokenizer.json", "w"))
+              open(f"{td}/domains/model/tokenizer/tokenizer.json", "w"))
 
     ids = [8 + (i % 100) for i in range(4096)]
     with open(f"{td}/shards/v0-00000.bin", "wb") as fh:
@@ -255,8 +255,8 @@ def _fixture(td):
                 "name": freeze_name,
                 "sha256": _sha(f"{td}/receipts/{freeze_name}")},
             "tokenizer_json": {
-                "path": "tokenizer/tokenizer.json",
-                "sha256": _sha(f"{td}/tokenizer/tokenizer.json")},
+                "path": "domains/model/tokenizer/tokenizer.json",
+                "sha256": _sha(f"{td}/domains/model/tokenizer/tokenizer.json")},
         },
         "sha_convention": SHA_CONVENTION,
         "no_gpu": True,

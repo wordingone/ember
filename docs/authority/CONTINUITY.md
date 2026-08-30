@@ -16,7 +16,7 @@ mechanism_erasure=forbidden
 2. Read docs/domains/governance/authority/GOAL.md, including EMBER_AUTHORITY_V1.
 3. Read the operator-owned durable goal selection when available.
 4. Read docs/authority/CONTINUITY.md for exact artifact identities and maturity;
-   docs/authority/STATE.md is only its compatibility pointer.
+   docs/domains/governance/authority/STATE.md is only its compatibility pointer.
 5. Run the authority verifier and mutation suite.
 6. Read only the subordinate contract needed for the selected goal.
 7. Inspect current Git, receipt, checkpoint, runtime, and benchmark evidence
@@ -150,16 +150,16 @@ changed files, verification commands, evidence boundary, and remaining
 certificate failures. It cannot claim completion from prep, a green board, or
 absence of a known error.
 
-## Migrated docs/authority/STATE.md artifact-state resolver
+## Migrated docs/domains/governance/authority/STATE.md artifact-state resolver
 
-The following block preserves the complete substantive docs/authority/STATE.md resolver that
+The following block preserves the complete substantive docs/domains/governance/authority/STATE.md resolver that
 was moved here from the pre-edit SHA-256 `364FF75B7DCB5C9A1CA424F78CD17F731DDCC5E429ED8BD5B927CC28D083B89E`.
 Its sections are explicitly dispositioned: identity and terminology remain
 subordinate evidence definitions; resolver rows retain their stated current,
 historical, borrowed, and denied classes; benchmark obligations remain durable
 obligations rather than execution claims; protected-control hashes remain
 immutable denied classifications; and the conclusion remains the negative
-model/admission boundary. The old docs/authority/STATE.md location is superseded, not its
+model/admission boundary. The old docs/domains/governance/authority/STATE.md location is superseded, not its
 information.
 # Ember identity and artifact state
 

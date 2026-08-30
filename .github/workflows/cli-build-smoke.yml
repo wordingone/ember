@@ -36,7 +36,7 @@ jobs:
         working-directory: tools/ember-cli/src
         shell: pwsh
         run: |
-          python -B ../../../scripts/owned_process.py --timeout-seconds 30 -- bun.exe run ./build-tools/conpty-nul-smoke.ts `
+          python -B ../../../src/ember/governance/scripts/owned_process.py --timeout-seconds 30 -- bun.exe run ./build-tools/conpty-nul-smoke.ts `
             "$PWD/ember.exe" `
             "${{ runner.temp }}/conpty-nul-smoke" `
             "${{ github.sha }}" `

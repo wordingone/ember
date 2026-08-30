@@ -56,7 +56,7 @@ GUARD_SUPPORT_FILES = [
     "scripts/receipt_check.py",
     "tools/frozen-receipt-exceptions.json",
     "docs/authority/INVARIANT.md",
-    "docs/authority/STATE.md",
+    "docs/domains/governance/authority/STATE.md",
     "docs/authority/GOVERNANCE.md",
     "README.md",
     "docs/authority/CONTINUITY.md",
@@ -226,7 +226,7 @@ def run_guard(
         env.update(extra_env)
     proc = subprocess.run(
         [GIT_BASH, "tools/repo-guard.sh", *args], cwd=str(tmp), env=env,
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     return proc.returncode, proc.stdout + proc.stderr
 
@@ -255,7 +255,7 @@ def run_guard_from_trusted_kernel(
         cwd=str(subject),
         env=env,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     return proc.returncode, proc.stdout + proc.stderr
 
@@ -475,9 +475,14 @@ def test_green_clean_fixture():
 def test_green_canonical_authority_paths():
     tmp = make_fixture("fix/selftest-migrated-authority")
     try:
-        for name in ("INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md", "STATE.md"):
+        for name in ("INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md"):
             assert not (tmp / name).exists()
             assert (tmp / "docs" / "authority" / name).is_file()
+        assert not (tmp / "STATE.md").exists()
+        assert not (tmp / "docs" / "authority" / "STATE.md").exists()
+        assert (
+            tmp / "docs" / "domains" / "governance" / "authority" / "STATE.md"
+        ).is_file()
         goal_rel = resolve_goal_support_file(tmp, tracked=False)
         assert goal_rel in GOAL_SUPPORT_CANDIDATES
         commit_fixture(tmp)
@@ -598,7 +603,11 @@ def test_red_duplicate_authority_path():
             source = (
                 tmp / resolve_goal_support_file(tmp, tracked=False)
                 if name == "GOAL.md"
-                else authority / name
+                else (
+                    tmp / "docs" / "domains" / "governance" / "authority" / name
+                    if name == "STATE.md"
+                    else authority / name
+                )
             )
             shutil.copyfile(source, tmp / name)
         commit_fixture(tmp)
@@ -926,7 +935,7 @@ def test_split_kernel_hashed_scan_covers_every_subject_guard_surface():
                 cwd=str(tmp),
                 check=True,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8", errors="replace",
             )
             subprocess.run(
                 [
@@ -937,7 +946,7 @@ def test_split_kernel_hashed_scan_covers_every_subject_guard_surface():
                 cwd=str(tmp),
                 check=True,
                 capture_output=True,
-                text=True,
+                text=True, encoding="utf-8", errors="replace",
             )
 
             rc, out = run_guard_from_trusted_kernel(tmp, kernel)
@@ -1422,7 +1431,7 @@ def test_green_pr_merge_excludes_live_base_squash_commit():
         def git(*args: str) -> str:
             return subprocess.run(
                 ["git", "-C", str(tmp), *args], check=True,
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
             ).stdout.strip()
 
         def commit(message: str) -> str:
@@ -1468,7 +1477,7 @@ def test_red_pr_merge_still_rejects_branch_goal_evidence_commit():
         def git(*args: str) -> str:
             return subprocess.run(
                 ["git", "-C", str(tmp), *args], check=True,
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
             ).stdout.strip()
 
         def commit(message: str) -> str:

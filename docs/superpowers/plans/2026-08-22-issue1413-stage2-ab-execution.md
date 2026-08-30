@@ -30,7 +30,7 @@
 
 ### Task 4: Source gates and merge
 
-- Run focused and affected tests through `scripts/owned_process.py` with finite timeouts and verified cleanup.
+- Run focused and affected tests through `src/ember/governance/scripts/owned_process.py` with finite timeouts and verified cleanup.
 - Run authority conservation, repository guard, exact diff review, and independent exact-head review.
 - Publish and merge only with green required checks; source review grants no performance or closure credit.
 

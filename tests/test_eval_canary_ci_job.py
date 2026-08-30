@@ -27,12 +27,12 @@ class EvalCanaryCiJobTests(unittest.TestCase):
             "python -B tests/test_eval_canary_ci_job.py -v",
             "--run-suite",
             "issue1948-eval-canary-terminal.json",
-            "ISSUE1948_FROZEN_TIMEOUT_SECONDS: 4",
-            "ISSUE1948_MEASURING_RUN_URL: https://github.com/wordingone/ember/actions/runs/33141228761/job/98752316520",
+            "ISSUE1948_FROZEN_TIMEOUT_SECONDS: 12",
+            "ISSUE1948_MEASURING_RUN_URL: https://github.com/wordingone/ember/actions/runs/33279094639",
             "torch-2.10.0+cpu-cp310-cp310-manylinux_2_28_x86_64.whl",
             "a280ffaea7b9c828e0c1b9b3bd502d9b6a649dc9416997b69b84544bd469f215",
             'test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"',
-            'GITHUB_SHA="$(git rev-parse HEAD)" timeout 4s python -B',
+            'GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B',
         )
         for needle in required:
             self.assertIn(needle, workflow)

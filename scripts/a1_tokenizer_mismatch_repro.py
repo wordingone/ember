@@ -23,7 +23,7 @@ supplied path, never committed).
 
 Usage:
   python scripts/a1_tokenizer_mismatch_repro.py \\
-      --scrubbed-tokenizer tokenizer/tokenizer.json \\
+      --scrubbed-tokenizer domains/model/tokenizer/tokenizer.json \\
       --original-tokenizer <local-archive path to the 2c557e7 tokenizer.json> \\
       --eval-suite-dir <sha-verified eval-suite-v1 copy> \\
       --freeze-receipt receipts/eval-suite-freeze/eval-suite-freeze-v1.json \\
@@ -51,7 +51,7 @@ ORIG_SHA = "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97"
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--scrubbed-tokenizer", default="tokenizer/tokenizer.json")
+    ap.add_argument("--scrubbed-tokenizer", default="domains/model/tokenizer/tokenizer.json")
     ap.add_argument("--original-tokenizer", required=True)
     ap.add_argument("--eval-suite-dir", required=True)
     ap.add_argument("--freeze-receipt", required=True)
@@ -123,7 +123,7 @@ def main() -> int:
                   "shard-generation tokenizer (sha 2c557e7...); token-id disagreement "
                   "on a row makes exact 13-id-window matching a possible FALSE NEGATIVE",
         "tokenizers": {
-            "scrubbed_on_disk": {"path": "tokenizer/tokenizer.json", "sha256": sha_scrub,
+            "scrubbed_on_disk": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": sha_scrub,
                                   "n_orphan_merges_dropped_in_memory": dropped_scrub},
             "original_shardgen": {"sha256": sha_orig,
                                    "n_orphan_merges_dropped_in_memory": dropped_orig,

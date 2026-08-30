@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "bun run ./entrypoints/main.ts",
-    "test": "python ../../../scripts/owned_process.py --timeout-seconds 900 -- bun test",
+    "test": "python ../../../src/ember/governance/scripts/owned_process.py --timeout-seconds 900 -- bun test",
     "test:gate": "bun scripts/test-gate.ts",
     "typecheck": "tsc --noEmit",
     "build": "bun run ./build-tools/build-cockpit.ts"

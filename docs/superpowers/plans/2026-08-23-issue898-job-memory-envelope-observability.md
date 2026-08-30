@@ -3,7 +3,7 @@
 > **Execution rule:** follow the committed design in
 > `docs/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md`.
 > Tests precede implementation. Every process-producing command runs through
-> `scripts/owned_process.py`; every Python process also runs through
+> `src/ember/governance/scripts/owned_process.py`; every Python process also runs through
 > the configured hidden/no-window Python launcher; pytest always uses
 > `-p no:cacheprovider`.
 

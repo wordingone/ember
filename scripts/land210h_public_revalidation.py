@@ -339,7 +339,7 @@ def validate_public_lineage(
             }
         )
 
-    tokenizer_path = "tokenizer/tokenizer.json"
+    tokenizer_path = "domains/model/tokenizer/tokenizer.json"
     tokenizer_raw = git_blob(root, subject_commit, tokenizer_path)
     current_tokenizer = validate_current_tokenizer(tokenizer_raw)
     tokenizer_last_change = _last_change_commit(root, subject_commit, tokenizer_path)

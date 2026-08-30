@@ -40,7 +40,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const CLOSURE_MANIFEST_RELATIVE_PATH: &str = "manifests/training-dependency-closure.json";
 const CLOSURE_MANIFEST_SCHEMA_VERSION: &str = "ember-training-dependency-closure-v1";
 const TRAINING_CONFIG_RELATIVE_PATH: &str = "configs/ember-restart-3b.json";
-const TOKENIZER_RELATIVE_PATH: &str = "tokenizer/tokenizer.json";
+const TOKENIZER_RELATIVE_PATH: &str = "domains/model/tokenizer/tokenizer.json";
 const INPUT_IDENTITY_SCHEMA_VERSION: &str = "ember-input-identity-v1";
 const PRODUCTION_RUNG_ARTIFACT_ID: &str = "owned-four-domain-production-rung-v1";
 // Mirrors tools/ember-restart-3b/production_rung.py's SHARD_RELATIVE/RECEIPT_RELATIVE

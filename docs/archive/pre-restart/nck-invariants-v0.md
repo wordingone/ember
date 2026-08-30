@@ -162,7 +162,7 @@ and in-repo Python.
 
 | File read | Role |
 |---|---|
-| `docs/archive/pre-restart/sp5-nck-harness-port-spec-v0.md` | Primary contract: §5 un-removable invariants list |
+| `docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md` | Primary contract: §5 un-removable invariants list |
 | `scripts/nck/event_loop.py` | Module to surgically edit; boot-check wiring point |
 | `docs/archive/pre-restart/nck-event-loop-v0.md` | Architecture doc for #260 (provenance + ambiguity resolutions) |
 | `scripts/nck/selftest_event_loop.py` | Existing selftest: extended with `_skip_invariant_check` |

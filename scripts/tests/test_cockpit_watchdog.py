@@ -22,7 +22,8 @@ import tempfile
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPTS_DIR = os.path.abspath(os.path.join(HERE, ".."))
+REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+SCRIPTS_DIR = os.path.join(REPO_ROOT, "src", "ember", "governance", "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 
 import pytest

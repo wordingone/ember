@@ -919,7 +919,7 @@ def _resolve_ember_state_root(repo_root: str, platform: str | None = None) -> st
 
 
 def _default_renderer_heartbeat_path() -> str:
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
     try:
         state_root = _resolve_ember_state_root(repo_root)
     except EmberStateRootError as err:

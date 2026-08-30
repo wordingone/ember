@@ -13,7 +13,7 @@ landed 2026-07-01, but the board only ever tamper-hashed it, never ran it -- the
 un-wired shape C-ENF cured for the publication/energy-law layer, issue #38).
 
 CHK enforced here: `milestone_leg.run_milestone_leg(ROOT)` subprocess-executes
-scripts/check_milestone_reconciliation.py with dual-source verdict resolution (process
+src/ember/governance/scripts/check_milestone_reconciliation.py with dual-source verdict resolution (process
 exit code cross-checked against the checker's own printed verdict line, reusing
 enforcement_leg.py's _run_one_checker UNMODIFIED -- exactly the C-ENF pattern, not a
 reimplementation):

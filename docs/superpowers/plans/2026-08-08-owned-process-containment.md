@@ -29,7 +29,7 @@
 ### Task 2: Implement the owned runner
 
 **Files:**
-- Create: `scripts/owned_process.py`
+- Create: `src/ember/governance/scripts/owned_process.py`
 - Modify: `scripts/ember_gate_process_supervision.py`
 - Test: `scripts/ember_gate_process_supervision_selftest.py`
 
@@ -45,6 +45,6 @@
 - Modify: `tools/ember-cli/src/package.json`
 
 - [ ] Require finite-timeout owned execution for automated descendant-producing commands.
-- [ ] Route the package test script through `scripts/owned_process.py`.
+- [ ] Route the package test script through `src/ember/governance/scripts/owned_process.py`.
 - [ ] Run compile, focused tests, relevant gate tests, and repository guard.
 - [ ] Commit, push, open PR, self-review the exact diff, and merge only after required checks pass.

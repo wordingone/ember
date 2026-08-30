@@ -1,0 +1,10 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "src/ember/governance/scripts/fp23_probe_prereg.py",
+  "artifact_sha256": "cdc15a98ed851991f6724d0ed14324714f7db6807e3754783c63abdd987e074e",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

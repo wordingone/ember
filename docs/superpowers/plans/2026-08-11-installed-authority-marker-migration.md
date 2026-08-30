@@ -39,7 +39,7 @@ Before the first install, create the exact legacy root marker and assert a succe
 Run:
 
 ```powershell
-python -B scripts/owned_process.py --timeout-seconds 180 -- powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/ember-desktop-deployment-selftest.ps1
+python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 180 -- powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/ember-desktop-deployment-selftest.ps1
 ```
 
 Expected: FAIL because the legacy root marker survives, producing dual authority markers.

@@ -2148,7 +2148,7 @@ def verified_derived_receipt_index_paths(
         return set()
     try:
         import importlib.util
-        builder_path = root / "scripts" / "build_claims_index.py"
+        builder_path = root / "src" / "ember" / "governance" / "scripts" / "build_claims_index.py"
         spec = importlib.util.spec_from_file_location(
             "ember_authority_claims_index_builder", builder_path
         )

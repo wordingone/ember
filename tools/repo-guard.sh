@@ -255,7 +255,7 @@ fi
 #
 # tools/repo-guard-names-exclude.cfg lists path-prefixes (one per line) that
 # the names scan skips entirely — machine-generated vocab/data artifacts only
-# (e.g. tokenizer/), never prose. Both plaintext and hashed modes read it.
+# (e.g. domains/model/tokenizer/), never prose. Both modes read it.
 # SKIP all NAME checks if backup exemption is applied (exact-match private mirror only)
 if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   NAMES_EXCLUDE_ARGS=()
@@ -627,14 +627,14 @@ check_dup receipts ledger
 DUPOK=$?
 [ "$FAIL" -eq 0 ] && ok "dup-dir" "no known duplicate dirs"
 
-# ---- 6. docs/authority/STATE.md is a bounded position ledger, not an append log ---------
+# ---- 6. docs/domains/governance/authority/STATE.md is a bounded position ledger, not an append log ---------
 if [ -n "$STATE_REL" ] && git ls-files --error-unmatch "$STATE_REL" >/dev/null 2>&1; then
   SL="$(git show ":$STATE_REL" 2>/dev/null | wc -l | tr -d ' ')"
   [ -z "$SL" ] && SL="$(wc -l < "$STATE_REL" | tr -d ' ')"
   if [ "$SL" -le "$MAX_STATE_LINES" ]; then
     ok "state" "$STATE_REL $SL lines (<= $MAX_STATE_LINES)"
   else
-    fail "state" "docs/authority/STATE.md $SL lines exceeds $MAX_STATE_LINES — it is a position ledger, not an append log"
+    fail "state" "docs/domains/governance/authority/STATE.md $SL lines exceeds $MAX_STATE_LINES — it is a position ledger, not an append log"
   fi
 fi
 

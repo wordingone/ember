@@ -1,7 +1,7 @@
 """fp24_verdict.py — execute the FROZEN fp-23 checkpoint-probe verdicts on
 REAL v0 checkpoint receipts (#139, successor to fp-23 #135).
 
-fp-23 (scripts/fp23_probe_prereg.py) froze, BEFORE pretrain step 0:
+fp-23 (src/ember/governance/scripts/fp23_probe_prereg.py) froze, BEFORE pretrain step 0:
   - the L1 curriculum grammar + held-out split,
   - the 16-field probe receipt schema,
   - the PASS / RETRY-AT-4B / KILL / PROTOCOL-VIOLATION decision procedure

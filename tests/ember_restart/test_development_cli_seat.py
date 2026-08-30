@@ -23,7 +23,7 @@ RUNTIME_FILES = {
     "scripts/ember_restart/prediction_contract.py",
     "scripts/ember_restart_eval_checkpoint_consumer.py",
     "scripts/ember_restart_eval_raw_forward.py",
-    "tokenizer/tokenizer.json",
+    "domains/model/tokenizer/tokenizer.json",
     "tools/ember-restart-3b/batch.py",
     "tools/ember-restart-3b/checkpoint_artifacts.py",
     "tools/ember-restart-3b/infer.py",
@@ -48,7 +48,7 @@ def _fixture(
     checkpoint_dir = tmp_path / "checkpoint"
     checkpoint_dir.mkdir(parents=True)
     model_config = tmp_path / "configs" / "ember-restart-3b.json"
-    tokenizer = tmp_path / "tokenizer" / "tokenizer.json"
+    tokenizer = tmp_path / "domains" / "model" / "tokenizer" / "tokenizer.json"
     server = tmp_path / "tools" / "ember-restart-3b" / "serve_owned_openai.py"
     counter = tmp_path / "parameter-evidence" / "parameter_counter.py"
     receipt = tmp_path / "parameter-evidence" / "step2-realization-receipt.json"
@@ -63,7 +63,7 @@ def _fixture(
         path.write_bytes(content)
     generated = {
         "configs/ember-restart-3b.json",
-        "tokenizer/tokenizer.json",
+        "domains/model/tokenizer/tokenizer.json",
         "tools/ember-restart-3b/serve_owned_openai.py",
         "parameter-evidence/parameter_counter.py",
         "parameter-evidence/step2-realization-receipt.json",
@@ -151,7 +151,7 @@ def _fixture(
             "endpoint_url": "http://127.0.0.1:8083",
             "checkpoint": {"manifest_path": "checkpoint/checkpoint-manifest.json", "sha256": checkpoint_hash},
             "model_config": {"path": "configs/ember-restart-3b.json", "sha256": config_hash},
-            "tokenizer": {"path": "tokenizer/tokenizer.json", "sha256": tokenizer_hash},
+            "tokenizer": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": tokenizer_hash},
             "server": {"path": "tools/ember-restart-3b/serve_owned_openai.py", "sha256": _sha256(server)},
             "runtime_bundle": {"index_path": runtime_index.name, "sha256": _sha256(runtime_index)},
             "parameter_evidence": {
