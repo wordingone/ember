@@ -25,6 +25,13 @@ HASH_KEYS = {key for key in MANIFEST_KEYS if key.endswith("_sha256")}
 WORKER_CLASSES = {"EXECUTED","MUTATING_SQL_REFUSED","SYNTAX_ERROR","SCHEMA_ERROR","RUNTIME_ERROR","EXACT_SCORER_ERROR","EXECUTION_SCORER_ERROR","SCORER_ERROR"}
 MODEL_OUTCOME_CLASSES = {"EXECUTED","SYNTAX_ERROR","SCHEMA_ERROR","RUNTIME_ERROR","MUTATING_SQL_REFUSED"}
 _OWNED_PROCESS_MODULE = None
+SPIDER_LICENSE_TOP_KEYS = {"schema_version","benchmark_id","authorities","dataset_attribution","self_sha256"}
+SPIDER_LICENSE_AUTHORITY_KEYS = {"authority_id","asset_class","license_spdx","license_text_raw_sha256","upstream_url","artifact_url","artifact_identity","artifact_bytes","artifact_raw_sha256"}
+SPIDER_LICENSE_ATTRIBUTION_KEYS = {"title","creators_citation","source_url","license_url","modifications","disclosure"}
+SPIDER_LICENSE_AUTHORITIES = {
+ "spider-code":{"asset_class":"code_scorer","license_spdx":"Apache-2.0","upstream_url":"https://github.com/taoyds/spider.git","artifact_url":"https://github.com/taoyds/spider/tree/b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c","artifact_identity":"git-tree:7687d1f709b5f2a645835d0c6c2ac13796e33491"},
+ "spider-dataset":{"asset_class":"protected_eval_dataset","license_spdx":"CC-BY-SA-4.0","upstream_url":"https://yale-lily.github.io/spider","artifact_url":"https://drive.google.com/file/d/1403EGqzIDoHMdQF4c9Bkyl7dZLZ5Wt6J/view?usp=sharing","artifact_identity":"spider_data.zip"},
+}
 
 def _is_sha256(value: object) -> bool:
  return isinstance(value,str) and len(value)==64 and all(c in "0123456789abcdef" for c in value)
@@ -201,7 +208,7 @@ def pinned_sqlparse_root(pyroot: Path):
 def _owned_process_runner():
  global _OWNED_PROCESS_MODULE
  if _OWNED_PROCESS_MODULE is not None: return _OWNED_PROCESS_MODULE.OwnedProcessRunner()
- source=Path(__file__).with_name("owned_process.py")
+ source=Path(__file__).resolve().parents[1]/"src"/"ember"/"governance"/"scripts"/"owned_process.py"
  spec=importlib.util.spec_from_file_location("spider_terminal_owned_process",source)
  if spec is None or spec.loader is None: raise RuntimeError("owned process runner is unavailable")
  _OWNED_PROCESS_MODULE=importlib.util.module_from_spec(spec);sys.modules[spec.name]=_OWNED_PROCESS_MODULE;spec.loader.exec_module(_OWNED_PROCESS_MODULE)
@@ -431,14 +438,32 @@ def _closed_self_hashed(raw: bytes, keys: set[str], schema_version: str) -> dict
  if not _is_sha256(claimed) or claimed!=sha256_bytes(canonical(unsigned)): raise ValueError("bound JSON self hash is invalid")
  return value
 
+def validate_spider_license_sidecar(raw: bytes) -> dict:
+ sidecar=_closed_self_hashed(raw,SPIDER_LICENSE_TOP_KEYS,"ember-spider-license-sidecar-v2")
+ if sidecar.get("benchmark_id")!="spider": raise ValueError("Spider license sidecar identity mismatch")
+ authorities=sidecar.get("authorities")
+ if not isinstance(authorities,list) or [row.get("authority_id") if isinstance(row,dict) else None for row in authorities]!=sorted(SPIDER_LICENSE_AUTHORITIES): raise ValueError("Spider license authorities are absent, extra, or reordered")
+ license_hashes=set()
+ for row in authorities:
+  if set(row)!=SPIDER_LICENSE_AUTHORITY_KEYS: raise ValueError("Spider license authority row schema is closed")
+  expected=SPIDER_LICENSE_AUTHORITIES[row["authority_id"]]
+  if any(row.get(key)!=item for key,item in expected.items()): raise ValueError("Spider license authority identity mismatch")
+  if not _is_sha256(row.get("license_text_raw_sha256")) or not _is_sha256(row.get("artifact_raw_sha256")): raise ValueError("Spider license authority raw identity is invalid")
+  artifact_bytes=row.get("artifact_bytes")
+  if isinstance(artifact_bytes,bool) or not isinstance(artifact_bytes,int) or artifact_bytes<=0: raise ValueError("Spider license authority artifact bytes are invalid")
+  license_hashes.add(row["license_text_raw_sha256"])
+ if len(license_hashes)!=len(authorities): raise ValueError("Spider code and dataset license text identities are conflated")
+ attribution=sidecar.get("dataset_attribution")
+ if not isinstance(attribution,dict) or set(attribution)!=SPIDER_LICENSE_ATTRIBUTION_KEYS or any(not isinstance(item,str) or not item.strip() for item in attribution.values()) or attribution.get("source_url")!="https://yale-lily.github.io/spider" or attribution.get("license_url")!="https://creativecommons.org/licenses/by-sa/4.0/legalcode": raise ValueError("Spider dataset attribution is incomplete or substituted")
+ return sidecar
+
 def validate_1581_admission_binding(admission_raw: bytes, catalog_raw: bytes, license_raw: bytes, manifest: dict) -> bool:
  """Return False, never partial credit, for an absent or unverifiable #1581 binding."""
  try:
   if sha256_bytes(admission_raw)!=manifest["admission_receipt_raw_sha256"]: raise ValueError("admission receipt raw identity mismatch")
   if sha256_bytes(catalog_raw)!=manifest["catalog_fragment_raw_sha256"]: raise ValueError("catalog fragment raw identity mismatch")
   if sha256_bytes(license_raw)!=manifest["license_sidecar_raw_sha256"]: raise ValueError("license sidecar raw identity mismatch")
-  license_sidecar=_closed_self_hashed(license_raw,{"schema_version","benchmark_id","license_spdx","license_text_raw_sha256","upstream_url","self_sha256"},"ember-spider-license-sidecar-v1")
-  if license_sidecar["benchmark_id"]!="spider" or license_sidecar["license_spdx"]!="Apache-2.0" or license_sidecar["upstream_url"]!="https://github.com/taoyds/spider.git" or not _is_sha256(license_sidecar["license_text_raw_sha256"]): raise ValueError("license sidecar Spider identity mismatch")
+  validate_spider_license_sidecar(license_raw)
   receipt_keys={"schema_version","result","benchmark_id","protected_eval_id","catalog_fragment_raw_sha256","license_sidecar_raw_sha256","ordered_row_set_sha256","examples_raw_sha256","gold_raw_sha256","tables_raw_sha256","database_tree_manifest_sha256","self_sha256"}
   receipt=_closed_self_hashed(admission_raw,receipt_keys,"ember-spider-1581-admission-receipt-v1")
   if receipt["result"]!="ADMITTED_FOR_PROTECTED_EVALUATION" or receipt["benchmark_id"]!="spider": raise ValueError("admission receipt verdict is not Spider admitted")

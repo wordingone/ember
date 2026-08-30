@@ -106,11 +106,40 @@ def test_closed_manifest_refuses_non_hex_identity(tmp_path: Path) -> None:
 def admission_fixture(module):
     license_sidecar = module.self_hashed(
         {
-            "schema_version": "ember-spider-license-sidecar-v1",
+            "schema_version": "ember-spider-license-sidecar-v2",
             "benchmark_id": "spider",
-            "license_spdx": "Apache-2.0",
-            "license_text_raw_sha256": "a" * 64,
-            "upstream_url": "https://github.com/taoyds/spider.git",
+            "authorities": [
+                {
+                    "authority_id": "spider-code",
+                    "asset_class": "code_scorer",
+                    "license_spdx": "Apache-2.0",
+                    "license_text_raw_sha256": "a" * 64,
+                    "upstream_url": "https://github.com/taoyds/spider.git",
+                    "artifact_url": "https://github.com/taoyds/spider/tree/b7b5b8c890cd30e35427348bb9eb8c6d1350ca7c",
+                    "artifact_identity": "git-tree:7687d1f709b5f2a645835d0c6c2ac13796e33491",
+                    "artifact_bytes": 100,
+                    "artifact_raw_sha256": "b" * 64,
+                },
+                {
+                    "authority_id": "spider-dataset",
+                    "asset_class": "protected_eval_dataset",
+                    "license_spdx": "CC-BY-SA-4.0",
+                    "license_text_raw_sha256": "c" * 64,
+                    "upstream_url": "https://yale-lily.github.io/spider",
+                    "artifact_url": "https://drive.google.com/file/d/1403EGqzIDoHMdQF4c9Bkyl7dZLZ5Wt6J/view?usp=sharing",
+                    "artifact_identity": "spider_data.zip",
+                    "artifact_bytes": 200,
+                    "artifact_raw_sha256": "d" * 64,
+                },
+            ],
+            "dataset_attribution": {
+                "title": "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic Parsing and Text-to-SQL Task",
+                "creators_citation": "Yu et al., EMNLP 2018",
+                "source_url": "https://yale-lily.github.io/spider",
+                "license_url": "https://creativecommons.org/licenses/by-sa/4.0/legalcode",
+                "modifications": "No upstream dataset bytes modified for protected evaluation custody.",
+                "disclosure": "No dataset bytes redistributed; attribution and CC BY-SA 4.0 inheritance retained.",
+            },
         }
     )
     protected_eval_id = "evaluation:spider:" + "b" * 64
@@ -203,6 +232,43 @@ def test_1581_admission_binding_accepts_one_closed_synthetic_fixture() -> None:
     assert module.validate_1581_admission_binding(
         receipt_raw, fragment_raw, license_raw, manifest
     ) is True
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "single_authority", "wrong_order", "shared_license_hash", "dataset_apache",
+        "missing_artifact_url", "wrong_dataset_upstream", "zero_artifact_bytes",
+        "empty_attribution", "self_hash_drift",
+    ],
+)
+def test_1581_admission_binding_refuses_license_or_identity_substitution(mutation: str) -> None:
+    module = load_module()
+    receipt, fragment, license_sidecar = admission_fixture(module)
+    license_sidecar.pop("self_sha256")
+    if mutation == "single_authority": license_sidecar["authorities"].pop()
+    elif mutation == "wrong_order": license_sidecar["authorities"].reverse()
+    elif mutation == "shared_license_hash": license_sidecar["authorities"][1]["license_text_raw_sha256"] = "a" * 64
+    elif mutation == "dataset_apache": license_sidecar["authorities"][1]["license_spdx"] = "Apache-2.0"
+    elif mutation == "missing_artifact_url": license_sidecar["authorities"][1].pop("artifact_url")
+    elif mutation == "wrong_dataset_upstream": license_sidecar["authorities"][1]["upstream_url"] = "https://github.com/taoyds/spider.git"
+    elif mutation == "zero_artifact_bytes": license_sidecar["authorities"][1]["artifact_bytes"] = 0
+    elif mutation == "empty_attribution": license_sidecar["dataset_attribution"]["disclosure"] = ""
+    license_sidecar = module.self_hashed(license_sidecar)
+    if mutation == "self_hash_drift": license_sidecar["self_sha256"] = "0" * 64
+    fragment_raw = canonical(fragment)
+    license_raw = canonical(license_sidecar)
+    receipt.pop("self_sha256")
+    receipt["license_sidecar_raw_sha256"] = hashlib.sha256(license_raw).hexdigest()
+    receipt = module.self_hashed(receipt)
+    receipt_raw = canonical(receipt)
+    manifest = valid_manifest()
+    for key in ("ordered_row_set_sha256", "examples_raw_sha256", "gold_raw_sha256", "tables_raw_sha256", "database_tree_manifest_sha256"):
+        manifest[key] = receipt[key]
+    manifest["admission_receipt_raw_sha256"] = hashlib.sha256(receipt_raw).hexdigest()
+    manifest["catalog_fragment_raw_sha256"] = hashlib.sha256(fragment_raw).hexdigest()
+    manifest["license_sidecar_raw_sha256"] = hashlib.sha256(license_raw).hexdigest()
+    assert module.validate_1581_admission_binding(receipt_raw, fragment_raw, license_raw, manifest) is False
 
 
 @pytest.mark.parametrize("mutation", ["missing", "malformed", "identity_mismatch"])
@@ -436,7 +502,7 @@ def test_derived_ember_import_set_is_the_actual_two_file_runtime() -> None:
     assert completed.returncode == 0, completed.stderr
     assert set(json.loads(completed.stdout)) == {
         "scripts/ember_restart_eval_spider.py",
-        "scripts/owned_process.py",
+        "src/ember/governance/scripts/owned_process.py",
     }
 
 
