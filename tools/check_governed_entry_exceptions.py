@@ -84,6 +84,7 @@ RULES = {
     "launcher-shape": {
         "policy": "tools/launcher-shape-exceptions.json",
         "schema": "ember-launcher-shape-exceptions-v1",
+        "supplement": "tools/ember-restart-3b/launcher-shape-exceptions.json",
         "paths_env": "LAUNCHER_SHAPE_PATHS",
         "uncovered": (
             "is directly runnable and starts a training child outside the daemon, "
@@ -117,6 +118,19 @@ def _read_bytes(path: str):
         return None
 
 
+def _exists(path: str) -> bool:
+    """Whether path exists in the adjudicated tree (staged index or worktree)."""
+    if _staged():
+        probe = subprocess.run(
+            ["git", "cat-file", "-e", f":{path}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return probe.returncode == 0
+    return os.path.lexists(path)
+
+
 def _fail(message: str) -> int:
     print(message)
     return 1
@@ -133,43 +147,66 @@ def main() -> int:
     EXCEPTIONS_PATH = rule["policy"]
     SCHEMA_VERSION = rule["schema"]
 
-    raw = _read_bytes(EXCEPTIONS_PATH)
-    if raw is None:
-        return _fail(f"{EXCEPTIONS_PATH}: missing or unreadable; policy required")
-    if not raw.strip():
-        return _fail(f"{EXCEPTIONS_PATH}: empty; policy required")
-    try:
-        doc = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return _fail(f"{EXCEPTIONS_PATH}: unparseable ({exc})")
-    if not isinstance(doc, dict):
-        return _fail(f"{EXCEPTIONS_PATH}: top level must be an object")
-    if doc.get("schema_version") != SCHEMA_VERSION:
-        return _fail(
-            f"{EXCEPTIONS_PATH}: schema_version must be {SCHEMA_VERSION}, "
-            f"found {doc.get('schema_version')!r}"
-        )
-    entries = doc.get("exceptions")
-    if not isinstance(entries, list):
-        return _fail(f"{EXCEPTIONS_PATH}: exceptions must be a list")
-
-    enumerated = {}
-    for index, entry in enumerate(entries):
-        if not isinstance(entry, dict):
-            return _fail(f"{EXCEPTIONS_PATH}: entry {index} is not an object")
-        path = entry.get("path")
-        digest = entry.get("sha256")
-        if not isinstance(path, str) or not path:
-            return _fail(f"{EXCEPTIONS_PATH}: entry {index} has no usable path")
-        if not isinstance(digest, str) or len(digest) != 64:
-            return _fail(f"{EXCEPTIONS_PATH}: entry {index} ({path}) has no 64-hex sha256")
+    def load_policy(policy_path: str) -> dict | str:
+        """Parse one exceptions policy; a str return is the failure message."""
+        raw = _read_bytes(policy_path)
+        if raw is None:
+            return f"{policy_path}: missing or unreadable; policy required"
+        if not raw.strip():
+            return f"{policy_path}: empty; policy required"
         try:
-            int(digest, 16)
-        except ValueError:
-            return _fail(f"{EXCEPTIONS_PATH}: entry {index} ({path}) sha256 is not hex")
-        if path in enumerated:
-            return _fail(f"{EXCEPTIONS_PATH}: duplicate entry for {path}")
-        enumerated[path] = digest.lower()
+            doc = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            return f"{policy_path}: unparseable ({exc})"
+        if not isinstance(doc, dict):
+            return f"{policy_path}: top level must be an object"
+        if doc.get("schema_version") != SCHEMA_VERSION:
+            return (
+                f"{policy_path}: schema_version must be {SCHEMA_VERSION}, "
+                f"found {doc.get('schema_version')!r}"
+            )
+        entries = doc.get("exceptions")
+        if not isinstance(entries, list):
+            return f"{policy_path}: exceptions must be a list"
+        parsed = {}
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                return f"{policy_path}: entry {index} is not an object"
+            path = entry.get("path")
+            digest = entry.get("sha256")
+            if not isinstance(path, str) or not path:
+                return f"{policy_path}: entry {index} has no usable path"
+            if not isinstance(digest, str) or len(digest) != 64:
+                return f"{policy_path}: entry {index} ({path}) has no 64-hex sha256"
+            try:
+                int(digest, 16)
+            except ValueError:
+                return f"{policy_path}: entry {index} ({path}) sha256 is not hex"
+            if path in parsed:
+                return f"{policy_path}: duplicate entry for {path}"
+            parsed[path] = digest.lower()
+        return parsed
+
+    base = load_policy(EXCEPTIONS_PATH)
+    if isinstance(base, str):
+        return _fail(base)
+    enumerated = base
+
+    # A per-workstream supplemental policy: absent means exactly the legacy
+    # (binding keys inside it are validated by the repository's
+    # authority-conservation gate, the sole authority on binding values.)
+    # behavior; present it must be VALID (a malformed supplement refuses, it
+    # is never ignored) and its entries take precedence over the base policy
+    # for an exact duplicate path, so a workstream can repin its own files
+    # without editing the base registry.
+    supplement_count = 0
+    SUPPLEMENT_PATH = rule.get("supplement")
+    if SUPPLEMENT_PATH and _exists(SUPPLEMENT_PATH):
+        supplement = load_policy(SUPPLEMENT_PATH)
+        if isinstance(supplement, str):
+            return _fail(supplement)
+        supplement_count = len(supplement)
+        enumerated = {**enumerated, **supplement}
 
     matched = [
         line.strip()
@@ -178,8 +215,8 @@ def main() -> int:
     ]
     if not matched:
         print(
-            f"{rule_name} policy validated ({len(enumerated)} enumerated); "
-            "nothing to adjudicate"
+            f"{rule_name} policy validated ({len(enumerated)} enumerated, "
+            f"{supplement_count} supplemental); nothing to adjudicate"
         )
         return 0
 
