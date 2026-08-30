@@ -26,6 +26,7 @@ pub mod rehearsal;
 pub mod rpc;
 pub mod scratch;
 pub mod server_supervisor;
+pub mod storage_retention;
 pub mod training_verify;
 
 pub type Result<T> = std::result::Result<T, EmberLabError>;
