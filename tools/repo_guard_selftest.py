@@ -281,7 +281,7 @@ def make_split_kernel(test_word: str) -> Path:
         encoding="utf-8",
         newline="\n",
     )
-    (kernel / "tools" / "repo-guard-names-exclude.txt").write_text(
+    (kernel / "tools" / "repo-guard-names-exclude.cfg").write_text(
         "", encoding="utf-8", newline="\n"
     )
     return kernel
@@ -760,7 +760,7 @@ def test_red_name_outside_exclude_scope():
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
-        (tmp / "tools" / "repo-guard-names-exclude.txt").write_text(
+        (tmp / "tools" / "repo-guard-names-exclude.cfg").write_text(
             "# selftest fixture\ntokenizer/\n", encoding="utf-8", newline="\n",
         )
         (tmp / "docs").mkdir(exist_ok=True)
@@ -787,7 +787,7 @@ def test_green_name_inside_excluded_path():
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
-        (tmp / "tools" / "repo-guard-names-exclude.txt").write_text(
+        (tmp / "tools" / "repo-guard-names-exclude.cfg").write_text(
             "# selftest fixture\ntokenizer/\n", encoding="utf-8", newline="\n",
         )
         (tmp / "tokenizer").mkdir()
@@ -908,7 +908,7 @@ def test_split_kernel_hashed_scan_covers_every_subject_guard_surface():
         "tools/check_names_hashed.py",
         "tools/.repo-guard-denylist",
         "tools/.repo-guard-denylist.example",
-        "tools/repo-guard-names-exclude.txt",
+        "tools/repo-guard-names-exclude.cfg",
     ):
         tmp = make_fixture("fix/selftest-split-hashed-surface")
         kernel = make_split_kernel(test_word)
