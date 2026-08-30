@@ -95,7 +95,7 @@
   "license": "CC0-1.0",
   "seed": 1948,
   "tokenizer": {
-    "file": "tokenizer/tokenizer.json",
+    "file": "repository-authority:tokenizer",
     "sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",
     "vocab_size": 32000
   }

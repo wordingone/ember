@@ -20,6 +20,10 @@ import torch
 from tokenizers import Tokenizer, __version__ as tokenizers_version
 
 from model import MultimodalSpan, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder
+_CANARY_MODULE_DIRECTORY = Path(__file__).resolve().parent
+if str(_CANARY_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_CANARY_MODULE_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -131,7 +135,9 @@ def load_positive(
         gradient_checkpointing=bool(config_payload["gradient_checkpointing"]),
     )
 
-    tokenizer_path = ROOT / str(manifest["tokenizer"]["file"])
+    if str(manifest["tokenizer"]["file"]) != "repository-authority:tokenizer":
+        raise ValueError("eval canary manifest must name the logical tokenizer authority")
+    tokenizer_path = resolve_repository_authority(ROOT, "tokenizer").path
     tokenizer_raw = tokenizer_path.read_bytes()
     if sha256_bytes(tokenizer_raw) != manifest["tokenizer"]["sha256"]:
         raise ValueError("tokenizer identity mismatch")
@@ -439,7 +445,7 @@ def terminal_suite_receipt(
             "eval_canary_image.py": sha256_bytes(Path(__file__).read_bytes()),
             "mechanics-only-dispositions.json": sha256_bytes((fixture_root / "mechanics-only-dispositions.json").read_bytes()),
             "model.py": sha256_bytes((Path(__file__).parent / "model.py").read_bytes()),
-            "tokenizer.json": sha256_bytes((ROOT / "tokenizer" / "tokenizer.json").read_bytes()),
+            "tokenizer.json": sha256_bytes(resolve_repository_authority(ROOT, "tokenizer").path.read_bytes()),
         },
     }
     canonical = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")

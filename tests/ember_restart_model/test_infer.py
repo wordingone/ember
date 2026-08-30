@@ -18,6 +18,7 @@ from tokenizers import Tokenizer, models, pre_tokenizers
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 sys.path.insert(0, str(ROOT / "scripts"))
+from repository_layout import resolve_repository_authority  # noqa: E402
 from model import RestartDecoderConfig
 
 from infer import _prompt_batch, canonical_prediction_envelope, frozen_split_prompt, load_frozen_tokenizer, greedy_generate
@@ -40,7 +41,7 @@ class _GreedyModel:
 
 class InferenceTests(unittest.TestCase):
     def test_real_frozen_bytelevel_tokenizer_decodes_exact_text(self) -> None:
-        tokenizer_path = ROOT / "tokenizer" / "tokenizer.json"
+        tokenizer_path = resolve_repository_authority(ROOT, "tokenizer").path
         tokenizer_sha256 = hashlib.sha256(tokenizer_path.read_bytes()).hexdigest()
         tokenizer = load_frozen_tokenizer(
             tokenizer_path,

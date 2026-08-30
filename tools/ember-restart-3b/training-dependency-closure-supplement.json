@@ -1,0 +1,22 @@
+{
+  "schema_version": "ember-training-dependency-closure-supplement-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "purpose": "Declare the seven 02B-owned code members introduced into the certified training closure by the repository-layout transition without mutating the 02A base manifest.",
+  "entrypoints": [
+    "tools/ember-restart-3b/repository_layout.py"
+  ],
+  "dynamic_entrypoints": [],
+  "code": [
+    "scripts/forecast_recalibration.py",
+    "scripts/frontier_receipt.py",
+    "scripts/r1_cheap_probe_suite.py",
+    "scripts/r1_e8_validator.py",
+    "scripts/r1_exit_battery.py",
+    "scripts/r1_frozen_eval_runner.py"
+  ],
+  "data": [],
+  "dynamic_call_sites": {},
+  "dynamic_call_site_notes": {}
+}

@@ -14,6 +14,7 @@ import argparse
 import base64
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -25,6 +26,10 @@ from build_owned_vision_scenes import build_records as build_vision_records
 from semantic_contract import semantic_model_contract_sha256
 from specialist_semantics import verify_audio_supervision, verify_image_supervision
 from verify_capability_record import verify_record
+_RUNG_MODULE_DIRECTORY = Path(__file__).resolve().parent
+if str(_RUNG_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_RUNG_MODULE_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
 
 
 ARTIFACT_ID = "owned-four-domain-production-rung-v1"
@@ -33,7 +38,6 @@ RECEIPT_SCHEMA = "ember-owned-four-domain-production-rung-receipt-v1"
 DATA_CLASS = "MEASURED_RUNG_NOT_SUFFICIENT_PRETRAINING"
 SHARD_RELATIVE = "data/ember-restart-3b/owned-four-domain-production-rung-v1.json"
 RECEIPT_RELATIVE = "data/ember-restart-3b/owned-four-domain-production-rung-v1.receipt.json"
-TOKENIZER_RELATIVE = "tokenizer/tokenizer.json"
 CONFIG_RELATIVE = "configs/ember-restart-3b.json"
 SOURCE_RECORD_COUNT = 512
 EXPERTS = ("vision", "audio", "reasoning", "tool")
@@ -88,7 +92,7 @@ def _model_markers(config: Mapping[str, Any]) -> tuple[int, int]:
 
 
 def _replay_records(root: Path) -> tuple[dict[str, dict[str, object]], dict[str, dict[str, object]]]:
-    tokenizer_path = root / TOKENIZER_RELATIVE
+    tokenizer_path = resolve_repository_authority(root, "tokenizer").path
     config_path = root / CONFIG_RELATIVE
     if not tokenizer_path.is_file() or not config_path.is_file():
         raise ValueError("production rung requires the frozen tokenizer and model config")
@@ -153,7 +157,7 @@ def _validate_raw_records(root: Path, payload: Mapping[str, Any]) -> None:
         by_expert[expert] = record
     if set(by_expert) != set(EXPERTS):
         raise ValueError("production rung lacks a declared expert family")
-    tokenizer = Tokenizer.from_file(str(root / TOKENIZER_RELATIVE))
+    tokenizer = Tokenizer.from_file(str(resolve_repository_authority(root, "tokenizer").path))
     image_marker, audio_marker = _model_markers(_json(root / CONFIG_RELATIVE, "model config"))
     image = by_expert["vision"]
     image_values = image.get("image_patches_u8_base64")
@@ -203,7 +207,7 @@ def build_receipt(root: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
         "domain_record_counts": {expert: 1 for expert in EXPERTS},
         "record_sha256": {record["active_expert"]: _sha256_bytes(_canonical_bytes(record)) for record in records},
         "source_replay": payload["source_replay"],
-        "tokenizer_sha256": _sha256_path(root / TOKENIZER_RELATIVE),
+        "tokenizer_sha256": resolve_repository_authority(root, "tokenizer").expected_sha256,
         "model_config_sha256": _sha256_path(root / CONFIG_RELATIVE),
         "semantic_model_contract_sha256": semantic_model_contract_sha256(_json(root / CONFIG_RELATIVE, "model config")),
         "verifier_sha256": _sha256_path(Path(__file__)),

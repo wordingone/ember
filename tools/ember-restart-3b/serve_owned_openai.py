@@ -25,6 +25,10 @@ import torch
 from infer import FrozenTokenizer, frozen_split_prompt, greedy_generate, load_frozen_tokenizer, sha
 import model as model_module
 from model import RestartDecoderConfig, UnifiedDecoder
+_SERVE_MODULE_DIRECTORY = Path(__file__).resolve().parent
+if str(_SERVE_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_SERVE_MODULE_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -42,7 +46,7 @@ from ember_restart_eval_raw_forward import (  # noqa: E402
     validate_state_map,
 )
 
-_TRACKED_TOKENIZER_SOURCE = ROOT / "tokenizer" / "tokenizer.json"
+_TRACKED_TOKENIZER_SOURCE = resolve_repository_authority(ROOT, "tokenizer").path
 _CHEAP_PROBE_SUITE_SCHEMA = "ember02-r1-r2-cheap-probe-suite/v1"
 _CHEAP_PROBE_SUITE_SHA256 = "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3"
 _TOKENIZER_FREEZE_RECEIPT = (

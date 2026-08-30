@@ -13,6 +13,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT / "tools" / "ember-restart-3b") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from repository_layout import resolve_repository_authority  # noqa: E402
 RESTART_TOOLS = ROOT / "tools" / "ember-restart-3b"
 if str(RESTART_TOOLS) not in sys.path:
     sys.path.insert(0, str(RESTART_TOOLS))
@@ -370,7 +373,7 @@ def test_cli_prints_ids_and_hashes_only(tmp_path: Path, capsys) -> None:
 
 
 def test_current_public_tokenizer_dry_run_is_oracle_bound() -> None:
-    source = ROOT / "tokenizer" / "tokenizer.json"
+    source = resolve_repository_authority(ROOT, "tokenizer").path
     freeze = ROOT / "receipts" / "tokenizer-freeze-20260611T154111Z.json"
     receipt = reconstruct_frozen_tokenizer(
         source=source,

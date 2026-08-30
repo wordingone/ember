@@ -17,9 +17,15 @@ import subprocess
 import sys
 import tempfile
 import uuid
+
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, NamedTuple
+
+_LAUNCH_MODULE_DIRECTORY = pathlib.Path(__file__).resolve().parent
+if str(_LAUNCH_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_LAUNCH_MODULE_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
 
 
 # A certificate that carries closure_sha256 binds the TRAINING DEPENDENCY
@@ -167,13 +173,12 @@ SPECIALIST_LAUNCH_RUN_SPEC_KEYS = {
 }
 TRAINING_DATA_MANIFEST_SCHEMA = "ember-owned-training-data-v1"
 TRAINING_CAPABILITIES = {"image", "audio", "reasoning", "tool"}
-# Mirrors production_rung.py::TOKENIZER_RELATIVE / launch_packet.py's
-# identity-manifest preflight / serve_owned_openai.py's _TRACKED_TOKENIZER_SOURCE
-# -- the one frozen tokenizer this tree trains and serves against. Not a
-# run-spec key: an operator-declared tokenizer path would let a specialist
-# launch train against different token identity than every other consumer of
-# this same tree without the certificate ever noticing.
-SPECIALIST_TOKENIZER_RELATIVE_PATH = "tokenizer/tokenizer.json"
+# The one frozen tokenizer this tree trains and serves against resolves through
+# repository_layout.resolve_repository_authority("tokenizer") -- the closed
+# canonical/legacy pair. Not a run-spec key: an operator-declared tokenizer
+# path would let a specialist launch train against different token identity
+# than every other consumer of this same tree without the certificate ever
+# noticing.
 # Semantic canary routing (issue #1719 acceptance clause 3) rides
 # the RUN SPEC for the same reason specialist routing does: which receipt/
 # shard set a canary trains against is a launch-time decision, while the
@@ -1597,12 +1602,9 @@ def _validate_specialist_request(
         "training_model_chat_restore_not_before",
     )
 
-    tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
-    if not tokenizer_path.is_file():
-        raise ValueError(
-            "run spec specialist launch requires the tree's canonical "
-            f"{SPECIALIST_TOKENIZER_RELATIVE_PATH}"
-        )
+    tokenizer_path = resolve_repository_authority(
+        pathlib.Path(repo_root), "tokenizer"
+    ).path
 
     # Single-hop scope (no chaining): the checkpoint being resumed is both the
     # immediate parent and the lineage root of this specialist generation.
@@ -2105,7 +2107,7 @@ def _validate_a1_request(
         raise ValueError("A1 token shards receipt shards must be a non-empty list")
     shard_sequence_sha = _canonical_sha256(shards)
 
-    tokenizer_path = repo_root / "tokenizer" / "tokenizer.json"
+    tokenizer_path = resolve_repository_authority(repo_root, "tokenizer").path
     tokenizer_sha = _file_sha256(tokenizer_path, "canonical A1 tokenizer")
     if tokenizer_sha != certificate["tokenizer_sha256"]:
         raise ValueError("certificate does not bind canonical A1 tokenizer bytes")
@@ -2507,17 +2509,13 @@ def _validate_semantic_canary_request(
     if not telemetry_path.is_absolute():
         telemetry_path = run_spec_path.parent / telemetry_path
 
-    # Fixed canonical tokenizer, never operator-declared: identical reasoning
-    # to SPECIALIST_TOKENIZER_RELATIVE_PATH -- an operator-declared tokenizer
-    # path would let a canary launch train against different token identity
-    # than every other consumer of this tree without the certificate ever
-    # noticing.
-    tokenizer_path = pathlib.Path(repo_root) / SPECIALIST_TOKENIZER_RELATIVE_PATH
-    if not tokenizer_path.is_file():
-        raise ValueError(
-            "run spec semantic canary launch requires the tree's canonical "
-            f"{SPECIALIST_TOKENIZER_RELATIVE_PATH}"
-        )
+    # Fixed canonical tokenizer, never operator-declared: an operator-declared
+    # tokenizer path would let a canary launch train against different token
+    # identity than every other consumer of this tree without the certificate
+    # ever noticing. The closed layout seam supplies the one allowed path.
+    tokenizer_path = resolve_repository_authority(
+        pathlib.Path(repo_root), "tokenizer"
+    ).path
     tokenizer_sha256 = _file_sha256(tokenizer_path, "semantic canary tokenizer")
 
     # Self-computed, not caller-supplied: mirrors this file's established

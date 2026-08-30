@@ -26,6 +26,11 @@ _CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-
 
 # The architecture's own expert declaration, read from the model module rather than
 # copied here, so a change to the roster moves the expectation with it.
+_TOOLS_DIRECTORY = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b"
+if str(_TOOLS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
+
 _MODEL_PATH = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "model.py"
 _model_spec = importlib.util.spec_from_file_location("ember_restart_model_decl", _MODEL_PATH)
 _model_mod = importlib.util.module_from_spec(_model_spec)
@@ -342,7 +347,7 @@ def test_identity_manifest_fail_closed_schema_invalid(cfg, root, tmp_path):
     import shutil
     for rel in (
         "configs/ember-restart-3b.json",
-        "tokenizer/tokenizer.json",
+        resolve_repository_authority(root, "tokenizer").relative_path,
         f"data/ember-restart-3b/{broken_payload['data']['corpus_id']}.json",
     ):
         src = root / rel
@@ -366,7 +371,7 @@ def test_identity_manifest_fail_closed_architecture_hash_drift(cfg, root, tmp_pa
     import shutil
     for rel in (
         "configs/ember-restart-3b.json",
-        "tokenizer/tokenizer.json",
+        resolve_repository_authority(root, "tokenizer").relative_path,
         f"data/ember-restart-3b/{payload['data']['corpus_id']}.json",
     ):
         src = root / rel
@@ -388,7 +393,7 @@ def test_identity_manifest_fail_closed_tokenizer_hash_drift(cfg, root, tmp_path)
     import shutil
     for rel in (
         "configs/ember-restart-3b.json",
-        "tokenizer/tokenizer.json",
+        resolve_repository_authority(root, "tokenizer").relative_path,
         f"data/ember-restart-3b/{payload['data']['corpus_id']}.json",
     ):
         src = root / rel
@@ -412,7 +417,7 @@ def test_identity_manifest_fail_closed_owned_admitted_at_pretrain_launch(cfg, ro
     import shutil
     for rel in (
         "configs/ember-restart-3b.json",
-        "tokenizer/tokenizer.json",
+        resolve_repository_authority(root, "tokenizer").relative_path,
         f"data/ember-restart-3b/{payload['data']['corpus_id']}.json",
     ):
         src = root / rel
