@@ -613,6 +613,23 @@
       "compatibility": null
     },
     {
+      "distribution": "nltk",
+      "version": "3.9.3",
+      "requirement": "nltk==3.9.3",
+      "imports": [
+        "nltk"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null
+    },
+    {
       "distribution": "zstandard",
       "version": "0.25.0",
       "requirement": "zstandard==0.25.0",
