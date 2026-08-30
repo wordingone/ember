@@ -115,9 +115,10 @@ def verify_database_tree(manifest_path: Path, database_root: Path, expected_hash
  if not isinstance(document,dict) or set(document)!={"schema_version","files"} or document.get("schema_version")!="ember-spider-database-tree-manifest-v1" or not isinstance(document.get("files"),list) or not document["files"]: raise ValueError("database tree manifest schema is closed")
  databases={};seen=set()
  for index,row in enumerate(document["files"]):
-  if not isinstance(row,dict) or set(row)!={"path","sha256"} or not _safe_relative(row.get("path")) or not _is_sha256(row.get("sha256")) or row["path"] in seen: raise ValueError(f"database tree row {index} is invalid")
+  if not isinstance(row,dict) or set(row)!={"path","size","sha256"} or not _safe_relative(row.get("path")) or isinstance(row.get("size"),bool) or not isinstance(row.get("size"),int) or row["size"]<0 or not _is_sha256(row.get("sha256")) or row["path"] in seen: raise ValueError(f"database tree row {index} is invalid")
   seen.add(row["path"]);target=database_root.joinpath(*Path(row["path"]).parts)
   verify_bound_file(target,row["sha256"],f"database tree {row['path']}")
+  if target.stat().st_size!=row["size"]: raise ValueError(f"database tree {row['path']} byte count drifted")
   relative=Path(row["path"])
   if len(relative.parts)==2 and relative.suffix==".sqlite" and relative.stem==relative.parts[0]: databases[relative.parts[0]]=target
  actual=set()
