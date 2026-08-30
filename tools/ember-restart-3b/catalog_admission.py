@@ -390,7 +390,6 @@ def build_evaluation_consumer_catalog_fragment(
     new_attempt_id = (
         f"attempt:issue1581-catalog-evaluation:{_sha256(catalog_export_raw)}"
     )
-    attempt["kind"] = "evaluation_attempt"
     attempt["id"] = new_attempt_id
     attempt["run_attempt_id"] = new_attempt_id
     protected_eval = next(
@@ -400,17 +399,10 @@ def build_evaluation_consumer_catalog_fragment(
     protected_eval["near_dup_ruling"] = "not_run"
     protected_eval["exclusion_reason"] = None
     protected_eval["overlap_state"] = "isolated"
-    edge_kinds = {
-        "consumer_dataset": "evaluation_dataset",
-        "consumer_evaluation": "evaluation_definition",
-        "consumer_receipt": "evaluation_import_receipt",
-    }
     for edge in fragment["edges"]:
         if edge.get("from_id") != old_attempt_id:
             continue
         edge["from_id"] = new_attempt_id
-        edge["from_kind"] = "evaluation_attempt"
-        edge["kind"] = edge_kinds[edge["kind"]]
     return _sorted_manifest(fragment["records"], fragment["edges"])
 
 
@@ -700,17 +692,25 @@ def _dataset_resolver_for_manifest(
     edges = manifest.get("edges") if isinstance(manifest, dict) else None
     if not isinstance(edges, list):
         raise ValueError("catalog consumer manifest schema is invalid")
-    has_training_edge = any(
-        isinstance(edge, dict)
+    matching_edges = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
         and edge.get("kind") == "consumer_dataset"
         and edge.get("to_id") == expected_dataset_id
-        for edge in edges
+    ]
+    if len(matching_edges) != 1:
+        raise ValueError(
+            "catalog consumer manifest must select exactly one dataset resolver"
+        )
+    attempt_id = matching_edges[0].get("from_id")
+    has_training_edge = (
+        isinstance(attempt_id, str)
+        and attempt_id.startswith("attempt:issue1581-catalog-preflight:")
     )
-    has_evaluation_edge = any(
-        isinstance(edge, dict)
-        and edge.get("kind") == "evaluation_dataset"
-        and edge.get("to_id") == expected_dataset_id
-        for edge in edges
+    has_evaluation_edge = (
+        isinstance(attempt_id, str)
+        and attempt_id.startswith("attempt:issue1581-catalog-evaluation:")
     )
     if has_training_edge == has_evaluation_edge:
         raise ValueError(

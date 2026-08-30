@@ -511,6 +511,22 @@ def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
         )
     combined = json.loads(manifest_raw)
     fragment = json.loads(consumer_fragment)
+    assert {row["kind"] for row in fragment["records"]} <= {
+        "consumer_attempt",
+        "immutable_object",
+        "protected_eval",
+        "receipt",
+    }
+    assert {edge["kind"] for edge in fragment["edges"]} <= {
+        "consumer_dataset",
+        "consumer_evaluation",
+        "consumer_receipt",
+        "evaluation_object",
+        "evaluation_receipt",
+    }
+    assert next(
+        row for row in fragment["records"] if row["kind"] == "consumer_attempt"
+    )["id"].startswith("attempt:issue1581-catalog-evaluation:")
     protected_eval = next(
         item for item in fragment["records"] if item["kind"] == "protected_eval"
     )
