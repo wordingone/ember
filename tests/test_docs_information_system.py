@@ -164,14 +164,19 @@ def test_prose_path_scanner_keeps_full_nested_path(tmp_path: Path) -> None:
     assert counts["prose_paths"] == 1
 
 
-def test_bad_public_command_is_terminal_red(tmp_path: Path) -> None:
+def test_bad_public_command_is_terminal_red(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = load_module()
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *args, **kwargs: module.subprocess.CompletedProcess(args[0], 7, "", "boom"),
+    )
     commands = {
         "schema_version": "ember-public-command-replay-v1",
         "commands": [
             {
                 "id": "bad",
-                "argv": [sys.executable, "-c", "raise SystemExit(7)"],
+                "argv": ["ember-test-command", "--fail"],
                 "cwd": ".",
                 "requirements": {"cpu": True, "gpu": False, "network": False},
             }
@@ -179,6 +184,64 @@ def test_bad_public_command_is_terminal_red(tmp_path: Path) -> None:
     }
     with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_FAILED"):
         module.run_public_commands(tmp_path, commands)
+
+
+def test_windows_python_command_refuses_without_headless_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    monkeypatch.delenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", raising=False)
+    commands = {"commands": [{"id": "python", "argv": ["python", "tool.py"], "cwd": "."}]}
+
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_DIRECT_PYTHON_REFUSED"):
+        module.run_public_commands(tmp_path, commands)
+
+
+def test_headless_command_replay_custodies_actual_argv_and_no_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    launcher_path = tmp_path / "headless-python.ps1"
+    write(launcher_path, "# test launcher\n")
+    launcher = [
+        "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+        str(launcher_path), "--",
+    ]
+    monkeypatch.setenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", json.dumps(launcher))
+    observed = {}
+
+    def fake_run(argv, **kwargs):
+        observed["argv"] = argv
+        observed["kwargs"] = kwargs
+        return module.subprocess.CompletedProcess(argv, 0, "ok\n", "")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    commands = {"commands": [{"id": "python", "argv": ["python", "tool.py"], "cwd": "."}]}
+
+    results = module.run_public_commands(tmp_path, commands)
+
+    assert observed["argv"] == launcher + ["tool.py"]
+    assert observed["kwargs"]["creationflags"] == module.NO_WINDOW
+    assert observed["kwargs"]["stdin"] is module.subprocess.DEVNULL
+    assert results[0]["manifest_argv"] == ["python", "tool.py"]
+    assert results[0]["host_argv"] == launcher + ["tool.py"]
+    assert results[0]["host_argv_sha256"] == module.sha256_bytes(
+        module.canonical_json(launcher + ["tool.py"])
+    )
+    assert results[0]["stdout_sha256"] == module.sha256_bytes(b"ok\n")
+
+
+def test_repository_receipt_retains_per_command_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = load_module()
+    command_results = [{"id": "one", "returncode": 0, "stdout_sha256": "a", "stderr_sha256": "b"}]
+    monkeypatch.setattr(module, "run_public_commands", lambda root, commands: command_results)
+
+    receipt = module.check_repository(REPO_ROOT, run_commands=True)
+
+    assert receipt["commands_executed"] == 1
+    assert receipt["command_results"] == command_results
 
 
 def test_command_manifest_binds_276_row_census_to_four_command_subset() -> None:
