@@ -1,0 +1,9 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "artifact_path": "tools/launchers/Ember.cmd",
+  "artifact_sha256": "5589fab9cade0133b25488b1be0759f35433d7667260fbd7a4176c67a8cffb94",
+  "claim_boundary": "Exact canonical Windows launcher bytes only; this binding grants no run, training, model, capability, or completion authority."
+}

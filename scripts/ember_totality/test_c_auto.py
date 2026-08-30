@@ -66,9 +66,9 @@ def main():
     if ROOT is None:
         emit("UNEVALUABLE", "C-AUTO: state root not found under any known layout")
 
-    state_path = os.path.join(ROOT, "autonomy-ladder-state.json")
+    state_path = os.path.join(ROOT, "docs/domains/governance/authority/autonomy-ladder-state.json")
     if not os.path.isfile(state_path):
-        emit("RED", "C-AUTO: state file absent at autonomy-ladder-state.json -> regression (input-missing)")
+        emit("RED", "C-AUTO: canonical autonomy ladder state absent -> regression (input-missing)")
 
     # Load and parse state file.
     try:

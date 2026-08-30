@@ -9,7 +9,7 @@ build target (its own §"Validation hook" paragraph). Checks, from ON-DISK evide
 never from a spec's prose or a model's self-report:
 
   (a) kernel_fired            — `docs/archive/pre-restart/kernel-v1-freeze-spec.md` §5 freeze artifact
-                                 (`kernel-v1.0.manifest`, anywhere under the repo) PLUS a
+                                 (`manifests/governance/kernel-v1.0.manifest`) PLUS a
                                  receipt demonstrating the math-core §9 flywheel-turn
                                  condition `dB/dround > 0 ∧ G1_delta > 0`.
   (b) earned_growth_rung      — a `receipts/**/*.json` file carrying the receipts-v1.md §2
@@ -278,12 +278,16 @@ def check_kernel_fired():
     reasons = []
     evidence = {}
 
-    manifest_hits = sorted(str(p.relative_to(REPO_ROOT).as_posix())
-                            for p in REPO_ROOT.rglob("kernel-v1.0.manifest"))
+    canonical_manifest = REPO_ROOT / "manifests" / "governance" / "kernel-v1.0.manifest"
+    manifest_hits = (
+        [canonical_manifest.relative_to(REPO_ROOT).as_posix()]
+        if canonical_manifest.is_file()
+        else []
+    )
     evidence["manifest_hits"] = manifest_hits
     manifest_ok = len(manifest_hits) > 0
     if not manifest_ok:
-        reasons.append("no kernel-v1.0.manifest found anywhere under the repo "
+        reasons.append("canonical manifests/governance/kernel-v1.0.manifest is absent "
                         "(freeze procedure, docs/archive/pre-restart/kernel-v1-freeze-spec.md sec5, never executed)")
 
     flywheel_receipts = []
@@ -1161,6 +1165,7 @@ def _selftest():
         CLAIMS_MAP_PATH = root / "paper" / "claims-evidence-map.md"
         OUTLINE_PATH = root / "paper" / "outline.md"
         GOAL_PATH = root / "docs/domains/governance/authority/GOAL.md"
+        GOAL_PATH.parent.mkdir(parents=True)
 
         # Identity-manifest fixtures shared by the earned_growth_rung and
         # bootstrap_pass_real_world identity-binding tests below.
@@ -1173,8 +1178,18 @@ def _selftest():
         r = check_kernel_fired()
         check("kernel_fired RED when no manifest and no flywheel receipt", r["verdict"] == "RED")
 
+        # A stale root-level copy is not the canonical authority and must not
+        # resurrect the gate after carrier-055 relocates the manifest.
+        decoy_manifest = root / "kernel-v1.0.manifest"
+        decoy_manifest.write_text("sha256:decoy\n", encoding="utf-8")
+        decoy = check_kernel_fired()
+        check("kernel_fired RED with only a root-level decoy manifest", decoy["verdict"] == "RED")
+        decoy_manifest.unlink()
+
         # --- kernel_fired: present case ---
-        (root / "kernel-v1.0.manifest").write_text("sha256:deadbeef\n", encoding="utf-8")
+        manifest = root / "manifests" / "governance" / "kernel-v1.0.manifest"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text("sha256:deadbeef\n", encoding="utf-8")
         (RECEIPTS_DIR / "kernel-fire-20260702T000000Z.json").write_text(json.dumps({
             "ticket": "T", "ts": "20260702T000000Z", "kind": "job",
             "dB_dround": 0.42, "G1_delta": 0.05,
@@ -1182,7 +1197,7 @@ def _selftest():
         r2 = check_kernel_fired()
         check("kernel_fired GREEN when manifest + positive dB/round + G1_delta receipt present",
               r2["verdict"] == "GREEN")
-        (root / "kernel-v1.0.manifest").unlink()
+        manifest.unlink()
         (RECEIPTS_DIR / "kernel-fire-20260702T000000Z.json").unlink()
 
         # --- earned_growth_rung: absent case ---

@@ -291,7 +291,7 @@ jobs:
           if (Test-Path ember.exe) { throw "EMBER_BUILD_OUTFILE was ignored: the build wrote the default ember.exe" }
       - run: bun run build
   launcher:
-    # The root Ember.cmd plus scripts/prepare-ember-cockpit.ps1 path has exactly one
+    # tools/launchers/Ember.cmd plus scripts/prepare-ember-cockpit.ps1 has exactly one
     # end-to-end guard, and until #1390 it
     # ran in ci-nightly only: a branch that broke it merged on a green PR and halted the
     # next nightly instead. Running it here fails the merge that causes the regression.

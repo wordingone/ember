@@ -142,14 +142,14 @@ function Assert-NoResidentCockpitWorktrees([string]$RepositoryRoot) {
     Write-Host ""
     Write-Host "They are NOT moved or deleted automatically: moving a registered worktree breaks"
     Write-Host "its link to this repository, and deleting one destroys the work inside it. Retire"
-    Write-Host "each deliberately, then run Ember.cmd again:"
+    Write-Host "each deliberately, then run tools\launchers\Ember.cmd again:"
     Write-Host ""
     foreach ($entry in $resident) {
         Write-Host "  python scripts/worktree_lifecycle.py retire --path `"$($entry.FullName)`""
     }
     Write-Host ""
     throw ("Cockpit state cannot be migrated while $($resident.Count) cockpit-created " +
-        "worktree(s) remain inside the repository. Retire them and run Ember.cmd again.")
+        "worktree(s) remain inside the repository. Retire them and run tools\launchers\Ember.cmd again.")
 }
 
 function Move-EmberStateOutOfTree([string]$RepositoryRoot, [string]$StateRoot) {
@@ -208,7 +208,7 @@ function Assert-EmberStateIsExternal([string]$RepositoryRoot) {
     throw ("Cockpit state is present inside the repository at '$inTree' (it is $shape). " +
         "It must live outside the certified tree, and a shim pointing at the external " +
         "root is not acceptable -- the census walks through it. Stop every Ember process " +
-        "writing there, remove that entry, and run Ember.cmd again.")
+        "writing there, remove that entry, and run tools\launchers\Ember.cmd again.")
 }
 
 function Test-IsOwnedEmberExecutablePath([string]$Candidate, [string]$StateRoot) {
@@ -344,7 +344,7 @@ try {
     $lock = Join-Path $sourceRoot "bun.lock"
     foreach ($required in @($entrypoint, $package, $lock)) {
         if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-            throw "This copy of the repository is incomplete. Restore it and run Ember.cmd again."
+            throw "This copy of the repository is incomplete. Restore it and run tools\launchers\Ember.cmd again."
         }
     }
 

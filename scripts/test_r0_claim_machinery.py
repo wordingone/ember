@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_r0_claim_machinery_v2.py -- Fixed TDD selftests for R0 claim machinery.
 
 Tests the window minter and claim executor with 4 sandbox fixtures:
@@ -25,6 +28,10 @@ def create_sandbox_repo() -> str:
     sandbox = tempfile.mkdtemp(prefix="r0_test_v2_")
     os.makedirs(os.path.join(sandbox, "receipts", "autonomy-ladder"), exist_ok=True)
     os.makedirs(os.path.join(sandbox, "docs", "spec"), exist_ok=True)
+    os.makedirs(
+        os.path.join(sandbox, "docs", "domains", "governance", "authority"),
+        exist_ok=True,
+    )
     os.makedirs(os.path.join(sandbox, "scripts", "ember_totality"), exist_ok=True)
     return sandbox
 
@@ -39,7 +46,7 @@ import os
 import sys
 
 repo_root = os.environ.get("EMBER_TOTALITY_ROOT", os.getcwd())
-state_path = os.path.join(repo_root, "autonomy-ladder-state.json")
+state_path = os.path.join(repo_root, "docs/domains/governance/authority/autonomy-ladder-state.json")
 
 if not os.path.isfile(state_path):
     print("RED C-AUTO: state file absent")
@@ -283,7 +290,7 @@ print("RED C-AUTO: test fixture validation failed")
     os.chmod(probe_script, 0o755)
 
     # Backup current state
-    state_path = os.path.join(sandbox, "autonomy-ladder-state.json")
+    state_path = os.path.join(sandbox, "docs/domains/governance/authority/autonomy-ladder-state.json")
     initial_state = None
     if os.path.isfile(state_path):
         with open(state_path, "r") as fh:

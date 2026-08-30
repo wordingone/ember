@@ -1,0 +1,102 @@
+{
+  "schema_version": "ember-issue2003-root-terminal-v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "issue": 2003,
+  "source_overlay": {
+    "path": "state/reports/issue1949-a-map-amendment-v2-root-priority-20260829.json",
+    "raw_sha256": "03d02aaf43992eb14ba845e72d8669f1cd72623243a2be833caca3bd144afd15",
+    "self_sha256": "714b95bcadac1c1137e8cedaaf485aff94c1aec1336e1919a1376fad28c0ccbb",
+    "rewrite_consumer_count": 46,
+    "rewrite_consumers_sha256": "23b37a31b236d4a14dc783ac5f9ff13698b8e45a0139c8bb359a7a6cf5fa143b"
+  },
+  "retained_root_files": [
+    "AGENTS.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "named_root_exceptions": [
+    {
+      "path": ".gitattributes",
+      "constraint": "Git worktree attribute discovery requires the control file at repository root."
+    },
+    {
+      "path": ".gitignore",
+      "constraint": "Repository-wide Git ignore discovery requires the control file at repository root."
+    },
+    {
+      "path": "pyproject.toml",
+      "constraint": "PEP 517 builds and repository-wide pytest discovery require the project declaration at repository root."
+    }
+  ],
+  "moves": [
+    {
+      "source": "Ember.cmd",
+      "destination": "tools/launchers/Ember.cmd",
+      "source_raw_sha256": "85a5270c922953d7e7f6491140df6e20f7d81faa10d5ad30e96e96186f1298a6",
+      "destination_raw_sha256": "5589fab9cade0133b25488b1be0759f35433d7667260fbd7a4176c67a8cffb94"
+    },
+    {
+      "source": "autonomy-ladder-state.json",
+      "destination": "docs/domains/governance/authority/autonomy-ladder-state.json",
+      "source_raw_sha256": "ce544e0b0cb28fed957caddb4773e1005003a7f1ab4d77f2d7e6a61d17ff7b8e",
+      "destination_raw_sha256": "ce544e0b0cb28fed957caddb4773e1005003a7f1ab4d77f2d7e6a61d17ff7b8e"
+    },
+    {
+      "source": "kernel-v1.0.manifest",
+      "destination": "manifests/governance/kernel-v1.0.manifest",
+      "source_raw_sha256": "5adb13837aee2454212b0cdbbb1162b253f91f207fc4957d2fa1596a310fa998",
+      "destination_raw_sha256": "5adb13837aee2454212b0cdbbb1162b253f91f207fc4957d2fa1596a310fa998"
+    }
+  ],
+  "live_consumer_rewrites": [
+    ".github/workflows/ci-pr.yml",
+    "docs/guides/START-HERE.md",
+    "docs/spec/conditions-v1.md",
+    "docs/superpowers/plans/2026-08-08-windows-desktop-install.md",
+    "docs/superpowers/specs/2026-08-08-windows-desktop-install-design.md",
+    "manifests/architecture/domain-authority-v1.json",
+    "manifests/training-dependency-closure.json",
+    "scripts/README.md",
+    "scripts/check_publication_gate.py",
+    "scripts/ember_gate_full_parity_harness_selftest.py",
+    "scripts/ember_gate_launch_packaging.py",
+    "scripts/ember_totality/chk_controls/c_auto_v2_fixture.py",
+    "scripts/ember_totality/chk_controls/run_controls.py",
+    "scripts/ember_totality/test_c_auto.py",
+    "scripts/prepare-ember-cockpit.ps1",
+    "scripts/r0_claim_executor.py",
+    "scripts/test_r0_claim_machinery.py",
+    "scripts/test_verify_nosource_operability.py",
+    "tests/test_c_auto_claim_contract.py",
+    "tests/test_c_auto_claim_integrity.py",
+    "tests/test_ember_root_launcher.py",
+    "tools/ember-cli/src/build-tools/lifecycle-smoke-driver.ts",
+    "tools/ember-cli/src/build-tools/lifecycle-smoke.ts",
+    "tools/launcher-shape-exceptions.json",
+    "tools/repo-guard.sh"
+  ],
+  "historical_reference_adjudications": [
+    {"document": "docs/archive/pre-restart/kernel-v1-freeze-spec.md", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "manifests/documentation/reader-study-instrument-v1.json", "literal": "Ember.cmd", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "manifests/documentation/reader-study-instrument-v2.json", "literal": "Ember.cmd", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "manifests/ember-01-identity/consumer-census-v1.json", "literal": "autonomy-ladder-state.json", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/ember-02-launch-authority/sha-binding-map.json", "literal": "Ember.cmd", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/ember-totality-audit/audit-20260710T203826Z.json", "literal": "autonomy-ladder-state.json", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260705T071930Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260705T072134Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260705T081939Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260707T173926Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260707T174201Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260707T184909Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260707T205415Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260708T033702Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260708T034111Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "receipts/publication-gate-20260708T034424Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "scripts/ember_totality/receipts-parity/ember-totality-20260705T150719Z.json", "literal": "autonomy-ladder-state.json", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "scripts/ember_totality/receipts-parity/ember-totality-20260705T150743Z.json", "literal": "autonomy-ladder-state.json", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "scripts/ember_totality/receipts-publication/publication-gate-20260709T045219Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "scripts/ember_totality/receipts-publication/publication-gate-20260709T102252Z.json", "literal": "kernel-v1.0.manifest", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"},
+    {"document": "scripts/ember_totality/receipts-totality/ember-totality-20260706T173800Z.json", "literal": "autonomy-ladder-state.json", "disposition": "IMMUTABLE_HISTORICAL_REFERENCE"}
+  ]
+}
