@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+PUBLIC_INTERPRETER_RECEIPT_PATH = Path("state/receipts/python-environment-install-v1.json")
 
 METADATA_PATH = Path("manifests/documentation/current-documents-v1.json")
 CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
@@ -574,6 +575,56 @@ def public_command_host_argv(argv: list[str]) -> list[str]:
     return [*launcher, *argv[1:]]
 
 
+def load_public_interpreter_binding(root: Path) -> dict[str, str]:
+    """Resolve only the self-hashed interpreter bound by bootstrap custody."""
+    receipt_path = root.resolve() / PUBLIC_INTERPRETER_RECEIPT_PATH
+    if not receipt_path.is_file():
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_MISSING")
+    receipt = load_json(receipt_path)
+    claimed = receipt.pop("self_sha256", None)
+    if not isinstance(claimed, str) or not re.fullmatch(r"[0-9a-f]{64}", claimed):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_SELF_HASH_INVALID")
+    if sha256_bytes(canonical_compact(receipt)) != claimed:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_SELF_HASH_INVALID")
+    if (
+        receipt.get("schema_version") != "ember-python-environment-install-receipt-v1"
+        or receipt.get("result") != "PASS"
+        or not isinstance(receipt.get("identity"), dict)
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_NOT_PASS")
+    binding = receipt["identity"].get("isolated_interpreter")
+    if not isinstance(binding, dict) or set(binding) != {
+        "path", "python_version", "package_set_sha256",
+    }:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
+    relative = binding.get("path")
+    if (
+        not isinstance(relative, str)
+        or not relative
+        or not isinstance(binding.get("python_version"), str)
+        or not binding["python_version"]
+        or not isinstance(binding.get("package_set_sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", binding["package_set_sha256"])
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
+    relative_path = Path(relative)
+    if relative_path.is_absolute():
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED")
+    interpreter = (root.resolve() / relative_path).resolve()
+    try:
+        interpreter.relative_to(root.resolve())
+    except ValueError as error:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED") from error
+    if not interpreter.is_file():
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_MISSING")
+    return {
+        "path": relative,
+        "python_version": binding["python_version"],
+        "package_set_sha256": binding["package_set_sha256"],
+        "resolved_path": str(interpreter),
+    }
+
+
 def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, Any]]:
     rows = commands.get("commands")
     if not isinstance(rows, list):
@@ -583,6 +634,16 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
         manifest_argv = [str(value) for value in row.get("argv", [])]
         host_argv = public_command_host_argv(manifest_argv)
         cwd = (root / str(row.get("cwd", "."))).resolve()
+        command_id = str(row.get("id", ""))
+        binding = None
+        environment = None
+        if manifest_argv and manifest_argv[0].lower() in {"python", "python.exe", "py", "py.exe"} and command_id != "bootstrap-python":
+            binding = load_public_interpreter_binding(root)
+            environment = os.environ.copy()
+            environment["CODEX_PYTHON"] = binding["resolved_path"]
+        run_kwargs = {}
+        if environment is not None:
+            run_kwargs["env"] = environment
         completed = subprocess.run(
             host_argv,
             cwd=cwd,
@@ -592,7 +653,10 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
             timeout=300,
             check=False,
             creationflags=NO_WINDOW,
+            **run_kwargs,
         )
+        if command_id == "bootstrap-python" and completed.returncode == 0:
+            binding = load_public_interpreter_binding(root)
         result = {
             "id": row.get("id"),
             "manifest_argv": manifest_argv,
@@ -602,6 +666,10 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
             "returncode": completed.returncode,
             "stdout_sha256": sha256_bytes(completed.stdout.encode("utf-8")),
             "stderr_sha256": sha256_bytes(completed.stderr.encode("utf-8")),
+            "interpreter_binding": (
+                {key: binding[key] for key in ("path", "python_version", "package_set_sha256")}
+                if binding is not None else None
+            ),
         }
         results.append(result)
         if completed.returncode != 0:
