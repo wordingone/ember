@@ -253,13 +253,13 @@ fi
 # committed hashed tools/repo-guard-denylist.sha256 (via check_names_hashed.py) >
 # unusable (CI fail-closed / local skip).
 #
-# tools/repo-guard-names-exclude.txt lists path-prefixes (one per line) that
+# tools/repo-guard-names-exclude.cfg lists path-prefixes (one per line) that
 # the names scan skips entirely — machine-generated vocab/data artifacts only
 # (e.g. tokenizer/), never prose. Both plaintext and hashed modes read it.
 # SKIP all NAME checks if backup exemption is applied (exact-match private mirror only)
 if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   NAMES_EXCLUDE_ARGS=()
-  NAMES_EXCLUDE_FILE="$KERNEL_ROOT/tools/repo-guard-names-exclude.txt"
+  NAMES_EXCLUDE_FILE="$KERNEL_ROOT/tools/repo-guard-names-exclude.cfg"
   if [ -f "$NAMES_EXCLUDE_FILE" ]; then
     while IFS= read -r prefix; do
       prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -339,7 +339,7 @@ fi
 
 # ---- 3b. emberd legacy-name: content-addressed exceptions only -----------
 # Separate from the [names] check above and from its path-prefix
-# tools/repo-guard-names-exclude.txt, which is left exactly as-is. A tracked
+# tools/repo-guard-names-exclude.cfg, which is left exactly as-is. A tracked
 # path matching the legacy name passes ONLY if it is enumerated in
 # tools/emberd-legacy-exceptions.json AND its current content's sha256 equals
 # the digest recorded there — path alone is never sufficient (anyone can
