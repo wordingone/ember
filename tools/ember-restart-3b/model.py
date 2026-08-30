@@ -296,7 +296,12 @@ class SharedAttention(nn.Module):
         self.output = nn.Linear(config.hidden_size, config.hidden_size, bias=False, device=device)
         self.rope = RotaryCoordinates(self.head_dim)
 
-    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        coordinates: torch.Tensor,
+        allowed: torch.Tensor | None,
+    ) -> torch.Tensor:
         batch, sequence, width = hidden_states.shape
         qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
         query, key, value = qkv.unbind(dim=2)
@@ -305,7 +310,13 @@ class SharedAttention(nn.Module):
         query = self.rope.apply(query.transpose(1, 2), coordinates)
         key = self.rope.apply(key.transpose(1, 2), coordinates)
         value = value.transpose(1, 2)
-        attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
+        attended = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=None if allowed is None else allowed.unsqueeze(1),
+            is_causal=allowed is None,
+        )
         return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
 
 
@@ -346,7 +357,13 @@ class _DecoderLayer(nn.Module):
         self.shared_ffn = SwiGLUExpert(config.hidden_size, device=device)
         self.experts = nn.ModuleDict({name: SwiGLUExpert(config.hidden_size, device=device) for name in config.expert_names})
 
-    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        coordinates: torch.Tensor,
+        allowed: torch.Tensor | None,
+        active_expert: str,
+    ) -> torch.Tensor:
         hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
         hidden_states = hidden_states + self.shared_ffn(self.pre_ffn_norm(hidden_states))
         if active_expert == "shared":
@@ -552,7 +569,12 @@ class UnifiedDecoder(nn.Module):
             input_ids, image_mask, image_coordinates, position_ids,
             static_image_marker_indices=static_image_marker_indices,
         )
-        allowed = self.build_attention_mask(batch_size=input_ids.shape[0], sequence_length=input_ids.shape[1], spans=spans, device=input_ids.device)
+        allowed = None if not spans else self.build_attention_mask(
+            batch_size=input_ids.shape[0],
+            sequence_length=input_ids.shape[1],
+            spans=spans,
+            device=input_ids.device,
+        )
         for layer in self.layers:
             if self.config.gradient_checkpointing and self.training:
                 hidden_states = checkpoint_utils.checkpoint(
