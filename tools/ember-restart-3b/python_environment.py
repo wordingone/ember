@@ -23,7 +23,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -93,6 +93,13 @@ _RESOLVER_BYPASS_REASON = (
     "transformers 5.8.0.dev0 VCS pin"
 )
 _PIP_CHECK_DISPOSITION = "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT"
+_PIP_CHECK_AUTHORITY = {
+    "source_issue": 1953,
+    "terminal_report_sha256": "93f461eebe4f3f311a86c7257a3bf2a6af9a11b1aeb050366bd5520bd3be3141",
+    "install_receipt_sha256": "f284689888470822974a87959c26f3707cc2de16a4fd2f20327cdcdd57fe3a61",
+    "install_receipt_self_sha256": "e40911b1c41553c4ae2c4ff5cb402fdc4ac3da7036d50710bf246ae9e2ff72d6",
+    "conflict_lines_sha256": "c5ac4c38584b8840f98c90f0fada2494085df0e7fbe64f63c5a2ce30918a8f32",
+}
 _PIP_ENVIRONMENT_CONDITIONING = {
     "GIT_CONFIG_COUNT": "1",
     "GIT_CONFIG_KEY_0": "core.longpaths",
@@ -217,6 +224,7 @@ def validate_build_manifest_shape(manifest: Mapping[str, Any]) -> None:
                 "requires_python": _SETUPTOOLS_REQUIRES_PYTHON,
             },
         },
+        "pip_check_authority": _PIP_CHECK_AUTHORITY,
         "runtime_dependency_completion": [
             {
                 "distribution": requirement.split("==", 1)[0],
@@ -295,7 +303,8 @@ def _verify_self_hash(value: Mapping[str, Any], label: str) -> dict[str, Any]:
 
 def build_install_receipt(
     *, legacy_manifest_sha256: str, build_manifest_sha256: str,
-    pyproject_sha256: str, stages: Sequence[Mapping[str, Any]],
+    pyproject_sha256: str, isolated_interpreter: Mapping[str, Any],
+    stages: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     for label, value in (
         ("legacy manifest", legacy_manifest_sha256),
@@ -304,6 +313,17 @@ def build_install_receipt(
     ):
         if not _SHA256_RE.fullmatch(value):
             raise EnvironmentContractError(f"{label} hash must be lowercase 64hex")
+    interpreter_binding = dict(isolated_interpreter)
+    if (
+        set(interpreter_binding) != {"path", "python_version", "package_set_sha256"}
+        or not isinstance(interpreter_binding.get("path"), str)
+        or not interpreter_binding["path"]
+        or Path(interpreter_binding["path"]).is_absolute()
+        or not isinstance(interpreter_binding.get("python_version"), str)
+        or not interpreter_binding["python_version"]
+        or not _SHA256_RE.fullmatch(str(interpreter_binding.get("package_set_sha256", "")))
+    ):
+        raise EnvironmentContractError("isolated interpreter binding is malformed")
     rows = [dict(stage) for stage in stages]
     if [row.get("id") for row in rows] != ["environment_packages", "build_backend", "local_editable"]:
         raise EnvironmentContractError("install receipt must contain the three frozen stages")
@@ -314,6 +334,7 @@ def build_install_receipt(
         "resolver_bypass_rows", "pip_check_disposition",
         "pip_check_disclosed_conflict_lines", "completion_report_filename",
         "completion_report_sha256", "resolver_governed_subdependencies",
+        "pip_check_authority",
     }
     backend_keys = common_keys | {
         "requirements_sha256", "report_sha256", "artifact_filename", "artifact_sha256",
@@ -407,6 +428,7 @@ def build_install_receipt(
         exit_code=1,
         stdout=("\n".join(pip_check_lines) + "\n").encode("utf-8"),
         stderr=b"",
+        authority=environment["pip_check_authority"],
     )
     backend = rows[1]
     if (
@@ -429,6 +451,7 @@ def build_install_receipt(
             "legacy_manifest_sha256": legacy_manifest_sha256,
             "build_manifest_sha256": build_manifest_sha256,
             "pyproject_sha256": pyproject_sha256,
+            "isolated_interpreter": interpreter_binding,
         },
         "stages": rows,
     })
@@ -455,6 +478,7 @@ def load_install_receipt(path: Path) -> dict[str, Any]:
     identity = value.get("identity")
     if not isinstance(identity, dict) or set(identity) != {
         "legacy_manifest_sha256", "build_manifest_sha256", "pyproject_sha256",
+        "isolated_interpreter",
     }:
         raise EnvironmentContractError("install receipt identity keys are not closed")
     if not isinstance(stages, list):
@@ -463,6 +487,7 @@ def load_install_receipt(path: Path) -> dict[str, Any]:
         legacy_manifest_sha256=str(value.get("identity", {}).get("legacy_manifest_sha256", "")),
         build_manifest_sha256=str(value.get("identity", {}).get("build_manifest_sha256", "")),
         pyproject_sha256=str(value.get("identity", {}).get("pyproject_sha256", "")),
+        isolated_interpreter=value.get("identity", {}).get("isolated_interpreter", {}),
         stages=stages,
     )
     for stage in stages:
@@ -495,7 +520,8 @@ def load_install_receipt(path: Path) -> dict[str, Any]:
 
 def build_install_failure_receipt(
     *, legacy_manifest_sha256: str, build_manifest_sha256: str,
-    pyproject_sha256: str, stages: Sequence[Mapping[str, Any]], failed_stage: str,
+    pyproject_sha256: str, isolated_interpreter: Mapping[str, Any],
+    stages: Sequence[Mapping[str, Any]], failed_stage: str,
 ) -> dict[str, Any]:
     if failed_stage not in {"environment_packages", "build_backend", "local_editable"}:
         raise EnvironmentContractError("install failure stage is invalid")
@@ -503,8 +529,23 @@ def build_install_failure_receipt(
         "legacy_manifest_sha256": legacy_manifest_sha256,
         "build_manifest_sha256": build_manifest_sha256,
         "pyproject_sha256": pyproject_sha256,
+        "isolated_interpreter": dict(isolated_interpreter),
     }
-    if any(not _SHA256_RE.fullmatch(str(value)) for value in identity.values()):
+    if any(
+        not _SHA256_RE.fullmatch(str(identity[key]))
+        for key in ("legacy_manifest_sha256", "build_manifest_sha256", "pyproject_sha256")
+    ):
+        raise EnvironmentContractError("install failure identity is malformed")
+    binding = identity["isolated_interpreter"]
+    if (
+        set(binding) != {"path", "python_version", "package_set_sha256"}
+        or not isinstance(binding.get("path"), str)
+        or not binding["path"]
+        or Path(binding["path"]).is_absolute()
+        or not isinstance(binding.get("python_version"), str)
+        or not binding["python_version"]
+        or not _SHA256_RE.fullmatch(str(binding.get("package_set_sha256", "")))
+    ):
         raise EnvironmentContractError("install failure identity is malformed")
     rows = [dict(row) for row in stages]
     if not rows or rows[-1].get("id") != failed_stage or rows[-1].get("exit_code") in {None, 0}:
@@ -1175,23 +1216,24 @@ def _completion_census_from_report(path: Path) -> list[dict[str, str]]:
 
 def validate_disclosed_pip_check(
     *, exit_code: int, stdout: bytes, stderr: bytes,
+    authority: Mapping[str, Any],
 ) -> dict[str, Any]:
     text = (stdout + stderr).decode("utf-8", errors="strict")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    allowed_prefixes = (
-        "peft 0.18.1 ", "trl 0.24.0 ", "unsloth 2026.2.1 ",
-        "unsloth-zoo 2026.2.1 ", "unsloth_zoo 2026.2.1 ",
-    )
-    if exit_code != 1 or not lines or any(
-        not line.lower().startswith(allowed_prefixes)
-        or "transformers" not in line.lower()
-        or "5.8.0.dev0" not in line.lower()
-        for line in lines
+    if (
+        dict(authority) != _PIP_CHECK_AUTHORITY
+        or exit_code != 1
+        or bool(stderr)
+        or hashlib.sha256(_canonical(lines)).hexdigest()
+        != authority.get("conflict_lines_sha256")
     ):
-        raise EnvironmentContractError("pip check differs from the one disclosed metadata conflict")
+        raise EnvironmentContractError(
+            "pip check differs from authority-bound disclosed conflict set"
+        )
     return {
         "pip_check_disposition": _PIP_CHECK_DISPOSITION,
         "pip_check_disclosed_conflict_lines": lines,
+        "pip_check_authority": dict(authority),
     }
 
 
@@ -1240,6 +1282,114 @@ def _parser() -> argparse.ArgumentParser:
 
 def _sha256_path(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def isolated_interpreter_path(root: Path, receipt_path: Path) -> Path:
+    """Return the deterministic, run-scoped interpreter inside one checkout."""
+    environment_root = root.resolve() / "state" / "python-environments" / receipt_path.stem
+    return environment_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def create_isolated_interpreter(root: Path, interpreter: Path) -> Path:
+    """Create one no-overwrite venv; the host interpreter is only its provisioner."""
+    root = root.resolve()
+    interpreter = interpreter.resolve()
+    try:
+        interpreter.relative_to(root)
+    except ValueError as error:
+        raise EnvironmentContractError("isolated interpreter must be inside repository root") from error
+    environment_root = interpreter.parents[1]
+    if environment_root.exists():
+        raise FileExistsError("isolated interpreter custody is no-overwrite")
+    environment_root.parent.mkdir(parents=True, exist_ok=True)
+    completed = subprocess.run(
+        [sys.executable, "-m", "venv", str(environment_root)],
+        cwd=root,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        shell=False,
+        creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+    )
+    if completed.returncode != 0:
+        raise EnvironmentContractError(
+            "isolated interpreter bootstrap failed: "
+            + bytes(completed.stderr).decode("utf-8", errors="replace").strip()
+        )
+    if not interpreter.is_file():
+        raise EnvironmentContractError("isolated interpreter bootstrap produced no interpreter")
+    return interpreter
+
+
+def build_isolated_interpreter_binding(root: Path, interpreter: Path) -> dict[str, str]:
+    """Bind the interpreter identity and its normalized installed package set."""
+    root = root.resolve()
+    interpreter = interpreter.resolve(strict=True)
+    try:
+        relative = interpreter.relative_to(root)
+    except ValueError as error:
+        raise EnvironmentContractError("isolated interpreter must be inside repository root") from error
+    probe = (
+        "import importlib.metadata,json,platform;"
+        "print(json.dumps({'python_version':platform.python_version(),"
+        "'packages':[{'name':d.metadata['Name'],'version':d.version} "
+        "for d in importlib.metadata.distributions()]}))"
+    )
+    completed = subprocess.run(
+        [str(interpreter), "-I", "-c", probe],
+        cwd=root,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        shell=False,
+        creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+    )
+    if completed.returncode != 0:
+        raise EnvironmentContractError("isolated interpreter identity probe failed")
+    try:
+        observed = json.loads(bytes(completed.stdout).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise EnvironmentContractError("isolated interpreter identity probe is malformed") from error
+    version = observed.get("python_version") if isinstance(observed, dict) else None
+    packages = observed.get("packages") if isinstance(observed, dict) else None
+    if not isinstance(version, str) or not version or not isinstance(packages, list):
+        raise EnvironmentContractError("isolated interpreter identity probe is malformed")
+    normalized = []
+    for row in packages:
+        if not isinstance(row, dict) or set(row) != {"name", "version"}:
+            raise EnvironmentContractError("isolated interpreter package row is malformed")
+        name = row.get("name")
+        package_version = row.get("version")
+        if not isinstance(name, str) or not name or not isinstance(package_version, str) or not package_version:
+            raise EnvironmentContractError("isolated interpreter package row is malformed")
+        normalized.append({
+            "name": re.sub(r"[-_.]+", "-", name).lower(),
+            "version": package_version,
+        })
+    normalized.sort(key=lambda row: (row["name"], row["version"]))
+    if len({row["name"] for row in normalized}) != len(normalized):
+        raise EnvironmentContractError("isolated interpreter package set has duplicate distributions")
+    return {
+        "path": str(PureWindowsPath(relative)),
+        "python_version": version,
+        "package_set_sha256": hashlib.sha256(_canonical(normalized)).hexdigest(),
+    }
+
+
+def validate_running_interpreter_binding(root: Path, binding: Mapping[str, Any]) -> None:
+    """Refuse verification unless this process is the still-matching bound interpreter."""
+    relative = binding.get("path")
+    if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+        raise EnvironmentContractError("isolated interpreter binding path is malformed")
+    interpreter = (root.resolve() / Path(relative)).resolve()
+    try:
+        interpreter.relative_to(root.resolve())
+    except ValueError as error:
+        raise EnvironmentContractError("isolated interpreter binding escapes repository root") from error
+    if interpreter != Path(sys.executable).resolve():
+        raise EnvironmentContractError("verification is not running under receipt-bound interpreter")
+    if build_isolated_interpreter_binding(root, interpreter) != dict(binding):
+        raise EnvironmentContractError("receipt-bound interpreter package set differs")
 
 
 def _sanitized_argv(
@@ -1431,10 +1581,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 current_installed_sources(manifest),
             )
             receipt = load_install_receipt(args.install_receipt.resolve(strict=True))
+            validate_running_interpreter_binding(root, receipt["identity"]["isolated_interpreter"])
             expected_identity = {
                 "legacy_manifest_sha256": _sha256_path(manifest_path),
                 "build_manifest_sha256": _sha256_path(build_manifest_path),
                 "pyproject_sha256": _sha256_path(pyproject_path),
+                "isolated_interpreter": receipt["identity"]["isolated_interpreter"],
             }
             if receipt.get("identity") != expected_identity:
                 raise EnvironmentContractError("install receipt identity differs from repository authority")
@@ -1474,20 +1626,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         if any(path.exists() for path in _stage_log_paths(receipt_path, command_id)):
             raise FileExistsError("install stage log custody is no-overwrite")
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    interpreter_path = isolated_interpreter_path(root, receipt_path)
+    create_isolated_interpreter(root, interpreter_path)
     wheel_path = args.backend_wheel.resolve(strict=True) if args.backend_wheel is not None else None
     if wheel_path is not None and (
         wheel_path.name != _SETUPTOOLS_WHEEL or _sha256_path(wheel_path) != _SETUPTOOLS_SHA256
     ):
         raise EnvironmentContractError("host-conditioned wheel differs from fixed manifest artifact")
 
-    identity_hashes = {
+    authority_hashes = {
         "legacy_manifest_sha256": _sha256_path(manifest_path),
         "build_manifest_sha256": _sha256_path(build_manifest_path),
         "pyproject_sha256": _sha256_path(pyproject_path),
     }
+    def receipt_identity() -> dict[str, Any]:
+        return {
+            **authority_hashes,
+            "isolated_interpreter": build_isolated_interpreter_binding(root, interpreter_path),
+        }
     stages: list[dict[str, Any]] = []
     environment_plan = build_environment_install_plan(
-        manifest, build_manifest=build_manifest, python_executable=sys.executable,
+        manifest, build_manifest=build_manifest, python_executable=str(interpreter_path),
         cache_dir=receipt_path.parent / "pip-cache",
         completion_report_path=completion_report_path,
     )
@@ -1508,7 +1667,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         })
         write_install_receipt_no_replace(
             receipt_path,
-            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+            build_install_failure_receipt(**receipt_identity(), stages=stages, failed_stage="environment_packages"),
         )
         return int(core_command["exit_code"])
     completion_command, _stdout, _stderr = _run_pip_command(
@@ -1528,7 +1687,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         })
         write_install_receipt_no_replace(
             receipt_path,
-            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+            build_install_failure_receipt(**receipt_identity(), stages=stages, failed_stage="environment_packages"),
         )
         return int(completion_command["exit_code"])
     completion_census = _completion_census_from_report(completion_report_path)
@@ -1551,7 +1710,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         })
         write_install_receipt_no_replace(
             receipt_path,
-            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+            build_install_failure_receipt(**receipt_identity(), stages=stages, failed_stage="environment_packages"),
         )
         return int(tail_command["exit_code"])
     pip_check_command, pip_check_stdout, pip_check_stderr = _run_pip_command(
@@ -1563,6 +1722,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         pip_check_disclosure = validate_disclosed_pip_check(
             exit_code=int(pip_check_command["exit_code"]),
             stdout=pip_check_stdout, stderr=pip_check_stderr,
+            authority=build_manifest["pip_check_authority"],
         )
     except EnvironmentContractError as error:
         stages.append({
@@ -1577,7 +1737,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         })
         write_install_receipt_no_replace(
             receipt_path,
-            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="environment_packages"),
+            build_install_failure_receipt(**receipt_identity(), stages=stages, failed_stage="environment_packages"),
         )
         return 1
     stages.append({
@@ -1601,7 +1761,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         backend_argv = build_backend_install_argv(
             build_manifest,
-            python_executable=sys.executable,
+            python_executable=str(interpreter_path),
             requirements_path=requirements_path,
             report_path=report_path,
         )
@@ -1621,7 +1781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             })
             write_install_receipt_no_replace(
                 receipt_path,
-                build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="build_backend"),
+                build_install_failure_receipt(**receipt_identity(), stages=stages, failed_stage="build_backend"),
             )
             return int(backend_command["exit_code"])
         observed_artifact = _validate_backend_report(report_path, build_manifest)
@@ -1637,7 +1797,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "host_conditioned_local_wheel": wheel_path is not None,
         })
 
-    local_argv = build_local_install_argv(sys.executable)
+    local_argv = build_local_install_argv(str(interpreter_path))
     local_command, _stdout, _stderr = _run_pip_command(
         receipt_path=receipt_path, command_id="local_editable",
         argv=local_argv, root=root,
@@ -1651,11 +1811,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if local_command["exit_code"] != 0:
         write_install_receipt_no_replace(
             receipt_path,
-            build_install_failure_receipt(**identity_hashes, stages=stages, failed_stage="local_editable"),
+            build_install_failure_receipt(**receipt_identity(), stages=stages, failed_stage="local_editable"),
         )
         return int(local_command["exit_code"])
     receipt = build_install_receipt(
-        **identity_hashes,
+        **receipt_identity(),
         stages=stages,
     )
     write_install_receipt_no_replace(receipt_path, receipt)
