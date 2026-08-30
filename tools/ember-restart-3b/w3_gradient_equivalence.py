@@ -177,8 +177,15 @@ def process_commit_bytes() -> tuple[int, int]:
         ]
     counters = Counters()
     counters.cb = ctypes.sizeof(counters)
-    if not ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
-        raise RuntimeError("GetProcessMemoryInfo failed")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    process = kernel32.GetCurrentProcess()
+    if not psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
+        raise RuntimeError(f"GetProcessMemoryInfo failed: winerror={ctypes.get_last_error()}")
     return int(counters.PrivateUsage), int(counters.PeakPagefileUsage)
 
 

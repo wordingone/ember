@@ -3,6 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,13 @@ PATH = LOCAL_PATH if LOCAL_PATH.exists() else Path(__file__).resolve().parents[2
 SPEC = importlib.util.spec_from_file_location("issue2006_w3_gradient_gate", PATH)
 subject = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(subject)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows process-commit contract")
+def test_process_commit_counter_uses_a_valid_full_width_process_handle():
+    current, peak = subject.process_commit_bytes()
+    assert current > 0
+    assert peak >= current
 
 
 def metric():
