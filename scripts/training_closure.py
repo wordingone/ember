@@ -47,6 +47,10 @@ from typing import Any, Iterable, NamedTuple
 
 MANIFEST_RELATIVE_PATH = "manifests/training-dependency-closure.json"
 MANIFEST_SCHEMA_VERSION = "ember-training-dependency-closure-v1"
+SUPPLEMENT_RELATIVE_PATH = (
+    "tools/ember-restart-3b/training-dependency-closure-supplement.json"
+)
+SUPPLEMENT_SCHEMA_VERSION = "ember-training-dependency-closure-supplement-v1"
 
 
 # Call shapes a static import walk cannot follow. A closure member using one
@@ -197,7 +201,173 @@ def load_manifest(root: pathlib.Path) -> dict[str, Any]:
             "dynamic_call_sites entries without repo targets require a "
             "dynamic_call_site_notes explanation"
         )
+    supplement = load_supplement(root)
+    if supplement is not None:
+        manifest = _merge_supplement(manifest, supplement)
     return manifest
+
+
+def _safe_repo_relative(path: str) -> bool:
+    return (
+        bool(path)
+        and "\\" not in path
+        and not path.startswith("/")
+        and ":" not in path
+        and ".." not in pathlib.PurePosixPath(path).parts
+    )
+
+
+def _validate_call_sites(document: dict[str, Any], label: str) -> None:
+    sites = document.get("dynamic_call_sites")
+    if not isinstance(sites, dict) or not all(
+        isinstance(path, str)
+        and _safe_repo_relative(path)
+        and isinstance(targets, list)
+        and all(
+            isinstance(target, str) and _safe_repo_relative(target)
+            for target in targets
+        )
+        for path, targets in sites.items()
+    ):
+        raise ValueError(
+            f"training dependency closure {label} dynamic_call_sites must map "
+            "each path to a list of repo-relative declared targets"
+        )
+    notes = document.get("dynamic_call_site_notes", {})
+    if not isinstance(notes, dict) or not all(
+        isinstance(path, str)
+        and path in sites
+        and isinstance(note, str)
+        and note.strip()
+        for path, note in notes.items()
+    ):
+        raise ValueError(
+            f"training dependency closure {label} dynamic_call_site_notes must "
+            "map declared dynamic paths to non-empty prose"
+        )
+    if any(not targets and path not in notes for path, targets in sites.items()):
+        raise ValueError(
+            f"training dependency closure {label} dynamic_call_sites entries "
+            "without repo targets require a dynamic_call_site_notes explanation"
+        )
+
+
+def load_supplement(root: pathlib.Path) -> dict[str, Any] | None:
+    """Load the optional per-workstream supplement, or None when absent.
+
+    Absent means exactly the legacy behavior. A present-but-invalid supplement
+    is a refusal, never silently ignored. The goal_id/workstream_id/
+    next_executed_outcome keys are tolerated for the repository's
+    authority-conservation gate, the sole validator of their values.
+    """
+
+    supplement_path = pathlib.Path(root) / SUPPLEMENT_RELATIVE_PATH
+    if not supplement_path.exists():
+        return None
+    try:
+        supplement = json.loads(supplement_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(
+            "training dependency closure supplement is unreadable"
+        ) from error
+    if not isinstance(supplement, dict):
+        raise ValueError("training dependency closure supplement must be an object")
+    if supplement.get("schema_version") != SUPPLEMENT_SCHEMA_VERSION:
+        raise ValueError("training dependency closure supplement schema")
+    allowed_keys = {
+        "schema_version",
+        "goal_id",
+        "workstream_id",
+        "next_executed_outcome",
+        "purpose",
+        "entrypoints",
+        "dynamic_entrypoints",
+        "code",
+        "data",
+        "dynamic_call_sites",
+        "dynamic_call_site_notes",
+    }
+    unknown = sorted(set(supplement) - allowed_keys)
+    if unknown:
+        raise ValueError(
+            "training dependency closure supplement carries unknown keys: "
+            + ", ".join(unknown)
+        )
+    for key in ("entrypoints", "dynamic_entrypoints", "code", "data"):
+        value = supplement.setdefault(key, [])
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) and _safe_repo_relative(item) for item in value
+        ):
+            raise ValueError(
+                f"training dependency closure supplement {key} must be a list "
+                "of safe repo-relative paths"
+            )
+    supplement.setdefault("dynamic_call_sites", {})
+    _validate_call_sites(supplement, "supplement")
+    return supplement
+
+
+def _merge_supplement(
+    manifest: dict[str, Any], supplement: dict[str, Any]
+) -> dict[str, Any]:
+    base_members = {
+        member
+        for key in ("entrypoints", "dynamic_entrypoints", "code", "data")
+        for member in manifest[key]
+    }
+    seen: set[str] = set()
+    for key in ("entrypoints", "dynamic_entrypoints", "code", "data"):
+        for member in supplement[key]:
+            if member == SUPPLEMENT_RELATIVE_PATH:
+                raise ValueError(
+                    "training dependency closure supplement must not list "
+                    "itself; the self-declaration is implicit"
+                )
+            if member in base_members:
+                raise ValueError(
+                    "training dependency closure supplement re-declares a "
+                    f"manifest member: {member}"
+                )
+            if member in seen:
+                raise ValueError(
+                    "training dependency closure supplement declares a member "
+                    f"twice: {member}"
+                )
+            seen.add(member)
+    supplement_members = seen
+    undeclared_callers = sorted(
+        caller
+        for caller in supplement["dynamic_call_sites"]
+        if caller not in base_members and caller not in supplement_members
+    )
+    if undeclared_callers:
+        raise ValueError(
+            "training dependency closure supplement dynamic_call_sites callers "
+            "must be declared members: " + ", ".join(undeclared_callers)
+        )
+    duplicate_sites = sorted(
+        set(manifest["dynamic_call_sites"]) & set(supplement["dynamic_call_sites"])
+    )
+    if duplicate_sites:
+        raise ValueError(
+            "training dependency closure supplement re-declares "
+            "dynamic_call_sites for: " + ", ".join(duplicate_sites)
+        )
+    merged = dict(manifest)
+    for key in ("entrypoints", "dynamic_entrypoints", "code", "data"):
+        merged[key] = [*manifest[key], *supplement[key]]
+    merged["dynamic_call_sites"] = {
+        **manifest["dynamic_call_sites"],
+        **supplement["dynamic_call_sites"],
+    }
+    merged["dynamic_call_site_notes"] = {
+        **manifest.get("dynamic_call_site_notes", {}),
+        **supplement.get("dynamic_call_site_notes", {}),
+    }
+    # The supplement declares itself, exactly as the manifest does: editing
+    # the declaration must move the closure hash.
+    merged["data"] = [*merged["data"], SUPPLEMENT_RELATIVE_PATH]
+    return merged
 
 
 def declared_paths(manifest: dict[str, Any]) -> tuple[str, ...]:
