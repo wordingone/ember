@@ -13,6 +13,7 @@ routing signals.
 from __future__ import annotations
 
 import hashlib
+import os
 import json
 import math
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
+W3_ACTIVE_EXPERT_FUSED_BACKWARD_TREATMENT_ID = "d3617962c97b1f7efec47a49ad113aedd19cea127c7b623bd15741cb38453de6"
 
 
 def _swiglu_product(up: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
@@ -309,6 +311,51 @@ class SharedAttention(nn.Module):
         return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
 
 
+def _swiglu_gradient(product_gradient: torch.Tensor, up: torch.Tensor, gate: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the two eager-equivalent SwiGLU pointwise gradients."""
+
+    return (
+        product_gradient * F.silu(gate),
+        torch.ops.aten.silu_backward(product_gradient * up, gate),
+    )
+
+
+_FUSED_SWIGLU_GRADIENT = torch.compile(
+    _swiglu_gradient,
+    fullgraph=True,
+    dynamic=True,
+)
+
+
+class _EagerForwardFusedSwiGLUBackward(torch.autograd.Function):
+    """Preserve eager forward bytes and fuse only the SwiGLU gradient site."""
+
+    @staticmethod
+    def forward(ctx, hidden_states: torch.Tensor, up_gate_weight: torch.Tensor, down_weight: torch.Tensor) -> torch.Tensor:
+        if not all(value.is_floating_point() for value in (hidden_states, up_gate_weight, down_weight)):
+            raise TypeError("fused SwiGLU backward requires floating-point tensors")
+        up, gate = F.linear(hidden_states, up_gate_weight).chunk(2, dim=-1)
+        product = _swiglu_product(up, gate)
+        ctx.save_for_backward(hidden_states, up, gate, product, up_gate_weight, down_weight)
+        return F.linear(product, down_weight)
+
+    @staticmethod
+    def backward(ctx, output_gradient: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        hidden_states, up, gate, product, up_gate_weight, down_weight = ctx.saved_tensors
+        product_gradient = F.linear(output_gradient, down_weight.transpose(0, 1))
+        gradient = _FUSED_SWIGLU_GRADIENT if product_gradient.device.type == "cuda" else _swiglu_gradient
+        up_gradient, gate_gradient = gradient(product_gradient, up, gate)
+        up_gate_gradient = torch.cat((up_gradient, gate_gradient), dim=-1)
+        hidden_gradient = F.linear(up_gate_gradient, up_gate_weight.transpose(0, 1))
+        output_rows = output_gradient.reshape(-1, output_gradient.shape[-1])
+        product_rows = product.reshape(-1, product.shape[-1])
+        up_gate_rows = up_gate_gradient.reshape(-1, up_gate_gradient.shape[-1])
+        hidden_rows = hidden_states.reshape(-1, hidden_states.shape[-1])
+        down_weight_gradient = output_rows.transpose(0, 1) @ product_rows
+        up_gate_weight_gradient = up_gate_rows.transpose(0, 1) @ hidden_rows
+        return hidden_gradient, up_gate_weight_gradient, down_weight_gradient
+
+
 class SwiGLUExpert(nn.Module):
     """One independently trainable 4H SwiGLU expert bank."""
 
@@ -320,6 +367,16 @@ class SwiGLUExpert(nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
         return self.down(_swiglu_product(up, gate))
+
+
+    def forward_with_fused_backward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """Use the eager forward with the selected custom SwiGLU backward."""
+
+        return _EagerForwardFusedSwiGLUBackward.apply(
+            hidden_states,
+            self.up_gate.weight,
+            self.down.weight,
+        )
 
     def forward_fused(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """Fuse only the shared-FFN SiLU/multiply site on CUDA.
@@ -338,8 +395,9 @@ class SwiGLUExpert(nn.Module):
 
 
 class _DecoderLayer(nn.Module):
-    def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None) -> None:
+    def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None, w3_active_expert_fused_backward: bool = False) -> None:
         super().__init__()
+        self.w3_active_expert_fused_backward = w3_active_expert_fused_backward
         self.pre_attention_norm = RMSNorm(config.hidden_size, device=device)
         self.attention = SharedAttention(config, device=device)
         self.pre_ffn_norm = RMSNorm(config.hidden_size, device=device)
@@ -351,7 +409,13 @@ class _DecoderLayer(nn.Module):
         hidden_states = hidden_states + self.shared_ffn(self.pre_ffn_norm(hidden_states))
         if active_expert == "shared":
             return hidden_states
-        return hidden_states + self.experts[active_expert](self.pre_ffn_norm(hidden_states))
+        normalized = self.pre_ffn_norm(hidden_states)
+        active_output = (
+            self.experts[active_expert].forward_with_fused_backward(normalized)
+            if self.w3_active_expert_fused_backward and active_expert == "reasoning"
+            else self.experts[active_expert](normalized)
+        )
+        return hidden_states + active_output
 
 
 class UnifiedDecoder(nn.Module):
@@ -360,6 +424,12 @@ class UnifiedDecoder(nn.Module):
     def __init__(self, config: RestartDecoderConfig, *, device: str | torch.device | None = None, allow_production_allocation: bool = False, genesis_seed: int | None = None) -> None:
         super().__init__()
         target_device = torch.device(device) if device is not None else torch.device("cpu")
+        w3_selector = os.environ.get("EMBER_W3_ACTIVE_EXPERT_FUSED_BACKWARD")
+        if w3_selector not in {None, W3_ACTIVE_EXPERT_FUSED_BACKWARD_TREATMENT_ID}:
+            raise ValueError("EMBER_W3_ACTIVE_EXPERT_FUSED_BACKWARD treatment identity mismatch")
+        if w3_selector is not None and "reasoning" not in config.expert_names:
+            raise ValueError("W3 fused backward requires the declared reasoning expert")
+        self.w3_active_expert_fused_backward = w3_selector is not None
         if genesis_seed is not None:
             if not isinstance(genesis_seed, int) or genesis_seed < 0:
                 raise ValueError("genesis_seed must be a nonnegative integer")
@@ -372,7 +442,10 @@ class UnifiedDecoder(nn.Module):
         self.token_embedding = nn.Embedding(config.vocab_size, config.hidden_size, device=target_device)
         self.image_projector = RawPatchProjector(config, device=target_device)
         self.audio_projector = RawAudioProjector(config, device=target_device)
-        self.layers = nn.ModuleList([_DecoderLayer(config, device=target_device) for _ in range(config.layers)])
+        self.layers = nn.ModuleList([
+            _DecoderLayer(config, device=target_device, w3_active_expert_fused_backward=self.w3_active_expert_fused_backward)
+            for _ in range(config.layers)
+        ])
         self.final_norm = RMSNorm(config.hidden_size, device=target_device)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, device=target_device)
         self.lm_head.weight = self.token_embedding.weight
