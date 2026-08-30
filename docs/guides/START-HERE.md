@@ -20,7 +20,7 @@ Its operating constraint is one consumer GPU.
   sparse unified text-image-audio decoder with native reasoning and structured-tool use.
 - The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
-- Inspection starts at the root `README.md` and this canonical start page. On Windows, `Ember.cmd`
+- Inspection starts at the root `README.md` and this canonical start page. On Windows, `tools/launchers/Ember.cmd`
   is the operator entry. Python uses `manifests/python-environment-v1.json`; Rust uses
   `runtime/ember-lab/Cargo.toml`; `ember-cli` uses `tools/ember-cli/src/package.json`.
 - The smallest safe executable check is CPU-only authority verification from the repository root:
@@ -44,7 +44,7 @@ from certified completion.
 ## Install the measured Python environment
 
 To inspect Ember, start at the repository-root `README.md` and continue through this canonical
-`docs/guides/START-HERE.md` page. On Windows, `Ember.cmd` is the operator entry.
+`docs/guides/START-HERE.md` page. On Windows, `tools/launchers/Ember.cmd` is the operator entry.
 
 Installation authorities are distinct: Python uses
 [`manifests/python-environment-v1.json`](../../manifests/python-environment-v1.json), Rust uses

@@ -151,7 +151,10 @@ def build_fresh_reversion_climb(
             "operator escalation set + governor caps + kill-discipline NEVER transfer"
         ),
     }
-    write_json_no_marker(str(root / "autonomy-ladder-state.json"), state)
+    write_json_no_marker(
+        str(root / "docs/domains/governance/authority/autonomy-ladder-state.json"),
+        state,
+    )
     contract = root / "docs" / "spec" / "autonomy-relinquishment-ladder-v1.md"
     contract.parent.mkdir(parents=True, exist_ok=True)
     contract.write_text(

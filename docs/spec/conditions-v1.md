@@ -426,7 +426,7 @@ pre-epoch history.
 
 - **C-AUTO — autonomy-ladder claim faithfulness (gh issue #104; added 2026-07-04 by
   maintainer; ladder contract `docs/spec/autonomy-relinquishment-ladder-v1.md`).** R: the
-  ladder state file (`autonomy-ladder-state.json`) is schema-valid, cites a resolvable
+  ladder state file (`docs/domains/governance/authority/autonomy-ladder-state.json`) is schema-valid, cites a resolvable
   contract, and names the never-transfer safety floor (operator escalation set, governor
   caps, kill-discipline); every CLAIMED rung is backed by K≥5 consecutive resolvable window
   receipts under `receipts/autonomy-ladder/` (absent as of 2026-08-01 in this contract tree —

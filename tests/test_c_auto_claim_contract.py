@@ -159,7 +159,10 @@ class CAutonomyClaimContractTests(unittest.TestCase):
                 "operator escalation set + governor caps + kill-discipline NEVER transfer"
             ),
         }
-        self._write_json(root / "autonomy-ladder-state.json", state)
+        self._write_json(
+            root / "docs/domains/governance/authority/autonomy-ladder-state.json",
+            state,
+        )
         return window_paths, claim_path
 
     def _assert_red(self, root: Path) -> None:

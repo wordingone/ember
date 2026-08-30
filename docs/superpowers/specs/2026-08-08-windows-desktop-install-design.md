@@ -4,7 +4,7 @@ Issue: [#1578](https://github.com/wordingone/ember/issues/1578)
 
 ## Outcome
 
-Ember gains a normal per-user Windows installation. A stable Desktop or Start Menu shortcut launches a versioned, hash-admitted `Ember.exe` without consulting a Git checkout. The repository `Ember.cmd` remains the developer launcher.
+Ember gains a normal per-user Windows installation. A stable Desktop or Start Menu shortcut launches a versioned, hash-admitted `Ember.exe` without consulting a Git checkout. The repository `tools/launchers/Ember.cmd` remains the developer launcher.
 
 ## Authority boundary
 

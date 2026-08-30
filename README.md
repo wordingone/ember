@@ -38,7 +38,7 @@ one into another.
 - The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
 - Inspection starts at this root README and the [canonical start page](docs/guides/START-HERE.md).
-  On Windows, `Ember.cmd` is the operator entry. Python uses
+  On Windows, `tools/launchers/Ember.cmd` is the operator entry. Python uses
   `manifests/python-environment-v1.json`; Rust uses `runtime/ember-lab/Cargo.toml`; `ember-cli` uses
   `tools/ember-cli/src/package.json`.
 - The smallest safe executable check is CPU-only authority verification from the repository root:
@@ -67,7 +67,7 @@ links each canonical overview.
 ## Inspect or install
 
 To inspect Ember, start at this repository-root README and continue through the
-[canonical `docs/guides/START-HERE.md` page](docs/guides/START-HERE.md). On Windows, `Ember.cmd` is
+[canonical `docs/guides/START-HERE.md` page](docs/guides/START-HERE.md). On Windows, `tools/launchers/Ember.cmd` is
 the operator entry.
 
 Python dependency authority: manifests/python-environment-v1.json.

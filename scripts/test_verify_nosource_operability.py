@@ -13,7 +13,7 @@ whose only content is the exact adversarial shape the reviewer's exact-head
 fixture used, so the artifact under measurement can never supply its own
 evidence.
 
-Item 6 (genuine Ember.cmd + genuinely registered commands still resolve
+Item 6 (genuine tools/launchers/Ember.cmd + genuinely registered commands still resolve
 true, on the REAL current tree) and item 7 (wrong-root exit 2, WEAK ranking
 fails the gate) are exercised separately against the real repository -- see
 rework-harness-report.md for those receipts, which this file's fixtures
@@ -96,9 +96,9 @@ def _write_real_launcher_chain(root: Path, filename: str = "Real.cmd") -> None:
     needs L1 resolved-true as a precondition but is not itself testing L1's
     own execution behavior."""
     _write(
-        root / filename,
+        root / "tools" / "launchers" / filename,
         "@echo off\r\n"
-        'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
+        'node "%~dp0..\\..\\tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
     )
 
 
@@ -165,7 +165,7 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
                 outside_path = Path(outside.name)
             try:
                 _write(
-                    root / "decoy.cmd",
+                    root / "tools" / "launchers" / "decoy.cmd",
                     f'@echo off\r\n"{outside_path}"\r\n',
                 )
                 report = harness.run(root)
@@ -179,7 +179,7 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "empty.cmd", "")
+            _write(root / "tools" / "launchers" / "empty.cmd", "")
             report = harness.run(root)
             self.assertNotEqual(
                 report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
@@ -189,7 +189,7 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "comment.cmd", "REM nothing here\r\n:: still nothing\r\n")
+            _write(root / "tools" / "launchers" / "comment.cmd", "REM nothing here\r\n:: still nothing\r\n")
             report = harness.run(root)
             self.assertNotEqual(
                 report["checks"]["L1_root_launcher"]["state"], "resolved-true", report
@@ -206,9 +206,9 @@ class L1DecoyAndEmptyTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Real.cmd",
+                root / "tools" / "launchers" / "Real.cmd",
                 '@echo off\r\npowershell.exe -NoLogo -NoProfile -NonInteractive '
-                '-ExecutionPolicy Bypass -File "%~dp0scripts\\launch.ps1"\r\n',
+                '-ExecutionPolicy Bypass -File "%~dp0..\\..\\scripts\\launch.ps1"\r\n',
             )
             _write(
                 root / "scripts/launch.ps1",
@@ -228,7 +228,7 @@ class L3RegistryGraphTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "Real.cmd", '@echo off\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n')
+            _write(root / "tools" / "launchers" / "Real.cmd", '@echo off\r\ncall "%~dp0..\\..\\tools\\ember-cli\\src\\x.ts"\r\n')
             # a correctly-named, correctly-keyworded module that nothing imports
             _command_module(root, "orphan-bench", "orphan-bench", "benchmark suite runner")
             # command-registry.ts registers nothing
@@ -242,7 +242,7 @@ class L3RegistryGraphTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "Real.cmd", '@echo off\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n')
+            _write(root / "tools" / "launchers" / "Real.cmd", '@echo off\r\ncall "%~dp0..\\..\\tools\\ember-cli\\src\\x.ts"\r\n')
             # registered module whose name+description carry ONLY "custody"
             _command_module(root, "seatmod", "custody", "custody status only")
             _registry_importing(root, ["seatmod"])
@@ -273,7 +273,7 @@ class L3RegistryGraphTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "Real.cmd", '@echo off\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n')
+            _write(root / "tools" / "launchers" / "Real.cmd", '@echo off\r\ncall "%~dp0..\\..\\tools\\ember-cli\\src\\x.ts"\r\n')
             _write(
                 root / "tools/ember-cli/src/commands/modelish.ts",
                 "export function createModelishCommand() {\n"
@@ -580,7 +580,7 @@ class SingleMatchSubstringGuardTests(unittest.TestCase):
 
 class Round3TextPositionTests(unittest.TestCase):
     """Round 3: an independent probe on dc6dcf3 fooled L1 with a root
-    Ember.cmd whose entire body was `@echo off` / a REM comment naming the
+    tools/launchers/Ember.cmd whose entire body was `@echo off` / a REM comment naming the
     CLI entry / an echo printing one line -- run for real it invokes
     nothing, but the harness's own string-literal scan credited the comment
     text as evidence and returned a full PASS. These reproduce the probe's
@@ -596,12 +596,12 @@ class Round3TextPositionTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Ember.cmd",
+                root / "tools" / "launchers" / "Ember.cmd",
                 "@echo off\r\n"
                 'REM stub, does nothing. "tools/ember-cli/anything-at-all" is never invoked.\r\n'
                 "echo This launcher performs no action.\r\n",
             )
-            _write(root / "README.md", "Run Ember.cmd to start Ember.\n")
+            _write(root / "README.md", "Run tools/launchers/Ember.cmd to start Ember.\n")
             stems = ["custody", "tokenizer", "checkpoint", "owned", "benchmark", "train"]
             for i, kw in enumerate(stems):
                 _command_module(
@@ -626,7 +626,7 @@ class Round3TextPositionTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "decoy.cmd",
+                root / "tools" / "launchers" / "decoy.cmd",
                 '@echo off\r\nREM "tools/ember-cli/README-not-real.md" is only mentioned here.\r\n',
             )
             report = harness.run(root)
@@ -641,7 +641,7 @@ class Round3TextPositionTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Ember.cmd",
+                root / "tools" / "launchers" / "Ember.cmd",
                 '@echo off\r\necho "tools/ember-cli/src is where the code lives"\r\n',
             )
             report = harness.run(root)
@@ -655,8 +655,8 @@ class Round3TextPositionTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Real.cmd",
-                '@echo off\r\npowershell.exe -File "%~dp0scripts\\launch.ps1"\r\n',
+                root / "tools" / "launchers" / "Real.cmd",
+                '@echo off\r\npowershell.exe -File "%~dp0..\\..\\scripts\\launch.ps1"\r\n',
             )
             _write(
                 root / "scripts/launch.ps1",
@@ -676,10 +676,10 @@ class Round3TextPositionTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Ember.cmd",
+                root / "tools" / "launchers" / "Ember.cmd",
                 "@echo off\r\n"
                 "exit /b 0\r\n"
-                'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
+                'node "%~dp0..\\..\\tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
             )
             report = harness.run(root)
             self.assertNotEqual(
@@ -687,7 +687,7 @@ class Round3TextPositionTests(unittest.TestCase):
             )
 
     def test_conditional_exit_inside_block_does_not_kill_reachability(self):
-        """Sanity control, and the real Ember.cmd's own shape: an exit
+        """Sanity control, and the real tools/launchers/Ember.cmd's own shape: an exit
         INSIDE an `if (...)` block must not stop the launcher from reaching
         its real invocation when the condition is false (no args passed
         here) -- proven now by REAL execution taking the correct branch,
@@ -696,13 +696,13 @@ class Round3TextPositionTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Ember.cmd",
+                root / "tools" / "launchers" / "Ember.cmd",
                 "@echo off\r\n"
                 'if not "%~1"=="" (\r\n'
                 "  echo no args allowed\r\n"
                 "  exit /b 2\r\n"
                 ")\r\n"
-                'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
+                'node "%~dp0..\\..\\tools\\ember-cli\\src\\entrypoints\\main.js"\r\n',
             )
             report = harness.run(root)
             self.assertEqual(report["checks"]["L1_root_launcher"]["state"], "resolved-true")
@@ -717,7 +717,7 @@ class Round3TextPositionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "Real.cmd", '@echo off\r\ncall "%~dp0tools\\ember-cli\\src\\x.ts"\r\n')
+            _write(root / "tools" / "launchers" / "Real.cmd", '@echo off\r\ncall "%~dp0..\\..\\tools\\ember-cli\\src\\x.ts"\r\n')
             _write(
                 root / "tools/ember-cli/src/commands/real-train.ts",
                 "export function createTrainCommand() {\n"
@@ -770,7 +770,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Ember.cmd",
+                root / "tools" / "launchers" / "Ember.cmd",
                 '@echo off\r\ntype "tools\\ember-cli\\src\\main.ts"\r\n',
             )
             report = harness.run(root)
@@ -794,7 +794,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as td:
                     root = Path(td)
                     _minimal_ember_root(root)
-                    _write(root / filename, f"@echo off\r\n{body}\r\n")
+                    _write(root / "tools" / "launchers" / filename, f"@echo off\r\n{body}\r\n")
                     report = harness.run(root)
                     self.assertEqual(
                         report["checks"]["L1_root_launcher"]["state"],
@@ -817,7 +817,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             "deadcode.cmd": (
                 "@echo off\r\n"
                 "exit /b 0\r\n"
-                'node "%~dp0tools\\ember-cli\\src\\entrypoints\\main.js"\r\n'
+                'node "%~dp0..\\..\\tools\\ember-cli\\src\\entrypoints\\main.js"\r\n'
             ),
         }
         for filename, body in fixtures.items():
@@ -825,7 +825,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as td:
                     root = Path(td)
                     _minimal_ember_root(root)
-                    _write(root / filename, body)
+                    _write(root / "tools" / "launchers" / filename, body)
                     report = harness.run(root)
                     self.assertEqual(
                         report["checks"]["L1_root_launcher"]["state"],
@@ -850,7 +850,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             report = harness.run(root)
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-true", report)
-            receipt = check["receipts"]["Real.cmd"]
+            receipt = check["receipts"]["tools/launchers/Real.cmd"]
             for field in (
                 "launcher",
                 "cli_entry",
@@ -874,7 +874,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
     def test_runtime_delegation_to_genuine_run_resolves_true_via_entry_marker(self):
         """Round 6 positive control: a launcher that reaches the CLI entry
         only through the substituted test-mode runtime (as the real
-        Ember.cmd chain does, since bun itself is replaced) resolves true
+        tools/launchers/Ember.cmd chain does, since bun itself is replaced) resolves true
         via the ENTRY marker -- the faithful runtime stub genuinely
         delegates `run <file>` to real bun, so the entry's own substituted
         bytes execute for real, from their own declared (in-place)
@@ -884,7 +884,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "ViaRuntime.cmd",
+                root / "tools" / "launchers" / "ViaRuntime.cmd",
                 "@echo off\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
                 "run tools/ember-cli/src/entrypoints/main.js\r\n"
@@ -893,7 +893,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             report = harness.run(root)
             check = report["checks"]["L1_root_launcher"]
             self.assertEqual(check["state"], "resolved-true", report)
-            receipt = check["receipts"]["ViaRuntime.cmd"]
+            receipt = check["receipts"]["tools/launchers/ViaRuntime.cmd"]
             self.assertTrue(receipt.get("entry_marker_path_matches_declared_entry"), receipt)
             self.assertEqual(
                 receipt.get("entry_marker_content"), receipt.get("expected_entry_path")
@@ -921,7 +921,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 _minimal_ember_root(root)
                 leak = root / "leak.txt"
                 _write(
-                    root / "Leak.cmd",
+                    root / "tools" / "launchers" / "Leak.cmd",
                     "@echo off\r\n"
                     f'echo [%EMBER_PROBE_TEST_FAKE_TOKEN%]> "{leak}"\r\n'
                     'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
@@ -949,7 +949,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "CopyRun.cmd",
+                root / "tools" / "launchers" / "CopyRun.cmd",
                 "@echo off\r\n"
                 'copy /y "tools\\ember-cli\\src\\entrypoints\\main.js" '
                 '"%TEMP%\\stolen-entry.js" >nul\r\n'
@@ -964,7 +964,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             # and the marker fired at the wrong path" from "nothing ran at all",
             # and only the former is what this decoy is written to exercise. A
             # guarded version of these assertions passed while never executing.
-            receipt = check["receipts"]["CopyRun.cmd"]
+            receipt = check["receipts"]["tools/launchers/CopyRun.cmd"]
             self.assertIn("entry_marker_content", receipt, receipt)
             self.assertFalse(
                 receipt.get("entry_marker_path_matches_declared_entry", True), receipt
@@ -984,7 +984,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write(root / "tools/ember-cli/decoy-landing/.keep", "")
             _write(
-                root / "CopyRunInTree.cmd",
+                root / "tools" / "launchers" / "CopyRunInTree.cmd",
                 "@echo off\r\n"
                 'copy /y "tools\\ember-cli\\src\\entrypoints\\main.js" '
                 '"tools\\ember-cli\\decoy-landing\\main.js" >nul\r\n'
@@ -998,7 +998,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             # Unconditional, for the same reason as the sibling above: the
             # location-exact claim in this docstring is only proved if the marker
             # actually fired and its path still failed to match.
-            receipt = check["receipts"]["CopyRunInTree.cmd"]
+            receipt = check["receipts"]["tools/launchers/CopyRunInTree.cmd"]
             self.assertIn("entry_marker_content", receipt, receipt)
             self.assertFalse(
                 receipt.get("entry_marker_path_matches_declared_entry", True), receipt
@@ -1018,7 +1018,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Decoy.cmd",
+                root / "tools" / "launchers" / "Decoy.cmd",
                 "@echo off\r\n"
                 "rem This launcher never runs the Ember CLI entry. It only asks "
                 "the runtime its version.\r\n"
@@ -1044,7 +1044,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Decoy2.cmd",
+                root / "tools" / "launchers" / "Decoy2.cmd",
                 "@echo off\r\n"
                 "rem Never executes the entry. Only mentions it as a flag "
                 "argument to the runtime.\r\n"
@@ -1061,7 +1061,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             # that an entry path handed to --version rather than to run executes
             # nothing. Guarded, this assertion never ran, so the claim was asserted
             # nowhere reachable.
-            receipt = check["receipts"]["Decoy2.cmd"]
+            receipt = check["receipts"]["tools/launchers/Decoy2.cmd"]
             self.assertNotIn("entry_marker_content", receipt, receipt)
 
     def test_decoy_entry_passed_to_unrelated_check_flag_never_resolves_true(self):
@@ -1072,7 +1072,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             root = Path(td)
             _minimal_ember_root(root)
             _write(
-                root / "Decoy3.cmd",
+                root / "tools" / "launchers" / "Decoy3.cmd",
                 "@echo off\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
                 "--check entrypoints/main.js\r\n"
@@ -1094,7 +1094,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write(root / "tools/ember-cli/src/unrelated.js", "// not the entry\n")
             _write(
-                root / "Decoy4.cmd",
+                root / "tools" / "launchers" / "Decoy4.cmd",
                 "@echo off\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
                 "run tools/ember-cli/src/unrelated.js\r\n"
@@ -1112,7 +1112,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "launch.exe", "not a real binary, just bytes\n")
+            _write(root / "tools" / "launchers" / "launch.exe", "not a real binary, just bytes\n")
             report = harness.run(root)
             self.assertEqual(
                 report["checks"]["L1_root_launcher"]["state"], "weak", report

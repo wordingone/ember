@@ -1985,6 +1985,29 @@ def test_sidecar_binds_an_artifact_that_cannot_carry_the_binding_inline(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_sidecar_binds_unsupported_inline_format_before_format_refusal(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "tools/launchers/Ember.cmd"
+    _write_sidecar(tmp_path, relative, b"@echo off\n")
+    git_fixture(
+        tmp_path,
+        "add",
+        relative,
+        "tools/launchers/Ember.authority.json",
+    )
+
+    result = run_verifier(tmp_path, extra_args=("--staged",))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_sidecar_with_wrong_goal_binding_still_fails_leg4(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     git_fixture(tmp_path, "init")
