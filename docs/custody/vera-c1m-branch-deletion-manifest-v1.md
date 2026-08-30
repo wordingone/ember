@@ -61,7 +61,7 @@ and `merge_blob` are equal for every changed path.
 | `receipts/publication-gate-20260707T174201Z.json` | `723eefb22d4916e2f042ee87737f05be60ac6759` | `723eefb22d4916e2f042ee87737f05be60ac6759` | `ddf04eb32548bdbb996993849ca727acfe4f7ce1` |
 | `receipts/publication-gate-20260707T184909Z.json` | `b2d50e387ec44d38b4676af16cee8028b58e2fbe` | `b2d50e387ec44d38b4676af16cee8028b58e2fbe` | `42d41de5610c1a5318d5ffefbed79e8a5d345e6d` |
 | `receipts/publication-gate-20260707T205415Z.json` | `b5fb2f35ab40eb4747e30dd108724b0aeffdf3ff` | `b5fb2f35ab40eb4747e30dd108724b0aeffdf3ff` | `1e6db9e2943b2c5b8e05a622101a148f0ccb6dcf` |
-| `scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` |
+| `src/ember/governance/scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` |
 | `scripts/check_publication_gate.py` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` |
 | `scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` |
 | `scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | `5376e5c569239478c8b470a0564d97b5573e692f` |
@@ -81,7 +81,7 @@ The complete six-commit chain was refreshed from the PR API. The path digest is 
 
 | commit | path | blob SHA | content disposition |
 |---|---|---|---|
-| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | retained |
+| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | retained |
 | `c71ad32c88627a16f4752aa246f547813f26e4ba` | `scripts/check_publication_gate.py` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | retained |
 | `c71ad32c88627a16f4752aa246f547813f26e4ba` | `scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | retained |
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T173924Z.json` | `08b179c735c78396937355573899baf933a41032` | retained |

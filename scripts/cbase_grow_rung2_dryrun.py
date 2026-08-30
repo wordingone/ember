@@ -6,7 +6,7 @@ execution against the REAL owned rung-1 checkpoint
 (models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/
 step-00000766, SHA-verified: receipts/spend-annex/attestations/
 cbase-gpu-verify-trainable-clean-20260707T015633.json), per the FROZEN
-docs/spec/rung2-grow-spec-v1.md (net2net FF-widening, strict doubling,
+docs/domains/governance/spec/rung2-grow-spec-v1.md (net2net FF-widening, strict doubling,
 16384->32768).
 
 Reuse discipline (no duplicated math — same rule cbase_grow_live.py and
@@ -395,7 +395,7 @@ def _part_a_worker(seed_ckpt_str: str, out_dir: str, receipt_dir: str,
         "arm": "grow-op-verify",
         "scope": "deterministic net2net FF-widening (16384->32768) function-preservation "
                  "check on the REAL rung-1 checkpoint's real weights -- same gate as rung-1 "
-                 "per the frozen docs/spec/rung2-grow-spec-v1.md",
+                 "per the frozen docs/domains/governance/spec/rung2-grow-spec-v1.md",
         "seed_identity": {
             "checkpoint": str(seed_ckpt.relative_to(REPO)) if seed_ckpt.is_relative_to(REPO) else str(seed_ckpt),
             "model_pt_sha256": actual_sha,
@@ -993,7 +993,7 @@ def main() -> int:
         "sha_convention": SHA_CONVENTION,
         "experiment": "C-BASE-clause-d-dryrun",
         "arm": "grow-operator-dryrun",
-        "spec_ref": "docs/spec/rung2-grow-spec-v1.md (FROZEN); cbase-dryrun-spec-20260707.md",
+        "spec_ref": "docs/domains/governance/spec/rung2-grow-spec-v1.md (FROZEN); cbase-dryrun-spec-20260707.md",
         "scope": ("C-BASE clause (d): net2net FF-widening (16384->32768) grow-operator "
                   "dry-run on the REAL owned rung-1 checkpoint. PART A (deterministic "
                   "function-preservation, real checkpoint, CPU) is execution-binding and "

@@ -7,7 +7,7 @@
 Writes the repo-level append-only registry `receipts/run-attempts.jsonl`
 that R1-E5 "failed work included" adjudication binds (prereg 5.4 leg 1,
 5.1 class 7). Consumer contract (PR #1500, scripts/r1_exit_battery.py
-E5 leg + scripts/frontier_receipt.py ledger_all_compute_coverage):
+E5 leg + src/ember/governance/scripts/frontier_receipt.py ledger_all_compute_coverage):
 
 - path: receipts/run-attempts.jsonl, resolved against the REPO ROOT
   (not the run root; run-root evidence discovery excludes attempt-*/

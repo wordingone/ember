@@ -1,6 +1,6 @@
 # Frozen tokenizer decoder convention
 
-`tokenizer/tokenizer.json` is a byte-frozen Ember artifact. Its on-disk
+`domains/model/tokenizer/tokenizer.json` is a byte-frozen Ember artifact. Its on-disk
 `pre_tokenizer.type` is `ByteLevel`, while its on-disk `decoder` is `null`.
 Changing those bytes would invalidate existing tokenizer and lineage hashes, so
 decode consumers must not repair the tracked artifact in place.

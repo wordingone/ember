@@ -31,7 +31,7 @@ scripts/check_docs_freshness.py
 scripts/check_energy_law_theory.py
 scripts/check_goal_citations.py
 scripts/ckpt_locality.py
-scripts/cockpit_watchdog.py
+src/ember/governance/scripts/cockpit_watchdog.py
 scripts/corpus_acquire_selftest.py
 scripts/corpus_mix_selftest.py
 scripts/corpus_patch_encode.py

@@ -31,7 +31,7 @@ hidden 1024, 20 layers, 16 heads, vocab 32k) and its config family
 marked `EMBER_ARTIFACT_CLASS=historical_only` / `goal_id: EMBER-00` and the
 script itself raises `SystemExit("historical_only: the sub-3B cbase trainer
 and every importer are execution-denied")` immediately after its docstring.
-`scripts/ember_bitnet_core.py` (BitNet b1.58 ternary twin, C15) is defined
+`src/ember/governance/scripts/ember_bitnet_core.py` (BitNet b1.58 ternary twin, C15) is defined
 architecture-parity with c03, so it inherits the same historical status for
 production purposes — it remains live only as a comparison harness (C15).
 

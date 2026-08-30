@@ -36,7 +36,7 @@ def _get_all_json_files(path: Path) -> set[str]:
 
 def _run_board_step(repo_root: Path, script_name: str) -> tuple[str, int]:
     """Run a board step script, return (stdout, exit_code)."""
-    script = repo_root / "scripts" / script_name
+    script = repo_root / script_name if "/" in script_name else repo_root / "scripts" / script_name
     if not script.exists():
         return f"Script {script} not found", 1
     
@@ -125,7 +125,7 @@ M1 -> M2
 
         # Run 2: Milestone and Publication probes
         print("\nRun 2a: Executing milestone-reconciliation probe...")
-        stdout2a, exit2a = _run_board_step(repo, "check_milestone_reconciliation.py")
+        stdout2a, exit2a = _run_board_step(repo, "src/ember/governance/scripts/check_milestone_reconciliation.py")
         print(f"  Exit code: {exit2a}")
 
         print("\nRun 2b: Executing publication-gate probe...")

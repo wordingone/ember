@@ -40,7 +40,7 @@ Cache by the cheap static tuple (expert, tensor shapes/dtypes/device/layout, spa
 
 ### Task 4: Verify and publish the parallel draft
 
-Run focused and affected suites through `scripts/owned_process.py`, then authority conservation, repo guard, and diff checks. Publish an immutable draft head for independent structural review. State clearly that it cannot merge before Carrier 1.
+Run focused and affected suites through `src/ember/governance/scripts/owned_process.py`, then authority conservation, repo guard, and diff checks. Publish an immutable draft head for independent structural review. State clearly that it cannot merge before Carrier 1.
 
 ### Task 5: Rebase the authority-consuming delta and execute
 

@@ -6,7 +6,7 @@ Ember's existing process-supervision gate terminates only the immediate `subproc
 
 ## Design
 
-Add `scripts/owned_process.py` as the sole local automation boundary for commands that can create descendants. Its platform-neutral `OwnedProcessRunner` returns a closed result containing the root PID, exit code, stdout, stderr, status, timeout, backend, and cleanup outcome.
+Add `src/ember/governance/scripts/owned_process.py` as the sole local automation boundary for commands that can create descendants. Its platform-neutral `OwnedProcessRunner` returns a closed result containing the root PID, exit code, stdout, stderr, status, timeout, backend, and cleanup outcome.
 
 On Windows the runner creates a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, assigns the root process immediately, and fails closed if assignment fails. Closing the controller or timing out closes the Job Object and terminates the complete tree. On POSIX the same API launches a new session and terminates its process group on completion or timeout; automatic cleanup after a controller crash remains a separately visible portability-hardening obligation.
 

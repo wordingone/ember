@@ -38,7 +38,7 @@ the error named, exit code 1. An (a)/(c) assertion violation is not a parse
 failure but is likewise reported as exit:"FAIL", exit code 1 -- only a lattice
 diff (b) never flips the verdict, per spec.
 
-Run:  python scripts/check_milestone_reconciliation.py
+Run:  python src/ember/governance/scripts/check_milestone_reconciliation.py
 """
 import json
 import os
@@ -47,7 +47,9 @@ import sys
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                                      # <external-state>
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))  # repository root
+LEGACY_SCRIPTS = os.path.join(ROOT, "scripts")
+sys.path.insert(0, LEGACY_SCRIPTS)
 EMBER_ROOT = os.path.normpath(os.path.join(ROOT, "..", "ember"))  # read-only fallback tree
 
 sys.path.insert(0, HERE)

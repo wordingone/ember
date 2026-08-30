@@ -42,7 +42,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NC = os.path.dirname(HERE)
 CORPUS_V0 = "<local-path>"
 OUT_DIR    = "<local-path>"
-TOK_JSON   = f"{NC}/tokenizer/tokenizer.json"
+TOK_JSON   = f"{NC}/domains/model/tokenizer/tokenizer.json"
 TOKFREEZE_RECEIPT = f"{NC}/receipts/tokenizer-freeze-20260611T154111Z.json"
 
 TARGET_TOKENS = 100_000_000

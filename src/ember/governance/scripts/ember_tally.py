@@ -29,8 +29,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-NC = os.path.dirname(HERE)
+NC = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
+LEGACY_SCRIPTS = os.path.join(NC, "scripts")
 sys.path.insert(0, HERE)
+sys.path.insert(0, LEGACY_SCRIPTS)
 
 from receipt_check import validate_receipt
 from receipt_write import checked_write

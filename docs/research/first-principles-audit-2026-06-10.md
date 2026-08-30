@@ -1284,7 +1284,7 @@ column from round-3 on.
 
 **The fp-15 discipline applied to the owned core:** the analysis that
 will judge the v0 checkpoints is now executable BEFORE any checkpoint
-exists (`scripts/fp23_probe_prereg.py`, selftest PASS, staged sentinel
+exists (`src/ember/governance/scripts/fp23_probe_prereg.py`, selftest PASS, staged sentinel
 + un-freeze guard in main). Pinned: L1 grammar (10 deterministic ops,
 int lists 4–12, fixed NL templates — no paraphrase pool, the floor
 does not measure paraphrase robustness), sha1-bucket held-out split

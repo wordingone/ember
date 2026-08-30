@@ -381,7 +381,7 @@ def _production_tokenizer(nc, tokfreeze, match_added_tokens):
     tokenizer as-frozen, where added-token literals in raw text match to
     their reserved ids — exactly the deviation being measured."""
     tok_json_rel = (tokfreeze.get("tokenizer_repo_path")
-                    or "tokenizer/tokenizer.json").replace(chr(92), "/")
+                    or "domains/model/tokenizer/tokenizer.json").replace(chr(92), "/")
     tok_json_sha = tokfreeze.get("tokenizer_json_sha256")
     tok_json_path = f"{nc}/{tok_json_rel}"
     if not os.path.exists(tok_json_path) or _sha(tok_json_path) != tok_json_sha:
@@ -439,7 +439,7 @@ def produce_shards_v0(nc, encode_fn=None, sources=None, out_dir=SHARD_DIR,
     asm_sha, assembly = _load_pinned(nc, assembly_name)
     tok_sha, tokfreeze = _load_pinned(nc, tokfreeze_name)
     tok_json_rel = (tokfreeze.get("tokenizer_repo_path")
-                    or "tokenizer/tokenizer.json").replace(chr(92), "/")
+                    or "domains/model/tokenizer/tokenizer.json").replace(chr(92), "/")
     tok_json_sha = tokfreeze.get("tokenizer_json_sha256")
     encode_batch_fn = _encode_batch_factory(nc, tokfreeze, encode_fn,
                                             match_added_tokens=False)
@@ -667,7 +667,7 @@ def _selftest():
         for nm in prem_names.values():
             json.dump({"ticket": "FIXTURE", "ts": "20260101T000000Z"},
                       open(f"{td}/receipts/{nm}", "w"))
-        json.dump({"vocab_size": 32000}, open(f"{td}/tokenizer/tokenizer.json",
+        json.dump({"vocab_size": 32000}, open(f"{td}/domains/model/tokenizer/tokenizer.json",
                                                "w"))
         # two synthetic uint16 shards; ids stay in [8, 31999] (no reserved/sep)
         def _write_shard(name, n):
@@ -715,8 +715,8 @@ def _selftest():
             "premises": {
                 "assembly_receipt": _premise("assembly_receipt"),
                 "tokenizer_freeze_receipt": _premise("tokenizer_freeze_receipt"),
-                "tokenizer_json": {"path": "tokenizer/tokenizer.json",
-                                   "sha256": _sha(f"{td}/tokenizer/tokenizer.json")},
+                "tokenizer_json": {"path": "domains/model/tokenizer/tokenizer.json",
+                                   "sha256": _sha(f"{td}/domains/model/tokenizer/tokenizer.json")},
             },
             "sha_convention": SHA_CONVENTION,
             "no_gpu": True,
@@ -821,13 +821,13 @@ def _selftest_writer():
         os.makedirs(f"{td}/receipts")
         os.makedirs(f"{td}/tokenizer")
         os.makedirs(f"{td}/corpus")
-        with open(f"{td}/tokenizer/tokenizer.json", "w", encoding="utf-8") as fh:
+        with open(f"{td}/domains/model/tokenizer/tokenizer.json", "w", encoding="utf-8") as fh:
             fh.write('{"model":"fixture"}')
-        tj_sha = _sha(f"{td}/tokenizer/tokenizer.json")
+        tj_sha = _sha(f"{td}/domains/model/tokenizer/tokenizer.json")
         _json.dump({"ticket": "FIX-ASM", "ts": "20260101T000000Z"},
                    open(f"{td}/receipts/fixture-assembly.json", "w"))
         _json.dump({"ticket": "FIX-TOK", "ts": "20260101T000000Z",
-                    "tokenizer_repo_path": "tokenizer/tokenizer.json",
+                    "tokenizer_repo_path": "domains/model/tokenizer/tokenizer.json",
                     "tokenizer_json_sha256": tj_sha, "sha_convention": "fixture"},
                    open(f"{td}/receipts/fixture-tokfreeze.json", "w"))
 

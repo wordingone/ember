@@ -59,7 +59,7 @@ const LAUNCH = {
   model_config_path: "/repo/configs/ember-restart-3b.json",
   run_manifest_path: MANIFEST_PATH,
   server_path: "/repo/tools/ember-restart-3b/serve_owned_openai.py",
-  tokenizer_path: "/repo/tokenizer/tokenizer.json",
+  tokenizer_path: "/repo/domains/model/tokenizer/tokenizer.json",
   trusted_verifier_registry_path: REGISTRY_PATH,
   trusted_verifier_registry_sha256: "d".repeat(64),
   trusted_verifier_registry_approval_path: REGISTRY_APPROVAL_PATH,

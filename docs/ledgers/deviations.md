@@ -244,7 +244,7 @@ issue #118.
 
 **Date filed:** 2026-07-08 (the lead). **Filed pre-run** (no full-param production training
 run has executed under this config; only the #402 dry-run estimate has run, receipted).
-**Frozen artifact:** `docs/spec/rung2-grow-spec-v1.md` (FROZEN, decision gated 2026-07-04, #76 /
+**Frozen artifact:** `docs/domains/governance/spec/rung2-grow-spec-v1.md` (FROZEN, decision gated 2026-07-04, #76 /
 #113).
 
 **What changes:** the production stabilization memory strategy. The frozen spec's config —
@@ -255,7 +255,7 @@ not a change to the stabilization run itself.
 
 ### Deviation
 
-docs/spec/rung2-grow-spec-v1.md specifies production stabilization at batch=16, seq=1024,
+docs/domains/governance/spec/rung2-grow-spec-v1.md specifies production stabilization at batch=16, seq=1024,
 full-param 2.2B, VRAM-resident AdamW. The #402 honest dry-run receipts this config at an
 estimated **30.903 GiB required vs 23.988 GiB total** on the L1 card — infeasible outright,
 independent of co-residency. FLOPs are NOT the wall (6.571e15 vs 2.431e16 ceiling, 0.5%).

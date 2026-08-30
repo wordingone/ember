@@ -6,7 +6,7 @@
 
 **Architecture:** Carrier 1 adds a closed, deterministic signature grammar and an observation-only collector at the real decoded-batch boundary. It cannot activate either accelerator and emits a no-overwrite census receipt. Carrier 2 wires the already-reviewed FP8 and graph primitives into the same training loop, but activation fails closed unless an exact merged census receipt and its admitted signature set verify.
 
-**Tech Stack:** Python 3.12, PyTorch/CUDA, unittest/pytest, governed Ember vertical runner, `scripts/owned_process.py`, `scripts/worktree_lifecycle.py`.
+**Tech Stack:** Python 3.12, PyTorch/CUDA, unittest/pytest, governed Ember vertical runner, `src/ember/governance/scripts/owned_process.py`, `scripts/worktree_lifecycle.py`.
 
 ---
 
@@ -19,7 +19,7 @@
 1. Add failing tests for canonical tensor descriptors, active-expert and span binding, deterministic SHA-256, unique signature counts, closed receipt keys, and no-overwrite output.
 2. Run the focused test and retain the RED output.
 3. Implement the minimum `training_step_signature` and `TrainingSignatureCensus` surface.
-4. Re-run the focused test through `scripts/owned_process.py`; require green and owned cleanup.
+4. Re-run the focused test through `src/ember/governance/scripts/owned_process.py`; require green and owned cleanup.
 
 ### Task 2: Carrier 1 real-path producer integration
 

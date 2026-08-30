@@ -181,7 +181,7 @@ def _build_model(seed):
 
 def _load_tokenizer_encode_fn():
     """Load frozen tokenizer, return text->list[int] function."""
-    tok_json = f"{NC}/tokenizer/tokenizer.json"
+    tok_json = f"{NC}/domains/model/tokenizer/tokenizer.json"
     from tokenizers import Tokenizer
     d = json.load(open(tok_json, encoding="utf-8"))
     d["added_tokens"] = []

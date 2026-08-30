@@ -22,6 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+GOVERNANCE_SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "ember" / "governance" / "scripts"
+sys.path.insert(0, str(GOVERNANCE_SCRIPTS))
+
 from receipt_write import checked_write
 from owned_process import OwnedProcessRunner
 

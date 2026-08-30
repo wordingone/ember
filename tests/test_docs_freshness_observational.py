@@ -49,9 +49,9 @@ def render_claims_md(rows):
 
 
 def fixture(tmp_path: Path, *, stale: bool = False) -> Path:
-    (tmp_path / "scripts").mkdir()
+    (tmp_path / "src" / "ember" / "governance" / "scripts").mkdir(parents=True)
     (tmp_path / "receipts").mkdir()
-    (tmp_path / "scripts" / "build_claims_index.py").write_text(
+    (tmp_path / "src" / "ember" / "governance" / "scripts" / "build_claims_index.py").write_text(
         BUILDER,
         encoding="utf-8",
     )

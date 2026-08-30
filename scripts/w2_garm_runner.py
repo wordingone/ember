@@ -3,7 +3,7 @@
 
 Authority precedence (per #113's own framing): docs/spec/w2-scale-
 preregistration-v1.md governs all training parameters and arm semantics;
-docs/spec/rung2-grow-spec-v1.md governs the rung-2 grow shape (strict
+docs/domains/governance/spec/rung2-grow-spec-v1.md governs the rung-2 grow shape (strict
 doubling, fp_diff tolerance); #113 adds the execution contract around both.
 Divergences are reported (see the coordination mail to team-lead), never
 silently reconciled.
@@ -106,7 +106,7 @@ import w2_derive_s_config  # issue #108's tool -- reused, not edited
 
 ISSUE_REF = "#113"
 SPEC_REF = "docs/spec/w2-scale-preregistration-v1.md"
-RUNG2_SPEC_REF = "docs/spec/rung2-grow-spec-v1.md"
+RUNG2_SPEC_REF = "docs/domains/governance/spec/rung2-grow-spec-v1.md"
 
 RECEIPT_DIR = os.path.join(REPO, "receipts", "ember-c-scale")
 EVENT_LOG_PATH = os.path.join(REPO, "state", "runs", "active-runs.jsonl")

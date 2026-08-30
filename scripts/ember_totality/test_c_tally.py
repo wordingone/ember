@@ -4,7 +4,7 @@ Totality test for Ember goal condition C-TALLY (status probe / TDD).
 
 Authoritative condition text (docs/spec/conditions-v1.md sec 4.3):
 
-  C-TALLY. `scripts/ember_tally.py` walks the manifest, verifies each row's
+  C-TALLY. `src/ember/governance/scripts/ember_tally.py` walks the manifest, verifies each row's
   receipt exists AND passes its named check, emits
   `receipts/tally-<ts>.json {total, implemented, pct, missing[]}`.
   The tally receipt is the only completion authority; prose claims void.
@@ -19,7 +19,7 @@ docs/goalforge-debate-ledger.md row R8): the pre-hardening version of this
 probe trusted the newest receipts/tally-*.json's *self-reported* pct field
 outright -- "MISAIMED both directions (RED-by-accident on a 19-day-stale
 receipt; one fixture tally file flips the completion headline GREEN)". A
-tally-*.json is written by `scripts/ember_tally.py` from ITS OWN reading of
+tally-*.json is written by `src/ember/governance/scripts/ember_tally.py` from ITS OWN reading of
 the manifest, not from the totality board itself -- nothing forced the two
 to agree, and nothing stopped a hand-placed fixture tally file from claiming
 pct=100 while the real board was mostly RED.

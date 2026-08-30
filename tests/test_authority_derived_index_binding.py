@@ -26,9 +26,9 @@ def render_claims_md(rows):
 """
 
 def fixture(tmp_path: Path) -> Path:
-    (tmp_path / "scripts").mkdir()
+    (tmp_path / "src" / "ember" / "governance" / "scripts").mkdir(parents=True)
     (tmp_path / "receipts").mkdir()
-    (tmp_path / "scripts" / "build_claims_index.py").write_text(BUILDER, encoding="utf-8")
+    (tmp_path / "src" / "ember" / "governance" / "scripts" / "build_claims_index.py").write_text(BUILDER, encoding="utf-8")
     (tmp_path / "receipts" / "INDEX.jsonl").write_text(
         '{"path": "receipts/a.json", "ticket": "A"}\n', encoding="utf-8"
     )

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_cbase_avir_data.py — C-BASE [REDACTED]-task data pipeline (GAP1 BUILD).
 
 Synthesizes correct action traces for each HEADLESS-verifiable train task,
@@ -35,7 +38,7 @@ from typing import Any
 _HERE = pathlib.Path(__file__).resolve().parent
 _REPO = _HERE.parent
 _DATA_DIR = _REPO / "data" / "cbase_pretrain"
-_TOK_PATH = _REPO / "tokenizer" / "tokenizer.json"
+_TOK_PATH = _REPO / "domains" / "model" / "tokenizer" / "tokenizer.json"
 
 sys.path.insert(0, str(_HERE))
 

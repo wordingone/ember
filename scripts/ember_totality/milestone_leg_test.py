@@ -5,7 +5,7 @@ mandates-recon-20260704.md #2, parent gh issue #35 DISPATCH 3 of 3).
 
 Unlike enforcement_leg_test.py's precedent (which had to fixture-mimic
 check_publication_gate.py because that checker did not exist in the builder's tree),
-this suite uses the REAL, UNMODIFIED scripts/check_milestone_reconciliation.py copied
+this suite uses the REAL, UNMODIFIED src/ember/governance/scripts/check_milestone_reconciliation.py copied
 byte-for-byte into each per-case sandbox -- real code, real dual-source verdict
 resolution (enforcement_leg._run_one_checker, also unmodified), only the 5 INPUT
 documents it reads are minimal fixture content. Every case gets a fresh

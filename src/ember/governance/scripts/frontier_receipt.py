@@ -78,12 +78,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+LEGACY_SCRIPTS = Path(__file__).resolve().parents[4] / "scripts"
+sys.path.insert(0, str(LEGACY_SCRIPTS))
+
 import r1_frozen_eval_runner as frozen_eval
 
 SCHEMA_VERSION = "ember02-frontier-receipt/v1"
-GENERATOR = "scripts/frontier_receipt.py"
+GENERATOR = "src/ember/governance/scripts/frontier_receipt.py"
 RUNG = "R1"
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"

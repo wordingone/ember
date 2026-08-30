@@ -42,7 +42,7 @@ def write_authority(root: Path) -> tuple[str, str]:
         "| discrepancy | disposition | enforced by | evidence/open question |\n"
         "|---|---|---|---|\n"
         "| D-001 | ENFORCED | docs/domains/governance/authority/GOAL.md | identity |\n"
-        "| D-002 | HISTORICAL_ONLY | docs/authority/STATE.md | history |\n",
+        "| D-002 | HISTORICAL_ONLY | docs/domains/governance/authority/STATE.md | history |\n",
         encoding="utf-8",
     )
     milestone = root / "docs" / "roadmap" / "milestones" / "EMBER-00.md"

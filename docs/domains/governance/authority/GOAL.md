@@ -113,19 +113,19 @@ they cannot reduce, defer, replace, or reinterpret it.
     "unrecovered_direct_names_minimum": 2
   },
   "conservation_hashes": {
-    "authority_matrix_sha256": "E2948C71EDD8B44EAF75F771BFA261025033F7EB876A7D4C77420180C158E556",
+    "authority_matrix_sha256": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "FB75FBCDD39C9ABA855D16CA92353E2948CF15CAE41FE8EFBF9368C1EC2E0077",
+      "docs/authority/CONTINUITY.md": "F58069638F49A122A0BDC9CF03DD99E55CAD0B23C90BB830267F197BCF195791",
       "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
       "README.md": "6A98F99DF2311ECC5DD1CC4A08F47E6DF7C2BB5318D0228627206D36D7AA3DF9",
-      "docs/authority/ember-authority-matrix.md": "E2948C71EDD8B44EAF75F771BFA261025033F7EB876A7D4C77420180C158E556",
+      "docs/authority/ember-authority-matrix.md": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
       "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
       "docs/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/spec/conditions-v1.md": "363B1A0E1D952ECA1B1DD70CC2239685EBC02A67816A3697872171E8D8256B37"
+      "docs/spec/conditions-v1.md": "8AE52656BBC196D52060453F453387C83090F158D0C9CDDC27EDB4432147FBCC"
     }
   },
   "authority_only_goal": false,
@@ -486,7 +486,7 @@ machinery are not progress without that link.
 
 docs/contracts/goal-clear-protocol.md defines the executable completion audit without
 changing this goal. docs/authority/ember-authority-matrix.md maps D-001 through D-062 to
-enforcement, historical evidence, and explicit open research. docs/authority/STATE.md resolves
+enforcement, historical evidence, and explicit open research. docs/domains/governance/authority/STATE.md resolves
 every current model, checkpoint, backend, and benchmark class.
 
 Evidence and historical artifacts never become authority. Subordinate contracts

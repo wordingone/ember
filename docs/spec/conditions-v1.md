@@ -464,7 +464,7 @@ count elsewhere is a stale intermediate count, corrected by this ruling.
 - **C-MANIFEST.** `docs/contracts/ember-completeness.md` enumerates every planned piece (id, subgoal, AC, test,
   receipt pointer, status). A planned piece absent from the manifest is a gate violation. ✗
   `invalid_unmanifested_piece`.
-- **C-TALLY.** `scripts/ember_tally.py` walks the manifest, verifies each row's receipt exists AND
+- **C-TALLY.** `src/ember/governance/scripts/ember_tally.py` walks the manifest, verifies each row's receipt exists AND
   passes its named check, emits `receipts/tally-<ts>.json {total, implemented, pct, missing[]}`. The
   tally receipt is the only completion authority. Each §4 CHK must be backed by an **executable check**
   the tally invokes; a non-executable CHK counts as `missing[]`, never pass. ✗ pct<100. CHK: pct=100,

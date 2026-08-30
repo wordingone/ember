@@ -88,12 +88,12 @@ paid_api_surface_used=false) on every receipt, bare #NN issue refs, no
 lineage terms.
 
 Usage:
-  python scripts/ember_c_scale_s3_producer.py --flops
-  python scripts/ember_c_scale_s3_producer.py --flops --t-dense-override 3.0e7
-  python scripts/ember_c_scale_s3_producer.py --deletion-arm
-  python scripts/ember_c_scale_s3_producer.py --working-set --dry-run
-  python scripts/ember_c_scale_s3_producer.py --working-set --live --device cuda   # refuses
-  python scripts/ember_c_scale_s3_producer.py --selftest
+  python src/ember/governance/scripts/ember_c_scale_s3_producer.py --flops
+  python src/ember/governance/scripts/ember_c_scale_s3_producer.py --flops --t-dense-override 3.0e7
+  python src/ember/governance/scripts/ember_c_scale_s3_producer.py --deletion-arm
+  python src/ember/governance/scripts/ember_c_scale_s3_producer.py --working-set --dry-run
+  python src/ember/governance/scripts/ember_c_scale_s3_producer.py --working-set --live --device cuda   # refuses
+  python src/ember/governance/scripts/ember_c_scale_s3_producer.py --selftest
 """
 from __future__ import annotations
 
@@ -107,11 +107,13 @@ import sys
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))                       # ember-goalforge/scripts
-REPO = os.path.dirname(HERE)                                            # ember-goalforge
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE))))  # repository root
+LEGACY_SCRIPTS = os.path.join(REPO, "scripts")
 CROSS_REPO_DEFAULT = os.path.normpath(os.path.join(REPO, "..", "ember"))  # sibling work tree
 
 sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(HERE, "ember_totality"))
+sys.path.insert(0, LEGACY_SCRIPTS)
+sys.path.insert(0, os.path.join(LEGACY_SCRIPTS, "ember_totality"))
 
 import test_c_scale as c_scale           # noqa: E402 -- frozen probe, reused not reimplemented
 from receipt_write import checked_write  # noqa: E402

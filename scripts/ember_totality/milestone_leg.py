@@ -6,13 +6,13 @@ the recon's own text names this exact CHK build-out as "a separate later dispatc
 Thin, reuse-only wrapper -- EXACTLY the C-ENF pattern (issue #38,
 scripts/ember_totality/enforcement_leg.py + test_c_enf.py), scoped to the ONE existing
 checker docs/spec/milestones-v1.md's own "Validation hook" section names:
-scripts/check_milestone_reconciliation.py. Imports enforcement_leg's CheckerSpec and
+src/ember/governance/scripts/check_milestone_reconciliation.py. Imports enforcement_leg's CheckerSpec and
 _run_one_checker UNMODIFIED -- the dual-source verdict resolution (subprocess exit code
 cross-checked against the checker's own printed verdict line, never forced to agree
 silently) is not reimplemented here.
 
 Checker's real, discovered verdict-line contract (read directly from
-scripts/check_milestone_reconciliation.py's run(), not guessed): on the non-exception
+src/ember/governance/scripts/check_milestone_reconciliation.py's run(), not guessed): on the non-exception
 path the final stdout line is
     mapped=<n>/55  unmapped=<n>  lattice_diff=<n>  floor_contract_gaps=<n>  exit=PASS|FAIL
 `sys.exit(run())` returns 0 iff exit_status == "PASS", else 1. A ParseError or any other
@@ -23,7 +23,7 @@ branch, which is fail-closed by construction (only PASS is ever a pass at the bo
 
 DISCLOSED, live finding (not a synthetic hypothetical -- reproduced against today's real
 tree the same session this module was authored): running
-`python scripts/check_milestone_reconciliation.py` against the live goalforge tree RIGHT
+`python src/ember/governance/scripts/check_milestone_reconciliation.py` against the live goalforge tree RIGHT
 NOW returns FAIL ("ember-completeness.md: expected exactly ids C1..C55, got missing=[]
 extra=[0]") because docs/contracts/ember-completeness.md carries a C0 row (line 79) whose leading
 `| C0 |` cell collides with check_milestone_reconciliation.py's own row-id regex
@@ -55,15 +55,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from enforcement_leg import CheckerSpec, _run_one_checker  # noqa: E402
 
 # Discovered canonical invocation (read-only source review of
-# scripts/check_milestone_reconciliation.py's run(), 2026-07-04): bare invocation
+# src/ember/governance/scripts/check_milestone_reconciliation.py's run(), 2026-07-04): bare invocation
 # (`python check_milestone_reconciliation.py`), no args; the module's own ROOT resolves
 # from `os.path.dirname(HERE)` (HERE = the script's own directory), so pointing
 # _run_one_checker's cwd/contract_root at a sandbox copy that contains its own
-# scripts/check_milestone_reconciliation.py is fully self-contained -- no absolute path
+# src/ember/governance/scripts/check_milestone_reconciliation.py is fully self-contained -- no absolute path
 # to the live tree is baked in anywhere in this module.
 MILESTONE_CHECKER = CheckerSpec(
     name="check_milestone_reconciliation",
-    rel_path="scripts/check_milestone_reconciliation.py",
+    rel_path="src/ember/governance/scripts/check_milestone_reconciliation.py",
     args=(),
     verdict_regex=r"^mapped=\d+/\d+\s+unmapped=\d+\s+lattice_diff=\d+\s+floor_contract_gaps=\d+\s+exit=(PASS|FAIL)\b",
     pass_values=("PASS",),

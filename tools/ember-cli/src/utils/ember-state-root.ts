@@ -27,7 +27,7 @@
 //      retain the user config-home fallback. The per-root key keeps checkouts disjoint.
 //
 // The default's key derivation is mirrored by Get-EmberStateRootKey in
-// scripts/prepare-ember-cockpit.ps1, AND by _repo_state_key in scripts/cockpit_watchdog.py (#413:
+// scripts/prepare-ember-cockpit.ps1, AND by _repo_state_key in src/ember/governance/scripts/cockpit_watchdog.py (#413:
 // the renderer-heartbeat reader needs the same default the writer resolves to, since nothing
 // exports EMBER_STATE_ROOT into the watchdog's own launch environment). Three
 // implementations, not two — TS, PowerShell, Python — all pinned to the same fixture vectors

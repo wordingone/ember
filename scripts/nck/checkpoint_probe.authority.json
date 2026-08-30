@@ -1,0 +1,10 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "scripts/nck/checkpoint_probe.py",
+  "artifact_sha256": "2f6a0960d92faa08cb45c90ddbe29fc8bce52b00a2c60d58c873db6a37247aa3",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

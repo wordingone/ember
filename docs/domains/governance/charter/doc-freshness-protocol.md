@@ -35,11 +35,11 @@ The `scripts/README.md` file contains a taxonomy of the 400+ scripts under `scri
 - If it's a new prefix family, add a new row to the census table with count and description
 
 ### 3. Claims index is regenerable
-The `receipts/CLAIMS.md` and `receipts/INDEX.jsonl` files are generated from `receipts/**/*.json` by `scripts/build_claims_index.py`. These files must exist and be regenerable without error.
+The `receipts/CLAIMS.md` and `receipts/INDEX.jsonl` files are generated from `receipts/**/*.json` by `src/ember/governance/scripts/build_claims_index.py`. These files must exist and be regenerable without error.
 
 **When the index goes stale:** After adding new receipts, run:
 ```bash
-python scripts/build_claims_index.py
+python src/ember/governance/scripts/build_claims_index.py
 ```
 
 **Defect class:** `missing_claims_index`
@@ -123,6 +123,6 @@ If the checker detects a defect that requires architectural change (e.g., the do
 ## See also
 
 - `scripts/check_docs_freshness.py` — the implementation
-- `scripts/build_claims_index.py` — regenerates receipts index
+- `src/ember/governance/scripts/build_claims_index.py` — regenerates receipts index
 - `scripts/README.md` — scripts taxonomy
 - `README.md` — repository structure and reproduction guide

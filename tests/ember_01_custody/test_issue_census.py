@@ -60,8 +60,8 @@ def test_issue_census_binds_master_blobs_and_history_without_closure(
     git(root, "config", "user.email", "fixture@example.invalid")
     git(root, "config", "user.name", "fixture")
     (root / "docs/authority").mkdir(parents=True, exist_ok=True)
-    (root / "docs/authority/STATE.md").write_text("Tracks #7.\n", encoding="utf-8")
-    git(root, "add", "docs/authority/STATE.md")
+    (root / "docs/domains/governance/authority/STATE.md").write_text("Tracks #7.\n", encoding="utf-8")
+    git(root, "add", "docs/domains/governance/authority/STATE.md")
     git(root, "commit", "-m", "Bind issue #9 in history")
     head = git(root, "rev-parse", "HEAD")
 
@@ -74,7 +74,7 @@ def test_issue_census_binds_master_blobs_and_history_without_closure(
 
     assert [row["number"] for row in payload["issues"]] == [7, 9, 11]
     assert payload["public_master_sha"] == head
-    assert rows[7]["master_evidence"][0]["path"] == "docs/authority/STATE.md"
+    assert rows[7]["master_evidence"][0]["path"] == "docs/domains/governance/authority/STATE.md"
     assert rows[7]["master_evidence"][0]["blob_sha1"]
     assert rows[9]["history_evidence"] == [{"commit": head}]
     assert rows[11]["disposition"] == "unresolved"

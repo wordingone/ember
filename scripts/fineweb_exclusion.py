@@ -861,7 +861,7 @@ def _selftest_fail_closed_against_real_schema():
             json.dump({"ticket": "FIXTURE", "ts": "20260101T000000Z"},
                       open(f"{td}/receipts/{nm}", "w"))
         json.dump({"vocab_size": 32000},
-                  open(f"{td}/tokenizer/tokenizer.json", "w"))
+                  open(f"{td}/domains/model/tokenizer/tokenizer.json", "w"))
         # the RULING fixture: excluded_token_ranges now defaults its excluded
         # set to ruled_excluded_sources(nc), so the fixture tree must carry a
         # ruling of its own -- proving the default really does read the ruling
@@ -913,8 +913,8 @@ def _selftest_fail_closed_against_real_schema():
                                      "sha256": _sha(f"{td}/receipts/{prem_names['assembly_receipt']}")},
                 "tokenizer_freeze_receipt": {"name": prem_names["tokenizer_freeze_receipt"],
                                              "sha256": _sha(f"{td}/receipts/{prem_names['tokenizer_freeze_receipt']}")},
-                "tokenizer_json": {"path": "tokenizer/tokenizer.json",
-                                   "sha256": _sha(f"{td}/tokenizer/tokenizer.json")},
+                "tokenizer_json": {"path": "domains/model/tokenizer/tokenizer.json",
+                                   "sha256": _sha(f"{td}/domains/model/tokenizer/tokenizer.json")},
             },
             "sha_convention": tsv.SHA_CONVENTION, "no_gpu": True,
         }

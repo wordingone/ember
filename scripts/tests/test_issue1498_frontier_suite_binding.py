@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "governance" / "scripts"))
 
 import frontier_receipt as frontier  # noqa: E402
 import r1_exit_battery as battery  # noqa: E402

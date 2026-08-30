@@ -33,7 +33,7 @@ issue-#193 pre-registered v2 convention, exactly as applied by the executed scan
 
 - **Unit**: the ITEM (one eval row). Matching runs at **W = 13-token windows**
   over the item's tokenized text (every string leaf of the row's JSON, joined by
-  newlines), encoded with the frozen tokenizer (`tokenizer/tokenizer.json`,
+  newlines), encoded with the frozen tokenizer (`domains/model/tokenizer/tokenizer.json`,
   sha256 `6923a52304637f48eb4cc421b58e6cdce29c1f5da860abaea5d57baa6ad6d97d`,
   added-token-matching-disabled-v1 semantics; the 21/31,755 vocab-absent-merge
   in-memory workaround is disclosed in the scan receipt).

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """sp: checkpoint-probe — fp-23 curriculum L1 eval on an ember checkpoint (#316).
 
 Loads the ember v0 checkpoint (step-specific; pass --checkpoint-dir), runs the
@@ -37,7 +40,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 import fp23_probe_prereg as fp23
 from nck.replay_rig import REPO_ROOT
 
-TOKENIZER_PATH = REPO_ROOT / "tokenizer" / "tokenizer.json"
+TOKENIZER_PATH = REPO_ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 CONFIG_PATH = REPO_ROOT / "configs" / "v0-pretrain-config.json"
 
 BATCH_SIZE = 4     # from v0-pretrain-config.json throughput.batch
@@ -580,7 +583,7 @@ def main() -> int:
           f"{probe_stats['probe_wall_s']}s wall")
 
     commit_sha = _get_commit_sha()
-    protocol_sha = _get_file_commit_sha("scripts/fp23_probe_prereg.py")
+    protocol_sha = _get_file_commit_sha("src/ember/governance/scripts/fp23_probe_prereg.py")
     harness_sha = _get_file_commit_sha("scripts/nck/checkpoint_probe.py")
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 

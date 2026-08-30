@@ -1,0 +1,10 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "scripts/fp29_curriculum_generator.py",
+  "artifact_sha256": "ec28e34c778fd375bb9bbfae2af89572b36d132ab58a1f6727ed860afed31b33",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

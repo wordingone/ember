@@ -121,7 +121,7 @@ SMOKE_DIR = REPO / "scratch" / "ember-c-e2b-smoke"   # NON-canonical; never rece
 DOCS_DIR = REPO / "docs"
 PROTOCOL_GLOB = str(DOCS_DIR / "c-e2b-paired-protocol-freeze-*.md")
 
-EMBER_TOKENIZER_PATH = REPO / "tokenizer" / "tokenizer.json"
+EMBER_TOKENIZER_PATH = REPO / "domains" / "model" / "tokenizer" / "tokenizer.json"
 EMBER_EOS_ID = 0  # '<|endoftext|>' -- see tokenizer.json added_tokens[0]
 
 # Local E2B reference weights -- CACHED LOCAL ONLY, verified present on this
@@ -201,7 +201,7 @@ this file as `protocol_frozen_ref`.
    Both arms are bound into the SAME seat_adapter core protocol
    (generate_fn(prompt) -> completion text, greedy decode) and scored by the
    SAME frozen score_episode() pass rule. Owned core's generate_fn uses
-   Ember's own tokenizer (tokenizer/tokenizer.json, vocab 32000) over the
+   Ember's own tokenizer (domains/model/tokenizer/tokenizer.json, vocab 32000) over the
    full (unrestricted) 32000-way output distribution -- NOT the C14 action-
    band restriction, which applies only to leg 1's mod-8 task interface.
 

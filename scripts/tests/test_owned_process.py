@@ -13,6 +13,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
+GOVERNANCE_SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
+sys.path.insert(0, str(GOVERNANCE_SCRIPTS))
 
 import owned_process  # noqa: E402
 
@@ -245,7 +247,7 @@ def test_posix_timeout_returns_and_kills_command() -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX controller-death backend")
 def test_posix_controller_death_reaps_grandchild_before_runner_returns(tmp_path: Path) -> None:
     descendant_pid_path = tmp_path / "descendant.pid"
-    scripts_dir = ROOT / "scripts"
+    scripts_dir = GOVERNANCE_SCRIPTS
     descendant_code = "import time; time.sleep(60)"
     parent_code = (
         "import pathlib, subprocess, sys, time; "

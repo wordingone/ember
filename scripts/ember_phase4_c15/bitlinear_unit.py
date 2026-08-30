@@ -40,7 +40,8 @@ import torch.nn as nn
 # Import from ember_bitnet_core (parent scripts directory).
 # Supports running from the ember_phase4_c15/ subdirectory directly.
 # ---------------------------------------------------------------------------
-_SCRIPTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_SCRIPTS_DIR = os.path.join(_REPO_ROOT, "src", "ember", "governance", "scripts")
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 

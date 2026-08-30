@@ -48,6 +48,8 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 NC = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+GOVERNANCE_SCRIPTS = os.path.join(NC, "src", "ember", "governance", "scripts")
+sys.path.insert(0, GOVERNANCE_SCRIPTS)
 from receipt_write import checked_write               # noqa: E402
 from receipt_check import validate_receipt             # noqa: E402
 import fp23_probe_prereg as fp23                       # noqa: E402

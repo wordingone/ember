@@ -109,7 +109,7 @@ RECEIPT_SCHEMA = "legb-live-candidate-v5/v1"
 
 SUPPORTED_CHECKPOINT_SCHEMA = "ember-sparse-checkpoint-v5"
 MODEL_CONFIG_REL = "configs/ember-restart-3b.json"
-TOKENIZER_REL = "tokenizer/tokenizer.json"
+TOKENIZER_REL = "domains/model/tokenizer/tokenizer.json"
 
 EXPERTS = ("vision", "audio", "reasoning", "tool")
 # "shared" scores through the always-active shared SwiGLU FFN with no expert

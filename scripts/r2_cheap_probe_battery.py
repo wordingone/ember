@@ -169,7 +169,7 @@ Usage:
       --checkpoint-manifest <path>/manifest.json \\
       --model-config <path>/model_config.json --arm A3 \\
       --source-suite <path>.json --source-suite-sha256 <sha> \\
-      --tokenizer tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
+      --tokenizer domains/model/tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
       --compiler-sha256 <sha> \\
       --out receipts/r2-cheap-probe-battery/r2e4-<UTCts>.json
   python scripts/r2_cheap_probe_battery.py --run-r2e3 \\
@@ -177,7 +177,7 @@ Usage:
       --checkpoint-manifest-control <path>/manifest.json --model-config-control <path>/model_config.json \\
       --control-arm A2 \\
       --source-suite <path>.json --source-suite-sha256 <sha> \\
-      --tokenizer tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
+      --tokenizer domains/model/tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
       --compiler-sha256 <sha> [--sigma-seed-receipt <path>.json] \\
       --out receipts/r2-cheap-probe-battery/r2e3-<UTCts>.json
 

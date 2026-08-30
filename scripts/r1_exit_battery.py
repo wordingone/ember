@@ -87,7 +87,7 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     method is a receipt-schema change, not a code rewrite (see
     `pooled_sigma_seed`).
   * check_r1_e5 validates a section-5.4 frontier receipt (schema
-    ember02-frontier-receipt/v1, produced by scripts/frontier_receipt.py)
+    ember02-frontier-receipt/v1, produced by src/ember/governance/scripts/frontier_receipt.py)
     by independently re-verifying its bindings against the bytes on disk:
     repo-document pins (prereg, admission config, docs/authority/INVARIANT.md, fixed-prior
     manifest, tokenizer receipt, predecessor receipt, run-attempts
@@ -1406,7 +1406,7 @@ def check_r1_e4(run_root: Path, thresholds: dict[str, Any], *, run_id: str | Non
 
 # ---------------------------------------------------------------------------
 # R1-E5 -- first closed-boundary frontier receipt, §5.4, energy_boundary
-# DEGRADED_PROXY. Validates receipts produced by scripts/frontier_receipt.py.
+# DEGRADED_PROXY. Validates receipts produced by src/ember/governance/scripts/frontier_receipt.py.
 # The constants below are INDEPENDENT transcriptions of the frozen spec
 # sources (§5.1/§5.4, the physiology-addendum twelve-wall table) -- NOT
 # imports from the generator, so a transcription error in either module
@@ -2229,7 +2229,7 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
     needs = (
         f"a §5.4-validated closed-boundary frontier receipt (all 8 legs; energy_boundary "
         f"'DEGRADED_PROXY'; sample_coverage_fraction >= T-06={t06}) from a real >= T-01={t01}-step "
-        "canary with energy-proxy sampling; generate it with scripts/frontier_receipt.py "
+        "canary with energy-proxy sampling; generate it with src/ember/governance/scripts/frontier_receipt.py "
         "--run-root <this root> (it refuses, with the leg named, until every leg's evidence exists)"
     )
     if not frontier_receipt_candidates:
@@ -2238,7 +2238,7 @@ def check_r1_e5(run_root: Path, thresholds: dict[str, Any], *, repo_root: Path =
             "frontier_receipt_validation": "IMPLEMENTED",
             "detail": (
                 "no frontier-receipt-shaped file under this run root; generate one with "
-                "scripts/frontier_receipt.py --run-root <this root>"
+                "src/ember/governance/scripts/frontier_receipt.py --run-root <this root>"
             ),
             "components": {
                 "layout_spec": RUN_ROOT_LAYOUT_SPEC,
@@ -3587,7 +3587,7 @@ def run_selftest() -> None:
             return {
                 "schema_version": FRONTIER_SCHEMA,
                 "generated_utc": "2026-08-06T12:00:00Z",
-                "generator": "scripts/frontier_receipt.py",
+                "generator": "src/ember/governance/scripts/frontier_receipt.py",
                 "rung": "R1",
                 "run_root": str(run),
                 "run_id": "SELFTEST_E5_run",

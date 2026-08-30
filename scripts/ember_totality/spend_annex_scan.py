@@ -626,7 +626,7 @@ CONVENTION_PATH_MAP = {
 #   signature despite living outside the ember-mvp/ directory.
 #
 # Evidence (b) GIT-ARCHAEOLOGY CONFIRMED GONE: `git log --follow` on the receipt
-#   shows the commit that added it contains ONLY the receipt JSON (+ docs/docs/authority/STATE.md
+#   shows the commit that added it contains ONLY the receipt JSON (+ docs/docs/domains/governance/authority/STATE.md
 #   at most), never an accompanying script; `git log HEAD -S "<literal-filename-prefix>"`
 #   and `--diff-filter=D` both return no in-tree script for this name anywhere in
 #   this repo's HEAD-reachable history. The generating code was run ambient/ad-hoc
@@ -776,7 +776,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "3b0559f adds ONLY this receipt JSON, no script; content is a per-axis prose disposition."),
     (re.compile(r"^pr1-review-verdict-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored, cross-confirmed by (b): git log --follow shows commit "
-     "bcdca5f adds only this receipt + docs/authority/STATE.md, no script; a hand-written PR review verdict."),
+     "bcdca5f adds only this receipt + docs/domains/governance/authority/STATE.md, no script; a hand-written PR review verdict."),
     (re.compile(r"^succession-trial-\d+-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored, cross-confirmed by (b): git log --follow shows commit "
      "676fac9 adds only this receipt + docs/authority/CONTINUITY.md/README.md, no script; a hand-typed "
@@ -799,7 +799,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "no generating script exists because none was ever meant to."),
     (re.compile(r"^raw-corpus-materiality-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored, cross-confirmed by (b): git log --follow shows commit "
-     "defcc56 adds only docs/authority/STATE.md + docs + this receipt, no script."),
+     "defcc56 adds only docs/domains/governance/authority/STATE.md + docs + this receipt, no script."),
     (re.compile(r"^heartbeat-runner-selftest-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored, cross-confirmed by (b): git log --follow shows commit "
      "9f038d7 adds ONLY this receipt JSON (13 lines), no script; commit message: 'Closes <reviewer> "
@@ -817,7 +817,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "(line 2092) hardcodes f\"v0-live-{receipt['ts']}.json\" -- it never constructs the exact "
      "literal '-import-edition-' suffix; no in-tree code does. Most likely this file is a v0-live "
      "output copied/renamed post-hoc to flag the C-BASE import-edition milestone (commit 67a784e "
-     "adds only this receipt + docs/authority/STATE.md, no script -- evidence (b) too)."),
+     "adds only this receipt + docs/domains/governance/authority/STATE.md, no script -- evidence (b) too)."),
     # --- Evidence (d) cross-branch unmerged (gh issue #431, 2026-07-08) -- restored via
     # the #415/#432 custody recovery; generating scripts confirmed real but off-branch.
     (re.compile(r"^ceff-composition-ab-20260703T111351Z\.json$"), "cross_branch_unmerged",

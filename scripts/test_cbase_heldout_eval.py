@@ -80,7 +80,7 @@ def build_real_corpus_fixture(nc_root, shard_root, *, clean_tokens=2000, fineweb
                                  "sha256": sha(nc_root/"receipts"/prem_names["assembly_receipt"])},
             "tokenizer_freeze_receipt": {"name": prem_names["tokenizer_freeze_receipt"],
                                          "sha256": sha(nc_root/"receipts"/prem_names["tokenizer_freeze_receipt"])},
-            "tokenizer_json": {"path": "tokenizer/tokenizer.json", "sha256": sha(nc_root/"tokenizer"/"tokenizer.json")},
+            "tokenizer_json": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": sha(nc_root/"tokenizer"/"tokenizer.json")},
         },
         "sha_convention": tsv.SHA_CONVENTION, "no_gpu": True,
     }

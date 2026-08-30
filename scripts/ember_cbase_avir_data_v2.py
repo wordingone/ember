@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_cbase_avir_data_v2.py — C-BASE [REDACTED]-task pretrain corpus REDO.
 
 Closes all four defects from the REJECT verdict:
@@ -15,7 +18,7 @@ Closes all four defects from the REJECT verdict:
 HARD RULES:
   - TRAIN-ONLY FIREWALL: raises on any heldout id (h0xx). Checked at entry +
     per-iteration. Heldout ids must never enter corpus or be readable into it.
-  - Frozen tokenizer: nc-ladder/tokenizer/tokenizer.json, SHA256 2c557e7f...,
+  - Frozen tokenizer: nc-ladder/domains/model/tokenizer/tokenizer.json, SHA256 2c557e7f...,
     vocab 32000. All token ids must be < 32000.
   - No GPU, no daemon — CPU only.
   - Do NOT edit timeshare_pretrain.py or ember_avir_harness.py (read-only deps).
@@ -42,7 +45,7 @@ from typing import Any
 _HERE = pathlib.Path(__file__).resolve().parent
 _REPO = _HERE.parent
 _DATA_DIR = _REPO / "data" / "cbase_pretrain"
-_TOK_PATH = _REPO / "tokenizer" / "tokenizer.json"
+_TOK_PATH = _REPO / "domains" / "model" / "tokenizer" / "tokenizer.json"
 
 sys.path.insert(0, str(_HERE))
 

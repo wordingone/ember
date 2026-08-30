@@ -46,7 +46,7 @@ value) which cannot themselves contaminate a 13-gram window meaningfully.
 
 Encoding matches the FROZEN production tokenizer under the SAME
 "added-token-matching-disabled-v1" semantics that built shards-v0
-(tokenizer/tokenizer.json, added_tokens table stripped in memory, each
+(domains/model/tokenizer/tokenizer.json, added_tokens table stripped in memory, each
 special literal probe-encoded to prove ids<8 are unreachable from text) --
 verbatim-quoted from scripts/token_shards_v0.py's _production_tokenizer.
 
@@ -56,7 +56,7 @@ Usage:
       --eval-suite-dir <path-to-sha-verified-eval-suite-v1-copy> \\
       --heldout-receipt receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json \\
       --freeze-receipt receipts/eval-suite-freeze/eval-suite-freeze-v1.json \\
-      --tokenizer-json tokenizer/tokenizer.json \\
+      --tokenizer-json domains/model/tokenizer/tokenizer.json \\
       --out receipts/a1-predicate-scan/<UTCts>.json \\
       [--n-workers 4] [--pilot-shard-dir <dir>] [--budget-cpu-minutes 30]
 """
@@ -538,7 +538,7 @@ def main() -> int:
     ap.add_argument("--freeze-receipt", required=True)
     ap.add_argument("--tokenizer-json", required=True)
     ap.add_argument("--tokenizer-sha", default=None)
-    ap.add_argument("--tokenizer-label", default="tokenizer/tokenizer.json",
+    ap.add_argument("--tokenizer-label", default="domains/model/tokenizer/tokenizer.json",
                      help="provenance label recorded as tokenizer.path in the receipt; "
                           "defaults to the on-disk repo path. Set this when the encoding "
                           "tokenizer is NOT the on-disk file (e.g. #631 corrected scan uses "

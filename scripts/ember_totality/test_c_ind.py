@@ -235,7 +235,7 @@ def _validate_ind1(entries, root: Path):
 # --- IND-2 OBSERVE (imported from C-OBS, never duplicated) -------------------
 
 def _check_ind2(root: Path):
-    probe_path = Path(__file__).resolve().parent / "test_c_obs.py"
+    probe_path = Path(__file__).resolve().parents[2] / "src" / "ember" / "governance" / "scripts" / "ember_totality" / "test_c_obs.py"
     env = dict(os.environ)
     env["EMBER_TOTALITY_ROOT"] = str(root)
     env["PYTHONIOENCODING"] = "utf-8"

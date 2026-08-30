@@ -617,7 +617,7 @@ def _check_efficiency_receipt(d):
 
 
 def g_efficiency(config_path=None, efficiency_receipt_path=None):
-    # H1 (docs/ledgers/hardest-problems-register-v1.md): every known throughput lever
+    # H1 (docs/domains/governance/ledgers/hardest-problems-register-v1.md): every known throughput lever
     # must be enumerated before any governed job >12 GPU-h dispatches.
     # No receipt -> BLOCKED (makes the 12c050e7 silent-skip impossible).
     # config_path: if provided, bind against this config's SHA instead of the
@@ -627,7 +627,7 @@ def g_efficiency(config_path=None, efficiency_receipt_path=None):
         return "BLOCKED", (
             "no launch-efficiency-*.json receipt — throughput levers not "
             "enumerated; any WAIVED lever must carry an explicit wall_days_cost "
-            "(H1: docs/ledgers/hardest-problems-register-v1.md)")
+            "(H1: docs/domains/governance/ledgers/hardest-problems-register-v1.md)")
     name = os.path.basename(efficiency_receipt_path) if efficiency_receipt_path else os.path.basename(cands[-1])
     ok, d = _receipt_clean_path(efficiency_receipt_path) if efficiency_receipt_path else _receipt_clean(name)
     if not ok:
@@ -952,7 +952,7 @@ def _selftest():
     bad = copy.deepcopy(cfg)
     bad["governor"]["vram_fraction"] = 0.95
     assert v0_config_check.check(bad) != []
-    # g_efficiency pure-logic tests (H1 — docs/ledgers/hardest-problems-register-v1.md)
+    # g_efficiency pure-logic tests (H1 — docs/domains/governance/ledgers/hardest-problems-register-v1.md)
     _all_levers_applied = {k: {"status": "receipted-APPLIED", "receipt": "x.json"}
                            for k in EFFICIENCY_LEVERS}
     _bound = {"licenses_config": "c03-qat-v0", "config_sha256": "a" * 64,

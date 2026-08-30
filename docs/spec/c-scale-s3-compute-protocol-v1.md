@@ -99,7 +99,7 @@ control runs, its sha-pinned capability batch becomes the canonical eval batch f
 
 ## 4. Producer + staging
 
-One new producer, `scripts/ember_c_scale_s3_producer.py` (build target, issue #75):
+One new producer, `src/ember/governance/scripts/ember_c_scale_s3_producer.py` (build target, issue #75):
 `--flops` mode (CPU-now: receipt arithmetic for fields 1–3, honest UNPRODUCIBLE marker while
 W1's T_dense is pending), `--deletion-arm` mode (CPU: re-slice + paired evals per §2),
 `--working-set` mode (GPU window: instrumented pass per §3). Every mode emits its own receipt

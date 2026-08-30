@@ -4,7 +4,7 @@ This is the entry point for anyone operating Ember without the maintainer or
 any LLM assistant in the loop (the C-IND operator-independence contract).
 Two documents cover the CLI's actual operator-facing surface:
 
-- [commands.md](commands.md) — every slash command the cockpit registers,
+- [commands.md](../domains/governance/operator/commands.md) — every slash command the cockpit registers,
   with its aliases and what it does.
 - [operate.md](operate.md) — how to launch a real ember-cli operator
   process, stop it cleanly, and recover it after an unplanned interruption.
@@ -16,7 +16,7 @@ is the operator's window into it: a terminal CLI exposing a small set of
 slash commands over the live goal/ledger/receipts state. Everything an
 operator needs to interact with, observe, activate, deactivate, customize,
 study, or comprehend the system is reachable through that command surface —
-see [commands.md](commands.md) for the full list.
+see [commands.md](../domains/governance/operator/commands.md) for the full list.
 
 ## Where things live
 

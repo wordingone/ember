@@ -159,7 +159,7 @@ def test_superseded_transition_is_not_current_authority(tmp_path: Path) -> None:
         {
             "premises": {
                 "tokenizer_json": {
-                    "path": "tokenizer/tokenizer.json",
+                    "path": "domains/model/tokenizer/tokenizer.json",
                     "sha256": digest(artifact),
                 }
             },
@@ -193,7 +193,7 @@ def test_tokenizer_format_failure_is_a_violation_even_when_hash_matches(
     receipt = tmp_path / "receipts" / "r.json"
     write_json(
         receipt,
-        {"tokenizer": {"path": "tokenizer/tokenizer.json", "sha256": digest(artifact)}},
+        {"tokenizer": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": digest(artifact)}},
     )
 
     row = module.scan_receipts(tmp_path, tmp_path / "receipts")["pins"][0]
