@@ -9,11 +9,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 
 METADATA_PATH = Path("manifests/documentation/current-documents-v1.json")
 CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
@@ -539,18 +542,62 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
     return rows
 
 
+def public_command_host_argv(argv: list[str]) -> list[str]:
+    if not argv:
+        raise DocsInfoError("PUBLIC_COMMAND_ARGV_INVALID")
+    if argv[0].lower() not in {"python", "python.exe", "py", "py.exe"}:
+        return argv
+    if sys.platform != "win32":
+        return [sys.executable, *argv[1:]]
+    raw = os.environ.get("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON")
+    if not raw:
+        raise DocsInfoError("PUBLIC_COMMAND_DIRECT_PYTHON_REFUSED")
+    try:
+        launcher = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID") from error
+    file_index = launcher.index("-File") if isinstance(launcher, list) and "-File" in launcher else -1
+    if (
+        not isinstance(launcher, list)
+        or not launcher
+        or not all(isinstance(value, str) and value for value in launcher)
+        or Path(launcher[0]).name.lower() not in {"powershell.exe", "pwsh.exe"}
+        or "-NoProfile" not in launcher
+        or "-NonInteractive" not in launcher
+        or file_index < 0
+        or file_index + 1 >= len(launcher)
+        or Path(launcher[file_index + 1]).name.lower() != "headless-python.ps1"
+        or not Path(launcher[file_index + 1]).is_file()
+        or launcher[-1] != "--"
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID")
+    return [*launcher, *argv[1:]]
+
+
 def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, Any]]:
     rows = commands.get("commands")
     if not isinstance(rows, list):
         raise DocsInfoError("PUBLIC_COMMAND_SET_INVALID")
     results = []
     for row in rows:
-        argv = [str(value) for value in row.get("argv", [])]
+        manifest_argv = [str(value) for value in row.get("argv", [])]
+        host_argv = public_command_host_argv(manifest_argv)
         cwd = (root / str(row.get("cwd", "."))).resolve()
-        completed = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=300, check=False)
+        completed = subprocess.run(
+            host_argv,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+            creationflags=NO_WINDOW,
+        )
         result = {
             "id": row.get("id"),
-            "argv": argv,
+            "manifest_argv": manifest_argv,
+            "host_argv": host_argv,
+            "host_argv_sha256": sha256_bytes(canonical_json(host_argv)),
             "cwd": str(cwd),
             "returncode": completed.returncode,
             "stdout_sha256": sha256_bytes(completed.stdout.encode("utf-8")),
@@ -643,6 +690,7 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
         "question_destination_count": len(destinations),
         "reference_disposition_count": len(dispositions),
         "commands_executed": len(command_results),
+        "command_results": command_results,
         **readme_counts,
         **references,
         "metadata_raw_sha256": sha256_file(root / METADATA_PATH),
