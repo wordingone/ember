@@ -267,6 +267,10 @@ def _scan_cost(snapshot: Mapping[str, Mapping[str, object]]) -> dict[str, object
     }
 
 
+def _no_window_creationflags() -> int:
+    return subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+
 def terminate_tree(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is not None:
         return
@@ -276,6 +280,7 @@ def terminate_tree(process: subprocess.Popen[bytes]) -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
+            creationflags=_no_window_creationflags(),
         )
     else:
         process.terminate()
@@ -460,6 +465,9 @@ def run_budgeted(
     process = subprocess.Popen(
         [sys.executable, "-c", _CHILD_ENV_BOOTSTRAP, json.dumps(child_cache_bindings, sort_keys=True), str(child_assertion_path), child_assertion_nonce, *command],
         env=child_environment,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        creationflags=_no_window_creationflags(),
     )
     child_started = True
     stop_reason = None
