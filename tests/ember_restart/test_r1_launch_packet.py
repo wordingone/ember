@@ -331,7 +331,7 @@ def _fixture(
     CERTIFIED_SUPPORT.install_model_config(
         paths["repo"], CERTIFIED_SUPPORT.ARCHITECTURE_REVISION
     )
-    tokenizer = paths["repo"] / "tokenizer" / "tokenizer.json"
+    tokenizer = paths["repo"] / "domains" / "model" / "tokenizer" / "tokenizer.json"
     _write_json(tokenizer, {"model": {"vocab": {"<pad>": 0, "x": 1}}})
     semantic_receipt = paths["repo"] / "manifests" / "token-shards-receipt.json"
     _write_json(

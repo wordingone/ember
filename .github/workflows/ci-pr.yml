@@ -183,9 +183,12 @@ jobs:
       - name: Run complete Rust test suite on Linux
         run: cargo test --locked --no-fail-fast
   eval-canary-image:
-    # ISSUE1948_FROZEN_TIMEOUT_SECONDS: 4
-    # ISSUE1948_MEASURING_RUN_URL: https://github.com/wordingone/ember/actions/runs/33141228761/job/98752316520
-    # The enforcing timeout is ceil(3 * 1.173608766 measured wall seconds).
+    # ISSUE1948_FROZEN_TIMEOUT_SECONDS: 12
+    # ISSUE1948_MEASURING_RUN_URL: https://github.com/wordingone/ember/actions/runs/33279094639
+    # The prior 4s bound (ceil(3 * 1.173608766)) killed a run that had already
+    # printed its self-hashed terminal PASS at ~3.8s wall (PR #1991, exit 124):
+    # hosted-runner startup variance exceeds 3x the originally measured wall.
+    # New bound = ceil(3 * 3.83) = 12; the receipt, not the wall, is the gate.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -229,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          GITHUB_SHA="$(git rev-parse HEAD)" timeout 4s python -B tools/ember-restart-3b/eval_canary_image.py \
+          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B tools/ember-restart-3b/eval_canary_image.py \
             --fixture-root tests/ember_restart_model/fixtures/eval-canary-image-v1 \
             --run-suite \
             --torch-wheel-filename "${TORCH_WHEEL_FILENAME}" \

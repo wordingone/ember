@@ -62,7 +62,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKPOINT_PATH_DEFAULT = (
     REPO_ROOT / "models" / "cbase-grow-rung" / "rung2-event-grow-rung2-20260708-real" / "b1-snapshot" / "model.pt"
 )
-TOKENIZER_PATH_DEFAULT = REPO_ROOT / "tokenizer" / "tokenizer.json"
+TOKENIZER_PATH_DEFAULT = REPO_ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 MANIFEST_PATH_DEFAULT = CHECKPOINT_PATH_DEFAULT.parent / "manifest.json"
 
 PORT_DEFAULT = 8083

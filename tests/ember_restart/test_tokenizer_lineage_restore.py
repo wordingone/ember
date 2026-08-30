@@ -13,7 +13,7 @@ from tokenizers import Tokenizer
 
 
 ROOT = Path(__file__).resolve().parents[2]
-TOKENIZER = ROOT / "tokenizer" / "tokenizer.json"
+TOKENIZER = ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 RECEIPTS = ROOT / "receipts"
 ASSEMBLY = RECEIPTS / "eng36-assembly-20260611T052337Z.json"
 FREEZE = RECEIPTS / "tokenizer-freeze-20260611T154111Z.json"
@@ -72,7 +72,9 @@ def test_token_shards_bind_loadable_tokenizer_and_sanitized_public_receipts() ->
             "sha256": sha256(FREEZE),
         },
         "tokenizer_json": {
-            "path": "domains/model/tokenizer/tokenizer.json",
+            # The 2026-06-11 receipt is immutable evidence; it records the
+            # tokenizer path as it stood at mint time, before the layout move.
+            "path": "tokenizer/tokenizer.json",
             "sha256": sha256(TOKENIZER),
         },
     }

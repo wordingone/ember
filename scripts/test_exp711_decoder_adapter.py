@@ -15,7 +15,7 @@ EXP711_PATH = ROOT / "scripts" / "exp711_intervals.py"
 HELPER_PATH = (
     ROOT / "tools" / "ember-restart-3b" / "frozen_tokenizer_decoder.py"
 )
-TOKENIZER_PATH = ROOT / "tokenizer" / "tokenizer.json"
+TOKENIZER_PATH = ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 
 
 def _shared_helper():

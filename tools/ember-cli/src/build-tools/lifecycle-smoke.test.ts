@@ -464,7 +464,10 @@ describe("compiled lifecycle driver host", () => {
     );
     expect(result.stderr).not.toContain("Named export 'Terminal' not found");
     expect(result.stderr).not.toContain("ERR_SOCKET_CLOSED");
-  }, 15_000);
+    // Budget = ceil(3 x 18.687s), the wall measured for this spawn on the
+    // hosted runner in PR #1990's compiled-lifecycle job (prior cap: 15s); the
+    // assertion gates the closed boundary (rc1 + message), not startup speed.
+  }, 57_000);
 
   test("checkpoint fixture is driven through a repo-relative source path", async () => {
     const driver = await import("./lifecycle-smoke-driver.ts");

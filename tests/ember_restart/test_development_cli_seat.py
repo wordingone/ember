@@ -48,7 +48,7 @@ def _fixture(
     checkpoint_dir = tmp_path / "checkpoint"
     checkpoint_dir.mkdir(parents=True)
     model_config = tmp_path / "configs" / "ember-restart-3b.json"
-    tokenizer = tmp_path / "tokenizer" / "tokenizer.json"
+    tokenizer = tmp_path / "domains" / "model" / "tokenizer" / "tokenizer.json"
     server = tmp_path / "tools" / "ember-restart-3b" / "serve_owned_openai.py"
     counter = tmp_path / "parameter-evidence" / "parameter_counter.py"
     receipt = tmp_path / "parameter-evidence" / "step2-realization-receipt.json"

@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "scripts/nck/checkpoint_probe.py",
-  "artifact_sha256": "73b289cfeca190ea1e27120d6cace21540a729c373f98e9ee13f27f064273bce",
+  "artifact_sha256": "2f6a0960d92faa08cb45c90ddbe29fc8bce52b00a2c60d58c873db6a37247aa3",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

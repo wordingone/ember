@@ -121,7 +121,7 @@ SMOKE_DIR = REPO / "scratch" / "ember-c-e2b-smoke"   # NON-canonical; never rece
 DOCS_DIR = REPO / "docs"
 PROTOCOL_GLOB = str(DOCS_DIR / "c-e2b-paired-protocol-freeze-*.md")
 
-EMBER_TOKENIZER_PATH = REPO / "tokenizer" / "tokenizer.json"
+EMBER_TOKENIZER_PATH = REPO / "domains" / "model" / "tokenizer" / "tokenizer.json"
 EMBER_EOS_ID = 0  # '<|endoftext|>' -- see tokenizer.json added_tokens[0]
 
 # Local E2B reference weights -- CACHED LOCAL ONLY, verified present on this
