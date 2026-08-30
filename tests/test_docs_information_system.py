@@ -192,7 +192,7 @@ def test_windows_python_command_refuses_without_headless_launcher(
     module = load_module()
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.delenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", raising=False)
-    commands = {"commands": [{"id": "python", "argv": ["python", "tool.py"], "cwd": "."}]}
+    commands = {"commands": [{"id": "bootstrap-python", "argv": ["python", "tool.py"], "cwd": "."}]}
 
     with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_DIRECT_PYTHON_REFUSED"):
         module.run_public_commands(tmp_path, commands)
@@ -215,10 +215,14 @@ def test_headless_command_replay_custodies_actual_argv_and_no_window(
     def fake_run(argv, **kwargs):
         observed["argv"] = argv
         observed["kwargs"] = kwargs
+        _write_bound_interpreter_receipt(
+            tmp_path, module,
+            relative="state/python-environments/python-environment-install-v1/Scripts/python.exe",
+        )
         return module.subprocess.CompletedProcess(argv, 0, "ok\n", "")
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
-    commands = {"commands": [{"id": "python", "argv": ["python", "tool.py"], "cwd": "."}]}
+    commands = {"commands": [{"id": "bootstrap-python", "argv": ["python", "tool.py"], "cwd": "."}]}
 
     results = module.run_public_commands(tmp_path, commands)
 
@@ -231,6 +235,111 @@ def test_headless_command_replay_custodies_actual_argv_and_no_window(
         module.canonical_json(launcher + ["tool.py"])
     )
     assert results[0]["stdout_sha256"] == module.sha256_bytes(b"ok\n")
+
+
+def _write_bound_interpreter_receipt(root: Path, module, *, relative: str) -> Path:
+    interpreter = root / relative
+    interpreter.parent.mkdir(parents=True, exist_ok=True)
+    interpreter.write_bytes(b"isolated-interpreter")
+    receipt = {
+        "schema_version": "ember-python-environment-install-receipt-v1",
+        "result": "PASS",
+        "identity": {
+            "legacy_manifest_sha256": "1" * 64,
+            "build_manifest_sha256": "2" * 64,
+            "pyproject_sha256": "3" * 64,
+            "isolated_interpreter": {
+                "path": relative.replace("/", "\\"),
+                "python_version": "3.10.11",
+                "package_set_sha256": "4" * 64,
+            },
+        },
+        "stages": [],
+    }
+    receipt["self_sha256"] = module.sha256_bytes(module.canonical_compact(receipt))
+    path = root / "state/receipts/python-environment-install-v1.json"
+    write(path, json.dumps(receipt))
+    return interpreter
+
+
+def test_nonbootstrap_python_refuses_missing_bound_interpreter_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    launcher_path = tmp_path / "headless-python.ps1"
+    launcher_path.write_text("# governed", encoding="utf-8")
+    monkeypatch.setenv(
+        "EMBER_PUBLIC_PYTHON_LAUNCHER_JSON",
+        json.dumps(["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(launcher_path), "--"]),
+    )
+    commands = {"commands": [{"id": "verify-authority", "argv": ["python", "tool.py"], "cwd": "."}]}
+
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_INTERPRETER_RECEIPT_MISSING"):
+        module.run_public_commands(tmp_path, commands)
+
+
+def test_nonbootstrap_python_refuses_receipt_interpreter_outside_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    outside = tmp_path.parent / "outside-python.exe"
+    outside.write_bytes(b"outside")
+    receipt = {
+        "schema_version": "ember-python-environment-install-receipt-v1",
+        "result": "PASS",
+        "identity": {
+            "legacy_manifest_sha256": "1" * 64,
+            "build_manifest_sha256": "2" * 64,
+            "pyproject_sha256": "3" * 64,
+            "isolated_interpreter": {
+                "path": str(outside),
+                "python_version": "3.10.11",
+                "package_set_sha256": "4" * 64,
+            },
+        },
+        "stages": [],
+    }
+    receipt["self_sha256"] = module.sha256_bytes(module.canonical_compact(receipt))
+    write(tmp_path / "state/receipts/python-environment-install-v1.json", json.dumps(receipt))
+
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED"):
+        module.load_public_interpreter_binding(tmp_path)
+
+
+def test_replay_uses_receipt_bound_interpreter_after_bootstrap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    launcher_path = tmp_path / "headless-python.ps1"
+    launcher_path.write_text("# governed", encoding="utf-8")
+    launcher = ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(launcher_path), "--"]
+    monkeypatch.setenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", json.dumps(launcher))
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((list(argv), kwargs))
+        if len(calls) == 1:
+            _write_bound_interpreter_receipt(
+                tmp_path, module,
+                relative="state/python-environments/python-environment-install-v1/Scripts/python.exe",
+            )
+        return module.subprocess.CompletedProcess(argv, 0, "ok\n", "")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    commands = {"commands": [
+        {"id": "bootstrap-python", "argv": ["python", "bootstrap.py"], "cwd": "."},
+        {"id": "verify-authority", "argv": ["python", "verify.py"], "cwd": "."},
+    ]}
+    results = module.run_public_commands(tmp_path, commands)
+
+    assert "CODEX_PYTHON" not in calls[0][1].get("env", {})
+    bound = calls[1][1]["env"]["CODEX_PYTHON"]
+    assert Path(bound).resolve() == (
+        tmp_path / "state/python-environments/python-environment-install-v1/Scripts/python.exe"
+    ).resolve()
+    assert results[1]["interpreter_binding"]["package_set_sha256"] == "4" * 64
 
 
 def test_repository_receipt_retains_per_command_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
