@@ -25,6 +25,8 @@ MANIFEST_RELATIVE_PATH = "manifests/training-dependency-closure.json"
 SUPPLEMENT_RELATIVE_PATH = (
     "tools/ember-restart-3b/training-dependency-closure-supplement.json"
 )
+FRONTIER_RECEIPT_LEGACY = "scripts/frontier_receipt.py"
+FRONTIER_RECEIPT_CANONICAL = "src/ember/governance/scripts/frontier_receipt.py"
 
 
 def load_closure():
@@ -132,6 +134,47 @@ class TrainingClosureSupplementTests(unittest.TestCase):
                 ),
             )
             self.assertNotEqual(before, closure.compute_closure_hash(repo))
+
+    def test_layout_alias_uses_legacy_member_before_cutover(self) -> None:
+        closure = load_closure()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_sandbox_repo(pathlib.Path(directory))
+            write_text(repo / FRONTIER_RECEIPT_LEGACY, "VALUE = 'legacy'\n")
+            write_supplement(
+                repo, minimal_supplement(code=[FRONTIER_RECEIPT_LEGACY])
+            )
+            manifest = closure.load_manifest(repo)
+            self.assertIn(FRONTIER_RECEIPT_LEGACY, manifest["code"])
+            self.assertNotIn(FRONTIER_RECEIPT_CANONICAL, manifest["code"])
+            audit = closure.audit_closure(repo, manifest)
+            self.assertTrue(audit.ok, audit.failure_report())
+
+    def test_layout_alias_uses_canonical_member_after_cutover(self) -> None:
+        closure = load_closure()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_sandbox_repo(pathlib.Path(directory))
+            write_text(repo / FRONTIER_RECEIPT_CANONICAL, "VALUE = 'canonical'\n")
+            write_supplement(
+                repo, minimal_supplement(code=[FRONTIER_RECEIPT_LEGACY])
+            )
+            manifest = closure.load_manifest(repo)
+            self.assertNotIn(FRONTIER_RECEIPT_LEGACY, manifest["code"])
+            self.assertIn(FRONTIER_RECEIPT_CANONICAL, manifest["code"])
+            audit = closure.audit_closure(repo, manifest)
+            self.assertTrue(audit.ok, audit.failure_report())
+            closure.compute_closure_hash(repo, manifest)
+
+    def test_layout_alias_refuses_mixed_tree(self) -> None:
+        closure = load_closure()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_sandbox_repo(pathlib.Path(directory))
+            write_text(repo / FRONTIER_RECEIPT_LEGACY, "VALUE = 'legacy'\n")
+            write_text(repo / FRONTIER_RECEIPT_CANONICAL, "VALUE = 'canonical'\n")
+            write_supplement(
+                repo, minimal_supplement(code=[FRONTIER_RECEIPT_LEGACY])
+            )
+            with self.assertRaisesRegex(ValueError, "both legacy and canonical"):
+                closure.load_manifest(repo)
 
     def test_declared_supplement_member_must_exist(self) -> None:
         closure = load_closure()

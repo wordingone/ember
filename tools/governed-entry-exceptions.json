@@ -47,7 +47,7 @@
     },
     {
       "path": "scripts/training_closure.py",
-      "sha256": "b0c1effc47b0823e6c80b4ce7f96463537412d0433ac169a1e52b39bfb441788",
+      "sha256": "24cc56c385e6002872ffde95d8f2c8b4b772b3b4a4495c3deed79a3305f6a97f",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {

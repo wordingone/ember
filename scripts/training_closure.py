@@ -52,6 +52,12 @@ SUPPLEMENT_RELATIVE_PATH = (
     "tools/ember-restart-3b/training-dependency-closure-supplement.json"
 )
 SUPPLEMENT_SCHEMA_VERSION = "ember-training-dependency-closure-supplement-v1"
+LAYOUT_PATH_ALIASES = (
+    (
+        "scripts/frontier_receipt.py",
+        "src/ember/governance/scripts/frontier_receipt.py",
+    ),
+)
 
 
 # Call shapes a static import walk cannot follow. A closure member using one
@@ -205,7 +211,80 @@ def load_manifest(root: pathlib.Path) -> dict[str, Any]:
     supplement = load_supplement(root)
     if supplement is not None:
         manifest = _merge_supplement(manifest, supplement)
-    return manifest
+    return _resolve_layout_aliases(pathlib.Path(root), manifest)
+
+
+def _resolve_layout_aliases(
+    root: pathlib.Path, manifest: dict[str, Any]
+) -> dict[str, Any]:
+    """Select the one present member of each closed repository-layout pair.
+
+    The declaration remains stable across an atomic move: before cutover its
+    legacy path is hashed; after cutover the canonical path is hashed.  A mixed
+    tree refuses instead of silently preferring either generation.
+    """
+
+    resolved = dict(manifest)
+    for key in ("entrypoints", "dynamic_entrypoints", "code", "data"):
+        resolved[key] = list(manifest[key])
+    resolved["dynamic_call_sites"] = {
+        caller: list(targets)
+        for caller, targets in manifest["dynamic_call_sites"].items()
+    }
+    resolved["dynamic_call_site_notes"] = dict(
+        manifest.get("dynamic_call_site_notes", {})
+    )
+
+    for legacy, canonical in LAYOUT_PATH_ALIASES:
+        declared_members = {
+            member
+            for key in ("entrypoints", "dynamic_entrypoints", "code", "data")
+            for member in resolved[key]
+        }
+        declared_members.update(resolved["dynamic_call_sites"])
+        declared_members.update(
+            target
+            for targets in resolved["dynamic_call_sites"].values()
+            for target in targets
+        )
+        if legacy not in declared_members:
+            continue
+        legacy_present = (root / legacy).is_file()
+        canonical_present = (root / canonical).is_file()
+        if legacy_present and canonical_present:
+            raise ValueError(
+                "training dependency closure layout alias has both legacy and "
+                f"canonical members: {legacy}, {canonical}"
+            )
+        if not canonical_present:
+            continue
+
+        def replace(value: str) -> str:
+            return canonical if value == legacy else value
+
+        for key in ("entrypoints", "dynamic_entrypoints", "code", "data"):
+            members = [replace(member) for member in resolved[key]]
+            if len(members) != len(set(members)):
+                raise ValueError(
+                    "training dependency closure layout alias creates a duplicate "
+                    f"member: {canonical}"
+                )
+            resolved[key] = members
+        call_sites: dict[str, list[str]] = {}
+        for caller, targets in resolved["dynamic_call_sites"].items():
+            selected_caller = replace(caller)
+            if selected_caller in call_sites:
+                raise ValueError(
+                    "training dependency closure layout alias creates a duplicate "
+                    f"dynamic caller: {selected_caller}"
+                )
+            call_sites[selected_caller] = [replace(target) for target in targets]
+        resolved["dynamic_call_sites"] = call_sites
+        resolved["dynamic_call_site_notes"] = {
+            replace(caller): note
+            for caller, note in resolved["dynamic_call_site_notes"].items()
+        }
+    return resolved
 
 
 def _safe_repo_relative(path: str) -> bool:
