@@ -57,6 +57,26 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _connector_media_type(path: PurePosixPath) -> str:
+    name = path.name.lower()
+    if name == ".gitattributes":
+        return "text/plain; charset=utf-8"
+    media_types = {
+        ".json": "application/json",
+        ".jsonl": "application/x-ndjson",
+        ".md": "text/markdown; charset=utf-8",
+        ".parquet": "application/vnd.apache.parquet",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain; charset=utf-8",
+    }
+    media_type = media_types.get(path.suffix.lower())
+    if media_type is None:
+        raise ValueError(
+            f"bulk domain connector file has unsupported media type: {path.as_posix()}"
+        )
+    return media_type
+
+
 def load_bulk_domain_connector_receipt(
     *,
     receipt_path: Path,
@@ -152,11 +172,7 @@ def load_bulk_domain_connector_receipt(
             or _sha256(physical) != digest
         ):
             raise ValueError("bulk domain connector physical file identity has drifted")
-        media_type = (
-            "text/plain; charset=utf-8"
-            if normalized.as_posix().lower().endswith(".txt")
-            else "application/pdf"
-        )
+        media_type = _connector_media_type(normalized)
         normalized_files.append({
             "path": normalized.as_posix(),
             "bytes": byte_count,
