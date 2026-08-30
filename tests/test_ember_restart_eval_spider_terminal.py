@@ -386,6 +386,7 @@ def test_bound_file_and_database_tree_verify_exact_bytes(tmp_path: Path) -> None
         "files": [
             {
                 "path": "db/db.sqlite",
+                "size": database.stat().st_size,
                 "sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
             }
         ],
@@ -406,7 +407,7 @@ def test_database_tree_drift_and_path_escape_refuse(tmp_path: Path) -> None:
     for relative in ("../escape.sqlite", "db\\db.sqlite", "/abs.sqlite"):
         tree = {
             "schema_version": "ember-spider-database-tree-manifest-v1",
-            "files": [{"path": relative, "sha256": "0" * 64}],
+            "files": [{"path": relative, "size": 0, "sha256": "0" * 64}],
         }
         tree_path.write_bytes(canonical(tree))
         with pytest.raises(ValueError, match="database tree"):
@@ -431,6 +432,7 @@ def test_database_tree_refuses_unmanifested_files(tmp_path: Path) -> None:
                 "files": [
                     {
                         "path": "db/db.sqlite",
+                        "size": database.stat().st_size,
                         "sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
                     }
                 ],
@@ -439,6 +441,45 @@ def test_database_tree_refuses_unmanifested_files(tmp_path: Path) -> None:
     )
     (database_root / "unmanifested.txt").write_text("extra", encoding="utf-8")
     with pytest.raises(ValueError, match="missing or extra"):
+        module.verify_database_tree(
+            tree_path,
+            database_root,
+            hashlib.sha256(tree_path.read_bytes()).hexdigest(),
+        )
+
+
+@pytest.mark.parametrize("mutation", ["missing", "boolean", "negative", "drift"])
+def test_database_tree_refuses_missing_invalid_or_drifted_size(
+    tmp_path: Path, mutation: str
+) -> None:
+    module = load_module()
+    database_root = tmp_path / "database"
+    database = database_root / "db" / "db.sqlite"
+    database.parent.mkdir(parents=True)
+    database.write_bytes(b"sqlite-fixture")
+    row = {
+        "path": "db/db.sqlite",
+        "size": database.stat().st_size,
+        "sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
+    }
+    if mutation == "missing":
+        row.pop("size")
+    elif mutation == "boolean":
+        row["size"] = True
+    elif mutation == "negative":
+        row["size"] = -1
+    else:
+        row["size"] += 1
+    tree_path = tmp_path / "tree.json"
+    tree_path.write_bytes(
+        canonical(
+            {
+                "schema_version": "ember-spider-database-tree-manifest-v1",
+                "files": [row],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="database tree"):
         module.verify_database_tree(
             tree_path,
             database_root,
@@ -904,6 +945,7 @@ def test_cli_missing_1581_files_publishes_structural_not_covered(
                 "files": [
                     {
                         "path": "db/db.sqlite",
+                        "size": database.stat().st_size,
                         "sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
                     }
                 ],
@@ -1022,6 +1064,7 @@ def test_full_manifest_bound_terminal_cli_with_real_scorers(tmp_path: Path) -> N
                 "files": [
                     {
                         "path": "db/db.sqlite",
+                        "size": database.stat().st_size,
                         "sha256": hashlib.sha256(database.read_bytes()).hexdigest(),
                     }
                 ],
