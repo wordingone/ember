@@ -285,10 +285,10 @@ def resolve_catalog_evaluation_dataset(
         expected_dataset_id=expected_dataset_id,
         expected_split=expected_split,
         _required_split="heldout",
-        _dataset_edge_kind="evaluation_dataset",
-        _attempt_record_kind="evaluation_attempt",
-        _attempt_evaluation_edge_kind="evaluation_definition",
-        _attempt_receipt_edge_kind="evaluation_import_receipt",
+        _dataset_edge_kind="consumer_dataset",
+        _attempt_record_kind="consumer_attempt",
+        _attempt_evaluation_edge_kind="consumer_evaluation",
+        _attempt_receipt_edge_kind="consumer_receipt",
     )
     resolved["evaluation_attempt_id"] = resolved.pop("consumer_attempt_id")
     resolved["protected_eval_item_admission"] = True
