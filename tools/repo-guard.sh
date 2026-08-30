@@ -116,7 +116,7 @@ if [ -L "$COCKPIT_STATE_DIR" ]; then
 elif [ -e "$COCKPIT_STATE_DIR" ] && [ ! -d "$COCKPIT_STATE_DIR" ]; then
   fail "cockpit-state" "'.ember' exists in the tree as a file; cockpit state must live outside it (see EMBER_STATE_ROOT)"
 elif [ -d "$COCKPIT_STATE_DIR" ] && [ -n "$(ls -A "$COCKPIT_STATE_DIR" 2>/dev/null)" ]; then
-  fail "cockpit-state" "'.ember/' is resident in the tree; cockpit state must live outside it (see EMBER_STATE_ROOT). Launch Ember.cmd once to migrate it, or move/delete the directory"
+  fail "cockpit-state" "'.ember/' is resident in the tree; cockpit state must live outside it (see EMBER_STATE_ROOT). Launch tools/launchers/Ember.cmd once to migrate it, or move/delete the directory"
   ls -A "$COCKPIT_STATE_DIR" | sed 's/^/      /' | head -10
 else
   ok "cockpit-state" "no resident cockpit state in the tree"

@@ -62,7 +62,7 @@
     "scripts/training_closure.py"
   ],
   "data": [
-    "Ember.cmd",
+    "tools/launchers/Ember.cmd",
     "configs/ember-restart-3b.json",
     "docs/spec/ember02-preregistration-thresholds-v1.json",
     "data/ember-restart-3b/owned-four-domain-production-rung-v1.json",
@@ -75,7 +75,7 @@
     "tools/ember-restart-3b/ember-restart-3b-a1-tier2.json",
     "tools/ember-restart-3b/checkpoint-low-commit-deferral-policy.json"
   ],
-  "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",
+  "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (tools/launchers/Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",
   "dynamic_call_sites": {
     "tools/ember-restart-3b/certified_train_launch.py": [
       "scripts/artifact_custody_gate.py",

@@ -818,7 +818,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     evidence.push({
       action: "launch",
       ordinal: 1,
-      input_sha256: sha256("Ember.cmd"),
+      input_sha256: sha256("tools/launchers/Ember.cmd"),
       before_frame_sha256: sha256(""),
       after_frame_sha256: sha256(readyFrame),
       effect_evidence_sha256: sha256(READY_OSC),
@@ -833,7 +833,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
     });
     attempts.push({
       action: "launch",
-      input: "Ember.cmd",
+      input: "tools/launchers/Ember.cmd",
       status: "PASS",
       frame_artifact: launchArtifact,
       detail: "READY_OSC observed",
@@ -1088,7 +1088,7 @@ export async function runLifecycleSmoke(argv: string[]): Promise<void> {
         diagnostics: artifactPath(repoRoot, outDir),
       },
       operator_contract_mapping:
-        "compiled Ember.cmd launch -> /train -> /watch -> /finetune pause/resume/stop -> " +
+        "compiled tools/launchers/Ember.cmd launch -> /train -> /watch -> /finetune pause/resume/stop -> " +
         "/model checkpoint save/load -> registered resume.ts /continue",
       accepted_instrument_run: true,
       claim_boundary: {

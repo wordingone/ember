@@ -23,7 +23,7 @@ def canonical(path: str | Path) -> str:
     """One spelling per real directory: 8.3 short names expanded, casing normalized.
     `realpath` is what expands the short form on Windows -- `abspath` leaves it alone."""
     return os.path.normcase(os.path.realpath(path))
-PUBLIC_LAUNCHER = REPOSITORY / "Ember.cmd"
+PUBLIC_LAUNCHER = REPOSITORY / "tools" / "launchers" / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "prepare-ember-cockpit.ps1"
 LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
 WINDOW_PLACEMENT = REPOSITORY / "scripts" / "ember-window-placement.ps1"
@@ -37,7 +37,9 @@ class EmberRootLauncherTests(unittest.TestCase):
         (root / "scripts").mkdir(parents=True)
         source = root / "tools" / "ember-cli" / "src"
         (source / "entrypoints").mkdir(parents=True)
-        shutil.copy2(PUBLIC_LAUNCHER, root / "Ember.cmd")
+        launcher = root / "tools" / "launchers" / "Ember.cmd"
+        launcher.parent.mkdir(parents=True)
+        shutil.copy2(PUBLIC_LAUNCHER, launcher)
         shutil.copy2(LAUNCH_IMPL, root / "scripts" / "prepare-ember-cockpit.ps1")
         # The preparation helper dot-sources the staging sibling at startup; the
         # fixture mirrors the deployed scripts/ layout so the copy can actually run.
@@ -85,7 +87,13 @@ class EmberRootLauncherTests(unittest.TestCase):
         else:
             env.pop("EMBER_LAUNCH_TEST_RUNTIME", None)
         return subprocess.run(
-            ["cmd.exe", "/d", "/c", str(root / "Ember.cmd"), *arguments],
+            [
+                "cmd.exe",
+                "/d",
+                "/c",
+                str(root / "tools" / "launchers" / "Ember.cmd"),
+                *arguments,
+            ],
             cwd=Path(tempfile.gettempdir()),
             env=env,
             text=True,
@@ -109,7 +117,8 @@ class EmberRootLauncherTests(unittest.TestCase):
             canonical(expected),
             f"launcher ran in {recorded[0]}, expected {expected}",
         )
-        # The launcher canonicalizes on its own (Ember.cmd's %~dp0 and PowerShell's
+        # The launcher canonicalizes on its own (tools/launchers/Ember.cmd's
+        # %~dp0 and PowerShell's
         # $PSScriptRoot both yield the long form), and callers see the path it reports.
         # Pin that here so a change that starts echoing the caller's spelling fails by
         # name instead of surfacing as an unexplained mismatch on one runner.
@@ -123,8 +132,7 @@ class EmberRootLauncherTests(unittest.TestCase):
         self.assertTrue(LAUNCH_IMPL.is_file())
         self.assertTrue(WINDOW_PLACEMENT.is_file())
         documentation = START_HERE.read_text(encoding="utf-8")
-        self.assertIn("repository root", documentation)
-        self.assertIn("`Ember.cmd`", documentation)
+        self.assertIn("`tools/launchers/Ember.cmd`", documentation)
 
     def test_no_argument_launch_discovers_repo_from_outside_and_handles_spaces(self) -> None:
         owner, root, runtime = self.make_fixture()
@@ -517,7 +525,12 @@ class EmberRootLauncherTests(unittest.TestCase):
         )
         env.pop("EMBER_LAUNCH_TEST_MODE", None)
         result = subprocess.run(
-            ["cmd.exe", "/d", "/c", str(root / "Ember.cmd")],
+            [
+                "cmd.exe",
+                "/d",
+                "/c",
+                str(root / "tools" / "launchers" / "Ember.cmd"),
+            ],
             cwd=Path(tempfile.gettempdir()),
             env=env,
             text=True,
@@ -546,7 +559,12 @@ class EmberRootLauncherTests(unittest.TestCase):
         env["EMBER_LAUNCH_NONINTERACTIVE"] = "1"
         env.pop("EMBER_LAUNCH_TEST_MODE", None)
         result = subprocess.run(
-            ["cmd.exe", "/d", "/c", str(root / "Ember.cmd")],
+            [
+                "cmd.exe",
+                "/d",
+                "/c",
+                str(root / "tools" / "launchers" / "Ember.cmd"),
+            ],
             cwd=Path(tempfile.gettempdir()),
             env=env,
             text=True,

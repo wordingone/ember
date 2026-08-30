@@ -2651,7 +2651,7 @@ def check_changed_artifact_bindings(
         }
         if not control_path and suffix not in source_suffixes:
             continue
-        if suffix not in {
+        inline_binding_supported = suffix in {
             "",
             ".json",
             ".jsonl",
@@ -2662,11 +2662,7 @@ def check_changed_artifact_bindings(
             ".ini",
             ".cfg",
             *source_suffixes,
-        }:
-            errors.append(
-                finding(4, "artifact.binding_format_unsupported", normalized)
-            )
-            continue
+        }
         try:
             candidate_text = read_candidate_text(normalized)
             if candidate_text is None:
@@ -2743,7 +2739,7 @@ def check_changed_artifact_bindings(
             except Exception:
                 binding_valid = False
                 workstreams = set()
-        else:
+        elif inline_binding_supported:
             binding_valid = validate_artifact_binding(
                 text,
                 suffix,
@@ -2752,6 +2748,11 @@ def check_changed_artifact_bindings(
                 allowed_workstreams,
             )
             workstreams = artifact_workstream_ids(text, suffix)
+        else:
+            errors.append(
+                finding(4, "artifact.binding_format_unsupported", normalized)
+            )
+            continue
         if not binding_valid:
             errors.append(
                 finding(
