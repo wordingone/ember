@@ -97,7 +97,9 @@ def test_root_file_law_and_moved_bytes() -> None:
     ordinary = sorted(
         path.name
         for path in ROOT.iterdir()
-        if path.is_file() and path.name not in ROOT_EXCEPTIONS
+        # ".git" is a directory in a clone but a Git administrative FILE in a
+        # linked worktree; it is repository plumbing, never root content.
+        if path.is_file() and path.name != ".git" and path.name not in ROOT_EXCEPTIONS
     )
     assert ordinary == ["AGENTS.md", "LICENSE", "README.md"]
     for source, (destination, _source_digest, destination_digest) in MOVES.items():
