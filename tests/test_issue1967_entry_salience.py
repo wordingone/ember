@@ -40,16 +40,17 @@ def test_q2_exact_constraint_is_in_both_direct_introductions() -> None:
 
 
 def assert_direct_install_route(text: str) -> None:
-    command_index = text.index(INSTALL_COMMAND)
-    assert text.index("README") < command_index
-    assert text.index("docs/guides/START-HERE.md") < command_index
-    assert text.index("`Ember.cmd` is the operator entry") < command_index
-    assert text.index("Python uses") < command_index
-    assert text.index("manifests/python-environment-v1.json") < command_index
-    assert text.index("Rust uses") < command_index
-    assert text.index("runtime/ember-lab/Cargo.toml") < command_index
-    assert text.index("`ember-cli` uses") < command_index
-    assert text.index("tools/ember-cli/src/package.json") < command_index
+    normalized = " ".join(text.split())
+    command_index = normalized.index(INSTALL_COMMAND)
+    assert normalized.index("README") < command_index
+    assert normalized.index("docs/guides/START-HERE.md") < command_index
+    assert normalized.index("`Ember.cmd` is the operator entry") < command_index
+    assert normalized.index("Python uses") < command_index
+    assert normalized.index("manifests/python-environment-v1.json") < command_index
+    assert normalized.index("Rust uses") < command_index
+    assert normalized.index("runtime/ember-lab/Cargo.toml") < command_index
+    assert normalized.index("`ember-cli` uses") < command_index
+    assert normalized.index("tools/ember-cli/src/package.json") < command_index
 
 
 def test_q5_readme_direct_route_precedes_install_command() -> None:
