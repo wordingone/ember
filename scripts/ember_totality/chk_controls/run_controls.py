@@ -1954,7 +1954,7 @@ def build_c_auto_base():
     root = fresh_dir(os.path.join(FIXTURES_DIR, "c_auto_base"))
     write_readme(root, _C_AUTO_ISOLATION_NOTE)
 
-    # Write the honest zero-claim autonomy-ladder-state.json.
+    # Write the honest zero-claim canonical autonomy ladder state.
     state = {
         "schema": "autonomy-ladder-state/v1",
         "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
@@ -1971,7 +1971,7 @@ def build_c_auto_base():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write the contract file so the probe can resolve it.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2014,7 +2014,7 @@ def build_c_auto_unreceipted_claim():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write contract.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2068,7 +2068,7 @@ def build_c_auto_dangling_window():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write contract.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2128,7 +2128,7 @@ def build_c_auto_missing_provenance():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write contract.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2189,7 +2189,7 @@ def build_c_auto_state_claim_mismatch():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write contract.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2252,7 +2252,7 @@ def build_c_auto_receipts_dir_absent():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write contract.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2298,7 +2298,7 @@ def build_c_auto_empty_provenance():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     # Write contract.
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
@@ -2366,7 +2366,7 @@ def build_c_auto_stale_reversion_claim():
         "promotion_rule": "K=5 consecutive clean receipted windows per rung; claim itself is a receipt under receipts/autonomy-ladder/",
         "safety_floor": "operator escalation set + governor caps + kill-discipline NEVER transfer",
     }
-    write_json_no_marker(os.path.join(root, "autonomy-ladder-state.json"), state)
+    write_json_no_marker(os.path.join(root, "docs/domains/governance/authority/autonomy-ladder-state.json"), state)
 
     contract_path = os.path.join(root, "docs", "spec", "autonomy-relinquishment-ladder-v1.md")
     os.makedirs(os.path.dirname(contract_path), exist_ok=True)

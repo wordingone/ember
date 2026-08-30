@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """r0_claim_executor.py -- Self-gating claim executor for R0 autonomy-ladder.
 
 After K=5 consecutive PASS windows, this executor:
 1. Writes R0-claim-<ts>.json receipt
-2. Updates autonomy-ladder-state.json (claimed=true, windows list, current_rung=R0)
+2. Updates docs/domains/governance/authority/autonomy-ladder-state.json (claimed=true, windows list, current_rung=R0)
 3. Runs test_c_auto probe
 4. ROLLS BACK state edit if probe returns RED
 
@@ -24,8 +27,8 @@ from typing import Any
 
 
 def load_state(repo_root: str) -> dict[str, Any] | None:
-    """Load the current autonomy-ladder-state.json."""
-    state_path = os.path.join(repo_root, "autonomy-ladder-state.json")
+    """Load the current canonical autonomy ladder state."""
+    state_path = os.path.join(repo_root, "docs/domains/governance/authority/autonomy-ladder-state.json")
     if not os.path.isfile(state_path):
         return None
 
@@ -38,7 +41,7 @@ def load_state(repo_root: str) -> dict[str, Any] | None:
 
 def backup_state(repo_root: str) -> str | None:
     """Create a backup of the state file for rollback."""
-    state_path = os.path.join(repo_root, "autonomy-ladder-state.json")
+    state_path = os.path.join(repo_root, "docs/domains/governance/authority/autonomy-ladder-state.json")
     if not os.path.isfile(state_path):
         return None
 
@@ -87,8 +90,8 @@ def write_claim_receipt(repo_root: str, claim_ts: str) -> str:
 
 
 def update_state(repo_root: str, window_refs: list[str], claim_ts: str) -> bool:
-    """Update autonomy-ladder-state.json with the claim."""
-    state_path = os.path.join(repo_root, "autonomy-ladder-state.json")
+    """Update the canonical autonomy ladder state with the claim."""
+    state_path = os.path.join(repo_root, "docs/domains/governance/authority/autonomy-ladder-state.json")
 
     # Load or create state
     state = load_state(repo_root)
@@ -213,7 +216,7 @@ def execute_claim(repo_root: str, window_refs: list[str], probe_path: str | None
     if not update_state(repo_root, window_refs, claim_ts):
         if backup_path:
             restore_state(backup_path)
-        return False, {"error": "Failed to update autonomy-ladder-state.json", "claim_ts": claim_ts}
+        return False, {"error": "Failed to update canonical autonomy ladder state", "claim_ts": claim_ts}
 
     # Step 4: Run test_c_auto probe
     probe_passed, probe_output = run_c_auto_probe(repo_root, probe_path)

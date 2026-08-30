@@ -67,7 +67,11 @@ class CAutonomyClaimIntegrityTests(unittest.TestCase):
                     "operator escalation set + governor caps + kill-discipline NEVER transfer"
                 ),
             }
-            (root / "autonomy-ladder-state.json").write_text(
+            state_path = (
+                root / "docs/domains/governance/authority/autonomy-ladder-state.json"
+            )
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
                 json.dumps(state) + "\n",
                 encoding="utf-8",
             )

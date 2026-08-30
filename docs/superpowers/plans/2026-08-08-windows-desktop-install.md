@@ -13,7 +13,7 @@
 - Exact issue authority: #1578.
 - Per-user writes only; no elevation, registry, service, task, or shell-profile mutation.
 - All executable paths admitted by closed manifests and SHA-256 before spawn.
-- Repository `Ember.cmd` remains the developer launcher.
+- Repository `tools/launchers/Ember.cmd` remains the developer launcher.
 - Windows adapter must not become a second model/server/process authority.
 - `NO_NEW_PARALLEL_AUTHORITY`.
 

@@ -498,13 +498,19 @@ def assert_ember_root(root: Path) -> None:
 
 
 def find_root_launcher_candidates(root: Path) -> list[Path]:
-    """Files at repo root worth OPENING to check what they invoke. Extension
-    and name-hint decide candidacy only -- never the verdict itself."""
+    """Files in the canonical launcher directory worth opening.
+
+    Extension and name-hint decide candidacy only -- never the verdict itself.
+    Root-level launcher adapters are intentionally outside this closed surface.
+    """
     found = []
+    launcher_root = root / "tools" / "launchers"
     try:
-        entries = sorted(p for p in root.iterdir() if p.is_file())
+        entries = sorted(p for p in launcher_root.iterdir() if p.is_file())
+    except FileNotFoundError:
+        return []
     except OSError as exc:
-        raise RuntimeError(f"repo root unreadable: {exc}") from exc
+        raise RuntimeError(f"canonical launcher directory unreadable: {exc}") from exc
     for p in entries:
         if p.suffix.lower() in LAUNCHER_CANDIDATE_SUFFIXES:
             found.append(p)
@@ -1537,7 +1543,7 @@ def run(root: Path) -> dict:
     report: dict = {"root": str(root), "checks": {}, "spine": {}, "undecidable": []}
     checks = report["checks"]
 
-    # L1 root launcher -- runtime-sentinel-bound, never text-bound ---------
+    # L1 canonical launcher -- runtime-sentinel-bound, never text-bound ----
     # Round 4: the static walk below (`resolve_invocation`) is kept as a
     # pre-filter/diagnostic ONLY. It may narrow or refuse; it may never grant
     # resolved-true on its own -- that authority belongs to
@@ -1571,7 +1577,7 @@ def run(root: Path) -> dict:
     elif launchers_weak:
         checks["L1_root_launcher"] = check(
             "weak",
-            "candidate root launcher(s) exist but the runtime probe could not "
+            "candidate canonical launcher(s) exist but the runtime probe could not "
             "resolve them: " + "; ".join(_combined_evidence(c) for c in launchers_weak),
         )
     elif candidates:
@@ -1581,7 +1587,7 @@ def run(root: Path) -> dict:
     else:
         checks["L1_root_launcher"] = check(
             "resolved-false",
-            "no .cmd/.bat/.ps1/.exe/.sh or executable-named file at repo root",
+            "no .cmd/.bat/.ps1/.exe/.sh or executable-named file under tools/launchers",
         )
 
     # Probe receipts for EVERY candidate, whatever the verdict. These were
@@ -1598,7 +1604,7 @@ def run(root: Path) -> dict:
     # distinguishable downstream.
     if candidates:
         checks["L1_root_launcher"]["receipts"] = {
-            str(c.name): probes[c].get(
+            c.relative_to(root).as_posix(): probes[c].get(
                 "receipt", {"probe_produced_no_receipt": probes[c]["evidence"]}
             )
             for c in candidates

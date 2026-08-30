@@ -296,7 +296,7 @@ def main() -> int:
                     "verdict": "LAUNCH_PACKAGING_GATE_PASS",
                     "launch_packaging": {
                         "bin_name": "ember",
-                        "launcher_path": "Ember.cmd",
+                        "launcher_path": "tools/launchers/Ember.cmd",
                         "uses_reference_exe": False,
                     },
                     "deletion_ablation": {
