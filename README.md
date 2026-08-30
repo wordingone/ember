@@ -70,6 +70,8 @@ To inspect Ember, start at this repository-root README and continue through the
 [canonical `docs/guides/START-HERE.md` page](docs/guides/START-HERE.md). On Windows, `Ember.cmd` is
 the operator entry.
 
+Python dependency authority: manifests/python-environment-v1.json.
+
 Installation authorities are distinct: Python uses
 [`manifests/python-environment-v1.json`](manifests/python-environment-v1.json), Rust uses
 [`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and `ember-cli` uses
