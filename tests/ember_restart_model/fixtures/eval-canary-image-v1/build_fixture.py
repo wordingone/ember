@@ -20,6 +20,7 @@ MODEL_ROOT = ROOT / "tools" / "ember-restart-3b"
 sys.path.insert(0, str(MODEL_ROOT))
 
 from model import RestartDecoderConfig, UnifiedDecoder
+from repository_layout import resolve_repository_authority  # noqa: E402
 
 
 SEED = 1948
@@ -46,7 +47,7 @@ def canonical_tensor_hash(name: str, tensor: torch.Tensor) -> str:
 def tokenizer_vocab_size(tokenizer_payload: dict[str, object]) -> int:
     model = tokenizer_payload.get("model")
     if not isinstance(model, dict) or not isinstance(model.get("vocab"), dict):
-        raise ValueError("real tokenizer/tokenizer.json must carry model.vocab")
+        raise ValueError("real tokenizer authority must carry model.vocab")
     vocab = model["vocab"]
     ids = sorted(int(value) for value in vocab.values())
     if ids != list(range(len(ids))):
@@ -79,7 +80,7 @@ def build(output_dir: Path) -> None:
     if existing - {"build_fixture.py"}:
         raise FileExistsError(f"refusing to overwrite nonempty fixture directory: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    tokenizer_path = ROOT / "tokenizer" / "tokenizer.json"
+    tokenizer_path = resolve_repository_authority(ROOT, "tokenizer").path
     tokenizer_raw = tokenizer_path.read_bytes()
     tokenizer_payload = json.loads(tokenizer_raw)
     vocab_size = tokenizer_vocab_size(tokenizer_payload)
@@ -142,7 +143,7 @@ def build(output_dir: Path) -> None:
         "license": "CC0-1.0",
         "seed": SEED,
         "tokenizer": {
-            "file": "tokenizer/tokenizer.json",
+            "file": "repository-authority:tokenizer",
             "sha256": sha256_bytes(tokenizer_raw),
             "vocab_size": vocab_size,
         },

@@ -23,9 +23,8 @@ from typing import Any, Iterator, Mapping
 _COUNTER_MODULE_DIRECTORY = Path(__file__).resolve().parent
 if str(_COUNTER_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_COUNTER_MODULE_DIRECTORY))
+from repository_layout import allowed_authority_pin_tuples, resolve_repository_authority  # noqa: E402
 
-_P2B_STREAM_MANIFEST_SHA256 = "25d4f681af1d43c12dda718b7cd0ddf75613a46a7d5053b7ddf5436e0cbf9a22"
-_P2B_STREAM_BUILD_RECEIPT_SHA256 = "2daf3de395c83dc19707cb81f31c12c1484d9c19de2249c8eb8aec1b5a179c9d"
 _P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
@@ -358,8 +357,11 @@ def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: st
     for field in ("stream_manifest_sha256", "stream_build_receipt_sha256", "corpus_root_sha256", "family_root_sha256"):
         if episode.get(field) != receipt.get(field):
             raise ValueError("P2B stream episode authority does not match selection receipt")
-    if (receipt["stream_manifest_sha256"] != _P2B_STREAM_MANIFEST_SHA256
-            or receipt["stream_build_receipt_sha256"] != _P2B_STREAM_BUILD_RECEIPT_SHA256
+    allowed_pin_tuples = allowed_authority_pin_tuples(
+        ("specialist_stream_manifest", "specialist_stream_build_receipt")
+    )
+    episode_pins = (receipt["stream_manifest_sha256"], receipt["stream_build_receipt_sha256"])
+    if (episode_pins not in allowed_pin_tuples
             or receipt["corpus_root_sha256"] != _P2B_STREAM_CORPUS_ROOT_SHA256):
         raise ValueError("P2B stream episode does not bind the canonical stream authorities")
     return dict(episode)
@@ -378,6 +380,14 @@ def validate_p2b_counter_stream_authority(
     root = Path(repo_root).resolve()
     manifest_path = Path(stream_manifest_path).resolve()
     build_path = Path(stream_build_receipt_path).resolve()
+    manifest_authority = resolve_repository_authority(root, "specialist_stream_manifest")
+    build_authority = resolve_repository_authority(root, "specialist_stream_build_receipt")
+    if (manifest_path != manifest_authority.path.resolve()
+            or build_path != build_authority.path.resolve()):
+        raise ValueError("P2B stream authority paths do not match the selected repository authorities")
+    if (normalized["stream_manifest_sha256"] != manifest_authority.expected_sha256
+            or normalized["stream_build_receipt_sha256"] != build_authority.expected_sha256):
+        raise ValueError("P2B stream authority hashes do not match the selected repository authorities")
     if hashlib.sha256(stream_manifest_bytes).hexdigest() != normalized["stream_manifest_sha256"]:
         raise ValueError("P2B stream manifest authority mismatch")
     if hashlib.sha256(stream_build_receipt_bytes).hexdigest() != normalized["stream_build_receipt_sha256"]:

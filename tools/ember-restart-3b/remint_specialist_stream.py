@@ -9,17 +9,22 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
+_REMINT_MODULE_DIRECTORY = Path(__file__).resolve().parent
+if str(_REMINT_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_REMINT_MODULE_DIRECTORY))
+from repository_layout import (  # noqa: E402
+    allowed_authority_pin_tuples,
+    resolve_repository_authority,
+)
 from specialist_stream import canonical_record_bytes, emit_stream_manifest, write_stream_build_receipt
 
 
-MANIFEST_RELATIVE = Path("data/ember-restart-3b/owned-specialist-stream-v1-4096.json")
-RECEIPT_RELATIVE = Path("data/ember-restart-3b/owned-specialist-stream-v1-4096-build-receipt.json")
 CONFIG_RELATIVE = Path("configs/ember-restart-3b.json")
-TOKENIZER_RELATIVE = Path("tokenizer/tokenizer.json")
 
 
 def _sha256(raw: bytes) -> str:
@@ -78,12 +83,15 @@ def _assert_build_receipt_matches_manifest(
         raise ValueError("specialist stream build receipt does not bind the reminted manifest")
 
 
-def _candidate(repo_root: Path, output_root: Path) -> tuple[Path, Path, dict[str, Any], dict[str, Any]]:
-    manifest_path = output_root / MANIFEST_RELATIVE.name
-    receipt_path = output_root / RECEIPT_RELATIVE.name
+def _candidate(
+    repo_root: Path, output_root: Path, *,
+    manifest_name: str, receipt_name: str, tokenizer_path: Path,
+) -> tuple[Path, Path, dict[str, Any], dict[str, Any]]:
+    manifest_path = output_root / manifest_name
+    receipt_path = output_root / receipt_name
     manifest, elapsed_ms = emit_stream_manifest(
         repo_root=repo_root, output_path=manifest_path,
-        tokenizer_path=repo_root / TOKENIZER_RELATIVE,
+        tokenizer_path=tokenizer_path,
         model_config_path=repo_root / CONFIG_RELATIVE,
         record_count=4096, chunk_size=256, data_class="SEMANTIC_PRETRAINING",
     )
@@ -95,13 +103,36 @@ def _candidate(repo_root: Path, output_root: Path) -> tuple[Path, Path, dict[str
 
 def remint_checked_in_stream(repo_root: Path, *, write: bool) -> dict[str, object]:
     repo_root = repo_root.resolve(strict=True)
-    manifest_path = repo_root / MANIFEST_RELATIVE
-    receipt_path = repo_root / RECEIPT_RELATIVE
+    manifest_authority = resolve_repository_authority(repo_root, "specialist_stream_manifest")
+    receipt_authority = resolve_repository_authority(repo_root, "specialist_stream_build_receipt")
+    # Layout-seam caveat: a future legitimate remint that changes these
+    # artifacts' bytes must update the corresponding repository_layout
+    # authority pins in the SAME governed change, or this atomic-tuple
+    # gate (and the per-authority hash pins) will refuse the new bytes.
+    resolved_pins = (
+        manifest_authority.expected_sha256,
+        receipt_authority.expected_sha256,
+    )
+    if resolved_pins not in allowed_authority_pin_tuples(
+        ("specialist_stream_manifest", "specialist_stream_build_receipt")
+    ):
+        raise ValueError(
+            "specialist stream authorities resolved to a mixed generation: "
+            f"{resolved_pins}; remint refuses a half-expanded tree"
+        )
+    tokenizer_authority = resolve_repository_authority(repo_root, "tokenizer")
+    manifest_path = manifest_authority.path
+    receipt_path = receipt_authority.path
     original_manifest_raw, original_manifest = _load(manifest_path)
     _original_receipt_raw, original_receipt = _load(receipt_path)
     current_config_sha256 = _sha256((repo_root / CONFIG_RELATIVE).read_bytes())
     with tempfile.TemporaryDirectory(dir=manifest_path.parent, prefix=".specialist-remint-") as directory:
-        candidate_manifest_path, candidate_receipt_path, candidate_manifest, candidate_receipt = _candidate(repo_root, Path(directory))
+        candidate_manifest_path, candidate_receipt_path, candidate_manifest, candidate_receipt = _candidate(
+            repo_root, Path(directory),
+            manifest_name=manifest_authority.path.name,
+            receipt_name=receipt_authority.path.name,
+            tokenizer_path=tokenizer_authority.path,
+        )
         candidate_manifest_raw = candidate_manifest_path.read_bytes()
         candidate_receipt_raw = candidate_receipt_path.read_bytes()
         _assert_manifest_remint(original_manifest, candidate_manifest, current_config_sha256=current_config_sha256)

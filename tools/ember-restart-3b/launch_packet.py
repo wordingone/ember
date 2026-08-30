@@ -21,6 +21,10 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+_PACKET_MODULE_DIRECTORY = Path(__file__).resolve().parent
+if str(_PACKET_MODULE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_PACKET_MODULE_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
 
 # Test/CI override: redirect the transient run receipt (packet.jsonl) outside
 # the tracked tree without touching where preflights look for real inputs
@@ -597,7 +601,13 @@ def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
             problems.append(
                 f"architecture.sha256 drift: manifest={declared} actual={actual}")
 
-    tokenizer_path = root / "tokenizer" / "tokenizer.json"
+    try:
+        tokenizer_authority = resolve_repository_authority(root, "tokenizer")
+    except ValueError as error:
+        tokenizer_path = root / "<unresolved-tokenizer-authority>"
+        problems.append(str(error))
+    else:
+        tokenizer_path = tokenizer_authority.path
     if not tokenizer_path.is_file():
         problems.append(f"declared tokenizer artifact is absent: {tokenizer_path}")
     else:
@@ -687,6 +697,7 @@ def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
         "disposition": disposition,
         "architecture_sha256": _dig(payload, "architecture", "sha256"),
         "tokenizer_sha256": _dig(payload, "tokenizer", "sha256"),
+        "tokenizer_path": tokenizer_authority.relative_path,
         "corpus_sha256": _dig(payload, "data", "sha256"),
         "stream_receipt_path": stream_receipt_rel,
         "stream_receipt_sha256": stream_receipt_sha256,
@@ -746,7 +757,7 @@ def named_launch_command(cfg: dict, identity: dict) -> dict:
             f"--artifact-root {ckpt_root}/<run-id> "
             f"--receipt {stream_receipt_rel} "
             "--shards-root <token-shard-dir declared by the receipt's own shard_dir field> "
-            "--tokenizer tokenizer/tokenizer.json "
+            f"--tokenizer {identity['tokenizer_path']} "
             f"--expected-receipt-sha256 {identity['stream_receipt_sha256']} "
             f"--expected-tokenizer-sha256 {identity['tokenizer_sha256']} "
             f"--expected-architecture-sha256 {identity['architecture_sha256']} "

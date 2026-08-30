@@ -23,6 +23,9 @@ from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
+if str(ROOT / "tools" / "ember-restart-3b") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from repository_layout import resolve_repository_authority  # noqa: E402
 SHA = "a" * 40
 EVIDENCE_SHA256 = "b" * 64
 
@@ -70,7 +73,7 @@ def load_module():
 
 
 def load_frontier_module():
-    path = ROOT / "scripts" / "frontier_receipt.py"
+    path = resolve_repository_authority(ROOT, "frontier_receipt").path
     spec = importlib.util.spec_from_file_location("frontier_receipt_under_test", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -3902,8 +3905,10 @@ class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
             checkpoint_revision=checkpoint_revision,
         )
 
-        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
-        write_json(tokenizer_path, {})
+        _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+        tokenizer_path = paths["repo"] / _tokenizer_authority.relative_path
+        tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
         paths["tokenizer"] = tokenizer_path
 
         # In-tree, mirroring build_specialist_bundle.py's OWN emission path
@@ -4706,8 +4711,10 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
         paths = write_valid_bundle(pathlib.Path(directory))
         install_model_config(paths["repo"], config_revision)
 
-        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
-        write_json(tokenizer_path, {})
+        _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+        tokenizer_path = paths["repo"] / _tokenizer_authority.relative_path
+        tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
         paths["tokenizer"] = tokenizer_path
 
         # In-tree, mirroring training_data_manifest's own containment
@@ -5808,8 +5815,10 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
 
         paths = self._bundle(directory)
 
-        tokenizer_path = paths["repo"] / "tokenizer" / "tokenizer.json"
-        write_json(tokenizer_path, {})
+        _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+        tokenizer_path = paths["repo"] / _tokenizer_authority.relative_path
+        tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
         paths["tokenizer"] = tokenizer_path
 
         manifest_path = paths["repo"] / "manifests" / "image.json"
