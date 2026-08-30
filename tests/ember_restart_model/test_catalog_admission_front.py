@@ -360,6 +360,56 @@ def test_projection_deduplicates_repeated_same_source_object_memberships(
     assert repeated_dataset_id != unique_dataset_id
 
 
+def test_bulk_connector_projects_exact_supported_media_types_and_refuses_unknown(
+    tmp_path: Path,
+) -> None:
+    known_root = tmp_path / "known"
+    connector_path, connector_sha = write_connector(
+        known_root,
+        source="internlm/Lean-Workbook",
+        domain="mathematics",
+        files=[
+            (".gitattributes", b"*.parquet filter=lfs"),
+            ("lean_workbook.json", b"{}"),
+            ("README.md", b"# Lean Workbook"),
+            ("wkbk_1009.parquet", b"PAR1fixture"),
+        ],
+    )
+    projected = load_bulk_domain_connector_receipt(
+        receipt_path=connector_path,
+        expected_receipt_sha256=connector_sha,
+        source_id="candidate-mathematics-heldout-1",
+        expected_source_selector="internlm/Lean-Workbook",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="mathematics",
+        split="heldout",
+    )
+    assert {row["path"]: row["media_type"] for row in projected["files"]} == {
+        ".gitattributes": "text/plain; charset=utf-8",
+        "README.md": "text/markdown; charset=utf-8",
+        "lean_workbook.json": "application/json",
+        "wkbk_1009.parquet": "application/vnd.apache.parquet",
+    }
+
+    unknown_root = tmp_path / "unknown"
+    unknown_path, unknown_sha = write_connector(
+        unknown_root,
+        source="fixture/unknown",
+        domain="mathematics",
+        files=[("payload.bin", b"unsupported")],
+    )
+    with pytest.raises(ValueError, match="unsupported media type"):
+        load_bulk_domain_connector_receipt(
+            receipt_path=unknown_path,
+            expected_receipt_sha256=unknown_sha,
+            source_id="candidate-mathematics-heldout-2",
+            expected_source_selector="fixture/unknown",
+            expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+            domain="mathematics",
+            split="heldout",
+        )
+
+
 def test_projects_one_heldout_slot_without_mislabeling_it_as_train(
     tmp_path: Path,
 ) -> None:
