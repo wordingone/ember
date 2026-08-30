@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,7 +18,11 @@ ROOT = Path(__file__).resolve().parents[2]
 HELPER_PATH = (
     ROOT / "tools" / "ember-restart-3b" / "frozen_tokenizer_decoder.py"
 )
-FROZEN_TOKENIZER_PATH = ROOT / "tokenizer" / "tokenizer.json"
+if str(ROOT / "tools" / "ember-restart-3b") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from repository_layout import resolve_repository_authority  # noqa: E402
+
+FROZEN_TOKENIZER_PATH = resolve_repository_authority(ROOT, "tokenizer").path
 
 
 def _load_helper():

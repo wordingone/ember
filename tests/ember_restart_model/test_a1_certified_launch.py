@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS_DIRECTORY = ROOT / "tools" / "ember-restart-3b"
 if str(TOOLS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIRECTORY))
+from repository_layout import resolve_repository_authority  # noqa: E402
 A1_FAMILY = "dense-tier1-full-state-adamw-cpu-offload-v1"
 TIER2_FAMILY = "dense-tier2-owned-q-galore-v1"
 
@@ -153,9 +154,8 @@ def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
     repo = paths["repo"]
     tools = repo / "tools" / "ember-restart-3b"
     thresholds = repo / "docs" / "spec"
-    tokenizer_dir = repo / "tokenizer"
     receipt_dir = repo / "receipts" / "ember-restart-3b"
-    for directory in (tools, thresholds, tokenizer_dir, receipt_dir):
+    for directory in (tools, thresholds, receipt_dir):
         directory.mkdir(parents=True, exist_ok=True)
     config_path = tools / "ember-restart-3b-a1.json"
     shutil.copyfile(ROOT / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json", config_path)
@@ -163,11 +163,10 @@ def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
         ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json",
         thresholds / "ember02-preregistration-thresholds-v1.json",
     )
-    tokenizer_path = tokenizer_dir / "tokenizer.json"
-    launch_fixtures.write_json(
-        tokenizer_path,
-        {"model": {"vocab": [f"token-{index}" for index in range(64)]}},
-    )
+    _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+    tokenizer_path = repo / _tokenizer_authority.relative_path
+    tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+    tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
     tokenizer_sha = hashlib.sha256(tokenizer_path.read_bytes()).hexdigest()
     shards_root = paths["custody_root"] / "a1-shards"
     shards_root.mkdir()
@@ -187,7 +186,7 @@ def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
             "ticket": "TOKEN-SHARDS-V0",
             "premises": {
                 "tokenizer_json": {
-                    "path": "tokenizer/tokenizer.json",
+                    "path": _tokenizer_authority.relative_path,
                     "sha256": tokenizer_sha,
                 }
             },

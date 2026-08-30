@@ -24,6 +24,10 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from repository_layout import resolve_repository_authority  # noqa: E402
+
+_STREAM_MANIFEST_AUTHORITY = resolve_repository_authority(ROOT, "specialist_stream_manifest")
+_STREAM_RECEIPT_AUTHORITY = resolve_repository_authority(ROOT, "specialist_stream_build_receipt")
 
 from checkpoint_artifacts import (
     build_packed_fresh_genesis_specialist_lineage,
@@ -895,8 +899,8 @@ class CounterCliTests(unittest.TestCase):
                 "expert_routing": {"expert_names": ["vision", "audio", "reasoning", "tool"]},
             },
         }
-        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-        build_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        manifest_path = _STREAM_MANIFEST_AUTHORITY.path
+        build_path = _STREAM_RECEIPT_AUTHORITY.path
         manifest_bytes, build_bytes = manifest_path.read_bytes(), build_path.read_bytes()
         stream = open_specialist_stream(
             repo_root=ROOT, manifest_path=manifest_path,
@@ -987,7 +991,7 @@ class CounterCliTests(unittest.TestCase):
         self.assertGreater(runtime_authority["file_count"], 0)
         self.assertGreater(runtime_authority["total_bytes"], 0)
         self.assertNotEqual(rejected.returncode, 0)
-        self.assertIn("manifest authority mismatch", rejected.stderr)
+        self.assertIn("do not match the selected repository authorities", rejected.stderr)
     def test_counter_rejects_specialist_active_v3_without_external_parent_and_root(self) -> None:
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, genesis_seed=41)
@@ -1278,8 +1282,8 @@ class CounterCliTests(unittest.TestCase):
 
         selection = {
             "schema_version": "ember-owned-specialist-stream-selection-receipt-v1",
-            "stream_manifest_sha256": "25d4f681af1d43c12dda718b7cd0ddf75613a46a7d5053b7ddf5436e0cbf9a22",
-            "stream_build_receipt_sha256": "2daf3de395c83dc19707cb81f31c12c1484d9c19de2249c8eb8aec1b5a179c9d",
+            "stream_manifest_sha256": _STREAM_MANIFEST_AUTHORITY.expected_sha256,
+            "stream_build_receipt_sha256": _STREAM_RECEIPT_AUTHORITY.expected_sha256,
             "corpus_root_sha256": "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab",
             "family_root_sha256": "4" * 64,
             "capability": "image",
@@ -1349,8 +1353,8 @@ class CounterCliTests(unittest.TestCase):
             reject(f"duplicate_{field}", lambda item, field=field: item.__setitem__(field, "0" * 64))
 
         reopen = getattr(parameter_counter, "validate_p2b_counter_stream_authority")
-        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-        build_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        manifest_path = _STREAM_MANIFEST_AUTHORITY.path
+        build_path = _STREAM_RECEIPT_AUTHORITY.path
         for label, invalid_bytes in (
             ("missing", None),
             ("mutable_bytearray", bytearray(b"{}")),
@@ -1384,8 +1388,8 @@ class CounterCliTests(unittest.TestCase):
 
     def test_p2b_counter_reopens_exact_bound_stream_selection(self) -> None:
         """Counter admission must reopen the end cursor against canonical stream authorities."""
-        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-        build_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        manifest_path = _STREAM_MANIFEST_AUTHORITY.path
+        build_path = _STREAM_RECEIPT_AUTHORITY.path
         manifest_bytes = manifest_path.read_bytes()
         build_bytes = build_path.read_bytes()
         receipt = {
@@ -1445,8 +1449,8 @@ class CounterCliTests(unittest.TestCase):
 
     def test_p2b_counter_reopens_real_checked_in_selection_authority(self) -> None:
         """A P2B counter admission reopens one real bound selection cursor from checked-in bytes."""
-        manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-        build_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        manifest_path = _STREAM_MANIFEST_AUTHORITY.path
+        build_path = _STREAM_RECEIPT_AUTHORITY.path
         manifest_bytes = manifest_path.read_bytes()
         build_bytes = build_path.read_bytes()
         stream = open_specialist_stream(
@@ -1560,8 +1564,8 @@ class CounterCliTests(unittest.TestCase):
         parent_parameters = dict(genesis)
         candidate_parameters = {**genesis, "vision": "a" * 64}
         parent_files = dict(genesis)
-        canonical_manifest_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096.json"
-        canonical_build_path = ROOT / "data" / "ember-restart-3b" / "owned-specialist-stream-v1-4096-build-receipt.json"
+        canonical_manifest_path = _STREAM_MANIFEST_AUTHORITY.path
+        canonical_build_path = _STREAM_RECEIPT_AUTHORITY.path
         manifest_bytes, build_bytes = canonical_manifest_path.read_bytes(), canonical_build_path.read_bytes()
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
         runtime_root, runtime_manifest, _ = runtime_bundle.materialize_tokenizer_runtime_bundle(
@@ -1608,8 +1612,8 @@ class CounterCliTests(unittest.TestCase):
             "expert_checkpoint_sha256": parent_files,
             "data_cursor": {"shard": "legacy", "record_index": 0, "global_step": 7, "tokens_seen": 42},
         }
-        manifest_path = Path("counter-snapshot-only-stream.json")
-        build_path = Path("counter-snapshot-only-build-receipt.json")
+        manifest_path = _STREAM_MANIFEST_AUTHORITY.path
+        build_path = _STREAM_RECEIPT_AUTHORITY.path
         original_bytes_snapshot = parameter_counter._read_bytes_snapshot
 
         def run_counter(

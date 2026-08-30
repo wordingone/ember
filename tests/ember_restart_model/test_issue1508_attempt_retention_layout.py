@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -15,6 +16,9 @@ from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
+if str(ROOT / "tools" / "ember-restart-3b") not in sys.path:
+    sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+from repository_layout import resolve_repository_authority  # noqa: E402
 CERTIFIED_TEST_PATH = ROOT / "tests" / "ember_restart_model" / "test_certified_train_launch.py"
 
 
@@ -36,7 +40,7 @@ def load_battery():
 
 
 def load_frontier():
-    path = ROOT / "scripts" / "frontier_receipt.py"
+    path = resolve_repository_authority(ROOT, "frontier_receipt").path
     spec = importlib.util.spec_from_file_location("frontier_receipt", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
