@@ -2449,3 +2449,41 @@ def test_identity_manifest_named_by_a_config_must_exist(tmp_path: Path) -> None:
     (tmp_path / IDENTITY_REL).unlink()
 
     assert_rejected(tmp_path, "input_identity.pinned_file_missing")
+
+
+def test_windows_cmd_control_is_admitted_only_by_its_exact_authority_sidecar(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+
+    relative = "tools/launchers/Ember.cmd"
+    artifact = _write_sidecar(
+        tmp_path,
+        relative,
+        b"@echo off\necho governed launcher\n",
+    )
+    sidecar = tmp_path / "tools" / "launchers" / "Ember.authority.json"
+    git_fixture(tmp_path, "add", relative, "tools/launchers/Ember.authority.json")
+
+    accepted = run_verifier(tmp_path, extra_args=("--staged",))
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload["artifact_sha256"] = "0" * 64
+    sidecar.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    git_fixture(tmp_path, "add", "tools/launchers/Ember.authority.json")
+    refused = run_verifier(tmp_path, extra_args=("--staged",))
+    assert refused.returncode == 1, refused.stdout + refused.stderr
+    receipt = json.loads(refused.stdout)
+    assert "artifact.goal_binding" in {
+        item["code"] for item in receipt["errors"]
+    }, receipt
+    assert "artifact.binding_format_unsupported" not in {
+        item["code"] for item in receipt["errors"]
+    }, receipt
+    assert hashlib.sha256(artifact.read_bytes()).hexdigest() != payload["artifact_sha256"]

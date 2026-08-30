@@ -2648,6 +2648,7 @@ def check_changed_artifact_bindings(
             ".lua",
             ".swift",
             ".cs",
+            ".cmd",
         }
         if not control_path and suffix not in source_suffixes:
             continue
