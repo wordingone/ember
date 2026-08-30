@@ -17,6 +17,13 @@
       "requires_python": ">=3.10"
     }
   },
+  "pip_check_authority": {
+    "source_issue": 1953,
+    "terminal_report_sha256": "93f461eebe4f3f311a86c7257a3bf2a6af9a11b1aeb050366bd5520bd3be3141",
+    "install_receipt_sha256": "f284689888470822974a87959c26f3707cc2de16a4fd2f20327cdcdd57fe3a61",
+    "install_receipt_self_sha256": "e40911b1c41553c4ae2c4ff5cb402fdc4ac3da7036d50710bf246ae9e2ff72d6",
+    "conflict_lines_sha256": "c5ac4c38584b8840f98c90f0fada2494085df0e7fbe64f63c5a2ce30918a8f32"
+  },
   "runtime_dependency_completion": [
     {"distribution": "typer", "version": "0.24.0", "requirement": "typer==0.24.0", "resolver_mode": "resolver_core", "transformers_requirement": null},
     {"distribution": "diffusers", "version": "0.35.2", "requirement": "diffusers==0.35.2", "resolver_mode": "resolver_core", "transformers_requirement": null},

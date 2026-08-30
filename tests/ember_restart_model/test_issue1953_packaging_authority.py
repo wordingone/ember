@@ -28,6 +28,18 @@ COMPLETION_REQUIREMENTS = [
     "msgspec==0.20.0",
 ]
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+INTERPRETER_BINDING = {
+    "path": "state\\python-environments\\python-environment-install-v1\\Scripts\\python.exe",
+    "python_version": "3.10.11",
+    "package_set_sha256": "5" * 64,
+}
+PIP_CHECK_AUTHORITY = python_environment.load_build_manifest(BUILD_MANIFEST)[
+    "pip_check_authority"
+]
+PIP_CHECK_LINES = [
+    "unsloth 2026.2.1 has requirement transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.0,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3, but you have transformers 5.8.0.dev0.",
+    "unsloth-zoo 2026.2.1 has requirement transformers!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3,!=4.53.0,!=4.54.0,!=4.55.0,!=4.55.1,!=4.57.4,!=4.57.5,<=4.57.6,>=4.51.3, but you have transformers 5.8.0.dev0.",
+]
 OUTPUT_EVIDENCE = {
     "stdout_filename": "stage.stdout.log", "stdout_sha256": EMPTY_SHA256,
     "stdout_bytes": 0, "stderr_filename": "stage.stderr.log",
@@ -69,6 +81,25 @@ def write_receipt_logs(parent: Path, stages: list[dict[str, object]]) -> None:
                 (parent / command[f"{stream_name}_filename"]).write_bytes(b"")
 
 
+def use_fake_isolated_interpreter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> Path:
+    interpreter = tmp_path / "isolated/Scripts/python.exe"
+
+    def create(_root: Path, path: Path) -> Path:
+        assert path == interpreter
+        interpreter.parent.mkdir(parents=True, exist_ok=True)
+        interpreter.write_bytes(b"isolated")
+        return interpreter
+
+    monkeypatch.setattr(python_environment, "isolated_interpreter_path", lambda *_args: interpreter)
+    monkeypatch.setattr(python_environment, "create_isolated_interpreter", create)
+    monkeypatch.setattr(
+        python_environment, "build_isolated_interpreter_binding", lambda *_args: INTERPRETER_BINDING,
+    )
+    return interpreter
+
+
 def use_writable_short_temp(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, accept_receipt: bool = False,
 ) -> None:
@@ -106,6 +137,7 @@ def test_build_manifest_is_closed_to_the_one_exact_backend_wheel() -> None:
                 "requires_python": ">=3.10",
             },
         },
+        "pip_check_authority": PIP_CHECK_AUTHORITY,
         "runtime_dependency_completion": [
             {
                 "distribution": requirement.split("==", 1)[0],
@@ -217,20 +249,16 @@ def test_completion_versions_are_exactly_verified() -> None:
 
 
 def test_pip_check_accepts_only_the_one_disclosed_metadata_conflict() -> None:
-    expected = (
-        b"unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, "
-        b"but you have transformers 5.8.0.dev0.\n"
-        b"unsloth_zoo 2026.2.1 has requirement transformers<=4.57.6, "
-        b"but you have transformers 5.8.0.dev0.\n"
-    )
+    expected = ("\n".join(PIP_CHECK_LINES) + "\n").encode()
     result = python_environment.validate_disclosed_pip_check(
-        exit_code=1, stdout=expected, stderr=b"",
+        exit_code=1, stdout=expected, stderr=b"", authority=PIP_CHECK_AUTHORITY,
     )
     assert result["pip_check_disposition"] == "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT"
     assert result["pip_check_disclosed_conflict_lines"] == expected.decode().splitlines()
     with pytest.raises(python_environment.EnvironmentContractError):
         python_environment.validate_disclosed_pip_check(
             exit_code=1, stdout=expected + b"another 1.0 has requirement missing>=2\n", stderr=b"",
+            authority=PIP_CHECK_AUTHORITY,
         )
 
 
@@ -241,7 +269,7 @@ def test_explicit_receipt_is_no_overwrite_self_hashed_and_binds_report(tmp_path:
     completion_report.write_text('{"install":[]}', encoding="utf-8")
     receipt_path = tmp_path / "install-receipt.json"
     stages = [
-        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 3.0, "commands": [command_evidence("resolved_core"), command_evidence("completion_resolver"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "completion_report_filename": completion_report.name, "completion_report_sha256": hashlib.sha256(completion_report.read_bytes()).hexdigest(), "resolver_governed_subdependencies": [], "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": ["unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, but you have transformers 5.8.0.dev0."]},
+        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 3.0, "commands": [command_evidence("resolved_core"), command_evidence("completion_resolver"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "completion_report_filename": completion_report.name, "completion_report_sha256": hashlib.sha256(completion_report.read_bytes()).hexdigest(), "resolver_governed_subdependencies": [], "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": PIP_CHECK_LINES, "pip_check_authority": PIP_CHECK_AUTHORITY},
         {"id": "build_backend", "result": "PASS", "exit_code": 0, "duration_seconds": 1.0, "commands": [command_evidence("build_backend")], "requirements_sha256": "6" * 64, "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(), "artifact_filename": "setuptools-84.0.0-py3-none-any.whl", "artifact_sha256": SETUPTOOLS_SHA256, "artifact_requires_python": ">=3.10", "manifest_artifact_sha256": SETUPTOOLS_SHA256, "artifact_matches_manifest": True, "host_conditioned_local_wheel": False},
         {"id": "local_editable", "result": "PASS", "exit_code": 0, "duration_seconds": 1.0, "commands": [command_evidence("local_editable")]},
     ]
@@ -249,6 +277,7 @@ def test_explicit_receipt_is_no_overwrite_self_hashed_and_binds_report(tmp_path:
         legacy_manifest_sha256="1" * 64,
         build_manifest_sha256="2" * 64,
         pyproject_sha256="3" * 64,
+        isolated_interpreter=INTERPRETER_BINDING,
         stages=stages,
     )
     write_receipt_logs(tmp_path, stages)
@@ -350,6 +379,75 @@ def test_pip_stage_captures_exact_stdout_and_stderr(
     assert not Path(temp_custody["path"]).exists()
 
 
+def test_isolated_interpreter_is_run_scoped_inside_checkout(tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    receipt = root / "state/receipts/run-1967.json"
+    expected = root / "state/python-environments/run-1967/Scripts/python.exe"
+
+    assert python_environment.isolated_interpreter_path(root, receipt) == expected
+
+
+def test_create_isolated_interpreter_uses_host_only_for_venv_bootstrap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    root = tmp_path / "checkout"
+    root.mkdir()
+    interpreter = root / "state/python-environments/run-1967/Scripts/python.exe"
+    observed = {}
+
+    def fake_run(argv, **kwargs):
+        observed["argv"] = list(argv)
+        observed["kwargs"] = kwargs
+        interpreter.parent.mkdir(parents=True)
+        interpreter.write_bytes(b"isolated")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(python_environment.subprocess, "run", fake_run)
+    created = python_environment.create_isolated_interpreter(root, interpreter)
+
+    assert created == interpreter
+    assert observed["argv"] == [python_environment.sys.executable, "-m", "venv", str(interpreter.parents[1])]
+    assert observed["kwargs"]["creationflags"] == getattr(python_environment.subprocess, "CREATE_NO_WINDOW", 0)
+    assert observed["kwargs"]["stdin"] is python_environment.subprocess.DEVNULL
+
+
+def test_interpreter_binding_hashes_normalized_package_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    root = tmp_path / "checkout"
+    interpreter = root / "state/python-environments/run/Scripts/python.exe"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.write_bytes(b"isolated")
+    packages = [
+        {"name": "Zeta", "version": "2.0"},
+        {"name": "alpha_pkg", "version": "1.0"},
+    ]
+
+    monkeypatch.setattr(
+        python_environment.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({"python_version": "3.10.11", "packages": packages}).encode(),
+            stderr=b"",
+        ),
+    )
+    binding = python_environment.build_isolated_interpreter_binding(root, interpreter)
+    normalized = [
+        {"name": "alpha-pkg", "version": "1.0"},
+        {"name": "zeta", "version": "2.0"},
+    ]
+    expected_hash = hashlib.sha256(
+        json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+    assert binding == {
+        "path": "state\\python-environments\\run\\Scripts\\python.exe",
+        "python_version": "3.10.11",
+        "package_set_sha256": expected_hash,
+    }
+
+
 def test_install_command_runs_three_stages_and_hashes_named_report(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
@@ -370,8 +468,7 @@ def test_install_command_runs_three_stages_and_hashes_named_report(
         if argv[-2:] == ["pip", "check"]:
             return SimpleNamespace(
                 returncode=1,
-                stdout=(b"unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, "
-                        b"but you have transformers 5.8.0.dev0.\n"),
+                stdout=("\n".join(PIP_CHECK_LINES) + "\n").encode(),
                 stderr=b"",
             )
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
@@ -379,6 +476,7 @@ def test_install_command_runs_three_stages_and_hashes_named_report(
     monkeypatch.setattr(python_environment, "validate_repository_contract", lambda **_kwargs: {"status": "PASS"})
     monkeypatch.setattr(python_environment, "validate_observed_environment", lambda _manifest: None)
     monkeypatch.setattr(python_environment.subprocess, "run", fake_run)
+    use_fake_isolated_interpreter(monkeypatch, tmp_path)
     use_writable_short_temp(monkeypatch, tmp_path, accept_receipt=True)
     receipt_path = tmp_path / "install.json"
     assert python_environment.main([
@@ -400,6 +498,7 @@ def test_install_failure_still_writes_explicit_self_hashed_custody(
     monkeypatch.setattr(python_environment, "validate_repository_contract", lambda **_kwargs: {"status": "PASS"})
     monkeypatch.setattr(python_environment, "validate_observed_environment", lambda _manifest: None)
     use_writable_short_temp(monkeypatch, tmp_path)
+    use_fake_isolated_interpreter(monkeypatch, tmp_path)
     monkeypatch.setattr(
         python_environment.subprocess,
         "run",
@@ -436,7 +535,7 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
     completion_report = tmp_path / "completion-report.json"
     completion_report.write_text('{"install":[]}', encoding="utf-8")
     stages = [
-        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 0.3, "commands": [command_evidence("resolved_core"), command_evidence("completion_resolver"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "completion_report_filename": completion_report.name, "completion_report_sha256": hashlib.sha256(completion_report.read_bytes()).hexdigest(), "resolver_governed_subdependencies": [], "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": ["unsloth 2026.2.1 has requirement transformers>=4.51.3,<=4.57.6, but you have transformers 5.8.0.dev0."]},
+        {"id": "environment_packages", "result": "PASS_WITH_DISCLOSED_METADATA_CONFLICT", "exit_code": 0, "duration_seconds": 0.3, "commands": [command_evidence("resolved_core"), command_evidence("completion_resolver"), command_evidence("exact_pin_no_deps_tail"), command_evidence("post_install_pip_check", exit_code=1)], "resolver_bypass_rows": BYPASS_ROWS, "completion_report_filename": completion_report.name, "completion_report_sha256": hashlib.sha256(completion_report.read_bytes()).hexdigest(), "resolver_governed_subdependencies": [], "pip_check_disposition": "DISCLOSED_EXPECTED_UNSLOTH_TRANSFORMERS_METADATA_CONFLICT", "pip_check_disclosed_conflict_lines": PIP_CHECK_LINES, "pip_check_authority": PIP_CHECK_AUTHORITY},
         {"id": "build_backend", "result": "PASS", "exit_code": 0, "duration_seconds": 0.1, "commands": [command_evidence("build_backend")], "requirements_sha256": "9" * 64, "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(), "artifact_filename": "setuptools-84.0.0-py3-none-any.whl", "artifact_sha256": SETUPTOOLS_SHA256, "artifact_requires_python": ">=3.10", "manifest_artifact_sha256": SETUPTOOLS_SHA256, "artifact_matches_manifest": True, "host_conditioned_local_wheel": False},
         {"id": "local_editable", "result": "PASS", "exit_code": 0, "duration_seconds": 0.1, "commands": [command_evidence("local_editable")]},
     ]
@@ -444,6 +543,7 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
         legacy_manifest_sha256=hashlib.sha256((ROOT / "manifests" / "python-environment-v1.json").read_bytes()).hexdigest(),
         build_manifest_sha256=hashlib.sha256(BUILD_MANIFEST.read_bytes()).hexdigest(),
         pyproject_sha256=hashlib.sha256((ROOT / "pyproject.toml").read_bytes()).hexdigest(),
+        isolated_interpreter=INTERPRETER_BINDING,
         stages=stages,
     )
     receipt_path = tmp_path / "install.json"
@@ -462,6 +562,7 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
     monkeypatch.setattr(python_environment, "validate_repository_contract", lambda **_kwargs: {"status": "PASS"})
     monkeypatch.setattr(python_environment, "validate_observed_environment", lambda _manifest: None)
     monkeypatch.setattr(python_environment, "validate_installed_sources", lambda *_args: None)
+    monkeypatch.setattr(python_environment, "validate_running_interpreter_binding", lambda *_args: None)
     monkeypatch.setattr(
         python_environment,
         "verify_packaging_installation",
