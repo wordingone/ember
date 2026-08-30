@@ -17,7 +17,7 @@
     },
     {
       "path": "scripts/ember_gate_launch_packaging.py",
-      "sha256": "386764fe20a96bc3ba76aedc5c47868625f5fd1a90ff167442f036c6178be87e",
+      "sha256": "c462be8fab5e24a4ebdc7315e639612154c7a451c9e2bf65d3b9aad130076574",
       "reason": "matched on its name, not its behaviour. It is a CLI parity harness: the child it creates is the packaged CLI under test with a 20-second timeout, never a training run."
     },
     {
@@ -32,7 +32,7 @@
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "375917983e53c40d4a46ee633e1b11b255a293be262670f5bf3b82809bd13c55",
+      "sha256": "3c0bd0abe80c6b1b4c04c7e1227b645cfd74648498854687c9de5bd256a3ebea",
       "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
@@ -67,8 +67,8 @@
     },
     {
       "path": "tests/test_ember_root_launcher.py",
-      "sha256": "9a60610f52bfdc0b9353687c28fc67378fd87f18c28d38a9d660be519ef4bded",
-      "reason": "root-entry hermetic acceptance suite. It copies Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
+      "sha256": "7d3e98d102f4c9335153ddea2d3e5781c80ef9484285e7dffe26b7ddb60a7b42",
+      "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {
       "path": "tests/test_nativization_motion.py",

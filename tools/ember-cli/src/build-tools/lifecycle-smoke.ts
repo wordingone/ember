@@ -44,7 +44,7 @@ const LIFECYCLE_SURFACE_PLAN: ReadonlyArray<{
   input: string;
   command: string;
 }> = [
-  { action: "launch", input: "Ember.cmd", command: "compiled-entrypoint" },
+  { action: "launch", input: "tools/launchers/Ember.cmd", command: "compiled-entrypoint" },
   { action: "train", input: "/train", command: "train" },
   { action: "observe", input: "/watch", command: "watch" },
   { action: "pause", input: "/finetune pause smoke-run", command: "finetune" },

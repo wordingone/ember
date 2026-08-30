@@ -179,7 +179,7 @@ def write_receipt(path: Path, receipt: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=str(repo_root()))
-    parser.add_argument("--launcher", default="Ember.cmd")
+    parser.add_argument("--launcher", default="tools/launchers/Ember.cmd")
     parser.add_argument("--backend-receipt", default=str(DEFAULT_BACKEND_RECEIPT))
     parser.add_argument("--reference-package-json", required=True)
     parser.add_argument("--reference-exe", required=True)
