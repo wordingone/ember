@@ -66,13 +66,13 @@ SELF_EXCLUDE = {
     "tools/check_names_hashed.py",
     "tools/.repo-guard-denylist",
     "tools/.repo-guard-denylist.example",
-    "tools/repo-guard-names-exclude.txt",
+    "tools/repo-guard-names-exclude.cfg",
 }
 # Note: tools/repo-guard-denylist.sha256 is NOT excluded — its comments must be
 # scanned to prevent raw names from appearing as metadata. Hash lines themselves
 # are safe (hex tokens don't match founder names).
 
-DEFAULT_NAMES_EXCLUDE = Path("tools/repo-guard-names-exclude.txt")
+DEFAULT_NAMES_EXCLUDE = Path("tools/repo-guard-names-exclude.cfg")
 
 
 def sha256_lower(word: str) -> str:
@@ -92,7 +92,7 @@ def load_denylist(path: Path) -> set[str]:
 
 
 def load_names_exclude_prefixes(path: Path) -> list[str]:
-    """tools/repo-guard-names-exclude.txt: path-prefixes (one per line) exempt
+    """tools/repo-guard-names-exclude.cfg: path-prefixes (one per line) exempt
     from the names scan only. Plaintext mode (tools/repo-guard.sh) reads the
     same file for its git-grep pathspec, so both modes exempt identically."""
     if not path.is_file():
@@ -270,7 +270,7 @@ def main() -> int:
     ap.add_argument("--generate", action="store_true", help="build the .sha256 file from a plaintext source")
     ap.add_argument("--denylist-plain", default=None, help="(--generate mode) plaintext source, one name per line")
     ap.add_argument("--out", default=None, help="(--generate mode) output .sha256 path")
-    ap.add_argument("--names-exclude", default=None, help="path-prefix exclusion list (default: tools/repo-guard-names-exclude.txt)")
+    ap.add_argument("--names-exclude", default=None, help="path-prefix exclusion list (default: tools/repo-guard-names-exclude.cfg)")
     ap.add_argument(
         "--scan-guard-surfaces",
         action="store_true",

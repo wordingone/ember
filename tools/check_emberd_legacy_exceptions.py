@@ -10,7 +10,7 @@ the emberd -> ember-lab rename is complete everywhere except two historical
 records that must keep their exact original bytes forever (a receipt whose
 own digest fields would change meaning if edited; a cached census of two
 still-open GitHub issue titles). Exempting those files by PATH ALONE, the
-way tools/repo-guard-names-exclude.txt already exempts other paths for the
+way tools/repo-guard-names-exclude.cfg already exempts other paths for the
 plaintext/hashed NAMES check, is a hole: anyone can create or rename a file
 into an exempted prefix. This script exempts by (path, sha256) PAIR instead
 -- an edit to an excepted file changes its digest and un-exempts it

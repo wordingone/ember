@@ -52,7 +52,7 @@
     },
     {
       "path": "tools/repo_guard_selftest.py",
-      "sha256": "d09641832dc08ddfd58dd8d48e5ba88655b237785fd96af4a18d25463e8cdf6d",
+      "sha256": "a42adc5da0a60b1a65c65f0f064e35a2eae96348652e332b03894ae90c963298",
       "reason": "repository-policy selftest names the governed training entry only inside a deliberate refusal fixture; it does not import, execute, or dispatch that entry"
     }
   ]
