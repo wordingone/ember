@@ -5,6 +5,8 @@ foundation-intelligence project, not only a model, trainer, service, or command-
 the [system overview](../architecture/system-overview.md) before interpreting a subsystem as the
 whole project.
 
+Its operating constraint is one consumer GPU.
+
 ## First-reader facts
 
 - Ember is the complete clean-genesis sovereign foundation-intelligence project: the local
@@ -41,6 +43,14 @@ from certified completion.
 
 ## Install the measured Python environment
 
+To inspect Ember, start at the repository-root `README.md` and continue through this canonical
+`docs/guides/START-HERE.md` page. On Windows, `Ember.cmd` is the operator entry.
+
+Installation authorities are distinct: Python uses
+[`manifests/python-environment-v1.json`](../../manifests/python-environment-v1.json), Rust uses
+[`runtime/ember-lab/Cargo.toml`](../../runtime/ember-lab/Cargo.toml), and `ember-cli` uses
+[`tools/ember-cli/src/package.json`](../../tools/ember-cli/src/package.json).
+
 From the repository root:
 
 ```text
@@ -49,13 +59,8 @@ python tools/ember-restart-3b/python_environment.py install --receipt state\rece
 
 The measured environment contract is
 [`manifests/python-environment-v1.json`](../../manifests/python-environment-v1.json). Installation
-uses CPU and network access, requires no model weights or GPU, and does not establish model
-capability. Rust and ember-cli use separate package authorities documented in the
-[system overview](../architecture/system-overview.md).
-
-On Windows, `Ember.cmd` is the operator entry. Launching the operator body is different from
-training, evaluation, or proof of an admitted model; follow the live authority and resource gates
-before any heavy execution.
+uses CPU and network access, requires no model weights or GPU, and does not establish model capability.
+Launching the operator body is different from training, evaluation, or proof of an admitted model.
 
 ## Verify before interpreting claims
 

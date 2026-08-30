@@ -13,7 +13,7 @@ mechanism_erasure=forbidden
 Ember is a complete local foundation-intelligence project: a clean-genesis model-creation
 primitive, a continuously improving organism, the ember-cli operator body, and a general local AI
 laboratory. It addresses the problem of creating and operating owned foundation intelligence on a
-consumer-GPU-scale system while making every learned, executed, and evaluated claim traceable to
+one consumer GPU while making every learned, executed, and evaluated claim traceable to
 public evidence. Borrowed learned or evaluative signals do not enter the target lineage.
 
 <a id="ember.claim.maturity"></a>
@@ -66,8 +66,14 @@ links each canonical overview.
 
 ## Inspect or install
 
-Python dependency authority: manifests/python-environment-v1.json. The machine-readable contract is
-[`manifests/python-environment-v1.json`](manifests/python-environment-v1.json). From the repository
+To inspect Ember, start at this repository-root README and continue through the
+[canonical `docs/guides/START-HERE.md` page](docs/guides/START-HERE.md). On Windows, `Ember.cmd` is
+the operator entry.
+
+Installation authorities are distinct: Python uses
+[`manifests/python-environment-v1.json`](manifests/python-environment-v1.json), Rust uses
+[`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and `ember-cli` uses
+[`tools/ember-cli/src/package.json`](tools/ember-cli/src/package.json). From the repository
 root, install the measured direct environment:
 
 ```text
@@ -75,10 +81,8 @@ python tools/ember-restart-3b/python_environment.py install --receipt state\rece
 ```
 
 This requires a supported Windows Python environment and network access for dependencies; it does
-not require model weights or a GPU. Rust package authority remains
-[`runtime/ember-lab/Cargo.toml`](runtime/ember-lab/Cargo.toml), and ember-cli package authority
-remains [`tools/ember-cli/src/package.json`](tools/ember-cli/src/package.json). See the
-[start guide](docs/guides/START-HERE.md) before using operator or training surfaces.
+not require model weights or a GPU. See the [start guide](docs/guides/START-HERE.md) before using
+operator or training surfaces.
 
 ## Verify safely
 
