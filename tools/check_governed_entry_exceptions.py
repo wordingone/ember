@@ -128,7 +128,7 @@ def _exists(path: str) -> bool:
             check=False,
         )
         return probe.returncode == 0
-    return os.path.exists(path)
+    return os.path.lexists(path)
 
 
 def _fail(message: str) -> int:

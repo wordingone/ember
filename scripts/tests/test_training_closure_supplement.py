@@ -254,7 +254,7 @@ class TrainingClosureSupplementTests(unittest.TestCase):
             write_supplement(
                 repo, minimal_supplement(data=[SUPPLEMENT_RELATIVE_PATH])
             )
-            with self.assertRaisesRegex(ValueError, "must not list\s+itself"):
+            with self.assertRaisesRegex(ValueError, r"must not list\s+itself"):
                 closure.load_manifest(repo)
 
     def test_duplicate_dynamic_call_site_refuses(self) -> None:

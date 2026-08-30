@@ -40,6 +40,7 @@ import argparse
 import ast
 import hashlib
 import json
+import os
 import pathlib
 import sys
 from typing import Any, Iterable, NamedTuple
@@ -262,7 +263,7 @@ def load_supplement(root: pathlib.Path) -> dict[str, Any] | None:
     """
 
     supplement_path = pathlib.Path(root) / SUPPLEMENT_RELATIVE_PATH
-    if not supplement_path.exists():
+    if not os.path.lexists(supplement_path):
         return None
     try:
         supplement = json.loads(supplement_path.read_text(encoding="utf-8"))
