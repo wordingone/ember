@@ -173,6 +173,21 @@ class TrainingClosureSupplementTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unreadable"):
                 closure.load_manifest(repo)
 
+    def test_broken_symlink_supplement_refuses_instead_of_appearing_absent(
+        self,
+    ) -> None:
+        closure = load_closure()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_sandbox_repo(pathlib.Path(directory))
+            supplement = repo / SUPPLEMENT_RELATIVE_PATH
+            supplement.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                supplement.symlink_to(repo / "missing-supplement.json")
+            except OSError as error:
+                self.skipTest(f"symlink creation unavailable: {error}")
+            with self.assertRaisesRegex(ValueError, "unreadable"):
+                closure.load_manifest(repo)
+
     def test_wrong_supplement_schema_refuses(self) -> None:
         closure = load_closure()
         with tempfile.TemporaryDirectory() as directory:

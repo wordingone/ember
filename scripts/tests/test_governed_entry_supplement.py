@@ -157,6 +157,19 @@ class LauncherShapeSupplementTests(unittest.TestCase):
             result = run_checker(repo, "launcher-shape", "")
             self.assertEqual(result.returncode, 1, result.stdout)
 
+    def test_broken_symlink_supplement_refuses_instead_of_appearing_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_fixture(pathlib.Path(directory))
+            supplement = repo / SUPPLEMENT_RELATIVE
+            supplement.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                supplement.symlink_to(repo / "missing-supplement.json")
+            except OSError as error:
+                self.skipTest(f"symlink creation unavailable: {error}")
+            result = run_checker(repo, "launcher-shape", "launcher_a.py")
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("missing or unreadable", result.stdout)
+
     def test_staged_scope_adjudicates_the_index_not_the_worktree(self) -> None:
         import os
 
