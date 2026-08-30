@@ -268,18 +268,52 @@ def _verified_catalog_import_receipt(raw: bytes, *, expected_export_sha256: str 
     return value
 
 
-def resolve_catalog_training_datasets(
+def resolve_catalog_evaluation_dataset(
+    *,
+    catalog_export_raw: bytes,
+    dataset_import_receipt_raw: bytes,
+    consumer_import_receipt_raw: bytes,
+    expected_dataset_id: str,
+    expected_split: str = "heldout",
+) -> dict[str, Any]:
+    """Resolve one exact heldout catalog dataset for evaluation only."""
+
+    resolved = _resolve_catalog_dataset(
+        catalog_export_raw=catalog_export_raw,
+        dataset_import_receipt_raw=dataset_import_receipt_raw,
+        consumer_import_receipt_raw=consumer_import_receipt_raw,
+        expected_dataset_id=expected_dataset_id,
+        expected_split=expected_split,
+        _required_split="heldout",
+        _dataset_edge_kind="evaluation_dataset",
+        _attempt_record_kind="evaluation_attempt",
+        _attempt_evaluation_edge_kind="evaluation_definition",
+        _attempt_receipt_edge_kind="evaluation_import_receipt",
+    )
+    resolved["evaluation_attempt_id"] = resolved.pop("consumer_attempt_id")
+    resolved["protected_eval_item_admission"] = True
+    return resolved
+
+
+def _resolve_catalog_dataset(
     *,
     catalog_export_raw: bytes,
     dataset_import_receipt_raw: bytes,
     consumer_import_receipt_raw: bytes,
     expected_dataset_id: str,
     expected_split: str = "train",
+    _required_split: str = "train",
+    _dataset_edge_kind: str = "consumer_dataset",
+    _attempt_record_kind: str = "consumer_attempt",
+    _attempt_evaluation_edge_kind: str = "consumer_evaluation",
+    _attempt_receipt_edge_kind: str = "consumer_receipt",
 ) -> dict[str, Any]:
     """Resolve one exact split-honest catalog dataset consumed by certified preflight."""
 
-    if expected_split not in {"train", "heldout"}:
-        raise InputIdentityError("catalog_dataset_substitution", "catalog dataset split is not admitted")
+    if expected_split != _required_split:
+        raise InputIdentityError(
+            "catalog_dataset_split_refused", f"resolver admits only {_required_split} datasets"
+        )
 
     catalog_export_sha256 = _sha256_bytes(catalog_export_raw)
     _verified_catalog_import_receipt(dataset_import_receipt_raw)
@@ -298,19 +332,28 @@ def resolve_catalog_training_datasets(
         "utf-8"
     ) != catalog_export_raw:
         raise InputIdentityError("catalog_receipt_drift", "canonical catalog export bytes have drifted")
-    admitted_datasets = {
-        row["id"]: row
+    expected_dataset_rows = [
+        row
         for row in records
         if isinstance(row, dict)
         and row.get("kind") == "dataset_version"
-        and row.get("state") == "admitted"
-        and isinstance(row.get("id"), str)
+        and row.get("id") == expected_dataset_id
+    ]
+    if len(expected_dataset_rows) != 1:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog must carry exactly one dataset version row for the expected identity",
+        )
+    admitted_datasets = {
+        row["id"]: row
+        for row in expected_dataset_rows
+        if row.get("state") == "admitted" and isinstance(row.get("id"), str)
     }
     consumer_dataset_edges = [
         edge
         for edge in edges
         if isinstance(edge, dict)
-        and edge.get("kind") == "consumer_dataset"
+        and edge.get("kind") == _dataset_edge_kind
         and edge.get("to_id") == expected_dataset_id
         and expected_dataset_id in admitted_datasets
         and isinstance(edge.get("from_id"), str)
@@ -327,12 +370,22 @@ def resolve_catalog_training_datasets(
             "caller dataset identity does not equal the catalog-derived identity",
         )
     dataset = admitted_datasets[derived_dataset_id]
+    forbidden_dataset_prefix = (
+        "dataset:issue1581-bulk-heldout:"
+        if _required_split == "train"
+        else "dataset:issue1581-bulk-train:"
+    )
+    if derived_dataset_id.startswith(forbidden_dataset_prefix):
+        raise InputIdentityError(
+            "catalog_dataset_split_refused",
+            f"{_required_split} resolver refuses an opposite-split dataset",
+        )
     consumer_id = consumer_dataset_edges[0]["from_id"]
     consumer_records = [
         row
         for row in records
         if isinstance(row, dict)
-        and row.get("kind") == "consumer_attempt"
+        and row.get("kind") == _attempt_record_kind
         and row.get("id") == consumer_id
         and row.get("state") in {"admitted", "completed"}
     ]
@@ -340,14 +393,20 @@ def resolve_catalog_training_datasets(
         raise InputIdentityError(
             "catalog_dataset_substitution", "catalog-derived consumer attempt is absent"
         )
-    membership_ids = {
-        edge["to_id"]
+    version_membership_edges = [
+        edge
         for edge in edges
         if isinstance(edge, dict)
         and edge.get("kind") == "version_membership"
         and edge.get("from_id") == derived_dataset_id
         and isinstance(edge.get("to_id"), str)
-    }
+    ]
+    membership_ids = {edge["to_id"] for edge in version_membership_edges}
+    if len(version_membership_edges) != len(membership_ids):
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog dataset carries duplicate version membership edges",
+        )
     memberships = [
         row
         for row in records
@@ -376,6 +435,18 @@ def resolve_catalog_training_datasets(
             "each catalog membership must bind one immutable object",
         )
     object_ids = {edge["to_id"] for edge in membership_object_edges}
+    selected_object_rows = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "immutable_object"
+        and row.get("id") in object_ids
+    ]
+    if len(selected_object_rows) != len(object_ids):
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog must carry exactly one immutable object row per selected object",
+        )
     object_records = {
         row["id"]: row
         for row in records
@@ -391,15 +462,17 @@ def resolve_catalog_training_datasets(
             "catalog_dataset_substitution",
             "catalog objects are absent or not available under their hashes",
         )
-    source_object_pairs = {
-        (edge["from_id"], edge["to_id"])
-        for edge in edges
-        if isinstance(edge, dict)
-        and edge.get("kind") == "source_object"
-        and isinstance(edge.get("from_id"), str)
-        and edge["from_id"].startswith("source:")
-        and isinstance(edge.get("to_id"), str)
-    }
+    source_object_pair_counts: dict[tuple[str, str], int] = {}
+    for edge in edges:
+        if (
+            isinstance(edge, dict)
+            and edge.get("kind") == "source_object"
+            and isinstance(edge.get("from_id"), str)
+            and edge["from_id"].startswith("source:")
+            and isinstance(edge.get("to_id"), str)
+        ):
+            pair = (edge["from_id"], edge["to_id"])
+            source_object_pair_counts[pair] = source_object_pair_counts.get(pair, 0) + 1
     source_record_ids = set()
     for edge in membership_object_edges:
         object_digest = edge["to_id"].removeprefix("sha256:")
@@ -413,50 +486,123 @@ def resolve_catalog_training_datasets(
             )
         source_id = membership_id[len(prefix) : -len(suffix)]
         source_record_id = f"source:{source_id}"
-        if (source_record_id, edge["to_id"]) not in source_object_pairs:
+        if source_object_pair_counts.get((source_record_id, edge["to_id"])) != 1:
             raise InputIdentityError(
                 "catalog_dataset_substitution",
                 "catalog dataset objects do not derive from exact source/object edges",
             )
         source_record_ids.add(source_record_id)
-    source_records = {
-        row["id"]
+    selected_source_rows = [
+        row
         for row in records
         if isinstance(row, dict)
         and row.get("kind") == "source"
         and row.get("id") in source_record_ids
-        and row.get("license_verdict") == "accepted"
+    ]
+    if len(selected_source_rows) != len(source_record_ids):
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog must carry exactly one source row per derived selected source",
+        )
+    source_records = {
+        row["id"]
+        for row in selected_source_rows
+        if row.get("license_verdict") == "accepted"
     }
     if source_records != source_record_ids:
         raise InputIdentityError(
             "catalog_dataset_substitution",
             "catalog source/object edges do not resolve accepted sources",
         )
-    evaluation_ids = {
-        edge["to_id"]
+    evaluation_edges = [
+        edge
         for edge in edges
         if isinstance(edge, dict)
-        and edge.get("kind") == "consumer_evaluation"
+        and edge.get("kind") == _attempt_evaluation_edge_kind
         and edge.get("from_id") == consumer_id
         and isinstance(edge.get("to_id"), str)
-    }
-    if len(evaluation_ids) != 1:
+    ]
+    if len(evaluation_edges) != 1:
         raise InputIdentityError("catalog_dataset_substitution", "catalog consumer lacks one evaluation-isolation binding")
-    evaluation_object_ids = {
-        edge["to_id"]
+    evaluation_id = evaluation_edges[0]["to_id"]
+    evaluation_records = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "protected_eval"
+        and row.get("id") == evaluation_id
+    ]
+    if len(evaluation_records) != 1:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog evaluation isolation record is absent or duplicated",
+        )
+    evaluation_object_edges = [
+        edge
         for edge in edges
         if isinstance(edge, dict)
         and edge.get("kind") == "evaluation_object"
-        and edge.get("from_id") in evaluation_ids
+        and edge.get("from_id") == evaluation_id
         and isinstance(edge.get("to_id"), str)
-    }
-    if len(evaluation_object_ids) != 1:
+    ]
+    if len(evaluation_object_edges) != 1:
         raise InputIdentityError(
             "catalog_dataset_substitution",
             "catalog evaluation isolation lacks one immutable object",
         )
-    if object_ids.intersection(evaluation_object_ids):
+    evaluation_object_id = evaluation_object_edges[0]["to_id"]
+    if evaluation_object_id in object_ids:
         raise InputIdentityError("catalog_dataset_substitution", "catalog objects overlap the protected evaluation identity")
+    evaluation_digest = evaluation_object_id.removeprefix("sha256:")
+    evaluation_object_records = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "immutable_object"
+        and row.get("id") == evaluation_object_id
+        and row.get("sha256") == evaluation_digest
+        and row.get("custody_state") == "available"
+    ]
+    evaluation_receipt_edges = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "evaluation_receipt"
+        and edge.get("from_id") == evaluation_id
+        and edge.get("to_id") == evaluation_object_id
+    ]
+    evaluation_receipt_records = [
+        row
+        for row in records
+        if isinstance(row, dict)
+        and row.get("kind") == "receipt"
+        and row.get("id") == evaluation_object_id
+        and row.get("sha256") == evaluation_digest
+        and row.get("state") == "accepted"
+    ]
+    evaluation_record = evaluation_records[0]
+    if (
+        not evaluation_object_id.startswith("sha256:")
+        or re.fullmatch(r"[0-9a-f]{64}", evaluation_digest) is None
+        or len(evaluation_object_records) != 1
+        or len(evaluation_receipt_edges) != 1
+        or len(evaluation_receipt_records) != 1
+        or evaluation_record.get("frozen_manifest_sha256") != evaluation_digest
+        or evaluation_record.get("test_set_sha256") != evaluation_digest
+        or (
+            _required_split == "heldout"
+            and (
+                evaluation_record.get("ngram_ruling") != "not_run"
+                or evaluation_record.get("near_dup_ruling") != "not_run"
+                or evaluation_record.get("exclusion_reason") is not None
+                or evaluation_record.get("overlap_state") != "isolated"
+            )
+        )
+    ):
+        raise InputIdentityError(
+            "catalog_receipt_drift",
+            "catalog evaluation receipt or immutable object binding has drifted",
+        )
     dataset_receipt_id = f"sha256:{_sha256_bytes(dataset_import_receipt_raw)}"
     receipt_records = [
         row
@@ -471,7 +617,7 @@ def resolve_catalog_training_datasets(
         edge
         for edge in edges
         if isinstance(edge, dict)
-        and edge.get("kind") == "consumer_receipt"
+        and edge.get("kind") == _attempt_receipt_edge_kind
         and edge.get("from_id") == consumer_id
         and edge.get("to_id") == dataset_receipt_id
     ]
@@ -493,3 +639,27 @@ def resolve_catalog_training_datasets(
         "object_set_sha256": _sha256_bytes(json.dumps(sorted(object_ids), separators=(",", ":")).encode("utf-8")),
         "protected_eval_item_admission": False,
     }
+
+
+def resolve_catalog_training_datasets(
+    *,
+    catalog_export_raw: bytes,
+    dataset_import_receipt_raw: bytes,
+    consumer_import_receipt_raw: bytes,
+    expected_dataset_id: str,
+    expected_split: str = "train",
+) -> dict[str, Any]:
+    """Resolve one exact train catalog dataset for certified preflight."""
+
+    return _resolve_catalog_dataset(
+        catalog_export_raw=catalog_export_raw,
+        dataset_import_receipt_raw=dataset_import_receipt_raw,
+        consumer_import_receipt_raw=consumer_import_receipt_raw,
+        expected_dataset_id=expected_dataset_id,
+        expected_split=expected_split,
+        _required_split="train",
+        _dataset_edge_kind="consumer_dataset",
+        _attempt_record_kind="consumer_attempt",
+        _attempt_evaluation_edge_kind="consumer_evaluation",
+        _attempt_receipt_edge_kind="consumer_receipt",
+    )
