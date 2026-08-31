@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w2_ingest.py — W-code ledger ingest: w1 sample rows -> ledger episodes.
 
-Wires docs/research/teacher-system-2026-06-10.md S1 + the W-code world into the
+Wires docs/domains/governance/research/teacher-system-2026-06-10.md S1 + the W-code world into the
 existing round machinery. Reads w1-floor *-samples.jsonl rows
 ({"task": "mbpp:<id>", "verified", "error", "src", "prompt", "sampler"}),
 converts them to t2_round ledger records (same key scheme `task:sha(src)`,

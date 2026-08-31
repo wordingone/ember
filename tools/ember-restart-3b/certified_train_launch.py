@@ -397,7 +397,7 @@ EMBER_LAB_SOURCE_RELATIVE_PATHS = (
     "runtime/ember-lab/src/lib.rs",
     "runtime/ember-lab/src/data_catalog.rs",
     "runtime/ember-lab/src/rpc.rs",
-    "runtime/ember-lab/src/main.rs",
+    "domains/runtime/runtime/ember-lab/src/main.rs",
     "runtime/ember-lab/src/training_verify.rs",
     "runtime/ember-lab/Cargo.toml",
     "runtime/ember-lab/Cargo.lock",

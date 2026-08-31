@@ -49,7 +49,7 @@ must_allow "tools/ember-restart-3b/launch_packet.py"
 must_allow "src/ember/governance/scripts/ember_01_identity/validate_identity.py"
 must_allow "data/ember-restart-3b/cond3-identity-manifest.json"
 must_allow "docs/some-note.md"
-must_allow "tests/ember_restart_model/test_launch_packet.py"
+must_allow "tests/ember_restart_model/domain-governance/test_launch_packet.py"
 
 echo
 echo "=== B. live dry run over the open backlog ==="

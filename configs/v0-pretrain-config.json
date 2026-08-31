@@ -11,7 +11,7 @@
   "frozen": "2026-06-11T07:20Z",
   "v2_delta": "2026-06-11T07:28Z — G-tokenizer green (PR #164 merged): tokenizer_receipt named; real token total recorded with the absorb decision. No other field changed.",
   "v3_delta": "2026-06-12 — NONE arm adoption (PR #298): grad_checkpointing disabled at next WSD segment boundary/resume. A/B bench receipt: receipts/selective-recompute-ab-20260612T063250Z.json (none=1.213x vs full-ckpt). Margin-assert: 8.245 GiB peak / 23.99 GiB total / 19.19 GiB at 0.80 fraction = 10.9 GiB headroom >> 1.5 GiB floor.",
-  "basis": "fp19-bench-20260611T024648Z (c03-qat receipted pace) + docs/research/gpu-math-multiplier-table-v2-2026-06-11.json (survivor stack) + nc2-own-technique-contract.md (directed components) + docs/research/v0-launch-gate.md (G-config row)",
+  "basis": "fp19-bench-20260611T024648Z (c03-qat receipted pace) + docs/research/gpu-math-multiplier-table-v2-2026-06-11.json (survivor stack) + nc2-own-technique-contract.md (directed components) + docs/domains/governance/research/v0-launch-gate.md (G-config row)",
 
   "model": {
     "name": "ember-v0",

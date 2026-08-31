@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """r1_exit_battery.py -- EMBER-02 R1 (WARM-100) exit-criteria derivation battery.
 
-Companion to scripts/r2_cheap_probe_battery.py (#1435): same posture ("the spec is
+Companion to src/ember/governance/scripts/r2_cheap_probe_battery.py (#1435): same posture ("the spec is
 the authority; invention is prohibited; reporting one unimplementable check
 accurately is worth more than five plausible guesses"), same receipt envelope
 (ticket/ts/schema/sha_convention/invariant_sha256/prereg block via receipt_check

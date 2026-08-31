@@ -43,7 +43,7 @@
         "sha256": "9c5f5c3dfd0e354e1a8f729090a00c4ca247c7df6e229ffce817df5fc7f3a880"
       },
       "r2_consumer": {
-        "path": "scripts/r2_cheap_probe_battery.py",
+        "path": "src/ember/governance/scripts/r2_cheap_probe_battery.py",
         "sha256": "f9a1338699e984e70f6a133e1b604b2dcf7ab7a04cb2c17e4ca4aed64c72de26"
       },
       "owned_server": {
@@ -52,7 +52,7 @@
       }
     },
     "r2_adapter": {
-      "runner": "scripts/r2_cheap_probe_battery.py",
+      "runner": "src/ember/governance/scripts/r2_cheap_probe_battery.py",
       "compiler": "src/ember/governance/scripts/r1_cheap_probe_suite.py",
       "tokenizer_path": "tokenizer/tokenizer.json",
       "tokenizer_sha256": "2c557e7ffe64706112ea947d056be503005d90b16f64c57ec354267c7e9e9c97",

@@ -26,7 +26,7 @@
       "reason": "matched on its name, not its behaviour. It adapts the roadmap runner to a file-backed JSON transport; the child it creates is that runner, never a training run."
     },
     {
-      "path": "scripts/ember-desktop-deployment-selftest.ps1",
+      "path": "src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1",
       "sha256": "97129ed7d9ca1a6ba7d0ceefb3db7820e7bd76646b16737cddf3f475e6cfd336",
       "reason": "genuine hermetic deployment fixture. It creates fake application and runtime executables and invokes the installer only inside a unique temporary repository/install root; it never starts a training run or a production cockpit. The exact digest is required because filename-based test exclusions are forbidden."
     },
@@ -47,7 +47,7 @@
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "cfc188b55516715013706c761d2c5de0f4efcbb7b3f1988054fffac4f5abbb14",
+      "sha256": "ea43e48434b1e6715f043fd7db8aba4edd066a889ffa9715006f6b6f7355c230",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {

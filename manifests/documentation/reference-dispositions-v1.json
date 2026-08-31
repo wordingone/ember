@@ -234,35 +234,35 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "document": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
       "line": 18,
       "target": "scripts/checkpoint_probe.py",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "document": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
       "line": 23,
       "target": "receipts/fp24-4b-retry-probe-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "document": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
       "line": 31,
       "target": "receipts/fp24-4b-retry-probe-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "document": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
       "line": 52,
       "target": "receipts/fp24-4b-retry-probe-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "document": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
       "line": 53,
       "target": "receipts/fp24-4b-verdict-",
       "visible_classification": "historical"
@@ -493,7 +493,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/density-ab-spec-v1.md",
+      "document": "docs/domains/governance/archive/pre-restart/density-ab-spec-v1.md",
       "line": 7,
       "target": "receipts/density-ab-",
       "visible_classification": "historical"
@@ -1711,7 +1711,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ember-restart/integration-contract-v1.md",
+      "document": "docs/domains/governance/ember-restart/integration-contract-v1.md",
       "line": 72,
       "target": "tokenizer/corpus/script/verifier",
       "visible_classification": "reference"
@@ -2250,7 +2250,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/world-choice.md",
+      "document": "docs/domains/governance/research/world-choice.md",
       "line": 147,
       "target": "scripts/functions",
       "visible_classification": "reference"
@@ -2782,63 +2782,63 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/eval-suite-freeze-v1.md",
+      "document": "docs/domains/governance/spec/eval-suite-freeze-v1.md",
       "line": 60,
       "target": "receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/eval-suite-freeze-v1.md",
+      "document": "docs/domains/governance/spec/eval-suite-freeze-v1.md",
       "line": 66,
       "target": "data/validation-00000-of-00001.parquet",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/eval-suite-freeze-v1.md",
+      "document": "docs/domains/governance/spec/eval-suite-freeze-v1.md",
       "line": 105,
       "target": "data/eval-suite-v1",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/publishability-adjudication-v1.md",
+      "document": "docs/domains/governance/spec/publishability-adjudication-v1.md",
       "line": 4,
       "target": "receipts/acceptance/acting-operator-ruling-2-20260703.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/publishability-adjudication-v1.md",
+      "document": "docs/domains/governance/spec/publishability-adjudication-v1.md",
       "line": 8,
       "target": "docs/audit/goal-audit-20260703.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/publishability-adjudication-v1.md",
+      "document": "docs/domains/governance/spec/publishability-adjudication-v1.md",
       "line": 44,
       "target": "docs/grounding/local-fm-2026.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/publishability-adjudication-v1.md",
+      "document": "docs/domains/governance/spec/publishability-adjudication-v1.md",
       "line": 44,
       "target": "docs/grounding/self-improvement-2026.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/publishability-adjudication-v1.md",
+      "document": "docs/domains/governance/spec/publishability-adjudication-v1.md",
       "line": 45,
       "target": "docs/spec/publication-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/publishability-adjudication-v1.md",
+      "document": "docs/domains/governance/spec/publishability-adjudication-v1.md",
       "line": 67,
       "target": "receipts/acceptance/publishability-",
       "visible_classification": "reference"
@@ -3097,7 +3097,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md",
+      "document": "docs/domains/governance/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md",
       "line": 265,
       "target": "state/issue898-probe-",
       "visible_classification": "reference"

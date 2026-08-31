@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """v0_config_check.py — validator for the frozen v0 pretrain config contract.
 
-G-config row of docs/research/v0-launch-gate.md. The launch shim runs this
+G-config row of docs/domains/governance/research/v0-launch-gate.md. The launch shim runs this
 fail-closed before any v0 dispatch; it also runs standalone as the
 contract selftest. Checks are structural (the contract is well-formed and
 internally consistent) plus the launch-blocking nulls.

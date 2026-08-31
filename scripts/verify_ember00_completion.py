@@ -188,8 +188,8 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
         ),
         (
             "registry_gate_selftest",
-            [py, "-B", "scripts/registry_gate_selftest.py"],
-            ["python", "-B", "scripts/registry_gate_selftest.py"],
+            [py, "-B", "src/ember/governance/scripts/registry_gate_selftest.py"],
+            ["python", "-B", "src/ember/governance/scripts/registry_gate_selftest.py"],
         ),
         (
             "repo_guard_selftest",

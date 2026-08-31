@@ -52,7 +52,7 @@
 
 **Files:**
 - Retire: the former installed launcher; shortcuts target the governed runtime directly.
-- Create: `scripts/ember-desktop-deployment-selftest.ps1`
+- Create: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**
 - Produces: `Read-EmberInstalledManifest`, `Resolve-EmberInstalledExecutable`, and CLI launch behavior returning the admitted executable's exit code.
@@ -66,7 +66,7 @@
 
 **Files:**
 - Create: `scripts/install-ember-desktop.ps1`
-- Modify: `scripts/ember-desktop-deployment-selftest.ps1`
+- Modify: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**
 - Produces: `Install`, `Repair`, `Rollback`, and `Uninstall` actions; immutable `version.json`; atomic `current.json`; path-free `install-receipt.json`.
@@ -80,7 +80,7 @@
 
 **Files:**
 - Modify: `scripts/install-ember-desktop.ps1`
-- Modify: `scripts/ember-desktop-deployment-selftest.ps1`
+- Modify: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**
 - Produces: idempotent Desktop and Start Menu `Ember.lnk` files targeting the stable installed launcher with exact target, fixed arguments, working directory, description, and current icon.
@@ -95,7 +95,7 @@
 **Files:**
 - Modify: `.github/workflows/ci-pr.yml`
 - Create: `docs/domains/governance/operations/windows-desktop-install.md`
-- Modify: `scripts/ember-desktop-deployment-selftest.ps1`
+- Modify: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**
 - CI runs the deployment selftest on Windows; operators have exact install/repair/rollback/uninstall commands.

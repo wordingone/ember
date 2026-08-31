@@ -29,7 +29,7 @@ No leg here touches a GPU or a training process. This receipt generator, the run
 and everything they read (docs/domains/governance/authority/GOAL.md, docs/domains/governance/ledgers/ember-debt-ledger.md, the totality-board receipt) are
 pure filesystem/process-exit-code operations.
 
-Run:  python scripts/ember_cobs_proof_pack_receipt.py
+Run:  python src/ember/governance/scripts/ember_cobs_proof_pack_receipt.py
 """
 from __future__ import annotations
 

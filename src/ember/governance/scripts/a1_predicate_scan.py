@@ -647,7 +647,7 @@ def main() -> int:
         },
         "suite_b": {
             "status": "UNRESOLVED-PENDING-CONVENTION-RULING",
-            "why": "docs/spec/eval-suite-freeze-v1.md states no counting "
+            "why": "docs/domains/governance/spec/eval-suite-freeze-v1.md states no counting "
                    "convention for the predicate; #440's 'plain binary absence' "
                    "language addresses held-out certification, and #193's v2 "
                    "pre-registration covers decontam candidates -- neither names "
@@ -669,7 +669,7 @@ def main() -> int:
         "invariant_sha256": INVARIANT_SHA256,
         "sha_convention": SHA_CONVENTION,
         "issue_refs": ["#593", "#123", "#591", "#440", "#582", "#585"],
-        "predicate_ref": "docs/spec/eval-suite-freeze-v1.md#selection-criteria (contamination-auditable clause) + #440",
+        "predicate_ref": "docs/domains/governance/spec/eval-suite-freeze-v1.md#selection-criteria (contamination-auditable clause) + #440",
         "only_suite": args.only_suite,
         "suite_a": {
             "n_rows": len(suite_a_rows),

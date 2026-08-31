@@ -93,7 +93,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 EXPECTED_LANDED_PATHS = {
     "src/ember/governance/scripts/convert_nf4_prequant.py",
-    "scripts/ember_cbase_avir_data.py",
+    "src/ember/governance/scripts/ember_cbase_avir_data.py",
     "scripts/ember_cbase_avir_data_v2.py",
     "scripts/test_ember_cbase_avir_data.py",
     "scripts/test_ember_cbase_avir_data_v2.py",

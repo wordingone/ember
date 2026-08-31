@@ -33,7 +33,7 @@ EMBER_LAB_SOURCE_FIXTURE = (
     ("runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
     ("runtime/ember-lab/src/data_catalog.rs", b"fixture data catalog\\n"),
     ("runtime/ember-lab/src/rpc.rs", b"fixture rpc\\n"),
-    ("runtime/ember-lab/src/main.rs", b"fixture main\\n"),
+    ("domains/runtime/runtime/ember-lab/src/main.rs", b"fixture main\\n"),
     ("runtime/ember-lab/src/training_verify.rs", b"fixture training verify\\n"),
     ("runtime/ember-lab/Cargo.toml", b"[package]\\nname='fixture'\\n"),
     ("runtime/ember-lab/Cargo.lock", b"# fixture lock\\n"),

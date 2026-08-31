@@ -449,7 +449,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out = os.path.join(RECEIPTS, f"cuda-graph-ab-{ts}.json")
 #   d-gate-*.json                            src/ember/governance/scripts/d_gate.py:405
 #     receipt_path = _RECEIPTS / f"d-gate-{artifact_stem}-{ts}.json"
-#   density-ab-verdict-*.json                scripts/density_ab_verdict.py:113,185,244
+#   density-ab-verdict-*.json                src/ember/governance/scripts/density_ab_verdict.py:113,185,244
 #     out = f"{RECEIPTS}/density-ab-verdict-{ts_now}.json"
 #   econ-pass-loopecon-adapter-*.json        scripts/econ_pass.py:242
 #     adapter_path = receipts_dir / f"econ-pass-loopecon-adapter-{ts}.json"
@@ -555,7 +555,7 @@ CONVENTION_MAP = [
     (re.compile(r"^c12-cognitive-mode-ablation-.*\.json$"), "scripts/ember_cognitive_mode_ablation.py"),
     (re.compile(r"^cuda-graph-ab-.*\.json$"), "src/ember/governance/scripts/cuda_graph_ab.py"),
     (re.compile(r"^d-gate-.*\.json$"), "src/ember/governance/scripts/d_gate.py"),
-    (re.compile(r"^density-ab-verdict-.*\.json$"), "scripts/density_ab_verdict.py"),
+    (re.compile(r"^density-ab-verdict-.*\.json$"), "src/ember/governance/scripts/density_ab_verdict.py"),
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
     (re.compile(r"^fp10-idiom-.*\.json$"), "scripts/fp10_idiom.py"),
     (re.compile(r"^fp11-denominator-.*\.json$"), "scripts/fp11_denominator.py"),
@@ -821,7 +821,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
     # --- Evidence (d) cross-branch unmerged (gh issue #431, 2026-07-08) -- restored via
     # the #415/#432 custody recovery; generating scripts confirmed real but off-branch.
     (re.compile(r"^ceff-composition-ab-20260703T111351Z\.json$"), "cross_branch_unmerged",
-     "evidence (d) cross-branch unmerged: generating script scripts/ember_ceff_composition_ab.py "
+     "evidence (d) cross-branch unmerged: generating script src/ember/governance/scripts/ember_ceff_composition_ab.py "
      "confirmed at commit 85e6d7f (write-site line 706, `path = os.path.join(RECEIPTS, "
      "f\"ceff-composition-ab-{ts}.json\")`, exact match); `git merge-base --is-ancestor 85e6d7f HEAD` "
      "is false -- that commit is reachable only from lane/ceff-ab-run and sibling branches, never "

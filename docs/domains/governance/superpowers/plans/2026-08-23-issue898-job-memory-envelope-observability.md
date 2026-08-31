@@ -1,7 +1,7 @@
 # Issue #898 D+C Job-Memory Envelope and Observability Implementation Plan
 
 > **Execution rule:** follow the committed design in
-> `docs/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md`.
+> `docs/domains/governance/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md`.
 > Tests precede implementation. Every process-producing command runs through
 > `src/ember/governance/scripts/owned_process.py`; every Python process also runs through
 > the configured hidden/no-window Python launcher; pytest always uses

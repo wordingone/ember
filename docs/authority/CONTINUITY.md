@@ -63,7 +63,7 @@ override this order.
     "benchmark_credit_without_owned_checkpoint"
   ],
   "prerequisite_receipts": [
-    "admission-contract validation of the exact candidate manifest per docs/ember-restart/integration-contract-v1.md",
+    "admission-contract validation of the exact candidate manifest per docs/domains/governance/ember-restart/integration-contract-v1.md",
     "dispatch-gate receipts under receipts/ember-restart-3b/ bound to the exact run being started"
   ],
   "next_executable_command": "python src/ember/governance/scripts/ember_restart/contract.py validate configs/ember-restart-3b.json"
@@ -246,7 +246,7 @@ the closed claim boundary and at least one explicit `caveat:` in evidence.
 | d3-code-artifact-result | benchmark_result | receipt-sha256:ac3be7d4bb8064de9d1722335a41367d847d66919279c6a8b370014d0275f383 | historical_only | not_applicable | not_applicable | external_code_artifact_loop | none | representative D3-Gym A/B/C/Deleted program result; not owned-model capability |
 | arcade-random-smoke-result | benchmark_result | receipt-sha256:931b3a608c6bf1911bb0ffaa56797014d8ea9a38be475297df9864d6c631a237 | historical_only | not_applicable | not_applicable | random_control | none | 25 games at 200 steps, zero wins; not the preregistered 1000-step floor |
 | ember-target | model_target | uninstantiated:ember-owned-30-35b-unified-sparse | target | 30000000001 | 0 | owned | none | docs/domains/governance/authority/GOAL.md; target identity only, no model claim |
-| ember-owned-rung-v1-contract | admission_contract | source:src/ember/governance/scripts/ember_restart/contract.py@8b0d684e9e289aa66a7c18217b71bfaecab1e642 | research_prototype | not_applicable | not_applicable | local_fail_closed_validator | none | docs/ember-restart/integration-contract-v1.md and src/ember/governance/scripts/ember_restart/contract.py; candidate/admission boundary only |
+| ember-owned-rung-v1-contract | admission_contract | source:src/ember/governance/scripts/ember_restart/contract.py@8b0d684e9e289aa66a7c18217b71bfaecab1e642 | research_prototype | not_applicable | not_applicable | local_fail_closed_validator | none | docs/domains/governance/ember-restart/integration-contract-v1.md and src/ember/governance/scripts/ember_restart/contract.py; candidate/admission boundary only |
 
 The seven-task frozen evaluation suite is custody, not seven results. The
 located full owned-checkpoint executions are ARC-Challenge and HellaSwag at

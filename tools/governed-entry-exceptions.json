@@ -12,7 +12,7 @@
   "exceptions": [
     {
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "38487feaa5e31736562378e485db6f518fd808dc7ba9c64638e21fd88f311627",
+      "sha256": "371c940754b64c985be7fc80ae145d8fc87e335786580a6426f133c03d3ced02",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -32,7 +32,7 @@
     },
     {
       "path": "scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "662a8dbfdd15fc7e981cddbcfcdaf586747790648158102c4e42a286dc01e5d9",
+      "sha256": "4966e917f692f388d2794cb7e0e5a1ed3b4cc36aaa5c2f1752221dfa708f3ac8",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "ce45f46691870bcdeccd894a35c38451074e10e7c3985f2a0de0b0d9f6251cf6",
+      "sha256": "23b3e46bcf935effc2775bd2b193eff2e626715615bbf9383c5baacfeab4571d",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {

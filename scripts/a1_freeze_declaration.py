@@ -5,7 +5,7 @@
 """a1_freeze_declaration.py -- ember issue #593 deliverable 1: the A1
 eval-freeze DECLARATION receipt.
 
-Extends the freeze doc's receipt schema (docs/spec/eval-suite-freeze-v1.md
+Extends the freeze doc's receipt schema (docs/domains/governance/spec/eval-suite-freeze-v1.md
 "Freeze Receipt Schema") with the falsifier-fill A1 fields (refs #123 sec.1):
   - eval_freeze_hash: the commit sha pinning suites (a)+(b). Self-reference
     is impossible (a commit cannot contain its own sha), so the declaration
@@ -159,7 +159,7 @@ def main() -> int:
         },
         "suite_b": {
             "definition": "eval-suite-v1's seven pinned datasets "
-                          "(docs/spec/eval-suite-freeze-v1.md, Status: Frozen, "
+                          "(docs/domains/governance/spec/eval-suite-freeze-v1.md, Status: Frozen, "
                           "effective 2026-07-08)",
             "pin_receipt": args.freeze_receipt.replace(os.sep, "/"),
             "pin_receipt_sha256": file_sha256(os.path.join(REPO, args.freeze_receipt)),

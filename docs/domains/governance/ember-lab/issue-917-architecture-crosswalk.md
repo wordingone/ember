@@ -6,7 +6,7 @@ authority is the repo-owned Ember Lab crate at `runtime/ember-lab`.
 
 | Historical obligation | Current Ember Lab owner | Classification | Preserved obligation |
 | --- | --- | --- | --- |
-| historical `rehearse <manifest>` | `runtime/ember-lab/src/main.rs` `episode`/`rehearse` commands and `rehearsal::episode`, driven by `Daemon::dispatch_manifest` | RENAMED | ordered admission, data verification, train, checkpoint, publish, selectable checkpoint, restore phases; CLI refuses without the current dispatch authority |
+| historical `rehearse <manifest>` | `domains/runtime/runtime/ember-lab/src/main.rs` `episode`/`rehearse` commands and `rehearsal::episode`, driven by `Daemon::dispatch_manifest` | RENAMED | ordered admission, data verification, train, checkpoint, publish, selectable checkpoint, restore phases; CLI refuses without the current dispatch authority |
 | strict-gate census | `runtime/ember-lab/src/rehearsal.rs` `production_strict_gate_census` plus producer/consumer tests | REORGANIZED | every listed strict comparison has an explicit producer, consumer, and binding kind |
 | measured-number admission | `rehearsal::Measurement`, `AdmissionBounds`, and `episode` | REORGANIZED | missing/unobserved evidence, memory, storage, and duration violations refuse before the runner |
 | self-diagnosing refusal receipt | daemon-owned `ember-lab-operational-receipt-v1` exported after terminal stop, with the rehearsal observation nested and content-addressed | RENAMED | closed refusal code, phase, gate, offending value/bound, and one plain-language `next_action`; the immutable preflight receipt is never rewritten |

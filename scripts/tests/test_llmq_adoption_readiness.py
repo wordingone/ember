@@ -305,7 +305,7 @@ def test_live_daemon_source_identity_matches_rust_composite_hash(monkeypatch, tm
         REPO_ROOT / "runtime/ember-lab/src/lib.rs",
         REPO_ROOT / "runtime/ember-lab/src/data_catalog.rs",
         REPO_ROOT / "runtime/ember-lab/src/rpc.rs",
-        REPO_ROOT / "runtime/ember-lab/src/main.rs",
+        REPO_ROOT / "domains/runtime/runtime/ember-lab/src/main.rs",
         REPO_ROOT / "runtime/ember-lab/src/training_verify.rs",
         REPO_ROOT / "runtime/ember-lab/Cargo.toml",
         REPO_ROOT / "runtime/ember-lab/Cargo.lock",

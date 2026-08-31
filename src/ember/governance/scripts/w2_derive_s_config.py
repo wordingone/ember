@@ -15,7 +15,7 @@ only scales FF width (`model.ff`) rung-to-rung -- hidden/layers/heads/vocab
 are fixed constants across the whole ladder (confirmed by reading
 docs/dossier/rung2-growth-ladder-dossier-v1.md's own strict-doubling table:
 rung-1 ff 8192->16384, rung-2 ff 16384->32768, hidden/layers/heads/vocab never
-move) and scripts/growth_refutation/capacity.py's net2net_grow, which widens
+move) and src/ember/governance/scripts/growth_refutation/capacity.py's net2net_grow, which widens
 ONLY the SwiGLU gate/up/down_proj tensors, never touches attention hidden
 size. So "identical architecture at 2x width" IS the G arm's post-grow
 config verbatim -- every field copied 1:1, `model.ff` included (it is

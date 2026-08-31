@@ -167,14 +167,14 @@
       "category": "parameter_identity",
       "evidence_sha256": "18c5e9119b7d759b4ae55af47d95e6c18885f74b1b760f32772ca86de2bfa2fc",
       "line": 1620,
-      "path": "scripts/cbase_grow_rung2_event.py",
+      "path": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "affc17d148e43447c5820d12fa2192fb5ad1ca44bfd711dbf0905a1a8374dc5b",
       "line": 1630,
-      "path": "scripts/cbase_grow_rung2_event.py",
+      "path": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {

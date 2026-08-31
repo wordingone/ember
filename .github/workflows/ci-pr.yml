@@ -310,7 +310,7 @@ jobs:
       - name: Run root launcher suite
         run: python -B -m unittest discover -s tests -p "test_ember_root_launcher.py" -v
       - name: Verify versioned desktop deployment and shortcuts
-        run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/ember-desktop-deployment-selftest.ps1
+        run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1
       - name: Verify Windows Job Object process-tree cleanup
         run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   ci-pr:

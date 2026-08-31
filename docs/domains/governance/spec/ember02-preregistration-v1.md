@@ -65,7 +65,7 @@ Common structure per rung: entry gate (all predicates receipted before dispatch)
 
 **Exit (state CAPABLE):**
 - R2-E1: loss trajectory inside the horizon-widened predicted band F-02. **(E-A)** An exit-band breach with all kill predicates green adjudicates as **FORECAST-MISS**, not a hard rung-fail: mandatory anomaly + failure-library entry + forecast-recalibration receipt + pivot receipt, all required before R3 funding — a miss forces receipts; it is never silent passage and never a false failure of a healthy run.
-- R2-E2: efficiency floor — **(E-F)** each arm adjudicated against its OWN R1-scale measured baseline (the per-arm R1-scale smoke measurement of §4.1): tokens/s ≥ T-22 × the arm's own R1-scale measured value; proxy-joules/token ≤ T-23 × the arm's own R1-scale measured value; P1 receipt-shape check passes (`scripts/check_energy_law_theory.py`).
+- R2-E2: efficiency floor — **(E-F)** each arm adjudicated against its OWN R1-scale measured baseline (the per-arm R1-scale smoke measurement of §4.1): tokens/s ≥ T-22 × the arm's own R1-scale measured value; proxy-joules/token ≤ T-23 × the arm's own R1-scale measured value; P1 receipt-shape check passes (`src/ember/governance/scripts/check_energy_law_theory.py`).
 - R2-E3: matched-control delta at equal budget (C3/C4/C5) on the frozen cheap-probe battery, adjudicated against the signal band (F-03): A3 below the band vs A2 fires falsifier F1 (pivot receipt); inside band = NO-SIGNAL.
 - R2-E4: frozen cheap-probe battery above chance with a one-sided lower confidence bound at level T-24 exceeding chance per probe.
 - R2-E5: precision-localization verdict receipted (adjudicated by the frozen bands of §4.3).

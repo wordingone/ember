@@ -249,7 +249,7 @@ def _leg_class_identity(d: Dict[str, Any]) -> Optional[str]:
 
 def _load_supersessions() -> tuple[Dict[str, Dict[str, Any]], list[str]]:
     """[SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2] Load
-    docs/ledgers/receipt-supersessions.jsonl (if it exists) into a
+    docs/domains/governance/ledgers/receipt-supersessions.jsonl (if it exists) into a
     {old_path: row} map. Malformed rows are never silently trusted -- they
     are skipped and returned in `skipped` for disclosure (same posture as
     _load_errata_coverage).
@@ -355,7 +355,7 @@ def check_stamped_receipts() -> tuple[bool, str]:
 
     [SUPERSESSION cure, gh issue #625, FROZEN SPEC point 2] A post-cutoff
     unstamped receipt (ineligible for errata coverage above) may instead be
-    covered by a docs/ledgers/receipt-supersessions.jsonl row -- STAMP-COVERAGE
+    covered by a docs/domains/governance/ledgers/receipt-supersessions.jsonl row -- STAMP-COVERAGE
     ACCOUNTING ONLY, never a verdict-content change, and only when
     _supersession_covers() confirms the row's new_path exists, is correctly
     stamped, and is a re-execution of the same leg class (the laundering

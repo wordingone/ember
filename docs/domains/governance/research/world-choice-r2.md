@@ -2,7 +2,7 @@
 
 Survey detail in `docs/research/drafts/world-choice-r2-draft.md` (Haiku draft,
 gated here; receipts cited per claim, UNVERIFIED marked). This file is the
-binding read: criteria from `docs/research/world-choice.md` §7 — (a) floor
+binding read: criteria from `docs/domains/governance/research/world-choice.md` §7 — (a) floor
 accessibility MEASURED at affordable k, (b) verification density, (c)
 portfolio coupling.
 

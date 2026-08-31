@@ -24,7 +24,7 @@ Never `git worktree add` directly — see 02_REPO_TOPOLOGY.md.
 ## Run a single totality-board condition probe
 
 ```bash
-python scripts/ember_totality/test_c_proc.py
+python src/ember/governance/scripts/ember_totality/test_c_proc.py
 python src/ember/governance/scripts/ember_totality/test_c_anat.py
 ```
 Each probe prints exactly one `RED <reason>` / `GREEN <reason>` /

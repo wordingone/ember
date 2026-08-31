@@ -34,7 +34,7 @@ episodes into the ledger, retire the teacher.* In formalization-v0 terms:
 The measured problem (q15 receipt, §3 of formalization): `F(θ_core, ARC-1, k=8)
 = 0` at 1.5B. The loop starves because the core's own solve probability is below
 the affordable-budget floor. Two registered repairs exist: restructure the world
-(W-code, `docs/research/world-choice.md` §6) or raise the sampler. A teacher pool is
+(W-code, `docs/domains/governance/research/world-choice.md` §6) or raise the sampler. A teacher pool is
 the second repair **without violating residency** — the core stays small and
 resident; the teacher runs in bounded bursts and is then evicted. The feed-rate
 algebra:

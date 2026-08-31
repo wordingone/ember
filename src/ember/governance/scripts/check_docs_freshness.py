@@ -7,7 +7,7 @@ Deterministic documentation freshness checker for ember.
 
 Enforces:
 1. Frozen-grammar path candidates in the selected front-door surface resolve in tracked tree
-2. scripts/README.md inventory matches actual scripts/**/*.py
+2. src/ember/governance/scripts/README.md inventory matches actual scripts/**/*.py
 3. CLAIMS.md/INDEX.jsonl up-to-date (regeneratable without diff)
 4. CONTINUITY state-as-of marker <= 1 day old
 
@@ -293,7 +293,7 @@ class DocsFreshnessChecker:
                 })
 
     def check_scripts_inventory(self):
-        """Check that scripts/README.md inventory is exhaustive (unless explicitly a taxonomy)."""
+        """Check that src/ember/governance/scripts/README.md inventory is exhaustive (unless explicitly a taxonomy)."""
         scripts_readme = (self.repo / "scripts" / "README.md").read_text()
 
         # If the document explicitly claims to be a taxonomy/sample, don't enforce exhaustiveness
@@ -318,7 +318,7 @@ class DocsFreshnessChecker:
         missing_from_inventory = actual_scripts - valid_py_scripts
         if missing_from_inventory:
             self.defects.append({
-                'file': 'scripts/README.md',
+                'file': 'src/ember/governance/scripts/README.md',
                 'defect_class': 'incomplete_inventory',
                 'count': len(missing_from_inventory),
                 'examples': sorted(list(missing_from_inventory))[:5],
@@ -520,7 +520,7 @@ See `scripts/test.py` for the harness.
         (tmpdir / "scripts" / "test.py").write_text("pass")
         (tmpdir / "scripts" / "test2.py").write_text("pass")
 
-        # Create scripts/README.md with incomplete inventory
+        # Create src/ember/governance/scripts/README.md with incomplete inventory
         scripts_readme = tmpdir / "scripts" / "README.md"
         scripts_readme.write_text("| test.py |\n")
 
@@ -528,7 +528,7 @@ See `scripts/test.py` for the harness.
         subprocess.run(
             [
                 "git", "-C", str(tmpdir), "add", "README.md", "scripts/test.py",
-                "scripts/test2.py", "scripts/README.md",
+                "scripts/test2.py", "src/ember/governance/scripts/README.md",
                 "docs/authority/CONTINUITY.md",
             ],
             check=True,

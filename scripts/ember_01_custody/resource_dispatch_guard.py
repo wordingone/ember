@@ -23,8 +23,8 @@ Prior art this reuses rather than reimplements:
     HOST_GOVERNOR_FLOOR_BYTES (6.0 GiB). That law governs mid-run; this
     module applies the identical floor PRE-dispatch, before the run starts.
   - GlobalMemoryStatusEx.ullAvailPageFile / ullTotalPageFile as the
-    commit-charge counter == scripts/cbase_grow_rung2_gpu_offload_probe.py's
-    _va_report and scripts/cbase_grow_rung2_event.py's phase_preflight
+    commit-charge counter == src/ember/governance/scripts/cbase_grow_rung2_gpu_offload_probe.py's
+    _va_report and src/ember/governance/scripts/cbase_grow_rung2_event.py's phase_preflight
     (commit_margin_gib_floor check), reused as the same Windows API call.
 
 Design (matches verify_c0_failure_class_ledger.py's own "honesty over green"

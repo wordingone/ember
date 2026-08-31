@@ -32,7 +32,7 @@ the projection definition; Packet A owns only byte and arithmetic validation.
 
 **Date filed:** 2026-08-18, before any #1433 WARM-100 evaluation or capability
 claim consumes this amendment. **Frozen artifact:**
-`docs/spec/eval-suite-freeze-v1.md`.
+`docs/domains/governance/spec/eval-suite-freeze-v1.md`.
 
 **What changes:** the HellaSwag scoring instrument moves from the upstream
 unlabelled `test` split to the labelled `validation` split that the installed
@@ -110,7 +110,7 @@ sha256 at pointer / on disk / at build-ref), `scripts/a1_freeze_consumer.py` +
 **Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593, executing
 the coordinator ruling: issue #593 comment 4930531475 — the binding text). **Filed
 before any capability claim cites the suite.** **Frozen artifact:**
-`docs/spec/eval-suite-freeze-v1.md`.
+`docs/domains/governance/spec/eval-suite-freeze-v1.md`.
 
 **What changes:** (1) the freeze doc gains a "Contamination counting convention"
 section adopting the issue-#193 pre-registered v2 convention as SPEC for external
@@ -137,7 +137,7 @@ per-item JSONL. Relates to issues #593, #193, #440, #591.
 **Date filed:** 2026-07-09 (the A1 eval-freeze execution lane, issue #593). **Filed
 before any capability claim cites the suite** (no eval-reference leg has run; the A1
 declaration receipt lands in the same PR as this entry). **Frozen artifact:**
-`docs/spec/eval-suite-freeze-v1.md` (Status: Frozen, effective 2026-07-08); this entry
+`docs/domains/governance/spec/eval-suite-freeze-v1.md` (Status: Frozen, effective 2026-07-08); this entry
 uses that doc's own amendment mechanism ("Amendments to this frozen specification
 require entries in `docs/domains/governance/ledgers/deviations.md` under the battery-14 section").
 

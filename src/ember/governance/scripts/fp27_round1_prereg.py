@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp27_round1_prereg.py — owned-core accumulation ROUND-1 prereg,
 FROZEN BEFORE CHECKPOINT-1 EXISTS (#198).
 

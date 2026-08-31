@@ -35,7 +35,7 @@ goal/manifest shape:
 
 Hermetic: every case builds its own fresh tempfile.TemporaryDirectory()
 fixture root, seeded from copies of the REAL repo files (never mutating the
-real tree), and runs the real scripts/ember_totality/test_c_manifest.py as a
+real tree), and runs the real src/ember/governance/scripts/ember_totality/test_c_manifest.py as a
 subprocess with EMBER_TOTALITY_ROOT pointed at that fixture -- exactly the
 isolation convention chk_controls/run_controls.py already uses for every
 other CHK-adequacy control in this package (see build_c_manifest() there for

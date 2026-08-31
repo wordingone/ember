@@ -277,7 +277,7 @@ reference run has executed against it yet, so no capability claim can cite a sco
 is an upgrade from issue #487's original gap ("the frozen external eval suite does not exist in
 this repository yet") — the suite exists now; running it does not.
 
-`docs/spec/eval-suite-freeze-v1.md` (landed via PR #490) freezes 7 of 8 test splits by sha256
+`docs/domains/governance/spec/eval-suite-freeze-v1.md` (landed via PR #490) freezes 7 of 8 test splits by sha256
 (MMLU-Pro, GSM8K, MATH-500, ARC-Challenge, HumanEval+, MBPP, HellaSwag) plus the harness commit
 (`EleutherAI/lm-evaluation-harness@97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176`); the 8th split,
 GPQA-diamond, is honestly `PIN-PENDING` — its automated download is blocked pending HuggingFace
@@ -286,7 +286,7 @@ Clauses) requires reference scores to be locally reproduced, never paper-quoted,
 first such run as still riding "the next free GPU window" — it has not happened yet.
 
 **Check it yourself:**
-- `docs/spec/eval-suite-freeze-v1.md` — suite composition, the harness pin, and both binding
+- `docs/domains/governance/spec/eval-suite-freeze-v1.md` — suite composition, the harness pin, and both binding
   clauses (Clause 1: text+code-only, explicitly insufficient for a C1 parity claim; Clause 2:
   local-reproduction-not-paper-quoted).
 - `receipts/eval-suite-freeze/eval-suite-freeze-v1.json` — the freeze receipt itself: per-split

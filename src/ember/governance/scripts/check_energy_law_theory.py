@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_energy_law_theory.py — docs/spec/energy-law-theory-v1.md sec6b receipt-shape checker.
 
 Contract (sec6b, v1.1 as of commit ea859d0, read in full before writing this): "Every receipt
@@ -424,7 +427,7 @@ def run_all(receipts_dir=RECEIPTS_DIR, repo_root=REPO_ROOT):
         "receipts_scanned": len(files),
         "citing_receipts": [_relpath_or_str(p, repo_root) for p in citing],
         "counts": counts,
-        "generator": {"path": "scripts/check_energy_law_theory.py", "sha256": generator_sha256},
+        "generator": {"path": "src/ember/governance/scripts/check_energy_law_theory.py", "sha256": generator_sha256},
         "sha_convention": SHA_CONVENTION,
     })
     print(f"receipt: {out_path}")

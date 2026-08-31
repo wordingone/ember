@@ -26,7 +26,7 @@ off the #195 critical path. The live decode that turns lengths into tokens is th
 round-1 seam (live_decode_contract below); the >=2x verified-episodes/gen-min
 confirmation fires there.
 
-fp-27 pins are CONTRACT, not mechanism (scripts/fp27_round1_prereg.py SAMPLING:
+fp-27 pins are CONTRACT, not mechanism (src/ember/governance/scripts/fp27_round1_prereg.py SAMPLING:
 seed 31, k=8, 200 L1 + 56 L2, temp 0.8 / top_p 0.95 / max_new 512). This sampler
 CITES them and never writes that file. The contract holds across the scheduling
 change because the live seam gives each stream its OWN torch.Generator seeded
@@ -104,7 +104,7 @@ SHA_CONVENTION = ("file shas = sha256 over the exact on-disk raw bytes, no "
                   "normalization")
 
 # fp-27 frozen sampling pins — CONTRACT, mirrored for citation, never mutated.
-# Source of truth is scripts/fp27_round1_prereg.py::SAMPLING; this module only
+# Source of truth is src/ember/governance/scripts/fp27_round1_prereg.py::SAMPLING; this module only
 # reads these and refuses to own them.
 FP27_PINS = {
     "seed": 31,
@@ -114,7 +114,7 @@ FP27_PINS = {
     "temperature": 0.8,
     "top_p": 0.95,
     "max_new_tokens": 512,
-    "source": "scripts/fp27_round1_prereg.py::SAMPLING",
+    "source": "src/ember/governance/scripts/fp27_round1_prereg.py::SAMPLING",
     "mutated_by_this_module": False,
 }
 

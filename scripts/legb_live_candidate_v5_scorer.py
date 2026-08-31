@@ -121,7 +121,7 @@ VALID_ROUTES = ("shared",) + EXPERTS
 MODEL_SHARDS = ("shared-model.pt",) + tuple(f"expert-{name}.pt" for name in EXPERTS)
 
 FROZEN_SUITE_SPEC = (
-    "docs/spec/eval-suite-freeze-v1.md (freeze v1) + "
+    "docs/domains/governance/spec/eval-suite-freeze-v1.md (freeze v1) + "
     "docs/spec/c8-f3-instrument-list-v1.md (full test_split_sha256 values)")
 
 HELLASWAG_DATASET_REVISION = "218ec52e09a7e7462a5400043bb9a69a41d06b76"

@@ -4,7 +4,7 @@ Owner: the lead. Status: **FROZEN** — receipt
 `receipts/fp27-prereg-20260611T130743Z.json` (`prereg_frozen:true`,
 receipt_check clean), emitted with zero checkpoint-era receipts on disk
 (the freeze-beats-checkpoint-1 guard held live). Artifact:
-`scripts/fp27_round1_prereg.py` (`--selftest` / `--freeze`). fp-26 froze the
+`src/ember/governance/scripts/fp27_round1_prereg.py` (`--selftest` / `--freeze`). fp-26 froze the
 round-3 SHAPE — (b) owned-core in-dist accumulation; this freezes the ROUND:
 every constant that will shape and judge the first accumulation round on
 ember-v0, pinned before any checkpoint exists.

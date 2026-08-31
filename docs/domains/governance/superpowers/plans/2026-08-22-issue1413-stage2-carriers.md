@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `tools/ember-restart-3b/training_acceleration.py`
-- Test: `tests/ember_restart_model/test_training_acceleration.py`
+- Test: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
 
 1. Add failing tests for canonical tensor descriptors, active-expert and span binding, deterministic SHA-256, unique signature counts, closed receipt keys, and no-overwrite output.
 2. Run the focused test and retain the RED output.
@@ -53,7 +53,7 @@
 - Modify: `tools/ember-restart-3b/model.py`
 - Modify: `tools/ember-restart-3b/pretrain.py`
 - Modify: `tools/ember-restart-3b/run_vertical_slice.py`
-- Test: `tests/ember_restart_model/test_training_acceleration.py`
+- Test: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
 - Test: `tests/ember_restart_model/domain-governance/test_pretrain.py`
 - Test: `tests/ember_restart_model/domain-governance/test_runner_preflight.py`
 

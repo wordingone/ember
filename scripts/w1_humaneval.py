@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w1_humaneval.py — W-code world (HumanEval+-graded): measured floor probe + sample harvest.
 
-World admission test per docs/domains/governance/archive/pre-restart/formalization-v0.md (S7) + docs/research/world-choice.md:
+World admission test per docs/domains/governance/archive/pre-restart/formalization-v0.md (S7) + docs/domains/governance/research/world-choice.md:
 a training world is admitted only on a MEASURED floor (F > 0 at affordable k).
 This script measures it: a core sampled on the MBPP sanitized TRAIN split,
 verified by each task's own asserts inside the t1_probe sandbox (same rlimits,
