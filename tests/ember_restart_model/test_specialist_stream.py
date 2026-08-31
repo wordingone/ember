@@ -37,6 +37,27 @@ def _frozen_tokenizer(path: Path) -> Path:
 
 
 class SpecialistStreamTests(unittest.TestCase):
+    def test_binding_path_migration_preserves_frozen_manifest_identity(self) -> None:
+        import specialist_stream
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            root = Path(directory)
+            canonical = root / "domains" / "model" / "tokenizer" / "tokenizer.json"
+            canonical.parent.mkdir(parents=True)
+            payload = b"frozen tokenizer bytes\n"
+            canonical.write_bytes(payload)
+            binding = {
+                "path": "tokenizer/tokenizer.json",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+
+            self.assertEqual(
+                specialist_stream._require_binding(root, binding, "tokenizer"), payload
+            )
+            binding["sha256"] = "0" * 64
+            with self.assertRaisesRegex(ValueError, "binding does not match"):
+                specialist_stream._require_binding(root, binding, "tokenizer")
+
     @staticmethod
     def _open_bound(manifest_path: Path, *, repo_root: Path = ROOT):
         from specialist_stream import open_specialist_stream
