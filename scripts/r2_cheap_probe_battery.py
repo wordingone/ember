@@ -211,7 +211,7 @@ ISSUE_REF = "#1435"
 AUTHORITY_ISSUE_REF = "#1498"
 PREREG_DOC = "docs/domains/governance/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
-R2_AUTHORITY_DOC = "docs/spec/ember02-r2-cheap-probe-amendment-v2.json"
+R2_AUTHORITY_DOC = "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v2.json"
 R2_AUTHORITY_SCHEMA = "ember02-r2-cheap-probe-amendment/v2"
 R2_AUTHORITY_DECISION_ID = "D-04"
 

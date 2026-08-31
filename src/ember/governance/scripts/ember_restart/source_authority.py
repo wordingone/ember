@@ -56,7 +56,7 @@ def _load_git_env_hardening():
 
     Same discipline as ``_load_worktree_lifecycle`` below and for the same
     reason: this module is executed both as ``scripts.ember_restart.source_authority``
-    (package import) and directly (``python scripts/ember_restart/contract.py``,
+    (package import) and directly (``python src/ember/governance/scripts/ember_restart/contract.py``,
     which falls back to a bare ``import source_authority`` -- see contract.py's
     own try/except). Under direct execution, ``sys.path[0]`` is
     ``scripts/ember_restart/``, not ``scripts/``, so a plain

@@ -88,7 +88,7 @@ EXPECTED_SCRIPT_PATHS = {
     "scripts/ember_avir_cli_launch_entry.py",
     "src/ember/governance/scripts/ember_avir_harness.py",
     "src/ember/governance/scripts/ember_avir_observe.py",
-    "scripts/ember_avir_tasks.py",
+    "src/ember/governance/scripts/ember_avir_tasks.py",
 }
 EXPECTED_COMPANION_PATHS = {
     "data/ember_avir_tasks/train.jsonl",
@@ -349,7 +349,7 @@ def validate_cpu_replay(root: Path) -> dict[str, Any]:
             ],
         ),
         (
-            ["scripts/ember_avir_tasks.py", "--test"],
+            ["src/ember/governance/scripts/ember_avir_tasks.py", "--test"],
             [
                 "load_split('train'): 24 tasks",
                 "load_split('heldout'): 20 tasks",

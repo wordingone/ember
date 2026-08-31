@@ -447,7 +447,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out_path = out_dir / f"c12-cognitive-mode-ablation-{receipt['ts']}.json"
 #   cuda-graph-ab-*.json                     src/ember/governance/scripts/cuda_graph_ab.py:495
 #     out = os.path.join(RECEIPTS, f"cuda-graph-ab-{ts}.json")
-#   d-gate-*.json                            scripts/d_gate.py:405
+#   d-gate-*.json                            src/ember/governance/scripts/d_gate.py:405
 #     receipt_path = _RECEIPTS / f"d-gate-{artifact_stem}-{ts}.json"
 #   density-ab-verdict-*.json                scripts/density_ab_verdict.py:113,185,244
 #     out = f"{RECEIPTS}/density-ab-verdict-{ts_now}.json"
@@ -554,7 +554,7 @@ CONVENTION_MAP = [
     # spend-annex-*.json deliberately NOT mapped here -- see comment above CONVENTION_MAP.
     (re.compile(r"^c12-cognitive-mode-ablation-.*\.json$"), "scripts/ember_cognitive_mode_ablation.py"),
     (re.compile(r"^cuda-graph-ab-.*\.json$"), "src/ember/governance/scripts/cuda_graph_ab.py"),
-    (re.compile(r"^d-gate-.*\.json$"), "scripts/d_gate.py"),
+    (re.compile(r"^d-gate-.*\.json$"), "src/ember/governance/scripts/d_gate.py"),
     (re.compile(r"^density-ab-verdict-.*\.json$"), "scripts/density_ab_verdict.py"),
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
     (re.compile(r"^fp10-idiom-.*\.json$"), "scripts/fp10_idiom.py"),

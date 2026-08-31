@@ -106,7 +106,7 @@ function mockRunner(opts: {
       if (opts.onGh) return opts.onGh(args);
       return { status: 0, stdout: "[]", stderr: "" };
     }
-    if (args.includes("scripts/ember_01_custody/issue_census.py")) {
+    if (args.includes("src/ember/governance/scripts/ember_01_custody/issue_census.py")) {
       if (opts.onIssueCensus) return opts.onIssueCensus(args);
       return { status: 0, stdout: "", stderr: "" };
     }
@@ -212,7 +212,7 @@ describe("startVerifyRun", () => {
     expect(calls[1]!.args[calls[1]!.args.indexOf("--start-point") + 1]).toBe(PINNED_COMMIT);
     expect(calls[2]!.executable).toBe("gh");
     const issueCensusArgs = calls[3]!.args;
-    expect(issueCensusArgs).toContain("scripts/ember_01_custody/issue_census.py");
+    expect(issueCensusArgs).toContain("src/ember/governance/scripts/ember_01_custody/issue_census.py");
     // #1371: repo-scoped legs read the PINNED WORKTREE, never "/repo".
     expect(issueCensusArgs[issueCensusArgs.indexOf("--repo-root") + 1]).toBe(worktreePath);
 
@@ -301,7 +301,7 @@ describe("startVerifyRun", () => {
     expect(final.status).toBe("failed");
     expect(final.phase).toBe("fetching-issues");
     expect(final.error).toContain("gh: rate limited");
-    expect(calls.some((c) => c.args.includes("scripts/ember_01_custody/issue_census.py"))).toBe(false);
+    expect(calls.some((c) => c.args.includes("src/ember/governance/scripts/ember_01_custody/issue_census.py"))).toBe(false);
     expect(calls.some((c) => c.args.includes("src/ember/governance/scripts/verify_ember01_completion.py"))).toBe(false);
     // A failure mid-pipeline still retires the worktree it already created -- never a leak
     // on the ordinary failure path.

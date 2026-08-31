@@ -331,7 +331,7 @@ def preflight_clean_genesis(cfg: dict, root: Path) -> dict:
 
 def _recovery_records(config_module, verifier_module) -> list:
     """Tiny fixed 4-record batch exercising all 4 declared experts (matches
-    tests/ember_restart_model/test_checkpoint_integrity.py's fixture so the
+    tests/ember_restart_model/domain-governance/test_checkpoint_integrity.py's fixture so the
     round-trip proof binds to the SAME real capability-verification path the
     production trainer uses, not a shortcut)."""
     import torch

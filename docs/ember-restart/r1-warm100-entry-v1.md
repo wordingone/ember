@@ -4,7 +4,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 
 # R1 WARM-100 entry adapter (schema v2)
 
-`scripts/ember_restart/contract.py r1-entry` is a thin producer/consumer
+`src/ember/governance/scripts/ember_restart/contract.py r1-entry` is a thin producer/consumer
 adapter around the existing `ember-owned-rung-v1` validator. It does not
 replace that validator and it does not launch a run. This file documents the
 adapter's current schema, `ember-r1-warm100-entry-v2`; the filename is kept

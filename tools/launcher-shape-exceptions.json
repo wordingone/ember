@@ -56,7 +56,7 @@
       "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
     },
     {
-      "path": "tests/ember_restart_model/test_runner_preflight.py",
+      "path": "tests/ember_restart_model/domain-governance/test_runner_preflight.py",
       "sha256": "fc7ad118e0b55741e0c0073a3defa641a62bcffd39922a31ba1fa15c4e399af5",
       "reason": "runner preflight unit suite that deliberately avoids allocating the production model. Any process surface is a patched or temporary probe used to test refusal ordering and preflight evidence, not a runnable training entry."
     },

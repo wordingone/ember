@@ -12,7 +12,7 @@
   "exceptions": [
     {
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "2c7dec68b17da266b94d1ef636ab47dfb2439fcd72c7830721ccfb739e5cc44f",
+      "sha256": "38487feaa5e31736562378e485db6f518fd808dc7ba9c64638e21fd88f311627",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {

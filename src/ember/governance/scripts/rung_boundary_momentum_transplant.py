@@ -16,7 +16,7 @@ Branch A: rung-2 stabilize and all rung-3 grow events adopt
 transplant-with-verified-buffer as boundary policy going forward.
 
 Gap this module fills: neither production grow runner
-(scripts/cbase_grow_live.py, scripts/cbase_grow_rung.py) has ANY momentum
+(src/ember/governance/scripts/cbase_grow_live.py, scripts/cbase_grow_rung.py) has ANY momentum
 transplant wiring at all -- cbase_grow_live.py's own docstring says so
 explicitly ("The pre-grow optimizer state cannot be replayed into the
 post-grow optimizer ... reset_optimizer_on_resume=True skips that load").

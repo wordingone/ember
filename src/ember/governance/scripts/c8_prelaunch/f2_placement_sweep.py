@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """f2_placement_sweep.py -- C8 pre-launch obligation O4, placement-sweep half
 (issue #629; frozen cure adopted from the independent-audit disposition on
 issue #123, "Tighten-only clearance" section, refs #582 #592). CPU-only, zero

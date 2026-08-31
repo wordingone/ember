@@ -38,16 +38,16 @@ One `ember-owned-rung-v1` JSON manifest binds the entire path:
 
 `owned data + owned tokenizer -> unified decoder training -> checkpoint shards -> frozen evaluations -> Ember CLI owned seat`
 
-The executable authority is `scripts/ember_restart/contract.py`. A candidate is checked with:
+The executable authority is `src/ember/governance/scripts/ember_restart/contract.py`. A candidate is checked with:
 
 ```text
-python scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
+python src/ember/governance/scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
 ```
 
 An admission attempt is checked with an independently supplied verifier registry:
 
 ```text
-python scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
+python src/ember/governance/scripts/ember_restart/contract.py validate <run-manifest.json> --trusted-verifier-registry <trusted-verifiers.json>
 ```
 
 The registry is a separate command-line input for both candidate and admission validation. A run manifest cannot declare its own parameter-realization, sufficiency, or evaluation verifier trusted. The content-addressed parameter counter is executed only when its exact bytes are independently admitted for the `parameter_realization` evidence class.

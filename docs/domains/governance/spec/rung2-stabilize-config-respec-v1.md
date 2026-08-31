@@ -7,7 +7,7 @@ deviations from this spec require a deviations.md entry BEFORE the run.
 ## 1. The wall (measured inputs, not folklore)
 
 - PART-B1 preflight receipt: required = 30.903 GiB. Card TOTAL = 23.988 GiB.
-- Headroom floor: the #84 margin assert's configured value = **2.0 GiB** (scripts/cbase_grow_rung2_dryrun.py:733)
+- Headroom floor: the #84 margin assert's configured value = **2.0 GiB** (src/ember/governance/scripts/cbase_grow_rung2_dryrun.py:733)
 - Server residency status quo: :8082 Qwen3.6-27B resident ≈ **6.395 GiB** (from receipts/cbase-grow-rung2-contended-launch-gate-20260708T125724Z.json, peak_used_gib)
 
 ## 2. Config options to price (each row = resident-VRAM formula + throughput cost + P-C disposition)
@@ -74,7 +74,7 @@ P-2 adjudicates on the b4 re-run (in flight, PR #515 branch):
 | 2 | Microbatch ↓ + grad accumulation | 30.903 − 0.75 ≈ **30.2 GiB** at micro_batch=2 (receipts/cbase-grow-rung2-contended-launch-gate-20260708T125724Z.json: micro_batch=2 → activation_estimate_gib=0.75) | UNMEASURED | server resident |
 | 3 | Optimizer-state offload (#429) | 30.903 − 21.602 = **9.301 GiB** VRAM-resident (16.602 GiB moved to host RAM; receipts/cbase-grow-rung2-contended-launch-gate-20260708T125724Z.json) | UNMEASURED | server resident |
 | 4 | Combinations of 1–3 | UNMEASURED (individual contributions not independently measured) | UNMEASURED | server resident |
-| 5 | Serving-on-CPU window | budget = 23.988 − 2.0 = **21.988 GiB** available (margin from scripts/cbase_grow_rung2_dryrun.py:733) | zero training-side cost | P-C stays LIVE |
+| 5 | Serving-on-CPU window | budget = 23.988 − 2.0 = **21.988 GiB** available (margin from src/ember/governance/scripts/cbase_grow_rung2_dryrun.py:733) | zero training-side cost | P-C stays LIVE |
 | 6 | 5 + offload | 21.988 − 21.602 = **0.386 GiB shortfall** (offload alone insufficient) | offload+microbatch needed | as in 5 |
 
 ## Section-3 verdict

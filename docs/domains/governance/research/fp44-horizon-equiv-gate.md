@@ -1,7 +1,7 @@
 # fp-44 — Horizon optimizer-equivalence gate (the c04 optimizer commit)
 
 **Pre-registered before the engineer's horizon-equiv receipt exists** (anti-goalpost-moving,
-the fp-39/fp-42 discipline). Scorer: `scripts/fp44_horizon_equiv_gate.py`
+the fp-39/fp-42 discipline). Scorer: `src/ember/governance/scripts/fp44_horizon_equiv_gate.py`
 (`FP44_HORIZON_EQUIV_GATE_SELFTEST_PASS`, 7 cases).
 
 ## Why this gate exists

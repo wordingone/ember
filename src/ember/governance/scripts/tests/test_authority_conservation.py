@@ -123,7 +123,7 @@ VALID_EXECUTION_BOUNDARY = {
     ],
     "prerequisite_receipts": ["fixture prerequisite receipt"],
     "next_executable_command": (
-        "python scripts/ember_restart/contract.py validate "
+        "python src/ember/governance/scripts/ember_restart/contract.py validate "
         "configs/ember-restart-3b.json"
     ),
 }

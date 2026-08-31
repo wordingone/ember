@@ -2859,7 +2859,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/w2-scale-preregistration-v1.md",
+      "document": "docs/domains/governance/spec/w2-scale-preregistration-v1.md",
       "line": 8,
       "target": "receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json",
       "visible_classification": "reference"

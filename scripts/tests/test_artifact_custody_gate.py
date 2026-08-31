@@ -6,7 +6,7 @@ the durable main-tree root, not whichever worktree happens to be executing them.
 
 #1741 Known Limitation B: both functions took ``repo_root`` as a caller-supplied
 path and every real call site computed it as ``Path(__file__).resolve().parents[2]``
-(``scripts/ember_restart/contract.py``) -- the tree the *executing script* lives
+(``src/ember/governance/scripts/ember_restart/contract.py``) -- the tree the *executing script* lives
 in. From a worktree (the normal working pattern here), that resolves to the
 worktree's own (nonexistent) ``state/`` directory instead of the durable
 ``<main-tree>/state/ember-lab-catalog.sqlite3`` every custody gate must share,

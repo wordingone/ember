@@ -4,7 +4,7 @@
 
 **Enforcement:** Every pull request and every push to master runs two deterministic named gates:
 `src/ember/governance/scripts/check_docs_freshness.py --front-door` and
-`scripts/gen_readme_status.py --check --generated-status`. The unscoped commands remain local
+`src/ember/governance/scripts/gen_readme_status.py --check --generated-status`. The unscoped commands remain local
 full-audit tools and retain their branch-inventory, claims-index, and wall-age checks.
 
 ## What the checker verifies
@@ -75,7 +75,7 @@ Both scoped checks run before merge and again on master:
 
 ```bash
 python src/ember/governance/scripts/check_docs_freshness.py --front-door
-python scripts/gen_readme_status.py --check --generated-status
+python src/ember/governance/scripts/gen_readme_status.py --check --generated-status
 # Exits 0 if clean, 1 if defects found
 ```
 

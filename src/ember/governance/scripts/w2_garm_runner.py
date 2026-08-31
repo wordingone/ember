@@ -108,7 +108,7 @@ import governor  # src/ember/governance/scripts/governor.py -- reused, not edite
 import w2_derive_s_config  # issue #108's tool -- reused, not edited
 
 ISSUE_REF = "#113"
-SPEC_REF = "docs/spec/w2-scale-preregistration-v1.md"
+SPEC_REF = "docs/domains/governance/spec/w2-scale-preregistration-v1.md"
 RUNG2_SPEC_REF = "docs/domains/governance/spec/rung2-grow-spec-v1.md"
 
 RECEIPT_DIR = os.path.join(REPO, "receipts", "ember-c-scale")

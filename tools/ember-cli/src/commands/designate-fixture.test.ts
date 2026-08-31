@@ -101,7 +101,7 @@ function buildCandidate(
     ],
     consumers: {
       identity: closureEntry("identity", "src/ember/governance/scripts/ember_01_identity/validate_identity.py"),
-      restart: closureEntry("restart", "scripts/ember_restart/cli_seat.py"),
+      restart: closureEntry("restart", "src/ember/governance/scripts/ember_restart/cli_seat.py"),
     },
     cross_consumer_digest_join_sha256: digestJoin,
     loaded: false,
@@ -237,7 +237,7 @@ describe("/designate selection over a real admitted candidate", () => {
       claim_boundary: ["candidate_produced", "identity_consumer_accepted", "restart_consumer_accepted"],
       consumers: {
         identity: closureEntry("identity", "src/ember/governance/scripts/ember_01_identity/validate_identity.py"),
-        restart: closureEntry("restart", "scripts/ember_restart/cli_seat.py"),
+        restart: closureEntry("restart", "src/ember/governance/scripts/ember_restart/cli_seat.py"),
       },
       cross_consumer_digest_join_sha256: digestJoin,
       loaded: false,
@@ -408,7 +408,7 @@ describe("/designate selection over a real admitted candidate", () => {
       claim_boundary: ["candidate_produced", "identity_consumer_accepted", "restart_consumer_accepted"],
       consumers: {
         identity: closureEntry("identity", "src/ember/governance/scripts/ember_01_identity/validate_identity.py"),
-        restart: closureEntry("restart", "scripts/ember_restart/cli_seat.py"),
+        restart: closureEntry("restart", "src/ember/governance/scripts/ember_restart/cli_seat.py"),
       },
       cross_consumer_digest_join_sha256: digestJoin,
       loaded: false,

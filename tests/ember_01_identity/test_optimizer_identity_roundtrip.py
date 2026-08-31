@@ -71,7 +71,7 @@ from optimizer_identity_binding import (  # noqa: E402
 OPTIMIZER_STATE_BYTES = ARTIFACT_BYTES["training.optimizer_state"]
 
 # A signed REALIZED optimizer-realization receipt shaped exactly as
-# scripts/ember_restart/contract.py binds it (schema_version / result / implementation /
+# src/ember/governance/scripts/ember_restart/contract.py binds it (schema_version / result / implementation /
 # hyperparameters / state_format). Contract half of the optimizer identity.
 REALIZATION_RECEIPT = {
     "schema_version": "ember-optimizer-realization-v1",
@@ -281,7 +281,7 @@ class OptimizerIdentityRoundTrip(unittest.TestCase):
     @staticmethod
     def _valid_contract() -> dict:
         # The manifest optimizer contract identity that equals the signed REALIZED
-        # ember-optimizer-realization-v1 receipt scripts/ember_restart/contract.py binds
+        # ember-optimizer-realization-v1 receipt src/ember/governance/scripts/ember_restart/contract.py binds
         # (the first 3 fields), PLUS the 5 B4 residual identity fields REQUIRED as of
         # this PR (ember01plan.md SS B4 L1061-1082). A complete contract -- every one
         # of the 8 fields present and well-formed -- is the GREEN case; the mutation

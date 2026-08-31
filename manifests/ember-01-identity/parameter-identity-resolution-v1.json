@@ -111,35 +111,35 @@
       "category": "parameter_identity",
       "evidence_sha256": "b0c28c13a9d27d229d39b979cf6945ef398b3d955e8460522a5209a781f53451",
       "line": 207,
-      "path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+      "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "e54fd95951c0300d992d8ec6593cab69ce889db90aabfe944f44d3b27210a3fb",
       "line": 216,
-      "path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+      "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "3cadf04ec0453286a412ac9a08e880d3aae4d7a2b17312482238072a6b8d6cd7",
       "line": 94,
-      "path": "scripts/cbase_grow_live.py",
+      "path": "src/ember/governance/scripts/cbase_grow_live.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "e54fd95951c0300d992d8ec6593cab69ce889db90aabfe944f44d3b27210a3fb",
       "line": 100,
-      "path": "scripts/cbase_grow_live.py",
+      "path": "src/ember/governance/scripts/cbase_grow_live.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "8aadaf692d8e76cd6ccf72f78b135b5c0c1c5f955418ab82c50a238a3c7555fe",
       "line": 341,
-      "path": "scripts/cbase_grow_live.py",
+      "path": "src/ember/governance/scripts/cbase_grow_live.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
@@ -503,28 +503,28 @@
       "category": "parameter_identity",
       "evidence_sha256": "406533155948fc3ebc2163bd5bd0d1f6584852ce82da19ec6beef8545e393e5f",
       "line": 271,
-      "path": "scripts/tests/test_authority_conservation.py",
+      "path": "src/ember/governance/scripts/tests/test_authority_conservation.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "5e5734bcace84fd508e0d70bf6da3a0c441fe6bdad306afc5813b7d9c907813e",
       "line": 666,
-      "path": "scripts/tests/test_authority_conservation.py",
+      "path": "src/ember/governance/scripts/tests/test_authority_conservation.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "c37bc4be0c0b831c2c8065865f36a69ca976f2888e57adedeefc812baf0a09ac",
       "line": 680,
-      "path": "scripts/tests/test_authority_conservation.py",
+      "path": "src/ember/governance/scripts/tests/test_authority_conservation.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "6ecd4ac532baf74d751a8ee6f44a167ea65edc3d16ce77f97d8a4f20b01e8b9c",
       "line": 713,
-      "path": "scripts/tests/test_authority_conservation.py",
+      "path": "src/ember/governance/scripts/tests/test_authority_conservation.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {

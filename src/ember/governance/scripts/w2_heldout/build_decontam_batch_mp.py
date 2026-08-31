@@ -2204,7 +2204,7 @@ def write_receipt(result: dict, *, receipt_dir: str = RECEIPT_DIR) -> str:
     receipt = {
         "schema": "w2-heldout-decontam/v1",
         "ts": ts,
-        "spec_ref": "docs/spec/w2-scale-preregistration-v1.md#4-decontamination-precondition",
+        "spec_ref": "docs/domains/governance/spec/w2-scale-preregistration-v1.md#4-decontamination-precondition",
         "reused_matcher": "src/ember/governance/scripts/w1_collapse_control_run.py:contamination_recheck "
                           "(parallelized via multiprocessing, same semantics)",
         "batch_sha256": result["batch_sha256"],

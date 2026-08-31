@@ -99,7 +99,7 @@ EXPECTED_LANDED_PATHS = {
     "scripts/test_ember_cbase_avir_data_v2.py",
 }
 IMPORT_CLOSURE_PATHS = (
-    "scripts/ember_avir_tasks.py",
+    "src/ember/governance/scripts/ember_avir_tasks.py",
     "src/ember/governance/scripts/ember_avir_harness.py",
     "src/ember/governance/scripts/governor.py",
     "scripts/timeshare_pretrain.py",

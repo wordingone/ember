@@ -33,7 +33,7 @@ legitimate caller, for zero security benefit, until the issuer side lands.
 | Entry point | What it does | Current CLI caller |
 | --- | --- | --- |
 | `src/ember/governance/scripts/verify_ember01_completion.py` | assembles the EMBER-01 nine-condition completion receipt (reads/hashes, never launches) | `services/verify-watch.ts` (`child_process.spawn`, polled) |
-| `scripts/ember_01_custody/census.py` | "Deterministic, read-only custody and benchmark census primitives" (its own docstring) | census-facing commands, spawned directly |
+| `src/ember/governance/scripts/ember_01_custody/census.py` | "Deterministic, read-only custody and benchmark census primitives" (its own docstring) | census-facing commands, spawned directly |
 | `src/ember/governance/scripts/ember_01_identity/validate_identity.py` | "Validate Ember model/experiment identity manifests **without loading a model**" (its own docstring) | identity-validation callers, spawned directly |
 | `tools/ember-restart-3b/launch_packet.py` | "EMBER-01 cond7 launch-packet readiness runner (**CPU-only, no GPU allocation**)" (its own docstring) | `commands/train.ts` preflight (`runLaunchPacket`), spawned directly, **before** any certified-launch offer exists |
 | `src/ember/governance/scripts/training_closure.py` | audits/hashes the training dependency closure declaration; `--print-hash` or pass/fail report, never spawns | imported by `certified_train_launch.py`; CLI-invoked standalone for audits |

@@ -6,7 +6,7 @@
 Derives the S arm's from-scratch model config MECHANICALLY from the G arm's
 post-grow architecture dump -- zero free parameters. Built by the pubgate
 lane specifically because it must NOT be the lane that builds/runs the G arm
-(W2 pre-registration docs/spec/w2-scale-preregistration-v1.md sec.5:
+(W2 pre-registration docs/domains/governance/spec/w2-scale-preregistration-v1.md sec.5:
 "control-authorship separation -- the S arm's config is derived mechanically
 from the G arm's architecture dump, never hand-tuned").
 

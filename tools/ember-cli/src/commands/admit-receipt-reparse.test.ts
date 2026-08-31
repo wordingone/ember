@@ -72,8 +72,8 @@ describe("/admit receipt path authority", () => {
           returncode: 0, stdout_sha256: "4".repeat(64),
           validator_sha256: "2".repeat(64),
           validator_closure: {
-            "scripts/ember_restart/cli_seat.py": {
-              relative_path: "scripts/ember_restart/cli_seat.py",
+            "src/ember/governance/scripts/ember_restart/cli_seat.py": {
+              relative_path: "src/ember/governance/scripts/ember_restart/cli_seat.py",
               sha256: "2".repeat(64), bytes: 1,
             },
           },

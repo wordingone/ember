@@ -206,7 +206,7 @@ INVENTORY: tuple[dict, ...] = (
          path="scripts/check_energy_law_theory.py",
          provenance="Energy-law receipt-shape checker (P1 receipt-shape check, R2-E2)."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/ember_restart/contract.py",
+         path="src/ember/governance/scripts/ember_restart/contract.py",
          provenance="ember-owned-rung-v1 admission contract; the fail-closed "
                     "prerequisite of sec1."),
     dict(category="deterministic_tools", kind="file",

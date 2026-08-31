@@ -3152,7 +3152,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
             },
             "w2_scale_preregistration_multiplier_1p5x": {
                 "multiplier": "1.5 * grow.projected",
-                "source": "docs/spec/w2-scale-preregistration-v1.md section 3 (L0 "
+                "source": "docs/domains/governance/spec/w2-scale-preregistration-v1.md section 3 (L0 "
                            "definition) -- a DIFFERENT experiment's convention "
                            "(rung-2 scale arms), not this W1 from-scratch control "
                            "run's own frozen ceiling. Referenced here only because "

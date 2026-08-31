@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Adjudicate ember-sufficient-pretraining-v2 from training evidence bytes.
 
-Evidence class: sufficient_pretraining. Invoked by scripts/ember_restart/contract.py as
+Evidence class: sufficient_pretraining. Invoked by src/ember/governance/scripts/ember_restart/contract.py as
 
     python -I sufficient-pretraining-verifier.py \
         --checkpoint-manifest <path> --criterion-id ember-sufficient-pretraining-v2 \

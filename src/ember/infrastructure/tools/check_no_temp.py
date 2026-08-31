@@ -20,7 +20,7 @@ This script scans ember source for the system-temp primitives named in the polic
     bare `TemporaryDirectory(...)` / `NamedTemporaryFile(...)` forms after a
     `from tempfile import ...`) that do NOT pass an explicit in-tree `dir=` argument
 
-A match is a violation UNLESS its file is listed in tools/no_temp_allowlist (one
+A match is a violation UNLESS its file is listed in src/ember/infrastructure/tools/no_temp_allowlist (one
 relative POSIX path per line; the allowlist is a SHRINKING list — new files may never
 be added to it going forward without an explicit exception; it exists only to let this
 gate land before every known site is purged, per the policy's staged rollout).
@@ -57,7 +57,7 @@ SCAN_DIRS = [
 # without being flagged as violations of themselves).
 SELF_EXCLUDE = {
     "src/ember/infrastructure/tools/check_no_temp.py",
-    "tools/no_temp_allowlist",
+    "src/ember/infrastructure/tools/no_temp_allowlist",
 }
 
 # Extensions worth scanning; anything else (binaries, lockfiles, data) is skipped.
@@ -230,7 +230,7 @@ def main() -> int:
         print(
             "\nEmber's NO-TEMP policy (per operator direction) forbids system temp anywhere "
             "in the stack. Route through emberScratchDir()/ember_scratch_dir(), or add the "
-            "exact file to tools/no_temp_allowlist ONLY as a tracked, shrinking debt entry."
+            "exact file to src/ember/infrastructure/tools/no_temp_allowlist ONLY as a tracked, shrinking debt entry."
         )
         return 1
 
@@ -254,7 +254,7 @@ def main() -> int:
 
     print(
         f"check_no_temp: PASS — {sum(len(h) for h in all_violations.values())} match(es), "
-        f"all covered by tools/no_temp_allowlist ({len(allowlist)} allowlisted file(s))."
+        f"all covered by src/ember/infrastructure/tools/no_temp_allowlist ({len(allowlist)} allowlisted file(s))."
     )
     for rel in sorted(all_violations):
         print(f"  allowlisted: {rel} ({len(all_violations[rel])} match(es))")

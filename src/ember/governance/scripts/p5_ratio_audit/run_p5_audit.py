@@ -822,7 +822,7 @@ def _find_reset_flag(obj, depth: int = 5):
     """Recursively search for an 'optimizer_reset_on_resume' field
     (verbatim key name, scripts/timeshare_pretrain.py::run_v0_segment
     parameter, receipted verbatim by scripts/cbase_grow_rung.py and
-    scripts/cbase_grow_live.py). Returns bool or None if absent."""
+    src/ember/governance/scripts/cbase_grow_live.py). Returns bool or None if absent."""
     if depth <= 0 or not isinstance(obj, dict):
         return None
     for k, v in obj.items():

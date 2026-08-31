@@ -395,7 +395,7 @@ def test_manifest_publish_is_atomic_and_check_mode_detects_drift(tmp_path: Path)
 
 
 def test_d04_superseding_amendment_binds_single_authority_and_consumers() -> None:
-    amendment_path = ROOT / "docs/spec/ember02-r2-cheap-probe-amendment-v2.json"
+    amendment_path = ROOT / "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v2.json"
     amendment = json.loads(amendment_path.read_text(encoding="utf-8"))
     suite_path = ROOT / amendment["decision"]["source_manifest"]["path"]
     implementations = amendment["decision"]["implementations"]

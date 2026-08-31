@@ -162,7 +162,7 @@ UNRESOLVED = "unresolved"
 
 CONFIG_REL = "configs/ember-restart-3b.json"
 LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
-CENSUS_REL = "scripts/ember_01_custody/census.py"
+CENSUS_REL = "src/ember/governance/scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "src/ember/governance/scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
 COND4_SURFACE_VALIDATOR_PATH = Path(__file__).with_name("cond4_behavior_surface.py")

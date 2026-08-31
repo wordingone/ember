@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Measure realized parameter counts from a model config and a checkpoint manifest.
 
-Evidence class: parameter_realization. Invoked by scripts/ember_restart/contract.py as
+Evidence class: parameter_realization. Invoked by src/ember/governance/scripts/ember_restart/contract.py as
 
     python -I parameter-realization-verifier.py \
         --model-config <path> --checkpoint-manifest <path> --active-expert <id|empty>

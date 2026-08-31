@@ -2763,7 +2763,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "scripts/c8_prelaunch/c5c_readout.py",
+          "artifact_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
           "artifact_sha256": "5339907ab72c63091e1866b8cf366766e6455aa8409bb5160ddfe90243690a3f",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "The frozen C5C readout keeps two rungs directional-only, uses a joint-bootstrap interval for W, and requires three rungs for uncertainty-aware monotone widening without changing F1-F3.",
@@ -2773,13 +2773,13 @@
           "implementation_commit": "2d4bfc9ecdf2df2c77dac884d1b42ee8d702228e",
           "implementation_diff_sha256": "b5905400005a2ba7486fb4ecfbe7fdbf0a7b296ad413b4f8b1afe4961e8a9a28",
           "implementation_paths": [
-            "scripts/c8_prelaunch/c5c_readout.py"
+            "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
           ],
           "number": 628,
           "verification_executed_at": "2026-07-13T11:33:26Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "scripts/c8_prelaunch/c5c_readout.py",
+          "verifier_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
           "verifier_sha256": "5339907ab72c63091e1866b8cf366766e6455aa8409bb5160ddfe90243690a3f"
         }
       ],
@@ -2814,7 +2814,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+          "artifact_path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
           "artifact_sha256": "911c6db4ad38ae81182a56fa6a75a174ef22bdbd50fc221185a922d426639cba",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "The F2 generator and sweep bind every frozen input except k, reject the .10/.40 collision, define sweep/zero/tie/failure behavior, and map FLOPs to integer steps within two percent.",
@@ -2825,8 +2825,8 @@
           "implementation_diff_sha256": "75e7ab696cec1f1ad7a9f3f742b178426a0e3017929fdcf186434b459892132b",
           "implementation_paths": [
             "receipts/c8-prelaunch/f2-collision-repro-20260710T010000Z.json",
-            "scripts/c8_prelaunch/f2_placement_sweep.py",
-            "scripts/c8_prelaunch/f2_schedule_generator.py",
+            "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py",
+            "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
             "tests/test_f2_instance_commitment.py"
           ],
           "number": 629,
@@ -3878,7 +3878,7 @@
       "verifier_sha256": "ae0c7dd22648d17b1db1491b4e701ddc3ba82f4608828fe1c6e58b19d991aa3b"
     },
     {
-      "artifact_path": "scripts/c8_prelaunch/c5c_readout.py",
+      "artifact_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
       "artifact_sha256": "5339907ab72c63091e1866b8cf366766e6455aa8409bb5160ddfe90243690a3f",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
       "criterion": "The frozen C5C readout keeps two rungs directional-only, uses a joint-bootstrap interval for W, and requires three rungs for uncertainty-aware monotone widening without changing F1-F3.",
@@ -3888,17 +3888,17 @@
       "implementation_commit": "2d4bfc9ecdf2df2c77dac884d1b42ee8d702228e",
       "implementation_diff_sha256": "b5905400005a2ba7486fb4ecfbe7fdbf0a7b296ad413b4f8b1afe4961e8a9a28",
       "implementation_paths": [
-        "scripts/c8_prelaunch/c5c_readout.py"
+        "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
       ],
       "number": 628,
       "verification_executed_at": "2026-07-13T11:33:26Z",
       "verification_exit_code": 0,
       "verification_outcome": "independently_verified",
-      "verifier_path": "scripts/c8_prelaunch/c5c_readout.py",
+      "verifier_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
       "verifier_sha256": "5339907ab72c63091e1866b8cf366766e6455aa8409bb5160ddfe90243690a3f"
     },
     {
-      "artifact_path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+      "artifact_path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
       "artifact_sha256": "911c6db4ad38ae81182a56fa6a75a174ef22bdbd50fc221185a922d426639cba",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
       "criterion": "The F2 generator and sweep bind every frozen input except k, reject the .10/.40 collision, define sweep/zero/tie/failure behavior, and map FLOPs to integer steps within two percent.",
@@ -3909,8 +3909,8 @@
       "implementation_diff_sha256": "75e7ab696cec1f1ad7a9f3f742b178426a0e3017929fdcf186434b459892132b",
       "implementation_paths": [
         "receipts/c8-prelaunch/f2-collision-repro-20260710T010000Z.json",
-        "scripts/c8_prelaunch/f2_placement_sweep.py",
-        "scripts/c8_prelaunch/f2_schedule_generator.py",
+        "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py",
+        "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
         "tests/test_f2_instance_commitment.py"
       ],
       "number": 629,
@@ -7273,12 +7273,12 @@
         {
           "blob_sha1": "72a9d0e7949bf172d99ebf48d454194e9470ffb8",
           "line": 36,
-          "path": "scripts/c04_pick_rehearsal.py"
+          "path": "src/ember/governance/scripts/c04_pick_rehearsal.py"
         },
         {
           "blob_sha1": "05a799eff1b31e84f0a2bb5811f5df6c7f744aa7",
           "line": 1,
-          "path": "scripts/c04_receipt3.py"
+          "path": "src/ember/governance/scripts/c04_receipt3.py"
         },
         {
           "blob_sha1": "5954e96c298dc24fe8fb60d55e21b29a28d0da79",
@@ -7802,12 +7802,12 @@
         {
           "blob_sha1": "6750869ec515cfe053a3b542f5f715236d34ea87",
           "line": 46,
-          "path": "docs/spec/w2-scale-preregistration-v1.md"
+          "path": "docs/domains/governance/spec/w2-scale-preregistration-v1.md"
         },
         {
           "blob_sha1": "6750869ec515cfe053a3b542f5f715236d34ea87",
           "line": 70,
-          "path": "docs/spec/w2-scale-preregistration-v1.md"
+          "path": "docs/domains/governance/spec/w2-scale-preregistration-v1.md"
         },
         {
           "blob_sha1": "89dea4a56ad9ab5e3b014693608bf689d884e476",
@@ -8358,7 +8358,7 @@
         {
           "blob_sha1": "23bf10cfe4ee2e2ab3c8b83f300dac6762dadd95",
           "line": 62,
-          "path": "docs/spec/p1-envelope-sweep-prereg-v1.md"
+          "path": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md"
         },
         {
           "blob_sha1": "1e0a07d5ac550420577c8452d5f32f0028aa418a",
@@ -8908,7 +8908,7 @@
         {
           "blob_sha1": "c494d6553c189a9e3bb4fea0b16cf4246daa4494",
           "line": 15,
-          "path": "docs/research/fp19-envelope.md"
+          "path": "docs/domains/governance/research/fp19-envelope.md"
         },
         {
           "blob_sha1": "dcb1bc4a7a2b9bc5bae2e6f2793686834a8bd0ca",
@@ -9160,17 +9160,17 @@
         {
           "blob_sha1": "23bf10cfe4ee2e2ab3c8b83f300dac6762dadd95",
           "line": 7,
-          "path": "docs/spec/p1-envelope-sweep-prereg-v1.md"
+          "path": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md"
         },
         {
           "blob_sha1": "23bf10cfe4ee2e2ab3c8b83f300dac6762dadd95",
           "line": 8,
-          "path": "docs/spec/p1-envelope-sweep-prereg-v1.md"
+          "path": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md"
         },
         {
           "blob_sha1": "23bf10cfe4ee2e2ab3c8b83f300dac6762dadd95",
           "line": 37,
-          "path": "docs/spec/p1-envelope-sweep-prereg-v1.md"
+          "path": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md"
         },
         {
           "blob_sha1": "40123de2e52c5cbe7156e4e8fa272996de562aa8",
@@ -9546,7 +9546,7 @@
         {
           "blob_sha1": "23bf10cfe4ee2e2ab3c8b83f300dac6762dadd95",
           "line": 15,
-          "path": "docs/spec/p1-envelope-sweep-prereg-v1.md"
+          "path": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md"
         },
         {
           "blob_sha1": "dd06f568f3f3cbe69236e76556e00c531f9f9e78",
@@ -9811,137 +9811,137 @@
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 3,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 4,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 15,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 25,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 49,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 50,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 52,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 55,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 68,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 72,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 78,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 110,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 3,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 32,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 190,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 262,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 271,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 4,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 8,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 27,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 65,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 121,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 122,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "17ac3f95b7813c85ba31a78c1be255881c2d8199",
           "line": 3,
-          "path": "scripts/c8_prelaunch/f2_schedule_generator.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py"
         },
         {
           "blob_sha1": "17ac3f95b7813c85ba31a78c1be255881c2d8199",
           "line": 7,
-          "path": "scripts/c8_prelaunch/f2_schedule_generator.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py"
         },
         {
           "blob_sha1": "17ac3f95b7813c85ba31a78c1be255881c2d8199",
           "line": 24,
-          "path": "scripts/c8_prelaunch/f2_schedule_generator.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py"
         },
         {
           "blob_sha1": "17ac3f95b7813c85ba31a78c1be255881c2d8199",
           "line": 186,
-          "path": "scripts/c8_prelaunch/f2_schedule_generator.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py"
         },
         {
           "blob_sha1": "1b212831be66744413d591fa7b3fc9157ef7290b",
@@ -10302,7 +10302,7 @@
         {
           "blob_sha1": "722af748adf59ab4b6061962526c5add411560ff",
           "line": 2,
-          "path": "scripts/fp24_verdict.py"
+          "path": "src/ember/governance/scripts/fp24_verdict.py"
         }
       ],
       "number": 139,
@@ -12464,7 +12464,7 @@
         {
           "blob_sha1": "c494d6553c189a9e3bb4fea0b16cf4246daa4494",
           "line": 72,
-          "path": "docs/research/fp19-envelope.md"
+          "path": "docs/domains/governance/research/fp19-envelope.md"
         },
         {
           "blob_sha1": "ea46af5eacd8dded2da48aa2c6a88a8e3d03b0a0",
@@ -13199,7 +13199,7 @@
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 156,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "7428c50eb157c920add5552ffe2f927e74e0f35c",
@@ -14107,7 +14107,7 @@
         {
           "blob_sha1": "28891fe94a33fb946b0eced86fde7eff1c809ca8",
           "line": 39,
-          "path": "scripts/fp44_horizon_equiv_gate.py"
+          "path": "src/ember/governance/scripts/fp44_horizon_equiv_gate.py"
         }
       ],
       "number": 367,
@@ -18099,22 +18099,22 @@
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 2,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "18daeb8d8e4fe810e06d32b3de910b6d6794ecab",
           "line": 4,
-          "path": "scripts/c8_prelaunch/f2_placement_sweep.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py"
         },
         {
           "blob_sha1": "17ac3f95b7813c85ba31a78c1be255881c2d8199",
           "line": 2,
-          "path": "scripts/c8_prelaunch/f2_schedule_generator.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py"
         },
         {
           "blob_sha1": "17ac3f95b7813c85ba31a78c1be255881c2d8199",
           "line": 8,
-          "path": "scripts/c8_prelaunch/f2_schedule_generator.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py"
         },
         {
           "blob_sha1": "1b212831be66744413d591fa7b3fc9157ef7290b",
@@ -18199,62 +18199,62 @@
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 13,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 93,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 111,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 126,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 187,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 218,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 245,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 270,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 341,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 389,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 504,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
           "line": 581,
-          "path": "scripts/c8_prelaunch/compute_mde.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py"
         },
         {
           "blob_sha1": "802e7f62d7578bcc43b541180c277059c7b646a0",
@@ -18588,7 +18588,7 @@
         {
           "blob_sha1": "c57b8cfd087c310e45b4c99da97e7d11a90f7e0a",
           "line": 41,
-          "path": "scripts/c8_prelaunch/c5c_readout.py"
+          "path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
         },
         {
           "blob_sha1": "e06367861d904fc5146a8e0ec293a6d9435ef418",

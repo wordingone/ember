@@ -672,7 +672,7 @@ class LoadedOwnedRuntime:
         run_manifest_bytes = run_manifest.read_bytes()
         run_manifest_sha256 = hashlib.sha256(run_manifest_bytes).hexdigest()
         # Registry trust-anchor pin (cond3 harden): _load_trusted_verifiers
-        # (scripts/ember_restart/contract.py) pins the registry's INNER
+        # (src/ember/governance/scripts/ember_restart/contract.py) pins the registry's INNER
         # entries only against sha256 values declared inside that same
         # registry file -- a self-consistent, attacker-authored registry
         # would otherwise be trusted as-supplied. Hash the registry FILE

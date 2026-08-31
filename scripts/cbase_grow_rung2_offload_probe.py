@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_rung2_offload_probe.py — CPU-verifiable equivalence probes for
 the DEV-002 cure (CPU-offloaded optimizer states + micro-batch/grad
-accumulation). Companion to scripts/cbase_grow_rung2_dryrun.py; does NOT run
+accumulation). Companion to src/ember/governance/scripts/cbase_grow_rung2_dryrun.py; does NOT run
 the measured production-scale dry-run itself (that needs the coordinated
 serving-pause GPU window — explicitly out of THIS lane's scope per the cure
 PR spec; the follow-up push adds those receipts before merge-gate).

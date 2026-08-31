@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """P2-G3 3-axis accounting harness — FLOP/token/wall-clock ledger + matched-budget comparison.
 
 Implements §4 C3 accounting protocol (3-axis receipts) and §5 P2-G3 gate.
@@ -23,7 +26,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 # FLOP computation: exact param-count formula per cbase_grow_live.py D1 budget
 # ---------------------------------------------------------------------------
-# Source: scripts/cbase_grow_live.py lines 94-100 (receipted precedent convention)
+# Source: src/ember/governance/scripts/cbase_grow_live.py lines 94-100 (receipted precedent convention)
 # and _backbone_param_estimate lines 103-118 (exact parameter count formula).
 #
 # Standard dense-transformer FLOPs/step: 6 * params * batch * seq

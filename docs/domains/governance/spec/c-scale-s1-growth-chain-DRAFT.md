@@ -162,7 +162,7 @@ accounting the issue asks for; no new field is needed, only continuation at the 
 
 ### 3.1 Deriving the exact formula from the two receipted points (not assumed)
 
-`scripts/cbase_grow_live.py::_backbone_param_estimate` (execution tree — **absent as of 2026-07-03 in
+`src/ember/governance/scripts/cbase_grow_live.py::_backbone_param_estimate` (execution tree — **absent as of 2026-07-03 in
 this contract tree**, same status as §2.1's `cbase_grow_dryrun.py`) gives the general per-layer form
 (hidden=1024, layers=20, vocab=32000 fixed): `per_layer = 4*hidden² + 3*hidden*ff + 2*hidden`.
 Isolating the FF-dependent term: `FF_term(ff) = layers * 3 * hidden * ff = 20*3*1024*ff = 61,440 * ff`.
@@ -311,7 +311,7 @@ directly bounds Option C in §6 below.
 **execution tree's** copy of the identical filename (`src/ember/governance/scripts/v0_pretrain_launch_gate.py`, execution
 tree root) has a materially different, newer `g_budget(launch_date, shatter_fit=None, requested_run=None)` plus a
 `_requested_run_compute_fit()` helper and `MICRO_FIT_CEILING_FLOPS`/`MICRO_FIT_FRACTION` constants —
-the exact mechanism `scripts/cbase_grow_live.py` and the composition A/B receipt's own `g_budget`
+the exact mechanism `src/ember/governance/scripts/cbase_grow_live.py` and the composition A/B receipt's own `g_budget`
 block already depend on and cite in practice (§4.1). **The contract tree's launch-gate script is stale
 relative to the one actually gating GPU dispatch decisions today** — a real drift on a script whose
 job is refusing unsafe launches, flagged here (build target: import the execution tree's newer copy
@@ -458,7 +458,7 @@ wall-clock target) per rung — this dossier deliberately does not choose.
 ## 8. Citation-checker verification
 
 `python src/ember/governance/scripts/check_goal_citations.py` was run against the repo (this document included, under
-`docs/spec/`) — three times: the first pass caught a real gap (a citation of `scripts/cbase_grow_live.py`
+`docs/spec/`) — three times: the first pass caught a real gap (a citation of `src/ember/governance/scripts/cbase_grow_live.py`
 in §3.1 with no adjacent absent-marker, plus a typo that mis-prefixed the same filename under the
 wrong top-level directory in §5.1), both fixed; a second pass then caught the same filename appearing
 a third time, unprefixed, inside this very verification paragraph's own description of the first fix
@@ -478,7 +478,7 @@ pass=True
 
 Zero missing citations repo-wide. This document contributes 3 of the run's 22 documented-absent
 citations — the execution-tree-only paths it names and explicitly marks absent-in-contract-tree at
-the citation site: `src/ember/governance/scripts/cbase_grow_dryrun.py` (line 85), `scripts/cbase_grow_live.py` (line 162),
+the citation site: `src/ember/governance/scripts/cbase_grow_dryrun.py` (line 85), `src/ember/governance/scripts/cbase_grow_live.py` (line 162),
 `receipts/ceff-composition-ab-20260703T111351Z.json` (line 262) — each carries the "absent as of
 2026-07-03 in this contract tree" marker per the checker's own documented convention (§2 of its module
 docstring), confirmed directly against `receipts/citation-check-20260703T122221Z.json`'s
@@ -491,7 +491,7 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 `GOAL.md` · `docs/domains/governance/spec/conditions-v1.md` · `docs/spec/growth-v1.md` ·
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
 `docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `src/ember/governance/scripts/ember_totality/test_c_scale.py` ·
-`src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·
+`src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `src/ember/governance/scripts/cbase_grow_live.py` ·
 `scripts/timeshare_pretrain.py` · `src/ember/governance/scripts/check_goal_citations.py` ·
 `configs/v0-pretrain-config.json` ·
 `receipts/v0-live-20260623T105829Z.json` ·

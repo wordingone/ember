@@ -166,7 +166,7 @@ ROWS = (
     {"id": 10, "condition": "B-leg instruments frozen: duty battery "
                             "(content + encodings), seat-adapter contract, "
                             "B-run designation rule, frozen episode spec v1",
-     "requires": (("docs/archive/pre-restart/sp6-duty-battery.jsonl", 1),
+     "requires": (("docs/domains/governance/archive/pre-restart/sp6-duty-battery.jsonl", 1),
                   ("docs/archive/pre-restart/sp6-duty-battery-encodings.jsonl", 1),
                   ("docs/archive/pre-restart/sp6c-seat-adapter-v0.md", 1),
                   ("docs/archive/pre-restart/sp6b-designation-rule-v0.md", 1),
