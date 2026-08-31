@@ -354,7 +354,7 @@ pre-epoch history.
   EVERY top-level directory the repo actually has (excluding `.git`) with a non-empty one-line
   purpose — any real directory absent from the map, or mapped with an empty purpose, is RED naming
   the dir(s); AND the newest receipt under `receipts/cold-read-reprobe/` (dir seeded 2026-07-02) exists and does not carry
-  `_synthetic_control_fixture: true` — receipt-absent = RED; AND `scripts/check_goal_citations.py`
+  `_synthetic_control_fixture: true` — receipt-absent = RED; AND `src/ember/governance/scripts/check_goal_citations.py`
   is run (subprocess, 120s timeout) and exits 0 — nonzero = RED quoting its last output line,
   unable-to-run = UNEVALUABLE.
 

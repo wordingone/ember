@@ -6,7 +6,7 @@
 
 **Architecture:** Carrier 1 adds a closed, deterministic signature grammar and an observation-only collector at the real decoded-batch boundary. It cannot activate either accelerator and emits a no-overwrite census receipt. Carrier 2 wires the already-reviewed FP8 and graph primitives into the same training loop, but activation fails closed unless an exact merged census receipt and its admitted signature set verify.
 
-**Tech Stack:** Python 3.12, PyTorch/CUDA, unittest/pytest, governed Ember vertical runner, `src/ember/governance/scripts/owned_process.py`, `scripts/worktree_lifecycle.py`.
+**Tech Stack:** Python 3.12, PyTorch/CUDA, unittest/pytest, governed Ember vertical runner, `src/ember/governance/scripts/owned_process.py`, `src/ember/governance/scripts/worktree_lifecycle.py`.
 
 ---
 

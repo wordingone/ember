@@ -40,7 +40,7 @@ baseline/**/*.sh text eol=lf
 baseline/**/*.md text eol=lf
 baseline/**/*.json text eol=lf
 baseline/**/*.jsonl text eol=lf
-docs/authority/INVARIANT.md -text
+docs/domains/governance/authority/INVARIANT.md -text
 tests/fixtures/ember-cli/issue-243/live-resize-v1/** -text -diff
 # Binary fixtures/captures: explicit byte-pinned opt-out from strict text gates.
 tests/ember_restart/__fixtures__/cond3-artifact-b/checkpoint -text

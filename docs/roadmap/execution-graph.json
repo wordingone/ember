@@ -39,13 +39,13 @@
     },
     {
       "id": "EMBER-03",
-      "contract": "docs/roadmap/milestones/EMBER-03.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-03.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-02"]
     },
     {
       "id": "EMBER-04",
-      "contract": "docs/roadmap/milestones/EMBER-04.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-04.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-03"]
     },
@@ -57,31 +57,31 @@
     },
     {
       "id": "EMBER-06",
-      "contract": "docs/roadmap/milestones/EMBER-06.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-06.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-05"]
     },
     {
       "id": "EMBER-07",
-      "contract": "docs/roadmap/milestones/EMBER-07.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-07.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-06"]
     },
     {
       "id": "EMBER-08",
-      "contract": "docs/roadmap/milestones/EMBER-08.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-08.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-07"]
     },
     {
       "id": "EMBER-09",
-      "contract": "docs/roadmap/milestones/EMBER-09.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-09.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-08"]
     },
     {
       "id": "EMBER-10",
-      "contract": "docs/roadmap/milestones/EMBER-10.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-10.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-09"]
     },

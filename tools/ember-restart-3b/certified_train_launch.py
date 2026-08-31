@@ -45,7 +45,7 @@ GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
 # RELATIVE_PATH -- the custody gate is infrastructure with no dependency on
 # which tree is being launched, so it is loaded from THIS file's own tree even
 # though the repo_root it is asked to verify custody against varies per call.
-ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "scripts/artifact_custody_gate.py"
+ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/artifact_custody_gate.py"
 # Guard-floor keys (issue #1410): the remote guard's receipt_check requires
 # ticket/ts/sha_convention on any receipt carrying sha256 fields, and authority
 # leg 4 requires goal_id/next_executed_outcome on committed artifacts. They are

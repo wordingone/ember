@@ -1196,7 +1196,7 @@ def build_gate_receipt(
     full_parity_receipt: Path | None = None,
 ) -> dict[str, Any]:
     goal_path = repo / "docs/domains/governance/authority/GOAL.md"
-    debt_path = repo / "docs/ledgers/ember-debt-ledger.md"
+    debt_path = repo / "docs/domains/governance/ledgers/ember-debt-ledger.md"
     errors: list[str] = []
     if not goal_path.exists():
         errors.append("goal_source.missing")
@@ -1384,7 +1384,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
             "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
         ),
-        "docs/ledgers/ember-debt-ledger.md": "ledger\n",
+        "docs/domains/governance/ledgers/ember-debt-ledger.md": "ledger\n",
         "docs/contracts/ember-floor-contract.md": (
             "<!-- EMBER_CONSERVATION_V1\n"
             "minimum_new_network_parameters=3000000000\n"
@@ -1704,7 +1704,7 @@ def main() -> int:
     changed = [Path(p) for p in args.changed_path] or [
         Path("scripts/ember_resident_training_gate.py"),
         Path("scripts/ember_resident_training_gate_selftest.py"),
-        Path("docs/ledgers/ember-debt-ledger.md"),
+        Path("docs/domains/governance/ledgers/ember-debt-ledger.md"),
         Path("docs/domains/governance/authority/GOAL.md"),
     ]
     receipt = build_gate_receipt(

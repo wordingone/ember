@@ -29,7 +29,7 @@ _IDENTITY_STATIC_EVIDENCE = (
 )
 CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
     "identity": (
-        "scripts/ember_01_identity/validate_identity.py",
+        "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
         *_IDENTITY_STATIC_EVIDENCE,
     ),
     "restart": (
@@ -38,20 +38,20 @@ CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
         "scripts/ember_restart/prediction_contract.py",
         "scripts/ember_restart/seat_identity_bridge.py",
         "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
-        "scripts/ember_01_identity/validate_identity.py",
+        "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
         "tools/ember-restart-3b/parameter_counter.py",
         *_IDENTITY_STATIC_EVIDENCE,
     ),
 }
 CONSUMER_ENTRYPOINTS = {
-    "identity": "scripts/ember_01_identity/validate_identity.py",
+    "identity": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
     "restart": "scripts/ember_restart/cli_seat.py",
 }
 
 CONSUMER_COMMAND_CONTRACTS = {
     "identity": (
         "python",
-        "scripts/ember_01_identity/validate_identity.py",
+        "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
         "role:identity_manifest",
         "--checkpoint",
         "role:checkpoint",

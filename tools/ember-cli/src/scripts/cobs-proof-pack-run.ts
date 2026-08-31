@@ -29,7 +29,7 @@
 //
 // This script never touches a GPU or a training process (verified: no torch import, no CUDA
 // call, no model load anywhere in its own source or in commands/world-state.ts's import chain --
-// only fs reads of docs/domains/governance/authority/GOAL.md / docs/ledgers/ember-debt-ledger.md / the totality-board receipt directory).
+// only fs reads of docs/domains/governance/authority/GOAL.md / docs/domains/governance/ledgers/ember-debt-ledger.md / the totality-board receipt directory).
 
 import { runWorldStateTurn } from "../commands/world-state.ts";
 

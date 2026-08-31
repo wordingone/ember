@@ -45,7 +45,7 @@ describe("cockpit worktree creation is refused", () => {
 
   test("the refusal names the sanctioned command and a concrete path", () => {
     const text = buildWorktreeRefusal(PATH, "worktree/wt-alpha");
-    expect(text).toContain("python scripts/worktree_lifecycle.py create");
+    expect(text).toContain("python src/ember/governance/scripts/worktree_lifecycle.py create");
     expect(text).toContain("--owner");
     expect(text).toContain("--purpose");
     expect(text).toContain("--expires");

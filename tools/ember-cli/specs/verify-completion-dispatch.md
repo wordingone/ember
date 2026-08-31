@@ -1,7 +1,7 @@
+<!-- goal_id: EMBER-02 -->
+<!-- workstream_id: EMBER-02A -->
+<!-- next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember -->
 <!--
-goal_id: EMBER-02
-workstream_id: EMBER-02A
-next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 -->
 
 # `/verify` — EMBER-01 completion verification dispatch, non-blocking, pinned-worktree isolated
@@ -47,7 +47,7 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
    `repoRoot` (read-only; the ONLY write this pipeline makes to `repoRoot`'s own git state
    is registering a new worktree row via step 0's `worktree add` — it never touches
    `repoRoot`'s working tree, index, or HEAD). Then `python -B
-   scripts/worktree_lifecycle.py --repo <repoRoot> create --path
+   src/ember/governance/scripts/worktree_lifecycle.py --repo <repoRoot> create --path
    <worktreeRoot>/<jobId> --detach --owner ember-cli-verify --purpose
    "verify dispatch <jobId>" --expires <today+1d> --start-point <pinnedCommit>` — the
    ONLY worktree-creation path (composes with #1366: no ad-hoc `git worktree add`).
@@ -93,7 +93,7 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
       `verify_ember01_completion.py` deletes these itself on the normal path precisely to
       keep the tree clean; when a leg is killed by the deadline that cleanup never runs,
       so the worktree is dirty with files only this pipeline wrote.
-   2. `python -B scripts/worktree_lifecycle.py --repo <repoRoot> retire --path <PATH>`.
+   2. `python -B src/ember/governance/scripts/worktree_lifecycle.py --repo <repoRoot> retire --path <PATH>`.
    3. If that refuses (`DIRTY_WORKTREE` on residue step 1 did not know about), retry with
       `--force-owner ember-cli-verify`. The lifecycle script overrides its dirty check
       ONLY for managed rows whose recorded owner matches that value, so the escalation can
@@ -285,7 +285,7 @@ plain retire to the owner-scoped forced retire.
 
 `services/verify-watch.integration.test.ts` is the one NON-mocked test in this node, and
 exists because the all-mocked suite structurally could not see B1: it creates a real
-worktree with the real `scripts/worktree_lifecycle.py` in a throwaway git repository, then
+worktree with the real `src/ember/governance/scripts/worktree_lifecycle.py` in a throwaway git repository, then
 asks the REAL `verify_ember01_completion.inspect_checkout` what it sees, asserting
 `detached` and `clean` are both true (the gate the executable legs hang on), that no
 `refs/heads/*` beyond `master` accrues, that retire archives the detached head, and that a

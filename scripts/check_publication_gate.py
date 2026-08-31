@@ -21,7 +21,7 @@ never from a spec's prose or a model's self-report:
                                  ADDITIONALLY (identity-manifest binding, closes a verified
                                  laundering gap): the receipt must name an `identity_manifest`
                                  field whose target validates cleanly through
-                                 `scripts/ember_01_identity/validate_identity.py`'s
+                                 `src/ember/governance/scripts/ember_01_identity/validate_identity.py`'s
                                  `validate_manifest` — a hand-authored receipt with no bound,
                                  validated identity does not satisfy this conjunct regardless
                                  of its earned metric.
@@ -52,7 +52,7 @@ never from a spec's prose or a model's self-report:
                                  ADDITIONALLY (identity-manifest binding, closes a verified
                                  laundering gap): the receipt must name an `identity_manifest`
                                  field whose target validates cleanly through
-                                 `scripts/ember_01_identity/validate_identity.py`'s
+                                 `src/ember/governance/scripts/ember_01_identity/validate_identity.py`'s
                                  `validate_manifest` — otherwise the outer-pass/param/real-world
                                  shape rides in with no validated claim of WHICH model produced
                                  it, and this conjunct stays RED.
@@ -215,7 +215,7 @@ def resolve_local_ref(ref):
 # no validation of WHICH model produced it). Shared by conjuncts (b) earned_growth_rung and
 # (d) bootstrap_pass_real_world: a capability receipt qualifies for either conjunct only if
 # it ALSO names an `identity_manifest` field whose target validates cleanly through
-# scripts/ember_01_identity/validate_identity.py's validate_manifest. Fails CLOSED: no
+# src/ember/governance/scripts/ember_01_identity/validate_identity.py's validate_manifest. Fails CLOSED: no
 # `identity_manifest` field, an unimportable validator, an unreadable/unparseable manifest
 # file, or any IdentityValidationError finding all resolve to ok=False with a stated reason
 # -- never a silent pass and never a crash.
@@ -1149,7 +1149,7 @@ def _selftest():
 
     # Read the real valid-identity manifest fixture BEFORE REPO_ROOT is repointed at the
     # temp workspace below, so the identity-manifest-binding fixtures validate through the
-    # real scripts/ember_01_identity/validate_identity.py against the real positive fixture
+    # real src/ember/governance/scripts/ember_01_identity/validate_identity.py against the real positive fixture
     # — never a hand-rolled stand-in.
     valid_identity_manifest_text = (
         orig_root / "tests" / "ember_01_identity" / "fixtures" / "valid-identity-v1.json"

@@ -503,11 +503,11 @@ def load_prior_receipt(
     return document, actual, relative
 
 def get_invariant_sha(root: Path) -> str:
-    """Get the invariant_sha256 from docs/authority/INVARIANT.md.
+    """Get the invariant_sha256 from docs/domains/governance/authority/INVARIANT.md.
 
     This is a fixed value that should be included in every receipt.
     """
-    invariant_path = root / "docs/authority/INVARIANT.md"
+    invariant_path = root / "docs/domains/governance/authority/INVARIANT.md"
     if not invariant_path.exists():
         return "sha256:unknown"
 

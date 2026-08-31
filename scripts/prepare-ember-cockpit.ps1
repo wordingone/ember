@@ -145,7 +145,7 @@ function Assert-NoResidentCockpitWorktrees([string]$RepositoryRoot) {
     Write-Host "each deliberately, then run tools\launchers\Ember.cmd again:"
     Write-Host ""
     foreach ($entry in $resident) {
-        Write-Host "  python scripts/worktree_lifecycle.py retire --path `"$($entry.FullName)`""
+        Write-Host "  python src/ember/governance/scripts/worktree_lifecycle.py retire --path `"$($entry.FullName)`""
     }
     Write-Host ""
     throw ("Cockpit state cannot be migrated while $($resident.Count) cockpit-created " +

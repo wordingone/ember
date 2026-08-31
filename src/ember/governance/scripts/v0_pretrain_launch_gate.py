@@ -44,7 +44,7 @@ CONFIG = f"{NC}/configs/v0-pretrain-config.json"
 DEADLINE = datetime.date(2026, 6, 22)
 # fp19-bench receipted-unstacked days-to-compute-optimal for the c03-qat core
 ENVELOPE_DAYS_FLOOR = 4.55
-WORLD_SPECS = ["docs/research/fp22-corpus-world.md", "docs/domains/governance/research/world-choice-r2.md"]
+WORLD_SPECS = ["docs/domains/governance/research/fp22-corpus-world.md", "docs/domains/governance/research/world-choice-r2.md"]
 RESERVED_BAND_N = 8           # NC2 v0 LOCK #1 (ids 0-7)
 HARD_BAR_BYTES = 100 * 10**9  # corpus <100GB hard bar
 FP26_PREREG_GLOB = "receipts/fp26-prereg-*.json"

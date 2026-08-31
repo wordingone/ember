@@ -1,7 +1,7 @@
 {
   "markdown_link_dispositions": [
     {
-      "canonical_target": "docs/authority/INVARIANT.md",
+      "canonical_target": "docs/domains/governance/authority/INVARIANT.md",
       "disposition": "RESOLVED_AT_CURRENT_HEAD",
       "document": "docs/roadmap/README.md",
       "line": 8,
@@ -1802,42 +1802,42 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ledgers/deviations.md",
+      "document": "docs/domains/governance/ledgers/deviations.md",
       "line": 41,
       "target": "data/validation-00000-of-00001.parquet",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ledgers/deviations.md",
+      "document": "docs/domains/governance/ledgers/deviations.md",
       "line": 101,
       "target": "receipts/eval-suite-freeze/a1-freeze-admission-example-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ledgers/deviations.md",
+      "document": "docs/domains/governance/ledgers/deviations.md",
       "line": 123,
       "target": "receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ledgers/deviations.md",
+      "document": "docs/domains/governance/ledgers/deviations.md",
       "line": 165,
       "target": "receipts/eval-suite-freeze/a1-freeze-declaration-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ledgers/ember-debt-ledger.md",
+      "document": "docs/domains/governance/ledgers/ember-debt-ledger.md",
       "line": 37,
       "target": "docs/spec/receipt",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/ledgers/ember-debt-ledger.md",
+      "document": "docs/domains/governance/ledgers/ember-debt-ledger.md",
       "line": 46,
       "target": "docs/research/journal/world-rule",
       "visible_classification": "reference"
@@ -2271,21 +2271,21 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-483-loop-revival-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-483-loop-revival-conservation.md",
       "line": 52,
       "target": "receipts/ember-mvp/c11-experience-horizon/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-649-659-corpus-domain-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-649-659-corpus-domain-conservation.md",
       "line": 227,
       "target": "data/evaluation",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-649-659-corpus-domain-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-649-659-corpus-domain-conservation.md",
       "line": 274,
       "target": "docs/ai-lab-corpus-charter.md",
       "visible_classification": "reference"
@@ -2299,35 +2299,35 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-696-ember-lab-supersession.md",
+      "document": "docs/domains/governance/roadmap/issue-696-ember-lab-supersession.md",
       "line": 14,
       "target": "tools/ember-cli/src/services/brain-server-supervisor.ts",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-701-fixed-capability-growth-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-701-fixed-capability-growth-conservation.md",
       "line": 63,
       "target": "data/order/tuning",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-702-offload-attribution-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-702-offload-attribution-conservation.md",
       "line": 69,
       "target": "tokenizer/data",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-757-scorer-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-757-scorer-conservation.md",
       "line": 46,
       "target": "tokenizer/device",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-869-gradient-accumulation-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-869-gradient-accumulation-conservation.md",
       "line": 27,
       "target": "data/order",
       "visible_classification": "reference"
@@ -2362,7 +2362,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/milestones/EMBER-11-issue-99-transfer.md",
+      "document": "docs/domains/governance/roadmap/milestones/EMBER-11-issue-99-transfer.md",
       "line": 9,
       "target": "tokenizer/source-lineage",
       "visible_classification": "reference"

@@ -15,7 +15,7 @@
     "commit": "9deafdd6813cd34b8276e6ccf2201584c4a32380",
     "branch": "fix/1296-shared-counter-contract"
   },
-  "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
+  "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/domains/governance/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
     "energy_boundary": "DEGRADED_PROXY",
     "boundary_status": "PERMANENT declared boundary by operator ruling; the upgrade to AC wall metering is UNPLANNED and no rung, claim, or publication conditions on it. A proxy point is never presented as a wall-metered point.",
@@ -3596,7 +3596,7 @@
       "category": "configuration",
       "kind": "file",
       "provenance": "Invariant authority; F3 stamps every receipt with its hash.",
-      "path": "docs/authority/INVARIANT.md",
+      "path": "docs/domains/governance/authority/INVARIANT.md",
       "sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
       "size_bytes": 5658
     }

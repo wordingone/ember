@@ -1122,7 +1122,7 @@ under the governor" qualifier.
 config fits the remaining continuous-GPU days, receipts-grade?
 
 **Method:** measured (never paper-claimed) training-step throughput,
-`scripts/fp19_bench.py` (selftest PASS) via daemon eval b839e851,
+`src/ember/governance/scripts/fp19_bench.py` (selftest PASS) via daemon eval b839e851,
 governed (fraction 0.80, margin assert, paced duty; budget = paced
 rate); plus the gpu-math-attack workflow's refuter-adjusted multiplier
 table (24 subagents; saved `.agent/workflows/gpu-math-attack.js`;
@@ -1234,7 +1234,7 @@ receipt fields.
 owned 0.37B core train ON, and in WHAT world must it clear a verify
 floor — decided before the GPU window opens.
 
-**Decisions (docs/research/fp22-corpus-world.md):** license-clean ~7.4B-token
+**Decisions (docs/domains/governance/research/fp22-corpus-world.md):** license-clean ~7.4B-token
 mix (stack-v2-permissive code majority + FineWeb-Edu + Wikipedia +
 Gutenberg + own MIT-clean ledger slice; qwen-research class EXCLUDED;
 fail-closed license stamps at ingest; doc-dedup receipts close the

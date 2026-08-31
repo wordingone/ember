@@ -152,7 +152,7 @@ def test_restart_consumer_executes_snapshotted_import_closure(
         consumers,
         "CONSUMER_CLOSURE_RELATIVE_PATHS",
         {
-            "identity": ("scripts/ember_01_identity/validate_identity.py",),
+            "identity": ("src/ember/governance/scripts/ember_01_identity/validate_identity.py",),
             "restart": (
                 "scripts/ember_restart/cli_seat.py",
                 "scripts/ember_restart/contract.py",

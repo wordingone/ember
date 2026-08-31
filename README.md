@@ -122,7 +122,7 @@ completion claim.
   [reproducibility charter](docs/charter/REPRODUCIBILITY.md).
 - Operate it: [operator documentation](docs/operator/README.md).
 - Audit authority: [continuity](docs/authority/CONTINUITY.md),
-  [invariant](docs/authority/INVARIANT.md), and
+  [invariant](docs/domains/governance/authority/INVARIANT.md), and
   [governance](docs/authority/GOVERNANCE.md).
 - Browse every current entry document: [generated canonical index](docs/INDEX.md).
 

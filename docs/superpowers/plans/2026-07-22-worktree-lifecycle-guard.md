@@ -21,7 +21,7 @@
 ### Task 1: Lifecycle state, audit, and install
 
 **Files:**
-- Create: `scripts/worktree_lifecycle.py`
+- Create: `src/ember/governance/scripts/worktree_lifecycle.py`
 - Create: `tests/test_worktree_lifecycle.py`
 
 **Interfaces:**
@@ -36,7 +36,7 @@
 ### Task 2: Safe create and retire
 
 **Files:**
-- Modify: `scripts/worktree_lifecycle.py`
+- Modify: `src/ember/governance/scripts/worktree_lifecycle.py`
 - Modify: `tests/test_worktree_lifecycle.py`
 
 **Interfaces:**
@@ -57,7 +57,7 @@
 - Modify: `tests/test_worktree_lifecycle.py`
 
 **Interfaces:**
-- Hooks invoke `python "$ROOT/scripts/worktree_lifecycle.py" audit --quiet` before existing guards.
+- Hooks invoke `python "$ROOT/src/ember/governance/scripts/worktree_lifecycle.py" audit --quiet` before existing guards.
 - `AGENTS.md` names the lifecycle CLI as the only permitted Ember worktree create/retire path.
 
 - [ ] Add a failing source-level test requiring both hook invocations and the operative policy text.

@@ -9,7 +9,7 @@
 // verify_ember01_completion.py runs its executable legs (and computes `ok`) only when the
 // checkout is clean AND DETACHED. A mocked verifier answers 0 either way, so a run that
 // could never have gone green looked green in the suite. This test therefore uses the
-// REAL scripts/worktree_lifecycle.py against a REAL throwaway git repository, and asks
+// REAL src/ember/governance/scripts/worktree_lifecycle.py against a REAL throwaway git repository, and asks
 // the REAL verifier probe (verify_ember01_completion.inspect_checkout) what it sees.
 //
 // Nothing here touches the ember repository: the repo under test is created fresh in a

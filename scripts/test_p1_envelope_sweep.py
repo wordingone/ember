@@ -186,7 +186,7 @@ def test_lr_curve_endpoints_match_actually_applied_schedule():
 
 
 # ---------------------------------------------------------------------------
-# warmup_steps override (docs/ledgers/deviations.md DEV-003, ruling d): additive
+# warmup_steps override (docs/domains/governance/ledgers/deviations.md DEV-003, ruling d): additive
 # reuse on src/ember/governance/scripts/w1_collapse_control_run.py's cosine_warmup_frac /
 # apply_cosine_warmup / run_phase2_live -- default None must be BYTE-
 # IDENTICAL to pre-DEV-003 behavior (regression), and an explicit override

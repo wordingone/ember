@@ -2678,7 +2678,7 @@ def check_changed_artifact_bindings(
         ("docs/README.md", "docs/DOCS-README.md"),
         ("CONTINUITY.md", "docs/authority/CONTINUITY.md"),
         ("GOVERNANCE.md", "docs/authority/GOVERNANCE.md"),
-        ("INVARIANT.md", "docs/authority/INVARIANT.md"),
+        ("INVARIANT.md", "docs/domains/governance/authority/INVARIANT.md"),
         ("REDACTIONS.md", "docs/authority/REDACTIONS.md"),
         ("STATE.md", "docs/domains/governance/authority/STATE.md"),
         ("docs/authority/STATE.md", "docs/domains/governance/authority/STATE.md"),

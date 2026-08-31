@@ -6,7 +6,7 @@
 (ember issue #207, P0 composition-law program).
 
 FROZEN SPEC (do not deviate without a dated entry in this file AND
-docs/ledgers/deviations.md -- the freeze rule, verbatim from the pre-registration):
+docs/domains/governance/ledgers/deviations.md -- the freeze rule, verbatim from the pre-registration):
   state/prereg-p0-probes-p5-p1tier0-v1.md, section "PROBE P5", v1.1
   (frozen 2026-07-06). This file implements that section EXACTLY. Anything
   this file cannot honestly ground in a live production object is recorded
@@ -104,7 +104,7 @@ N/A -- never assumed):
 
 GROUND-TRUTH RULING (v1.2 amendment, team lead, 2026-07-06 -- pending
 formal landing in state/prereg-p0-probes-p5-p1tier0-v1.md as a dated
-deviation + docs/ledgers/deviations.md entry, filed BEFORE any real-checkpoint
+deviation + docs/domains/governance/ledgers/deviations.md entry, filed BEFORE any real-checkpoint
 execution per the freeze rule's own pre-execution-amendment allowance;
 nothing in this file has executed against real checkpoints, so this
 lands clean). The team lead verified the real on-disk manifests directly
@@ -346,7 +346,7 @@ import timeshare_pretrain as ts  # noqa: E402  (light; no torch at module level 
 SPEC_REF = "state/prereg-p0-probes-p5-p1tier0-v1.md#PROBE-P5"
 SPEC_VERSION = "v1.1+ckpt-inventory-v1.2"  # measurement spec is v1.1 (frozen,
 # unchanged); checkpoint-inventory amendment is v1.2 (team lead ruling,
-# 2026-07-06, pending formal landing in the frozen spec doc + docs/ledgers/deviations.md)
+# 2026-07-06, pending formal landing in the frozen spec doc + docs/domains/governance/ledgers/deviations.md)
 ISSUE = "#207"
 
 # Absolute root of the models/ directory tree on whatever box actually runs

@@ -489,7 +489,7 @@ def load_suite_b_rows(eval_suite_dir: str, freeze_receipt: dict, tk):
                 "status": "PIN-PENDING",
                 "n_items": 0,
                 "n_windows_contributed": 0,
-                "reason": "excluded from v1 per eval-suite-freeze-v1.md; see docs/ledgers/deviations.md",
+                "reason": "excluded from v1 per eval-suite-freeze-v1.md; see docs/domains/governance/ledgers/deviations.md",
             }
             continue
 

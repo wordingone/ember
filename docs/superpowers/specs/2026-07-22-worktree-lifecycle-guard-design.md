@@ -14,7 +14,7 @@ Ember keeps isolated worktrees, but their count can no longer grow without custo
 
 ## Components
 
-`scripts/worktree_lifecycle.py` provides four commands:
+`src/ember/governance/scripts/worktree_lifecycle.py` provides four commands:
 
 - `install`: atomically snapshots the existing worktrees as the legacy set and sets `ceiling = max(current_count, 12)`.
 - `audit`: fails when count exceeds the ceiling, a new worktree is neither legacy nor managed, a managed lease expires, or registered/live state diverges. With `--ratchet`, it lowers the ceiling after verified removals.

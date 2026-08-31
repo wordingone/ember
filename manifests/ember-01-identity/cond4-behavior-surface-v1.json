@@ -489,7 +489,7 @@
           "size_bytes": 3111
         }
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "roots": [
         "main"
       ],

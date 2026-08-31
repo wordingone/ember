@@ -1,6 +1,6 @@
 # EMBER - Constitution
 
-docs/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/domains/governance/authority/GOAL.md is the
+docs/domains/governance/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/domains/governance/authority/GOAL.md is the
 highest amendable authority. Lower-precedence files may implement and test it;
 they cannot reduce, defer, replace, or reinterpret it.
 
@@ -115,9 +115,9 @@ they cannot reduce, defer, replace, or reinterpret it.
   "conservation_hashes": {
     "authority_matrix_sha256": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "B0F3BE164798CD83C7598823ABF561651D2AA72F260E04ED157ED17F2C4591E5",
+      "docs/authority/CONTINUITY.md": "B482C5367AB73F0EC936FD9277AF3B5DA0A976B22E4492B638133A1E50BD9BD1",
       "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
-      "README.md": "3F58251BB1C053FC4FBDF34B827487AFD0AC86C1409AAEC7DB91E860F611E996",
+      "README.md": "7723F7073AC6DDC4BB3DBD0BFAD9B8167F24AABAE1A2F446DFBAF1A271E59B87",
       "docs/authority/ember-authority-matrix.md": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
       "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
@@ -125,7 +125,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/spec/conditions-v1.md": "1FD0512535B7DA5A71DA2CE7107AAD18FA4EC3D2ADFE1CF3E0D434B1181CA45A"
+      "docs/spec/conditions-v1.md": "441219175CD474D7E162CEC488CACFDA6179DECAC53B2DDE8962BD9530631F0F"
     }
   },
   "authority_only_goal": false,
@@ -491,7 +491,7 @@ every current model, checkpoint, backend, and benchmark class.
 
 Evidence and historical artifacts never become authority. Subordinate contracts
 carry the machine-checked conservation header and fail closed on contradiction.
-Precedence is docs/authority/INVARIANT.md, then docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
+Precedence is docs/domains/governance/authority/INVARIANT.md, then docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
 then implementation and evidence, then history.
 
 No completion claim is valid unless the primitive, model, organism, body, and

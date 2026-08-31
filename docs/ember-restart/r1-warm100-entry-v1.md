@@ -31,7 +31,7 @@ first then commit:
 - **`source_root` -> canonical checkout or managed worktree.** `source_root`
   must share the canonical checkout's Git common directory (a clone or fork
   has its own object store even with byte-identical contents) and must either
-  be that checkout itself or a `scripts/worktree_lifecycle.py`-managed
+  be that checkout itself or a `src/ember/governance/scripts/worktree_lifecycle.py`-managed
   worktree of it. An ad-hoc `git worktree add` that bypasses the lifecycle
   tool is refused, as is a missing or malformed worktree-lifecycle registry.
 - **`source_commit` -> governed-remote ancestry.** The governed remote's ref

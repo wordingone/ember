@@ -69,7 +69,7 @@ EXIT_SOURCE_PATHS = {
     "E7": ("src/ember/governance/scripts/r1_exit_battery.py",),
     "E8": (
         "src/ember/governance/scripts/r1_exit_battery.py",
-        "scripts/density_ab_a1.py",
+        "src/ember/governance/scripts/density_ab_a1.py",
     ),
 }
 

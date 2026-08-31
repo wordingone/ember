@@ -20,9 +20,9 @@
 
 ## Worktree discipline
 
-Ember worktrees are created ONLY via `python scripts/worktree_lifecycle.py
+Ember worktrees are created ONLY via `python src/ember/governance/scripts/worktree_lifecycle.py
 create --path <name-or-path> --branch <branch> --owner <name> --purpose "<text>"
---expires <date> --start-point origin/master` (`scripts/worktree_lifecycle.py`). A
+--expires <date> --start-point origin/master` (`src/ember/governance/scripts/worktree_lifecycle.py`). A
 bare name is rooted on the governed B: volume under `M/ember-wt` (or
 `EMBER_WORKTREE_ROOT`); an explicit C:-volume destination fails closed unless the operator supplies
 `--allow-c-drive`. B: is the default work-product, worktree, and tool-cache

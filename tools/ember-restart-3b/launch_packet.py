@@ -536,7 +536,7 @@ def _sha256_bytes(data: bytes) -> str:
 def preflight_identity_manifest(cfg: dict, root: Path) -> dict:
     """cond3 GAP-3: the 3B launch path must round-trip the declared model/
     experiment identity manifest (training.identity_manifest) through the
-    REAL cond3 validator (scripts/ember_01_identity/validate_identity.py's
+    REAL cond3 validator (src/ember/governance/scripts/ember_01_identity/validate_identity.py's
     validate_manifest -- imported, never reimplemented) before naming a
     launch command, and cross-check the manifest's architecture/tokenizer/
     corpus identity against the ACTUAL bytes this packet is about to launch.

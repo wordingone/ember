@@ -73,8 +73,95 @@ if str(_SCRIPT_DIR) not in sys.path:
 # The REAL runtime consumers this module wires into. Imported directly so the binding is
 # provably against the same objects those consumers key on -- never a re-implementation that
 # could drift from them.
-import validate_identity  # noqa: E402
-from validate_identity import IdentityValidationError, validate_manifest  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_01_identity/validate_identity.py
+import importlib.util as _ember_f289ed8a6472ef21_importlib
+import sys as _ember_f289ed8a6472ef21_sys
+from pathlib import Path as _ember_f289ed8a6472ef21_Path
+_ember_f289ed8a6472ef21_path = _ember_f289ed8a6472ef21_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'validate_identity.py')
+if not _ember_f289ed8a6472ef21_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+_ember_f289ed8a6472ef21_aliases = ('_ember_issue2015_f289ed8a6472ef21', 'scripts.ember_01_identity.validate_identity', 'validate_identity')
+_ember_f289ed8a6472ef21_existing = []
+for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+    _ember_f289ed8a6472ef21_candidate = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+    if _ember_f289ed8a6472ef21_candidate is not None and all(_ember_f289ed8a6472ef21_candidate is not item for item in _ember_f289ed8a6472ef21_existing):
+        _ember_f289ed8a6472ef21_existing.append(_ember_f289ed8a6472ef21_candidate)
+if len(_ember_f289ed8a6472ef21_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+if _ember_f289ed8a6472ef21_existing:
+    _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_existing[0]
+    _ember_f289ed8a6472ef21_observed = getattr(_ember_f289ed8a6472ef21_module, '__file__', None)
+    if _ember_f289ed8a6472ef21_observed is None or _ember_f289ed8a6472ef21_Path(_ember_f289ed8a6472ef21_observed).resolve() != _ember_f289ed8a6472ef21_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+else:
+    _ember_f289ed8a6472ef21_spec = _ember_f289ed8a6472ef21_importlib.spec_from_file_location('_ember_issue2015_f289ed8a6472ef21', _ember_f289ed8a6472ef21_path)
+    if _ember_f289ed8a6472ef21_spec is None or _ember_f289ed8a6472ef21_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+    _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_importlib.module_from_spec(_ember_f289ed8a6472ef21_spec)
+    for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+        _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+        if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+        _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
+    try:
+        _ember_f289ed8a6472ef21_spec.loader.exec_module(_ember_f289ed8a6472ef21_module)
+    except BaseException:
+        for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+            if _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias) is _ember_f289ed8a6472ef21_module:
+                _ember_f289ed8a6472ef21_sys.modules.pop(_ember_f289ed8a6472ef21_alias, None)
+        raise
+for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+    _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+    if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+    _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
+validate_identity = _ember_f289ed8a6472ef21_module
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_identity/validate_identity.py  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_01_identity/validate_identity.py
+import importlib.util as _ember_f289ed8a6472ef21_importlib
+import sys as _ember_f289ed8a6472ef21_sys
+from pathlib import Path as _ember_f289ed8a6472ef21_Path
+_ember_f289ed8a6472ef21_path = _ember_f289ed8a6472ef21_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'validate_identity.py')
+if not _ember_f289ed8a6472ef21_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+_ember_f289ed8a6472ef21_aliases = ('_ember_issue2015_f289ed8a6472ef21', 'scripts.ember_01_identity.validate_identity', 'validate_identity')
+_ember_f289ed8a6472ef21_existing = []
+for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+    _ember_f289ed8a6472ef21_candidate = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+    if _ember_f289ed8a6472ef21_candidate is not None and all(_ember_f289ed8a6472ef21_candidate is not item for item in _ember_f289ed8a6472ef21_existing):
+        _ember_f289ed8a6472ef21_existing.append(_ember_f289ed8a6472ef21_candidate)
+if len(_ember_f289ed8a6472ef21_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+if _ember_f289ed8a6472ef21_existing:
+    _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_existing[0]
+    _ember_f289ed8a6472ef21_observed = getattr(_ember_f289ed8a6472ef21_module, '__file__', None)
+    if _ember_f289ed8a6472ef21_observed is None or _ember_f289ed8a6472ef21_Path(_ember_f289ed8a6472ef21_observed).resolve() != _ember_f289ed8a6472ef21_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+else:
+    _ember_f289ed8a6472ef21_spec = _ember_f289ed8a6472ef21_importlib.spec_from_file_location('_ember_issue2015_f289ed8a6472ef21', _ember_f289ed8a6472ef21_path)
+    if _ember_f289ed8a6472ef21_spec is None or _ember_f289ed8a6472ef21_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+    _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_importlib.module_from_spec(_ember_f289ed8a6472ef21_spec)
+    for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+        _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+        if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+        _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
+    try:
+        _ember_f289ed8a6472ef21_spec.loader.exec_module(_ember_f289ed8a6472ef21_module)
+    except BaseException:
+        for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+            if _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias) is _ember_f289ed8a6472ef21_module:
+                _ember_f289ed8a6472ef21_sys.modules.pop(_ember_f289ed8a6472ef21_alias, None)
+        raise
+for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+    _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+    if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+    _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
+IdentityValidationError = getattr(_ember_f289ed8a6472ef21_module, 'IdentityValidationError')
+validate_manifest = getattr(_ember_f289ed8a6472ef21_module, 'validate_manifest')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_identity/validate_identity.py  # noqa: E402
 from evaluation_identity_binding import (  # noqa: E402
     EVALUATION_CLAIM_FIELDS,
     EvaluationIdentityMismatch,

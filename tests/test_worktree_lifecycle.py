@@ -686,13 +686,13 @@ def test_hooks_and_agents_require_lifecycle_guard() -> None:
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
     invocation = (
-        'bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" '
+        'bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/src/ember/governance/scripts/worktree_lifecycle.py" '
         "--allow-modified-self audit --strict --quiet"
     )
     assert invocation in pre_commit
     assert invocation in pre_push
-    assert "scripts/worktree_lifecycle.py create" in agents
-    assert "scripts/worktree_lifecycle.py retire" in agents
+    assert "src/ember/governance/scripts/worktree_lifecycle.py create" in agents
+    assert "src/ember/governance/scripts/worktree_lifecycle.py retire" in agents
     assert "Raw `git worktree add` and recursive worktree deletion are forbidden" in agents
 
 
@@ -1380,7 +1380,7 @@ def test_reconcile_refusal_writes_no_tombstone(tmp_path: Path) -> None:
 def test_agents_documents_the_mechanical_registry_check() -> None:
     """The check only kills the class if the next agent knows it exists."""
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert "scripts/worktree_lifecycle.py audit --strict" in agents
+    assert "src/ember/governance/scripts/worktree_lifecycle.py audit --strict" in agents
 
 
 def test_strict_audit_ignores_another_repositorys_linked_worktree(tmp_path: Path) -> None:
@@ -1988,13 +1988,13 @@ def make_throwaway_tool_checkout(tmp_path: Path) -> Path:
     git(checkout, "init", "-b", "master")
     git(checkout, "config", "user.name", "Ember Test")
     git(checkout, "config", "user.email", "ember@example.invalid")
-    git(checkout, "add", "scripts/worktree_lifecycle.py", "scripts/gate_provenance.py")
+    git(checkout, "add", "src/ember/governance/scripts/worktree_lifecycle.py", "scripts/gate_provenance.py")
     git(checkout, "commit", "-m", "seed tool checkout")
     return checkout
 
 
 def test_refuses_every_subcommand_when_own_bytes_are_modified_vs_head(tmp_path: Path) -> None:
-    """Acceptance (1): reproduces the incident directly. `scripts/worktree_lifecycle.py`
+    """Acceptance (1): reproduces the incident directly. `src/ember/governance/scripts/worktree_lifecycle.py`
     is modified on disk (appended, never committed) in a throwaway checkout, and every
     subcommand must refuse with a named error rather than silently run the stale bytes.
     RED before the self-integrity gate existed: every one of these calls would have

@@ -34,7 +34,7 @@ class ResolveParameterIdentityCensusTests(unittest.TestCase):
         # validate_identity.py's parameter schema/contradiction checks are the one
         # real consumer this census snapshot contains for cond3 increment-1.
         consumer_paths = {row["path"] for row in merged["consumer_rows"]}
-        self.assertEqual(consumer_paths, {"scripts/ember_01_identity/validate_identity.py"})
+        self.assertEqual(consumer_paths, {"src/ember/governance/scripts/ember_01_identity/validate_identity.py"})
 
 
 if __name__ == "__main__":

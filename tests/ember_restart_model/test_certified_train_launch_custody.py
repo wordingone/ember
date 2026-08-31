@@ -14,7 +14,7 @@ bare tempdir with no Cargo build or catalog of its own, so
 ``canonical_ember_lab_binary``/``default_catalog_db`` are redirected at the real
 repository's build output and an isolated per-test database. ``custody_verify``,
 ``checkpoint_manifest_hashes``, ``CustodyRefused``, and ``RESUME_CHECKPOINT_VOLUME``
-are the untouched real implementations from ``scripts/artifact_custody_gate.py``.
+are the untouched real implementations from ``src/ember/governance/scripts/artifact_custody_gate.py``.
 """
 
 from __future__ import annotations

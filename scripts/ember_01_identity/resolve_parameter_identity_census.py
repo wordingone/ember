@@ -30,7 +30,7 @@ FINDINGS (read before trusting the output blindly):
    whole tree -- most are NOT calls into the identity manifest at all (schedule
    generators, bitnet-twin scripts, accounting harnesses that happen to count
    parameters for unrelated purposes). Only rows inside the real validation/round-trip
-   call path this increment lands (``scripts/ember_01_identity/validate_identity.py``'s
+   call path this increment lands (``src/ember/governance/scripts/ember_01_identity/validate_identity.py``'s
    ``parameters`` schema/contradiction checks, exercised end-to-end by
    ``tests/ember_01_identity/test_parameter_identity_roundtrip.py`` against a manifest
    bound to a REAL measured checkpoint receipt) are adjudicated as real consumers here.
@@ -69,7 +69,7 @@ OUTPUT_PATH = (
 # Real call-sites this increment's round-trip test actually exercises against a
 # receipt bound to a live checkpoint. Everything else in the category is a static
 # keyword coincidence, not a manifest binding.
-REAL_CONSUMER_PATHS = {"scripts/ember_01_identity/validate_identity.py"}
+REAL_CONSUMER_PATHS = {"src/ember/governance/scripts/ember_01_identity/validate_identity.py"}
 
 
 def _key(row: dict) -> tuple[str, int, str, str]:
