@@ -9,5 +9,5 @@
     "lib_b.py",
     "manifests/training-dependency-closure.json"
   ],
-  "expected_closure_sha256": "abb15291bdd321e2bb413d9b3939775cb2c412578fe031eb837309db07c06484"
+  "expected_closure_sha256": "f38442f14afb26f51342c97500ffbe75eb9422e2c7c10f3193bd2c33ceaff4f3"
 }

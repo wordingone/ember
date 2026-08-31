@@ -575,7 +575,7 @@ for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTION
   OLD_REL="$AUTHORITY_NAME"
   NEW_REL="docs/authority/$AUTHORITY_NAME"
   DOMAIN_REL=""
-  if [ "$AUTHORITY_NAME" = "GOAL.md" ] || [ "$AUTHORITY_NAME" = "STATE.md" ] || [ "$AUTHORITY_NAME" = "INVARIANT.md" ]; then
+  if [ "$AUTHORITY_NAME" = "GOAL.md" ] || [ "$AUTHORITY_NAME" = "STATE.md" ]; then
     DOMAIN_REL="docs/domains/governance/authority/$AUTHORITY_NAME"
   fi
   OLD_PRESENT=0

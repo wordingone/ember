@@ -192,12 +192,12 @@ def _utc_stamp() -> str:
 
 
 def invariant_sha256() -> str:
-    """sha256 of docs/domains/governance/authority/INVARIANT.md -- the F3 stamp every receipt carries (sec5.1 item 9).
+    """sha256 of docs/authority/INVARIANT.md -- the F3 stamp every receipt carries (sec5.1 item 9).
 
     Computed from the file rather than pinned as a literal: a hardcoded copy
     would keep validating after the invariant it claims to stamp had changed.
     """
-    return hashlib.sha256((REPO_ROOT / "docs/domains/governance/authority/INVARIANT.md").read_bytes()).hexdigest()
+    return hashlib.sha256((REPO_ROOT / "docs/authority/INVARIANT.md").read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------

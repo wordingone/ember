@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Proves mechanism_identity is fail-closed at the manifest layer via the REAL
-src/ember/governance/scripts/ember_01_identity/validate_identity.py validate_manifest consumer.
+scripts/ember_01_identity/validate_identity.py validate_manifest consumer.
 
 Reuses the admitted-manifest + artifact-authority + receipt-signing plumbing already
 built in test_validate_identity.py (imported as a module) rather than reimplementing it.

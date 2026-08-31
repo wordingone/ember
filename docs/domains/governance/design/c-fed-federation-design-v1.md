@@ -45,7 +45,7 @@ Federated checkpoint portability reuses this exact mechanism, unchanged, across 
 boundary instead of a save/load boundary: a checkpoint produced on an external avenue (Kaggle/
 Colab/HF compute) is only ever re-admitted to this machine's lineage if its identity manifest
 round-trips against the same verifier used for legs 3/4 today
-(`src/ember/governance/scripts/verify_ember01_completion.py` / the identity-manifest checker it calls). No new
+(`scripts/verify_ember01_completion.py` / the identity-manifest checker it calls). No new
 trust boundary is introduced — the external avenue is treated exactly like any other producer
 of an untrusted checkpoint: verify identity before crediting it.
 

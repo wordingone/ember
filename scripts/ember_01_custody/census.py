@@ -1,0 +1,2466 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""Deterministic, read-only custody and benchmark census primitives."""
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import hashlib
+import json
+import os
+import secrets
+import re
+import subprocess
+import tempfile
+import time
+from collections import defaultdict
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, Iterable, Iterator, Mapping
+
+from issue_census import validate_issue_census
+
+
+DIRECT_MANDATE_IDS = {
+    "swe-bench-pro",
+    "frontiercode-diamond",
+    "gdpval-aa",
+    "gdppdf",
+    "blueprint-bench-2",
+    "automationbench",
+    "osworld-verified",
+    "legal-agent-benchmark",
+    "humanitys-last-exam",
+    "terminal-bench-2.1",
+    "arc-agi-1",
+    "arc-agi-2",
+    "arc-agi-3",
+}
+
+
+HASH_ALGORITHM = "sha256-byte-stream-v1"
+
+
+# ---------------------------------------------------------------------------
+# Run timings (#1397).
+#
+# A census run's wall clock was only ever observable as one whole-leg number
+# (run verify-msemvz0yrvyq00: 37.9 minutes, no interior structure), so whether
+# the cost is driven by bytes hashed or by file count was unsettleable from the
+# receipts themselves. These fields make each root's and each phase's share of
+# the clock part of the artifact the run already writes.
+#
+# They are observability, never evidence: a duration cannot be reproduced, so
+# it is named `_non_authoritative` and stripped by `canonical_root_identity`
+# exactly as `mtime_ns_non_authoritative` is. Every custody digest — the
+# canonical root census hash, and the canonical manifest hash built on it — is
+# byte-identical to what the same bytes produced before timings existed.
+TIMING_FIELD = "timings_non_authoritative"
+TIMING_CLOCK = "time.perf_counter"
+
+
+def _elapsed_seconds(value: float) -> float:
+    return round(value, 6)
+
+
+class _PhaseClock:
+    """Monotonic wall-clock accumulated per named phase.
+
+    `start` closes whichever phase is open, so a control-flow path that leaves
+    a phase open (any of the early `continue`s in the per-root loop) still has
+    its time attributed rather than lost; `stop` closes the last one.
+    """
+
+    def __init__(self) -> None:
+        self.totals: dict[str, float] = defaultdict(float)
+        self._phase: str | None = None
+        self._started = 0.0
+
+    def start(self, phase: str) -> None:
+        self.stop()
+        self._phase = phase
+        self._started = time.perf_counter()
+
+    def stop(self) -> None:
+        if self._phase is None:
+            return
+        self.totals[self._phase] += time.perf_counter() - self._started
+        self._phase = None
+
+    def phase_seconds(self) -> dict[str, float]:
+        return {
+            phase: _elapsed_seconds(seconds)
+            for phase, seconds in sorted(self.totals.items())
+        }
+
+
+def hash_file_streaming(
+    path: Path,
+    chunk_size: int = 1024 * 1024,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    digest = hashlib.sha256()
+    completed = 0
+    with path.open("rb") as stream:
+        while True:
+            chunk = stream.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+            completed += len(chunk)
+            if on_progress is not None:
+                on_progress({"state": "partial", "completed_bytes": completed})
+    return {
+        "state": "complete",
+        "size_bytes": completed,
+        "sha256": digest.hexdigest(),
+        "algorithm": HASH_ALGORITHM,
+    }
+
+
+def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    return str(hash_file_streaming(path, chunk_size=chunk_size)["sha256"])
+
+
+def append_hash_journal(path: Path, record: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    with path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(encoded + "\n")
+        stream.flush()
+
+
+def load_hash_journal(path: Path) -> dict[str, dict[str, Any]]:
+    completed: dict[str, dict[str, Any]] = {}
+    if not path.exists():
+        return completed
+    with path.open("r", encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(record, dict) or record.get("state") != "complete":
+                continue
+            key = record.get("artifact_key")
+            digest = record.get("sha256")
+            if (
+                not isinstance(key, str)
+                or not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                or record.get("algorithm") != HASH_ALGORITHM
+            ):
+                continue
+            completed[key] = record
+    return completed
+
+
+def _discover_file_rows(
+    root: Path,
+) -> tuple[list[tuple[str, Path]], list[dict[str, Any]]]:
+    candidates: list[tuple[str, Path]] = []
+    errors: list[dict[str, Any]] = []
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            children = list(directory.iterdir())
+        except OSError as exc:
+            errors.append({
+                "relative_path": directory.relative_to(root).as_posix(),
+                "exception": type(exc).__name__,
+                "winerror": getattr(exc, "winerror", None),
+                "errno": exc.errno,
+            })
+            continue
+        for candidate in children:
+            try:
+                if candidate.is_dir():
+                    pending.append(candidate)
+                elif candidate.is_file():
+                    candidates.append((candidate.relative_to(root).as_posix(), candidate))
+            except OSError as exc:
+                errors.append({
+                    "relative_path": candidate.relative_to(root).as_posix(),
+                    "exception": type(exc).__name__,
+                    "winerror": getattr(exc, "winerror", None),
+                    "errno": exc.errno,
+                })
+                candidates.append((candidate.relative_to(root).as_posix(), candidate))
+    return sorted(candidates), sorted(errors, key=lambda row: row["relative_path"])
+
+
+def _file_rows(root: Path) -> Iterable[tuple[str, Path]]:
+    rows, _ = _discover_file_rows(root)
+    yield from rows
+
+
+def tree_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    for relative, path in _file_rows(root):
+        encoded = relative.encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+        digest.update(path.stat().st_size.to_bytes(8, "big"))
+        digest.update(bytes.fromhex(sha256_file(path)))
+    return digest.hexdigest()
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _git(root: Path, *arguments: str) -> str:
+    result = subprocess.run(
+        ["git", *arguments],
+        cwd=root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            "git command failed: "
+            + " ".join(arguments)
+            + ": "
+            + (result.stderr.strip() or result.stdout.strip())
+        )
+    return result.stdout.replace("\r\n", "\n").rstrip("\n")
+
+
+def git_reference_inventory(root_id: str, root: Path) -> dict[str, Any]:
+    refs = _git(
+        root,
+        "for-each-ref",
+        "--format=%(refname)%00%(objectname)",
+        "refs",
+    )
+    normalized = sorted(line for line in refs.splitlines() if line)
+    names = sorted(line.partition("\x00")[0] for line in normalized)
+    serialized = "\n".join(normalized)
+    return {
+        "root_id": root_id,
+        "ref_names": names,
+        "ref_count": len(normalized),
+        "refs_sha256": _sha256_text(serialized),
+        "stash_present": "refs/stash" in names,
+        "pull_ref_count": sum(name.startswith("refs/pull/") for name in names),
+    }
+
+
+def git_repository_summary(root_id: str, root: Path) -> dict[str, Any]:
+    head = _git(root, "rev-parse", "HEAD")
+    is_bare = _git(root, "rev-parse", "--is-bare-repository") == "true"
+    branch_result = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+        cwd=root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    branch = (
+        branch_result.stdout.strip().replace("\\", "/")
+        if branch_result.returncode == 0
+        else None
+    )
+    status = (
+        None
+        if is_bare
+        else _git(root, "status", "--porcelain=v1", "--untracked-files=all")
+    )
+    normalized_status = "\n".join(sorted(status.splitlines())) if status else ""
+    refs = git_reference_inventory(root_id, root)
+    reachable = "\n".join(sorted(_git(root, "rev-list", "--objects", "--all").splitlines()))
+    tracked_tree = "\n".join(sorted(_git(root, "ls-tree", "-r", "--full-tree", head).splitlines()))
+    index_manifest = None if is_bare else "\n".join(sorted(_git(root, "ls-files", "--stage").splitlines()))
+    return {
+        "root_id": root_id,
+        "head": head,
+        "is_bare": is_bare,
+        "branch": branch,
+        "detached": branch is None,
+        "dirty": None if is_bare else bool(normalized_status),
+        "status_sha256": None if is_bare else _sha256_text(normalized_status),
+        "status_entry_count": (
+            len(normalized_status.splitlines()) if normalized_status else 0
+        ),
+        "refs_sha256": refs["refs_sha256"],
+        "ref_count": refs["ref_count"],
+        "stash_present": refs["stash_present"],
+        "pull_ref_count": refs["pull_ref_count"],
+        "reachable_object_count": len(reachable.splitlines()) if reachable else 0,
+        "reachable_object_manifest_sha256": _sha256_text(reachable),
+        "tracked_tree_entry_count": len(tracked_tree.splitlines()) if tracked_tree else 0,
+        "tracked_tree_manifest_sha256": _sha256_text(tracked_tree),
+        "index_entry_count": None if index_manifest is None else len(index_manifest.splitlines()),
+        "index_manifest_sha256": None if index_manifest is None else _sha256_text(index_manifest),
+    }
+
+def parse_worktree_porcelain(text: str) -> list[dict[str, Any]]:
+    parsed: list[tuple[str, dict[str, Any]]] = []
+    for block in text.replace("\r\n", "\n").strip().split("\n\n"):
+        values: dict[str, str | bool] = {}
+        for line in block.splitlines():
+            key, _, value = line.partition(" ")
+            values[key] = value if value else True
+        local_path = str(values.get("worktree", ""))
+        if not local_path:
+            continue
+        branch = values.get("branch")
+        parsed.append(
+            (
+                local_path.replace("\\", "/").casefold(),
+                {
+                    "normalized_path": local_path.replace("\\", "/"),
+                    "head": str(values.get("HEAD", "")),
+                    "branch": str(branch) if isinstance(branch, str) else None,
+                    "detached": bool(values.get("detached")),
+                    "prunable": bool(values.get("prunable")),
+                },
+            )
+        )
+    return [
+        {
+            "worktree_id": "worktree-" + hashlib.sha256(
+                normalized_path.encode("utf-8")
+            ).hexdigest()[:16],
+            **row,
+        }
+        for normalized_path, row in sorted(parsed, key=lambda item: item[0])
+    ]
+
+
+def _portable_worktree_rows(
+    rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in row.items() if key != "normalized_path"}
+        for row in rows
+    ]
+
+
+def _portable_discovery_rows(
+    rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in row.items() if key != "normalized_path"}
+        for row in rows
+    ]
+
+
+def _git_material_paths(root: Path) -> list[str]:
+    paths: set[str] = set()
+    commands = (
+        ("ls-files", "--modified", "--others", "--exclude-standard", "-z"),
+        ("diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB", "-z"),
+        ("ls-files", "--others", "--ignored", "--exclude-standard", "-z"),
+    )
+    for arguments in commands:
+        output = _git(root, *arguments)
+        paths.update(
+            item.replace("\\", "/")
+            for item in output.split("\0")
+            if item
+        )
+    return sorted(paths)
+
+def _material_file_rows(
+    root: Path, paths: Iterable[str], prefix: str = ""
+) -> tuple[list[tuple[str, Path]], list[dict[str, Any]]]:
+    rows: list[tuple[str, Path]] = []
+    errors: list[dict[str, Any]] = []
+    for relative in sorted(set(paths)):
+        candidate = root / Path(relative)
+        if candidate.is_dir():
+            nested, nested_errors = _discover_file_rows(candidate)
+            rows.extend((f"{prefix}{relative}/{child}", path) for child, path in nested)
+            errors.extend(
+                {**error, "relative_path": f"{prefix}{relative}/{error['relative_path']}"}
+                for error in nested_errors
+            )
+        else:
+            rows.append((f"{prefix}{relative}", candidate))
+    return rows, errors
+
+
+# ---------------------------------------------------------------------------
+# Bounded-memory variants for the git_ignored_registry scan.
+#
+# A working tree's git-ignored payload (node_modules, venvs, build output,
+# model checkpoints, torch caches, ...) has no upper bound census.py can rely
+# on. `_discover_file_rows`/`_material_file_rows` above are correct but
+# materialize every discovered (relative_path, Path) row into one Python list
+# before any hashing starts, and the caller then keeps that full list alive
+# for the remainder of the run (`final_membership_records`) to detect
+# membership changes at the end. On a large enough ignored payload this is
+# exactly the class of allocation that OOM'd a real run (2026-07-21,
+# `state/receipts/cond1-2-census-ABORTED-20260721.md` — journal reached
+# 855,271 lines / 259MB before the process was killed, never finishing).
+#
+# The functions below give the SAME rows, in the SAME deterministic order,
+# with the SAME scope (every ignored path is still enrolled and byte-hashed,
+# nothing is excluded) — they just never hold more than one directory level's
+# worth of entries in memory at a time, and the long-lived per-root
+# "membership snapshot" used for the final TOCTOU check becomes a single
+# sha256 digest instead of the full path list, so it does not have to stay
+# resident for the rest of the census run.
+def _iter_git_ignored_paths(bound: Path) -> Iterator[str]:
+    """Stream `git ls-files -z --others --ignored --exclude-standard` output.
+
+    Reads stdout incrementally instead of capturing it in one string
+    (`_git()`'s `subprocess.run(..., capture_output=True)`), and yields each
+    NUL-delimited path as soon as it is available. Bounded by one read chunk,
+    not by the total number of ignored paths in the tree.
+    """
+    process = subprocess.Popen(
+        ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+        cwd=bound,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert process.stdout is not None
+    pending = ""
+    try:
+        while True:
+            chunk = process.stdout.read(1 << 16)
+            if not chunk:
+                break
+            pending += chunk
+            *complete, pending = pending.split("\0")
+            for relative in complete:
+                if relative:
+                    yield relative.replace("\\", "/")
+        if pending:
+            yield pending.replace("\\", "/")
+    finally:
+        process.stdout.close()
+        stderr = process.stderr.read() if process.stderr is not None else ""
+        returncode = process.wait()
+        if returncode != 0:
+            raise ValueError(
+                "git command failed: ls-files --others --ignored --exclude-standard -z: "
+                + stderr.strip()
+            )
+
+
+def _iter_discover_file_rows(root: Path) -> Iterator[tuple[str, Path]]:
+    """Generator twin of `_discover_file_rows`: same iterative stack walk,
+    same relative-path construction, but yields each file row immediately
+    instead of accumulating the full list before returning. Directory access
+    errors are swallowed here (parity with `_discover_file_rows` recording
+    them as a side list is preserved by `_iter_material_rows`, which is the
+    only caller that needs errors alongside rows for census purposes)."""
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            children = list(directory.iterdir())
+        except OSError:
+            continue
+        for candidate in children:
+            try:
+                if candidate.is_dir():
+                    pending.append(candidate)
+                elif candidate.is_file():
+                    yield candidate.relative_to(root).as_posix(), candidate
+            except OSError:
+                yield candidate.relative_to(root).as_posix(), candidate
+
+
+def _iter_material_rows(
+    root: Path, paths: Iterable[str], prefix: str = ""
+) -> Iterator[tuple[str, Path]]:
+    """Lazy twin of `_material_file_rows`. The top-level `paths` set (the
+    entries `git ls-files` reports directly, before recursing into any
+    ignored directory) is still small enough to sort eagerly — the explosion
+    happens inside a single ignored directory (e.g. one `node_modules/`
+    unfolding into hundreds of thousands of files), which is exactly the part
+    this streams instead of materializing."""
+    for relative in sorted(set(paths)):
+        candidate = root / Path(relative)
+        if candidate.is_dir():
+            for child, path in _iter_discover_file_rows(candidate):
+                yield f"{prefix}{relative}/{child}", path
+        else:
+            yield f"{prefix}{relative}", candidate
+
+
+def _canonical_membership_digest(paths: Iterable[str]) -> str:
+    """Length-prefixed sha256 over the sorted, de-duplicated relative-path
+    set — the same collision-safe encoding style `tree_digest` uses for file
+    content. Two calls over the same underlying set (regardless of
+    encounter order or how many times a path was yielded) always agree."""
+    digest = hashlib.sha256()
+    for relative in sorted(set(paths)):
+        encoded = relative.encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _spooled_membership_digest(path_iter: Iterator[str]) -> str:
+    """Spool a stream of relative-path strings to a tempfile (bounded
+    memory: one line at a time, never the whole set), then read it back once
+    to compute `_canonical_membership_digest`. The read-back is a single
+    short-lived local list scoped to this one root's membership check, freed
+    immediately after — unlike storing the raw list in
+    `final_membership_records` for the rest of the run, nothing from it
+    survives past this function returning."""
+    handle = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=".jsonl", delete=False
+    )
+    try:
+        for relative in path_iter:
+            handle.write(relative)
+            handle.write("\n")
+        handle.close()
+        with open(handle.name, "r", encoding="utf-8") as spooled:
+            return _canonical_membership_digest(
+                line.rstrip("\n") for line in spooled
+            )
+    finally:
+        try:
+            os.unlink(handle.name)
+        except OSError:
+            pass
+
+
+def _compute_ignored_membership_sha256(
+    bound: Path, exclusions: list[dict[str, str]] | None = None
+) -> str:
+    """Recompute the current git-ignored membership digest for `bound`,
+    bounded the same way as the initial scan (spooled, never a resident full
+    list). Used only for the final TOCTOU membership check. `exclusions`
+    must match whatever runtime-state exclusions (#1365) were applied to the
+    initial digest, or a filter mismatch alone would manufacture a spurious
+    membership-changed contradiction."""
+    rows = _iter_material_rows(bound, _iter_git_ignored_paths(bound))
+    if exclusions:
+        discard_counts: dict[str, int] = defaultdict(int)
+        rows = _iter_exclude_runtime_state(rows, exclusions, discard_counts)
+    return _spooled_membership_digest(relative for relative, _ in rows)
+
+
+def _resolved_path_key(path: Path) -> str:
+    return str(Path(path).resolve()).replace("\\", "/").casefold()
+
+
+def bound_root_paths(
+    specification: Mapping[str, Any],
+    bindings: Mapping[str, Path],
+) -> dict[str, list[str]]:
+    """Map every physically bound root's resolved path to the root_ids on it.
+
+    Roots that only re-express another root (`source_root_id`) or that declare
+    themselves an alias (`alias_of_root_id`) are not path owners — the root
+    they derive from is.
+    """
+    owners: dict[str, list[str]] = defaultdict(list)
+    for root_spec in specification.get("roots", []):
+        if root_spec.get("source_root_id") or root_spec.get("alias_of_root_id"):
+            continue
+        root_id = root_spec.get("root_id")
+        bound = bindings.get(root_id)
+        if not isinstance(root_id, str) or bound is None or not Path(bound).exists():
+            continue
+        owners[_resolved_path_key(Path(bound))].append(root_id)
+    return dict(owners)
+
+
+def discovery_children(
+    bound: Path,
+    patterns: Iterable[str],
+    root_id: str,
+    owners: Mapping[str, list[str]] | None = None,
+) -> tuple[list[Path], list[dict[str, Any]]]:
+    """Name-matched children of `bound`, minus any already bound to another root.
+
+    A discovery root whose glob happens to match a directory that some other
+    root already binds would otherwise hash that whole tree a second time
+    (#1380: the `ember*` pattern self-matched the live execution tree, which
+    local-execution-tree already binds). The exclusion is by resolved path, so
+    it holds for every such collision, not just the ones anyone has noticed.
+    """
+    pattern_list = list(patterns)
+    matched = sorted(
+        (
+            child
+            for child in bound.iterdir()
+            if any(
+                fnmatch.fnmatch(child.name.casefold(), pattern.casefold())
+                for pattern in pattern_list
+            )
+        ),
+        key=lambda child: child.name.casefold(),
+    )
+    if not owners:
+        return matched, []
+    children: list[Path] = []
+    excluded: list[dict[str, Any]] = []
+    for child in matched:
+        try:
+            key = _resolved_path_key(child)
+        except OSError:
+            children.append(child)
+            continue
+        bound_elsewhere = sorted(
+            owner for owner in owners.get(key, []) if owner != root_id
+        )
+        if bound_elsewhere:
+            excluded.append(
+                {
+                    "name": child.name,
+                    "normalized_path": str(child.resolve()).replace("\\", "/"),
+                    "bound_root_ids": bound_elsewhere,
+                }
+            )
+            continue
+        children.append(child)
+    return children, excluded
+
+
+def alias_validation_error(
+    root_id: str,
+    alias_of_root_id: str,
+    bound: Path,
+    specs_by_id: Mapping[str, Mapping[str, Any]],
+    bindings: Mapping[str, Path],
+) -> dict[str, Any] | None:
+    """Why this alias cannot be trusted to stand in for its target, or None.
+
+    Dropping a root's bytes is only safe when the target provably hashes the
+    SAME path. Anything unproven — a self-reference, an undeclared target, a
+    target that is itself an alias (which is also how chains and cycles are
+    caught), an unbound target, or a target on different bytes — is a
+    contradiction, and the caller scans the root anyway. An alias must never
+    be able to remove custody material.
+    """
+    def error(code: str) -> dict[str, Any]:
+        return {
+            "code": code,
+            "root_id": root_id,
+            "alias_of_root_id": alias_of_root_id,
+            "resolution": "unresolved",
+        }
+
+    if alias_of_root_id == root_id:
+        return error("alias_target_is_self")
+    target = specs_by_id.get(alias_of_root_id)
+    if target is None:
+        return error("alias_target_root_missing")
+    if isinstance(target.get("alias_of_root_id"), str):
+        return error("alias_target_is_alias")
+    target_source = target.get("source_root_id")
+    target_binding_id = (
+        target_source if isinstance(target_source, str) else alias_of_root_id
+    )
+    target_bound = bindings.get(target_binding_id)
+    if target_bound is None or not Path(target_bound).exists():
+        return error("alias_target_unbound")
+    if _resolved_path_key(Path(target_bound)) != _resolved_path_key(bound):
+        return error("alias_target_path_mismatch")
+    return None
+
+
+def canonical_root_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
+    encoded = json.loads(json.dumps(payload))
+    for artifact in encoded.get("artifacts", []):
+        artifact.pop("mtime_ns_non_authoritative", None)
+    # Timings (#1397) are run observability, not custody evidence: two runs over
+    # identical bytes must still produce an identical canonical identity.
+    encoded.pop(TIMING_FIELD, None)
+    for root_row in encoded.get("roots", []):
+        root_row.pop(TIMING_FIELD, None)
+    return encoded
+
+
+def build_duplicate_groups(artifacts: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    by_hash: dict[str, list[str]] = defaultdict(list)
+    for artifact in artifacts:
+        digest = artifact.get("sha256")
+        artifact_id = artifact.get("artifact_id")
+        if isinstance(digest, str) and isinstance(artifact_id, str):
+            by_hash[digest].append(artifact_id)
+    return [
+        {"sha256": digest, "artifact_ids": sorted(ids)}
+        for digest, ids in sorted(by_hash.items())
+        if len(ids) > 1
+    ]
+
+
+def detect_contradictions(
+    artifacts: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    by_identity: dict[str, set[str]] = defaultdict(set)
+    for artifact in artifacts:
+        artifact_id = artifact.get("artifact_id")
+        digest = artifact.get("sha256")
+        if isinstance(artifact_id, str) and isinstance(digest, str):
+            by_identity[artifact_id].add(digest)
+    return [
+        {
+            "code": "conflicting_artifact_identity",
+            "artifact_id": artifact_id,
+            "candidate_sha256": sorted(hashes),
+            "resolution": "unresolved_preserve_all",
+        }
+        for artifact_id, hashes in sorted(by_identity.items())
+        if len(hashes) > 1
+    ]
+
+
+def _current_root_membership(
+    scan: str,
+    bound: Path,
+    root_spec: Mapping[str, Any],
+    initial_membership: list[str],
+    owners: Mapping[str, list[str]] | None = None,
+    exclusions: list[dict[str, str]] | None = None,
+) -> list[str]:
+    # Must apply the exact same runtime-state exclusion filter as the
+    # initial scan in build_root_census (#1365) — otherwise an excluded
+    # path would be present in one snapshot and absent from the other,
+    # manufacturing a spurious directory_membership_changed_during_scan
+    # contradiction purely from the filter mismatch, not a real mutation.
+    # The caller passes the list it actually applied (spec defaults merged
+    # with this root's own entries, #1384); re-deriving from `root_spec`
+    # alone would reintroduce exactly that mismatch.
+    if exclusions is None:
+        exclusions = _normalize_runtime_state_exclusions(root_spec)
+    discard_counts: dict[str, int] = defaultdict(int)
+    if scan == "git_repository":
+        rows, _ = _material_file_rows(
+            bound, _git_material_paths(bound), "git-material/"
+        )
+        rows = _apply_runtime_state_exclusions(rows, exclusions, discard_counts)
+        return [relative for relative, _ in rows]
+    if scan == "directory_discovery":
+        patterns = root_spec["name_patterns"]
+        rows: list[tuple[str, Path]] = []
+        children, _ = discovery_children(
+            bound, patterns, str(root_spec.get("root_id", "")), owners
+        )
+        for child in children:
+            git_probe = subprocess.run(
+                ["git", "rev-parse", "--git-dir"],
+                cwd=child if child.is_dir() else bound,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            if child.is_dir() and git_probe.returncode == 0:
+                summary = git_repository_summary(
+                    f"membership:{child.name}", child
+                )
+                if not summary["is_bare"]:
+                    material_rows, _ = _material_file_rows(
+                        child,
+                        _git_material_paths(child),
+                        f"{child.name}/git-material/",
+                    )
+                    material_rows = _apply_runtime_state_exclusions(
+                        material_rows, exclusions, discard_counts
+                    )
+                    rows.extend(material_rows)
+            elif child.is_file():
+                rows.append((child.name, child))
+            elif child.is_dir():
+                nested_rows, _ = _discover_file_rows(child)
+                nested_rows = _apply_runtime_state_exclusions(
+                    (
+                        (f"{child.name}/{relative}", candidate)
+                        for relative, candidate in nested_rows
+                    ),
+                    exclusions,
+                    discard_counts,
+                )
+                rows.extend(nested_rows)
+        return [relative for relative, _ in rows]
+    if scan == "git_ignored_registry":
+        ignored = [
+            relative.replace("\\", "/")
+            for relative in _git(
+                bound,
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+            ).split("\0")
+            if relative
+        ]
+        rows, _ = _material_file_rows(bound, ignored)
+        rows = _apply_runtime_state_exclusions(rows, exclusions, discard_counts)
+        return [relative for relative, _ in rows]
+    if scan == "git_worktree_material_registry":
+        rows: list[tuple[str, Path]] = []
+        for worktree in parse_worktree_porcelain(
+            _git(bound, "worktree", "list", "--porcelain")
+        ):
+            worktree_path = Path(worktree["normalized_path"])
+            if not worktree_path.exists():
+                raise FileNotFoundError(
+                    2, "registered worktree unavailable during final verification"
+                )
+            material_paths = _git_material_paths(worktree_path)
+            worktree_rows = (
+                (
+                    f"{worktree['worktree_id']}/{relative}",
+                    worktree_path / Path(relative),
+                )
+                for relative in material_paths
+                if (worktree_path / Path(relative)).is_file()
+            )
+            rows.extend(
+                _apply_runtime_state_exclusions(
+                    worktree_rows, exclusions, discard_counts
+                )
+            )
+        return [relative for relative, _ in rows]
+    if scan == "files" and bound.is_dir():
+        rows, _ = _discover_file_rows(bound)
+        rows = _apply_runtime_state_exclusions(rows, exclusions, discard_counts)
+        return [relative for relative, _ in rows]
+    return list(initial_membership)
+
+
+def _final_verification_error(
+    root_id: str,
+    verification: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    return {
+        "code": "final_verification_inaccessible",
+        "root_id": root_id,
+        "verification": verification,
+        "exception": type(exc).__name__,
+        "winerror": getattr(exc, "winerror", None),
+        "errno": getattr(exc, "errno", None),
+        "resolution": "unresolved_retry_snapshot",
+    }
+
+
+def _current_discovery_snapshot(
+    root_id: str,
+    bound: Path,
+    patterns: list[str],
+    owners: Mapping[str, list[str]] | None = None,
+) -> list[dict[str, Any]]:
+    snapshot: list[dict[str, Any]] = []
+    children, _ = discovery_children(bound, patterns, root_id, owners)
+    for child in children:
+        normalized_path = str(child.resolve()).replace("\\", "/")
+        git_probe = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=child if child.is_dir() else bound,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        if child.is_dir() and git_probe.returncode == 0:
+            summary = git_repository_summary(f"{root_id}:{child.name}", child)
+            snapshot.append(
+                {
+                    "name": child.name,
+                    "normalized_path": normalized_path,
+                    "kind": "bare_git" if summary["is_bare"] else "git_worktree",
+                    "git": summary,
+                }
+            )
+        else:
+            snapshot.append(
+                {
+                    "name": child.name,
+                    "normalized_path": normalized_path,
+                    "kind": "non_git",
+                }
+            )
+    return snapshot
+
+
+# ---------------------------------------------------------------------------
+# Discovery-snapshot churn classification (#1384).
+#
+# A discovery root's snapshot is a list of children, and for every child that
+# is a git tree it embeds that tree's whole live summary — HEAD, refs, status.
+# Comparing the two snapshots whole meant any sanctioned concurrent commit, or
+# any working-tree noise in any discovered tree, contradicted the run: the
+# `ember-named-root-discovery` snapshot alone carries 39 children, several with
+# thousands of status entries. The non-blocking-verify directive (#1371) says
+# that work continues during verification, so a check that fails on it makes
+# verify unpassable rather than making it strict.
+#
+# The split is by what the census took custody OF. Which children exist, and
+# what kind each one is, is the membership this root attests — churn there is
+# still a contradiction, because the census's own enumeration is then wrong.
+# A child that is still present and still the same kind, whose git tree simply
+# moved forward underneath it, is churn in a path the census enumerated but
+# does not own: tolerated, and receipted with the child and the fields that
+# moved. Nothing here relaxes the byte-level custody check — every file the
+# census hashed is still re-verified byte-for-byte at the end of the run.
+def _discovery_membership_key(row: Mapping[str, Any]) -> tuple[str, str]:
+    return str(row.get("name", "")), str(row.get("normalized_path", ""))
+
+
+def classify_discovery_snapshot_change(
+    initial: Iterable[Mapping[str, Any]],
+    final: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    before = {_discovery_membership_key(row): row for row in initial}
+    after = {_discovery_membership_key(row): row for row in final}
+    added = sorted(key[0] for key in after.keys() - before.keys())
+    removed = sorted(key[0] for key in before.keys() - after.keys())
+    kind_changed: list[str] = []
+    live_state_churn: list[dict[str, Any]] = []
+    for key in sorted(before.keys() & after.keys()):
+        was, now = before[key], after[key]
+        if was.get("kind") != now.get("kind"):
+            kind_changed.append(key[0])
+            continue
+        if was == now:
+            continue
+        changed_fields = sorted(
+            field
+            for field in set(was.get("git") or {}) | set(now.get("git") or {})
+            if (was.get("git") or {}).get(field) != (now.get("git") or {}).get(field)
+        )
+        live_state_churn.append(
+            {"name": key[0], "changed_fields": changed_fields}
+        )
+    return {
+        "added": added,
+        "removed": removed,
+        "kind_changed": kind_changed,
+        "membership_changed": bool(added or removed or kind_changed),
+        "live_state_churn": live_state_churn,
+    }
+
+
+_EXTERNAL_ABSENCE_POLICY = "external_party_evidence_absent_by_design"
+_OPERATOR_WORKTREE_ABSENCE_POLICY = (
+    "operator_noncanonical_worktree_absent_with_archival_pointers"
+)
+
+
+def _valid_operator_worktree_absence_policy(
+    root_spec: Mapping[str, Any],
+    *,
+    present: bool,
+    bindings: Mapping[str, Path],
+) -> bool:
+    """Accept the one closed declaration for the retired public worktree.
+
+    Archival pointers prove only that named archives still exist. They never
+    replace, bind, or promote the absent worktree itself.
+    """
+    if present:
+        return False
+    required_tuple = {
+        "root_id": "public-worktree",
+        "required": True,
+        "scan": "git_repository",
+        "provenance_class": "archive_history",
+        "lineage_admissibility": "unresolved_requires_patch_review",
+        "mutability": "dirty_or_branch_specific",
+        "owner": "operator",
+        "authority_status": "noncanonical_worktree",
+    }
+    if any(root_spec.get(key) != value for key, value in required_tuple.items()):
+        return False
+
+    evidence = root_spec.get("absence_evidence")
+    if not isinstance(evidence, Mapping):
+        return False
+    deletion_evidence = evidence.get("deletion_evidence")
+    expected_evidence_keys = {
+        "observed_absent_at",
+        "observed_by",
+        "deletion_evidence",
+    }
+    if deletion_evidence == "receipted":
+        expected_evidence_keys.add("receipt_path")
+        receipt_path = evidence.get("receipt_path")
+        if not isinstance(receipt_path, str) or not receipt_path.strip():
+            return False
+    elif deletion_evidence != "none_located":
+        return False
+    if set(evidence) != expected_evidence_keys:
+        return False
+    if (
+        evidence.get("observed_absent_at") != "2026-08-18T05:04Z"
+        or evidence.get("observed_by") != "independent-review-session"
+    ):
+        return False
+
+    pointers = root_spec.get("archival_pointers")
+    if not isinstance(pointers, list) or len(pointers) != 2:
+        return False
+    seen_kinds: set[str] = set()
+    required_bindings = {
+        "bare_mirror": "EMBER_PUBLIC_WORKTREE_MIRROR_GIT",
+        "bundle": "EMBER_PUBLIC_WORKTREE_MIRROR_BUNDLE",
+    }
+    for pointer in pointers:
+        if not isinstance(pointer, Mapping) or set(pointer) != {"binding", "kind"}:
+            return False
+        kind = pointer.get("kind")
+        binding = pointer.get("binding")
+        if kind not in {"bare_mirror", "bundle"} or kind in seen_kinds:
+            return False
+        if binding != required_bindings[kind]:
+            return False
+        resolved = bindings.get(binding)
+        if resolved is None or not Path(resolved).exists():
+            return False
+        seen_kinds.add(kind)
+    return seen_kinds == {"bare_mirror", "bundle"}
+
+
+def _valid_required_absence_policy(
+    root_spec: Mapping[str, Any],
+    *,
+    present: bool,
+    bindings: Mapping[str, Path],
+) -> bool:
+    """Allow only the two closed declared-absence policy families."""
+    external_policy_valid = (
+        root_spec.get("required") is True
+        and root_spec.get("absence_policy") == _EXTERNAL_ABSENCE_POLICY
+        and root_spec.get("provenance_class") == "evidence_receipt"
+        and root_spec.get("authority_status") == "noncanonical_evidence"
+        and root_spec.get("owner") in {"auditor", "collaborator"}
+        and root_spec.get("lineage_admissibility")
+        in {"excluded_evidence_only", "excluded_stale_audit_copy"}
+    )
+    if external_policy_valid:
+        return True
+    if root_spec.get("absence_policy") == _OPERATOR_WORKTREE_ABSENCE_POLICY:
+        return _valid_operator_worktree_absence_policy(
+            root_spec,
+            present=present,
+            bindings=bindings,
+        )
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Runtime-state exclusions (#1365).
+#
+# The custody census hashes every artifact under its registered roots, then
+# re-verifies unchanged bytes at the end of the run. A live ember-cli cockpit
+# continuously rewrites its own runtime-state files (activity-feed tailpoll
+# debug log, activity-feed watermark, hardening receipts) under
+# `tools/ember-cli/state/` inside every root that mirrors the ember working
+# tree — and since /verify (#1360) dispatches verification FROM the cockpit,
+# the cockpit is by definition alive during every census. Without an
+# exclusion this is structural self-contamination: the census flags its own
+# host's heartbeat as a custody violation on every run.
+#
+# The exclusion is read ONLY from each root's own `runtime_state_exclusions`
+# entry in the version-controlled root spec (manifests/ember-01-custody/
+# root-spec.json) — never from a pattern hardcoded here. A root that does not
+# declare an exclusion is scanned in full, unconditionally; declaring one on
+# a root that never contains a match costs nothing (excluded_artifact_count
+# stays 0) but keeps every filesystem-mirroring root defended in advance.
+#
+# #1384 widened where the declaration may live, not what a declaration is. A
+# per-root-only list meant every new root had to remember the cockpit patterns
+# for itself, and `local-ignored-payload-registry` — which reaches the very
+# same `tools/ember-cli/state/` bytes through the ignored-payload scan — never
+# did, so the cockpit's own watermark and ledger writes red-lined the run that
+# the cockpit dispatched. The spec may now carry a top-level
+# `runtime_state_exclusion_defaults` list that applies to every root, merged
+# ahead of each root's own entries. It is still read ONLY from the
+# version-controlled spec document: a spec that declares no defaults excludes
+# nothing anywhere, exactly as before.
+def _normalize_runtime_state_exclusions(
+    root_spec: Mapping[str, Any],
+    defaults: list[dict[str, str]] | None = None,
+) -> list[dict[str, str]]:
+    declared = _exclusion_entries(root_spec.get("runtime_state_exclusions"))
+    normalized: list[dict[str, str]] = []
+    seen_patterns: set[str] = set()
+    for entry in [*(defaults or []), *declared]:
+        pattern = entry["pattern"]
+        if pattern in seen_patterns:
+            continue
+        normalized.append({"pattern": pattern, "reason": entry["reason"]})
+        seen_patterns.add(pattern)
+    return normalized
+
+
+def _exclusion_entries(raw: Any) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    entries: list[dict[str, str]] = []
+    for entry in raw:
+        if not isinstance(entry, Mapping):
+            continue
+        pattern = entry.get("pattern")
+        reason = entry.get("reason")
+        if (
+            isinstance(pattern, str)
+            and pattern.strip()
+            and isinstance(reason, str)
+            and reason.strip()
+        ):
+            entries.append({"pattern": pattern, "reason": reason})
+    return entries
+
+
+def _specification_exclusion_defaults(
+    specification: Mapping[str, Any],
+) -> list[dict[str, str]]:
+    return _exclusion_entries(specification.get("runtime_state_exclusion_defaults"))
+
+
+def _runtime_state_exclusion_match(
+    relative: str, exclusions: list[dict[str, str]]
+) -> str | None:
+    normalized_relative = relative.replace("\\", "/").casefold()
+    for entry in exclusions:
+        if fnmatch.fnmatch(normalized_relative, entry["pattern"].casefold()):
+            return entry["pattern"]
+    return None
+
+
+def _iter_exclude_runtime_state(
+    rows: Iterable[tuple[str, Path]],
+    exclusions: list[dict[str, str]],
+    counts: dict[str, int],
+) -> Iterator[tuple[str, Path]]:
+    """Drop rows matching a declared exclusion pattern before they are ever
+    hashed or membership-tracked, so a writer mutating an excluded path
+    mid-census can never produce a contradiction. Every drop is counted
+    (never silent) so it can be disclosed in the census output."""
+    if not exclusions:
+        yield from rows
+        return
+    for relative, path in rows:
+        matched = _runtime_state_exclusion_match(relative, exclusions)
+        if matched is not None:
+            counts[matched] += 1
+            continue
+        yield relative, path
+
+
+def _apply_runtime_state_exclusions(
+    rows: Iterable[tuple[str, Path]],
+    exclusions: list[dict[str, str]],
+    counts: dict[str, int],
+) -> list[tuple[str, Path]]:
+    return list(_iter_exclude_runtime_state(rows, exclusions, counts))
+
+
+def build_root_census(
+    specification: Mapping[str, Any],
+    bindings: Mapping[str, Path],
+    journal_path: Path | None = None,
+) -> dict[str, Any]:
+    roots: list[dict[str, Any]] = []
+    artifacts: list[dict[str, Any]] = []
+    contradictions: list[dict[str, Any]] = []
+    # Journals are progress receipts only. Exact custody hashes always come
+    # from current bytes; metadata can be restored without restoring bytes.
+    if journal_path:
+        load_hash_journal(journal_path)
+    exclusion_defaults = _specification_exclusion_defaults(specification)
+    direct_paths = bound_root_paths(specification, bindings)
+    specs_by_id = {
+        row["root_id"]: row
+        for row in specification.get("roots", [])
+        if isinstance(row.get("root_id"), str)
+    }
+    for root_ids in direct_paths.values():
+        if len(root_ids) > 1:
+            contradictions.append(
+                {
+                    "code": "root_path_alias",
+                    "root_ids": sorted(root_ids),
+                    "resolution": "unresolved_preserve_all",
+                }
+            )
+    # #1397 timing scaffolding. The per-root clock is opened after the root's
+    # row exists and closed at the top of the NEXT iteration (and once after the
+    # loop), so every exit path out of the long loop body — the absent-root
+    # `continue`, the verified-alias `continue`, the git_remote and
+    # git_worktree_registry `continue`s, the root_scan_failed handler — is
+    # covered without wrapping 650 lines in a `try/finally`.
+    census_clock = _PhaseClock()
+    census_started = time.perf_counter()
+    open_root_timing: list[tuple[dict[str, Any], _PhaseClock, float]] = []
+
+    def open_root_clock(row: dict[str, Any]) -> _PhaseClock:
+        close_root_clock()
+        clock = _PhaseClock()
+        clock.start("discovery")
+        open_root_timing.append((row, clock, time.perf_counter()))
+        return clock
+
+    def close_root_clock() -> None:
+        while open_root_timing:
+            row, clock, started = open_root_timing.pop()
+            clock.stop()
+            row[TIMING_FIELD] = {
+                "duration_seconds": _elapsed_seconds(
+                    time.perf_counter() - started
+                ),
+                "phase_seconds": clock.phase_seconds(),
+            }
+
+    physical_hash_cache: dict[tuple[object, ...], str] = {}
+    final_byte_records: dict[tuple[object, ...], dict[str, Any]] = {}
+    final_membership_records: list[dict[str, Any]] = []
+    final_git_records: list[dict[str, Any]] = []
+    final_discovery_records: list[dict[str, Any]] = []
+    census_clock.start("root_scan")
+    for root_spec in sorted(
+        specification.get("roots", []), key=lambda row: row["root_id"]
+    ):
+        close_root_clock()
+        root_id = root_spec["root_id"]
+        scan = root_spec.get("scan", "files")
+        runtime_state_exclusions = _normalize_runtime_state_exclusions(
+            root_spec, exclusion_defaults
+        )
+        runtime_state_exclusion_hits: dict[str, int] = defaultdict(int)
+        source_root_id = root_spec.get("source_root_id")
+        binding_id = source_root_id if isinstance(source_root_id, str) else root_id
+        bound_value = bindings.get(binding_id)
+        bound = Path(bound_value) if bound_value is not None else None
+        present = bool(bound is not None and bound.exists())
+        absence_policy = root_spec.get("absence_policy")
+        absence_policy_valid = _valid_required_absence_policy(
+            root_spec,
+            present=present,
+            bindings=bindings,
+        )
+        absence_attested = bool(not present and absence_policy_valid)
+        root_row = {
+            "root_id": root_id,
+            "required": bool(root_spec.get("required")),
+            "present": present,
+            "scan": scan,
+            "provenance_class": root_spec.get(
+                "provenance_class", "unresolved"
+            ),
+            "lineage_admissibility": root_spec.get(
+                "lineage_admissibility", "unresolved"
+            ),
+        }
+        if isinstance(absence_policy, str):
+            root_row["absence_policy"] = absence_policy
+        if absence_policy == _OPERATOR_WORKTREE_ABSENCE_POLICY:
+            if "absence_evidence" in root_spec:
+                root_row["absence_evidence"] = root_spec["absence_evidence"]
+            if "archival_pointers" in root_spec:
+                root_row["archival_pointers"] = [
+                    {
+                        "binding": pointer.get("binding"),
+                        "kind": pointer.get("kind"),
+                        "resolved_exists": bool(
+                            isinstance(pointer.get("binding"), str)
+                            and bindings.get(pointer["binding"]) is not None
+                            and Path(bindings[pointer["binding"]]).exists()
+                        ),
+                    }
+                    for pointer in root_spec["archival_pointers"]
+                    if isinstance(pointer, Mapping)
+                ]
+        if (
+            not present or absence_policy == _OPERATOR_WORKTREE_ABSENCE_POLICY
+        ) and absence_policy is not None:
+            root_row["absence_attested"] = absence_attested
+        if isinstance(source_root_id, str):
+            root_row["source_root_id"] = source_root_id
+        alias_of_root_id = root_spec.get("alias_of_root_id")
+        if isinstance(alias_of_root_id, str):
+            root_row["alias_of_root_id"] = alias_of_root_id
+        roots.append(root_row)
+        root_clock = open_root_clock(root_row)
+        if (
+            present
+            and absence_policy == _OPERATOR_WORKTREE_ABSENCE_POLICY
+            and not absence_policy_valid
+        ):
+            contradictions.append(
+                {
+                    "code": "invalid_required_absence_policy",
+                    "root_id": root_id,
+                    "resolution": "unresolved",
+                }
+            )
+        if not present:
+            if absence_policy is not None and not absence_attested:
+                contradictions.append(
+                    {
+                        "code": "invalid_required_absence_policy",
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
+            if root_spec.get("required") and not absence_attested:
+                contradictions.append(
+                    {
+                        "code": (
+                            "required_source_binding_missing"
+                            if bound is None and source_root_id
+                            else "required_root_missing"
+                        ),
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
+            continue
+        assert bound is not None
+        if root_spec.get("required"):
+            owner = root_spec.get("owner", "unresolved")
+            if not isinstance(owner, str) or not owner.strip() or owner == "unresolved":
+                contradictions.append(
+                    {
+                        "code": "required_root_owner_unresolved",
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
+            authority_status = root_spec.get("authority_status", "unresolved")
+            if (
+                not isinstance(authority_status, str)
+                or not authority_status.strip()
+                or authority_status == "unresolved"
+            ):
+                contradictions.append(
+                    {
+                        "code": "required_root_authority_missing",
+                        "root_id": root_id,
+                        "resolution": "unresolved",
+                    }
+                )
+        if isinstance(alias_of_root_id, str):
+            # #1380: a root declared an alias of another root is the SAME
+            # physical bytes under a second logical name. Re-hashing it buys
+            # no custody evidence and doubles the census. The alias is still
+            # declared, still checked for presence and required-root fields,
+            # and still names what it aliases — it just contributes no
+            # artifacts of its own.
+            #
+            # Dropping those bytes is sound ONLY when the target provably
+            # covers the same path, so an alias that cannot be verified is a
+            # contradiction AND is scanned normally below. Fail-closed: the
+            # field can add a contradiction, never remove custody material.
+            alias_error = alias_validation_error(
+                root_id, alias_of_root_id, bound, specs_by_id, bindings
+            )
+            if alias_error is None:
+                root_row["artifact_contribution"] = "none_alias"
+                continue
+            contradictions.append(alias_error)
+            root_row["artifact_contribution"] = "scanned_unverified_alias"
+        provenance_class = root_spec.get("provenance_class", "unresolved")
+        lineage_admissibility = root_spec.get(
+            "lineage_admissibility", "unresolved"
+        )
+
+        def virtual_artifact(relative: str, digest: str) -> dict[str, Any]:
+            return {
+                "artifact_id": f"{root_id}:{relative}",
+                "source": {"root_id": root_id, "relative_path": relative},
+                "sha256": digest,
+                "size_bytes": 0,
+                "mtime_ns_non_authoritative": None,
+                "provenance_class": provenance_class,
+                "lineage_admissibility": lineage_admissibility,
+                "mutability": root_spec.get("mutability", "unresolved"),
+                "owner": root_spec.get("owner", "unresolved"),
+                "authority_status": root_spec.get(
+                    "authority_status", "unresolved"
+                ),
+            }
+
+        file_candidates: Iterable[tuple[str, Path]] | None = None
+        directory_errors: list[dict[str, Any]] = []
+        initial_membership: list[str] | None = None
+        initial_git_summary: dict[str, Any] | None = None
+        initial_discovery_snapshot: list[dict[str, Any]] | None = None
+        # Set true only for the git_ignored_registry bounded-memory path:
+        # `file_candidates` there is a single-use generator, so the
+        # membership snapshot cannot be derived from it up front the way
+        # every other scan type does — it is spooled during the per-file
+        # hash loop below and reduced to a digest right after.
+        membership_deferred = False
+        membership_spool: Any = None
+        try:
+            if scan == "git_repository":
+                summary = git_repository_summary(root_id, bound)
+                root_row["git"] = summary
+                initial_git_summary = summary
+                artifacts.extend(
+                    [
+                        virtual_artifact("git-refs", summary["refs_sha256"]),
+                        virtual_artifact("git-status", summary["status_sha256"]),
+                        virtual_artifact("git-reachable-objects", summary["reachable_object_manifest_sha256"]),
+                        virtual_artifact("git-tracked-tree", summary["tracked_tree_manifest_sha256"]),
+                    ]
+                )
+                if summary["index_manifest_sha256"] is not None:
+                    artifacts.append(virtual_artifact("git-index", summary["index_manifest_sha256"]))
+                if summary["is_bare"]:
+                    file_candidates = []
+                else:
+                    file_candidates, directory_errors = _material_file_rows(
+                        bound, _git_material_paths(bound), "git-material/"
+                    )
+                    file_candidates = _apply_runtime_state_exclusions(
+                        file_candidates,
+                        runtime_state_exclusions,
+                        runtime_state_exclusion_hits,
+                    )
+                    initial_membership = [
+                        relative for relative, _ in file_candidates
+                    ]
+            if scan == "git_remote":
+                remote_name = str(root_spec.get("remote_name", ""))
+                remote_names = set(_git(bound, "remote").splitlines())
+                remote_present = bool(remote_name and remote_name in remote_names)
+                root_row["present"] = remote_present
+                if not remote_present:
+                    if root_spec.get("required"):
+                        contradictions.append(
+                            {
+                                "code": "required_git_remote_missing",
+                                "root_id": root_id,
+                                "resolution": "unresolved",
+                            }
+                        )
+                    continue
+                refs = _git(
+                    bound,
+                    "for-each-ref",
+                    "--format=%(refname)%00%(objectname)",
+                    f"refs/remotes/{remote_name}",
+                )
+                normalized_refs = "\n".join(sorted(refs.splitlines()))
+                digest = _sha256_text(normalized_refs)
+                root_row["git_remote"] = {
+                    "remote_name": remote_name,
+                    "ref_count": len(normalized_refs.splitlines())
+                    if normalized_refs
+                    else 0,
+                    "refs_sha256": digest,
+                }
+                artifacts.append(virtual_artifact("git-remote-refs", digest))
+                continue
+            if scan == "directory_discovery":
+                patterns = root_spec.get("name_patterns")
+                if (
+                    not isinstance(patterns, list)
+                    or not patterns
+                    or not all(isinstance(item, str) and item for item in patterns)
+                ):
+                    raise ValueError("directory_discovery requires name_patterns")
+                children, alias_excluded = discovery_children(
+                    bound, patterns, root_id, direct_paths
+                )
+                if alias_excluded:
+                    root_row["discovery_bound_elsewhere"] = (
+                        _portable_discovery_rows(alias_excluded)
+                    )
+                discovered: list[dict[str, Any]] = []
+                file_candidates = []
+                for child in children:
+                    normalized_path = str(child.resolve()).replace("\\", "/")
+                    git_probe = subprocess.run(
+                        ["git", "rev-parse", "--git-dir"],
+                        cwd=child if child.is_dir() else bound,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        capture_output=True,
+                        check=False,
+                    )
+                    if child.is_dir() and git_probe.returncode == 0:
+                        summary = git_repository_summary(
+                            f"{root_id}:{child.name}", child
+                        )
+                        kind = "bare_git" if summary["is_bare"] else "git_worktree"
+                        discovered.append(
+                            {
+                                "name": child.name,
+                                "normalized_path": normalized_path,
+                                "kind": kind,
+                                "git": summary,
+                            }
+                        )
+                        git_identities = {
+                            "git-refs": summary["refs_sha256"],
+                            "git-reachable-objects": summary["reachable_object_manifest_sha256"],
+                            "git-tracked-tree": summary["tracked_tree_manifest_sha256"],
+                            "git-status": summary["status_sha256"],
+                            "git-index": summary["index_manifest_sha256"],
+                        }
+                        artifacts.extend(
+                            virtual_artifact(f"{child.name}/{suffix}", digest)
+                            for suffix, digest in git_identities.items()
+                            if digest is not None
+                        )
+                        if not summary["is_bare"]:
+                            material_rows, material_errors = _material_file_rows(
+                                child,
+                                _git_material_paths(child),
+                                f"{child.name}/git-material/",
+                            )
+                            material_rows = _apply_runtime_state_exclusions(
+                                material_rows,
+                                runtime_state_exclusions,
+                                runtime_state_exclusion_hits,
+                            )
+                            file_candidates.extend(material_rows)
+                            directory_errors.extend(material_errors)
+                    else:
+                        discovered.append(
+                            {
+                                "name": child.name,
+                                "normalized_path": normalized_path,
+                                "kind": "non_git",
+                            }
+                        )
+                        if child.is_file():
+                            file_candidates.append((child.name, child))
+                        elif child.is_dir():
+                            nested_rows, nested_errors = _discover_file_rows(child)
+                            nested_rows = _apply_runtime_state_exclusions(
+                                (
+                                    (f"{child.name}/{relative}", candidate)
+                                    for relative, candidate in nested_rows
+                                ),
+                                runtime_state_exclusions,
+                                runtime_state_exclusion_hits,
+                            )
+                            file_candidates.extend(nested_rows)
+                            directory_errors.extend(
+                                {**error, "relative_path": f"{child.name}/{error['relative_path']}"}
+                                for error in nested_errors
+                            )
+                root_row["discovered_roots"] = _portable_discovery_rows(discovered)
+                root_row["discovered_root_count"] = len(discovered)
+                initial_discovery_snapshot = discovered
+            if scan == "git_worktree_registry":
+                worktrees = parse_worktree_porcelain(
+                    _git(bound, "worktree", "list", "--porcelain")
+                )
+                portable_worktrees = _portable_worktree_rows(worktrees)
+                root_row["worktrees"] = portable_worktrees
+                serialized = json.dumps(
+                    portable_worktrees, sort_keys=True, separators=(",", ":")
+                )
+                artifacts.append(
+                    virtual_artifact("git-worktree-registry", _sha256_text(serialized))
+                )
+                continue
+            if scan == "git_worktree_material_registry":
+                worktrees = parse_worktree_porcelain(
+                    _git(bound, "worktree", "list", "--porcelain")
+                )
+                root_row["worktrees"] = _portable_worktree_rows(worktrees)
+                root_row["registered_worktree_count"] = len(worktrees)
+                file_candidates = []
+                worktree_errors: list[dict[str, Any]] = []
+                materialized = 0
+                for worktree in worktrees:
+                    worktree_path = Path(worktree["normalized_path"])
+                    if not worktree_path.exists():
+                        error = {
+                            "code": "registered_worktree_missing",
+                            "root_id": root_id,
+                            "worktree_id": worktree["worktree_id"],
+                            "resolution": "unresolved",
+                        }
+                        contradictions.append(error)
+                        worktree_errors.append(error)
+                        continue
+                    try:
+                        material_paths = _git_material_paths(worktree_path)
+                    except Exception as exc:
+                        error = {
+                            "code": "registered_worktree_scan_failed",
+                            "root_id": root_id,
+                            "worktree_id": worktree["worktree_id"],
+                            "exception": type(exc).__name__,
+                            "resolution": "unresolved",
+                        }
+                        contradictions.append(error)
+                        worktree_errors.append(error)
+                        continue
+                    materialized += 1
+                    worktree_rows = (
+                        (
+                            f"{worktree['worktree_id']}/{relative}",
+                            worktree_path / Path(relative),
+                        )
+                        for relative in material_paths
+                        if (worktree_path / Path(relative)).is_file()
+                    )
+                    file_candidates.extend(
+                        _apply_runtime_state_exclusions(
+                            worktree_rows,
+                            runtime_state_exclusions,
+                            runtime_state_exclusion_hits,
+                        )
+                    )
+                root_row["materialized_worktree_count"] = materialized
+                root_row["worktree_errors"] = worktree_errors
+            if scan == "git_ignored_registry":
+                # Bounded-memory path (see the block above `canonical_root_identity`).
+                # The top-level ignored-entry list (what `git ls-files` reports
+                # directly) is small and still sorted+deduped eagerly; the
+                # per-directory recursive expansion (the part that can explode
+                # to hundreds of thousands of rows for one ignored payload
+                # directory) is streamed lazily straight into the existing
+                # per-file hash loop below, never materialized as one list.
+                ignored_top_level = sorted(set(_iter_git_ignored_paths(bound)))
+                root_row["ignored_entry_count"] = len(ignored_top_level)
+                membership_spool = tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", suffix=".jsonl", delete=False
+                )
+
+                def _spooling_ignored_rows(
+                    rows: Iterator[tuple[str, Path]], spool=membership_spool
+                ) -> Iterator[tuple[str, Path]]:
+                    for relative, path in rows:
+                        spool.write(relative)
+                        spool.write("\n")
+                        yield relative, path
+
+                file_candidates = _spooling_ignored_rows(
+                    _iter_exclude_runtime_state(
+                        _iter_material_rows(bound, ignored_top_level),
+                        runtime_state_exclusions,
+                        runtime_state_exclusion_hits,
+                    )
+                )
+                directory_errors = []
+                initial_membership = None
+                membership_deferred = True
+            if scan != "files":
+                if scan not in {
+                    "directory_discovery",
+                    "git_ignored_registry",
+                    "git_worktree_material_registry",
+                    "git_repository",
+                }:
+                    raise ValueError(f"unsupported scan mode: {scan}")
+        except Exception as exc:
+            root_row["present"] = False
+            contradictions.append(
+                {
+                    "code": "root_scan_failed",
+                    "root_id": root_id,
+                    "exception": type(exc).__name__,
+                    "winerror": getattr(exc, "winerror", None),
+                    "errno": getattr(exc, "errno", None),
+                    "resolution": "unresolved",
+                }
+            )
+            continue
+        if file_candidates is not None:
+            candidates = file_candidates
+        elif bound.is_file():
+            candidates = _apply_runtime_state_exclusions(
+                [(bound.name, bound)],
+                runtime_state_exclusions,
+                runtime_state_exclusion_hits,
+            )
+        else:
+            candidates, directory_errors = _discover_file_rows(bound)
+            candidates = _apply_runtime_state_exclusions(
+                candidates, runtime_state_exclusions, runtime_state_exclusion_hits
+            )
+            initial_membership = [relative for relative, _ in candidates]
+        if initial_membership is None and not membership_deferred:
+            initial_membership = [relative for relative, _ in candidates]
+        pending_membership_record: dict[str, Any] | None = None
+        if not (
+            scan == "git_repository"
+            and initial_git_summary is not None
+            and initial_git_summary["is_bare"] is True
+        ):
+            if membership_deferred:
+                membership_record: dict[str, Any] = {
+                    "root_id": root_id,
+                    "scan": scan,
+                    "bound": bound,
+                    "root_spec": dict(root_spec),
+                    "runtime_state_exclusions": runtime_state_exclusions,
+                    "membership_representation": "sha256",
+                    # Patched in right after the per-file hash loop below
+                    # finishes spooling this root's rows — see the
+                    # `if membership_deferred:` block that follows it.
+                    "initial_membership_sha256": None,
+                }
+                pending_membership_record = membership_record
+            else:
+                membership_record = {
+                    "root_id": root_id,
+                    "scan": scan,
+                    "bound": bound,
+                    "root_spec": dict(root_spec),
+                    "runtime_state_exclusions": runtime_state_exclusions,
+                    "membership_representation": "list",
+                    "initial_membership": list(initial_membership),
+                }
+            final_membership_records.append(membership_record)
+        if initial_git_summary is not None:
+            final_git_records.append(
+                {
+                    "root_id": root_id,
+                    "bound": bound,
+                    "initial_summary": initial_git_summary,
+                }
+            )
+        if initial_discovery_snapshot is not None:
+            final_discovery_records.append(
+                {
+                    "root_id": root_id,
+                    "bound": bound,
+                    "root_row": root_row,
+                    "patterns": list(root_spec["name_patterns"]),
+                    "initial_snapshot": initial_discovery_snapshot,
+                }
+            )
+        for error in directory_errors:
+            contradictions.append({
+                "code": "directory_coverage_inaccessible",
+                "root_id": root_id,
+                **error,
+                "resolution": "unresolved_preserve_directory",
+            })
+        # For git_ignored_registry `candidates` is the lazy spooling generator,
+        # so that scan's enumeration is interleaved with hashing and lands in
+        # this phase rather than in `discovery` — the one scan mode where the
+        # two phases are not separable without re-materializing the row list
+        # the bounded-memory scan deliberately never builds.
+        root_clock.start("hashing")
+        for relative, path in candidates:
+            artifact_key = f"{root_id}:{relative}"
+            base_row = {
+                "artifact_id": artifact_key,
+                "source": {
+                    "root_id": root_id,
+                    "relative_path": relative,
+                },
+                "provenance_class": provenance_class,
+                "lineage_admissibility": lineage_admissibility,
+                "mutability": root_spec.get("mutability", "unresolved"),
+                "owner": root_spec.get("owner", "unresolved"),
+                "authority_status": root_spec.get(
+                    "authority_status", "unresolved"
+                ),
+            }
+            try:
+                stat = path.stat()
+                physical_key = (
+                    str(path.resolve()).replace("\\", "/").casefold(),
+                    stat.st_dev,
+                    stat.st_ino,
+                    stat.st_size,
+                    stat.st_mtime_ns,
+                    stat.st_ctime_ns,
+                )
+                physical_digest = physical_hash_cache.get(physical_key)
+                if physical_digest is not None:
+                    digest = physical_digest
+                else:
+                    def progress(record: dict[str, Any]) -> None:
+                        if journal_path is not None:
+                            append_hash_journal(
+                                journal_path,
+                                {
+                                    **record,
+                                    "artifact_key": artifact_key,
+                                    "size_bytes": stat.st_size,
+                                    "mtime_ns_non_authoritative": stat.st_mtime_ns,
+                                },
+                            )
+
+                    result = hash_file_streaming(
+                        path,
+                        on_progress=(
+                            progress if stat.st_size > 1024 * 1024 else None
+                        ),
+                    )
+                    post_stat = path.stat()
+                    post_key = (
+                        str(path.resolve()).replace("\\", "/").casefold(),
+                        post_stat.st_dev,
+                        post_stat.st_ino,
+                        post_stat.st_size,
+                        post_stat.st_mtime_ns,
+                        post_stat.st_ctime_ns,
+                    )
+                    if (
+                        post_key != physical_key
+                        or result["size_bytes"] != post_stat.st_size
+                    ):
+                        raise RuntimeError("artifact_mutated_during_hash")
+                    digest = str(result["sha256"])
+                    if journal_path is not None:
+                        append_hash_journal(
+                            journal_path,
+                            {
+                                **result,
+                                "artifact_key": artifact_key,
+                                "mtime_ns_non_authoritative": stat.st_mtime_ns,
+                            },
+                        )
+                    physical_hash_cache[physical_key] = digest
+            except RuntimeError as exc:
+                if str(exc) != "artifact_mutated_during_hash":
+                    raise
+                artifacts.append(
+                    {
+                        **base_row,
+                        "sha256": None,
+                        "size_bytes": None,
+                        "mtime_ns_non_authoritative": None,
+                        "hash_source": "rejected_mutation",
+                    }
+                )
+                contradictions.append(
+                    {
+                        "code": "artifact_mutated_during_hash",
+                        "root_id": root_id,
+                        "relative_path": relative,
+                        "resolution": "unresolved_preserve_entry",
+                    }
+                )
+                continue
+            except OSError as exc:
+                access_error = {
+                    "exception": type(exc).__name__,
+                    "winerror": getattr(exc, "winerror", None),
+                    "errno": exc.errno,
+                }
+                artifacts.append(
+                    {
+                        **base_row,
+                        "sha256": None,
+                        "size_bytes": None,
+                        "mtime_ns_non_authoritative": None,
+                        "access_error": access_error,
+                    }
+                )
+                contradictions.append(
+                    {
+                        "code": "artifact_access_failed",
+                        "root_id": root_id,
+                        "relative_path": relative,
+                        **access_error,
+                        "resolution": "unresolved_preserve_entry",
+                    }
+                )
+                continue
+            artifacts.append(
+                {
+                    **base_row,
+                    "sha256": digest,
+                    "size_bytes": stat.st_size,
+                    "mtime_ns_non_authoritative": stat.st_mtime_ns,
+                    "hash_source": "current_bytes",
+                }
+            )
+            final_record = final_byte_records.get(physical_key)
+            if final_record is None:
+                final_record = {
+                    "path": path,
+                    "expected_sha256": digest,
+                    "expected_size_bytes": stat.st_size,
+                    "initial_stat_key": physical_key,
+                    "sources": [],
+                }
+                final_byte_records[physical_key] = final_record
+            final_record["sources"].append((root_id, relative))
+        root_clock.start("membership_snapshot")
+        if membership_deferred and pending_membership_record is not None:
+            # The spooling generator above has now been fully drained by the
+            # hash loop that just finished, so the spool file holds exactly
+            # this root's membership set. Reduce it to a digest and forget
+            # the file — nothing about the full row set survives past here.
+            membership_spool.close()
+            try:
+                with open(membership_spool.name, "r", encoding="utf-8") as spooled:
+                    pending_membership_record["initial_membership_sha256"] = (
+                        _canonical_membership_digest(
+                            line.rstrip("\n") for line in spooled
+                        )
+                    )
+            finally:
+                try:
+                    os.unlink(membership_spool.name)
+                except OSError:
+                    pass
+        if runtime_state_exclusions:
+            # Disclosure (#1365 acceptance #3): every declared exclusion is
+            # always reported, pattern + reason + how many artifacts it
+            # actually dropped on this root — 0 for a root the pattern never
+            # matches, so an exclusion can never silently hide custody
+            # material.
+            root_row["runtime_state_exclusions"] = [
+                {
+                    "pattern": entry["pattern"],
+                    "reason": entry["reason"],
+                    "excluded_artifact_count": runtime_state_exclusion_hits.get(
+                        entry["pattern"], 0
+                    ),
+                }
+                for entry in runtime_state_exclusions
+            ]
+    close_root_clock()
+    census_clock.start("final_discovery_verification")
+    for record in final_discovery_records:
+        try:
+            final_discovery_snapshot = _current_discovery_snapshot(
+                record["root_id"],
+                record["bound"],
+                record["patterns"],
+                direct_paths,
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(
+                    record["root_id"], "discovery_snapshot", exc
+                )
+            )
+            continue
+        if final_discovery_snapshot == record["initial_snapshot"]:
+            continue
+        change = classify_discovery_snapshot_change(
+            record["initial_snapshot"], final_discovery_snapshot
+        )
+        if change["membership_changed"]:
+            contradictions.append({
+                "code": "directory_snapshot_changed_during_scan",
+                "root_id": record["root_id"],
+                "added": change["added"],
+                "removed": change["removed"],
+                "kind_changed": change["kind_changed"],
+                "resolution": "unresolved_retry_snapshot",
+            })
+        if change["live_state_churn"]:
+            record["root_row"]["discovery_live_state_churn"] = change[
+                "live_state_churn"
+            ]
+    census_clock.start("final_git_verification")
+    for record in final_git_records:
+        try:
+            final_git_summary = git_repository_summary(
+                record["root_id"], record["bound"]
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(record["root_id"], "git_snapshot", exc)
+            )
+            continue
+        if final_git_summary != record["initial_summary"]:
+            contradictions.append({
+                "code": "git_snapshot_changed_during_scan",
+                "root_id": record["root_id"],
+                "resolution": "unresolved_retry_snapshot",
+            })
+    census_clock.start("final_membership_verification")
+    for record in final_membership_records:
+        if record.get("membership_representation") == "sha256":
+            # Bounded-memory path (git_ignored_registry): the initial
+            # membership was reduced to a digest, not kept as a full list, so
+            # the final check recomputes the same digest (also bounded — see
+            # `_compute_ignored_membership_sha256`) instead of re-diffing two
+            # full path lists.
+            try:
+                final_membership_sha256 = _compute_ignored_membership_sha256(
+                    record["bound"],
+                    record["runtime_state_exclusions"],
+                )
+            except Exception as exc:
+                contradictions.append(
+                    _final_verification_error(
+                        record["root_id"], "directory_membership", exc
+                    )
+                )
+                continue
+            if final_membership_sha256 != record["initial_membership_sha256"]:
+                contradictions.append({
+                    "code": "directory_membership_changed_during_scan",
+                    "root_id": record["root_id"],
+                    "resolution": "unresolved_retry_snapshot",
+                })
+            continue
+        try:
+            final_membership = _current_root_membership(
+                record["scan"],
+                record["bound"],
+                record["root_spec"],
+                record["initial_membership"],
+                direct_paths,
+                record["runtime_state_exclusions"],
+            )
+        except Exception as exc:
+            contradictions.append(
+                _final_verification_error(
+                    record["root_id"], "directory_membership", exc
+                )
+            )
+            continue
+        if final_membership != record["initial_membership"]:
+            contradictions.append({
+                "code": "directory_membership_changed_during_scan",
+                "root_id": record["root_id"],
+                "resolution": "unresolved_retry_snapshot",
+            })
+    census_clock.start("final_byte_verification")
+    for record in sorted(
+        final_byte_records.values(),
+        key=lambda row: str(row["path"]).replace("\\", "/").casefold(),
+    ):
+        path = record["path"]
+        try:
+            final_stat = path.stat()
+            final_hash = hash_file_streaming(path)
+            final_post_stat = path.stat()
+            final_key = (
+                str(path.resolve()).replace("\\", "/").casefold(),
+                final_post_stat.st_dev,
+                final_post_stat.st_ino,
+                final_post_stat.st_size,
+                final_post_stat.st_mtime_ns,
+                final_post_stat.st_ctime_ns,
+            )
+            if (
+                final_stat.st_size != final_post_stat.st_size
+                or final_stat.st_mtime_ns != final_post_stat.st_mtime_ns
+                or final_hash["size_bytes"] != final_post_stat.st_size
+                or final_key != record["initial_stat_key"]
+                or str(final_hash["sha256"]) != record["expected_sha256"]
+                or final_post_stat.st_size != record["expected_size_bytes"]
+            ):
+                raise RuntimeError("artifact_changed_after_hash")
+        except (OSError, RuntimeError):
+            contradictions.extend(
+                {
+                    "code": "artifact_changed_after_hash",
+                    "root_id": root_id,
+                    "relative_path": relative,
+                    "resolution": "unresolved_retry_snapshot",
+                }
+                for root_id, relative in sorted(record["sources"])
+            )
+    census_clock.start("aggregation")
+    artifacts.sort(
+        key=lambda row: (
+            row["source"]["root_id"],
+            row["source"]["relative_path"],
+        )
+    )
+    contradictions.extend(detect_contradictions(artifacts))
+    runtime_state_excluded_artifact_count = sum(
+        entry.get("excluded_artifact_count", 0)
+        for root_row in roots
+        for entry in root_row.get("runtime_state_exclusions", [])
+    )
+    duplicate_groups = build_duplicate_groups(artifacts)
+    sorted_contradictions = sorted(
+        contradictions,
+        key=lambda row: (row["code"], row.get("root_id", ""), row.get("artifact_id", "")),
+    )
+    census_clock.stop()
+    return {
+        "schema": "ember-01-root-census-v1",
+        "hash_algorithm": HASH_ALGORITHM,
+        "proof_mode": "current_bytes_rehashed",
+        TIMING_FIELD: {
+            "clock": TIMING_CLOCK,
+            "total_seconds": _elapsed_seconds(
+                time.perf_counter() - census_started
+            ),
+            "phase_seconds": census_clock.phase_seconds(),
+        },
+        "roots": roots,
+        "artifacts": artifacts,
+        "duplicate_groups": duplicate_groups,
+        "runtime_state_excluded_artifact_count": runtime_state_excluded_artifact_count,
+        "contradictions": sorted_contradictions,
+    }
+
+
+def validate_benchmark_registry(
+    registry: Mapping[str, Any], repository_root: Path | None = None,
+    source_commit: str | None = None,
+) -> list[str]:
+    errors: list[str] = []
+    rows = registry.get("benchmarks")
+    if not isinstance(rows, list):
+        return ["benchmarks_not_list"]
+    identifiers = [
+        row.get("benchmark_id") for row in rows if isinstance(row, Mapping)
+    ]
+    for benchmark_id in sorted(DIRECT_MANDATE_IDS - set(identifiers)):
+        errors.append(f"direct_mandate_missing:{benchmark_id}")
+    duplicates = sorted(
+        benchmark_id
+        for benchmark_id in set(identifiers)
+        if identifiers.count(benchmark_id) > 1
+    )
+    errors.extend(f"benchmark_id_duplicate:{item}" for item in duplicates)
+    unresolved = sum(
+        1
+        for row in rows
+        if isinstance(row, Mapping)
+        and row.get("provenance_class") == "unresolved_direct_request"
+    )
+    required_unresolved = max(
+        0,
+        int(registry.get("operator_recollection_minimum", 15))
+        - int(registry.get("direct_recovered_minimum", 13)),
+    )
+    if unresolved < required_unresolved:
+        errors.append(
+            f"unresolved_direct_requests_missing:{required_unresolved - unresolved}"
+        )
+    required_fields = (
+        "split",
+        "harness_path",
+        "harness_identity",
+        "comparator_requirements",
+        "lineage_admissibility",
+        "completion_eligibility",
+    )
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        benchmark_id = row.get("benchmark_id", "<missing>")
+        for field in required_fields:
+            if field not in row:
+                errors.append(f"required_field_missing:{benchmark_id}:{field}")
+        comparator = row.get("comparator_requirements")
+        if isinstance(comparator, Mapping) and (
+            comparator.get("owned_subject_required") is not True
+            or comparator.get("borrowed_reference_role") != "frozen_reference_only"
+            or comparator.get("lineage_signal_allowed") is not False
+        ):
+            errors.append(f"comparator_boundary_invalid:{benchmark_id}")
+        if (
+            row.get("completion") is True
+            and row.get("provenance_class")
+            not in {"direct_mandate", "broader_research_candidate"}
+        ):
+            errors.append(f"completion_benchmark_class_not_frozen:{benchmark_id}")
+    for row in rows:
+        if not isinstance(row, Mapping) or row.get("completion") is not True:
+            continue
+        benchmark_id = row.get("benchmark_id", "<missing>")
+        if row.get("subject_class") != "owned_admissible_ember_checkpoint":
+            errors.append(f"completion_subject_not_owned:{benchmark_id}")
+        if row.get("lineage_admissibility") != "owned_subject_only":
+            errors.append(f"completion_lineage_not_admissible:{benchmark_id}")
+        if row.get("execution_status") != "executed":
+            errors.append(f"completion_not_executed:{benchmark_id}")
+        for field in ("version", "split"):
+            value = row.get(field)
+            if (
+                not isinstance(value, str)
+                or not value.strip()
+                or value.casefold() == "unresolved"
+            ):
+                errors.append(f"completion_{field}_unresolved:{benchmark_id}")
+        exact_values = {
+            "harness_status": "verified",
+            "data_status": "frozen",
+            "license_status": "verified",
+            "completion_eligibility": "eligible_exact_owned_execution",
+        }
+        for field, expected in exact_values.items():
+            if row.get(field) != expected:
+                errors.append(f"completion_{field}_invalid:{benchmark_id}")
+        bindings = (
+            ("harness_path", "harness_identity"),
+            ("subject_manifest_path", "subject_manifest"),
+            ("result_receipt_path", "result_receipt"),
+            ("data_evidence_path", "data_evidence"),
+            ("license_evidence_path", "license_evidence"),
+        )
+        for path_field, identity_field in bindings:
+            relative = row.get(path_field)
+            identity = row.get(identity_field)
+            if not isinstance(relative, str) or not relative.strip():
+                errors.append(f"completion_{path_field}_missing:{benchmark_id}")
+                continue
+            if not isinstance(identity, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", identity) is None:
+                errors.append(f"completion_{identity_field}_not_content_bound:{benchmark_id}")
+                continue
+            if repository_root is None:
+                errors.append(f"completion_repository_unresolved:{benchmark_id}")
+                continue
+            root = repository_root.resolve()
+            if source_commit is None:
+                errors.append(f"completion_source_commit_unresolved:{benchmark_id}")
+                continue
+            relative_path = Path(relative)
+            if relative_path.is_absolute() or ".." in relative_path.parts:
+                errors.append(f"completion_{path_field}_outside_repository:{benchmark_id}")
+                continue
+            shown = subprocess.run(
+                ["git", "show", f"{source_commit}:{relative_path.as_posix()}"],
+                cwd=root,
+                capture_output=True,
+                check=False,
+            )
+            if shown.returncode != 0:
+                errors.append(f"completion_{path_field}_unresolved:{benchmark_id}")
+                continue
+            actual = "sha256:" + hashlib.sha256(shown.stdout).hexdigest()
+            if actual != identity:
+                errors.append(f"completion_{identity_field}_mismatch:{benchmark_id}")
+        if row.get("official_boundary") is not True:
+            errors.append(f"completion_boundary_not_official:{benchmark_id}")
+    return errors
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"expected JSON object: {path}")
+    return payload
+
+
+def _load_json_bound(
+    path: Path,
+    expected_sha256: str | None,
+) -> tuple[dict[str, Any], str]:
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if expected_sha256 is not None:
+        expected = expected_sha256.lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise ValueError("expected JSON digest must be exactly 64 lowercase hex")
+        if digest != expected:
+            raise ValueError("bound JSON digest does not match expected bytes")
+    payload = json.loads(raw.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"expected JSON object: {path}")
+    return payload, digest
+
+
+def _parse_bindings(values: Iterable[str]) -> dict[str, Path]:
+    bindings: dict[str, Path] = {}
+    for value in values:
+        root_id, separator, raw_path = value.partition("=")
+        if not separator or not root_id or not raw_path:
+            raise ValueError(f"binding must be ROOT_ID=PATH: {value}")
+        if root_id in bindings:
+            raise ValueError(f"duplicate binding: {root_id}")
+        bindings[root_id] = Path(raw_path)
+    return bindings
+
+
+def _write_json_atomic(path: Path, payload: Mapping[str, Any], *, sort_keys: bool = True) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=sort_keys) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    temporary.replace(path)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root-spec", required=True)
+    parser.add_argument("--benchmark-registry", required=True)
+    parser.add_argument("--issue-census", required=True)
+    parser.add_argument("--issue-census-sha256")
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--public-master-ref", required=True)
+    parser.add_argument("--binding", action="append", default=[])
+    parser.add_argument("--journal")
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--sidecar")
+    arguments = parser.parse_args()
+    try:
+        spec_path = Path(arguments.root_spec)
+        registry_path = Path(arguments.benchmark_registry)
+        specification = _load_json(spec_path)
+        registry = _load_json(registry_path)
+        issue_path = Path(arguments.issue_census)
+        issue_census, issue_census_sha256 = _load_json_bound(
+            issue_path,
+            arguments.issue_census_sha256,
+        )
+        source_commit = str(arguments.source_commit).lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
+            raise ValueError("source commit must be exactly 40 lowercase hex")
+        bindings = _parse_bindings(arguments.binding)
+        public_repository = bindings.get("public-repository")
+        if public_repository is None:
+            raise ValueError("public-repository binding is required")
+        try:
+            resolved_source = _git(public_repository, "rev-parse", "--verify", source_commit + "^{commit}").strip().lower()
+        except ValueError as exc:
+            raise ValueError("source commit does not resolve in public repository") from exc
+        if resolved_source != source_commit:
+            raise ValueError("source commit does not match public repository object")
+        if arguments.public_master_ref != "refs/remotes/origin/master":
+            raise ValueError("public master ref must be refs/remotes/origin/master")
+        # The census binds to the commit its own snapshot pinned, NOT to wherever
+        # the public master ref happens to point while the run executes. Demanding
+        # equality here froze every code merge for the whole census window: a docs
+        # merge advancing master mid-run failed a census that had already captured
+        # its evidence at the pinned commit (#1331). Where the ref points now is
+        # recorded as evidence; the binding that gates is snapshot-internal --
+        # the issue census's own public_master_sha must equal this source commit.
+        try:
+            resolved_public_master = _git(
+                public_repository,
+                "rev-parse",
+                "--verify",
+                arguments.public_master_ref + "^{commit}",
+            ).strip().lower()
+        except ValueError:
+            resolved_public_master = None
+        public_master_binding = {
+            "public_master_ref": arguments.public_master_ref,
+            "public_master_ref_resolved": resolved_public_master,
+            "source_commit_is_public_master_tip": resolved_public_master == source_commit,
+            "binding_mode": "snapshot_internal",
+        }
+        root_census = build_root_census(
+            specification,
+            bindings,
+            Path(arguments.journal) if arguments.journal else None,
+        )
+        benchmark_errors = validate_benchmark_registry(
+            registry,
+            repository_root=bindings.get("public-repository"),
+            source_commit=source_commit,
+        )
+        if issue_census.get("public_master_sha") != source_commit:
+            raise ValueError("issue census public master does not match source commit")
+        issue_errors = validate_issue_census(issue_census, repository_root=bindings.get("public-repository"))
+        manifest_binding = {
+            "root_census_sha256": _sha256_text(
+                json.dumps(canonical_root_identity(root_census), sort_keys=True, separators=(",", ":"))
+            ),
+            "benchmark_registry_sha256": sha256_file(registry_path),
+            "issue_census_sha256": issue_census_sha256,
+            "source_commit": source_commit,
+        }
+        transient_codes = {
+            "artifact_mutated_during_hash",
+            "artifact_changed_after_hash",
+            "directory_membership_changed_during_scan",
+            "directory_snapshot_changed_during_scan",
+            "git_snapshot_changed_during_scan",
+        }
+        transient = [
+            row for row in root_census["contradictions"]
+            if row.get("code") in transient_codes
+        ]
+        payload = {
+            "schema": "ember-01-custody-census-v1",
+            "authority": specification.get("authority"),
+            "source_commit": source_commit,
+            "public_master_binding": public_master_binding,
+            "root_spec_sha256": sha256_file(spec_path),
+            "benchmark_registry_sha256": manifest_binding[
+                "benchmark_registry_sha256"
+            ],
+            "issue_census_sha256": manifest_binding["issue_census_sha256"],
+            "canonical_manifest_sha256": _sha256_text(
+                json.dumps(
+                    manifest_binding, sort_keys=True, separators=(",", ":")
+                )
+            ),
+            "root_census": root_census,
+            "benchmark_registry": registry,
+            "public_issue_census": issue_census,
+            "benchmark_validation_errors": benchmark_errors,
+            "issue_validation_errors": issue_errors,
+            "summary": {
+                "root_count": len(root_census["roots"]),
+                "artifact_count": len(root_census["artifacts"]),
+                "artifact_bytes": sum(
+                    row["size_bytes"]
+                    for row in root_census["artifacts"]
+                    if isinstance(row.get("size_bytes"), int)
+                ),
+                "duplicate_group_count": len(root_census["duplicate_groups"]),
+                "access_error_count": sum(
+                    row.get("code") == "artifact_access_failed"
+                    for row in root_census["contradictions"]
+                ),
+                "contradiction_count": len(root_census["contradictions"]),
+                "benchmark_row_count": len(registry.get("benchmarks", [])),
+                "issue_row_count": len(issue_census.get("issues", [])),
+            },
+        }
+        run_identity = {
+            "authority": specification.get("authority"),
+            "execution_id": secrets.token_hex(16),
+            "source_commit": source_commit,
+            "root_spec_sha256": sha256_file(spec_path),
+            "benchmark_registry_sha256": manifest_binding["benchmark_registry_sha256"],
+            "issue_census_sha256": manifest_binding["issue_census_sha256"],
+            "canonical_root_census_sha256": manifest_binding["root_census_sha256"],
+            "canonical_manifest_sha256": payload["canonical_manifest_sha256"],
+            "summary": payload["summary"],
+            "benchmark_validation_errors": benchmark_errors,
+            "issue_validation_errors": issue_errors,
+            "contradiction_count": len(root_census["contradictions"]),
+            "transient_contradictions": transient,
+        }
+        payload = {"run_identity": run_identity, **payload}
+        output_path = Path(arguments.output)
+        _write_json_atomic(output_path, payload, sort_keys=False)
+        if arguments.sidecar:
+            sidecar = {
+                "schema": "ember-01-custody-run-sidecar-v1",
+                "receipt_name": output_path.name,
+                "receipt_sha256": sha256_file(output_path),
+                "receipt_size_bytes": output_path.stat().st_size,
+                "run_identity": run_identity,
+            }
+            _write_json_atomic(Path(arguments.sidecar), sidecar)
+    except Exception as exc:
+        print(f"EMBER_01_CUSTODY FAIL: {exc}")
+        return 1
+    if benchmark_errors or issue_errors or root_census["contradictions"]:
+        print(
+            "EMBER_01_CUSTODY INCOMPLETE: "
+            f"benchmark_errors={len(benchmark_errors)} "
+            f"issue_errors={len(issue_errors)} "
+            f"contradictions={len(root_census['contradictions'])}"
+        )
+        return 2
+    print(
+        "EMBER_01_CUSTODY PASS: "
+        f"roots={len(root_census['roots'])} "
+        f"artifacts={len(root_census['artifacts'])}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

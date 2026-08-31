@@ -9,7 +9,7 @@ The C0 ledger's blocking_reason for TEXT_LAB_DATA_AUTHORITY is exact:
 ``accepted-training-input-authorities-v1.json`` exists as a manifest, but "no
 executable guard cross-references every consumed training shard against it at
 cycle start." The existing consumer of that registry
-(``src/ember/governance/scripts/ember_01_identity/validate_identity.py``'s ``_pinned_accepted_training_
+(``scripts/ember_01_identity/validate_identity.py``'s ``_pinned_accepted_training_
 input`` / the ``admission.training_input_authority`` finding) binds ONE claim --
 a whole checkpoint's ``data.accepted_input`` -- at admission time. It never checks
 that every INDIVIDUAL shard about to be consumed in a training cycle actually

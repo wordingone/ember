@@ -10,7 +10,7 @@
   "type": "object",
   "additionalProperties": false,
   "b4_governed_conditional_requirement": {
-    "decision": "OWNED_ADMITTED (current owned-admission legs) requires training.optimizer_contract; a manifest with any other disposition may omit it. Authority: ember01plan.md SS B4 L1067-1069 (conditional requirement inside v1, decided by a governed decision receipt, in lieu of a hard v2 cutover whose blast radius spans unrelated ember-cli/test fixtures outside this PR's scope). Enforced twice: the if/then below (schema.validation finding) and src/ember/governance/scripts/ember_01_identity/validate_identity.py's admission.optimizer_contract_missing finding (same disposition==OWNED_ADMITTED gate, house style for OWNED_ADMITTED requirements).",
+    "decision": "OWNED_ADMITTED (current owned-admission legs) requires training.optimizer_contract; a manifest with any other disposition may omit it. Authority: ember01plan.md SS B4 L1067-1069 (conditional requirement inside v1, decided by a governed decision receipt, in lieu of a hard v2 cutover whose blast radius spans unrelated ember-cli/test fixtures outside this PR's scope). Enforced twice: the if/then below (schema.validation finding) and scripts/ember_01_identity/validate_identity.py's admission.optimizer_contract_missing finding (same disposition==OWNED_ADMITTED gate, house style for OWNED_ADMITTED requirements).",
     "goal_id": "EMBER-01"
   },
   "if": {

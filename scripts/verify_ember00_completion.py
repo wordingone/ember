@@ -271,7 +271,7 @@ def main() -> int:
         before = inspect_checkout(root)
         selection_before = selection_evidence(selection)
         authority = verify(root, selection)
-        invariant_actual = sha256(root / "docs/domains/governance/authority/INVARIANT.md")
+        invariant_actual = sha256(root / "docs/authority/INVARIANT.md")
         invariant_matches = invariant_actual == INVARIANT_SHA256
         checks = executable_checks(root) if before["clean"] and before["detached"] else []
         selection_after = selection_evidence(selection)
@@ -335,7 +335,7 @@ def main() -> int:
     if not checkout["clean"] or not checkout["detached"]:
         print("  checkout was not clean and detached throughout")
     if not invariant_matches:
-        print("  docs/domains/governance/authority/INVARIANT.md hash changed")
+        print("  docs/authority/INVARIANT.md hash changed")
     if not selection_unchanged:
         print("  goal selector or selected goal bytes changed during verification")
     return 1

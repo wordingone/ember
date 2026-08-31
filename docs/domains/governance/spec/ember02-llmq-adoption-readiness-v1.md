@@ -38,7 +38,7 @@ at `runtime/ember-lab/target/release/ember-lab.exe` (or the debug build only
 when release is absent), with exact normalized path and reopened-byte hash;
 packet, response, and environment binary locators are ignored. Blocking pipe
 I/O runs in a hidden owned worker with a ten-second end-to-end deadline. That
-daemon export must bind the exact `domains/runtime/runtime/ember-lab/src/lib.rs` and daemon binary bytes, the
+daemon export must bind the exact `runtime/ember-lab/src/lib.rs` and daemon binary bytes, the
 terminal job/identity/resource lease, exit zero, and daemon-sealed stdout and
 stderr; the invented caller-side producer/status shape is refused. A benchmark
 receipt must reuse that exact daemon export and job, equate its hardware UUID

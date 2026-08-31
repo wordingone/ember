@@ -30,12 +30,12 @@ FINDINGS (read before trusting the output blindly):
    whole tree -- most are NOT calls into the identity manifest at all (schedule
    generators, bitnet-twin scripts, accounting harnesses that happen to count
    parameters for unrelated purposes). Only rows inside the real validation/round-trip
-   call path this increment lands (``src/ember/governance/scripts/ember_01_identity/validate_identity.py``'s
+   call path this increment lands (``scripts/ember_01_identity/validate_identity.py``'s
    ``parameters`` schema/contradiction checks, exercised end-to-end by
    ``tests/ember_01_identity/test_parameter_identity_roundtrip.py`` against a manifest
    bound to a REAL measured checkpoint receipt) are adjudicated as real consumers here.
    The new wiring this increment adds
-   (``src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py``,
+   (``scripts/ember_01_identity/parameter_identity_binding.py``,
    ``tools/ember-restart-3b/parameter_counter.py``) is not present in this census
    snapshot (it predates the increment); it is not claimed as resolved by this script
    and needs a fresh census run to be discovered and adjudicated in its own right.
@@ -55,13 +55,13 @@ _IDENTITY_DIR = Path(__file__).resolve().parent
 if str(_IDENTITY_DIR) not in sys.path:
     sys.path.insert(0, str(_IDENTITY_DIR))
 
-# issue2015 exact-local-import:src/ember/governance/scripts/ember_01_identity/census_consumers.py
+# issue2015 exact-local-import:scripts/ember_01_identity/census_consumers.py
 import importlib.util as _ember_21106b7bc55d9483_importlib
 import sys as _ember_21106b7bc55d9483_sys
 from pathlib import Path as _ember_21106b7bc55d9483_Path
 _ember_21106b7bc55d9483_path = _ember_21106b7bc55d9483_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'census_consumers.py')
 if not _ember_21106b7bc55d9483_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_identity/census_consumers.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_01_identity/census_consumers.py')
 _ember_21106b7bc55d9483_aliases = ('_ember_issue2015_21106b7bc55d9483', 'census_consumers', 'scripts.ember_01_identity.census_consumers')
 _ember_21106b7bc55d9483_existing = []
 for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
@@ -69,21 +69,21 @@ for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
     if _ember_21106b7bc55d9483_candidate is not None and all(_ember_21106b7bc55d9483_candidate is not item for item in _ember_21106b7bc55d9483_existing):
         _ember_21106b7bc55d9483_existing.append(_ember_21106b7bc55d9483_candidate)
 if len(_ember_21106b7bc55d9483_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_identity/census_consumers.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_01_identity/census_consumers.py')
 if _ember_21106b7bc55d9483_existing:
     _ember_21106b7bc55d9483_module = _ember_21106b7bc55d9483_existing[0]
     _ember_21106b7bc55d9483_observed = getattr(_ember_21106b7bc55d9483_module, '__file__', None)
     if _ember_21106b7bc55d9483_observed is None or _ember_21106b7bc55d9483_Path(_ember_21106b7bc55d9483_observed).resolve() != _ember_21106b7bc55d9483_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_identity/census_consumers.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_01_identity/census_consumers.py')
 else:
     _ember_21106b7bc55d9483_spec = _ember_21106b7bc55d9483_importlib.spec_from_file_location('_ember_issue2015_21106b7bc55d9483', _ember_21106b7bc55d9483_path)
     if _ember_21106b7bc55d9483_spec is None or _ember_21106b7bc55d9483_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_identity/census_consumers.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_01_identity/census_consumers.py')
     _ember_21106b7bc55d9483_module = _ember_21106b7bc55d9483_importlib.module_from_spec(_ember_21106b7bc55d9483_spec)
     for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
         _ember_21106b7bc55d9483_prior = _ember_21106b7bc55d9483_sys.modules.get(_ember_21106b7bc55d9483_alias)
         if _ember_21106b7bc55d9483_prior is not None and _ember_21106b7bc55d9483_prior is not _ember_21106b7bc55d9483_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/census_consumers.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_01_identity/census_consumers.py')
         _ember_21106b7bc55d9483_sys.modules[_ember_21106b7bc55d9483_alias] = _ember_21106b7bc55d9483_module
     try:
         _ember_21106b7bc55d9483_spec.loader.exec_module(_ember_21106b7bc55d9483_module)
@@ -95,10 +95,10 @@ else:
 for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
     _ember_21106b7bc55d9483_prior = _ember_21106b7bc55d9483_sys.modules.get(_ember_21106b7bc55d9483_alias)
     if _ember_21106b7bc55d9483_prior is not None and _ember_21106b7bc55d9483_prior is not _ember_21106b7bc55d9483_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/census_consumers.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_01_identity/census_consumers.py')
     _ember_21106b7bc55d9483_sys.modules[_ember_21106b7bc55d9483_alias] = _ember_21106b7bc55d9483_module
 _source_role = getattr(_ember_21106b7bc55d9483_module, '_source_role')
-# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_identity/census_consumers.py  # noqa: E402
+# issue2015 exact-local-import-end:scripts/ember_01_identity/census_consumers.py  # noqa: E402
 from merge_adjudications import LANE_SCHEMA, merge_adjudication_lanes  # noqa: E402
 
 CENSUS_PATH = (
@@ -112,7 +112,7 @@ OUTPUT_PATH = (
 # Real call-sites this increment's round-trip test actually exercises against a
 # receipt bound to a live checkpoint. Everything else in the category is a static
 # keyword coincidence, not a manifest binding.
-REAL_CONSUMER_PATHS = {"src/ember/governance/scripts/ember_01_identity/validate_identity.py"}
+REAL_CONSUMER_PATHS = {"scripts/ember_01_identity/validate_identity.py"}
 
 
 def _key(row: dict) -> tuple[str, int, str, str]:

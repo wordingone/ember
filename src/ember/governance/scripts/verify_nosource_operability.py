@@ -402,7 +402,7 @@ DESC_TEXT_RE = re.compile(r'description:\s*(?:\n\s*)?"((?:[^"\\]|\\.)*)"')
 # directory and reported three unrelated PowerShell scripts as "ember's root
 # launchers", which would have passed L1. Absence of every marker is a harness
 # error, not a verdict about ember.
-ROOT_MARKERS = ("docs/domains/governance/authority/INVARIANT.md", "docs/domains/governance/authority/GOAL.md", COMMANDS_DIR, PACKAGE_JSON)
+ROOT_MARKERS = ("docs/authority/INVARIANT.md", "docs/domains/governance/authority/GOAL.md", COMMANDS_DIR, PACKAGE_JSON)
 
 # --- L1 static invocation resolution -----------------------------------
 

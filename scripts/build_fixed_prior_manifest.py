@@ -308,7 +308,7 @@ INVENTORY: tuple[dict, ...] = (
          path="docs/domains/governance/authority/GOAL.md",
          provenance="Goal authority: the 3B floor and required native capabilities."),
     dict(category="configuration", kind="file",
-         path="docs/domains/governance/authority/INVARIANT.md",
+         path="docs/authority/INVARIANT.md",
          provenance="Invariant authority; F3 stamps every receipt with its hash."),
 )
 
@@ -478,7 +478,7 @@ def build_manifest() -> dict:
             "Every item in this manifest is a NON-LEARNED prior. Zero imported "
             "learned weights, embeddings, learned-parameter tokenizers, teacher "
             "outputs, learned filters or judges, or hidden accelerator services "
-            "(docs/domains/governance/authority/INVARIANT.md clause 3, fail-closed on unknown provenance)."),
+            "(docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance)."),
         "energy_method": energy_method_block(),
         "host_governor": host_governor_block(),
         "items": build_items(),

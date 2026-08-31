@@ -521,7 +521,7 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
     if not isinstance(markdown, list) or len(markdown) != 2:
         raise DocsInfoError("MARKDOWN_LINK_DISPOSITION_COUNT_INVALID")
     expected_links = {
-        ("docs/domains/governance/roadmap/README.md", 8, "../../INVARIANT.md", "docs/domains/governance/authority/INVARIANT.md"),
+        ("docs/domains/governance/roadmap/README.md", 8, "../../INVARIANT.md", "docs/authority/INVARIANT.md"),
         (
             "docs/domains/governance/roadmap/README.md",
             9,

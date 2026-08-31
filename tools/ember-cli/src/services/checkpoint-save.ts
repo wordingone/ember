@@ -12,7 +12,7 @@
 //
 // The source checkpoint convention mirrors `_resolveModelIdentity` in
 // commands/model.ts: a manifest JSON file (validated by
-// src/ember/governance/scripts/ember_01_identity/validate_identity.py) plus, alongside it, a
+// scripts/ember_01_identity/validate_identity.py) plus, alongside it, a
 // binary `checkpoint` file named literally `checkpoint`. `saveCheckpoint`
 // below is the CORE — validate -> atomic copy -> return sha — kept
 // deliberately separate from "which path is the currently-loaded seat",

@@ -32,7 +32,7 @@ _GOVERNED_ORIGIN = "https://github.com/IST-DASLab/llmq.git"
 _ADOPTION_DESIGN_PATH = "docs/domains/governance/spec/llmq/adoption-design-v1.json"
 _MECHANISM_ATTRIBUTION_PATH = "docs/domains/governance/spec/llmq/mechanism-attribution-v1.json"
 _LLMQ_PIN = "f5b234c4b95009dfe43ee15181be93bc3fb34563"
-_EMBER_LAB_SOURCE_PATH = "domains/runtime/runtime/ember-lab/src/lib.rs"
+_EMBER_LAB_SOURCE_PATH = "runtime/ember-lab/src/lib.rs"
 _PIPE_PREFIX = r"\\.\pipe\ember-lab-"
 _OPERATOR_PIPE_PREFIX = r"\\.\pipe\ember-operator-"
 _MAX_RPC_FRAME_BYTES = 64 * 1024
@@ -206,10 +206,10 @@ def _canonical_ember_lab_source_sha256(repository_root: Path) -> str | None:
     """Reproduce Rust's length-delimited daemon source identity over canonical files."""
     root = repository_root.resolve(strict=True)
     relative_sources = (
-        "domains/runtime/runtime/ember-lab/src/lib.rs",
+        "runtime/ember-lab/src/lib.rs",
         "runtime/ember-lab/src/data_catalog.rs",
         "runtime/ember-lab/src/rpc.rs",
-        "domains/runtime/runtime/ember-lab/src/main.rs",
+        "runtime/ember-lab/src/main.rs",
         "runtime/ember-lab/src/training_verify.rs",
         "runtime/ember-lab/Cargo.toml",
         "runtime/ember-lab/Cargo.lock",

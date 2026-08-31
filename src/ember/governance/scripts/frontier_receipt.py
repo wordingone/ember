@@ -93,7 +93,7 @@ WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 
 PREREG_PATH = "docs/domains/governance/spec/ember02-preregistration-v1.md"
-INVARIANT_PATH = "docs/domains/governance/authority/INVARIANT.md"
+INVARIANT_PATH = "docs/authority/INVARIANT.md"
 ADMISSION_CONFIG_PATH = "configs/ember-restart-3b.json"
 TOKENIZER_RECONSTRUCTION_RECEIPT = "receipts/ember-restart-3b/tokenizer-reconstruction-issue534-v1.json"
 RUN_ATTEMPTS_REGISTRY = "receipts/run-attempts.jsonl"

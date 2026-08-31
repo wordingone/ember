@@ -56,8 +56,8 @@ describe("/admit consumer-result authority", () => {
           stdout_sha256: "3".repeat(64),
           validator_sha256: "1".repeat(64),
           validator_closure: {
-            "src/ember/governance/scripts/ember_01_identity/validate_identity.py": {
-              relative_path: "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
+            "scripts/ember_01_identity/validate_identity.py": {
+              relative_path: "scripts/ember_01_identity/validate_identity.py",
               sha256: "1".repeat(64), bytes: 1,
             },
           },

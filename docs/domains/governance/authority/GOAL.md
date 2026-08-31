@@ -1,6 +1,6 @@
 # EMBER - Constitution
 
-docs/domains/governance/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/domains/governance/authority/GOAL.md is the
+docs/authority/INVARIANT.md is Ember's sole unamendable identity surface. docs/domains/governance/authority/GOAL.md is the
 highest amendable authority. Lower-precedence files may implement and test it;
 they cannot reduce, defer, replace, or reinterpret it.
 
@@ -115,9 +115,9 @@ they cannot reduce, defer, replace, or reinterpret it.
   "conservation_hashes": {
     "authority_matrix_sha256": "D7E2AD4401CA11FAAAF289892838450842325516C9A08CA2AEA96FC1D4AF2D2F",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "98654ED20178EBAF7CA5CAC8F0F69E2708DA53BE3D8DF4107168AAF37B4D7FED",
+      "docs/authority/CONTINUITY.md": "18FA870F27194696F6BBE8D12EBCD64B3AE22986AE8B5D0CB077191B0B205B3C",
       "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
-      "README.md": "36E71D64027D4D405224FBC12B8449C9BA505B019A4F3B6B10E995A049ABA35D",
+      "README.md": "5468CFBF418A70E8A1DB1BA76A380C368EB7594EB41C4EC8E88C6667DBAF496E",
       "docs/authority/ember-authority-matrix.md": "D7E2AD4401CA11FAAAF289892838450842325516C9A08CA2AEA96FC1D4AF2D2F",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
       "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
@@ -491,7 +491,7 @@ every current model, checkpoint, backend, and benchmark class.
 
 Evidence and historical artifacts never become authority. Subordinate contracts
 carry the machine-checked conservation header and fail closed on contradiction.
-Precedence is docs/domains/governance/authority/INVARIANT.md, then docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
+Precedence is docs/authority/INVARIANT.md, then docs/domains/governance/authority/GOAL.md, then named subordinate contracts,
 then implementation and evidence, then history.
 
 No completion claim is valid unless the primitive, model, organism, body, and

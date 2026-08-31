@@ -28,9 +28,9 @@
 ### Task 1: Pressure schema and pure transition policy
 
 **Files:**
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:1230-1245`
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:2147-2170`
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:8520-8670`
+- Modify: `runtime/ember-lab/src/lib.rs:1230-1245`
+- Modify: `runtime/ember-lab/src/lib.rs:2147-2170`
+- Modify: `runtime/ember-lab/src/lib.rs:8520-8670`
 
 **Interfaces:**
 - Produces: `ForeignProcessIdentity`, `ForeignProcessCensus`, `ForeignPressureState`, `foreign_pressure_transition(&ForeignProcessCensus) -> ForeignPressureState`, `persist_foreign_process_census(&Connection, i64, Result<ForeignProcessCensus>) -> Result<()>`, and `foreign_process_pressure_status_from_connection(&Connection) -> Result<Value>`.
@@ -167,9 +167,9 @@ Run `git diff --check`, `git status --short`, and SHA-256 the modified files wit
 ### Task 2A: Schema version 7
 
 **Files:**
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs`
+- Modify: `runtime/ember-lab/src/lib.rs`
 - Modify: `runtime/ember-lab/tests/data_catalog.rs`
-- Modify: `domains/runtime/runtime/ember-lab/tests/artifact_custody.rs`
+- Modify: `runtime/ember-lab/tests/artifact_custody.rs`
 
 **Interfaces:**
 - Produces: schema version 7 and both foreign-pressure tables.
@@ -192,8 +192,8 @@ Do not add rollback or historical rollback-chain changes in this packet. Review 
 ### Task 2B: Pure classifier and read-only Windows census provider
 
 **Files:**
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:8280-8420`
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:8673-8720`
+- Modify: `runtime/ember-lab/src/lib.rs:8280-8420`
+- Modify: `runtime/ember-lab/src/lib.rs:8673-8720`
 - Modify: `runtime/ember-lab/Cargo.toml:14-28` only if the already enabled Windows feature set fails to expose a required API
 
 **Interfaces:**
@@ -276,11 +276,11 @@ Include the exact Win32 access mask used, raw tests, source diff, file hashes, a
 ### Task 3: Monitor persistence and effective admission fence
 
 **Files:**
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:2209-2230`
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:2670-2685`
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:4010-4060`
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:9543-9660`
-- Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs:1760-1840`
+- Modify: `runtime/ember-lab/src/lib.rs:2209-2230`
+- Modify: `runtime/ember-lab/src/lib.rs:2670-2685`
+- Modify: `runtime/ember-lab/src/lib.rs:4010-4060`
+- Modify: `runtime/ember-lab/src/lib.rs:9543-9660`
+- Modify: `runtime/ember-lab/tests/control_plane.rs:1760-1840`
 
 **Interfaces:**
 - Consumes: `ForeignProcessCensusProvider::sample`, `persist_foreign_process_census`, and `foreign_process_pressure_status_from_connection`.
@@ -348,8 +348,8 @@ Report raw tests, exact refusal receipt contents/hash, DB transition rows, file 
 ### Task 4: Probe receipt and custody verifier
 
 **Files:**
-- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs` near the existing resource-guard status/probe APIs
-- Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs` beside foreign-pressure integration tests
+- Modify: `runtime/ember-lab/src/lib.rs` near the existing resource-guard status/probe APIs
+- Modify: `runtime/ember-lab/tests/control_plane.rs` beside foreign-pressure integration tests
 
 **Interfaces:**
 - Consumes: the current pressure singleton and bounded observation ledger.
@@ -384,9 +384,9 @@ Send the receipt path, raw file SHA-256, self hash, exact JSON content, stdout/s
 ### Task 5: Full sentinel verification and handoff
 
 **Files:**
-- Verify: `domains/runtime/runtime/ember-lab/src/lib.rs`
+- Verify: `runtime/ember-lab/src/lib.rs`
 - Verify: `runtime/ember-lab/Cargo.toml`
-- Verify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs`
+- Verify: `runtime/ember-lab/tests/control_plane.rs`
 - Verify: `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 **Interfaces:**
@@ -414,8 +414,8 @@ Expected: zero failures. If A: disk budget cannot safely hold build artifacts, m
 Run:
 
 ```text
-rg -n "PROCESS_TERMINATE|PROCESS_SUSPEND_RESUME|PROCESS_ALL_ACCESS|TerminateProcess|TerminateJobObject" domains/runtime/runtime/ember-lab/src/lib.rs
-rg -n "foreign_process_control|PrivateUsage|CommitTotal|CommitLimit|FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES" domains/runtime/runtime/ember-lab/src/lib.rs
+rg -n "PROCESS_TERMINATE|PROCESS_SUSPEND_RESUME|PROCESS_ALL_ACCESS|TerminateProcess|TerminateJobObject" runtime/ember-lab/src/lib.rs
+rg -n "foreign_process_control|PrivateUsage|CommitTotal|CommitLimit|FOREIGN_PROCESS_ATTRIBUTION_CUTOFF_BYTES" runtime/ember-lab/src/lib.rs
 git diff --check
 git status --short
 ```

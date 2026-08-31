@@ -72,7 +72,7 @@
     },
     {
       "path": "tests/test_nativization_motion.py",
-      "sha256": "ceee690857d8c27fdc582c2a9de160b40678a2bb9158aba179e6ea177aff8f62",
+      "sha256": "aedc8acd40bde45f2a8f5d271a217eb0fadab5269ecc0c4259eac964a759ed06",
       "reason": "offline nativization-motion test suite. It executes only synthetic temporary runner/import fixtures to validate delta and receipt calculations, with zero network and no production training identity or custody."
     },
     {
