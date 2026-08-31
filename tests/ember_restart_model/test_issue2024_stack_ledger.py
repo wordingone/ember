@@ -21,11 +21,13 @@ def _event(
     parent_id: int = 3,
     device_time_us: str = "10.000001",
     stack: tuple[str, ...] = ("tools/ember-restart-3b/model.py:41",),
+    parent_stack: tuple[str, ...] = (),
 ) -> SimpleNamespace:
+    parent = SimpleNamespace(id=parent_id, stack=list(parent_stack), cpu_parent=None)
     return SimpleNamespace(
         id=event_id,
         key="aten::mm",
-        cpu_parent=SimpleNamespace(id=parent_id),
+        cpu_parent=parent,
         input_shapes=[[2, 3], [3, 4]],
         self_device_time_total=float(device_time_us),
         stack=list(stack),
@@ -102,6 +104,16 @@ def test_issue2024_ledger_refuses_event_without_source_stack() -> None:
         )
 
 
+def test_issue2024_ledger_inherits_source_stack_from_cpu_parent_for_device_event() -> None:
+    ledger = subject.build_issue2024_event_ledger(
+        [_event(stack=(), parent_stack=("tools/ember-restart-3b/model.py:99",))],
+        declared_self_device_time_total_us="10.000001",
+    )
+    assert ledger["events"][0]["source_stack"] == [
+        "tools/ember-restart-3b/model.py:99"
+    ]
+
+
 def test_issue2024_ledger_refuses_reconciliation_gap_above_one_ns() -> None:
     with pytest.raises(ValueError, match="ISSUE2024_EVENT_RECONCILIATION_MISS"):
         subject.build_issue2024_event_ledger(
@@ -110,6 +122,10 @@ def test_issue2024_ledger_refuses_reconciliation_gap_above_one_ns() -> None:
 
 
 def test_issue2024_live_modes_bind_predecessor_policy_and_unique_outputs() -> None:
+    assert subject.issue2024_profile_mode("issue2024-smoke") == {
+        "policy_mode": "issue1946-arm-a",
+        "output_name": "issue2024-smoke-stack-ledger.json",
+    }
     assert subject.issue2024_profile_mode("issue2024-arm-a") == {
         "policy_mode": "issue1946-arm-a",
         "output_name": "issue2024-arm-a-stack-ledger.json",
@@ -123,9 +139,25 @@ def test_issue2024_live_modes_bind_predecessor_policy_and_unique_outputs() -> No
 
 
 def test_issue2024_profile_configuration_is_selected_only_for_successor_modes() -> None:
+    assert subject.profiler_configuration_for_mode("issue2024-smoke")["with_stack"] is True
     assert subject.profiler_configuration_for_mode("issue2024-arm-a")["with_stack"] is True
     assert subject.profiler_configuration_for_mode("issue2024-arm-b")["with_stack"] is True
     assert subject.profiler_configuration_for_mode("issue1946-arm-a")["with_stack"] is False
+
+
+def test_issue2024_smoke_reaches_trace_callback_on_the_first_update() -> None:
+    assert subject.issue2024_profile_schedule("issue2024-smoke", "issue1946-arm-a") == {
+        "packs": 1,
+        "wait": 0,
+        "active": 1,
+        "update_indexes": [0],
+    }
+    assert subject.issue2024_profile_schedule("issue2024-arm-a", "issue1946-arm-a") == {
+        "packs": 64,
+        "wait": 16,
+        "active": 8,
+        "update_indexes": list(range(16, 24)),
+    }
 
 
 def test_issue2024_ledger_refuses_duplicate_event_identity() -> None:
