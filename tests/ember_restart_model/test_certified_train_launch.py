@@ -30,7 +30,7 @@ SHA = "a" * 40
 EVIDENCE_SHA256 = "b" * 64
 
 EMBER_LAB_SOURCE_FIXTURE = (
-    ("runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
+    ("domains/runtime/runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
     ("runtime/ember-lab/src/data_catalog.rs", b"fixture data catalog\\n"),
     ("runtime/ember-lab/src/rpc.rs", b"fixture rpc\\n"),
     ("domains/runtime/runtime/ember-lab/src/main.rs", b"fixture main\\n"),

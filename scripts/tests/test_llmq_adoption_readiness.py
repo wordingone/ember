@@ -302,7 +302,7 @@ def test_live_daemon_source_identity_matches_rust_composite_hash(monkeypatch, tm
     canonical_binary.write_bytes(b"resident-ember-lab-binary")
     binary_sha = hashlib.sha256(canonical_binary.read_bytes()).hexdigest()
     source_files = [
-        REPO_ROOT / "runtime/ember-lab/src/lib.rs",
+        REPO_ROOT / "domains/runtime/runtime/ember-lab/src/lib.rs",
         REPO_ROOT / "runtime/ember-lab/src/data_catalog.rs",
         REPO_ROOT / "runtime/ember-lab/src/rpc.rs",
         REPO_ROOT / "domains/runtime/runtime/ember-lab/src/main.rs",
@@ -506,7 +506,7 @@ def test_daemon_preflight_and_identity_do_not_require_caller_build_manifests(tmp
         "dispatch_receipt_sha256": live["preflight_receipt_sha256"],
         "operational_receipt_path": "daemon-operational.json",
         "operational_receipt_sha256": "6" * 64,
-        "producer_source_path": "runtime/ember-lab/src/lib.rs",
+        "producer_source_path": "domains/runtime/runtime/ember-lab/src/lib.rs",
         "producer_source_sha256": source_identity,
         "producer_binary_path": "runtime/ember-lab/target/release/ember-lab.exe",
         "producer_binary_sha256": binary_identity,
@@ -1010,7 +1010,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "binary_sha256": source_sha,
             "operational_receipt_path": "ember-lab-operational.json",
             "operational_receipt_sha256": operational_sha,
-            "producer_source_path": "runtime/ember-lab/src/lib.rs",
+            "producer_source_path": "domains/runtime/runtime/ember-lab/src/lib.rs",
             "producer_source_sha256": producer_source_sha,
             "producer_binary_path": "runtime/ember-lab/ember-lab.exe",
             "producer_binary_sha256": producer_binary_sha,
@@ -1046,7 +1046,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
             "binary_manifest_sha256": binary_manifest_sha,
             "operational_receipt_path": "ember-lab-operational.json",
             "operational_receipt_sha256": operational_sha,
-            "producer_source_path": "runtime/ember-lab/src/lib.rs",
+            "producer_source_path": "domains/runtime/runtime/ember-lab/src/lib.rs",
             "producer_source_sha256": producer_source_sha,
             "producer_binary_path": "runtime/ember-lab/ember-lab.exe",
             "producer_binary_sha256": producer_binary_sha,

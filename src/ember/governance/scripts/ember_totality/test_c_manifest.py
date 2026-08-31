@@ -6,7 +6,7 @@
 
 Authoritative condition (<<external>>/state/<spec>, §4.3 C-MANIFEST):
 
-  R:  docs/contracts/ember-completeness.md enumerates every planned/known piece
+  R:  docs/domains/governance/contracts/ember-completeness.md enumerates every planned/known piece
       (id, subgoal S1-S7, AC, test, receipt pointer, status). A planned piece
       absent from the manifest is a gate violation -- planning and
       manifest-entry are the same act.
@@ -14,7 +14,7 @@ Authoritative condition (<<external>>/state/<spec>, §4.3 C-MANIFEST):
   CHK: the manifest enumerates every planned piece with the required fields,
       and no planned piece is absent (an absent piece == invalid_unmanifested_piece).
 
-Receipt/artifact inspected (REAL): <<external>>/state/<external-state>/docs/contracts/ember-completeness.md
+Receipt/artifact inspected (REAL): <<external>>/state/<external-state>/docs/domains/governance/contracts/ember-completeness.md
 and the authoritative goal file's enumerated §4 conditions
 (<<external>>/state/<spec>), which ARE planned pieces of the organism.
 
@@ -184,7 +184,7 @@ def _parse_manifest_rows(text: str) -> tuple[list[dict], list[str]]:
 # and "- **C-TALLY.**" (period immediately after the id, before the bold-close),
 # both failed to match and silently vanished from the denominator (38 seen vs
 # the true 40). Widened to accept "." so these two genuinely-planned pieces are
-# counted; the cure is same-PR: docs/contracts/ember-completeness.md gains real rows for
+# counted; the cure is same-PR: docs/domains/governance/contracts/ember-completeness.md gains real rows for
 # both (see the "Additional condition rows" table) so GREEN stays honest.
 _CID_RE = re.compile(r"^\s*-\s*\*\*(C[\w()−\-]+?)\s*(?:--|—|–|:|\*\*|\.| -)")
 
@@ -247,7 +247,7 @@ def main() -> int:
     manifest_path = os.path.join(nc_root, "docs", "ember-completeness.md")
     if not os.path.exists(manifest_path):
         # positive artifact genuinely absent
-        print(f"RED docs/contracts/ember-completeness.md ABSENT under {nc_root} "
+        print(f"RED docs/domains/governance/contracts/ember-completeness.md ABSENT under {nc_root} "
               f"-- the completeness manifest (the C-MANIFEST artifact) does not exist")
         return 0
 
@@ -257,12 +257,12 @@ def main() -> int:
     # in the manifest or in any receipt. Its presence is a literal does-NOT-count.
     if INVALID_TOKEN in manifest_text:
         print(f"RED {INVALID_TOKEN} marker present literally in "
-              f"docs/contracts/ember-completeness.md (a planned piece flagged unmanifested)")
+              f"docs/domains/governance/contracts/ember-completeness.md (a planned piece flagged unmanifested)")
         return 0
 
     rows, malformed = _parse_manifest_rows(manifest_text)
     if not rows:
-        print(f"RED docs/contracts/ember-completeness.md present but NO parseable "
+        print(f"RED docs/domains/governance/contracts/ember-completeness.md present but NO parseable "
               f"(id|subgoal|piece|AC|receipt|status) rows found")
         return 0
 
@@ -314,7 +314,7 @@ def main() -> int:
     if unmanifested:
         print(
             f"RED {INVALID_TOKEN}: {len(unmanifested)}/{len(section4_ids)} §4 "
-            f"planned condition(s) ABSENT from docs/contracts/ember-completeness.md "
+            f"planned condition(s) ABSENT from docs/domains/governance/contracts/ember-completeness.md "
             f"({len(rows)} rows present, ids M1..M{len(rows)} per the in-file "
             f"legacy-id migration, {len(legacy_id_map)} legacy C-id mappings "
             f"applied); missing={','.join(unmanifested)}"
@@ -324,7 +324,7 @@ def main() -> int:
     # GREEN: every §4 planned piece is enumerated with complete fields, and no
     # invalid_unmanifested_piece marker exists.
     print(
-        f"GREEN C-MANIFEST CHK satisfied: docs/contracts/ember-completeness.md enumerates "
+        f"GREEN C-MANIFEST CHK satisfied: docs/domains/governance/contracts/ember-completeness.md enumerates "
         f"all {len(rows)} rows with complete fields (id+subgoal[S1-S7]+AC+receipt+"
         f"status), every §4 planned condition ({len(section4_ids)}) is manifested, "
         f"and no {INVALID_TOKEN} marker present"

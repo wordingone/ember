@@ -351,7 +351,7 @@ class _FakeDaemonPipe:
     in this file mocks. Captures the OS-level PID Windows reports as the connecting
     client via `GetNamedPipeClientProcessId`: exactly what
     `runtime/ember-lab/src/rpc.rs::named_pipe_client_pid` reads on the real daemon, and
-    what `Daemon::consume_dispatch_token` (`runtime/ember-lab/src/lib.rs`) compares
+    what `Daemon::consume_dispatch_token` (`domains/runtime/runtime/ember-lab/src/lib.rs`) compares
     against the PID it recorded when it spawned the job. If the RPC connect is ever
     again routed through a spawned helper process instead of running in this process,
     the observed PID diverges from `os.getpid()` and this test fails.

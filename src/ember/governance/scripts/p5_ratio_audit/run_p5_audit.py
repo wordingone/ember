@@ -76,7 +76,7 @@ N/A -- never assumed):
   - Rank projection (rho_rank / rho_grow): no production code path
     projects a Muon-eligible tensor into a rank-r subspace anywhere in
     scripts/timeshare_pretrain.py or the cbase_grow_* family (grep-
-    confirmed). scripts/expc1/run_expc1_rank_sweep.py is a SEPARATE
+    confirmed). src/ember/governance/scripts/expc1/run_expc1_rank_sweep.py is a SEPARATE
     research harness exploring a hypothetical design; it is not wired into
     production. rho_rank / rho_grow are therefore N/A-by-construction
     (structural, no projector enabled) for all three checkpoints -- an
@@ -269,7 +269,7 @@ GOVERNOR / LAUNCH-GATE (never loosened; --dry-run and --selftest touch
 neither CUDA nor nvidia-smi nor any real checkpoint): the live path (no
 flags) requires EMBER_GATE_AUTHORIZED=1 (env) or refuses closed (status
 BLOCKED, receipt WRITTEN, probe NOT executed) -- identical interlock
-pattern to scripts/expc1/run_expc1_rank_sweep.py. NOT fired by this
+pattern to src/ember/governance/scripts/expc1/run_expc1_rank_sweep.py. NOT fired by this
 authoring session. Even when authorized, the live path first runs
 discover_checkpoints(); on any MISSING checkpoint it writes a
 FAILED-ENGAGEMENT receipt (never fabricates a path) and stops.
@@ -936,7 +936,7 @@ def build_probe_batch(vocab: int, batch_size: int, out_dir: str,
     seq_len) token ids, fixed seed, saved to disk BEFORE any measurement,
     sha256 recorded. Generation uses a dedicated CPU torch.Generator (never
     the model-init seed) -- decoupled, matching the repo's own convention
-    (see scripts/expc1/run_expc1_rank_sweep.py::make_batch)."""
+    (see src/ember/governance/scripts/expc1/run_expc1_rank_sweep.py::make_batch)."""
     import torch
     gen = torch.Generator().manual_seed(seed)
     microbatches = []

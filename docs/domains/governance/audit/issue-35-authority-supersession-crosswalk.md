@@ -23,7 +23,7 @@ verifier is `scripts/verify_authority_supersession_crosswalk.py`.
   per-mandate identities were never stored.
 - Seven reported documentation-divergence slots. Four are recoverable from the
   issue body; three remain explicit custody gaps.
-- M1 through M55 from `docs/contracts/ember-completeness.md`.
+- M1 through M55 from `docs/domains/governance/contracts/ember-completeness.md`.
 - Every legacy condition parsed from `docs/domains/governance/spec/conditions-v1.md`, including
   C-MANIFEST and C-MILE.
 

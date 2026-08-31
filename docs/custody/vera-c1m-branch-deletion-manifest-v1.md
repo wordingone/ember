@@ -63,7 +63,7 @@ and `merge_blob` are equal for every changed path.
 | `receipts/publication-gate-20260707T205415Z.json` | `b5fb2f35ab40eb4747e30dd108724b0aeffdf3ff` | `b5fb2f35ab40eb4747e30dd108724b0aeffdf3ff` | `1e6db9e2943b2c5b8e05a622101a148f0ccb6dcf` |
 | `src/ember/governance/scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` |
 | `src/ember/governance/scripts/check_publication_gate.py` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` |
-| `scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` |
+| `src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` |
 | `scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | `5376e5c569239478c8b470a0564d97b5573e692f` |
 | `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | `61054671de25c057492ee12e5a5faec2ecd91c10` |
 | `scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` |
@@ -83,7 +83,7 @@ The complete six-commit chain was refreshed from the PR API. The path digest is 
 |---|---|---|---|
 | `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/check_milestone_reconciliation.py` | `4274c32db0b1bd736b3cdf55f00ebcf444adc3a7` | retained |
 | `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/check_publication_gate.py` | `b9a24ac58b69cbbac154c5b58c8c071637d521e8` | retained |
-| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | retained |
+| `c71ad32c88627a16f4752aa246f547813f26e4ba` | `src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | retained |
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T173924Z.json` | `08b179c735c78396937355573899baf933a41032` | retained |
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T174158Z.json` | `f7d847ee064067107ce78f26d647c7e9224b3067` | retained |
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `receipts/disconfirmation-eval-20260707T184903Z.json` | `46a8a19d9b9e46b269ca9718955fa87605ee504f` | retained |

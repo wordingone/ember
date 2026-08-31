@@ -322,7 +322,7 @@ a strong signal in any one member could carry the check.
 ## 7. Re-verification trigger (the disjointness rationale has an expiry)
 
 Every measured-overlap leg in §5 is the 2026-07-09 scan against the corpus **as it then stood**.
-The AI-Lab Corpus Charter (`docs/charter/ai-lab-corpus-charter.md`) commits to acquiring domains that
+The AI-Lab Corpus Charter (`docs/domains/governance/charter/ai-lab-corpus-charter.md`) commits to acquiring domains that
 `receipts/corpus-census-20260710.json` grades at NONE, and the census names the intended sources
 by name. Several would land directly on top of a candidate's provenance:
 

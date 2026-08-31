@@ -21,7 +21,7 @@ of this consolidation.
 ## Current canonical owners and byte bindings
 
 - #648 is the open parent corpus charter. Its current carrier is
-  `docs/charter/ai-lab-corpus-charter.md`, Git blob
+  `docs/domains/governance/charter/ai-lab-corpus-charter.md`, Git blob
   `3ed47e8047f9a67b37c220c99ba272e0fb377271`.
 - #1116 is the open EMBER-02 canonical contract. Its current carrier is
   `docs/roadmap/milestones/EMBER-02.md`, Git blob

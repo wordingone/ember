@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember totality test — Condition C-EFF (status probe / TDD).
 
 C-EFF — efficiency keystone measured/closed (goal §4.1, <spec> L94).
@@ -18,7 +21,7 @@ C-EFF — efficiency keystone measured/closed (goal §4.1, <spec> L94).
        verified against real git objects, governor + FLOPs recompute).
 
 Honest closure bar (goal L46/L73, mirrored from the canonical checker
-scripts/ember_tally_checks.py:chk_ceff): SHATTER requires a >=3.3x COMPOUND
+src/ember/governance/scripts/ember_tally_checks.py:chk_ceff): SHATTER requires a >=3.3x COMPOUND
 speedup over the anchor AND the useful base trains in <=1 governed day with
 effective_days = useful_base_tokens / (sustained_tok_s * 86400) — NOT the
 self-referential K_floor/throughput ratio. The prior

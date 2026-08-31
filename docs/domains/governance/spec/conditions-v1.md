@@ -461,7 +461,7 @@ roll-ups; re-ruled 2026-07-07 on C-CUSTODY's addition, gh issue #382; re-ruled
 by EMBER-00 on C-AUTHORITY's addition: 39 primary + 2 roll-ups). Any lower
 count elsewhere is a stale intermediate count, corrected by this ruling.
 
-- **C-MANIFEST.** `docs/contracts/ember-completeness.md` enumerates every planned piece (id, subgoal, AC, test,
+- **C-MANIFEST.** `docs/domains/governance/contracts/ember-completeness.md` enumerates every planned piece (id, subgoal, AC, test,
   receipt pointer, status). A planned piece absent from the manifest is a gate violation. ✗
   `invalid_unmanifested_piece`.
 - **C-TALLY.** `src/ember/governance/scripts/ember_tally.py` walks the manifest, verifies each row's receipt exists AND

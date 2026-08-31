@@ -1582,7 +1582,7 @@ def _battery_8_batch_vs_single_parity(failures: list) -> None:
 
 def _corrupt_state_dict_floats(state: dict) -> int:
     """TEST-ONLY: perturbs every floating-point tensor in a state_dict IN
-    PLACE (matching scripts/w1_baseline_replay_closure.py's own
+    PLACE (matching src/ember/governance/scripts/w1_baseline_replay_closure.py's own
     _corrupt_checkpoint_model_weights_for_test idiom -- perturbs ALL float
     tensors, not just the first key, since tied embeddings mean a first-key
     perturbation could land on a copy rather than the live weight)."""

@@ -31,8 +31,8 @@
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
-      "path": "scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "4966e917f692f388d2794cb7e0e5a1ed3b4cc36aaa5c2f1752221dfa708f3ac8",
+      "path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
+      "sha256": "cb09ef120555ea104626ad8179ccd59545b2cafd9b7e48fe6e0ff0ff2cee8760",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "23b3e46bcf935effc2775bd2b193eff2e626715615bbf9383c5baacfeab4571d",
+      "sha256": "06561e02540590bfe166777ceea047bdc1da1e830a2714381e41858f4fde8900",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -52,7 +52,7 @@
     },
     {
       "path": "tools/repo_guard_selftest.py",
-      "sha256": "c37baa7736d460fdc53e0c249a3617cff84b6e2fc27a999cb9add5316fd4f20a",
+      "sha256": "da342261108cc79240b12c384e82252e7c24da1863748cceba8cdc0521e18550",
       "reason": "repository-policy selftest names the governed training entry only inside a deliberate refusal fixture; it does not import, execute, or dispatch that entry"
     }
   ]

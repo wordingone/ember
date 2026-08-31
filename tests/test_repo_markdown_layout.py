@@ -18,7 +18,7 @@ AUTHORITY_NAMES = {
 
 APPROVED_DOC_PATHS = {
     "docs/authority/ember-authority-matrix.md",
-    "docs/contracts/ember-completeness.md",
+    "docs/domains/governance/contracts/ember-completeness.md",
     "docs/contracts/ember-floor-contract.md",
     "docs/contracts/goal-clear-protocol.md",
     "docs/guides/goal-live-session.md",

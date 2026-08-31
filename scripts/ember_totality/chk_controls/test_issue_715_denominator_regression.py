@@ -15,7 +15,7 @@ counted 38 vs the true count, which was 40 at fix time and has since grown
 to 41 as the registry gained further conditions -- see conditions-v1.md
 line 451's own running tally). This regression suite proves BOTH halves of
 the fix stay true against PRODUCTION-SHAPED inputs -- the real
-docs/domains/governance/spec/conditions-v1.md and docs/contracts/ember-completeness.md files copied
+docs/domains/governance/spec/conditions-v1.md and docs/domains/governance/contracts/ember-completeness.md files copied
 byte-for-byte into an isolated fixture root, never a helper-invented mini
 goal/manifest shape:
 
@@ -149,7 +149,7 @@ def _delete_manifest_row(manifest_path: Path, condition_id: str) -> None:
     ]
     assert len(matches) == 1, (
         f"expected exactly one '{condition_id}' manifest row in the real "
-        f"docs/contracts/ember-completeness.md, found {len(matches)} -- fixture "
+        f"docs/domains/governance/contracts/ember-completeness.md, found {len(matches)} -- fixture "
         "assumption invalid, cannot construct the removal control"
     )
     del lines[matches[0]]

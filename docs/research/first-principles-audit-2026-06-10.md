@@ -940,7 +940,7 @@ Closing PR mints fp-17.
 were independent evidence. What is the ledger's effective composition,
 and which standing claims change when episodes count as evidence?
 
-**Method (`scripts/fp16_census.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp16_census.py`, selftest PASS, receipt
 `fp16-census-20260611T013228Z.json`, CPU-from-ledger, mapping =
 fp6_provenance.classify single-source):** per (file, class): rows /
 exact-unique srcs / near-dup clusters (cos≥0.95 + fp-13 chaining

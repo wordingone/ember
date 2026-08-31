@@ -18,7 +18,7 @@ called fresh at boot by `tools/ember-cli/src/commands/world-state.ts`
 membrane referenced by requirement (c). `tools/ember-cli/src/core/
 monitor-render.ts` implements the render side of MONITOR.
 
-`scripts/ember_cobs_capture.py` is the proof-pack CAPTURE harness (gh issue
+`src/ember/governance/scripts/ember_cobs_capture.py` is the proof-pack CAPTURE harness (gh issue
 #10): it runs the real observatory —
 `tools/ember-cli/src/core/ember-world-state-repl.ts` — in a visible ConPTY
 (never headless, per operator rule), scripts a

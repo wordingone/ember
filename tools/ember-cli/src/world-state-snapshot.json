@@ -298,7 +298,7 @@
    {
     "id": "board.C-MANIFEST",
     "label": "[32] C-MANIFEST",
-    "detail": "GREEN: GREEN C-MANIFEST CHK satisfied: docs/contracts/ember-completeness.md enumerates all 72 rows with complete fields (id+subgoal[S1-S7]+AC+receipt+status), every §4 planned condition (32) is manifested, and no invalid_unmanifested_piece marker present",
+    "detail": "GREEN: GREEN C-MANIFEST CHK satisfied: docs/domains/governance/contracts/ember-completeness.md enumerates all 72 rows with complete fields (id+subgoal[S1-S7]+AC+receipt+status), every §4 planned condition (32) is manifested, and no invalid_unmanifested_piece marker present",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"

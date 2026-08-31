@@ -62,7 +62,7 @@ validate_results_receipt = getattr(_ember_df97174e3ec7fc7e_module, 'validate_res
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CANONICAL_SUITE = ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
+CANONICAL_SUITE = ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
 _AUTHORITY = json.loads(CANONICAL_SUITE.read_text(encoding="utf-8"))
 _DEFAULT_OUTPUTS = {row["row_id"]: row["expected_output"] for row in _AUTHORITY["tasks"]}
 

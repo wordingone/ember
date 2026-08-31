@@ -8,7 +8,7 @@ schema + the decision-machine notes. Decision logic is FROZEN in the scorer.
 ## Why this gate exists
 
 The ember GOAL has **two** completion conditions. (1) `src/ember/governance/scripts/ember_tally.py`
-reads 100% on `docs/contracts/ember-completeness.md`. (2) **an S5 E2B-surpass receipt
+reads 100% on `docs/domains/governance/contracts/ember-completeness.md`. (2) **an S5 E2B-surpass receipt
 exists.** This scorer produces (2): it reads the seven leg receipts and computes
 
     SURPASS = A1 ∧ A2 ∧ A3 ∧ B1 ∧ B2 ∧ B3 ∧ B4

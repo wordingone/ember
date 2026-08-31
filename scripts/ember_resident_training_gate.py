@@ -383,7 +383,7 @@ def inspect_clean_room_harness(repo: Path, full_parity_receipt: Path | None = No
     required = [
         Path("docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md"),
         Path("docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md"),
-        Path("docs/archive/pre-restart/nck-invariants-v0.md"),
+        Path("docs/domains/governance/archive/pre-restart/nck-invariants-v0.md"),
         Path("src/ember/governance/scripts/nck/event_loop.py"),
         Path("src/ember/governance/scripts/nck/invariants.py"),
         Path("scripts/nck/nck_e2e_proof.py"),
@@ -1419,7 +1419,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
         "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
         "docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
-        "docs/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
+        "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
         "docs/contracts/nc2-own-technique-contract.md": (
             "# Owned architecture and mechanism research contract (fixture mirror)\n\n"
             "## Unified decoder contract\n\n"
