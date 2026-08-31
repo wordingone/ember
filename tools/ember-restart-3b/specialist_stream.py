@@ -44,6 +44,10 @@ _VERIFIER_SOURCES = {
     "capability": "tools/ember-restart-3b/verify_capability_record.py",
 }
 
+_BINDING_PATH_MIGRATIONS = {
+    "tokenizer/tokenizer.json": "domains/model/tokenizer/tokenizer.json",
+}
+
 _BOUND_STANDARD_IMPORTS = {
     "__future__", "argparse", "ast", "base64", "dataclasses", "hashlib", "itertools", "json", "operator",
     "pathlib", "re", "struct", "sys", "typing",
@@ -241,6 +245,13 @@ def _require_binding(repo_root: Path, binding: object, label: str, *, expected_r
         raise ValueError(f"noncanonical {label} path")
     if expected_relative is not None and canonical != expected_relative:
         raise ValueError(f"{label} role path does not match production authority")
+    if not path.is_file() and canonical in _BINDING_PATH_MIGRATIONS:
+        migrated_relative = _BINDING_PATH_MIGRATIONS[canonical]
+        path, migrated_canonical = _canonical_path(
+            repo_root, repo_root / migrated_relative,
+        )
+        if migrated_canonical != migrated_relative:
+            raise ValueError(f"noncanonical migrated {label} path")
     value = path.read_bytes()
     if _sha256(value) != expected:
         raise ValueError(f"{label} binding does not match")
