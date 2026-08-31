@@ -262,6 +262,41 @@ def _write_bound_interpreter_receipt(root: Path, module, *, relative: str) -> Pa
     return interpreter
 
 
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (
+            r"state\python-environments\python-environment-install-v1\Scripts\python.exe",
+            Path("state/python-environments/python-environment-install-v1/Scripts/python.exe"),
+        ),
+        (
+            "state/python-environments/python-environment-install-v1/bin/python",
+            Path("state/python-environments/python-environment-install-v1/bin/python"),
+        ),
+    ],
+)
+def test_portable_interpreter_path_accepts_windows_and_posix_venv_layouts(
+    stored: str, expected: Path
+) -> None:
+    module = load_module()
+
+    assert module.portable_interpreter_relative_path(stored) == expected
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [r"C:\outside\python.exe", r"\\server\share\python.exe", "/outside/python"],
+)
+def test_portable_interpreter_path_refuses_absolute_paths_on_every_host(stored: str) -> None:
+    module = load_module()
+
+    with pytest.raises(
+        module.DocsInfoError,
+        match="PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED",
+    ):
+        module.portable_interpreter_relative_path(stored)
+
+
 def test_nonbootstrap_python_refuses_missing_bound_interpreter_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
@@ -575,6 +575,23 @@ def public_command_host_argv(argv: list[str]) -> list[str]:
     return [*launcher, *argv[1:]]
 
 
+def portable_interpreter_relative_path(relative: str) -> Path:
+    """Resolve a receipt path without inheriting the producer host's separators."""
+    windows_path = PureWindowsPath(relative)
+    posix_path = PurePosixPath(relative.replace("\\", "/"))
+    if (
+        windows_path.is_absolute()
+        or bool(windows_path.drive)
+        or posix_path.is_absolute()
+        or ".." in posix_path.parts
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED")
+    parts = tuple(part for part in posix_path.parts if part not in {"", "."})
+    if not parts:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
+    return Path(*parts)
+
+
 def load_public_interpreter_binding(root: Path) -> dict[str, str]:
     """Resolve only the self-hashed interpreter bound by bootstrap custody."""
     receipt_path = root.resolve() / PUBLIC_INTERPRETER_RECEIPT_PATH
@@ -607,9 +624,7 @@ def load_public_interpreter_binding(root: Path) -> dict[str, str]:
         or not re.fullmatch(r"[0-9a-f]{64}", binding["package_set_sha256"])
     ):
         raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
-    relative_path = Path(relative)
-    if relative_path.is_absolute():
-        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED")
+    relative_path = portable_interpreter_relative_path(relative)
     interpreter = (root.resolve() / relative_path).resolve()
     try:
         interpreter.relative_to(root.resolve())
