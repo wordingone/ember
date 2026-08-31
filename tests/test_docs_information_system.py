@@ -426,7 +426,9 @@ def test_nonwindows_replay_executes_receipt_bound_interpreter(
     assert reported_raw.resolve() == bound.resolve()
     assert reported_raw != Path(sys.executable)
     assert Path(results[0]["host_argv"][0]).resolve() == bound.resolve()
-    assert Path(results[0]["interpreter_binding"]["path"]) == Path(relative)
+    assert module.portable_interpreter_relative_path(
+        results[0]["interpreter_binding"]["path"]
+    ) == Path(relative)
 
 
 def _run_repo_launcher_identity(module, monkeypatch, bound_interpreter: Path) -> Path:
