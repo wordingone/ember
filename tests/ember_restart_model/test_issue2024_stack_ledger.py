@@ -40,6 +40,30 @@ def test_issue2024_profiler_configuration_enables_source_stacks() -> None:
     }
 
 
+def test_issue2024_live_schedule_emits_exactly_one_trace_callback() -> None:
+    callback_count = 0
+
+    def count_trace(_profiler: object) -> None:
+        nonlocal callback_count
+        callback_count += 1
+
+    torch = subject.torch
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU],
+        schedule=torch.profiler.schedule(wait=16, warmup=0, active=8, repeat=1),
+        on_trace_ready=count_trace,
+        profile_memory=True,
+        record_shapes=True,
+        with_stack=True,
+    ) as profiler:
+        for _ in range(24):
+            value = torch.ones((2, 2))
+            value @ value
+            profiler.step()
+
+    assert callback_count == 1
+
+
 def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns() -> None:
     ledger = subject.build_issue2024_event_ledger(
         [_event(), _event(event_id=8, parent_id=7, device_time_us="2.000002")],
@@ -82,4 +106,30 @@ def test_issue2024_ledger_refuses_reconciliation_gap_above_one_ns() -> None:
     with pytest.raises(ValueError, match="ISSUE2024_EVENT_RECONCILIATION_MISS"):
         subject.build_issue2024_event_ledger(
             [_event()], declared_self_device_time_total_us="10.002001"
+        )
+
+
+def test_issue2024_live_modes_bind_predecessor_policy_and_unique_outputs() -> None:
+    assert subject.issue2024_profile_mode("issue2024-arm-a") == {
+        "policy_mode": "issue1946-arm-a",
+        "output_name": "issue2024-arm-a-stack-ledger.json",
+    }
+    assert subject.issue2024_profile_mode("issue2024-arm-b") == {
+        "policy_mode": "issue1946-arm-b",
+        "output_name": "issue2024-arm-b-stack-ledger.json",
+    }
+    with pytest.raises(ValueError, match="unknown #2024 profile mode"):
+        subject.issue2024_profile_mode("issue2024-preflight")
+
+
+def test_issue2024_profile_configuration_is_selected_only_for_successor_modes() -> None:
+    assert subject.profiler_configuration_for_mode("issue2024-arm-a")["with_stack"] is True
+    assert subject.profiler_configuration_for_mode("issue2024-arm-b")["with_stack"] is True
+    assert subject.profiler_configuration_for_mode("issue1946-arm-a")["with_stack"] is False
+
+
+def test_issue2024_ledger_refuses_duplicate_event_identity() -> None:
+    with pytest.raises(ValueError, match="ISSUE2024_EVENT_ID_DUPLICATE"):
+        subject.build_issue2024_event_ledger(
+            [_event(), _event()], declared_self_device_time_total_us="20.000002"
         )
