@@ -83,7 +83,7 @@ genuinely multi-segment absolute path to shorten). These are excluded by name fr
 `repo-guard.sh`'s path check (see `PATHPAT_EXCLUDE` in `tools/repo-guard.sh`), the same
 mechanism the guard already used to exclude itself:
 
-- `scripts/test_w1b_continuation.py`
+- `src/ember/governance/scripts/test_w1b_continuation.py`
 - `tools/ember-cli/src/core/monitor-render.test.ts`
 - `tools/ember-cli/src/components/homescreen-mock1-parity.test.ts`
 - `tools/ember-cli/src/components/logo-homescreen.test.ts`

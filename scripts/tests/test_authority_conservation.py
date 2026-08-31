@@ -1924,7 +1924,7 @@ def test_changed_range_exact_path_migration_preserves_historical_authority(
 
     control.write_text(
         control.read_text(encoding="utf-8").replace(
-            '"INVARIANT.md"', '"docs/authority/INVARIANT.md"'
+            '"INVARIANT.md"', '"docs/domains/governance/authority/INVARIANT.md"'
         ),
         encoding="utf-8",
     )
@@ -1956,7 +1956,7 @@ def test_changed_range_path_migration_rejects_mixed_behavior_change(
 
     control.write_text(
         control.read_text(encoding="utf-8").replace(
-            '"INVARIANT.md"', '"docs/authority/INVARIANT.md"'
+            '"INVARIANT.md"', '"docs/domains/governance/authority/INVARIANT.md"'
         )
         + 'print("new behavior")\n',
         encoding="utf-8",
@@ -1992,7 +1992,7 @@ def test_changed_range_uses_committed_endpoint_not_dirty_worktree(
     git_fixture(tmp_path, "commit", "-m", "historical fixture")
 
     migrated = historical.replace(
-        '"INVARIANT.md"', '"docs/authority/INVARIANT.md"'
+        '"INVARIANT.md"', '"docs/domains/governance/authority/INVARIANT.md"'
     )
     control.write_text(migrated + 'print("committed behavior")\n', encoding="utf-8")
     git_fixture(tmp_path, "add", "scripts/historical_control.py")

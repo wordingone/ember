@@ -12,7 +12,7 @@ mechanism_erasure=forbidden
 
 ## Resume order
 
-1. Read docs/authority/INVARIANT.md and verify its SHA256 against docs/domains/governance/authority/GOAL.md.
+1. Read docs/domains/governance/authority/INVARIANT.md and verify its SHA256 against docs/domains/governance/authority/GOAL.md.
 2. Read docs/domains/governance/authority/GOAL.md, including EMBER_AUTHORITY_V1.
 3. Read the operator-owned durable goal selection when available.
 4. Read docs/authority/CONTINUITY.md for exact artifact identities and maturity;

@@ -271,7 +271,7 @@
    {
     "id": "board.C-LEGIB",
     "label": "[29] C-LEGIB",
-    "detail": "GREEN: GREEN C-LEGIB CHK satisfied: entry map covers every top-level directory with a one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and scripts/check_goal_citations.py exits 0 (docs/authority/GOAL.md: the repo is legible to a fresh reader with no prior session context)",
+    "detail": "GREEN: GREEN C-LEGIB CHK satisfied: entry map covers every top-level directory with a one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and src/ember/governance/scripts/check_goal_citations.py exits 0 (docs/authority/GOAL.md: the repo is legible to a fresh reader with no prior session context)",
     "evidence": {
      "path": "scripts/ember_totality/receipts-totality/ember-totality-20260704T140249Z.json",
      "sha256": "617ca1663bfaa28dbed955f669ef4ddea9285ea59303cd4ca3ec7982696afead"

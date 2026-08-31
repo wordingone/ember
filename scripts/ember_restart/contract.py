@@ -149,7 +149,7 @@ R1_ENTRY_CLAIM_BOUNDARY = {
 # Issue #1721: same fixed-installation discipline as certified_train_launch.py's
 # ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH -- the gate is infrastructure loaded
 # from THIS file's own tree, independent of the checkpoint directory it verifies.
-ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "scripts/artifact_custody_gate.py"
+ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/artifact_custody_gate.py"
 
 R1_ENTRY_KEYS = {
     "schema",

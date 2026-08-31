@@ -92,7 +92,7 @@ function _defaultIdentityRunner(executable: string, args: string[]): ResolveIden
 
 /**
  * Resolves the active checkpoint's identity by spawning validate_identity.py
- * (scripts/ember_01_identity/validate_identity.py) against the manifest at
+ * (src/ember/governance/scripts/ember_01_identity/validate_identity.py) against the manifest at
  * `manifestPath`, and parsing its JSON verdict.
  *
  * FAIL-CLOSED: returns null (never a guessed/partial identity) whenever the

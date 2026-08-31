@@ -15,11 +15,11 @@ C10 — No deferred-work escape hatch.
      "out of scope / v2 / later / post-MVP / stretch / deferred to post-X."
   Invalid-token (?): invalid_deferred_remains
   CHK: zero ACTIVE / ACTIVE-BLOCKER / OPEN / triggerless-DEFERRED rows remain in
-       docs/ledgers/ember-debt-ledger.md; every disposition has its receipt.
+       docs/domains/governance/ledgers/ember-debt-ledger.md; every disposition has its receipt.
 
 Gloss (task): no deferred-work escape hatch: zero ACTIVE/OPEN/triggerless-
   DEFERRED rows in the debt ledger; every disposition has its receipt.
-Receipt hint: docs/ledgers/ember-debt-ledger.md.
+Receipt hint: docs/domains/governance/ledgers/ember-debt-ledger.md.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really

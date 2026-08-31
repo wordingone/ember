@@ -284,7 +284,7 @@ I_MEMBERS = {
     "enforcement_layer": [
         "docs/spec/anti-gaming-contract-v1.md",
         "docs/spec/engineering-contracts-v1.md",
-        "scripts/check_goal_citations.py",
+        "src/ember/governance/scripts/check_goal_citations.py",
         "scripts/check_publication_gate.py",
         "src/ember/governance/scripts/ember_tally.py",
         "scripts/ember_tally_checks.py",

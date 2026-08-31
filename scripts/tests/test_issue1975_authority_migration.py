@@ -8,5 +8,5 @@ def test_issue1975_state_uses_governance_domain_authority_path():
         "docs/domains/governance/authority/STATE.md"
     )
     assert verifier.authority_canonical_relative_path("INVARIANT.md") == PurePosixPath(
-        "docs/authority/INVARIANT.md"
+        "docs/domains/governance/authority/INVARIANT.md"
     )

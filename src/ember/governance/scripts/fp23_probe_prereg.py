@@ -3,7 +3,7 @@ generator spec, FROZEN BEFORE PRETRAIN STEP 0 (#135).
 
 Same discipline as fp-15: the analysis that will judge the owned core's
 checkpoints is frozen before any checkpoint exists, so it can never be
-fitted to the receipts it judges. fp-22 (docs/research/fp22-corpus-world.md
+fitted to the receipts it judges. fp-22 (docs/domains/governance/research/fp22-corpus-world.md
 §2–§3) named the world and the floor bar; this file pins the generator
 grammar, the held-out split construction, the verifier semantics, the
 receipt schema, and the PASS/RETRY/KILL decision procedure as

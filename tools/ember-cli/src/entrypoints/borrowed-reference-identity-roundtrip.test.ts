@@ -7,7 +7,7 @@
 // owned config-sha, and NO capability (completion) credit -- and can never be
 // silently upgraded to owned. This is the runtime-layer twin of the identity-
 // manifest prohibition already enforced (and tested) in the validator:
-//   scripts/ember_01_identity/validate_identity.py
+//   src/ember/governance/scripts/ember_01_identity/validate_identity.py
 //     L960-965  disposition!=OWNED_ADMITTED + selected/completion -> admission.disposition
 //     L967-971  REFERENCE_ONLY + selected/completion ->
 //               reference.selected_as_owned / reference.owned_completion_credit

@@ -1760,7 +1760,7 @@
         }
       ],
       "goal_id": "EMBER-03",
-      "public_path": "docs/roadmap/milestones/EMBER-03.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-03.md",
       "public_sha256": "b5100356bde1c993d0593404faca3e0dfcc374c58c94dd50994818f5b3029e11",
       "source_path": "ember-03-body-tools-operator-relationship/goal.md",
       "source_sha256": "aef05eeeede4206b8ff60cec8c62f3d365f05dc7372d6911462f4babaf78c223"
@@ -2189,7 +2189,7 @@
         }
       ],
       "goal_id": "EMBER-04",
-      "public_path": "docs/roadmap/milestones/EMBER-04.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-04.md",
       "public_sha256": "86b27ca23fb955aea21f7fb7de654204c813a81e7d295a334e7fff7e80381bea",
       "source_path": "ember-04-grounded-memory-world-model-dreaming/goal.md",
       "source_sha256": "4582b677b6ae2fc0766ce30c8c51f8999b0fe701311ee79415ca9019dbed38d4"
@@ -3061,7 +3061,7 @@
         }
       ],
       "goal_id": "EMBER-06",
-      "public_path": "docs/roadmap/milestones/EMBER-06.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-06.md",
       "public_sha256": "964404f6b98f8b94367a86433ff2e6e267028193ed60244875635b523c320dac",
       "source_path": "ember-06-autonomous-research-bootstrap/goal.md",
       "source_sha256": "6ef22e709d5c95bf86dcc318110c5934a70d04618d702152ac992258dd0b5fdf"
@@ -3434,7 +3434,7 @@
         }
       ],
       "goal_id": "EMBER-07",
-      "public_path": "docs/roadmap/milestones/EMBER-07.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-07.md",
       "public_sha256": "5ed715b82a0086bdb5c15c8ef10e48899a96b3b8dddf82027d5d65e9af550eff",
       "source_path": "ember-07-rung-7b/goal.md",
       "source_sha256": "b2bb77728fafc5a853e209f82cb4050f7613572f2f5ee007ab854b1abf08e07c"
@@ -3807,7 +3807,7 @@
         }
       ],
       "goal_id": "EMBER-08",
-      "public_path": "docs/roadmap/milestones/EMBER-08.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-08.md",
       "public_sha256": "23c852821b5dbea9efca840caa21ae9da5266666a7ec3ef75d3d2fa25775d7ec",
       "source_path": "ember-08-rung-15b/goal.md",
       "source_sha256": "111ceb2f38e28b4a174973a5d1bc50dbea39e164e18420d033a9e5873a1c3621"
@@ -4250,7 +4250,7 @@
         }
       ],
       "goal_id": "EMBER-09",
-      "public_path": "docs/roadmap/milestones/EMBER-09.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-09.md",
       "public_sha256": "ee22a990d9b8dfe0dade4f3a1429f1054eb97655474186516054fb5d2f2994dd",
       "source_path": "ember-09-rung-over-27b/goal.md",
       "source_sha256": "9522b637d8840461ddbb5c8cfeb47b1652af3029fbd4a515881dff72df57d586"
@@ -4644,7 +4644,7 @@
         }
       ],
       "goal_id": "EMBER-10",
-      "public_path": "docs/roadmap/milestones/EMBER-10.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-10.md",
       "public_sha256": "ec87b006c71dd0dc7566f594bbd1db282d015216138f2c03ce3e255c7c02e083",
       "source_path": "ember-10-general-sovereign-ai-lab/goal.md",
       "source_sha256": "605ca045d2b537938a9818006a5041237ed9d26064aeb3f37a9c0b7dd5f6c254"

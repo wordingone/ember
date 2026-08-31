@@ -68,7 +68,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # fp19_bench governing-floor constants (sha-pinned; never relax)
 # ---------------------------------------------------------------------------
-# Source: scripts/fp19_bench.py, frozen fp-19 (2026-06-11), commit be76095.
+# Source: src/ember/governance/scripts/fp19_bench.py, frozen fp-19 (2026-06-11), commit be76095.
 # Any change here must raise the floor, never lower it.
 FP19_VRAM_FRACTION = 0.80   # fp19_bench.VRAM_FRACTION
 FP19_MARGIN_GIB    = 1.5    # fp19_bench.MARGIN_GIB

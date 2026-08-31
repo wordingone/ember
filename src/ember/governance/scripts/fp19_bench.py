@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp19_bench.py — owned-core pretrain throughput micro-benchmark (#111, fp-19).
 
 The June-22 critical path (docs/research/june22-critical-path.md §2) needs the

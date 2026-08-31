@@ -55,7 +55,7 @@ GUARD_SUPPORT_FILES = [
     "scripts/oldest_issue_disposition.py",
     "src/ember/governance/scripts/receipt_check.py",
     "tools/frozen-receipt-exceptions.json",
-    "docs/authority/INVARIANT.md",
+    "docs/domains/governance/authority/INVARIANT.md",
     "docs/domains/governance/authority/STATE.md",
     "docs/authority/GOVERNANCE.md",
     "README.md",
@@ -867,7 +867,7 @@ def test_trusted_kernel_ignores_subject_guard_and_helpers():
             encoding="utf-8",
             newline="\n",
         )
-        (tmp / "docs/authority/INVARIANT.md").unlink()
+        (tmp / "docs/domains/governance/authority/INVARIANT.md").unlink()
         commit_fixture(tmp)
 
         rc, out = run_guard_from_trusted_kernel(

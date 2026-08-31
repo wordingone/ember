@@ -1404,14 +1404,14 @@
           "implementation_commit": "af31edf0501b166f663bebba849f09c1689747d5",
           "implementation_diff_sha256": "5d98571aedc956ddb35dfc0a8dbfb822653e23a7b463a9c94bd20a99e0ffcb2d",
           "implementation_paths": [
-            "scripts/test_w1b_continuation.py",
+            "src/ember/governance/scripts/test_w1b_continuation.py",
             "src/ember/governance/scripts/w1_collapse_control_run.py"
           ],
           "number": 357,
           "verification_executed_at": "2026-07-13T12:25:49Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "scripts/test_w1b_continuation.py",
+          "verifier_path": "src/ember/governance/scripts/test_w1b_continuation.py",
           "verifier_sha256": "87bfbcc37209e7cabb1a99b41e4af4835e463b278c0cdc5567bba5a797d40ade"
         }
       ],
@@ -3286,14 +3286,14 @@
       "implementation_commit": "af31edf0501b166f663bebba849f09c1689747d5",
       "implementation_diff_sha256": "5d98571aedc956ddb35dfc0a8dbfb822653e23a7b463a9c94bd20a99e0ffcb2d",
       "implementation_paths": [
-        "scripts/test_w1b_continuation.py",
+        "src/ember/governance/scripts/test_w1b_continuation.py",
         "src/ember/governance/scripts/w1_collapse_control_run.py"
       ],
       "number": 357,
       "verification_executed_at": "2026-07-13T12:25:49Z",
       "verification_exit_code": 0,
       "verification_outcome": "independently_verified",
-      "verifier_path": "scripts/test_w1b_continuation.py",
+      "verifier_path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "verifier_sha256": "87bfbcc37209e7cabb1a99b41e4af4835e463b278c0cdc5567bba5a797d40ade"
     },
     {
@@ -8918,7 +8918,7 @@
         {
           "blob_sha1": "ecb224cc0c047eacafc1cb63df8daa4c0a9f6f01",
           "line": 1,
-          "path": "scripts/fp19_bench.py"
+          "path": "src/ember/governance/scripts/fp19_bench.py"
         },
         {
           "blob_sha1": "cc96add9cefb1bfbcab582fb2acb68678321ea57",
@@ -9526,7 +9526,7 @@
         {
           "blob_sha1": "5460799b0463332f74dc9b70df72b4542a942f74",
           "line": 6,
-          "path": "docs/research/fp22-corpus-world.md"
+          "path": "docs/domains/governance/research/fp22-corpus-world.md"
         },
         {
           "blob_sha1": "ada3ca346f0065427868aba2862004932df03a6a",
@@ -10087,12 +10087,12 @@
         {
           "blob_sha1": "5460799b0463332f74dc9b70df72b4542a942f74",
           "line": 124,
-          "path": "docs/research/fp22-corpus-world.md"
+          "path": "docs/domains/governance/research/fp22-corpus-world.md"
         },
         {
           "blob_sha1": "5460799b0463332f74dc9b70df72b4542a942f74",
           "line": 135,
-          "path": "docs/research/fp22-corpus-world.md"
+          "path": "docs/domains/governance/research/fp22-corpus-world.md"
         }
       ],
       "number": 124,
@@ -10147,12 +10147,12 @@
         {
           "blob_sha1": "5460799b0463332f74dc9b70df72b4542a942f74",
           "line": 131,
-          "path": "docs/research/fp22-corpus-world.md"
+          "path": "docs/domains/governance/research/fp22-corpus-world.md"
         },
         {
           "blob_sha1": "5460799b0463332f74dc9b70df72b4542a942f74",
           "line": 135,
-          "path": "docs/research/fp22-corpus-world.md"
+          "path": "docs/domains/governance/research/fp22-corpus-world.md"
         },
         {
           "blob_sha1": "a0034005bbd91874c6b6197cfb7cea544d4e70af",

@@ -14,7 +14,7 @@ and to the worktree's own (unbuilt) ``runtime/ember-lab/target/...`` instead of
 the one repository-governed binary. Both fail closed today (no bypass), but
 every real checkpoint validation run from a worktree refuses by construction.
 
-Fix precedent: ``scripts/worktree_lifecycle.py::common_dir`` and
+Fix precedent: ``src/ember/governance/scripts/worktree_lifecycle.py::common_dir`` and
 ``scripts/ember_restart/source_authority.py::_common_dir`` both resolve the
 main tree from any worktree via
 ``git rev-parse --path-format=absolute --git-common-dir`` -- the main

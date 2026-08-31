@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-#!/usr/bin/env python3
 """Emit the unified EMBER-01 nine-condition completion receipt.
 
 EMBER-01 certification today requires assembling evidence from five separate
@@ -81,7 +81,7 @@ UNRESOLVED = "unresolved"
 CONFIG_REL = "configs/ember-restart-3b.json"
 LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
-VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
+VALIDATE_IDENTITY_REL = "src/ember/governance/scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
 COND4_SURFACE_VALIDATOR_PATH = Path(__file__).with_name("cond4_behavior_surface.py")
 COND4_SURFACE_MANIFEST_REL = (
@@ -1148,7 +1148,7 @@ def _cond4_surface_manifest(root: Path) -> dict[str, Any]:
                     "remeasured.get",
                 ],
             },
-            "scripts/ember_01_identity/validate_identity.py": {
+            "src/ember/governance/scripts/ember_01_identity/validate_identity.py": {
                 "roots": ["main"],
                 "dynamic_call_bindings": [
                     "accepted_input.get",

@@ -8,7 +8,7 @@ it).
 ## Create a worktree for a scoped fix
 
 ```bash
-python scripts/worktree_lifecycle.py create \
+python src/ember/governance/scripts/worktree_lifecycle.py create \
   --path <local-worktree-root>/<name> \
   --branch fix/<name> \
   --owner <you> \

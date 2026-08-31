@@ -311,7 +311,7 @@ class TestMergeGatePathClassification:
 
         coordinator_paths = [
             "docs/domains/governance/authority/GOAL.md",
-            "docs/authority/INVARIANT.md",
+            "docs/domains/governance/authority/INVARIANT.md",
             "docs/spec/inference.md",
             "scripts/cbase_bootstrap.py",
             "scripts/ember_totality/some_runner.py",

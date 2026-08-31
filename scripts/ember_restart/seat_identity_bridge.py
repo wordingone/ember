@@ -7,7 +7,7 @@
 The seat loader stops being an independent identity authority (goal cert #3 +
 goal line 95). Every identity-bearing seat field is DERIVED from a referenced
 ``ember-model-experiment-identity-v1`` manifest, pinned by digest, validated by
-``scripts/ember_01_identity/validate_identity.py`` (the SAME validator the
+``src/ember/governance/scripts/ember_01_identity/validate_identity.py`` (the SAME validator the
 ``/model`` path uses — single authority), and bound to the exact checkpoint
 bytes on disk. Any failure at any step REFUSES the seat load. No fallback.
 

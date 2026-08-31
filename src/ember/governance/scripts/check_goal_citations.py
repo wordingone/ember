@@ -10,7 +10,7 @@ docs/spec/, then verifies each one exists under the repo root.
 
 Reference shapes recognized (per spec):
   - @-prefixed:       @docs/spec/math-core-v1.md
-  - backtick-quoted:  `scripts/check_goal_citations.py`
+  - backtick-quoted:  `src/ember/governance/scripts/check_goal_citations.py`
     (the path may appear anywhere inside the backtick span, e.g.
     `python src/ember/governance/scripts/governor.py --selftest` still yields src/ember/governance/scripts/governor.py)
 

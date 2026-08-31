@@ -147217,7 +147217,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147239,7 +147239,7 @@
       "matched_terms": [
         "checkpoint_bound_causal_evidence"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147261,7 +147261,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147283,7 +147283,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147305,7 +147305,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147327,7 +147327,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147349,7 +147349,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147371,7 +147371,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147393,7 +147393,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147415,7 +147415,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147437,7 +147437,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147459,7 +147459,7 @@
       "matched_terms": [
         "clean_genesis"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147481,7 +147481,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147503,7 +147503,7 @@
       "matched_terms": [
         "effective_tokens"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147525,7 +147525,7 @@
       "matched_terms": [
         "router"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147547,7 +147547,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147569,7 +147569,7 @@
       "matched_terms": [
         "benchmark_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147591,7 +147591,7 @@
       "matched_terms": [
         "score"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147613,7 +147613,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147635,7 +147635,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147657,7 +147657,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147679,7 +147679,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147701,7 +147701,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147723,7 +147723,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147745,7 +147745,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147767,7 +147767,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147789,7 +147789,7 @@
       "matched_terms": [
         "router"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147811,7 +147811,7 @@
       "matched_terms": [
         "benchmark_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147833,7 +147833,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147855,7 +147855,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147877,7 +147877,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147899,7 +147899,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147921,7 +147921,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147943,7 +147943,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147965,7 +147965,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -147987,7 +147987,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148009,7 +148009,7 @@
       "matched_terms": [
         "clean_genesis"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148031,7 +148031,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148053,7 +148053,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148075,7 +148075,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148097,7 +148097,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148119,7 +148119,7 @@
       "matched_terms": [
         "effective_tokens"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148141,7 +148141,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148163,7 +148163,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148185,7 +148185,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148207,7 +148207,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148229,7 +148229,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148251,7 +148251,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148273,7 +148273,7 @@
       "matched_terms": [
         "router"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148295,7 +148295,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148317,7 +148317,7 @@
       "matched_terms": [
         "benchmark_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148339,7 +148339,7 @@
       "matched_terms": [
         "score"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148361,7 +148361,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148383,7 +148383,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148405,7 +148405,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148427,7 +148427,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148449,7 +148449,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148471,7 +148471,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148493,7 +148493,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148515,7 +148515,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148537,7 +148537,7 @@
       "matched_terms": [
         "receipt_hash_invalid"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148560,7 +148560,7 @@
         "receipt",
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148582,7 +148582,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148604,7 +148604,7 @@
       "matched_terms": [
         "receipt_missing"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148626,7 +148626,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148648,7 +148648,7 @@
       "matched_terms": [
         "receipt_hash_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148670,7 +148670,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148692,7 +148692,7 @@
       "matched_terms": [
         "receipt_shape"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148714,7 +148714,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148736,7 +148736,7 @@
       "matched_terms": [
         "receipt_schema"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148758,7 +148758,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148780,7 +148780,7 @@
       "matched_terms": [
         "receipt_class_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148802,7 +148802,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148824,7 +148824,7 @@
       "matched_terms": [
         "receipt_checkpoint_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148846,7 +148846,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148868,7 +148868,7 @@
       "matched_terms": [
         "receipt_verifier_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148890,7 +148890,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148912,7 +148912,7 @@
       "matched_terms": [
         "receipt_result_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148934,7 +148934,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148956,7 +148956,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -148978,7 +148978,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149000,7 +149000,7 @@
       "matched_terms": [
         "receipt_claim_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149022,7 +149022,7 @@
       "matched_terms": [
         "checkpoint_bytes"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149044,7 +149044,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149066,7 +149066,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149088,7 +149088,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149110,7 +149110,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149132,7 +149132,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149154,7 +149154,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149176,7 +149176,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149198,7 +149198,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149220,7 +149220,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149242,7 +149242,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149264,7 +149264,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149286,7 +149286,7 @@
       "matched_terms": [
         "checkpoint_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149308,7 +149308,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149330,7 +149330,7 @@
       "matched_terms": [
         "checkpoint_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149352,7 +149352,7 @@
       "matched_terms": [
         "checkpoint_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149376,7 +149376,7 @@
         "checkpoint_hash",
         "checkpoint_present"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149399,7 +149399,7 @@
         "checkpoint_bytes",
         "checkpoint_present"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149421,7 +149421,7 @@
       "matched_terms": [
         "checkpoint_bytes"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149443,7 +149443,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149465,7 +149465,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149487,7 +149487,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149509,7 +149509,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149531,7 +149531,7 @@
       "matched_terms": [
         "checkpoint_bytes"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149553,7 +149553,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149575,7 +149575,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149597,7 +149597,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149619,7 +149619,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149641,7 +149641,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149663,7 +149663,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149685,7 +149685,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149707,7 +149707,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149729,7 +149729,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149751,7 +149751,7 @@
       "matched_terms": [
         "checkpoint_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149774,7 +149774,7 @@
         "checkpoint_hash",
         "checkpoint_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149796,7 +149796,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149818,7 +149818,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149840,7 +149840,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149862,7 +149862,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149884,7 +149884,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149906,7 +149906,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149928,7 +149928,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149950,7 +149950,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149972,7 +149972,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -149994,7 +149994,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150016,7 +150016,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150038,7 +150038,7 @@
       "matched_terms": [
         "receipt_hash_invalid"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150060,7 +150060,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150082,7 +150082,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150104,7 +150104,7 @@
       "matched_terms": [
         "pid"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150126,7 +150126,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150148,7 +150148,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150171,7 +150171,7 @@
         "pid",
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150194,7 +150194,7 @@
         "pid",
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150216,7 +150216,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150238,7 +150238,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150260,7 +150260,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150282,7 +150282,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150304,7 +150304,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150326,7 +150326,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150348,7 +150348,7 @@
       "matched_terms": [
         "process_identity"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150370,7 +150370,7 @@
       "matched_terms": [
         "router"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150392,7 +150392,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150414,7 +150414,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150436,7 +150436,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150459,7 +150459,7 @@
         "evidence_receipts",
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150482,7 +150482,7 @@
         "checkpoint_hash",
         "checkpoint_present"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150504,7 +150504,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150526,7 +150526,7 @@
       "matched_terms": [
         "checkpoint_parameter_count"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150548,7 +150548,7 @@
       "matched_terms": [
         "checkpoint_parameter_count"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150570,7 +150570,7 @@
       "matched_terms": [
         "checkpoint_parameter_count_mismatch"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150592,7 +150592,7 @@
       "matched_terms": [
         "checkpoint_parameter_count"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150614,7 +150614,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150636,7 +150636,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150658,7 +150658,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150680,7 +150680,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150702,7 +150702,7 @@
       "matched_terms": [
         "evaluation_result"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150724,7 +150724,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150746,7 +150746,7 @@
       "matched_terms": [
         "benchmark_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150768,7 +150768,7 @@
       "matched_terms": [
         "score"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150790,7 +150790,7 @@
       "matched_terms": [
         "REFERENCE_ONLY"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150812,7 +150812,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150834,7 +150834,7 @@
       "matched_terms": [
         "checkpoint_format_unsupported"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150856,7 +150856,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150878,7 +150878,7 @@
       "matched_terms": [
         "checkpoint_bytes"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150900,7 +150900,7 @@
       "matched_terms": [
         "checkpoint_bytes_missing"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150922,7 +150922,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150944,7 +150944,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150966,7 +150966,7 @@
       "matched_terms": [
         "tokenizer"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -150988,7 +150988,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151010,7 +151010,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151032,7 +151032,7 @@
       "matched_terms": [
         "optimizer_state"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151054,7 +151054,7 @@
       "matched_terms": [
         "checkpoint_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151076,7 +151076,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151098,7 +151098,7 @@
       "matched_terms": [
         "receipt_bundle_missing"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151120,7 +151120,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151142,7 +151142,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151164,7 +151164,7 @@
       "matched_terms": [
         "receipt_bundle_invalid"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151186,7 +151186,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151208,7 +151208,7 @@
       "matched_terms": [
         "clean_genesis"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151230,7 +151230,7 @@
       "matched_terms": [
         "clean_genesis"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151252,7 +151252,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151274,7 +151274,7 @@
       "matched_terms": [
         "actually_trained"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151296,7 +151296,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151318,7 +151318,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151340,7 +151340,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151362,7 +151362,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151384,7 +151384,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151406,7 +151406,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151428,7 +151428,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151450,7 +151450,7 @@
       "matched_terms": [
         "mechanism_id"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151472,7 +151472,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151494,7 +151494,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151516,7 +151516,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151538,7 +151538,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151560,7 +151560,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151582,7 +151582,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151604,7 +151604,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151626,7 +151626,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151648,7 +151648,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151670,7 +151670,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151692,7 +151692,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151714,7 +151714,7 @@
       "matched_terms": [
         "evidence_receipts"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151736,7 +151736,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151758,7 +151758,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151780,7 +151780,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151802,7 +151802,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151824,7 +151824,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151846,7 +151846,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151868,7 +151868,7 @@
       "matched_terms": [
         "receipt_sha256"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151890,7 +151890,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151912,7 +151912,7 @@
       "matched_terms": [
         "checkpoint_hash"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151934,7 +151934,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151956,7 +151956,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -151978,7 +151978,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -152000,7 +152000,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -152022,7 +152022,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -152044,7 +152044,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -152067,7 +152067,7 @@
         "checkpoint",
         "checkpoint_bytes"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -152089,7 +152089,7 @@
       "matched_terms": [
         "receipt_bundle"
       ],
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "path_sha256": "b0f15bf5fe99b32c271b0714b326ef5b34d1214da671af20d45ad20071603985",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -206955,7 +206955,7 @@
         "Tokenizer",
         "tokenizer"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -206978,7 +206978,7 @@
         "RECEIPT",
         "receipt"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -207000,7 +207000,7 @@
       "matched_terms": [
         "qwen"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -207022,7 +207022,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -207044,7 +207044,7 @@
       "matched_terms": [
         "adapter"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -260380,7 +260380,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260402,7 +260402,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260424,7 +260424,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260446,7 +260446,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260468,7 +260468,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260490,7 +260490,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260512,7 +260512,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260534,7 +260534,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260556,7 +260556,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260578,7 +260578,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260600,7 +260600,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260622,7 +260622,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260644,7 +260644,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260666,7 +260666,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260688,7 +260688,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260710,7 +260710,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260732,7 +260732,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260754,7 +260754,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260776,7 +260776,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260799,7 +260799,7 @@
         "receipt",
         "receipt_path"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260822,7 +260822,7 @@
         "receipt",
         "receipt_path"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260845,7 +260845,7 @@
         "receipt",
         "receipt_path"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260867,7 +260867,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260889,7 +260889,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260911,7 +260911,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260933,7 +260933,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260955,7 +260955,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -260978,7 +260978,7 @@
         "corpus",
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261000,7 +261000,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261022,7 +261022,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261044,7 +261044,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261066,7 +261066,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261088,7 +261088,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261110,7 +261110,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261132,7 +261132,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261154,7 +261154,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261176,7 +261176,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261198,7 +261198,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261220,7 +261220,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261242,7 +261242,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261264,7 +261264,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261286,7 +261286,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -261308,7 +261308,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495052,7 +495052,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495074,7 +495074,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495096,7 +495096,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495118,7 +495118,7 @@
       "matched_terms": [
         "LlamaConfig"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495140,7 +495140,7 @@
       "matched_terms": [
         "LlamaConfig"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495162,7 +495162,7 @@
       "matched_terms": [
         "hidden_size"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495184,7 +495184,7 @@
       "matched_terms": [
         "intermediate_size"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495206,7 +495206,7 @@
       "matched_terms": [
         "num_hidden_layers"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495228,7 +495228,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495250,7 +495250,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495272,7 +495272,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495294,7 +495294,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495316,7 +495316,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495338,7 +495338,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -495360,7 +495360,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -600908,7 +600908,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -600930,7 +600930,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -600952,7 +600952,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -600974,7 +600974,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -600996,7 +600996,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601018,7 +601018,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601040,7 +601040,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601062,7 +601062,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601084,7 +601084,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601106,7 +601106,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601128,7 +601128,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601150,7 +601150,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601172,7 +601172,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601194,7 +601194,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601216,7 +601216,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601238,7 +601238,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601260,7 +601260,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601282,7 +601282,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601304,7 +601304,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601326,7 +601326,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601348,7 +601348,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601370,7 +601370,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601392,7 +601392,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601414,7 +601414,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601436,7 +601436,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601458,7 +601458,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601480,7 +601480,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601502,7 +601502,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601524,7 +601524,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601546,7 +601546,7 @@
       "matched_terms": [
         "checkpoint_every"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601568,7 +601568,7 @@
       "matched_terms": [
         "checkpoint_every"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601590,7 +601590,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601612,7 +601612,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601634,7 +601634,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601656,7 +601656,7 @@
       "matched_terms": [
         "torch.save"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601678,7 +601678,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601700,7 +601700,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601722,7 +601722,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601744,7 +601744,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601766,7 +601766,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601788,7 +601788,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601810,7 +601810,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601832,7 +601832,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601854,7 +601854,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601876,7 +601876,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601898,7 +601898,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601920,7 +601920,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601942,7 +601942,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601964,7 +601964,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -601986,7 +601986,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -602008,7 +602008,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -602030,7 +602030,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -602052,7 +602052,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -602074,7 +602074,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -602096,7 +602096,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835033,7 +835033,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835055,7 +835055,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835077,7 +835077,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835099,7 +835099,7 @@
       "matched_terms": [
         "LlamaConfig"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835121,7 +835121,7 @@
       "matched_terms": [
         "LlamaConfig"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835143,7 +835143,7 @@
       "matched_terms": [
         "hidden_size"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835165,7 +835165,7 @@
       "matched_terms": [
         "intermediate_size"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835187,7 +835187,7 @@
       "matched_terms": [
         "num_hidden_layers"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835209,7 +835209,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835231,7 +835231,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835253,7 +835253,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835275,7 +835275,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835297,7 +835297,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835319,7 +835319,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -835341,7 +835341,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -931086,7 +931086,7 @@
         "Tokenizer",
         "tokenizer"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -931109,7 +931109,7 @@
         "RECEIPT",
         "receipt"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -931131,7 +931131,7 @@
       "matched_terms": [
         "qwen"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -931153,7 +931153,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -931175,7 +931175,7 @@
       "matched_terms": [
         "adapter"
       ],
-      "path": "docs/research/fp22-corpus-world.md",
+      "path": "docs/domains/governance/research/fp22-corpus-world.md",
       "path_sha256": "059acf5a6dd065553ae6c1caaaee3f930b28530d7a7e319f1b3582e153e2fb75",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EVIDENCE_MATCH",
@@ -1027043,7 +1027043,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027065,7 +1027065,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027087,7 +1027087,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027109,7 +1027109,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027131,7 +1027131,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027153,7 +1027153,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027175,7 +1027175,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027197,7 +1027197,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027219,7 +1027219,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027241,7 +1027241,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027263,7 +1027263,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027285,7 +1027285,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027307,7 +1027307,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027329,7 +1027329,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027351,7 +1027351,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027373,7 +1027373,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027395,7 +1027395,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027417,7 +1027417,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027439,7 +1027439,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027462,7 +1027462,7 @@
         "receipt",
         "receipt_path"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027485,7 +1027485,7 @@
         "receipt",
         "receipt_path"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027508,7 +1027508,7 @@
         "receipt",
         "receipt_path"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027530,7 +1027530,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027552,7 +1027552,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027574,7 +1027574,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027596,7 +1027596,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027618,7 +1027618,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027641,7 +1027641,7 @@
         "corpus",
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027663,7 +1027663,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027685,7 +1027685,7 @@
       "matched_terms": [
         "curriculum"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027707,7 +1027707,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027729,7 +1027729,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027751,7 +1027751,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027773,7 +1027773,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027795,7 +1027795,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027817,7 +1027817,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027839,7 +1027839,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027861,7 +1027861,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027883,7 +1027883,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027905,7 +1027905,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027927,7 +1027927,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027949,7 +1027949,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1027971,7 +1027971,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/check_goal_citations.py",
+      "path": "src/ember/governance/scripts/check_goal_citations.py",
       "path_sha256": "f582d79e9101de656b0cd55d62e04afd546ec8bfc68218332488a648807d700c",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234548,7 +1234548,7 @@
       "matched_terms": [
         "paper"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234570,7 +1234570,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234592,7 +1234592,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234614,7 +1234614,7 @@
       "matched_terms": [
         "LlamaConfig"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234636,7 +1234636,7 @@
       "matched_terms": [
         "LlamaConfig"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234658,7 +1234658,7 @@
       "matched_terms": [
         "hidden_size"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234680,7 +1234680,7 @@
       "matched_terms": [
         "intermediate_size"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234702,7 +1234702,7 @@
       "matched_terms": [
         "num_hidden_layers"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234724,7 +1234724,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234746,7 +1234746,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234768,7 +1234768,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234790,7 +1234790,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234812,7 +1234812,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234834,7 +1234834,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1234856,7 +1234856,7 @@
       "matched_terms": [
         "param_count"
       ],
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "path_sha256": "1400f6d91c42671a8afe089c393f47d86df23d67187d5a2a58199b379040381b",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340668,7 +1340668,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340690,7 +1340690,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340712,7 +1340712,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340734,7 +1340734,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340756,7 +1340756,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340778,7 +1340778,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340800,7 +1340800,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340822,7 +1340822,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340844,7 +1340844,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340866,7 +1340866,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340888,7 +1340888,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340910,7 +1340910,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340932,7 +1340932,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340954,7 +1340954,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340976,7 +1340976,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1340998,7 +1340998,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341020,7 +1341020,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341042,7 +1341042,7 @@
       "matched_terms": [
         "corpus_id"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341064,7 +1341064,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341086,7 +1341086,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341108,7 +1341108,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341130,7 +1341130,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341152,7 +1341152,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341174,7 +1341174,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341196,7 +1341196,7 @@
       "matched_terms": [
         "architecture"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341218,7 +1341218,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341240,7 +1341240,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341262,7 +1341262,7 @@
       "matched_terms": [
         "corpus"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341284,7 +1341284,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341306,7 +1341306,7 @@
       "matched_terms": [
         "checkpoint_every"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341328,7 +1341328,7 @@
       "matched_terms": [
         "checkpoint_every"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341350,7 +1341350,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341372,7 +1341372,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341394,7 +1341394,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341416,7 +1341416,7 @@
       "matched_terms": [
         "torch.save"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341438,7 +1341438,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341460,7 +1341460,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341482,7 +1341482,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341504,7 +1341504,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341526,7 +1341526,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341548,7 +1341548,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341570,7 +1341570,7 @@
       "matched_terms": [
         "state_dict"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341592,7 +1341592,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341614,7 +1341614,7 @@
       "matched_terms": [
         "checkpoint"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341636,7 +1341636,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341658,7 +1341658,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341680,7 +1341680,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341702,7 +1341702,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341724,7 +1341724,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341746,7 +1341746,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341768,7 +1341768,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341790,7 +1341790,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341812,7 +1341812,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341834,7 +1341834,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",
@@ -1341856,7 +1341856,7 @@
       "matched_terms": [
         "receipt"
       ],
-      "path": "scripts/test_w1b_continuation.py",
+      "path": "src/ember/governance/scripts/test_w1b_continuation.py",
       "path_sha256": "6be6887682f547e254abf8cd353665d93d7f3f72cbf1053889cc5b5395cd5eff",
       "protocol": "UNRESOLVED_STATIC_ANALYSIS",
       "record_class": "CANDIDATE_EXECUTABLE_MATCH",

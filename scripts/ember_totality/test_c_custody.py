@@ -33,7 +33,7 @@ Five probe-side cures, each fixture-verified:
      compound-reference suffix swallowed into the greedy extraction regex is
      stripped before the existence check (_clean_citation); a citation-check
      receipt's own wrap_joined record ({"doc","ref","joined","line"} --
-     scripts/check_goal_citations.py) is consumed by its RECONSTRUCTED
+     src/ember/governance/scripts/check_goal_citations.py) is consumed by its RECONSTRUCTED
      `joined` value instead of re-truncating the raw `ref` fragment; a bare,
      no-extension citation that resolves as a real, git-tracked-populated
      DIRECTORY (isdir() + >=1 tracked file inside) is a directory reference,
@@ -174,7 +174,7 @@ def _clean_citation(raw):
 
 
 def _is_wrap_joined_record(obj):
-    """True iff obj is exactly the record shape scripts/check_goal_citations.py
+    """True iff obj is exactly the record shape src/ember/governance/scripts/check_goal_citations.py
     appends to its `wrap_joined` list: {"doc":str, "ref":str, "joined":str,
     "line":int}. When a citation-check receipt (receipts/citation-check-*.json)
     carrying one of these is scanned by THIS probe's generic recursive

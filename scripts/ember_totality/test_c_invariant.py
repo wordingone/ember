@@ -4,11 +4,11 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Totality status-probe for Ember goal condition C-INV (constitutional invariant).
 
-Condition (from docs/domains/governance/authority/GOAL.md §9, docs/authority/INVARIANT.md binds):
+Condition (from docs/domains/governance/authority/GOAL.md §9, docs/domains/governance/authority/INVARIANT.md binds):
 
   C-INV — Invariant persists, stamped, and unchained in every post-genesis artifact.
   Invariant file exists and hashes correctly; docs/domains/governance/authority/GOAL.md pins the hash; all post-genesis
-  manifests and receipts carry the invariant_sha256 stamp. If docs/authority/INVARIANT.md is missing,
+  manifests and receipts carry the invariant_sha256 stamp. If docs/domains/governance/authority/INVARIANT.md is missing,
   this is a BREACH, not UNEVALUABLE — the receipt is written anyway with
   invariant_breach:true, complete:false.
 
@@ -44,7 +44,7 @@ ROOT = next(
 )
 
 RECEIPTS = ROOT / "receipts"
-INVARIANT_FILE = ROOT / "docs/authority/INVARIANT.md"
+INVARIANT_FILE = ROOT / "docs/domains/governance/authority/INVARIANT.md"
 GOAL_FILE = ROOT / "docs/domains/governance/authority/GOAL.md"
 
 # The canonical invariant hash
@@ -83,7 +83,7 @@ SUPERSESSIONS_FILE = ROOT / "docs" / "ledgers" / "receipt-supersessions.jsonl"
 
 # Invalid tokens for this condition
 INVALID_TOKENS = [
-    "invariant_breach",  # docs/authority/INVARIANT.md missing or hash wrong
+    "invariant_breach",  # docs/domains/governance/authority/INVARIANT.md missing or hash wrong
     "invariant_unstamped_receipt",  # post-genesis receipt lacks stamp
     "invariant_errata_chain_broken",  # errata sha chain invalid
 ]
@@ -98,7 +98,7 @@ _LAST_STAMP_COUNTS: Optional[Dict[str, Any]] = None
 
 
 def read_invariant_bytes() -> Optional[bytes]:
-    """Read docs/authority/INVARIANT.md bytes if it exists."""
+    """Read docs/domains/governance/authority/INVARIANT.md bytes if it exists."""
     if not INVARIANT_FILE.exists():
         return None
     return INVARIANT_FILE.read_bytes()
@@ -110,20 +110,20 @@ def compute_hash(data: bytes) -> str:
 
 
 def check_invariant_file() -> tuple[bool, str]:
-    """Check that docs/authority/INVARIANT.md exists and hashes correctly.
+    """Check that docs/domains/governance/authority/INVARIANT.md exists and hashes correctly.
 
     Returns:
         (success: bool, reason: str)
     """
     inv_bytes = read_invariant_bytes()
     if inv_bytes is None:
-        return False, "docs/authority/INVARIANT.md missing"
+        return False, "docs/domains/governance/authority/INVARIANT.md missing"
 
     computed = compute_hash(inv_bytes)
     if computed != INVARIANT_SHA256:
-        return False, f"docs/authority/INVARIANT.md hash mismatch: {computed[:16]}... != {INVARIANT_SHA256[:16]}..."
+        return False, f"docs/domains/governance/authority/INVARIANT.md hash mismatch: {computed[:16]}... != {INVARIANT_SHA256[:16]}..."
 
-    return True, f"docs/authority/INVARIANT.md present and correct"
+    return True, f"docs/domains/governance/authority/INVARIANT.md present and correct"
 
 
 def check_goal_pin() -> tuple[bool, str]:
@@ -649,7 +649,7 @@ def write_receipt(status: str, reason: str, breach: bool = False) -> str:
 def main():
     """Run C-INV status probe."""
     checks = [
-        ("docs/authority/INVARIANT.md file & hash", check_invariant_file),
+        ("docs/domains/governance/authority/INVARIANT.md file & hash", check_invariant_file),
         ("docs/domains/governance/authority/GOAL.md pin", check_goal_pin),
         ("Stamped receipts", check_stamped_receipts),
         ("Errata structure", check_errata_structure),

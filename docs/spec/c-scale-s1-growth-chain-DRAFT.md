@@ -11,7 +11,7 @@ end of this document (marked **PRE-REGISTRATION DECISION**). Follows the same pa
 `docs/spec/c-scale-s2-token-bill-protocol.md` (S2, ratified 2026-07-03 on the pre-registration
 lane — absent as of 2026-08-01 in this contract tree, not yet merged to master): gather receipts-first,
 compute what can be computed live, flag what cannot be decided here, and never silently resolve an
-open question. The `DRAFT` suffix keeps this document out of `scripts/check_goal_citations.py`'s
+open question. The `DRAFT` suffix keeps this document out of `src/ember/governance/scripts/check_goal_citations.py`'s
 contract-force scope until ratified as `-v1.md`.
 
 No git commits, no GPU runs, and no probe edits were made while assembling this document. One script
@@ -457,7 +457,7 @@ wall-clock target) per rung — this dossier deliberately does not choose.
 
 ## 8. Citation-checker verification
 
-`python scripts/check_goal_citations.py` was run against the repo (this document included, under
+`python src/ember/governance/scripts/check_goal_citations.py` was run against the repo (this document included, under
 `docs/spec/`) — three times: the first pass caught a real gap (a citation of `scripts/cbase_grow_live.py`
 in §3.1 with no adjacent absent-marker, plus a typo that mis-prefixed the same filename under the
 wrong top-level directory in §5.1), both fixed; a second pass then caught the same filename appearing
@@ -492,7 +492,7 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
 `docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `scripts/ember_totality/test_c_scale.py` ·
 `src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·
-`scripts/timeshare_pretrain.py` · `scripts/check_goal_citations.py` ·
+`scripts/timeshare_pretrain.py` · `src/ember/governance/scripts/check_goal_citations.py` ·
 `configs/v0-pretrain-config.json` ·
 `receipts/v0-live-20260623T105829Z.json` ·
 `receipts/cbase-grow-dryrun-20260702T190532Z.json` ·

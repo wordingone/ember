@@ -52,7 +52,7 @@ def _durable_repo_root(repo_root: Path) -> Path:
     ``Path(__file__).resolve()``, which names whichever tree happens to be
     executing this module (#1741 Known Limitation B).
 
-    Precedent: ``scripts/worktree_lifecycle.py::common_dir`` and
+    Precedent: ``src/ember/governance/scripts/worktree_lifecycle.py::common_dir`` and
     ``scripts/ember_restart/source_authority.py::_common_dir``. A genuine main
     checkout's ``.git`` is a real directory that IS the common dir; a worktree's
     (lifecycle-managed or ad hoc) ``.git`` is a FILE pointing elsewhere -- so the

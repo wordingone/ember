@@ -7,7 +7,7 @@ atomic_write_json: write to a per-process temp file in the same directory,
 fsync, then os.replace onto the target. os.replace is atomic on both POSIX
 and Windows (NTFS), so a reader never observes a partially-written file, and
 a crash mid-write leaves only an orphaned .tmp file behind -- never a
-corrupted target. Same pattern as scripts/worktree_lifecycle.py's write_state.
+corrupted target. Same pattern as src/ember/governance/scripts/worktree_lifecycle.py's write_state.
 
 ExclusiveLock + atomic_append_jsonl: review-pr1310.md MAJOR-1. The prior
 version of atomic_append_jsonl was read-modify-replace, which is crash-safe
@@ -51,7 +51,7 @@ def atomic_write_json(path: Path, payload: Any) -> None:
 class ExclusiveLock(AbstractContextManager["ExclusiveLock"]):
     """Blocking cross-process/cross-thread exclusive lock on a sidecar file.
 
-    Unlike scripts/worktree_lifecycle.py's RepositoryLock (fail-fast, one
+    Unlike src/ember/governance/scripts/worktree_lifecycle.py's RepositoryLock (fail-fast, one
     repo-wide lock), this blocks until acquired -- callers here (concurrent
     appenders, concurrent claimants) are expected to queue, not fail.
     """

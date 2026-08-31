@@ -10,7 +10,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 80,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     },
     {
@@ -23,7 +23,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 200,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     },
     {
@@ -36,7 +36,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 201,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     },
     {
@@ -49,7 +49,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 631,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     },
     {
@@ -62,7 +62,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 646,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     },
     {
@@ -75,7 +75,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 1082,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     },
     {
@@ -88,7 +88,7 @@
       "failure_behavior": "FAIL_CLOSED_ON_SCHEMA_OR_CONTRADICTION",
       "integration_requirement": "emit all six parameter axes from independently verified evidence",
       "line": 1093,
-      "path": "scripts/ember_01_identity/validate_identity.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "protocol": "validate_identity.validate_manifest"
     }
   ],
@@ -377,28 +377,28 @@
       "category": "parameter_identity",
       "evidence_sha256": "b6d143906877fcdf0e9a4014da105eee0199263ada2416de0ccb2d5edd12474a",
       "line": 58,
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "694e0e264b48933616fd57e590f3c98a5da1d4afeb82496518332bdac50a3c93",
       "line": 149,
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "47488c9ba19ddd99b31f0e713598b26a197d593dd262f4143256705849a0e1cb",
       "line": 203,
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "bea362a78cab046db1f40be5e7cd345a85b153ef269765fb5070381765a1748e",
       "line": 204,
-      "path": "scripts/fp19_bench.py",
+      "path": "src/ember/governance/scripts/fp19_bench.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {

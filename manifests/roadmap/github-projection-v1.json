@@ -3402,7 +3402,7 @@
       "title": "EMBER-02 — Three-billion-parameter foundation birth"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-03.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-03.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 12,
       "milestone_id": "EMBER-03",
@@ -3410,7 +3410,7 @@
       "title": "EMBER-03 — Body, tools, and operator relationship"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-04.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-04.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 16,
       "milestone_id": "EMBER-04",
@@ -3426,7 +3426,7 @@
       "title": "EMBER-05 — Three-billion-parameter Verified Expert Accretion rung"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-06.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-06.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 18,
       "milestone_id": "EMBER-06",
@@ -3434,7 +3434,7 @@
       "title": "EMBER-06 — Autonomous AI-research bootstrap"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-07.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-07.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 20,
       "milestone_id": "EMBER-07",
@@ -3442,7 +3442,7 @@
       "title": "EMBER-07 — Seven-billion-parameter hard rung"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-08.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-08.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 21,
       "milestone_id": "EMBER-08",
@@ -3450,7 +3450,7 @@
       "title": "EMBER-08 — Fifteen-billion-parameter hard rung"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-09.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-09.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 22,
       "milestone_id": "EMBER-09",
@@ -3458,7 +3458,7 @@
       "title": "EMBER-09 — Owned model above twenty-seven billion parameters"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-10.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-10.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 23,
       "milestone_id": "EMBER-10",
@@ -3516,7 +3516,7 @@
       "tracking_key": "roadmap-parent:EMBER-02"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-03 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-03.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-03 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-03.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-02"
       ],
@@ -3530,7 +3530,7 @@
       "tracking_key": "roadmap-parent:EMBER-03"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-04 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-04.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-04 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-04.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-03"
       ],
@@ -3558,7 +3558,7 @@
       "tracking_key": "roadmap-parent:EMBER-05"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-06 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-06.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-06 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-06.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-05"
       ],
@@ -3572,7 +3572,7 @@
       "tracking_key": "roadmap-parent:EMBER-06"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-07 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-07.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-07 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-07.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-06"
       ],
@@ -3586,7 +3586,7 @@
       "tracking_key": "roadmap-parent:EMBER-07"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-08 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-08.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-08 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-08.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-07"
       ],
@@ -3600,7 +3600,7 @@
       "tracking_key": "roadmap-parent:EMBER-08"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-09 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-09.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-09 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-09.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-08"
       ],
@@ -3614,7 +3614,7 @@
       "tracking_key": "roadmap-parent:EMBER-09"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-10 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-10.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-10 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-10.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-09"
       ],

@@ -381,7 +381,7 @@ async function main(): Promise<void> {
       ticket: "EMBER-CLI-ISSUE-54-FIREBALL-CAPTURE",
       ts: captures[0]!.captured_at,
       sha_convention: "sha256 over exact on-disk file bytes, no normalization",
-      invariant_sha256: sha256File(join(repoRoot, "docs/authority/INVARIANT.md")),
+      invariant_sha256: sha256File(join(repoRoot, "docs/domains/governance/authority/INVARIANT.md")),
       goal_id: "EMBER-02",
       workstream_id: "EMBER-02A",
       next_executed_outcome: NEXT_OUTCOME,

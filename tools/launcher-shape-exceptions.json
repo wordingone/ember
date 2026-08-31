@@ -32,7 +32,7 @@
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "3c0bd0abe80c6b1b4c04c7e1227b645cfd74648498854687c9de5bd256a3ebea",
+      "sha256": "d100f6d8c9ae0c9910a5e6f4a905120cbfad0f72b7aca57e253d9081a2d11c52",
       "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
@@ -52,7 +52,7 @@
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
-      "sha256": "4289d6fc2a69659d2921b1b2baa27844d341e69b12d8d58b3444960e47df314c",
+      "sha256": "b6adcbafc96247d0f3b49bd96993c9218164dd66a97a4c82861f2a3c54cfbc10",
       "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "path": "tests/test_nativization_motion.py",
-      "sha256": "aedc8acd40bde45f2a8f5d271a217eb0fadab5269ecc0c4259eac964a759ed06",
+      "sha256": "ceee690857d8c27fdc582c2a9de160b40678a2bb9158aba179e6ea177aff8f62",
       "reason": "offline nativization-motion test suite. It executes only synthetic temporary runner/import fixtures to validate delta and receipt calculations, with zero network and no production training identity or custody."
     },
     {

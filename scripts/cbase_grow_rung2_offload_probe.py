@@ -311,7 +311,7 @@ def main() -> int:
         "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
         "experiment": "C-BASE-clause-d-cure",
         "arm": "cpu-offload-probe",
-        "spec_ref": "state/rung2-cure-pr-spec-20260708.md; docs/ledgers/deviations.md DEV-002",
+        "spec_ref": "state/rung2-cure-pr-spec-20260708.md; docs/domains/governance/ledgers/deviations.md DEV-002",
         "scope": ("CPU-only equivalence probes for the DEV-002 cure (CPU-offloaded "
                   "optimizer states + micro-batch/grad accumulation). Does NOT run the "
                   "measured production-scale dry-run (real 2.2B, nvidia-smi sampling) -- "
