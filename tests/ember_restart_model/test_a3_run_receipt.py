@@ -4,7 +4,7 @@
 """Real-path closure tests for the R1-E8 A3-arm run receipt producer.
 
 The happy-path test mints a receipt from real fixture artifacts and passes it,
-unmocked, through BOTH real downstream consumers: src/ember/governance/scripts/r1_e8_validator.py's own
+unmocked, through BOTH real downstream consumers: scripts/r1_e8_validator.py's own
 `_validate_run`, and certified_train_launch.py's matched-A3 verification reached
 through its public entrypoint `validate_certified_request` against a real valid A1
 launch bundle (the hand-built matched-a3-run.json swapped for the minted one).
@@ -22,50 +22,7 @@ from unittest import mock
 
 import pytest
 
-# issue2015 exact-local-import:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py
-import importlib.util as _ember_c931b27d036f5545_importlib
-import sys as _ember_c931b27d036f5545_sys
-from pathlib import Path as _ember_c931b27d036f5545_Path
-_ember_c931b27d036f5545_path = _ember_c931b27d036f5545_Path(__file__).resolve().parents[2].joinpath('tests', 'ember_restart_model', 'domain-governance', 'test_a1_certified_launch.py')
-if not _ember_c931b27d036f5545_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py')
-_ember_c931b27d036f5545_aliases = ('_ember_issue2015_c931b27d036f5545', 'test_a1_certified_launch', 'tests.ember_restart_model.test_a1_certified_launch')
-_ember_c931b27d036f5545_existing = []
-for _ember_c931b27d036f5545_alias in _ember_c931b27d036f5545_aliases:
-    _ember_c931b27d036f5545_candidate = _ember_c931b27d036f5545_sys.modules.get(_ember_c931b27d036f5545_alias)
-    if _ember_c931b27d036f5545_candidate is not None and all(_ember_c931b27d036f5545_candidate is not item for item in _ember_c931b27d036f5545_existing):
-        _ember_c931b27d036f5545_existing.append(_ember_c931b27d036f5545_candidate)
-if len(_ember_c931b27d036f5545_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py')
-if _ember_c931b27d036f5545_existing:
-    _ember_c931b27d036f5545_module = _ember_c931b27d036f5545_existing[0]
-    _ember_c931b27d036f5545_observed = getattr(_ember_c931b27d036f5545_module, '__file__', None)
-    if _ember_c931b27d036f5545_observed is None or _ember_c931b27d036f5545_Path(_ember_c931b27d036f5545_observed).resolve() != _ember_c931b27d036f5545_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py')
-else:
-    _ember_c931b27d036f5545_spec = _ember_c931b27d036f5545_importlib.spec_from_file_location('_ember_issue2015_c931b27d036f5545', _ember_c931b27d036f5545_path)
-    if _ember_c931b27d036f5545_spec is None or _ember_c931b27d036f5545_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py')
-    _ember_c931b27d036f5545_module = _ember_c931b27d036f5545_importlib.module_from_spec(_ember_c931b27d036f5545_spec)
-    for _ember_c931b27d036f5545_alias in _ember_c931b27d036f5545_aliases:
-        _ember_c931b27d036f5545_prior = _ember_c931b27d036f5545_sys.modules.get(_ember_c931b27d036f5545_alias)
-        if _ember_c931b27d036f5545_prior is not None and _ember_c931b27d036f5545_prior is not _ember_c931b27d036f5545_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py')
-        _ember_c931b27d036f5545_sys.modules[_ember_c931b27d036f5545_alias] = _ember_c931b27d036f5545_module
-    try:
-        _ember_c931b27d036f5545_spec.loader.exec_module(_ember_c931b27d036f5545_module)
-    except BaseException:
-        for _ember_c931b27d036f5545_alias in _ember_c931b27d036f5545_aliases:
-            if _ember_c931b27d036f5545_sys.modules.get(_ember_c931b27d036f5545_alias) is _ember_c931b27d036f5545_module:
-                _ember_c931b27d036f5545_sys.modules.pop(_ember_c931b27d036f5545_alias, None)
-        raise
-for _ember_c931b27d036f5545_alias in _ember_c931b27d036f5545_aliases:
-    _ember_c931b27d036f5545_prior = _ember_c931b27d036f5545_sys.modules.get(_ember_c931b27d036f5545_alias)
-    if _ember_c931b27d036f5545_prior is not None and _ember_c931b27d036f5545_prior is not _ember_c931b27d036f5545_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py')
-    _ember_c931b27d036f5545_sys.modules[_ember_c931b27d036f5545_alias] = _ember_c931b27d036f5545_module
-a1_authority_fixtures = _ember_c931b27d036f5545_module
-# issue2015 exact-local-import-end:tests/ember_restart_model/domain-governance/test_a1_certified_launch.py
+from . import test_a1_certified_launch as a1_authority_fixtures
 from . import test_certified_train_launch as launch_fixtures
 
 
@@ -258,13 +215,13 @@ def test_mint_a3_run_receipt_passes_both_real_downstream_consumers() -> None:
         ).hexdigest()
         unsigned = {key: value for key, value in doc.items() if key != "receipt_sha256"}
         # Self-digest convention: compact JSON, no trailing newline, ensure_ascii
-        # False -- matching src/ember/governance/scripts/r1_e8_validator.py's `_self_digest` exactly
+        # False -- matching scripts/r1_e8_validator.py's `_self_digest` exactly
         # (see fix(training): align matched-A3 self-digest convention, #1464).
         assert doc["receipt_sha256"] == hashlib.sha256(
             json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
-        # Real consumer 1 (bare check): src/ember/governance/scripts/r1_e8_validator.py's own
+        # Real consumer 1 (bare check): scripts/r1_e8_validator.py's own
         # _validate_run, unmocked. Does not check digest format on its own.
         validator = _load_validator()
         validator._validate_run(doc, arm="A3", tier=None, t06=T06)  # must not raise
@@ -277,7 +234,7 @@ def test_one_minted_a3_receipt_passes_both_full_real_pipelines_unmocked() -> Non
     must satisfy BOTH real full pipelines that actually reopen and
     self-digest a matched A3 run receipt in production:
 
-      (a) src/ember/governance/scripts/r1_e8_validator.py's `_reopen_ref(..., self_digest=True)`,
+      (a) scripts/r1_e8_validator.py's `_reopen_ref(..., self_digest=True)`,
           the exact call `validate_e8` makes on the a3_run reference -- NOT
           the bare `_validate_run`, which never checks digest format.
       (b) certified_train_launch.py's matched-A3 verification, reached
@@ -314,7 +271,7 @@ def test_one_minted_a3_receipt_passes_both_full_real_pipelines_unmocked() -> Non
             }
         )
 
-        # (a) src/ember/governance/scripts/r1_e8_validator.py's real self-digest-checking reopen.
+        # (a) scripts/r1_e8_validator.py's real self-digest-checking reopen.
         minted_sha256 = hashlib.sha256(matched_path.read_bytes()).hexdigest()
         doc, digest = validator._reopen_ref(
             matched_path.parent,

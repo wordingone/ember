@@ -6,7 +6,7 @@
   "exceptions": [
     {
       "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "9330cf72f931825637622868e75f7730be64c6a2ed0fd05b536a232149897a30",
+      "sha256": "ce71f9eb2c3f985fb09d6a60fb98a78b5ea22c51d196ed7f068c2e982d038f68",
       "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     }
   ]
