@@ -7507,7 +7507,7 @@
         {
           "blob_sha1": "cfac3f8838e68365abb5108fe807aa6b8b650efa",
           "line": 6,
-          "path": "scripts/ember_totality/test_c_anat.py"
+          "path": "src/ember/governance/scripts/ember_totality/test_c_anat.py"
         },
         {
           "blob_sha1": "ba9529aa7bdebec379c4d7070d5a9733fd596417",
@@ -9731,7 +9731,7 @@
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 148,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "70e2063565d6e9e815938f810d0a41c40cdd62d4",
@@ -12618,12 +12618,12 @@
         {
           "blob_sha1": "6c1c61cf0f4ece7fc09b940388dcc6f2a75647db",
           "line": 236,
-          "path": "scripts/ember_totality/test_c0.py"
+          "path": "src/ember/governance/scripts/ember_totality/test_c0.py"
         },
         {
           "blob_sha1": "6c1c61cf0f4ece7fc09b940388dcc6f2a75647db",
           "line": 532,
-          "path": "scripts/ember_totality/test_c0.py"
+          "path": "src/ember/governance/scripts/ember_totality/test_c0.py"
         },
         {
           "blob_sha1": "3b48c7a6f64d8848548ff94697153e0578c984c6",
@@ -14769,7 +14769,7 @@
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 148,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "70e2063565d6e9e815938f810d0a41c40cdd62d4",
@@ -18563,7 +18563,7 @@
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 148,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "b642c17b562818ae7ce11a7faba59a40a9817480",
@@ -18816,22 +18816,22 @@
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 3,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 148,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 150,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "bfa3b6c9c1efb21b0a81584bbf5f3d4264861694",
           "line": 177,
-          "path": "scripts/a1_exclusion_amendment.py"
+          "path": "src/ember/governance/scripts/a1_exclusion_amendment.py"
         },
         {
           "blob_sha1": "70e2063565d6e9e815938f810d0a41c40cdd62d4",

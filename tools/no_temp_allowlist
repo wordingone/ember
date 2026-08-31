@@ -19,8 +19,8 @@
 # One relative POSIX path per line (matches src/ember/infrastructure/tools/check_no_temp.py's file-level
 # grain — a file with any covered temp-primitive match must appear here or the
 # gate fails closed).
-scripts/c04_batched_ns5_bench.py
-scripts/c04_eager_bf16_throughput.py
+src/ember/governance/scripts/c04_batched_ns5_bench.py
+src/ember/governance/scripts/c04_eager_bf16_throughput.py
 scripts/c04_pretrain_prestage.py
 scripts/c8_prelaunch/compute_mde.py
 scripts/c8_prelaunch/f2_schedule_generator.py
@@ -38,7 +38,7 @@ src/ember/governance/scripts/corpus_patch_encode.py
 scripts/e1b_pair_assemble.py
 src/ember/governance/scripts/ember_avir_harness.py
 scripts/ember_avir_tasks.py
-scripts/ember_c_e2b_founder_likeness.py
+src/ember/governance/scripts/ember_c_e2b_founder_likeness.py
 scripts/ember_candidate_generator_selftest.py
 scripts/ember_cbase_avir_augment.py
 scripts/ember_cbase_avir_data.py
@@ -51,7 +51,7 @@ scripts/ember_ceff_composition_ab.py
 scripts/ember_d3_broader_multifamily_admission_selftest.py
 scripts/ember_d3_broader_multifamily_loop_selftest.py
 scripts/ember_d3_generalized_candidate_exec_selftest.py
-scripts/ember_e2b_surpass_run.py
+src/ember/governance/scripts/ember_e2b_surpass_run.py
 scripts/ember_gate_backend_coordinator_agents_selftest.py
 scripts/ember_gate_cleanroom_inventory_selftest.py
 scripts/ember_gate_cleanroom_legal_boundary.py

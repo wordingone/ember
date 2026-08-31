@@ -8,7 +8,7 @@ Computes the frozen conjunction verdict from the seven leg receipts:
 
     SURPASS = A1 AND A2 AND A3 AND B1 AND B2 AND B3 AND B4
 
-against the FROZEN prereg `docs/archive/pre-restart/fp33-surpass-prereg-v1.md` (the 2nd of the
+against the FROZEN prereg `docs/domains/governance/archive/pre-restart/fp33-surpass-prereg-v1.md` (the 2nd of the
 goal's two completion conditions; the 1st is ember_tally == 100%). This script
 holds the *decision logic*; the prereg holds the *contract*. The means (base
 pick, training plan) gate elsewhere (#255) and never touch this verdict.

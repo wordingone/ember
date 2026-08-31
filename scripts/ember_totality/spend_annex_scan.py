@@ -445,7 +445,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # nc2-manifest.json, not that receipt -- stays unresolvable, see exclusion note below):
 #   c12-cognitive-mode-ablation-*.json       scripts/ember_cognitive_mode_ablation.py:275
 #     out_path = out_dir / f"c12-cognitive-mode-ablation-{receipt['ts']}.json"
-#   cuda-graph-ab-*.json                     scripts/cuda_graph_ab.py:495
+#   cuda-graph-ab-*.json                     src/ember/governance/scripts/cuda_graph_ab.py:495
 #     out = os.path.join(RECEIPTS, f"cuda-graph-ab-{ts}.json")
 #   d-gate-*.json                            scripts/d_gate.py:405
 #     receipt_path = _RECEIPTS / f"d-gate-{artifact_stem}-{ts}.json"
@@ -462,7 +462,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp33-e5-fp8-bench-*.json                 scripts/fp33_e5_fp8_bench.py:255
 #   fp33-fp8-linear-ab-*.json                scripts/fp33_fp8_linear_ab.py:380
 #   fp33-p1-native-fp8-probe-*.json          scripts/fp33_p1_native_fp8_probe.py:164
-#   fp35-fused-muon-kernel-ab-*.json         scripts/fp35_fused_muon_kernel_ab.py:545 (distinct from
+#   fp35-fused-muon-kernel-ab-*.json         src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py:545 (distinct from
 #     fp35-fused-muon-ab-*.json, no "kernel" -- that one has NO confirmed writer, excluded below)
 #   fp35d-k4096-steady-state-*.json          scripts/fp35d_k4096_steady_state.py:216
 #   fp35g-width-cond-fp8-ab-*.json           scripts/fp35g_width_cond_fp8_ab.py:484
@@ -553,7 +553,7 @@ CONVENTION_MAP = [
     # --- second pass (gh issue #17 follow-up, 2026-07-03) ---
     # spend-annex-*.json deliberately NOT mapped here -- see comment above CONVENTION_MAP.
     (re.compile(r"^c12-cognitive-mode-ablation-.*\.json$"), "scripts/ember_cognitive_mode_ablation.py"),
-    (re.compile(r"^cuda-graph-ab-.*\.json$"), "scripts/cuda_graph_ab.py"),
+    (re.compile(r"^cuda-graph-ab-.*\.json$"), "src/ember/governance/scripts/cuda_graph_ab.py"),
     (re.compile(r"^d-gate-.*\.json$"), "scripts/d_gate.py"),
     (re.compile(r"^density-ab-verdict-.*\.json$"), "scripts/density_ab_verdict.py"),
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
@@ -566,7 +566,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp33-e5-fp8-bench-.*\.json$"), "scripts/fp33_e5_fp8_bench.py"),
     (re.compile(r"^fp33-fp8-linear-ab-.*\.json$"), "scripts/fp33_fp8_linear_ab.py"),
     (re.compile(r"^fp33-p1-native-fp8-probe-.*\.json$"), "scripts/fp33_p1_native_fp8_probe.py"),
-    (re.compile(r"^fp35-fused-muon-kernel-ab-.*\.json$"), "scripts/fp35_fused_muon_kernel_ab.py"),
+    (re.compile(r"^fp35-fused-muon-kernel-ab-.*\.json$"), "src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py"),
     (re.compile(r"^fp35d-k4096-steady-state-.*\.json$"), "scripts/fp35d_k4096_steady_state.py"),
     (re.compile(r"^fp35g-width-cond-fp8-ab-.*\.json$"), "scripts/fp35g_width_cond_fp8_ab.py"),
     (re.compile(r"^fp38-l9-flash-ab-.*\.json$"), "scripts/fp38_l9_flash_ab.py"),
@@ -757,7 +757,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "receipts/fp32-step-econ-20260612T213856Z.json, "
      "receipts/fp35c-weight-cache-ab-20260612T214509Z.json and "
      "docs/domains/governance/archive/pre-restart/compute-ceiling-program-v1.md -- no .py file in that commit; distinct from the "
-     "resolvable fp35-fused-muon-KERNEL-ab-*.json (scripts/fp35_fused_muon_kernel_ab.py)."),
+     "resolvable fp35-fused-muon-KERNEL-ab-*.json (src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py)."),
     (re.compile(r"^assembly-sha-as-manifest-adjudication-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: schema=='adjudication/v1', kind=='field_semantics' -- "
      "a hand-typed disposition of a historical field-semantics question, not a script output."),

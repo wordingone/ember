@@ -170,7 +170,7 @@ ROWS = (
                   ("docs/archive/pre-restart/sp6-duty-battery-encodings.jsonl", 1),
                   ("docs/archive/pre-restart/sp6c-seat-adapter-v0.md", 1),
                   ("docs/archive/pre-restart/sp6b-designation-rule-v0.md", 1),
-                  ("docs/archive/pre-restart/sp6b-duty-battery-spec-v1.md", 1))},
+                  ("docs/domains/governance/archive/pre-restart/sp6b-duty-battery-spec-v1.md", 1))},
     {"id": 11, "condition": "B-leg seats bound: shakedown receipts for "
                             "BOTH seats (E2B + ember), template hash pinned",
      "requires": (("receipts/sp6c-e2b-shakedown-*.json", 1),
@@ -185,7 +185,7 @@ ROWS = (
      # satisfy this row.
      "requires": (("receipts/b-run-designation-*.json", 1),
                   ("receipts/sp6b-b-run-*.json", 1,
-                   {"battery_sha256": "docs/archive/pre-restart/sp6b-duty-battery-spec-v1.md"}))},
+                   {"battery_sha256": "docs/domains/governance/archive/pre-restart/sp6b-duty-battery-spec-v1.md"}))},
     # ---- the OUTCOME row (added 2026-06-13, pre-06-20 window). Rows 10-12
     # bind B-leg PROCESS (instruments frozen, seats bound, B3 executed); none
     # bind the actual surpass VERDICT. The goal's 2nd completion condition is

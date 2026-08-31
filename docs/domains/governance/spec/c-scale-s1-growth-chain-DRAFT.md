@@ -55,7 +55,7 @@ open, which is separately relevant to S1's throughput basis, not a blocker on S1
 > capability_per_compute_ratio>1, contribution_deletion_collapses_excess=true,
 > active_working_set_bytes ≤ device floor}
 
-`scripts/ember_totality/test_c_scale.py`'s `INVALID_TOKENS` (lines 54-60, quoted in full):
+`src/ember/governance/scripts/ember_totality/test_c_scale.py`'s `INVALID_TOKENS` (lines 54-60, quoted in full):
 
 ```
 INVALID_TOKENS = [
@@ -490,7 +490,7 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 
 `GOAL.md` · `docs/domains/governance/spec/conditions-v1.md` · `docs/spec/growth-v1.md` ·
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
-`docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `scripts/ember_totality/test_c_scale.py` ·
+`docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `src/ember/governance/scripts/ember_totality/test_c_scale.py` ·
 `src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·
 `scripts/timeshare_pretrain.py` · `src/ember/governance/scripts/check_goal_citations.py` ·
 `configs/v0-pretrain-config.json` ·

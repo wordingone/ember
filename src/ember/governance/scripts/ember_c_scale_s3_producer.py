@@ -118,7 +118,7 @@ sys.path.insert(0, os.path.join(LEGACY_SCRIPTS, "ember_totality"))
 import test_c_scale as c_scale           # noqa: E402 -- frozen probe, reused not reimplemented
 from receipt_write import checked_write  # noqa: E402
 
-SPEC_REF = "docs/spec/c-scale-s3-compute-protocol-v1.md"
+SPEC_REF = "docs/domains/governance/spec/c-scale-s3-compute-protocol-v1.md"
 ISSUE_REF = "#75"
 _ratio_ok = c_scale._ratio_ok  # imported directly -- never reimplemented
 

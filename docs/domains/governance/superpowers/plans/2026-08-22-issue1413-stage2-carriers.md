@@ -26,7 +26,7 @@
 **Files:**
 - Modify: `tools/ember-restart-3b/pretrain.py`
 - Modify: `tools/ember-restart-3b/run_vertical_slice.py`
-- Test: `tests/ember_restart_model/test_pretrain.py`
+- Test: `tests/ember_restart_model/domain-governance/test_pretrain.py`
 - Test: `tests/ember_restart_model/test_runner_preflight.py`
 
 1. Add failing tests proving the observer sees the actual decoded batch before mutation, does not change optimizer/cursor behavior, and is absent by default.
@@ -54,7 +54,7 @@
 - Modify: `tools/ember-restart-3b/pretrain.py`
 - Modify: `tools/ember-restart-3b/run_vertical_slice.py`
 - Test: `tests/ember_restart_model/test_training_acceleration.py`
-- Test: `tests/ember_restart_model/test_pretrain.py`
+- Test: `tests/ember_restart_model/domain-governance/test_pretrain.py`
 - Test: `tests/ember_restart_model/test_runner_preflight.py`
 
 1. In the parallel activation worktree, add failing tests for census/hash mismatch, an unapproved live signature, non-SM89, stale FP8 weights, any fallback, capture identity drift, and default-disabled behavior.

@@ -94,7 +94,7 @@
 
 **Files:**
 - Modify: `.github/workflows/ci-pr.yml`
-- Create: `docs/operations/windows-desktop-install.md`
+- Create: `docs/domains/governance/operations/windows-desktop-install.md`
 - Modify: `scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**

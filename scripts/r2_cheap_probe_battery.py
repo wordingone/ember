@@ -261,7 +261,7 @@ HISTORICAL_SPEC_DEFECTS = [
         "id": "SPEC-DEFECT-1435-A",
         "severity": "BLOCKING",
         "authority_status": "DEFERRED_BY_D-03",
-        "authority_path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+        "authority_path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
         "exit_criteria_affected": ["R2-E3", "R2-E4", "F-03"],
         "summary": (
             "the frozen cheap-probe battery is referenced as an existing, "
@@ -309,7 +309,7 @@ HISTORICAL_SPEC_DEFECTS = [
         "id": "SPEC-DEFECT-1435-B",
         "severity": "SECONDARY",
         "authority_status": "RATIFIED_BY_D-03",
-        "authority_path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+        "authority_path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
         "exit_criteria_affected": ["R2-E4"],
         "summary": (
             "R2-E4's 'one-sided lower confidence bound at level T-24' "

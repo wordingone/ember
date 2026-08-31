@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember MVP v0 closed-cycle receipt spine.
 
-This module is the local interface layer described in docs/archive/pre-restart/ember-mvp-v0.md.
+This module is the local interface layer described in docs/domains/governance/archive/pre-restart/ember-mvp-v0.md.
 It does not claim Windows Job Object isolation, real GPU training, or
 MLE-bench execution. It provides the cycle identity and validation boundary
 those later surfaces must bind to.
@@ -166,7 +166,7 @@ def _goal_doc_hashes() -> list[dict[str, str]]:
     repo_root = Path(__file__).resolve().parent.parent
     docs = [
         repo_root / "docs/archive/pre-restart/20260617-maximally-viable-product.md",
-        repo_root / "docs/archive/pre-restart/ember-mvp-v0.md",
+        repo_root / "docs/domains/governance/archive/pre-restart/ember-mvp-v0.md",
     ]
     rows: list[dict[str, str]] = []
     for path in docs:
@@ -779,7 +779,7 @@ def validate_cycle_bundle(
     state_commit: dict[str, Any],
     cycle: dict[str, Any],
 ) -> None:
-    """Validate cross-object MVP invariants from docs/archive/pre-restart/ember-mvp-v0.md."""
+    """Validate cross-object MVP invariants from docs/domains/governance/archive/pre-restart/ember-mvp-v0.md."""
     errors: list[str] = []
     cycle_id = cycle.get("cycle_id")
     for name, obj in (

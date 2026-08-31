@@ -2,7 +2,7 @@
   "schema": "ember02-r2-cheap-probe-amendment/v2",
   "issue": 1498,
   "supersedes": {
-    "path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+    "path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
     "sha256": "e95de0f81900ef76d8d7a2b81e6147e631234016262d04073913b371dbeccd56"
   },
   "decision": {

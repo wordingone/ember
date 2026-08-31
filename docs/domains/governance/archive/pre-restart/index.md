@@ -50,7 +50,7 @@ Live chain (each step fail-closed on the previous step's receipt):
    receipted curriculum-synthesis attempt (`scripts/fp29_kill_synthesis_gate.py`).
 7. **Accumulation round 1** — frozen prereg `scripts/fp27_round1_prereg.py`
    (split discipline, sampling pins, frozen verdict vocabulary);
-   persistence-gate instances in `docs/research/sp2-owned-core-persistence-gates.md`.
+   persistence-gate instances in `docs/domains/governance/research/sp2-owned-core-persistence-gates.md`.
 8. **Coverage obligation** — `scripts/fp28_v0_coverage.py` discharges the
    frozen frontier-depth obligation on the first real checkpoint eval.
 
