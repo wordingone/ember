@@ -422,9 +422,9 @@ def test_nonwindows_replay_executes_receipt_bound_interpreter(
     }]}
     results = module.run_public_commands(tmp_path, commands)
 
-    reported = Path(observed.read_text(encoding="utf-8")).resolve()
-    assert reported == bound.resolve()
-    assert reported != Path(sys.executable).resolve()
+    reported_raw = Path(observed.read_text(encoding="utf-8"))
+    assert reported_raw.resolve() == bound.resolve()
+    assert reported_raw != Path(sys.executable)
     assert Path(results[0]["host_argv"][0]).resolve() == bound.resolve()
     assert Path(results[0]["interpreter_binding"]["path"]) == Path(relative)
 
