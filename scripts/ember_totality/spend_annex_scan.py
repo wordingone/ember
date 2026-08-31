@@ -402,7 +402,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     SELFTEST_RECEIPT_PATH: pathlib.Path = RECEIPTS_DIR / f"c7-selftest-{_TS}.json"
 #   citation-check-*.json                    src/ember/governance/scripts/check_goal_citations.py:804
 #     receipt_path = RECEIPTS_DIR / f"citation-check-{receipt['timestamp']}.json"
-#   publication-gate-*.json                  scripts/check_publication_gate.py:963
+#   publication-gate-*.json                  src/ember/governance/scripts/check_publication_gate.py:963
 #     receipt_path = RECEIPTS_DIR / f"publication-gate-{receipt['ts']}.json"
 #   proof-judge-admission-*.json             scripts/proofs/judge_admission_sweep.py:686
 #     out_path = out_dir / f"proof-judge-admission-{stamp}.json"
@@ -533,7 +533,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 CONVENTION_MAP = [
     (re.compile(r"^c7-selftest-.*\.json$"), "scripts/ember_phase5_c7/c7_selftest.py"),
     (re.compile(r"^citation-check-.*\.json$"), "src/ember/governance/scripts/check_goal_citations.py"),
-    (re.compile(r"^publication-gate-.*\.json$"), "scripts/check_publication_gate.py"),
+    (re.compile(r"^publication-gate-.*\.json$"), "src/ember/governance/scripts/check_publication_gate.py"),
     (re.compile(r"^proof-judge-admission-.*\.json$"), "scripts/proofs/judge_admission_sweep.py"),
     (re.compile(r"^p-gate-.*\.json$"), "scripts/p_gate.py"),
     (re.compile(r"^training-throughput-anchor-check-all-.*\.json$"),

@@ -360,7 +360,7 @@ pre-epoch history.
 
 - **C-ENF — enforcement layer executes and coheres (gh issue #38, Class-2 cure, parent #35;
   added 2026-07-04 by maintainer per the frozen Deliverable-3 spec).** R: the standalone
-  enforcement layer (`scripts/check_publication_gate.py`, `scripts/check_energy_law_theory.py`)
+  enforcement layer (`src/ember/governance/scripts/check_publication_gate.py`, `scripts/check_energy_law_theory.py`)
   EXECUTES under the board's own run and returns coherent dual-source verdicts — a GREEN board
   can never again coexist with a silently broken, missing, or tampered enforcement layer (the
   board previously only tamper-hashed these checkers, never ran them). The condition is

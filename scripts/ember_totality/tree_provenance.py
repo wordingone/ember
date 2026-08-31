@@ -7,7 +7,7 @@
 Env-hardening (issue #1706): every git call here runs with
 ``hardened_git_env`` (system config silenced, environment-injected
 GIT_CONFIG_COUNT/KEY_*/VALUE_* stripped). Unlike
-``scripts/ember_restart/source_authority.py``'s pinned-URL binding, this
+``src/ember/governance/scripts/ember_restart/source_authority.py``'s pinned-URL binding, this
 module resolves a NAMED remote (``origin``, by default) rather than a
 literal constant, so resolving it inherently requires ``root``'s own
 repository context -- there is no "no repository context" call shape here

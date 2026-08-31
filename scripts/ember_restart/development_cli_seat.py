@@ -51,7 +51,7 @@ RUNTIME_FILES = {
     "parameter-evidence/step2-realization-receipt.json",
     "parameter-evidence/trusted-verifiers.json",
     "scripts/ember_restart/development_cli_seat.py",
-    "scripts/ember_restart/prediction_contract.py",
+    "src/ember/governance/scripts/ember_restart/prediction_contract.py",
     "scripts/ember_restart_eval_checkpoint_consumer.py",
     "scripts/ember_restart_eval_raw_forward.py",
     "domains/model/tokenizer/tokenizer.json",

@@ -147,7 +147,7 @@ ruled:
                  fake-quant THROUGHPUT bench (QAT arm vs bf16/ternary
                  arms) -- no checkpoint was ever saved. Dropped as a
                  target (was never real).
-    "1.22B rung-1" (docs/spec/c-scale-s1-growth-chain-DRAFT.md's OWN
+    "1.22B rung-1" (docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md's OWN
                  "rung 1" row, N=1,221,633,024 at ff=16384) -- NEVER
                  EXECUTED, priced only (pure-Python G-budget FIT estimate,
                  no CUDA). NAMING COLLISION, resolved by this ruling: the

@@ -3466,7 +3466,7 @@
       "title": "EMBER-10 — General sovereign local AI laboratory"
     },
     {
-      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-11.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
+      "description": "Canonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-11.md\n\nProgress is navigational. Completion requires the version-controlled certificate.",
       "due_on": null,
       "existing_number": 24,
       "milestone_id": "EMBER-11",
@@ -3628,7 +3628,7 @@
       "tracking_key": "roadmap-parent:EMBER-10"
     },
     {
-      "body": "<!-- ember-roadmap-parent: EMBER-11 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/roadmap/milestones/EMBER-11.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
+      "body": "<!-- ember-roadmap-parent: EMBER-11 -->\n\nCanonical contract: https://github.com/wordingone/ember/blob/master/docs/domains/governance/roadmap/milestones/EMBER-11.md\n\nThis issue tracks concrete work and evidence. Its progress does not complete or redefine the version-controlled milestone contract.\n\nNo child issue may be closed without current-master evidence for its own acceptance clauses.",
       "depends_on": [
         "roadmap-parent:EMBER-10"
       ],

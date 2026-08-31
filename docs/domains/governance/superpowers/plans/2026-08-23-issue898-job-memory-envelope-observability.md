@@ -122,7 +122,7 @@ Run the two host/launcher files together and review the execution receipt bytes.
 
 - Modify: `runtime/ember-lab/Cargo.toml`
 - Modify: `runtime/ember-lab/src/lib.rs`
-- Modify: `runtime/ember-lab/tests/control_plane.rs` or colocated unit tests
+- Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs` or colocated unit tests
 
 ### Step 1: Write failing pure event tests
 

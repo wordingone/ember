@@ -96,7 +96,7 @@ These numeric gates are only a fail-closed minimum that prevents a random or few
 
 - exactly one checkpoint-bound `MEASURED` external-evaluation receipt for each of text, image, audio, reasoning, and typed tools; every receipt binds benchmark ID/version, split, harness, protocol, raw predictions, score artifact, nonzero sample count, finite numeric metrics, and a capability-specific `PASSED` criterion; the exact local verifier bytes must be externally trusted for that criterion and are executed with fixed arguments against those artifacts, with output required to match the receipt;
 - raw predictions use the closed `ember-owned-predictions-v1` envelope validated by
-  `scripts/ember_restart/prediction_contract.py`. The envelope binds the exact checkpoint
+  `src/ember/governance/scripts/ember_restart/prediction_contract.py`. The envelope binds the exact checkpoint
   manifest, model config, owned tokenizer, inference implementation bytes, benchmark,
   version, capability, split, protocol, decoding parameters, per-row input hashes,
   generated token IDs, stop reasons, and typed outputs. Decoding must be greedy and

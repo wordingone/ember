@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w1c_certification_e2e.py -- Tier-2 synthetic end-to-end pipeline for the
 #372 W1c certification re-scope (RE-SCOPE RULING, issue #374 comment
 4920277395). Proves the FULL production wiring is correct on a small
@@ -46,7 +49,50 @@ from w2_heldout.corpus_boilerplate_bloom import BoilerplateBloomIndex  # noqa: E
 from w2_heldout.certify_heldout_batch import HeldoutCertifier  # noqa: E402
 
 try:
-    from scripts.lib.invariant import stamp as stamp_invariant
+    # issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
+    import importlib.util as _ember_2560a87c017c05b0_importlib
+    import sys as _ember_2560a87c017c05b0_sys
+    from pathlib import Path as _ember_2560a87c017c05b0_Path
+    _ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+    if not _ember_2560a87c017c05b0_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')
+    _ember_2560a87c017c05b0_existing = []
+    for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+        _ember_2560a87c017c05b0_candidate = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+        if _ember_2560a87c017c05b0_candidate is not None and all(_ember_2560a87c017c05b0_candidate is not item for item in _ember_2560a87c017c05b0_existing):
+            _ember_2560a87c017c05b0_existing.append(_ember_2560a87c017c05b0_candidate)
+    if len(_ember_2560a87c017c05b0_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+    if _ember_2560a87c017c05b0_existing:
+        _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_existing[0]
+        _ember_2560a87c017c05b0_observed = getattr(_ember_2560a87c017c05b0_module, '__file__', None)
+        if _ember_2560a87c017c05b0_observed is None or _ember_2560a87c017c05b0_Path(_ember_2560a87c017c05b0_observed).resolve() != _ember_2560a87c017c05b0_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/lib/invariant.py')
+    else:
+        _ember_2560a87c017c05b0_spec = _ember_2560a87c017c05b0_importlib.spec_from_file_location('_ember_issue2015_2560a87c017c05b0', _ember_2560a87c017c05b0_path)
+        if _ember_2560a87c017c05b0_spec is None or _ember_2560a87c017c05b0_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/lib/invariant.py')
+        _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_importlib.module_from_spec(_ember_2560a87c017c05b0_spec)
+        for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+            _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+            if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+            _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+        try:
+            _ember_2560a87c017c05b0_spec.loader.exec_module(_ember_2560a87c017c05b0_module)
+        except BaseException:
+            for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+                if _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias) is _ember_2560a87c017c05b0_module:
+                    _ember_2560a87c017c05b0_sys.modules.pop(_ember_2560a87c017c05b0_alias, None)
+            raise
+    for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+        _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+        if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+        _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+    stamp_invariant = getattr(_ember_2560a87c017c05b0_module, 'stamp')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/lib/invariant.py
 except Exception:  # noqa: BLE001 -- disclose, never silently omit
     stamp_invariant = None
 

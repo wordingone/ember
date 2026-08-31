@@ -66,7 +66,7 @@ Include access masks, diff, hashes, and raw tests.
 **Files:**
 - Modify: `runtime/ember-lab/src/lib.rs:6999-7044`
 - Modify: `runtime/ember-lab/src/lib.rs:11521-11643`
-- Modify: `runtime/ember-lab/tests/control_plane.rs` beside reconciliation tests
+- Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs` beside reconciliation tests
 
 **Interfaces:**
 - Consumes: `open_verified_owned_job`, `write_content_addressed_receipt`, `job_process_row_from_connection`, and exact lease/state SQL fences.
@@ -132,7 +132,7 @@ Include one exact decision receipt's raw/self hashes and JSON, event rows, proce
 
 **Files:**
 - Verify: `runtime/ember-lab/src/lib.rs`
-- Verify: `runtime/ember-lab/tests/control_plane.rs`
+- Verify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs`
 - Verify: `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 **Interfaces:**

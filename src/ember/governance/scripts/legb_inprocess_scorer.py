@@ -154,12 +154,12 @@ coordinator-gated per the original mission's GPU/full-corpus exclusion, see
 module docstring spec item 7). Never fires GPU.
 
 Usage:
-  python scripts/legb_inprocess_scorer.py --selftest
-  python scripts/legb_inprocess_scorer.py --live-cpu-doc \\
+  python src/ember/governance/scripts/legb_inprocess_scorer.py --selftest
+  python src/ember/governance/scripts/legb_inprocess_scorer.py --live-cpu-doc \\
       --checkpoint-dir <step50 custody dir> \\
       --tokenizer-path <custody tokenizer.json path> \\
       --out receipts/legb-scorer/legb-scorer-live-cpu-doc-<UTCts>.json
-  python scripts/legb_inprocess_scorer.py --evaluator-run --limit 5 \\
+  python src/ember/governance/scripts/legb_inprocess_scorer.py --evaluator-run --limit 5 \\
       --checkpoint-dir <step50 custody dir> \\
       --tokenizer-path <custody tokenizer.json path> \\
       --out receipts/legb-scorer/legb-scorer-evaluator-run-<UTCts>.json
@@ -187,9 +187,52 @@ from lm_eval.api.model import LM  # noqa: E402 -- reused abstract base
 from w1_collapse_control_run import (  # noqa: E402 -- reused, never edited
     sha256_file, build_real_model, verify_checkpoint_key_shape_parity,
 )
-from timeshare_pretrain import (  # noqa: E402 -- reused, never edited
-    load_checkpoint, save_checkpoint, capture_rng,
-)
+# issue2015 exact-local-import:scripts/timeshare_pretrain.py
+import importlib.util as _ember_d9c5c82c124e1dc8_importlib
+import sys as _ember_d9c5c82c124e1dc8_sys
+from pathlib import Path as _ember_d9c5c82c124e1dc8_Path
+_ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parents[4].joinpath('scripts', 'timeshare_pretrain.py')
+if not _ember_d9c5c82c124e1dc8_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/timeshare_pretrain.py')
+_ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'scripts.timeshare_pretrain', 'timeshare_pretrain')
+_ember_d9c5c82c124e1dc8_existing = []
+for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+    _ember_d9c5c82c124e1dc8_candidate = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
+    if _ember_d9c5c82c124e1dc8_candidate is not None and all(_ember_d9c5c82c124e1dc8_candidate is not item for item in _ember_d9c5c82c124e1dc8_existing):
+        _ember_d9c5c82c124e1dc8_existing.append(_ember_d9c5c82c124e1dc8_candidate)
+if len(_ember_d9c5c82c124e1dc8_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/timeshare_pretrain.py')
+if _ember_d9c5c82c124e1dc8_existing:
+    _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_existing[0]
+    _ember_d9c5c82c124e1dc8_observed = getattr(_ember_d9c5c82c124e1dc8_module, '__file__', None)
+    if _ember_d9c5c82c124e1dc8_observed is None or _ember_d9c5c82c124e1dc8_Path(_ember_d9c5c82c124e1dc8_observed).resolve() != _ember_d9c5c82c124e1dc8_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/timeshare_pretrain.py')
+else:
+    _ember_d9c5c82c124e1dc8_spec = _ember_d9c5c82c124e1dc8_importlib.spec_from_file_location('_ember_issue2015_d9c5c82c124e1dc8', _ember_d9c5c82c124e1dc8_path)
+    if _ember_d9c5c82c124e1dc8_spec is None or _ember_d9c5c82c124e1dc8_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/timeshare_pretrain.py')
+    _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_importlib.module_from_spec(_ember_d9c5c82c124e1dc8_spec)
+    for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+        _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
+        if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
+    try:
+        _ember_d9c5c82c124e1dc8_spec.loader.exec_module(_ember_d9c5c82c124e1dc8_module)
+    except BaseException:
+        for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+            if _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias) is _ember_d9c5c82c124e1dc8_module:
+                _ember_d9c5c82c124e1dc8_sys.modules.pop(_ember_d9c5c82c124e1dc8_alias, None)
+        raise
+for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+    _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
+    if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+    _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
+load_checkpoint = getattr(_ember_d9c5c82c124e1dc8_module, 'load_checkpoint')
+save_checkpoint = getattr(_ember_d9c5c82c124e1dc8_module, 'save_checkpoint')
+capture_rng = getattr(_ember_d9c5c82c124e1dc8_module, 'capture_rng')
+# issue2015 exact-local-import-end:scripts/timeshare_pretrain.py
 from a1_predicate_scan import load_stripped_tokenizer  # noqa: E402 -- reused
 from exp711_intervals import _wire_bytelevel_decoder  # noqa: E402 -- reused
 from receipt_write import checked_write  # noqa: E402
@@ -787,7 +830,50 @@ def device_lease(requested_device: str):
         yield
         return
     try:
-        import gpu_lock_guard
+        # issue2015 exact-local-import:scripts/gpu_lock_guard.py
+        import importlib.util as _ember_bde3ce9b68d78728_importlib
+        import sys as _ember_bde3ce9b68d78728_sys
+        from pathlib import Path as _ember_bde3ce9b68d78728_Path
+        _ember_bde3ce9b68d78728_path = _ember_bde3ce9b68d78728_Path(__file__).resolve().parents[4].joinpath('scripts', 'gpu_lock_guard.py')
+        if not _ember_bde3ce9b68d78728_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/gpu_lock_guard.py')
+        _ember_bde3ce9b68d78728_aliases = ('_ember_issue2015_bde3ce9b68d78728', 'gpu_lock_guard', 'scripts.gpu_lock_guard')
+        _ember_bde3ce9b68d78728_existing = []
+        for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
+            _ember_bde3ce9b68d78728_candidate = _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias)
+            if _ember_bde3ce9b68d78728_candidate is not None and all(_ember_bde3ce9b68d78728_candidate is not item for item in _ember_bde3ce9b68d78728_existing):
+                _ember_bde3ce9b68d78728_existing.append(_ember_bde3ce9b68d78728_candidate)
+        if len(_ember_bde3ce9b68d78728_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/gpu_lock_guard.py')
+        if _ember_bde3ce9b68d78728_existing:
+            _ember_bde3ce9b68d78728_module = _ember_bde3ce9b68d78728_existing[0]
+            _ember_bde3ce9b68d78728_observed = getattr(_ember_bde3ce9b68d78728_module, '__file__', None)
+            if _ember_bde3ce9b68d78728_observed is None or _ember_bde3ce9b68d78728_Path(_ember_bde3ce9b68d78728_observed).resolve() != _ember_bde3ce9b68d78728_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/gpu_lock_guard.py')
+        else:
+            _ember_bde3ce9b68d78728_spec = _ember_bde3ce9b68d78728_importlib.spec_from_file_location('_ember_issue2015_bde3ce9b68d78728', _ember_bde3ce9b68d78728_path)
+            if _ember_bde3ce9b68d78728_spec is None or _ember_bde3ce9b68d78728_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/gpu_lock_guard.py')
+            _ember_bde3ce9b68d78728_module = _ember_bde3ce9b68d78728_importlib.module_from_spec(_ember_bde3ce9b68d78728_spec)
+            for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
+                _ember_bde3ce9b68d78728_prior = _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias)
+                if _ember_bde3ce9b68d78728_prior is not None and _ember_bde3ce9b68d78728_prior is not _ember_bde3ce9b68d78728_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/gpu_lock_guard.py')
+                _ember_bde3ce9b68d78728_sys.modules[_ember_bde3ce9b68d78728_alias] = _ember_bde3ce9b68d78728_module
+            try:
+                _ember_bde3ce9b68d78728_spec.loader.exec_module(_ember_bde3ce9b68d78728_module)
+            except BaseException:
+                for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
+                    if _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias) is _ember_bde3ce9b68d78728_module:
+                        _ember_bde3ce9b68d78728_sys.modules.pop(_ember_bde3ce9b68d78728_alias, None)
+                raise
+        for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
+            _ember_bde3ce9b68d78728_prior = _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias)
+            if _ember_bde3ce9b68d78728_prior is not None and _ember_bde3ce9b68d78728_prior is not _ember_bde3ce9b68d78728_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/gpu_lock_guard.py')
+            _ember_bde3ce9b68d78728_sys.modules[_ember_bde3ce9b68d78728_alias] = _ember_bde3ce9b68d78728_module
+        gpu_lock_guard = _ember_bde3ce9b68d78728_module
+        # issue2015 exact-local-import-end:scripts/gpu_lock_guard.py
     except ImportError as e:
         raise LegBScorerRefusal(
             f"LEGB_SCORER_GPU_LOCK_GUARD_IMPORT_FAILED: {e}") from e

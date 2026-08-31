@@ -26,7 +26,7 @@ else.
   },
   "executed_commands": [
     "bash <custody>/census-assembly-20260802/run9b.sh",
-    "python -B scripts/verify_ember01_completion.py --root <custody>/ember01-verify --selection <custody>/EMBER-GOAL-RESUME.md --receipt receipt9.json --run-custody --issue-census issue-census9.json <16 ROOT bindings> --run-seat --identity-manifest bundle_v2/model-identity.json --checkpoint-manifest bundle_v2/checkpoint/checkpoint-manifest.json --model-config bundle_v2/config.json"
+    "python -B src/ember/governance/scripts/verify_ember01_completion.py --root <custody>/ember01-verify --selection <custody>/EMBER-GOAL-RESUME.md --receipt receipt9.json --run-custody --issue-census issue-census9.json <16 ROOT bindings> --run-seat --identity-manifest bundle_v2/model-identity.json --checkpoint-manifest bundle_v2/checkpoint/checkpoint-manifest.json --model-config bundle_v2/config.json"
   ],
   "node_id": "EMBER-01",
   "public_commit_sha1": "323be9da58a7527f3526d4a9a839ae2b5765bfd1",
@@ -76,7 +76,7 @@ exact hash.
 The milestone contract's completion certificate
 (`docs/roadmap/milestones/EMBER-01.md`, clauses `EMBER-01.CERT.002` through
 `EMBER-01.CERT.010`) defines nine legs. The verifier
-(`scripts/verify_ember01_completion.py`) evaluates them in contract order;
+(`src/ember/governance/scripts/verify_ember01_completion.py`) evaluates them in contract order;
 every leg resolved true in the certifying run:
 
 | # | Verifier leg | Contract clause |
@@ -105,7 +105,7 @@ available, nothing more.
 The verifier is public. From a clean detached checkout, the certifying command
 shape is:
 
-    python -B scripts/verify_ember01_completion.py --root <checkout> \
+    python -B src/ember/governance/scripts/verify_ember01_completion.py --root <checkout> \
       --selection <operator goal selection> --receipt <receipt.json> \
       --run-custody --issue-census <census.json> <ROOT bindings> --run-seat \
       --identity-manifest bundle_v2/model-identity.json \

@@ -1983,7 +1983,7 @@ def _rewrite_completion(
 
 class ProducerSchemaBindingTest(unittest.TestCase):
     """Bind the consumer's completion-receipt expectations to the REAL
-    producer (scripts/verify_ember01_completion.py) so schema drift breaks CI
+    producer (src/ember/governance/scripts/verify_ember01_completion.py) so schema drift breaks CI
     instead of the launch (issue #1300)."""
 
     def test_leg_state_constant_matches_producer(self) -> None:

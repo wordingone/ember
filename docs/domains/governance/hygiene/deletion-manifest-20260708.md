@@ -70,7 +70,7 @@ categorized conclusions.
 
 ## A. `docs/` — 205 tracked, 52 zero-reference
 
-Of the 52, one (`docs/archive/pre-restart/index.md`) is a repo entry point — by nature
+Of the 52, one (`docs/domains/governance/archive/pre-restart/index.md`) is a repo entry point — by nature
 everything links *from* it, nothing links *to* it by filename; excluded as
 a structural false positive, not proposed.
 

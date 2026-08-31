@@ -13,7 +13,7 @@
       "path": "scripts/cbase_grow_rung.py",
       "classification": "historical_only",
       "import_outcome": "execution_denied_by_own_guard",
-      "sha256": "5bede8b26c447353c142347d08a3bac7a6a1ab5ca91a9592794353f4c2ebf5a2",
+      "sha256": "7c03aaaf61e2f986a184210d4bcb176a383a9d9cdc6be68f2cfe41fc7068a5be",
       "module_scope": false,
       "nested_import_count": 2
     },

@@ -52,18 +52,100 @@ sys.path.insert(
 from issue_census import canonical_open_issue_source_snapshot
 
 # Leg 8 imports the SAME authority function verify_ember00_completion.py uses.
-from verify_authority_conservation import (
-    ACTIVE_GOAL_ID,
-    ACTIVE_WORKSTREAM_IDS,
-    NEXT_EXECUTED_OUTCOME,
-    verify,
-)
+# issue2015 exact-local-import:scripts/verify_authority_conservation.py
+import importlib.util as _ember_6684f8b7ce199219_importlib
+import sys as _ember_6684f8b7ce199219_sys
+from pathlib import Path as _ember_6684f8b7ce199219_Path
+_ember_6684f8b7ce199219_path = _ember_6684f8b7ce199219_Path(__file__).resolve().parents[4].joinpath('scripts', 'verify_authority_conservation.py')
+if not _ember_6684f8b7ce199219_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/verify_authority_conservation.py')
+_ember_6684f8b7ce199219_aliases = ('_ember_issue2015_6684f8b7ce199219', 'scripts.verify_authority_conservation', 'verify_authority_conservation')
+_ember_6684f8b7ce199219_existing = []
+for _ember_6684f8b7ce199219_alias in _ember_6684f8b7ce199219_aliases:
+    _ember_6684f8b7ce199219_candidate = _ember_6684f8b7ce199219_sys.modules.get(_ember_6684f8b7ce199219_alias)
+    if _ember_6684f8b7ce199219_candidate is not None and all(_ember_6684f8b7ce199219_candidate is not item for item in _ember_6684f8b7ce199219_existing):
+        _ember_6684f8b7ce199219_existing.append(_ember_6684f8b7ce199219_candidate)
+if len(_ember_6684f8b7ce199219_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/verify_authority_conservation.py')
+if _ember_6684f8b7ce199219_existing:
+    _ember_6684f8b7ce199219_module = _ember_6684f8b7ce199219_existing[0]
+    _ember_6684f8b7ce199219_observed = getattr(_ember_6684f8b7ce199219_module, '__file__', None)
+    if _ember_6684f8b7ce199219_observed is None or _ember_6684f8b7ce199219_Path(_ember_6684f8b7ce199219_observed).resolve() != _ember_6684f8b7ce199219_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/verify_authority_conservation.py')
+else:
+    _ember_6684f8b7ce199219_spec = _ember_6684f8b7ce199219_importlib.spec_from_file_location('_ember_issue2015_6684f8b7ce199219', _ember_6684f8b7ce199219_path)
+    if _ember_6684f8b7ce199219_spec is None or _ember_6684f8b7ce199219_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/verify_authority_conservation.py')
+    _ember_6684f8b7ce199219_module = _ember_6684f8b7ce199219_importlib.module_from_spec(_ember_6684f8b7ce199219_spec)
+    for _ember_6684f8b7ce199219_alias in _ember_6684f8b7ce199219_aliases:
+        _ember_6684f8b7ce199219_prior = _ember_6684f8b7ce199219_sys.modules.get(_ember_6684f8b7ce199219_alias)
+        if _ember_6684f8b7ce199219_prior is not None and _ember_6684f8b7ce199219_prior is not _ember_6684f8b7ce199219_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/verify_authority_conservation.py')
+        _ember_6684f8b7ce199219_sys.modules[_ember_6684f8b7ce199219_alias] = _ember_6684f8b7ce199219_module
+    try:
+        _ember_6684f8b7ce199219_spec.loader.exec_module(_ember_6684f8b7ce199219_module)
+    except BaseException:
+        for _ember_6684f8b7ce199219_alias in _ember_6684f8b7ce199219_aliases:
+            if _ember_6684f8b7ce199219_sys.modules.get(_ember_6684f8b7ce199219_alias) is _ember_6684f8b7ce199219_module:
+                _ember_6684f8b7ce199219_sys.modules.pop(_ember_6684f8b7ce199219_alias, None)
+        raise
+for _ember_6684f8b7ce199219_alias in _ember_6684f8b7ce199219_aliases:
+    _ember_6684f8b7ce199219_prior = _ember_6684f8b7ce199219_sys.modules.get(_ember_6684f8b7ce199219_alias)
+    if _ember_6684f8b7ce199219_prior is not None and _ember_6684f8b7ce199219_prior is not _ember_6684f8b7ce199219_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/verify_authority_conservation.py')
+    _ember_6684f8b7ce199219_sys.modules[_ember_6684f8b7ce199219_alias] = _ember_6684f8b7ce199219_module
+ACTIVE_GOAL_ID = getattr(_ember_6684f8b7ce199219_module, 'ACTIVE_GOAL_ID')
+ACTIVE_WORKSTREAM_IDS = getattr(_ember_6684f8b7ce199219_module, 'ACTIVE_WORKSTREAM_IDS')
+NEXT_EXECUTED_OUTCOME = getattr(_ember_6684f8b7ce199219_module, 'NEXT_EXECUTED_OUTCOME')
+verify = getattr(_ember_6684f8b7ce199219_module, 'verify')
+# issue2015 exact-local-import-end:scripts/verify_authority_conservation.py
 from ember_01_identity import validate_identity as identity_validator
-from ember_01_identity.parameter_identity_binding import (
-    ParameterIdentityMismatch,
-    measure_live_checkpoint,
-    verify_parameter_identity_binding,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py
+import importlib.util as _ember_bbbf7b42c6105c50_importlib
+import sys as _ember_bbbf7b42c6105c50_sys
+from pathlib import Path as _ember_bbbf7b42c6105c50_Path
+_ember_bbbf7b42c6105c50_path = _ember_bbbf7b42c6105c50_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'parameter_identity_binding.py')
+if not _ember_bbbf7b42c6105c50_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py')
+_ember_bbbf7b42c6105c50_aliases = ('_ember_issue2015_bbbf7b42c6105c50', 'ember_01_identity.parameter_identity_binding', 'parameter_identity_binding', 'scripts.ember_01_identity.parameter_identity_binding')
+_ember_bbbf7b42c6105c50_existing = []
+for _ember_bbbf7b42c6105c50_alias in _ember_bbbf7b42c6105c50_aliases:
+    _ember_bbbf7b42c6105c50_candidate = _ember_bbbf7b42c6105c50_sys.modules.get(_ember_bbbf7b42c6105c50_alias)
+    if _ember_bbbf7b42c6105c50_candidate is not None and all(_ember_bbbf7b42c6105c50_candidate is not item for item in _ember_bbbf7b42c6105c50_existing):
+        _ember_bbbf7b42c6105c50_existing.append(_ember_bbbf7b42c6105c50_candidate)
+if len(_ember_bbbf7b42c6105c50_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py')
+if _ember_bbbf7b42c6105c50_existing:
+    _ember_bbbf7b42c6105c50_module = _ember_bbbf7b42c6105c50_existing[0]
+    _ember_bbbf7b42c6105c50_observed = getattr(_ember_bbbf7b42c6105c50_module, '__file__', None)
+    if _ember_bbbf7b42c6105c50_observed is None or _ember_bbbf7b42c6105c50_Path(_ember_bbbf7b42c6105c50_observed).resolve() != _ember_bbbf7b42c6105c50_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py')
+else:
+    _ember_bbbf7b42c6105c50_spec = _ember_bbbf7b42c6105c50_importlib.spec_from_file_location('_ember_issue2015_bbbf7b42c6105c50', _ember_bbbf7b42c6105c50_path)
+    if _ember_bbbf7b42c6105c50_spec is None or _ember_bbbf7b42c6105c50_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py')
+    _ember_bbbf7b42c6105c50_module = _ember_bbbf7b42c6105c50_importlib.module_from_spec(_ember_bbbf7b42c6105c50_spec)
+    for _ember_bbbf7b42c6105c50_alias in _ember_bbbf7b42c6105c50_aliases:
+        _ember_bbbf7b42c6105c50_prior = _ember_bbbf7b42c6105c50_sys.modules.get(_ember_bbbf7b42c6105c50_alias)
+        if _ember_bbbf7b42c6105c50_prior is not None and _ember_bbbf7b42c6105c50_prior is not _ember_bbbf7b42c6105c50_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py')
+        _ember_bbbf7b42c6105c50_sys.modules[_ember_bbbf7b42c6105c50_alias] = _ember_bbbf7b42c6105c50_module
+    try:
+        _ember_bbbf7b42c6105c50_spec.loader.exec_module(_ember_bbbf7b42c6105c50_module)
+    except BaseException:
+        for _ember_bbbf7b42c6105c50_alias in _ember_bbbf7b42c6105c50_aliases:
+            if _ember_bbbf7b42c6105c50_sys.modules.get(_ember_bbbf7b42c6105c50_alias) is _ember_bbbf7b42c6105c50_module:
+                _ember_bbbf7b42c6105c50_sys.modules.pop(_ember_bbbf7b42c6105c50_alias, None)
+        raise
+for _ember_bbbf7b42c6105c50_alias in _ember_bbbf7b42c6105c50_aliases:
+    _ember_bbbf7b42c6105c50_prior = _ember_bbbf7b42c6105c50_sys.modules.get(_ember_bbbf7b42c6105c50_alias)
+    if _ember_bbbf7b42c6105c50_prior is not None and _ember_bbbf7b42c6105c50_prior is not _ember_bbbf7b42c6105c50_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py')
+    _ember_bbbf7b42c6105c50_sys.modules[_ember_bbbf7b42c6105c50_alias] = _ember_bbbf7b42c6105c50_module
+ParameterIdentityMismatch = getattr(_ember_bbbf7b42c6105c50_module, 'ParameterIdentityMismatch')
+measure_live_checkpoint = getattr(_ember_bbbf7b42c6105c50_module, 'measure_live_checkpoint')
+verify_parameter_identity_binding = getattr(_ember_bbbf7b42c6105c50_module, 'verify_parameter_identity_binding')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py
 from cond4_behavior_surface import (
     COND4_AXES,
     EXECUTION_SCHEMA as COND4_EXECUTION_SCHEMA,
@@ -1093,7 +1175,7 @@ def _run_identity_tamper_battery(
         if not isinstance(row, dict) or row.get("rejected") is not True
     ]
     return {
-        "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery",
+        "tool": "src/ember/governance/scripts/verify_ember01_completion.py::cond4_tamper_battery",
         "axis_count": 8,
         "axes": evidence,
         "failures": failures,
@@ -1105,7 +1187,7 @@ def _cond4_surface_manifest(root: Path) -> dict[str, Any]:
     return build_surface_manifest(
         root,
         {
-            "scripts/verify_ember01_completion.py": {
+            "src/ember/governance/scripts/verify_ember01_completion.py": {
                 "roots": [
                     "_cond4_execution_evidence",
                     "_cond4_surface_manifest",
@@ -1135,7 +1217,7 @@ def _cond4_surface_manifest(root: Path) -> dict[str, Any]:
                     "tokenizer['tokenizer'].get",
                 ],
             },
-            "scripts/ember_01_identity/parameter_identity_binding.py": {
+            "src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py": {
                 "roots": [
                     "measure_live_checkpoint",
                     "verify_parameter_identity_binding",
@@ -1362,7 +1444,7 @@ def identity_legs(
         )
     except Exception as error:  # noqa: BLE001 - completion must fail closed
         evidence = {
-            "tool": "scripts/ember_01_identity/parameter_identity_binding.py",
+            "tool": "src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py",
             "error_type": type(error).__name__,
             "error": str(error)[-400:],
         }
@@ -1377,7 +1459,7 @@ def identity_legs(
         ).encode("utf-8")
     ).hexdigest()
     clean_evidence = {
-        "tool": "scripts/ember_01_identity/parameter_identity_binding.py",
+        "tool": "src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py",
         "checkpoint_sha256": receipt["subject_checkpoint_sha256"],
         "parameter_receipt_sha256": receipt_sha,
         "disposition": payload["identity"]["disposition"],
@@ -1404,7 +1486,7 @@ def identity_legs(
         tamper_evidence["execution_evidence"] = execution_evidence
     except Exception as error:  # noqa: BLE001 - battery itself fails closed
         tamper_evidence = {
-            "tool": "scripts/verify_ember01_completion.py::cond4_tamper_battery",
+            "tool": "src/ember/governance/scripts/verify_ember01_completion.py::cond4_tamper_battery",
             "axis_count": 8,
             "axes": {},
             "failures": ["battery_execution"],

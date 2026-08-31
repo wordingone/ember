@@ -2896,7 +2896,7 @@
             "scripts/a1_corpus_lineage.py",
             "scripts/a1_freeze_consumer.py",
             "scripts/a1_heldout_beacon_select.py",
-            "scripts/a1_predicate_scan.py",
+            "src/ember/governance/scripts/a1_predicate_scan.py",
             "scripts/a1_quarantine_enum_v2.py",
             "scripts/a1_tokenizer_errata.py",
             "scripts/a1_tokenizer_mismatch_repro.py",
@@ -3949,7 +3949,7 @@
         "scripts/a1_corpus_lineage.py",
         "scripts/a1_freeze_consumer.py",
         "scripts/a1_heldout_beacon_select.py",
-        "scripts/a1_predicate_scan.py",
+        "src/ember/governance/scripts/a1_predicate_scan.py",
         "scripts/a1_quarantine_enum_v2.py",
         "scripts/a1_tokenizer_errata.py",
         "scripts/a1_tokenizer_mismatch_repro.py",
@@ -7752,52 +7752,52 @@
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 7,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 25,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 118,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 135,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 150,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 398,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 429,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 517,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 533,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 583,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "6750869ec515cfe053a3b542f5f715236d34ea87",
@@ -8084,7 +8084,7 @@
         {
           "blob_sha1": "1c78290d7f808b46efd11917872615f318e9e921",
           "line": 4,
-          "path": "scripts/ember_totality/milestone_leg_test.py"
+          "path": "src/ember/governance/scripts/ember_totality/milestone_leg_test.py"
         },
         {
           "blob_sha1": "045fe42ba3d0018b29d6185f2e8bfc8fbc80bbb7",
@@ -9771,7 +9771,7 @@
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 668,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "ccad0fbe7ead38320bc2db00468c92c5af6646a8",
@@ -9996,17 +9996,17 @@
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 742,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 760,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 1042,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "d3973cac7807e3d53a667e387e6f783b4cfc1f1d",
@@ -14789,22 +14789,22 @@
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 4,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 648,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 668,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 669,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "017cea0e3e1d0f5bdaa8e676fb164b43d8fd544b",
@@ -18094,7 +18094,7 @@
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 668,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
@@ -18194,7 +18194,7 @@
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 668,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6af2fa31a00b7dbb2c99f67a826fc3763f53d3e8",
@@ -18573,7 +18573,7 @@
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 668,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "ccad0fbe7ead38320bc2db00468c92c5af6646a8",
@@ -18861,22 +18861,22 @@
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 2,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 31,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 549,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "6289436b0d6d511ee5821b536760fb88c6c79040",
           "line": 668,
-          "path": "scripts/a1_predicate_scan.py"
+          "path": "src/ember/governance/scripts/a1_predicate_scan.py"
         },
         {
           "blob_sha1": "ccad0fbe7ead38320bc2db00468c92c5af6646a8",
@@ -20549,7 +20549,7 @@
         {
           "blob_sha1": "6c166521485e41ef3b5c117aec61e43f12e51149",
           "line": 335,
-          "path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md"
+          "path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md"
         },
         {
           "blob_sha1": "bad5c341aa56a9312e0d6f87a85ddd4a90d75e29",
@@ -22100,12 +22100,12 @@
         {
           "blob_sha1": "1cc0aea84ec3acada25625175c6ad099ea97280c",
           "line": 1,
-          "path": "scripts/exp711_intervals.py"
+          "path": "src/ember/governance/scripts/exp711_intervals.py"
         },
         {
           "blob_sha1": "1cc0aea84ec3acada25625175c6ad099ea97280c",
           "line": 4,
-          "path": "scripts/exp711_intervals.py"
+          "path": "src/ember/governance/scripts/exp711_intervals.py"
         },
         {
           "blob_sha1": "550ac427091460f7178aee7d9cc0331ae98d81b5",
@@ -22631,12 +22631,12 @@
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 2,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 195,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "6cff8c2dc29a4c75093918f4675149b3241bc3ba",
@@ -22971,107 +22971,107 @@
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 2,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 4,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 22,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 47,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 49,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 70,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 71,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 89,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 194,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 198,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 263,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 297,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 425,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 438,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 460,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 530,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 544,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 551,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 688,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 741,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 1012,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         }
       ],
       "number": 757,
@@ -23247,17 +23247,17 @@
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 742,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 761,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "4fa78d80a432aa807d523c6448acde5a419205b3",
           "line": 1017,
-          "path": "scripts/legb_inprocess_scorer.py"
+          "path": "src/ember/governance/scripts/legb_inprocess_scorer.py"
         },
         {
           "blob_sha1": "c21d497a8f53ac59eb4d7cb21cccea44f87703c2",

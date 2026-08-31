@@ -190,7 +190,7 @@ def _load_worktree_lifecycle():
 def resolve_canonical_root() -> Path:
     """The repository that owns the executing validator bytes (self-anchor).
 
-    ``scripts/ember_restart/source_authority.py`` -> parents[1] is
+    ``src/ember/governance/scripts/ember_restart/source_authority.py`` -> parents[1] is
     ``scripts/`` -> parents[2] is repo root (same derivation gate_provenance.py
     uses for tool identity, one level shallower because that tool lives
     directly in ``scripts/``).

@@ -6,7 +6,7 @@
 ember-sparse-checkpoint-v5 candidate (issue #1433).
 
 WHY THIS FILE EXISTS (executed evidence, not assumption):
-scripts/legb_inprocess_scorer.py cannot be "re-pointed" at the live R1
+src/ember/governance/scripts/legb_inprocess_scorer.py cannot be "re-pointed" at the live R1
 candidate by swapping a path and four hashes. It is bound to a DIFFERENT
 MODEL. Measured on the live candidate at
 checkpoint-vertical-slice-seed-830001:

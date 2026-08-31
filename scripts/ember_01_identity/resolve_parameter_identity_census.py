@@ -35,7 +35,7 @@ FINDINGS (read before trusting the output blindly):
    ``tests/ember_01_identity/test_parameter_identity_roundtrip.py`` against a manifest
    bound to a REAL measured checkpoint receipt) are adjudicated as real consumers here.
    The new wiring this increment adds
-   (``scripts/ember_01_identity/parameter_identity_binding.py``,
+   (``src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py``,
    ``tools/ember-restart-3b/parameter_counter.py``) is not present in this census
    snapshot (it predates the increment); it is not claimed as resolved by this script
    and needs a fresh census run to be discovered and adjudicated in its own right.

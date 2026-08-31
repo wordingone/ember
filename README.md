@@ -110,7 +110,7 @@ public replay set.
 Exact mutable state lives in
 [`docs/authority/CONTINUITY.md`](docs/authority/CONTINUITY.md). This README links to that owner and
 does not duplicate its rapidly changing identities. Public milestone contracts and certificates
-live under the [roadmap](docs/roadmap/README.md); a certificate, not a progress bar, carries a
+live under the [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
 
 ## Documentation routes

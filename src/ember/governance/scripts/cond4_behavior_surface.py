@@ -23,7 +23,7 @@ from typing import Any, Mapping, Sequence
 
 SURFACE_SCHEMA = "ember-cond4-behavior-surface-v1"
 EXECUTION_SCHEMA = "ember-cond4-execution-evidence-v1"
-VALIDATOR_REL = "scripts/cond4_behavior_surface.py"
+VALIDATOR_REL = "src/ember/governance/scripts/cond4_behavior_surface.py"
 COND4_AXES = (
     "checkpoint_bytes",
     "param_count",

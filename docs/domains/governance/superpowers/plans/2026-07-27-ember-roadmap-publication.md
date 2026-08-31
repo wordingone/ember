@@ -52,7 +52,7 @@ GitHub REST/GraphQL through the repository's safe wrappers, Git, pytest/unittest
 ### Task 2: Publish the twelve milestone contracts
 
 **Files:**
-- Create: `docs/roadmap/README.md`
+- Create: `docs/domains/governance/roadmap/README.md`
 - Create: `docs/roadmap/milestones/EMBER-00.md` through `EMBER-11.md`
 - Create: `manifests/roadmap/clause-crosswalk-v1.json`
 - Modify: `GOAL.md`

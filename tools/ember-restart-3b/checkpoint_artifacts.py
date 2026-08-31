@@ -372,7 +372,7 @@ def _bind_checkpoint_identity(published_root: Path, receipt: Mapping[str, Any]) 
     location -- never a passed-in constant, never the pre-publish staging candidate
     -- so the identity binding proves what is actually selectable on disk. This is
     the cond3 identity manifest surface's ``checkpoint.byte_sha256`` field (same
-    convention as ``scripts/ember_01_identity/parameter_identity_binding.py``'s
+    convention as ``src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py``'s
     ``subject_checkpoint_sha256``: the checkpoint manifest file's own bytes are the
     checkpoint's identity subject). Additive -- every existing receipt field is
     preserved untouched.

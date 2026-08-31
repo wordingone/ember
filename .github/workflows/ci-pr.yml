@@ -96,7 +96,7 @@ jobs:
           python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py
           python -B scripts/docs_information_system.py check --root .
       - name: Verify POSIX owned process-tree cleanup
-        run: python -B scripts/ember_gate_process_supervision_selftest.py
+        run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   owned-process-posix:
     strategy:
       fail-fast: false
@@ -312,7 +312,7 @@ jobs:
       - name: Verify versioned desktop deployment and shortcuts
         run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/ember-desktop-deployment-selftest.ps1
       - name: Verify Windows Job Object process-tree cleanup
-        run: python -B scripts/ember_gate_process_supervision_selftest.py
+        run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
     needs: [python, owned-process-posix, rust, rust-linux-test, eval-canary-image, cli, launcher, production-rung-replay]

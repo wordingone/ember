@@ -87,7 +87,7 @@
     },
     {
       "id": "EMBER-11",
-      "contract": "docs/roadmap/milestones/EMBER-11.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-11.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-10"]
     }

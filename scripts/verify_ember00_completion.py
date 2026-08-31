@@ -198,8 +198,8 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
         ),
         (
             "condition_registry_sync",
-            [py, "-B", "scripts/ember_totality/check_registry_sync.py"],
-            ["python", "-B", "scripts/ember_totality/check_registry_sync.py"],
+            [py, "-B", "src/ember/governance/scripts/ember_totality/check_registry_sync.py"],
+            ["python", "-B", "src/ember/governance/scripts/ember_totality/check_registry_sync.py"],
         ),
         (
             "c_authority_condition",

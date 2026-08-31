@@ -85,7 +85,7 @@ SAME directory, not a move to a different directory -- a basename-
 uniqueness index can never catch it. A cited path with no such twin still
 counts `cited_missing` unchanged (negative control,
 c_custody_twin_resolution_test.py). The `documented_absent` convention
-(docs/custody/custody-disposition-20260708.md) remains a prose disposition record
+(docs/domains/governance/custody/custody-disposition-20260708.md) remains a prose disposition record
 this probe does NOT consume programmatically -- its rows stay honestly
 `cited_missing` unless resolved by a twin, a relocation, or an annex
 attestation; see that doc's dated addendum for the current tree's

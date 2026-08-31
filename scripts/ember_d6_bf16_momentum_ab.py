@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_d6_bf16_momentum_ab.py — D6 VRAM-route pricing A/B (issue #29,
-docs/spec/c-scale-s1-growth-chain-DRAFT.md §9 D6).
+docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md §9 D6).
 
 D6 (quoted in full): "VRAM route: reduced-precision optimizer state (bf16
 momentum) is the single authorized route for rung 2+, priced by receipt
@@ -534,7 +537,7 @@ def run_and_emit_live() -> Path:
         "ts": ts,
         "mode": "live",
         "issue": "#29",
-        "spec_ref": "docs/spec/c-scale-s1-growth-chain-DRAFT.md §9 D6",
+        "spec_ref": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md §9 D6",
         "scope": "reduced-precision (bf16) momentum optimizer-state VRAM route, pre-registered "
                  "authorized route for S1 rung 2+, priced by A/B at the CURRENT 718.3M shape "
                  "before rung 2 opens",
@@ -620,7 +623,7 @@ def run_and_emit_dry() -> Path:
         "mode": "dry-run",
         "dry_run": True,
         "issue": "#29",
-        "spec_ref": "docs/spec/c-scale-s1-growth-chain-DRAFT.md §9 D6",
+        "spec_ref": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md §9 D6",
         "scope": "CPU plumbing proof only — NOT the real 718.3M-shape pricing evidence; no "
                  "receipts/d6-bf16-momentum-ab-*.json evidence-search glob match, self-declared dry_run",
         "harness_sha": _harness_sha(),

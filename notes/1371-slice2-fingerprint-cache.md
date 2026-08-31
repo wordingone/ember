@@ -43,7 +43,7 @@ INSIDE the leg row, never as a new top-level receipt key, because
 see `closure_evidence_at`'s comment on the same constraint).
 
 `verify_ember01_completion.py` is SHA-PINNED by the cond4 tamper battery's receipt (see
-`scripts/verify_ember01_completion.py::cond4_tamper_battery`'s own evidence + whatever
+`src/ember/governance/scripts/verify_ember01_completion.py::cond4_tamper_battery`'s own evidence + whatever
 receipt pins this file's hash — grep the repo for a receipt keyed on this path before
 touching it, and follow the #1360 commit's three-field re-mint precedent in the SAME
 commit that edits this file, not a follow-up).

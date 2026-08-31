@@ -5087,7 +5087,7 @@
         }
       ],
       "goal_id": "EMBER-11",
-      "public_path": "docs/roadmap/milestones/EMBER-11.md",
+      "public_path": "docs/domains/governance/roadmap/milestones/EMBER-11.md",
       "public_sha256": "2c55b7c3c2ed0573bf9eaa20ecb4fe70ace9021098072bac47338d847553c17e",
       "source_path": "ember-11-independent-local-release/goal.md",
       "source_sha256": "6fe7eeff5f80c6899a004fdc0f46b9a0e8ccaeb8a91a58bb1da89563f215f3ab"

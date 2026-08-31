@@ -85,7 +85,7 @@ command with zero further code changes:
     refusal is itself written as a receipt, so the record of "checkpoint X
     could not be adjudicated on this date because the battery is
     undefined" is durable and auditable rather than silent.
-  * Receipt conventions matched to scripts/legb_inprocess_scorer.py (issue
+  * Receipt conventions matched to src/ember/governance/scripts/legb_inprocess_scorer.py (issue
     #757) and scripts/cbase_heldout_eval.py (issue #760): ticket/ts/
     sha_convention/invariant_sha256 envelope, `receipt_write.checked_write`
     atomic quarantine-on-invalid publication, double-run determinism proof

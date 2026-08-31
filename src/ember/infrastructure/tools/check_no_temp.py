@@ -56,7 +56,7 @@ SCAN_DIRS = [
 # to say the words "tmpdir" / "temp_dir" / etc. in docstrings/comments/regexes
 # without being flagged as violations of themselves).
 SELF_EXCLUDE = {
-    "tools/check_no_temp.py",
+    "src/ember/infrastructure/tools/check_no_temp.py",
     "tools/no_temp_allowlist",
 }
 

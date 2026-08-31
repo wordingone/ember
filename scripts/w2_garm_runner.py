@@ -68,7 +68,7 @@ manifest therefore omits lm_head.weight whenever tied_embeddings is true,
 by construction, matching the contract #108 actually checks rather than
 whatever raw PyTorch would emit.
 
-Acceptance (a) verification: scripts/w2_derive_s_config.py's derive_s_config
+Acceptance (a) verification: src/ember/governance/scripts/w2_derive_s_config.py's derive_s_config
 + refuse_or_pass are imported and run directly against this run's dump
 (never reimplemented) -- both must succeed clean for this runner's own
 dry-run receipt to claim PASS.
@@ -518,7 +518,7 @@ def run_108_verification(run_id: str, out_dir: str, dump_dir: str) -> dict:
         "ticket": "ISSUE-113-W2-GARM-108-VERIFICATION",
         "ts": _ts(),
         "run_id": run_id,
-        "tool": "scripts/w2_derive_s_config.py (imported, not reimplemented)",
+        "tool": "src/ember/governance/scripts/w2_derive_s_config.py (imported, not reimplemented)",
         "derive": {"s_config_path": _repo_relpath(s_config_path),
                    "derive_receipt_path": _repo_relpath(derive_receipt_path),
                    "s_arm_config_sha256": derive_receipt["s_arm_config_sha256"]},

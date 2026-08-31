@@ -6,7 +6,7 @@
 """cbase_grow_rung.py — C-SCALE S1 growth-chain rung runner (issue #29).
 
 Generalizes cbase_grow_live.py's net2net FF-widening warm-start pipeline to
-the MULTI-RUNG growth chain docs/spec/c-scale-s1-growth-chain-DRAFT.md's
+the MULTI-RUNG growth chain docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md's
 section 9 (PRE-REGISTRATION, binding 2026-07-03) rules govern. Each rung:
 
   1. loads its PARENT rung's own already-landed grow receipt + final
@@ -304,7 +304,7 @@ def _assemble_receipt(*, rung: int, mode: str, ts_stamp: str,
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
         "issue": "#29",
-        "spec_ref": "docs/spec/c-scale-s1-growth-chain-DRAFT.md §9 (D1/D2/D3/D4/D5/D6 pre-registration)",
+        "spec_ref": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md §9 (D1/D2/D3/D4/D5/D6 pre-registration)",
         "scope": ("S1 growth-chain rung: net2net FF-doubling warm-start from the certified "
                   "parent lineage checkpoint, D1-sized stabilization segment, dual parameter "
                   "convention (D4), G-budget micro-fit pre-flight, issue-29 kill criterion"),

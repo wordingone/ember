@@ -49,7 +49,7 @@ contract tree (authored on the pre-registration lane, not yet merged to master).
   same receipt): a contribution is research if it is a statement about — or an instrument
   constitutive of — one of the two formal objects. Instruments remain subject to this leg's
   delta bar: "we built a tool" without a receipted, falsifiable field-delta still fails.
-- Mechanized floor: `scripts/check_publication_gate.py` conjuncts green (board-wired execution
+- Mechanized floor: `src/ember/governance/scripts/check_publication_gate.py` conjuncts green (board-wired execution
   of that checker is queued mechanism work — the audit's Class-2 cure; until wired, a fresh
   manual execution receipt is required per adjudication round).
 

@@ -257,7 +257,7 @@ WHAT IS NOT MEASURED (permanently undecidable here, human capture required):
     a scope boundary of what one bounded, sandboxed execution, with a
     faithful runtime proxy, can observe.
 
-Usage:  python scripts/verify_nosource_operability.py [--root PATH] [--json]
+Usage:  python src/ember/governance/scripts/verify_nosource_operability.py [--root PATH] [--json]
 Exit 0 = PASS (of the measurable half), 1 = FAIL, 2 = harness error.
 """
 

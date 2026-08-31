@@ -110,7 +110,7 @@ function mockRunner(opts: {
       if (opts.onIssueCensus) return opts.onIssueCensus(args);
       return { status: 0, stdout: "", stderr: "" };
     }
-    if (args.includes("scripts/verify_ember01_completion.py")) {
+    if (args.includes("src/ember/governance/scripts/verify_ember01_completion.py")) {
       if (opts.onVerifier) return opts.onVerifier(args);
       return { status: 0, stdout: "", stderr: "" };
     }
@@ -302,7 +302,7 @@ describe("startVerifyRun", () => {
     expect(final.phase).toBe("fetching-issues");
     expect(final.error).toContain("gh: rate limited");
     expect(calls.some((c) => c.args.includes("scripts/ember_01_custody/issue_census.py"))).toBe(false);
-    expect(calls.some((c) => c.args.includes("scripts/verify_ember01_completion.py"))).toBe(false);
+    expect(calls.some((c) => c.args.includes("src/ember/governance/scripts/verify_ember01_completion.py"))).toBe(false);
     // A failure mid-pipeline still retires the worktree it already created -- never a leak
     // on the ordinary failure path.
     expect(calls.some((c) => c.args.includes("retire"))).toBe(true);
