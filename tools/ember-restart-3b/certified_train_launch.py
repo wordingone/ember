@@ -348,7 +348,7 @@ REQUESTED_SCOPE_KEYS = {
     "artifact_root",
     "custody_root",
 }
-# Mirrors the EXACT emission of scripts/verify_ember01_completion.py (the
+# Mirrors the EXACT emission of src/ember/governance/scripts/verify_ember01_completion.py (the
 # producer is the source of truth): top-level goal_id is the ACTIVE goal
 # ("EMBER-02"); the EMBER-01 subject binding is completion_subject_goal_id.
 COMPLETION_RECEIPT_KEYS = {
@@ -367,7 +367,7 @@ COMPLETION_RECEIPT_KEYS = {
     "selection",
     "authority_certificate",
 }
-# scripts/verify_ember01_completion.py RESOLVED_TRUE -- lowercase-hyphen form.
+# src/ember/governance/scripts/verify_ember01_completion.py RESOLVED_TRUE -- lowercase-hyphen form.
 COMPLETION_LEG_RESOLVED_TRUE = "resolved-true"
 
 # Mirrors the receipt runtime/ember-lab/src/training_verify.rs::run assembles.

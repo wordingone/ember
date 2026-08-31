@@ -16,7 +16,7 @@ Consumer: `tools/ember-cli/src/services/verify-watch.ts`
 
 "No process regarding anything ember should even be able to bypass ember-cli" and
 "embercli needs to be able to stay up during verification ... or it's useless"
-(2026-08-03). Before #1344, `scripts/verify_ember01_completion.py` was invocable only
+(2026-08-03). Before #1344, `src/ember/governance/scripts/verify_ember01_completion.py` was invocable only
 from a bare shell, and the cockpit had no live-dispatched way to run it. #1344 made
 verification a first-class, non-blocking ember-cli command.
 
@@ -75,7 +75,7 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
    --public-ref refs/remotes/origin/master --issues-json <jobDir>/issues.json --output
    <jobDir>/issue-census.json`. Non-zero exit fails the job at phase `issue-census`.
    `--repo-root` targets the pinned worktree, never `repoRoot` — #1371's whole point.
-3. `python -B scripts/verify_ember01_completion.py --root <PINNED WORKTREE PATH> --receipt
+3. `python -B src/ember/governance/scripts/verify_ember01_completion.py --root <PINNED WORKTREE PATH> --receipt
    <jobDir>/verifier-receipt.json --run-custody --issue-census <jobDir>/issue-census.json
    --preserve-custody-output <jobDir>/custody-census-output.json --run-seat
    --selection <EMBER_VERIFY_SELECTION> [--binding root_id=path ...] [--identity-manifest
@@ -255,7 +255,7 @@ staging notes for the design sketch.
 ### Not in this node
 
 - Dispatch-token / machine-refusal enforcement that blocks
-  `scripts/verify_ember01_completion.py` from being invoked directly outside ember-cli
+  `src/ember/governance/scripts/verify_ember01_completion.py` from being invoked directly outside ember-cli
   (issue #1344's requirement 2) is separate follow-on work.
 - The per-leg fingerprint cache (#1371 requirement 3) and the worktree-registry
   re-scoping (#1371 requirement 5's residual scope, above) are slice 2 — #1371 stays

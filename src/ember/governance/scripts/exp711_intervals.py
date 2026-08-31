@@ -29,9 +29,9 @@ sizing scans, via binary/exponential search -- never a full-source decode,
 never the 13GB stream loaded whole).
 
 Run (real corpus, writes the apparatus receipt):
-    python scripts/exp711_intervals.py --emit
+    python src/ember/governance/scripts/exp711_intervals.py --emit
 Selftest (small synthetic streams, no real corpus/cache required):
-    python scripts/exp711_intervals.py --selftest
+    python src/ember/governance/scripts/exp711_intervals.py --selftest
 """
 import argparse
 import base64
@@ -281,7 +281,7 @@ def _load_production_tokenizer(token_shards_receipt=None):
     """Load the frozen tokenizer via the CURRENT pin recorded in the
     token-shards-v0 receipt's own premises (premises.tokenizer_json), using
     the pre-existing, already-disclosed orphaned-merge workaround from
-    scripts/a1_predicate_scan.py (ember #631): the on-disk tokenizer.json
+    src/ember/governance/scripts/a1_predicate_scan.py (ember #631): the on-disk tokenizer.json
     (post-58ddf8d-scrub, sha 6923a52...) has 21/31755 merge rules that
     produce a target string absent from its own vocab (proper-noun vocab
     entries the public-root consolidation scrub removed broke those merge
@@ -307,7 +307,7 @@ def _load_production_tokenizer(token_shards_receipt=None):
         "tokenizer_json_path": tok_json["path"],
         "tokenizer_json_sha256": actual_sha,
         "orphaned_merge_workaround": {
-            "source": "scripts/a1_predicate_scan.py:load_stripped_tokenizer "
+            "source": "src/ember/governance/scripts/a1_predicate_scan.py:load_stripped_tokenizer "
                        "(ember #631, pre-existing disclosed defect)",
             "n_dropped_orphan_merges": n_dropped,
             "n_merges_total": n_merges_total,
@@ -338,7 +338,50 @@ def _open_stream(shard_dir=SHARD_DIR_DEFAULT, cache_dir=MMAP_CACHE_DIR_DEFAULT,
     """Open the flat token stream read-only via the production
     PackedShardLoader memmap-cache path. Reuses the already-built cache
     (bin+manifest exist, sha matches) -- never writes there."""
-    from timeshare_pretrain import PackedShardLoader
+    # issue2015 exact-local-import:scripts/timeshare_pretrain.py
+    import importlib.util as _ember_d9c5c82c124e1dc8_importlib
+    import sys as _ember_d9c5c82c124e1dc8_sys
+    from pathlib import Path as _ember_d9c5c82c124e1dc8_Path
+    _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parents[4].joinpath('scripts', 'timeshare_pretrain.py')
+    if not _ember_d9c5c82c124e1dc8_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/timeshare_pretrain.py')
+    _ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'scripts.timeshare_pretrain', 'timeshare_pretrain')
+    _ember_d9c5c82c124e1dc8_existing = []
+    for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+        _ember_d9c5c82c124e1dc8_candidate = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
+        if _ember_d9c5c82c124e1dc8_candidate is not None and all(_ember_d9c5c82c124e1dc8_candidate is not item for item in _ember_d9c5c82c124e1dc8_existing):
+            _ember_d9c5c82c124e1dc8_existing.append(_ember_d9c5c82c124e1dc8_candidate)
+    if len(_ember_d9c5c82c124e1dc8_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/timeshare_pretrain.py')
+    if _ember_d9c5c82c124e1dc8_existing:
+        _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_existing[0]
+        _ember_d9c5c82c124e1dc8_observed = getattr(_ember_d9c5c82c124e1dc8_module, '__file__', None)
+        if _ember_d9c5c82c124e1dc8_observed is None or _ember_d9c5c82c124e1dc8_Path(_ember_d9c5c82c124e1dc8_observed).resolve() != _ember_d9c5c82c124e1dc8_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/timeshare_pretrain.py')
+    else:
+        _ember_d9c5c82c124e1dc8_spec = _ember_d9c5c82c124e1dc8_importlib.spec_from_file_location('_ember_issue2015_d9c5c82c124e1dc8', _ember_d9c5c82c124e1dc8_path)
+        if _ember_d9c5c82c124e1dc8_spec is None or _ember_d9c5c82c124e1dc8_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_importlib.module_from_spec(_ember_d9c5c82c124e1dc8_spec)
+        for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+            _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
+            if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+            _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
+        try:
+            _ember_d9c5c82c124e1dc8_spec.loader.exec_module(_ember_d9c5c82c124e1dc8_module)
+        except BaseException:
+            for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+                if _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias) is _ember_d9c5c82c124e1dc8_module:
+                    _ember_d9c5c82c124e1dc8_sys.modules.pop(_ember_d9c5c82c124e1dc8_alias, None)
+            raise
+    for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
+        _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
+        if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
+    PackedShardLoader = getattr(_ember_d9c5c82c124e1dc8_module, 'PackedShardLoader')
+    # issue2015 exact-local-import-end:scripts/timeshare_pretrain.py
     loader = PackedShardLoader(shard_dir, seq=1024, n_mtp=2,
                                 mmap_cache_dir=cache_dir,
                                 expected_manifest_sha256=expected_sha)

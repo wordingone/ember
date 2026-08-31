@@ -280,7 +280,7 @@ Include the exact Win32 access mask used, raw tests, source diff, file hashes, a
 - Modify: `runtime/ember-lab/src/lib.rs:2670-2685`
 - Modify: `runtime/ember-lab/src/lib.rs:4010-4060`
 - Modify: `runtime/ember-lab/src/lib.rs:9543-9660`
-- Modify: `runtime/ember-lab/tests/control_plane.rs:1760-1840`
+- Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs:1760-1840`
 
 **Interfaces:**
 - Consumes: `ForeignProcessCensusProvider::sample`, `persist_foreign_process_census`, and `foreign_process_pressure_status_from_connection`.
@@ -349,7 +349,7 @@ Report raw tests, exact refusal receipt contents/hash, DB transition rows, file 
 
 **Files:**
 - Modify: `runtime/ember-lab/src/lib.rs` near the existing resource-guard status/probe APIs
-- Modify: `runtime/ember-lab/tests/control_plane.rs` beside foreign-pressure integration tests
+- Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs` beside foreign-pressure integration tests
 
 **Interfaces:**
 - Consumes: the current pressure singleton and bounded observation ledger.
@@ -386,7 +386,7 @@ Send the receipt path, raw file SHA-256, self hash, exact JSON content, stdout/s
 **Files:**
 - Verify: `runtime/ember-lab/src/lib.rs`
 - Verify: `runtime/ember-lab/Cargo.toml`
-- Verify: `runtime/ember-lab/tests/control_plane.rs`
+- Verify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs`
 - Verify: `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 **Interfaces:**

@@ -32,7 +32,7 @@
     },
     {
       "path": "scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "34d21bc1ae88fc2462ff1488e24cd65f3bac8a7353bac18be1036317d1e20a2c",
+      "sha256": "662a8dbfdd15fc7e981cddbcfcdaf586747790648158102c4e42a286dc01e5d9",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {

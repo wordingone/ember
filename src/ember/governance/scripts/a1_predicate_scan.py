@@ -51,7 +51,7 @@ special literal probe-encoded to prove ids<8 are unreachable from text) --
 verbatim-quoted from src/ember/governance/scripts/token_shards_v0.py's _production_tokenizer.
 
 Usage:
-  python scripts/a1_predicate_scan.py \\
+  python src/ember/governance/scripts/a1_predicate_scan.py \\
       --shard-dir <path-to-shards-v0-dir> \\
       --eval-suite-dir <path-to-sha-verified-eval-suite-v1-copy> \\
       --heldout-receipt receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json \\

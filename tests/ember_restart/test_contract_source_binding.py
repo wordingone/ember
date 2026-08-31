@@ -24,7 +24,51 @@ from pathlib import Path
 
 import pytest
 
-from scripts.ember_restart.contract import R1_ENTRY_PINNED_FILES, R1_ENTRY_SOURCE_FILES
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+import importlib.util as _ember_3cb9868455ee2567_importlib
+import sys as _ember_3cb9868455ee2567_sys
+from pathlib import Path as _ember_3cb9868455ee2567_Path
+_ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+if not _ember_3cb9868455ee2567_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+_ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+_ember_3cb9868455ee2567_existing = []
+for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+    _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+    if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+        _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+if len(_ember_3cb9868455ee2567_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+if _ember_3cb9868455ee2567_existing:
+    _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+    _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+    if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+else:
+    _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+    if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    try:
+        _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+    except BaseException:
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+        raise
+for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+    _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+    if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+R1_ENTRY_PINNED_FILES = getattr(_ember_3cb9868455ee2567_module, 'R1_ENTRY_PINNED_FILES')
+R1_ENTRY_SOURCE_FILES = getattr(_ember_3cb9868455ee2567_module, 'R1_ENTRY_SOURCE_FILES')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "scripts" / "ember_restart" / "contract.py"
@@ -182,7 +226,50 @@ def test_foreign_repo_is_refused(tmp_path: Path, foreign: Path):
     bytes -- the P1 defect made concrete. Post-fix it must raise ValueError
     on the canonical-object-store binding, before any network/ancestry work.
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     foreign_head = _git(foreign, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, foreign_head)
@@ -205,7 +292,50 @@ def test_origin_url_spoof_is_refused(tmp_path: Path, foreign: Path):
     The config cell and the object store are independent (spec B3); the
     binding never reads ``foreign``'s configured ``origin``.
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     _git(foreign, "remote", "add", "origin", "https://github.com/wordingone/ember.git")
     foreign_head = _git(foreign, "rev-parse", "HEAD")
@@ -227,7 +357,50 @@ def test_ancestry_severed_clone_is_refused_by_default_anchor(tmp_path: Path, gov
     """Variant 3a: a real clone of governed_remote, checked against the real
     (default) canonical anchor, fails on object-store identity -- it is its
     own clone, sharing nothing with the anchor's common dir."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     severed = tmp_path / "severed"
     subprocess.run(["git", "clone", str(governed_remote), str(severed)], check=True, capture_output=True)
@@ -254,7 +427,50 @@ def test_ancestry_severed_clone_is_refused_by_unpublished_ancestry(tmp_path: Pat
     severed its own anchor (object-store identity trivially holds), so the
     refusal must come from B2: the new commit was never pushed to
     governed_remote and is therefore not published ancestry."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     severed = tmp_path / "severed"
     subprocess.run(["git", "clone", str(governed_remote), str(severed)], check=True, capture_output=True)
@@ -288,7 +504,50 @@ def test_unmanaged_worktree_is_refused(tmp_path: Path, canonical: Path, managed_
     ``canonical``), isolating "registered but not this worktree" from
     variant 7's "no registry at all".
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     ad_hoc = tmp_path / "ad-hoc-worktree"
     _git(canonical, "worktree", "add", "-b", "ad-hoc-branch", str(ad_hoc), "HEAD")
@@ -312,7 +571,50 @@ def test_unpublished_commit_from_right_root_is_refused(tmp_path: Path, canonical
     """Variant 5: right root (the synthetic canonical itself), wrong commit
     -- HEAD equals source_commit, tree clean, root canonical, but the tip
     was never pushed. Fails only the B2 ancestry leg."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     (canonical / "local-only.txt").write_text("unpublished\n", encoding="utf-8")
     _git(canonical, "add", "-A")
@@ -338,7 +640,51 @@ def test_receipt_tampering_of_source_binding_is_refused(tmp_path: Path, canonica
     """Variant 6: flipping ancestry, swapping remote_master_sha, or dropping
     the source_binding block must all be refused on reopen (closed-key set
     or self-hash), extending the mutation loop of test_contract.py:582-594."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry, validate_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    validate_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'validate_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     head = _git(canonical, "rev-parse", "HEAD")
     manifest_path = _manifest_at(tmp_path, head)
@@ -380,7 +726,50 @@ def test_missing_registry_refuses(tmp_path: Path, canonical: Path, managed_workt
     """Variant 7: the synthetic registry state file is deleted; minting from
     the (now orphaned) managed worktree fails closed -- a missing authority
     is a refusal, never an implicit pass."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     state_file = canonical / ".git" / "ember-worktree-lifecycle.json"
     assert state_file.exists()
@@ -408,7 +797,51 @@ def test_positive_control_main_and_managed_worktree_mint_green(
     """Variant 8: the synthetic canonical MAIN checkout and its
     lifecycle-managed worktree both mint a green, round-trippable receipt at
     published master."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry, validate_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    validate_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'validate_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     main_head = _git(canonical, "rev-parse", "HEAD")
     main_manifest = _manifest_at(tmp_path / "main-manifest", main_head)
@@ -482,7 +915,50 @@ def test_self_invocation_from_ad_hoc_worktree_is_refused(
     Depends on managed_worktree only to guarantee canonical's registry file
     exists (precedent: test_unmanaged_worktree_is_refused).
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     ad_hoc = tmp_path / "ad-hoc-self-invoke"
     _git(canonical, "worktree", "add", "-b", "ad-hoc-self-invoke-branch", str(ad_hoc), "HEAD")
@@ -515,7 +991,50 @@ def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
     commit fails closed on ancestry: spurious refusal is acceptable, silent
     acceptance or binding to the wrong ref is not.
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     published_tip = _git(canonical, "rev-parse", "HEAD")
     _git(canonical, "checkout", "--detach", published_tip)
@@ -732,8 +1251,94 @@ def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Pa
     below can only mean B1 fired first, not that B2 silently no-opped on a
     remote that happened to tolerate being unreachable.
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry
-    from scripts.ember_restart.source_authority import resolve_governed_master
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/source_authority.py
+    import importlib.util as _ember_e33bbd3b13c22910_importlib
+    import sys as _ember_e33bbd3b13c22910_sys
+    from pathlib import Path as _ember_e33bbd3b13c22910_Path
+    _ember_e33bbd3b13c22910_path = _ember_e33bbd3b13c22910_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'source_authority.py')
+    if not _ember_e33bbd3b13c22910_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/source_authority.py')
+    _ember_e33bbd3b13c22910_aliases = ('_ember_issue2015_e33bbd3b13c22910', 'scripts.ember_restart.source_authority', 'source_authority')
+    _ember_e33bbd3b13c22910_existing = []
+    for _ember_e33bbd3b13c22910_alias in _ember_e33bbd3b13c22910_aliases:
+        _ember_e33bbd3b13c22910_candidate = _ember_e33bbd3b13c22910_sys.modules.get(_ember_e33bbd3b13c22910_alias)
+        if _ember_e33bbd3b13c22910_candidate is not None and all(_ember_e33bbd3b13c22910_candidate is not item for item in _ember_e33bbd3b13c22910_existing):
+            _ember_e33bbd3b13c22910_existing.append(_ember_e33bbd3b13c22910_candidate)
+    if len(_ember_e33bbd3b13c22910_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/source_authority.py')
+    if _ember_e33bbd3b13c22910_existing:
+        _ember_e33bbd3b13c22910_module = _ember_e33bbd3b13c22910_existing[0]
+        _ember_e33bbd3b13c22910_observed = getattr(_ember_e33bbd3b13c22910_module, '__file__', None)
+        if _ember_e33bbd3b13c22910_observed is None or _ember_e33bbd3b13c22910_Path(_ember_e33bbd3b13c22910_observed).resolve() != _ember_e33bbd3b13c22910_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/source_authority.py')
+    else:
+        _ember_e33bbd3b13c22910_spec = _ember_e33bbd3b13c22910_importlib.spec_from_file_location('_ember_issue2015_e33bbd3b13c22910', _ember_e33bbd3b13c22910_path)
+        if _ember_e33bbd3b13c22910_spec is None or _ember_e33bbd3b13c22910_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/source_authority.py')
+        _ember_e33bbd3b13c22910_module = _ember_e33bbd3b13c22910_importlib.module_from_spec(_ember_e33bbd3b13c22910_spec)
+        for _ember_e33bbd3b13c22910_alias in _ember_e33bbd3b13c22910_aliases:
+            _ember_e33bbd3b13c22910_prior = _ember_e33bbd3b13c22910_sys.modules.get(_ember_e33bbd3b13c22910_alias)
+            if _ember_e33bbd3b13c22910_prior is not None and _ember_e33bbd3b13c22910_prior is not _ember_e33bbd3b13c22910_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/source_authority.py')
+            _ember_e33bbd3b13c22910_sys.modules[_ember_e33bbd3b13c22910_alias] = _ember_e33bbd3b13c22910_module
+        try:
+            _ember_e33bbd3b13c22910_spec.loader.exec_module(_ember_e33bbd3b13c22910_module)
+        except BaseException:
+            for _ember_e33bbd3b13c22910_alias in _ember_e33bbd3b13c22910_aliases:
+                if _ember_e33bbd3b13c22910_sys.modules.get(_ember_e33bbd3b13c22910_alias) is _ember_e33bbd3b13c22910_module:
+                    _ember_e33bbd3b13c22910_sys.modules.pop(_ember_e33bbd3b13c22910_alias, None)
+            raise
+    for _ember_e33bbd3b13c22910_alias in _ember_e33bbd3b13c22910_aliases:
+        _ember_e33bbd3b13c22910_prior = _ember_e33bbd3b13c22910_sys.modules.get(_ember_e33bbd3b13c22910_alias)
+        if _ember_e33bbd3b13c22910_prior is not None and _ember_e33bbd3b13c22910_prior is not _ember_e33bbd3b13c22910_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/source_authority.py')
+        _ember_e33bbd3b13c22910_sys.modules[_ember_e33bbd3b13c22910_alias] = _ember_e33bbd3b13c22910_module
+    resolve_governed_master = getattr(_ember_e33bbd3b13c22910_module, 'resolve_governed_master')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/source_authority.py
 
     sentinel_remote = str(tmp_path / "sentinel-unreachable-remote-does-not-exist")
 

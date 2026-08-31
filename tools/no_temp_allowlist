@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-# ember NO-TEMP policy allowlist — tools/check_no_temp.py
+# ember NO-TEMP policy allowlist — src/ember/infrastructure/tools/check_no_temp.py
 #
 # Per operator direction (2026-07-20, verbatim): "Non of embers full stack, whether
 # current, past, or future should live in temp. none." This file is a TRACKED,
@@ -16,7 +16,7 @@
 # a policy violation — route new code through emberScratchDir() /
 # ember_scratch_dir() instead.
 #
-# One relative POSIX path per line (matches tools/check_no_temp.py's file-level
+# One relative POSIX path per line (matches src/ember/infrastructure/tools/check_no_temp.py's file-level
 # grain — a file with any covered temp-primitive match must appear here or the
 # gate fails closed).
 scripts/c04_batched_ns5_bench.py
@@ -63,7 +63,7 @@ scripts/ember_gate_function_slash_commands_selftest.py
 scripts/ember_gate_goal_mode_parity_adapter_selftest.py
 scripts/ember_gate_hook_runner_selftest.py
 scripts/ember_gate_launch_packaging_selftest.py
-scripts/ember_gate_process_supervision_selftest.py
+src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
 scripts/ember_gate_receipt_store.py
 scripts/ember_gate_receipt_store_selftest.py
 scripts/ember_gate_rollback_rewind.py
@@ -123,7 +123,7 @@ scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py
 scripts/ember_totality/chk_controls/test_preflight.py
 scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
 scripts/ember_totality/disconfirmation_leg_test.py
-scripts/ember_totality/milestone_leg_test.py
+src/ember/governance/scripts/ember_totality/milestone_leg_test.py
 scripts/ember_totality/test_c_ladm.py
 scripts/ember_train_multimodal_resident_adapter.py
 scripts/ember_train_multimodal_resident_adapter_cli_selftest.py
@@ -151,8 +151,8 @@ scripts/gpu_lock_selftest.py
 scripts/heartbeat_runner.py
 scripts/heldout_v21_fcalib.py
 scripts/kernel_replay.py
-scripts/legb_inprocess_scorer.py
-scripts/lib/invariant.py
+src/ember/governance/scripts/legb_inprocess_scorer.py
+src/ember/governance/scripts/lib/invariant.py
 scripts/loop_launch_guard_selftest.py
 scripts/manifest_sha.py
 scripts/nck/checkpoint_probe.py
@@ -216,7 +216,7 @@ scripts/verify_authority_conservation.py
 scripts/w1_baseline_replay_closure.py
 src/ember/governance/scripts/w1_collapse_control_run.py
 scripts/w1_fullstate_resume_verify.py
-scripts/w2_derive_s_config.py
+src/ember/governance/scripts/w2_derive_s_config.py
 src/ember/governance/scripts/w2_heldout/build_decontam_batch_mp.py
 src/ember/governance/scripts/w2_heldout/launch_gate.py
 scripts/w2_heldout/test_build_decontam_batch.py

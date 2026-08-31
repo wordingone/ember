@@ -960,7 +960,7 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
       _update(deps.jobId, { phase: "verifying", stdoutTail: tail(censusResult.stdout) });
 
       const verifierArgs = [
-        "-B", "scripts/verify_ember01_completion.py",
+        "-B", "src/ember/governance/scripts/verify_ember01_completion.py",
         // #1371: the whole point -- every repository-scoped leg (checkout integrity,
         // launch-packet, authority, identity, custody-census's own repo-relative reads)
         // now runs against the pinned worktree, never the live repoRoot checkout.

@@ -112,7 +112,7 @@
       "state": "CLOSED_GUARDED",
       "guard_ref": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
       "guard_kind": "test",
-      "evidence": "PR #809; tests/ember_01_identity/test_validate_identity.py; EMBER-01 leg 3/leg 4 (identity fail-closed on tampered checkpoint) in scripts/verify_ember01_completion.py"
+      "evidence": "PR #809; tests/ember_01_identity/test_validate_identity.py; EMBER-01 leg 3/leg 4 (identity fail-closed on tampered checkpoint) in src/ember/governance/scripts/verify_ember01_completion.py"
     },
     {
       "class_id": "R8_AUTHORITY_CONSERVATION",

@@ -1443,7 +1443,7 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
     assert receipt["schema"] == "ember-cond4-tamper-battery-receipt-v7"
     assert receipt["result"] == "PASS"
     assert receipt["migration"]["command"] == (
-        "scripts/verify_ember01_completion.py::identity_legs"
+        "src/ember/governance/scripts/verify_ember01_completion.py::identity_legs"
     )
     implementation = receipt["implementation"]["behavior_surface_validator"]
     assert hashlib.sha256((REPO_ROOT / implementation["path"]).read_bytes()).hexdigest() == implementation["sha256"]

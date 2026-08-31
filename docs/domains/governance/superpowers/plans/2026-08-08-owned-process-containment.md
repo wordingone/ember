@@ -21,17 +21,17 @@
 ### Task 1: Reproduce descendant survival
 
 **Files:**
-- Modify: `scripts/ember_gate_process_supervision_selftest.py`
+- Modify: `src/ember/governance/scripts/ember_gate_process_supervision_selftest.py`
 
 - [ ] Add a child/grandchild fixture and assert the grandchild is gone after timeout.
-- [ ] Run `python -B scripts/ember_gate_process_supervision_selftest.py` and confirm the assertion fails because the grandchild remains alive.
+- [ ] Run `python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py` and confirm the assertion fails because the grandchild remains alive.
 
 ### Task 2: Implement the owned runner
 
 **Files:**
 - Create: `src/ember/governance/scripts/owned_process.py`
-- Modify: `scripts/ember_gate_process_supervision.py`
-- Test: `scripts/ember_gate_process_supervision_selftest.py`
+- Modify: `src/ember/governance/scripts/ember_gate_process_supervision.py`
+- Test: `src/ember/governance/scripts/ember_gate_process_supervision_selftest.py`
 
 - [ ] Implement the closed result and containment-error types.
 - [ ] Implement Windows Job Object ownership and POSIX process-group cleanup.

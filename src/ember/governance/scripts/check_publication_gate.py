@@ -136,7 +136,50 @@ OUTLINE_PATH = REPO_ROOT / "paper" / "outline.md"
 GOAL_PATH = REPO_ROOT / "docs/domains/governance/authority/GOAL.md"
 
 sys.path.insert(0, str(Path(__file__).parent))
-import receipt_fp  # noqa: E402
+# issue2015 exact-local-import:scripts/receipt_fp.py
+import importlib.util as _ember_69780e19bf0d970d_importlib
+import sys as _ember_69780e19bf0d970d_sys
+from pathlib import Path as _ember_69780e19bf0d970d_Path
+_ember_69780e19bf0d970d_path = _ember_69780e19bf0d970d_Path(__file__).resolve().parents[4].joinpath('scripts', 'receipt_fp.py')
+if not _ember_69780e19bf0d970d_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/receipt_fp.py')
+_ember_69780e19bf0d970d_aliases = ('_ember_issue2015_69780e19bf0d970d', 'receipt_fp', 'scripts.receipt_fp')
+_ember_69780e19bf0d970d_existing = []
+for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
+    _ember_69780e19bf0d970d_candidate = _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias)
+    if _ember_69780e19bf0d970d_candidate is not None and all(_ember_69780e19bf0d970d_candidate is not item for item in _ember_69780e19bf0d970d_existing):
+        _ember_69780e19bf0d970d_existing.append(_ember_69780e19bf0d970d_candidate)
+if len(_ember_69780e19bf0d970d_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/receipt_fp.py')
+if _ember_69780e19bf0d970d_existing:
+    _ember_69780e19bf0d970d_module = _ember_69780e19bf0d970d_existing[0]
+    _ember_69780e19bf0d970d_observed = getattr(_ember_69780e19bf0d970d_module, '__file__', None)
+    if _ember_69780e19bf0d970d_observed is None or _ember_69780e19bf0d970d_Path(_ember_69780e19bf0d970d_observed).resolve() != _ember_69780e19bf0d970d_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/receipt_fp.py')
+else:
+    _ember_69780e19bf0d970d_spec = _ember_69780e19bf0d970d_importlib.spec_from_file_location('_ember_issue2015_69780e19bf0d970d', _ember_69780e19bf0d970d_path)
+    if _ember_69780e19bf0d970d_spec is None or _ember_69780e19bf0d970d_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/receipt_fp.py')
+    _ember_69780e19bf0d970d_module = _ember_69780e19bf0d970d_importlib.module_from_spec(_ember_69780e19bf0d970d_spec)
+    for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
+        _ember_69780e19bf0d970d_prior = _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias)
+        if _ember_69780e19bf0d970d_prior is not None and _ember_69780e19bf0d970d_prior is not _ember_69780e19bf0d970d_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/receipt_fp.py')
+        _ember_69780e19bf0d970d_sys.modules[_ember_69780e19bf0d970d_alias] = _ember_69780e19bf0d970d_module
+    try:
+        _ember_69780e19bf0d970d_spec.loader.exec_module(_ember_69780e19bf0d970d_module)
+    except BaseException:
+        for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
+            if _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias) is _ember_69780e19bf0d970d_module:
+                _ember_69780e19bf0d970d_sys.modules.pop(_ember_69780e19bf0d970d_alias, None)
+        raise
+for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
+    _ember_69780e19bf0d970d_prior = _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias)
+    if _ember_69780e19bf0d970d_prior is not None and _ember_69780e19bf0d970d_prior is not _ember_69780e19bf0d970d_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/receipt_fp.py')
+    _ember_69780e19bf0d970d_sys.modules[_ember_69780e19bf0d970d_alias] = _ember_69780e19bf0d970d_module
+receipt_fp = _ember_69780e19bf0d970d_module
+# issue2015 exact-local-import-end:scripts/receipt_fp.py  # noqa: E402
 import receipt_write  # noqa: E402
 
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
@@ -228,9 +271,51 @@ def _check_identity_manifest(receipt):
         return False, "receipt names no identity_manifest field"
 
     try:
-        from ember_01_identity.validate_identity import (  # noqa: PLC0415
-            IdentityValidationError, validate_manifest,
-        )
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_01_identity/validate_identity.py
+        import importlib.util as _ember_f289ed8a6472ef21_importlib
+        import sys as _ember_f289ed8a6472ef21_sys
+        from pathlib import Path as _ember_f289ed8a6472ef21_Path
+        _ember_f289ed8a6472ef21_path = _ember_f289ed8a6472ef21_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'validate_identity.py')
+        if not _ember_f289ed8a6472ef21_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+        _ember_f289ed8a6472ef21_aliases = ('_ember_issue2015_f289ed8a6472ef21', 'ember_01_identity.validate_identity', 'scripts.ember_01_identity.validate_identity', 'validate_identity')
+        _ember_f289ed8a6472ef21_existing = []
+        for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+            _ember_f289ed8a6472ef21_candidate = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+            if _ember_f289ed8a6472ef21_candidate is not None and all(_ember_f289ed8a6472ef21_candidate is not item for item in _ember_f289ed8a6472ef21_existing):
+                _ember_f289ed8a6472ef21_existing.append(_ember_f289ed8a6472ef21_candidate)
+        if len(_ember_f289ed8a6472ef21_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+        if _ember_f289ed8a6472ef21_existing:
+            _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_existing[0]
+            _ember_f289ed8a6472ef21_observed = getattr(_ember_f289ed8a6472ef21_module, '__file__', None)
+            if _ember_f289ed8a6472ef21_observed is None or _ember_f289ed8a6472ef21_Path(_ember_f289ed8a6472ef21_observed).resolve() != _ember_f289ed8a6472ef21_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+        else:
+            _ember_f289ed8a6472ef21_spec = _ember_f289ed8a6472ef21_importlib.spec_from_file_location('_ember_issue2015_f289ed8a6472ef21', _ember_f289ed8a6472ef21_path)
+            if _ember_f289ed8a6472ef21_spec is None or _ember_f289ed8a6472ef21_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+            _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_importlib.module_from_spec(_ember_f289ed8a6472ef21_spec)
+            for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+                _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+                if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+                _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
+            try:
+                _ember_f289ed8a6472ef21_spec.loader.exec_module(_ember_f289ed8a6472ef21_module)
+            except BaseException:
+                for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+                    if _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias) is _ember_f289ed8a6472ef21_module:
+                        _ember_f289ed8a6472ef21_sys.modules.pop(_ember_f289ed8a6472ef21_alias, None)
+                raise
+        for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
+            _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
+            if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+            _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
+        IdentityValidationError = getattr(_ember_f289ed8a6472ef21_module, 'IdentityValidationError')
+        validate_manifest = getattr(_ember_f289ed8a6472ef21_module, 'validate_manifest')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_identity/validate_identity.py
     except Exception as e:  # noqa: BLE001 — fail-closed on any import defect
         return False, f"identity validator unavailable: {type(e).__name__}: {e}"
 
@@ -1070,7 +1155,7 @@ def build_receipt(conjuncts, start_ts, start_perf, generator_path):
                     "paper/claims-evidence-map.md rows 18/19/21; "
                     "docs/domains/governance/authority/GOAL.md sec1b (research-focus test)",
         "generator": {
-            "path": "scripts/check_publication_gate.py",
+            "path": "src/ember/governance/scripts/check_publication_gate.py",
             "sha256": generator_sha256,
         },
         "execution": {

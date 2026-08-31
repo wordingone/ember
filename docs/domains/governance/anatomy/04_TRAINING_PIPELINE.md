@@ -3,7 +3,7 @@
 ## Active entry point: tools/ember-restart-3b/
 
 The current production entry point for the `ember-sparse-3b-v2` subject is
-`tools/ember-restart-3b/` (`docs/ember-restart/ember-restart-3b-governed-runner-v1.md`
+`tools/ember-restart-3b/` (`docs/domains/governance/ember-restart/ember-restart-3b-governed-runner-v1.md`
 calls it "the public production entrypoint... constructs the real model and
 optimizer, consumes the checked-in owned training authority, executes the
 real training path, and publishes manifest-last checkpoint bundles through
@@ -16,7 +16,7 @@ Notable modules under `tools/ember-restart-3b/`:
 - `model.py` — the network implementation matching `configs/ember-restart-3b.json`
 - `certified_train_launch.py` — the certified-launch validator. It holds every gate a certified launch must pass: declaration-ledger membership, completion-receipt and conjunct authority, requested-scope subset, run-scoped custody, resume and specialist and semantic and A1 route validation, and runner argv derivation. It is NOT directly runnable and has no command-line entry point (issue 898); the daemon dispatches it as a caged child with its path and sha256 pinned in a manifest the daemon builds. Contributors do not invoke it — see "Launch discipline" below for the one command that starts a governed run.
 - `checkpoint_artifacts.py`, `checkpoint_scratch.py` — checkpoint bundle publication
-- `disk_budget_runner.py` — wraps any command with a hard C:/B: drive write-budget preflight (see the CPU-only launch example in `docs/ember-restart/ember-restart-3b-governed-runner-v1.md`, which caps `--max-c-write-gib 0` for the canary preflight)
+- `disk_budget_runner.py` — wraps any command with a hard C:/B: drive write-budget preflight (see the CPU-only launch example in `docs/domains/governance/ember-restart/ember-restart-3b-governed-runner-v1.md`, which caps `--max-c-write-gib 0` for the canary preflight)
 - `build_owned_audio_frames.py`, `build_owned_vision_scenes.py`, `build_owned_reasoning_tool_trajectories.py`, `build_owned_curriculum.py` — owned (non-borrowed) data construction per modality, matching the 03_MODEL_ARCHITECTURE.md expert set
 - `domain_manifest.py`, `input_identity.py`, `custody_process_scope_worker.py` — custody/identity bookkeeping feeding condition `C0`/custody chain
 

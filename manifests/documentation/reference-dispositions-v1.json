@@ -3,14 +3,14 @@
     {
       "canonical_target": "docs/domains/governance/authority/INVARIANT.md",
       "disposition": "RESOLVED_AT_CURRENT_HEAD",
-      "document": "docs/roadmap/README.md",
+      "document": "docs/domains/governance/roadmap/README.md",
       "line": 8,
       "old_target": "../../INVARIANT.md"
     },
     {
       "canonical_target": "docs/domains/governance/authority/GOAL.md",
       "disposition": "RESOLVED_AT_CURRENT_HEAD",
-      "document": "docs/roadmap/README.md",
+      "document": "docs/domains/governance/roadmap/README.md",
       "line": 9,
       "old_target": "../../GOAL.md"
     }
@@ -1018,280 +1018,280 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 25,
       "target": "scripts/ember_totality/receipts-custody/custody-20260708T103129Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 34,
       "target": "scripts/ember_totality/receipts-custody/custody-20260708T090209Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 44,
       "target": "receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 44,
       "target": "receipts/wheel/wheel-real-20260618T143007Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 46,
       "target": "receipts/stale-figure-adjudication-20260702T151929Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 47,
       "target": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 47,
       "target": "receipts/publication-gate-20260705T",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 80,
       "target": "receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 81,
       "target": "receipts/ceff-shatter-REPUDIATED-20260623T170000Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 82,
       "target": "receipts/governor-repair-080-20260702T180248Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 109,
       "target": "receipts/cgrow-superseded/cgrow-receipt-20260628T061735Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 110,
       "target": "receipts/stale-figure-adjudication-20260702T151929Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 136,
       "target": "receipts/nck-event-mail-mail_arrived-15038-20260612T210139Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 136,
       "target": "state/nck-event-receipts/nck-event-mail-mail_arrived-...json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 137,
       "target": "receipts/wheel/wheel-real-20260618T143007Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 159,
       "target": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-adapter-trace.log",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 160,
       "target": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-meta.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 161,
       "target": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-process-after.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 162,
       "target": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-stub-server-log.jsonl",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 163,
       "target": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z-terminal-transcript-clean.txt",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 164,
       "target": "receipts/ember-preloop-resident-gate/real-reference-uiux-ax-observation-20260622T151722Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 165,
       "target": "receipts/ember-preloop-resident-gate/reference-cli-full-parity-harness-gate-20260622T141500Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 177,
       "target": "docs/goal-archive-v1-full.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 206,
       "target": "receipts/ember-c-scale/w2-heldout-decontam-20260707T055843Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 268,
       "target": "receipts/publication-gate-20260705T",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 281,
       "target": "scripts/ember_totality/receipts-custody/custody-20260708T121616Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 299,
       "target": "receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 320,
       "target": "receipts/bootstrap-falsifier-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 353,
       "target": "receipts/ceff-RESOLVED-20260703T124623Z-import-edition.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 358,
       "target": "receipts/ceff-RESOLVED-20260703T124623Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 370,
       "target": "receipts/corpus-verification-20260704T095213Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 388,
       "target": "receipts/ceff-RESOLVED-20260703T124623Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 389,
       "target": "receipts/cgrow-prereq/ff-widen-preservation-20260628T053513Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 390,
       "target": "receipts/corpus-manifest-20260702T162110Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 391,
       "target": "receipts/corpus-materiality-adjudication-20260702T162033Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 392,
       "target": "receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T084922Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 393,
       "target": "receipts/ember-c-scale/w1-collapse-control-20260704T071732Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 394,
       "target": "receipts/ember-c8-execution-binding/ablation-20260703T080952Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 406,
       "target": "receipts/stab524-gpu-window-done-20260709.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/custody/custody-disposition-20260708.md",
+      "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
       "line": 406,
       "target": "tools/ember-cli/state/serve-receipts/stab524-gpu-window-done-20260709.json",
       "visible_classification": "reference"
@@ -2390,168 +2390,168 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 11,
       "target": "docs/spec/c-scale-s2-token-bill-protocol.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 77,
       "target": "docs/spec/c-scale-s2-token-bill-protocol.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 89,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 115,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 144,
       "target": "docs/spec/c-scale-s2-token-bill-protocol.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 147,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 223,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 232,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 253,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 264,
       "target": "receipts/c04-design-bench-c03-h1024-d20-20260623T024512Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 280,
       "target": "docs/spec/ceff-lever-ladder.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 288,
       "target": "docs/spec/c-scale-s2-token-bill-protocol.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 292,
       "target": "receipts/c04-design-bench-h",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 319,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 437,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 449,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 475,
       "target": "receipts/citation-check-20260703T122221Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 484,
       "target": "receipts/citation-check-20260703T122221Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 491,
       "target": "docs/spec/growth-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 492,
       "target": "docs/spec/c-scale-s2-token-bill-protocol.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 492,
       "target": "docs/spec/ceff-lever-ladder.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 500,
       "target": "receipts/c04-design-bench-c03-h1024-d20-20260623T024512Z.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 504,
       "target": "receipts/shatter-verdict-canonical-20260623.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 505,
       "target": "receipts/shatter-verdict-bf16ns5-20260623T132000Z.json",
       "visible_classification": "reference"
@@ -2761,7 +2761,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/ember02-llmq-adoption-readiness-v1.md",
+      "document": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
       "line": 37,
       "target": "runtime/ember-lab/target/release/ember-lab.exe",
       "visible_classification": "reference"
@@ -2852,7 +2852,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/update-survival-preflight-v1.md",
+      "document": "docs/domains/governance/spec/update-survival-preflight-v1.md",
       "line": 35,
       "target": "state/dtype-mapping",
       "visible_classification": "reference"
@@ -2866,126 +2866,126 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 382,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/receipt.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 383,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/stage-1-80.raw",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 384,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/stage-1-80.frame.txt",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 385,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/stage-2-40.raw",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 386,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/stage-2-40.frame.txt",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 387,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/stage-3-80.raw",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 388,
       "target": "receipts/ember-cli/issue-243/live-resize-v1/stage-3-80.frame.txt",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 405,
       "target": "scripts/repo_guard.py",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 415,
       "target": "receipts/ember-cli/issue-243/live-resize-v1",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 415,
       "target": "tools/ember-cli/src/ember.exe",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 424,
       "target": "receipts/ember-cli/issue-243/live-resize-v1",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
       "line": 426,
       "target": "scripts/repo_guard.py",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-27-ember-roadmap-publication.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-27-ember-roadmap-publication.md",
       "line": 148,
       "target": "receipts/roadmap/roadmap-publication-v1.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-29-github-work-system-remediation.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-29-github-work-system-remediation.md",
       "line": 30,
       "target": "scripts/tests/test_check_pr_authority_binding.py",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-29-github-work-system-remediation.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-29-github-work-system-remediation.md",
       "line": 100,
       "target": "receipts/github-work-system/github-work-system-remediation-v2.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-30-issue-567-spec-lattice.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-30-issue-567-spec-lattice.md",
       "line": 68,
       "target": "scripts/github/test_",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-07-31-native-fixed-viewport-tui.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-07-31-native-fixed-viewport-tui.md",
       "line": 61,
       "target": "state/style",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-11-installed-authority-marker-migration.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-11-installed-authority-marker-migration.md",
       "line": 63,
       "target": "scratch/issue1251",
       "visible_classification": "reference"
@@ -2999,98 +2999,98 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-22-issue1413-stage2-carriers.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-22-issue1413-stage2-carriers.md",
       "line": 72,
       "target": "data/checkpoint/seed/order",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
       "line": 192,
       "target": "state/issue898-probe-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
       "line": 370,
       "target": "state/observation",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
       "line": 7,
       "target": "state/lease",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 70,
       "target": "docs/a.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 75,
       "target": "data/a.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 122,
       "target": "receipts/run.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 122,
       "target": "scripts/train.py",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 130,
       "target": "manifests/b.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 130,
       "target": "receipts/a.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 134,
       "target": "data/a.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 134,
       "target": "scripts/eval.py",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "document": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
       "line": 223,
       "target": "receipts/manifests/schemas/configs",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/superpowers/specs/2026-07-25-ember-cli-prompt-input-border-design.md",
+      "document": "docs/domains/governance/superpowers/specs/2026-07-25-ember-cli-prompt-input-border-design.md",
       "line": 119,
       "target": "tools/ember-cli/src/ember.exe",
       "visible_classification": "reference"

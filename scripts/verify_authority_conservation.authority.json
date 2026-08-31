@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "scripts/verify_authority_conservation.py",
-  "artifact_sha256": "341ca77ef747be7975935b600f9aeae4e807a932a49aea61e551adbbe1c92edf",
+  "artifact_sha256": "0e9aa8638fef9f6c11cdde8aacfc24e75ac5639776257b1ce97c64e571da46c9",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

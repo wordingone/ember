@@ -2671,7 +2671,7 @@ def check_changed_artifact_bindings(
         ("docs/goal-clear-protocol.md", "docs/contracts/goal-clear-protocol.md"),
         ("docs/goal-live-session.md", "docs/guides/goal-live-session.md"),
         ("docs/ember-floor-contract.md", "docs/contracts/ember-floor-contract.md"),
-        ("docs/custody-disposition-20260708.md", "docs/custody/custody-disposition-20260708.md"),
+        ("docs/custody-disposition-20260708.md", "docs/domains/governance/custody/custody-disposition-20260708.md"),
         ("docs/r1-exit-evidence-inventory-20260805.md", "docs/custody/r1-exit-evidence-inventory-20260805.md"),
         ("docs/START-HERE.md", "docs/domains/governance/guides/START-HERE.md"),
         ("docs/PROBLEMS.md", "docs/roadmap/PROBLEMS.md"),

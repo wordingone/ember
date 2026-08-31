@@ -490,7 +490,7 @@ def main() -> int:
             "(766 steps, receipts/cbase-grow-rung/cbase-grow-rung1-live-20260703T155711Z.json "
             "stabilization_segment.global_step_end) at the CURRENT grown width (ff=16384, "
             "1,221,633,024 params) -- a fixed, completed compute/step budget, the same axis "
-            "docs/spec/c-scale-s1-growth-chain-DRAFT.md §9 D1 uses for S1 rung sizing "
+            "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md §9 D1 uses for S1 rung sizing "
             "('Option B: fixed FLOPs per rung... steps(rung) = max(ceil(ANCHOR/(6*N*batch*seq)), "
             "30)'). This does NOT claim a from-scratch run at ff=16384 would reach a comparable "
             "loss in 766 steps -- that convergence-equivalence claim is explicitly NOT made and "

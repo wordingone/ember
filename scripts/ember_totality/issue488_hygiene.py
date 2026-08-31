@@ -28,8 +28,94 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.ember_totality.ember_totality_spec import compute_working_set
-from scripts.lib.invariant import INVARIANT_SHA256
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_totality/ember_totality_spec.py
+import importlib.util as _ember_a8376424dcb1abdf_importlib
+import sys as _ember_a8376424dcb1abdf_sys
+from pathlib import Path as _ember_a8376424dcb1abdf_Path
+_ember_a8376424dcb1abdf_path = _ember_a8376424dcb1abdf_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'ember_totality_spec.py')
+if not _ember_a8376424dcb1abdf_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
+_ember_a8376424dcb1abdf_aliases = ('_ember_issue2015_a8376424dcb1abdf', 'ember_totality_spec', 'scripts.ember_totality.ember_totality_spec')
+_ember_a8376424dcb1abdf_existing = []
+for _ember_a8376424dcb1abdf_alias in _ember_a8376424dcb1abdf_aliases:
+    _ember_a8376424dcb1abdf_candidate = _ember_a8376424dcb1abdf_sys.modules.get(_ember_a8376424dcb1abdf_alias)
+    if _ember_a8376424dcb1abdf_candidate is not None and all(_ember_a8376424dcb1abdf_candidate is not item for item in _ember_a8376424dcb1abdf_existing):
+        _ember_a8376424dcb1abdf_existing.append(_ember_a8376424dcb1abdf_candidate)
+if len(_ember_a8376424dcb1abdf_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
+if _ember_a8376424dcb1abdf_existing:
+    _ember_a8376424dcb1abdf_module = _ember_a8376424dcb1abdf_existing[0]
+    _ember_a8376424dcb1abdf_observed = getattr(_ember_a8376424dcb1abdf_module, '__file__', None)
+    if _ember_a8376424dcb1abdf_observed is None or _ember_a8376424dcb1abdf_Path(_ember_a8376424dcb1abdf_observed).resolve() != _ember_a8376424dcb1abdf_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
+else:
+    _ember_a8376424dcb1abdf_spec = _ember_a8376424dcb1abdf_importlib.spec_from_file_location('_ember_issue2015_a8376424dcb1abdf', _ember_a8376424dcb1abdf_path)
+    if _ember_a8376424dcb1abdf_spec is None or _ember_a8376424dcb1abdf_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
+    _ember_a8376424dcb1abdf_module = _ember_a8376424dcb1abdf_importlib.module_from_spec(_ember_a8376424dcb1abdf_spec)
+    for _ember_a8376424dcb1abdf_alias in _ember_a8376424dcb1abdf_aliases:
+        _ember_a8376424dcb1abdf_prior = _ember_a8376424dcb1abdf_sys.modules.get(_ember_a8376424dcb1abdf_alias)
+        if _ember_a8376424dcb1abdf_prior is not None and _ember_a8376424dcb1abdf_prior is not _ember_a8376424dcb1abdf_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
+        _ember_a8376424dcb1abdf_sys.modules[_ember_a8376424dcb1abdf_alias] = _ember_a8376424dcb1abdf_module
+    try:
+        _ember_a8376424dcb1abdf_spec.loader.exec_module(_ember_a8376424dcb1abdf_module)
+    except BaseException:
+        for _ember_a8376424dcb1abdf_alias in _ember_a8376424dcb1abdf_aliases:
+            if _ember_a8376424dcb1abdf_sys.modules.get(_ember_a8376424dcb1abdf_alias) is _ember_a8376424dcb1abdf_module:
+                _ember_a8376424dcb1abdf_sys.modules.pop(_ember_a8376424dcb1abdf_alias, None)
+        raise
+for _ember_a8376424dcb1abdf_alias in _ember_a8376424dcb1abdf_aliases:
+    _ember_a8376424dcb1abdf_prior = _ember_a8376424dcb1abdf_sys.modules.get(_ember_a8376424dcb1abdf_alias)
+    if _ember_a8376424dcb1abdf_prior is not None and _ember_a8376424dcb1abdf_prior is not _ember_a8376424dcb1abdf_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
+    _ember_a8376424dcb1abdf_sys.modules[_ember_a8376424dcb1abdf_alias] = _ember_a8376424dcb1abdf_module
+compute_working_set = getattr(_ember_a8376424dcb1abdf_module, 'compute_working_set')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_totality/ember_totality_spec.py
+# issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
+import importlib.util as _ember_2560a87c017c05b0_importlib
+import sys as _ember_2560a87c017c05b0_sys
+from pathlib import Path as _ember_2560a87c017c05b0_Path
+_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+if not _ember_2560a87c017c05b0_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
+_ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')
+_ember_2560a87c017c05b0_existing = []
+for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+    _ember_2560a87c017c05b0_candidate = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+    if _ember_2560a87c017c05b0_candidate is not None and all(_ember_2560a87c017c05b0_candidate is not item for item in _ember_2560a87c017c05b0_existing):
+        _ember_2560a87c017c05b0_existing.append(_ember_2560a87c017c05b0_candidate)
+if len(_ember_2560a87c017c05b0_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+if _ember_2560a87c017c05b0_existing:
+    _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_existing[0]
+    _ember_2560a87c017c05b0_observed = getattr(_ember_2560a87c017c05b0_module, '__file__', None)
+    if _ember_2560a87c017c05b0_observed is None or _ember_2560a87c017c05b0_Path(_ember_2560a87c017c05b0_observed).resolve() != _ember_2560a87c017c05b0_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/lib/invariant.py')
+else:
+    _ember_2560a87c017c05b0_spec = _ember_2560a87c017c05b0_importlib.spec_from_file_location('_ember_issue2015_2560a87c017c05b0', _ember_2560a87c017c05b0_path)
+    if _ember_2560a87c017c05b0_spec is None or _ember_2560a87c017c05b0_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_importlib.module_from_spec(_ember_2560a87c017c05b0_spec)
+    for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+        _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+        if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+        _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+    try:
+        _ember_2560a87c017c05b0_spec.loader.exec_module(_ember_2560a87c017c05b0_module)
+    except BaseException:
+        for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+            if _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias) is _ember_2560a87c017c05b0_module:
+                _ember_2560a87c017c05b0_sys.modules.pop(_ember_2560a87c017c05b0_alias, None)
+        raise
+for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+    _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+    if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+INVARIANT_SHA256 = getattr(_ember_2560a87c017c05b0_module, 'INVARIANT_SHA256')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/lib/invariant.py
 
 
 MANIFEST_SCHEMA = "ember-issue-488-reference-manifest-v1"
