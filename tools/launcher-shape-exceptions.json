@@ -67,7 +67,7 @@
     },
     {
       "path": "tests/test_ember_root_launcher.py",
-      "sha256": "46d7aceecb69bf0ea747abd3584b03844d1023a78b8e75f31b54829eb1a27f35",
+      "sha256": "1626215e538be15ce0deceb5da539261f3fe3357d11b44f478200df9cbad76f1",
       "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {
