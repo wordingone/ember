@@ -26,7 +26,7 @@ from scripts.lib.invariant import stamp
 GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
-PROBE_REL = Path("scripts/ember_totality/test_c_grow.py")
+PROBE_REL = Path("src/ember/governance/scripts/ember_totality/test_c_grow.py")
 EVIDENCE_RE = re.compile(r"present in ([^ ]+)")
 
 

@@ -31,7 +31,7 @@ way round):
     (ii) founder_likeness   -- runs its own event stream, initiates+completes
                                work with receipts, answers when addressed.
                                Battery = the nck/ 20-episode duty battery
-                               (scripts/nck/replay_rig.py + seat_adapter.py) --
+                               (src/ember/governance/scripts/nck/replay_rig.py + seat_adapter.py) --
                                the SAME battery sp6c-e2b-shakedown already
                                ran the E2B seat through
                                (receipts/sp6c-e2b-shakedown-*.json).
@@ -195,7 +195,7 @@ this file as `protocol_frozen_ref`.
    slice, same n_tasks, same corpus seed.
 
 2. **founder_likeness** -- the nck/ 20-episode duty battery
-   (scripts/nck/replay_rig.py::join_battery_encodings +
+   (src/ember/governance/scripts/nck/replay_rig.py::join_battery_encodings +
    scripts/nck/seat_adapter.py::make_seat_core), the SAME battery the
    2026-06-12 sp6c-e2b-shakedown receipts already ran the E2B seat through.
    Both arms are bound into the SAME seat_adapter core protocol

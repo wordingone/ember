@@ -219,7 +219,7 @@ receipt; SOAR reports 1.0% pass@1 zero-shot for a 7B-class base). The
 resolution is role separation, not abandonment: ARC moves to the *held-out
 transfer surface* role — where its adversarial design is exactly what you
 want — and training worlds are selected for floor accessibility and density.
-Full analysis: `docs/research/world-choice.md`.
+Full analysis: `docs/domains/governance/research/world-choice.md`.
 
 ## 8. Residency as a correctness criterion
 

@@ -81,7 +81,7 @@ N/A -- never assumed):
     production. rho_rank / rho_grow are therefore N/A-by-construction
     (structural, no projector enabled) for all three checkpoints -- an
     honest finding per the spec's own "an N/A is a finding, not a gap".
-  - 8-bit optimizer state (rho_block): scripts/ember_d6_bf16_momentum_ab.py
+  - 8-bit optimizer state (rho_block): src/ember/governance/scripts/ember_d6_bf16_momentum_ab.py
     measured (CPU selftest, no assumption) that production optimizer state
     is bf16-native end to end (AdamW/_Muon zeros_like(g) inherits the
     bf16 param/grad dtype; nothing promotes to fp32 anywhere in the
@@ -481,7 +481,7 @@ PRE_REGISTRATION = {
         "unwired research harness.",
         "rho_block is N/A (structural) -- production optimizer state is "
         "bf16-native end to end, no 8-bit optimizer-state path exists "
-        "(scripts/ember_d6_bf16_momentum_ab.py measured this directly); "
+        "(src/ember/governance/scripts/ember_d6_bf16_momentum_ab.py measured this directly); "
         "the formula is implemented and selftested regardless.",
         "net2net grow noise (epsilon) is measured, not assumed, every run "
         "by diffing the realized duplicate pair post-widen; production's "

@@ -14,7 +14,7 @@ refuses immediately -- that refusal, not a policy or a README, is the
 enforcement mechanism #1344 asks for.
 
 This is the Python mirror of
-`runtime/ember-lab/src/main.rs::consume_verifier_dispatch_token`: the same
+`domains/runtime/runtime/ember-lab/src/main.rs::consume_verifier_dispatch_token`: the same
 four environment variables, the same named-pipe JSON-RPC method
 (`consume_verifier_dispatch_token` -- generic despite the name; see
 `runtime/ember-lab/src/rpc.rs`, which routes it straight to
@@ -91,7 +91,7 @@ _EMBER_LAB_SOURCE_RELATIVE = (
     "runtime/ember-lab/src/lib.rs",
     "runtime/ember-lab/src/data_catalog.rs",
     "runtime/ember-lab/src/rpc.rs",
-    "runtime/ember-lab/src/main.rs",
+    "domains/runtime/runtime/ember-lab/src/main.rs",
     "runtime/ember-lab/src/training_verify.rs",
     "runtime/ember-lab/Cargo.toml",
     "runtime/ember-lab/Cargo.lock",

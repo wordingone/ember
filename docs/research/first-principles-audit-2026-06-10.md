@@ -1263,7 +1263,7 @@ minted + mailed).
 ## 8.31 sp-1 (#117): the-search → ember component map — method layer ports strongest
 
 User-pointed (via an agent 14482). Verdict of the mapping
-(docs/research/sp1-thesearch-ember-map.md): the-search's REGIME (no labels,
+(docs/domains/governance/research/sp1-thesearch-ember-map.md): the-search's REGIME (no labels,
 no gradients) is ember's opposite, so component-level ports are
 selective while the METHOD layer ports whole: family/kill discipline,
 extraction protocol (= our matched-control single-variable arms),

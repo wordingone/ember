@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_measured_flops.py — INSTRUMENTED (measured, not analytical)
-flop_saving receipt for C-GROW (scripts/ember_totality/test_c_grow.py).
+flop_saving receipt for C-GROW (src/ember/governance/scripts/ember_totality/test_c_grow.py).
 
 Why this script exists
 -----------------------
@@ -533,9 +533,9 @@ def main() -> int:
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "invariant_sha256": INVARIANT_SHA256,
         "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
-        "issue": "refs the C-GROW owning issue (docs/domains/governance/spec/conditions-v1.md C-GROW; scripts/ember_totality/test_c_grow.py)",
+        "issue": "refs the C-GROW owning issue (docs/domains/governance/spec/conditions-v1.md C-GROW; src/ember/governance/scripts/ember_totality/test_c_grow.py)",
         "probe_requirement_as_read": (
-            "scripts/ember_totality/test_c_grow.py CHK: post-grow loss continuous within "
+            "src/ember/governance/scripts/ember_totality/test_c_grow.py CHK: post-grow loss continuous within "
             "tolerance AND FLOPs-to-fixed-target lower than the from-scratch baseline at the "
             "grown size, MEASURED (not a self-declared estimate/unmeasured flop_saving block "
             "-- flop_saving_self_declares_unmeasured() added by PR #608 rejects any flop_saving-"

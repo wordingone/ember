@@ -22,7 +22,7 @@ explicitly ("The pre-grow optimizer state cannot be replayed into the
 post-grow optimizer ... reset_optimizer_on_resume=True skips that load").
 Production defaults to Branch B (reset) by omission, not by adjudicated
 law. The only existing transplant + fail-closed code
-(scripts/cbase_grow_rung2_event.py's `_pushforward_gate_momentum` +
+(src/ember/governance/scripts/cbase_grow_rung2_event.py's `_pushforward_gate_momentum` +
 src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py's `EngagementFailure`) lives in the
 FORENSIC/measurement path (the b3/b4 d_comm arms comparison), not in a
 form a production stabilize launcher can call. This module is that
@@ -111,7 +111,7 @@ MOMENTUM_PUSHFORWARD_RULE_DECLARED = (
     "momentum buffer is not itself perturbed by the #280 operator; only weights are). "
     "AdamW-routed params (embeddings/norms/head/mtp_heads): shape-invariant across the grow, "
     "no pushforward needed (net2net widening only touches Muon-routed FF tensors). "
-    "Verbatim from scripts/cbase_grow_rung2_event.py's MOMENTUM_PUSHFORWARD_RULE_DECLARED."
+    "Verbatim from src/ember/governance/scripts/cbase_grow_rung2_event.py's MOMENTUM_PUSHFORWARD_RULE_DECLARED."
 )
 
 BOUNDARY_POLICY = (

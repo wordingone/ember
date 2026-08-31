@@ -423,8 +423,8 @@ def test_d04_superseding_amendment_binds_single_authority_and_consumers() -> Non
             "sha256": _sha((ROOT / "src/ember/governance/scripts/r1_frozen_eval_runner.py").read_bytes()),
         },
         "r2_consumer": {
-            "path": "scripts/r2_cheap_probe_battery.py",
-            "sha256": _sha((ROOT / "scripts/r2_cheap_probe_battery.py").read_bytes()),
+            "path": "src/ember/governance/scripts/r2_cheap_probe_battery.py",
+            "sha256": _sha((ROOT / "src/ember/governance/scripts/r2_cheap_probe_battery.py").read_bytes()),
         },
         "owned_server": {
             "path": "tools/ember-restart-3b/serve_owned_openai.py",

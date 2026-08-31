@@ -12,7 +12,7 @@ probe. Therefore R2-E3, R2-E4, and F-03 are explicitly deferred.
 
 ## Current executable authority
 
-`scripts/r2_cheap_probe_battery.py` remains the executable consumer. Its empty
+`src/ember/governance/scripts/r2_cheap_probe_battery.py` remains the executable consumer. Its empty
 registry and `BATTERY_UNDEFINED` refusal are the only truthful current result.
 That refusal grants no R2 advancement credit and no R3 funding. It is not a
 failed model result and it does not establish capability, training, or

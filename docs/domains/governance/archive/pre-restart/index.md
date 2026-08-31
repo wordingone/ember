@@ -47,8 +47,8 @@ Live chain (each step fail-closed on the previous step's receipt):
    `src/ember/governance/scripts/fp23_probe_prereg.py` (bar: ≥1.0 verified L1 episode per
    governed minute at the 2B checkpoint; one retry at 4B); executed by
    `src/ember/governance/scripts/fp24_verdict.py`; the kill path additionally requires a
-   receipted curriculum-synthesis attempt (`scripts/fp29_kill_synthesis_gate.py`).
-7. **Accumulation round 1** — frozen prereg `scripts/fp27_round1_prereg.py`
+   receipted curriculum-synthesis attempt (`src/ember/governance/scripts/fp29_kill_synthesis_gate.py`).
+7. **Accumulation round 1** — frozen prereg `src/ember/governance/scripts/fp27_round1_prereg.py`
    (split discipline, sampling pins, frozen verdict vocabulary);
    persistence-gate instances in `docs/domains/governance/research/sp2-owned-core-persistence-gates.md`.
 8. **Coverage obligation** — `scripts/fp28_v0_coverage.py` discharges the

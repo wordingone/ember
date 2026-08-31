@@ -4,7 +4,7 @@
   "observed_at": "2026-08-10T07:33:42Z",
   "public_master": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
   "producer": {
-    "path": "scripts/cbase_grow_rung2_event.py",
+    "path": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
     "blob_sha": "5f4ec2f0ce9bef5bb42844f045ddea67e352703a",
     "phase": "b3",
     "persisted_actual_operands": ["grad_post_gate"],

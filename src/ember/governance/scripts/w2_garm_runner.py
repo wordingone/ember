@@ -102,7 +102,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "growth_refutation"))
 sys.path.insert(0, os.path.join(HERE, "w2_heldout"))
 
-import capacity  # scripts/growth_refutation/capacity.py -- reused, not edited
+import capacity  # src/ember/governance/scripts/growth_refutation/capacity.py -- reused, not edited
 import launch_gate  # src/ember/governance/scripts/w2_heldout/launch_gate.py -- reused, not edited
 import governor  # src/ember/governance/scripts/governor.py -- reused, not edited
 import w2_derive_s_config  # issue #108's tool -- reused, not edited
@@ -293,7 +293,7 @@ def run_grow_step(run_id: str, out_dir: str) -> dict:
         "dry_run": True,
         "is_real_lineage": False,
         "operator": {
-            "module": "scripts/growth_refutation/capacity.py",
+            "module": "src/ember/governance/scripts/growth_refutation/capacity.py",
             "function": "net2net_grow",
             "provenance": (
                 "landed byte-for-byte from previously-uncommitted local "

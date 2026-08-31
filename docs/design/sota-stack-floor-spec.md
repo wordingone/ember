@@ -26,7 +26,7 @@ It has two load-bearing jobs:
 3. **Receipts-only literature:** every maturity or frontier claim has a primary
    citation. Every Ember status has an exact config, implementation, or receipt.
 4. **Training translation:** every inference technique is mapped through
-   [`docs/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md).
+   [`docs/domains/governance/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md).
    Missing training twins are recorded as research gaps rather than silently
    treated as irrelevant.
 
@@ -44,7 +44,7 @@ For every node:
 4. compare Ember's current evidence as `EXCEEDS`, `MEETS`, `LAGS`, or
    `UNMEASURED`;
 5. link the node's inference lever to its training-side twin in
-   `docs/design/inference-to-training-translation-v1.md`;
+   `docs/domains/governance/design/inference-to-training-translation-v1.md`;
 6. name a bounded experiment when the row is `LAGS` or `UNMEASURED`.
 
 After the per-node pass, perform a cross-node synthesis pass. A synthesized
@@ -54,7 +54,7 @@ external baseline, execution receipt, comparator, and deletion test.
 ## Deliverables
 
 - `docs/design/sota-stack-floor.md`: maintained per-layer gap table and evidence links.
-- `docs/design/inference-to-training-translation-v1.md`: inference-to-training mapping.
+- `docs/domains/governance/design/inference-to-training-translation-v1.md`: inference-to-training mapping.
 - `docs/ledgers/technique-registry.jsonl`: adopted technique registry.
 - `scripts/check_inference_training_translation.py`: deterministic structural
   and citation-resolution gate.

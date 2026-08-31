@@ -13,7 +13,7 @@
 ### Task 1: Write activation RED tests
 
 **Files:**
-- Modify: `tests/ember_restart_model/test_training_acceleration.py`
+- Modify: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
 - Modify: `tests/ember_restart_model/domain-governance/test_pretrain.py`
 - Modify: `tests/ember_restart_model/domain-governance/test_runner_preflight.py`
 

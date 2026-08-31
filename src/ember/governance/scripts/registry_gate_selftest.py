@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Selftest for the technique-registry dispatch gate (#256, sp-7).
 
 Validates the LIVE registry, predicate coverage of ADOPT rows, and the gate
@@ -14,7 +15,53 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from registry_gate import PREDICATES, check, load_registry, normalize_config_path  # noqa: E402
+# issue2015 exact-local-import:scripts/registry_gate.py
+import importlib.util as _ember_abd330e63c6c95de_importlib
+import sys as _ember_abd330e63c6c95de_sys
+from pathlib import Path as _ember_abd330e63c6c95de_Path
+_ember_abd330e63c6c95de_path = _ember_abd330e63c6c95de_Path(__file__).resolve().parents[4].joinpath('scripts', 'registry_gate.py')
+if not _ember_abd330e63c6c95de_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/registry_gate.py')
+_ember_abd330e63c6c95de_aliases = ('_ember_issue2015_abd330e63c6c95de', 'registry_gate', 'scripts.registry_gate')
+_ember_abd330e63c6c95de_existing = []
+for _ember_abd330e63c6c95de_alias in _ember_abd330e63c6c95de_aliases:
+    _ember_abd330e63c6c95de_candidate = _ember_abd330e63c6c95de_sys.modules.get(_ember_abd330e63c6c95de_alias)
+    if _ember_abd330e63c6c95de_candidate is not None and all(_ember_abd330e63c6c95de_candidate is not item for item in _ember_abd330e63c6c95de_existing):
+        _ember_abd330e63c6c95de_existing.append(_ember_abd330e63c6c95de_candidate)
+if len(_ember_abd330e63c6c95de_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/registry_gate.py')
+if _ember_abd330e63c6c95de_existing:
+    _ember_abd330e63c6c95de_module = _ember_abd330e63c6c95de_existing[0]
+    _ember_abd330e63c6c95de_observed = getattr(_ember_abd330e63c6c95de_module, '__file__', None)
+    if _ember_abd330e63c6c95de_observed is None or _ember_abd330e63c6c95de_Path(_ember_abd330e63c6c95de_observed).resolve() != _ember_abd330e63c6c95de_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/registry_gate.py')
+else:
+    _ember_abd330e63c6c95de_spec = _ember_abd330e63c6c95de_importlib.spec_from_file_location('_ember_issue2015_abd330e63c6c95de', _ember_abd330e63c6c95de_path)
+    if _ember_abd330e63c6c95de_spec is None or _ember_abd330e63c6c95de_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/registry_gate.py')
+    _ember_abd330e63c6c95de_module = _ember_abd330e63c6c95de_importlib.module_from_spec(_ember_abd330e63c6c95de_spec)
+    for _ember_abd330e63c6c95de_alias in _ember_abd330e63c6c95de_aliases:
+        _ember_abd330e63c6c95de_prior = _ember_abd330e63c6c95de_sys.modules.get(_ember_abd330e63c6c95de_alias)
+        if _ember_abd330e63c6c95de_prior is not None and _ember_abd330e63c6c95de_prior is not _ember_abd330e63c6c95de_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/registry_gate.py')
+        _ember_abd330e63c6c95de_sys.modules[_ember_abd330e63c6c95de_alias] = _ember_abd330e63c6c95de_module
+    try:
+        _ember_abd330e63c6c95de_spec.loader.exec_module(_ember_abd330e63c6c95de_module)
+    except BaseException:
+        for _ember_abd330e63c6c95de_alias in _ember_abd330e63c6c95de_aliases:
+            if _ember_abd330e63c6c95de_sys.modules.get(_ember_abd330e63c6c95de_alias) is _ember_abd330e63c6c95de_module:
+                _ember_abd330e63c6c95de_sys.modules.pop(_ember_abd330e63c6c95de_alias, None)
+        raise
+for _ember_abd330e63c6c95de_alias in _ember_abd330e63c6c95de_aliases:
+    _ember_abd330e63c6c95de_prior = _ember_abd330e63c6c95de_sys.modules.get(_ember_abd330e63c6c95de_alias)
+    if _ember_abd330e63c6c95de_prior is not None and _ember_abd330e63c6c95de_prior is not _ember_abd330e63c6c95de_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/registry_gate.py')
+    _ember_abd330e63c6c95de_sys.modules[_ember_abd330e63c6c95de_alias] = _ember_abd330e63c6c95de_module
+PREDICATES = getattr(_ember_abd330e63c6c95de_module, 'PREDICATES')
+check = getattr(_ember_abd330e63c6c95de_module, 'check')
+load_registry = getattr(_ember_abd330e63c6c95de_module, 'load_registry')
+normalize_config_path = getattr(_ember_abd330e63c6c95de_module, 'normalize_config_path')
+# issue2015 exact-local-import-end:scripts/registry_gate.py  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TODAY = dt.date(2026, 6, 12)

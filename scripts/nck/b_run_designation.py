@@ -5,7 +5,7 @@
 """sp-6b B-run designation resolver (part of #282).
 
 Mechanically resolves THE ember checkpoint for the official B3 run per the
-frozen rule (docs/archive/pre-restart/sp6b-designation-rule-v0.md): highest-step COMPLETE
+frozen rule (docs/domains/governance/archive/pre-restart/sp6b-designation-rule-v0.md): highest-step COMPLETE
 checkpoint across the named lineage dirs, inside the resolution window.
 Pure function of the checkpoint dirs + clock — reads NOTHING from receipts/
 (battery scores cannot reach the choice).

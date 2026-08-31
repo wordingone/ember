@@ -9,7 +9,7 @@
   "issue_contract_sha256": "992463793324f75d90e0d80128efbe980a3cc7ee9171300132b59b536b468f33",
   "cpu_packet_binding": "external-manifest-last",
   "source_admission": {
-    "historical_producer": "scripts/cbase_grow_rung2_event.py",
+    "historical_producer": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
     "historical_import_refusal": "historical_only: the sub-3B cbase trainer and every importer are execution-denied",
     "governed_vertical_entrypoint_present": false,
     "b3_gradient_persisted": true,

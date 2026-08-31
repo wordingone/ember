@@ -79,7 +79,7 @@ DEFAULT_CHECKERS: tuple = (
     ),
     CheckerSpec(
         name="check_energy_law_theory",
-        rel_path="scripts/check_energy_law_theory.py",
+        rel_path="src/ember/governance/scripts/check_energy_law_theory.py",
         args=("--selftest",),
         verdict_regex=r"^selftest:\s*(ALL PASS|\d+ FAILED)\s*$",
         pass_values=("ALL PASS",),

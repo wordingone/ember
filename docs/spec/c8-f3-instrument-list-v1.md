@@ -46,7 +46,7 @@ not chosen:
   (`receipts/eval-suite-freeze/EVAL-FREEZE-HASH`; declaration
   `receipts/eval-suite-freeze/a1-freeze-declaration-20260709T233050Z.json`, `freeze_ts`
   2026-07-09T23:30:50Z, seven pinned datasets).
-- `docs/spec/eval-suite-freeze-v1.md` and the declaration's own GPQA clause fix the amendment
+- `docs/domains/governance/spec/eval-suite-freeze-v1.md` and the declaration's own GPQA clause fix the amendment
   mechanism: *a dataset pinned later joins a future suite VERSION; it is never appended to a
   frozen one.*
 - Therefore admitting a candidate from outside the seven would require a suite v2, a fresh
@@ -175,7 +175,7 @@ every dataset. `main` is a mutable ref and is **not** the pin — the binding pi
 canonical URL, re-hash, and compare against the recorded `test_split_sha256`. **A mismatch is a
 fetch FAILURE**, published as such and requiring a dated amendment; it is never cured by re-pinning
 to whatever upstream now serves. Harness: the standard open harness pinned by commit SHA in the
-freeze receipt (`docs/spec/eval-suite-freeze-v1.md` "Harness"); prompt templates and scoring
+freeze receipt (`docs/domains/governance/spec/eval-suite-freeze-v1.md` "Harness"); prompt templates and scoring
 configs are frozen in that receipt and are not tuned per candidate. Licences below were re-checked
 against upstream on 2026-08-03.
 

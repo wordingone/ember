@@ -115,7 +115,7 @@ they cannot reduce, defer, replace, or reinterpret it.
   "conservation_hashes": {
     "authority_matrix_sha256": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "FC48AA72C9223994B9F4E349B7EDC0297A87CD3DE14AAACB06BE022BD30EB59E",
+      "docs/authority/CONTINUITY.md": "98654ED20178EBAF7CA5CAC8F0F69E2708DA53BE3D8DF4107168AAF37B4D7FED",
       "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
       "README.md": "36E71D64027D4D405224FBC12B8449C9BA505B019A4F3B6B10E995A049ABA35D",
       "docs/authority/ember-authority-matrix.md": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
@@ -125,7 +125,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/domains/governance/spec/conditions-v1.md": "AA7867D324263658986681048EBF457A558FE3AEEC4D0FA3A721C7BF6795375D"
+      "docs/domains/governance/spec/conditions-v1.md": "DB91B218C5EF4F84BD55E79F6FE0FC3FC9FE716568CBAED5DD62CFDE737343D7"
     }
   },
   "authority_only_goal": false,

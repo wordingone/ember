@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_live.py — REAL governed net2net warm-start growth run (C-GROW).
 
-Produces the C-GROW receipt scripts/ember_totality/test_c_grow.py (in
+Produces the C-GROW receipt src/ember/governance/scripts/ember_totality/test_c_grow.py (in
 the goal-forge working tree, read as the field/shape spec) demands: a net2net FF-
 widening warm-start MEASURED on a real governed training run — before/after
 PARAMETER COUNTS, LOSS CONTINUITY across the grow step, and the FLOP-SAVING

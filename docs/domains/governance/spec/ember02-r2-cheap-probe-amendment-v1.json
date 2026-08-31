@@ -17,7 +17,7 @@
     ],
     "registry_state": "EMPTY",
     "defined_probes": [],
-    "runner": "scripts/r2_cheap_probe_battery.py",
+    "runner": "src/ember/governance/scripts/r2_cheap_probe_battery.py",
     "runner_refusal": "BATTERY_UNDEFINED",
     "advancement_credit": false,
     "r3_funding_allowed": false,

@@ -6,7 +6,7 @@
 subject artifact by hash uses to fail closed on unverified custody.
 
 Shells out to the real `ember-lab custody-verify` CLI
-(``runtime/ember-lab/src/main.rs``) -- never reimplements the check in Python -- so
+(``domains/runtime/runtime/ember-lab/src/main.rs``) -- never reimplements the check in Python -- so
 every Python-side gate consumes the exact same catalog logic the Rust suite proves
 (``domains/runtime/runtime/ember-lab/tests/artifact_custody.rs``). The receipt is always written to
 disk before the admission decision, mirroring the CLI's own convention: a refusal is

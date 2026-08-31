@@ -7,7 +7,7 @@
 > holds; and `docs/domains/governance/spec/conditions-v1.md` does regulate sub-quadratic substitution
 > (`invalid_substrate_downgrade`), so read "zero mentions" as an audit-date claim at
 > best. §6 is the maintained tail — for the live frontier read
-> `docs/design/inference-to-training-translation-v1.md` and
+> `docs/domains/governance/design/inference-to-training-translation-v1.md` and
 > `docs/design/sota-stack-floor.md`.
 
 Operator raised (2026-07-03 ~23:10, verbatim themes): (1) "you've been training ember on fp16 —
@@ -100,7 +100,7 @@ evolving HIS OWN foundation models — sovereign, no cloud/subscription AI in th
 ## 6. Inference-to-training translation and C-SCALE(ii)
 
 The maintained translation system is
-[`docs/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md);
+[`docs/domains/governance/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md);
 the per-layer frontier and gap table is
 [`docs/design/sota-stack-floor.md`](sota-stack-floor.md). These replace the former
 implicit assumption that an inference optimization automatically supplies a

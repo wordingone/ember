@@ -150,7 +150,7 @@ Full patch/path equality was recomputed from immutable objects, not inferred fro
 
 No-consumer searches were bounded and exact. GitHub code search returned zero tracked-file matches for each branch ref, head SHA, and merge SHA. Issue search returned only the candidate issue references: branch `feat/main-tree-guard` -> #385; `fix/issue-400` -> none; `fix/custody-sidecar-401` -> #401 and #409; equivalent head-SHA searches returned #385, #403, and #401/#409 respectively. Releases matched 0, tags matched 0, and deployments matched 0 for all nine searched ref/SHA tokens. Canonical search-result digest (sorted query/result lines, LF-terminated) is `c4057e2aae59fda9eb323ba6775ed7dd287aac1fb19d158ae941f9ffbeb313aa`.
 
-Paired fresh pre-delete receipt: `docs/custody/vera-c1m-branch-deletion-predelete-receipt-v1.md`, byte SHA-256 `B9866D4BA1AC4B7D8E74424AFEC78760F90C57365FDEE545D89D094B74876BAF`. It is explicitly `PREDELETE_REVIEW_ONLY` with `deletion_performed: false` and carries the same live ref/age/consumer facts.
+Paired fresh pre-delete receipt: `docs/domains/governance/custody/vera-c1m-branch-deletion-predelete-receipt-v1.md`, byte SHA-256 `B9866D4BA1AC4B7D8E74424AFEC78760F90C57365FDEE545D89D094B74876BAF`. It is explicitly `PREDELETE_REVIEW_ONLY` with `deletion_performed: false` and carries the same live ref/age/consumer facts.
 
 The manifest branch itself is `docs/vera-c1m-branch-deletion-manifest` at PR #929. It is retained through review and any accepted ref deletions; after the manifest is merged and the three DELETE requests each return HTTP 204, the exact branch ref is retired in a separate final recheck while this manifest remains in `master`. No retirement or deletion is executed by this PR.
 ## Reconstruction and deletion plan (not executed)

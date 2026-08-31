@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_rung2_completion_audit.py — issue #626 read-only audit.
 
-Enumerates every growth receipt scripts/ember_totality/test_c_grow.py itself
+Enumerates every growth receipt src/ember/governance/scripts/ember_totality/test_c_grow.py itself
 scans (via that module's own candidate_files()) and tables, per receipt,
 which of the probe's four R-text requirements its raw text already
 satisfies:
@@ -17,7 +17,7 @@ satisfies:
 plus the probe's own measured/invalid/smoke/near-miss classification, so
 this table matches test_c_grow.py's real verdict exactly (same regex
 objects, imported directly -- zero duplication, zero probe edits; this
-script only READS scripts/ember_totality/test_c_grow.py as a module).
+script only READS src/ember/governance/scripts/ember_totality/test_c_grow.py as a module).
 
 Default invocation is read-only and never touches the probe file. The two explicit
 --write-*-receipt modes exclusively publish a stamped successor under
@@ -238,7 +238,7 @@ def build_completion_receipt(
         ),
         "probe": {
             "verdict": "GREEN",
-            "command": "python -B scripts/ember_totality/test_c_grow.py",
+            "command": "python -B src/ember/governance/scripts/ember_totality/test_c_grow.py",
             "stdout": probe_stdout,
             "stderr": completed.stderr.strip(),
             "exit_code": completed.returncode,
@@ -367,7 +367,7 @@ def main() -> int:
         "issue": 626,
         "script": "scripts/cbase_grow_rung2_completion_audit.py",
         "scope": (
-            "Read-only enumeration of every file scripts/ember_totality/test_c_grow.py's own "
+            "Read-only enumeration of every file src/ember/governance/scripts/ember_totality/test_c_grow.py's own "
             "candidate_files() scans, tabled per the probe's four R-text requirements (grow_method, "
             "param_counts_before_after, loss_continuity, flop_saving_vs_fromscratch) plus its "
             "measured/exclusion classification -- zero probe edits, direct import + reuse of the "

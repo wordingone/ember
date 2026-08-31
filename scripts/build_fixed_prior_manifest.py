@@ -203,7 +203,7 @@ INVENTORY: tuple[dict, ...] = (
          provenance="The sec5.3 DEGRADED_PROXY energy logger; smoke-tested as an "
                     "R1 entry-gate item. Criterion receipted before first use."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/check_energy_law_theory.py",
+         path="src/ember/governance/scripts/check_energy_law_theory.py",
          provenance="Energy-law receipt-shape checker (P1 receipt-shape check, R2-E2)."),
     dict(category="deterministic_tools", kind="file",
          path="src/ember/governance/scripts/ember_restart/contract.py",

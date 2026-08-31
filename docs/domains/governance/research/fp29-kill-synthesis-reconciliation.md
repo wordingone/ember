@@ -1,7 +1,7 @@
 # fp-29 — kill-rule curriculum-synthesis precondition (#200)
 
 Owner: the lead. Status: **RECONCILED** (tighten-only; no frozen file mutated).
-Artifact: `scripts/fp29_kill_synthesis_gate.py` (`--selftest` / `--emit`).
+Artifact: `src/ember/governance/scripts/fp29_kill_synthesis_gate.py` (`--selftest` / `--emit`).
 Receipt: `receipts/fp29-kill-gate-20260611T125510Z.json` (RECONCILED,
 `kill_requires_synthesis_receipt: true`, receipt_check clean).
 

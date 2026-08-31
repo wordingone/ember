@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """density_ab_verdict.py — aggregate 4 density A/B receipts into a combined verdict.
 
 Reads all 4 per-cell receipts (arm-a-seed0, arm-a-seed1, arm-b-seed0, arm-b-seed1),

@@ -12,7 +12,7 @@
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/domain-governance/test_pretrain.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_sparse_successor.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_specialist_stream.py"},
-    {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_training_acceleration.py"},
+    {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/domain-governance/test_training_acceleration.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_training_data_verifier.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_vertical_slice.py"}
   ],

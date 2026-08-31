@@ -1,8 +1,8 @@
-//! Ember Lab's rehearsal-first dispatch contract.
-//!
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+//! Ember Lab's rehearsal-first dispatch contract.
+//!
 
 //! This is the current implementation of the historical daemon's `rehearse`
 //! wording.  It deliberately reuses the Ember Lab dispatch authority instead
@@ -826,7 +826,7 @@ pub fn production_strict_gate_census() -> StrictGateCensus {
         gates: vec![
             StrictGate {
                 name: "dispatch_manifest_bytes".into(),
-                producer: "runtime/ember-lab/src/main.rs::dispatch".into(),
+                producer: "domains/runtime/runtime/ember-lab/src/main.rs::dispatch".into(),
                 consumers: vec![
                     "runtime/ember-lab/src/rpc.rs::dispatch_manifest".into(),
                     "runtime/ember-lab/src/lib.rs::dispatch_manifest_bytes".into(),

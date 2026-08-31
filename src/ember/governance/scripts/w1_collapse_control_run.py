@@ -1186,7 +1186,7 @@ def assert_disjoint_from_training(held_out_start: int, ceiling_steps: int,
 #                                     corpus_id -- the corpus dir's own
 #                                     basename ('shards-v0' is already the
 #                                     established repo-wide name for this
-#                                     corpus: docs/archive/pre-restart/density-ab-spec-v1.md,
+#                                     corpus: docs/domains/governance/archive/pre-restart/density-ab-spec-v1.md,
 #                                     src/ember/governance/scripts/token_shards_v0.py) -- plus the
 #                                     manifest's own combined_sha256, which
 #                                     pins CONTENT strictly more precisely

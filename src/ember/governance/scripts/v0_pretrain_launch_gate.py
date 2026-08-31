@@ -4,7 +4,7 @@
 """v0_pretrain_launch_gate.py — fail-closed dispatch gate for the owned-core
 v0 pretrain (historical c03: 0.4339B realized / 0.3684B base excluding MTP).
 
-This shim embeds docs/research/v0-launch-gate.md as named, receipt-checkable
+This shim embeds docs/domains/governance/research/v0-launch-gate.md as named, receipt-checkable
 assertions. The v0 trainer (#167 — scripts/timeshare_pretrain.py extended
 against configs/v0-pretrain-config.json) is dispatched THROUGH this gate:
 it loads each named receipt, receipt_checks it, verifies the pins, and

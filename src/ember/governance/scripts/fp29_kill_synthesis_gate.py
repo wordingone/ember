@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp29_kill_synthesis_gate.py — kill-rule curriculum-synthesis
 precondition gate (#200): reconcile the fp-26 kill wording with the
 frozen fp-23 decide() protocol.

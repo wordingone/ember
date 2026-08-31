@@ -177,7 +177,7 @@ def test_specialist_authorities_declare_canonical_preference(name: str) -> None:
         "tests/ember_restart_model/test_frozen_tokenizer_decoder.py",
         "tests/ember_restart_model/test_infer.py",
         "tests/ember_restart_model/test_issue1508_attempt_retention_layout.py",
-        "tests/ember_restart_model/test_launch_packet.py",
+        "tests/ember_restart_model/domain-governance/test_launch_packet.py",
         "tests/ember_restart_model/test_specialist_stream.py",
         "tests/ember_restart_model/test_tokenizer_reconstruction.py",
     ],

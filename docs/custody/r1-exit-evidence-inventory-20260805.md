@@ -83,7 +83,7 @@ missing capability (no CLI path today can both run ≥100 steps *and* record tel
   required to run the tests.
 - Receipts land under `receipts/ember-02-r1-exits/` in this worktree (never in the
   off-tree custody root), via `receipt_write.checked_write` (same atomic
-  quarantine-on-invalid convention as `scripts/r2_cheap_probe_battery.py`).
+  quarantine-on-invalid convention as `src/ember/governance/scripts/r2_cheap_probe_battery.py`).
 - Needs-execution plan: see the battery's own `--exit e1..e8` refusal `result.needs` field
   (machine-readable) and the build task's final report (this file does not re-duplicate
   the argv list — it lives with the execution plan since some legs need engineering first,

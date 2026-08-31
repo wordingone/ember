@@ -38,7 +38,7 @@ one current D-row or EMBER milestone, but still grants no completion credit.
 The following public documents were restored from their original Git
 objects because issue #35 still cited them while current master omitted them:
 
-- `docs/spec/publishability-adjudication-v1.md` from `f2027c00`;
+- `docs/domains/governance/spec/publishability-adjudication-v1.md` from `f2027c00`;
 - `docs/audit/class2-unwatched-mandates-recon-20260704.md` from
   `852457d3`.
 

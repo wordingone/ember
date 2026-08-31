@@ -3367,7 +3367,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "Energy-law receipt-shape checker (P1 receipt-shape check, R2-E2).",
-      "path": "scripts/check_energy_law_theory.py",
+      "path": "src/ember/governance/scripts/check_energy_law_theory.py",
       "sha256": "94094c0d5a24a7247facd13c4c3d1f4602e250a4d78e01e827f32610810c1902",
       "size_bytes": 33156
     },

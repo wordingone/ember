@@ -13,7 +13,7 @@ WHY THIS EXISTS
   CODE-LEVEL CORRECTION to the brief that commissioned this script: the
   brief describes that cell as comparing "COMPILED-bf16 NS5 output against
   the FP32-EAGER baseline", i.e. conflating dtype-swap and compile deltas in
-  one number. Reading scripts/ember_ceff_composition_ab.py::_run_bench_live
+  one number. Reading src/ember/governance/scripts/ember_ceff_composition_ab.py::_run_bench_live
   line-by-line shows this is NOT what the code does:
 
       equiv_bf16 = _ns5_equiv_cell(_ns5_bf16, ns5_bf16_fused, ...)
@@ -62,7 +62,7 @@ FOUR CELLS PER SHAPE (same seeded G, reused across all four within a shape)
                              trusting cells (1)-(3).
 
 FUNCTIONS REUSED VERBATIM (imported, not reimplemented, from
-scripts/ember_ceff_composition_ab.py — see ab_harness_sha256 in the receipt
+src/ember/governance/scripts/ember_ceff_composition_ab.py — see ab_harness_sha256 in the receipt
 for the exact byte-version mirrored)
   orig_ns5        = timeshare_pretrain._zeropower_via_newtonschulz5 (fp32 eager)
   ns5_bf16        = ember_ceff_composition_ab._ns5_bf16              (bf16 eager)

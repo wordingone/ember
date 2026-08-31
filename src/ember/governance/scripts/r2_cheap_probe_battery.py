@@ -164,15 +164,15 @@ Refusal reasons (R2ProbeBatteryRefusal, always prefixed onto the message):
   SCORER_BACKEND_NOT_CONFIGURED, OUTPUT_PATH_REQUIRED.
 
 Usage:
-  python scripts/r2_cheap_probe_battery.py --selftest
-  python scripts/r2_cheap_probe_battery.py --run-r2e4 \\
+  python src/ember/governance/scripts/r2_cheap_probe_battery.py --selftest
+  python src/ember/governance/scripts/r2_cheap_probe_battery.py --run-r2e4 \\
       --checkpoint-manifest <path>/manifest.json \\
       --model-config <path>/model_config.json --arm A3 \\
       --source-suite <path>.json --source-suite-sha256 <sha> \\
       --tokenizer domains/model/tokenizer/tokenizer.json --tokenizer-sha256 <sha> \\
       --compiler-sha256 <sha> \\
       --out receipts/r2-cheap-probe-battery/r2e4-<UTCts>.json
-  python scripts/r2_cheap_probe_battery.py --run-r2e3 \\
+  python src/ember/governance/scripts/r2_cheap_probe_battery.py --run-r2e3 \\
       --checkpoint-manifest-a3 <path>/manifest.json --model-config-a3 <path>/model_config.json \\
       --checkpoint-manifest-control <path>/manifest.json --model-config-control <path>/model_config.json \\
       --control-arm A2 \\
@@ -601,7 +601,50 @@ def verify_checkpoint(manifest_path: str | Path, model_config_path: str | Path, 
         raise R2ProbeBatteryRefusal(f"CHECKPOINT_MODEL_CONFIG_MISSING: {model_config_path}")
 
     if verify_fn is None:
-        from ember_restart_eval_checkpoint_consumer import _verify as verify_fn  # reused, never reimplemented
+        # issue2015 exact-local-import:scripts/ember_restart_eval_checkpoint_consumer.py
+        import importlib.util as _ember_347eaa81a3a26359_importlib
+        import sys as _ember_347eaa81a3a26359_sys
+        from pathlib import Path as _ember_347eaa81a3a26359_Path
+        _ember_347eaa81a3a26359_path = _ember_347eaa81a3a26359_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_restart_eval_checkpoint_consumer.py')
+        if not _ember_347eaa81a3a26359_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_restart_eval_checkpoint_consumer.py')
+        _ember_347eaa81a3a26359_aliases = ('_ember_issue2015_347eaa81a3a26359', 'ember_restart_eval_checkpoint_consumer', 'scripts.ember_restart_eval_checkpoint_consumer')
+        _ember_347eaa81a3a26359_existing = []
+        for _ember_347eaa81a3a26359_alias in _ember_347eaa81a3a26359_aliases:
+            _ember_347eaa81a3a26359_candidate = _ember_347eaa81a3a26359_sys.modules.get(_ember_347eaa81a3a26359_alias)
+            if _ember_347eaa81a3a26359_candidate is not None and all(_ember_347eaa81a3a26359_candidate is not item for item in _ember_347eaa81a3a26359_existing):
+                _ember_347eaa81a3a26359_existing.append(_ember_347eaa81a3a26359_candidate)
+        if len(_ember_347eaa81a3a26359_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_restart_eval_checkpoint_consumer.py')
+        if _ember_347eaa81a3a26359_existing:
+            _ember_347eaa81a3a26359_module = _ember_347eaa81a3a26359_existing[0]
+            _ember_347eaa81a3a26359_observed = getattr(_ember_347eaa81a3a26359_module, '__file__', None)
+            if _ember_347eaa81a3a26359_observed is None or _ember_347eaa81a3a26359_Path(_ember_347eaa81a3a26359_observed).resolve() != _ember_347eaa81a3a26359_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_restart_eval_checkpoint_consumer.py')
+        else:
+            _ember_347eaa81a3a26359_spec = _ember_347eaa81a3a26359_importlib.spec_from_file_location('_ember_issue2015_347eaa81a3a26359', _ember_347eaa81a3a26359_path)
+            if _ember_347eaa81a3a26359_spec is None or _ember_347eaa81a3a26359_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_restart_eval_checkpoint_consumer.py')
+            _ember_347eaa81a3a26359_module = _ember_347eaa81a3a26359_importlib.module_from_spec(_ember_347eaa81a3a26359_spec)
+            for _ember_347eaa81a3a26359_alias in _ember_347eaa81a3a26359_aliases:
+                _ember_347eaa81a3a26359_prior = _ember_347eaa81a3a26359_sys.modules.get(_ember_347eaa81a3a26359_alias)
+                if _ember_347eaa81a3a26359_prior is not None and _ember_347eaa81a3a26359_prior is not _ember_347eaa81a3a26359_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_restart_eval_checkpoint_consumer.py')
+                _ember_347eaa81a3a26359_sys.modules[_ember_347eaa81a3a26359_alias] = _ember_347eaa81a3a26359_module
+            try:
+                _ember_347eaa81a3a26359_spec.loader.exec_module(_ember_347eaa81a3a26359_module)
+            except BaseException:
+                for _ember_347eaa81a3a26359_alias in _ember_347eaa81a3a26359_aliases:
+                    if _ember_347eaa81a3a26359_sys.modules.get(_ember_347eaa81a3a26359_alias) is _ember_347eaa81a3a26359_module:
+                        _ember_347eaa81a3a26359_sys.modules.pop(_ember_347eaa81a3a26359_alias, None)
+                raise
+        for _ember_347eaa81a3a26359_alias in _ember_347eaa81a3a26359_aliases:
+            _ember_347eaa81a3a26359_prior = _ember_347eaa81a3a26359_sys.modules.get(_ember_347eaa81a3a26359_alias)
+            if _ember_347eaa81a3a26359_prior is not None and _ember_347eaa81a3a26359_prior is not _ember_347eaa81a3a26359_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_restart_eval_checkpoint_consumer.py')
+            _ember_347eaa81a3a26359_sys.modules[_ember_347eaa81a3a26359_alias] = _ember_347eaa81a3a26359_module
+        verify_fn = getattr(_ember_347eaa81a3a26359_module, '_verify')
+        # issue2015 exact-local-import-end:scripts/ember_restart_eval_checkpoint_consumer.py  # reused, never reimplemented
 
     try:
         identity = verify_fn(manifest_path, model_config_path)
@@ -713,7 +756,50 @@ def one_sided_lower_wilson(successes: int, n: int, confidence: float = T24_CONFI
         raise R2ProbeBatteryRefusal(f"CI_INPUT_INVALID: successes={successes!r} n={n!r}")
     if not (0.5 <= confidence < 1.0):
         raise R2ProbeBatteryRefusal(f"CI_INPUT_INVALID: confidence={confidence!r} must be in [0.5, 1.0)")
-    from power import wilson  # reused, never reimplemented
+    # issue2015 exact-local-import:scripts/power.py
+    import importlib.util as _ember_41d654a4576ceb0a_importlib
+    import sys as _ember_41d654a4576ceb0a_sys
+    from pathlib import Path as _ember_41d654a4576ceb0a_Path
+    _ember_41d654a4576ceb0a_path = _ember_41d654a4576ceb0a_Path(__file__).resolve().parents[4].joinpath('scripts', 'power.py')
+    if not _ember_41d654a4576ceb0a_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/power.py')
+    _ember_41d654a4576ceb0a_aliases = ('_ember_issue2015_41d654a4576ceb0a', 'power', 'scripts.power')
+    _ember_41d654a4576ceb0a_existing = []
+    for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
+        _ember_41d654a4576ceb0a_candidate = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
+        if _ember_41d654a4576ceb0a_candidate is not None and all(_ember_41d654a4576ceb0a_candidate is not item for item in _ember_41d654a4576ceb0a_existing):
+            _ember_41d654a4576ceb0a_existing.append(_ember_41d654a4576ceb0a_candidate)
+    if len(_ember_41d654a4576ceb0a_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/power.py')
+    if _ember_41d654a4576ceb0a_existing:
+        _ember_41d654a4576ceb0a_module = _ember_41d654a4576ceb0a_existing[0]
+        _ember_41d654a4576ceb0a_observed = getattr(_ember_41d654a4576ceb0a_module, '__file__', None)
+        if _ember_41d654a4576ceb0a_observed is None or _ember_41d654a4576ceb0a_Path(_ember_41d654a4576ceb0a_observed).resolve() != _ember_41d654a4576ceb0a_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/power.py')
+    else:
+        _ember_41d654a4576ceb0a_spec = _ember_41d654a4576ceb0a_importlib.spec_from_file_location('_ember_issue2015_41d654a4576ceb0a', _ember_41d654a4576ceb0a_path)
+        if _ember_41d654a4576ceb0a_spec is None or _ember_41d654a4576ceb0a_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/power.py')
+        _ember_41d654a4576ceb0a_module = _ember_41d654a4576ceb0a_importlib.module_from_spec(_ember_41d654a4576ceb0a_spec)
+        for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
+            _ember_41d654a4576ceb0a_prior = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
+            if _ember_41d654a4576ceb0a_prior is not None and _ember_41d654a4576ceb0a_prior is not _ember_41d654a4576ceb0a_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/power.py')
+            _ember_41d654a4576ceb0a_sys.modules[_ember_41d654a4576ceb0a_alias] = _ember_41d654a4576ceb0a_module
+        try:
+            _ember_41d654a4576ceb0a_spec.loader.exec_module(_ember_41d654a4576ceb0a_module)
+        except BaseException:
+            for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
+                if _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias) is _ember_41d654a4576ceb0a_module:
+                    _ember_41d654a4576ceb0a_sys.modules.pop(_ember_41d654a4576ceb0a_alias, None)
+            raise
+    for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
+        _ember_41d654a4576ceb0a_prior = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
+        if _ember_41d654a4576ceb0a_prior is not None and _ember_41d654a4576ceb0a_prior is not _ember_41d654a4576ceb0a_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/power.py')
+        _ember_41d654a4576ceb0a_sys.modules[_ember_41d654a4576ceb0a_alias] = _ember_41d654a4576ceb0a_module
+    wilson = getattr(_ember_41d654a4576ceb0a_module, 'wilson')
+    # issue2015 exact-local-import-end:scripts/power.py  # reused, never reimplemented
     z = statistics.NormalDist().inv_cdf(confidence)
     lower, _upper = wilson(successes, n, z=z)
     return float(lower)

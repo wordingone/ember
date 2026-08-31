@@ -6,7 +6,7 @@ The field must be re-surveyed before any contribution claim that depends on a
 row whose cited evidence has materially changed.
 
 The translation IDs point to
-[`docs/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md).
+[`docs/domains/governance/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md).
 `UNMEASURED` and `LAGS` are honest research-queue states.
 
 | Layer | Irreducible job | External frontier evidence | Ember evidence | Gap | Training translation |
