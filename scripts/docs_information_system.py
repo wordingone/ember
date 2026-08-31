@@ -18,6 +18,8 @@ from typing import Any
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 PUBLIC_INTERPRETER_RECEIPT_PATH = Path("state/receipts/python-environment-install-v1.json")
+PUBLIC_PYTHON_LAUNCHER_PATH = Path("scripts/headless-python.ps1")
+PUBLIC_PYTHON_LAUNCHER_SHA256 = "f4570528882408c6c0bdc5bcd4fb945b60a6e2770287875e8750824bf1f5d230"
 
 METADATA_PATH = Path("manifests/documentation/current-documents-v1.json")
 CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
@@ -543,13 +545,16 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
     return rows
 
 
-def public_command_host_argv(argv: list[str]) -> list[str]:
+def public_command_host_argv(
+    root: Path, argv: list[str], *, binding: dict[str, str] | None = None,
+) -> list[str]:
     if not argv:
         raise DocsInfoError("PUBLIC_COMMAND_ARGV_INVALID")
     if argv[0].lower() not in {"python", "python.exe", "py", "py.exe"}:
         return argv
     if sys.platform != "win32":
-        return [sys.executable, *argv[1:]]
+        interpreter = binding["resolved_path"] if binding is not None else sys.executable
+        return [interpreter, *argv[1:]]
     raw = os.environ.get("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON")
     if not raw:
         raise DocsInfoError("PUBLIC_COMMAND_DIRECT_PYTHON_REFUSED")
@@ -558,6 +563,11 @@ def public_command_host_argv(argv: list[str]) -> list[str]:
     except json.JSONDecodeError as error:
         raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID") from error
     file_index = launcher.index("-File") if isinstance(launcher, list) and "-File" in launcher else -1
+    repo_launcher = (root.resolve() / PUBLIC_PYTHON_LAUNCHER_PATH).resolve()
+    try:
+        repo_launcher.relative_to(root.resolve())
+    except ValueError as error:
+        raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID") from error
     if (
         not isinstance(launcher, list)
         or not launcher
@@ -567,8 +577,9 @@ def public_command_host_argv(argv: list[str]) -> list[str]:
         or "-NonInteractive" not in launcher
         or file_index < 0
         or file_index + 1 >= len(launcher)
-        or Path(launcher[file_index + 1]).name.lower() != "headless-python.ps1"
-        or not Path(launcher[file_index + 1]).is_file()
+        or Path(launcher[file_index + 1]).resolve() != repo_launcher
+        or not repo_launcher.is_file()
+        or sha256_file(repo_launcher) != PUBLIC_PYTHON_LAUNCHER_SHA256
         or launcher[-1] != "--"
     ):
         raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID")
@@ -647,15 +658,16 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
     results = []
     for row in rows:
         manifest_argv = [str(value) for value in row.get("argv", [])]
-        host_argv = public_command_host_argv(manifest_argv)
         cwd = (root / str(row.get("cwd", "."))).resolve()
         command_id = str(row.get("id", ""))
         binding = None
         environment = None
         if manifest_argv and manifest_argv[0].lower() in {"python", "python.exe", "py", "py.exe"} and command_id != "bootstrap-python":
             binding = load_public_interpreter_binding(root)
-            environment = os.environ.copy()
-            environment["CODEX_PYTHON"] = binding["resolved_path"]
+            if sys.platform == "win32":
+                environment = os.environ.copy()
+                environment["CODEX_PYTHON"] = binding["resolved_path"]
+        host_argv = public_command_host_argv(root, manifest_argv, binding=binding)
         run_kwargs = {}
         if environment is not None:
             run_kwargs["env"] = environment
