@@ -21,9 +21,9 @@
 # gate fails closed).
 src/ember/governance/scripts/c04_batched_ns5_bench.py
 src/ember/governance/scripts/c04_eager_bf16_throughput.py
-scripts/c04_pretrain_prestage.py
-scripts/c8_prelaunch/compute_mde.py
-scripts/c8_prelaunch/f2_schedule_generator.py
+src/ember/governance/scripts/c04_pretrain_prestage.py
+src/ember/governance/scripts/c8_prelaunch/compute_mde.py
+src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py
 scripts/c8_prelaunch/q2_rho_leg.py
 scripts/c8_prelaunch/run_ledger.py
 scripts/cbase_grow_rung2_event.py
@@ -37,7 +37,7 @@ scripts/corpus_mix_selftest.py
 src/ember/governance/scripts/corpus_patch_encode.py
 scripts/e1b_pair_assemble.py
 src/ember/governance/scripts/ember_avir_harness.py
-scripts/ember_avir_tasks.py
+src/ember/governance/scripts/ember_avir_tasks.py
 src/ember/governance/scripts/ember_c_e2b_founder_likeness.py
 scripts/ember_candidate_generator_selftest.py
 scripts/ember_cbase_avir_augment.py

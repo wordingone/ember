@@ -3375,7 +3375,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "ember-owned-rung-v1 admission contract; the fail-closed prerequisite of sec1.",
-      "path": "scripts/ember_restart/contract.py",
+      "path": "src/ember/governance/scripts/ember_restart/contract.py",
       "sha256": "0c481589c0e513befead63c23322634d1200492a6c3f12e54193371191e1e3bb",
       "size_bytes": 116723
     },

@@ -147,7 +147,7 @@ def main() -> int:
             "an ancestor of the ref they build from."),
         "suite_a": {
             "definition": "the decontaminated held-out batch per "
-                          "docs/spec/w2-scale-preregistration-v1.md sec.4",
+                          "docs/domains/governance/spec/w2-scale-preregistration-v1.md sec.4",
             "batch_sha256": heldout["batch_sha256"],
             "pin_receipt": args.heldout_receipt.replace(os.sep, "/"),
             "pin_receipt_sha256": file_sha256(os.path.join(REPO, args.heldout_receipt)),

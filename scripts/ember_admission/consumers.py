@@ -33,10 +33,10 @@ CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
         *_IDENTITY_STATIC_EVIDENCE,
     ),
     "restart": (
-        "scripts/ember_restart/cli_seat.py",
-        "scripts/ember_restart/contract.py",
+        "src/ember/governance/scripts/ember_restart/cli_seat.py",
+        "src/ember/governance/scripts/ember_restart/contract.py",
         "src/ember/governance/scripts/ember_restart/prediction_contract.py",
-        "scripts/ember_restart/seat_identity_bridge.py",
+        "src/ember/governance/scripts/ember_restart/seat_identity_bridge.py",
         "src/ember/governance/scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
         "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
         "tools/ember-restart-3b/parameter_counter.py",
@@ -45,7 +45,7 @@ CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
 }
 CONSUMER_ENTRYPOINTS = {
     "identity": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
-    "restart": "scripts/ember_restart/cli_seat.py",
+    "restart": "src/ember/governance/scripts/ember_restart/cli_seat.py",
 }
 
 CONSUMER_COMMAND_CONTRACTS = {
@@ -69,7 +69,7 @@ CONSUMER_COMMAND_CONTRACTS = {
     ),
     "restart": (
         "python",
-        "scripts/ember_restart/cli_seat.py",
+        "src/ember/governance/scripts/ember_restart/cli_seat.py",
         "role:restart_run_manifest",
         "--trusted-verifier-registry",
         "role:restart_trusted_verifier_registry",

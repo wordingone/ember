@@ -176,7 +176,7 @@ GPQA row carries the PIN-PENDING blocker text, unchanged). Relates to issues #59
 build, issue #118). **Filed pre-run** (no live gate-probe run has executed clean against
 this prereg; the point-3 attempt failed on unrelated environmental blockers -- see PR #434
 -- before reaching the schedule/numbering surfaces this deviation touches). **Frozen
-artifact:** `docs/spec/p1-envelope-sweep-prereg-v1.md` (FROZEN 2026-07-05).
+artifact:** `docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md` (FROZEN 2026-07-05).
 
 **What changes:** three clerical/operational clarifications to section 2's frozen run
 protocol and section 1/4's point inventory. No threshold is relaxed; no run's acceptance

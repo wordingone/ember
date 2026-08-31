@@ -27,7 +27,7 @@ RENEWAL_CAP_DAYS = 14
 DEFAULT_WORKTREE_ROOT = str(PureWindowsPath("B:" + chr(92), "M", "ember-wt"))
 
 # The exact commands the custody census runs per registered worktree
-# (`scripts/ember_01_custody/census.py`, `_git_material_paths`). The census's
+# (`src/ember/governance/scripts/ember_01_custody/census.py`, `_git_material_paths`). The census's
 # `registered_worktree_scan_failed` contradiction is one of these raising, so this is what
 # `audit --strict` has to probe with: a cheaper stand-in like `rev-parse --git-dir` passes
 # on registrations whose `ls-files` fails, and a green strict run that does not imply a

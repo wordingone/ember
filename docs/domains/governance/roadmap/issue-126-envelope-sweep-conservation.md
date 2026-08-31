@@ -22,7 +22,7 @@ second energy authority.
 ## Historical record and current boundary
 
 Issue #126 registered a W1/c03/C14-era dispatch surface for the P1 energy law.
-The frozen source is `docs/spec/p1-envelope-sweep-prereg-v1.md` (Git blob
+The frozen source is `docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md` (Git blob
 `23bf10cfe4ee2e2ab3c8b83f300dac6762dadd95`). The current tree contains only
 `receipts/p1-envelope-sweep/20260708T144213Z-point3.json` (Git blob
 `faf0968cd832b9e91fcf134bb2ee2d62fe26634b`), which identifies itself as issue

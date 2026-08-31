@@ -4,7 +4,7 @@
 """p1_envelope_sweep.py -- P1 envelope-sweep point runner (issue #118).
 
 Executes ONE sweep point (--point k in [3..8]) of the frozen run protocol in
-docs/spec/p1-envelope-sweep-prereg-v1.md section 2: a from-scratch c03-shape
+docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md section 2: a from-scratch c03-shape
 training run at a token budget derived from E0, scored by held-out val loss
 at the FINAL step of the budget (never mid-run / never early-stopped).
 
@@ -158,7 +158,7 @@ POINT_MULTIPLIERS = {3: 0.1, 4: 0.2, 5: 0.5, 6: 1.0, 7: 2.0, 8: 4.0}
 HOLDOUT_POINT = 8  # prereg section 3
 
 E0_GPU_HOURS = 0.067478
-E0_SOURCE = "docs/spec/p1-envelope-sweep-prereg-v1.md section 5"
+E0_SOURCE = "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md section 5"
 
 REFERENCE_THROUGHPUT_RECEIPT = (
     "receipts/ember-c-scale/w1-collapse-control-20260707T110256Z.json")
@@ -372,7 +372,7 @@ def run_point_dry(args: argparse.Namespace, point_info: dict, ts: str,
         "ts": ts,
         "issue": "#118",
         "schema": "p1-envelope-sweep-point/v1",
-        "prereg_ref": "docs/spec/p1-envelope-sweep-prereg-v1.md",
+        "prereg_ref": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md",
         "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
         "dry_run": True,
         "point": args.point,
@@ -666,7 +666,7 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             "ts": ts,
             "issue": "#118",
             "schema": "p1-envelope-sweep-point/v1",
-            "prereg_ref": "docs/spec/p1-envelope-sweep-prereg-v1.md",
+            "prereg_ref": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md",
             "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
             "dry_run": False,
             "point": args.point,

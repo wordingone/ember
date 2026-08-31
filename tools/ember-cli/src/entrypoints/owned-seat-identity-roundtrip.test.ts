@@ -10,7 +10,7 @@
 // default: OWNED. It drives the REAL production chain -- never a
 // reimplementation:
 //
-//   admitted resolver verdict (scripts/ember_restart/cli_seat.py stdout)
+//   admitted resolver verdict (src/ember/governance/scripts/ember_restart/cli_seat.py stdout)
 //     -> loadOwnedModelIdentity   (owned-seat-loader.ts, the manifest consumer)
 //     -> resolveModelSeat         (model-seat.ts, DEFAULT invocation: no
 //                                  --reference-seat flag, no env, no gpu-free)

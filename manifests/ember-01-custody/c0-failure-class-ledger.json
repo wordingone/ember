@@ -92,7 +92,7 @@
       "title": "R1 / RECORD-COHERENT: custody-root census incomplete",
       "birth_relevance": "EMBER-01 leg 1 (R1 subset): an operator-machine root that is claimed as custody but never bound in the census is an unverifiable authority claim, violating R1 (no external loss/reward masquerading as owned signal).",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "scripts/ember_01_custody/census.py:build_root_census",
+      "guard_ref": "src/ember/governance/scripts/ember_01_custody/census.py:build_root_census",
       "guard_kind": "test",
       "evidence": "PR #809, PR #810; tests/ember_01_custody/test_census.py (build_root_census exercised on resolved/unresolved/empty-string roots)"
     },
@@ -101,7 +101,7 @@
       "title": "R2 / RECORD-COHERENT: artifact custody census incomplete",
       "birth_relevance": "EMBER-01 leg 2 (R2 subset): a benchmark or receipt claimed as evidence whose cited path is untracked, unparseable, or missing a direct mandate is not real custody, violating R2 (the update signal must be the computation, not an assertion).",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "scripts/ember_01_custody/census.py:validate_benchmark_registry",
+      "guard_ref": "src/ember/governance/scripts/ember_01_custody/census.py:validate_benchmark_registry",
       "guard_kind": "test",
       "evidence": "PR #810; tests/ember_01_custody/test_census.py (validate_benchmark_registry exercised for direct-mandate-missing and malformed-registry cases)"
     },
@@ -128,7 +128,7 @@
       "title": "R9 / RECORD-COHERENT: public issue census freeze",
       "birth_relevance": "EMBER-01 leg 9 (R9 subset): an unfrozen or unreconciled public-issue disposition ledger lets a closed-in-word issue remain open-in-fact (or vice versa), corrupting the one-ground-truth issue record R9 requires.",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "scripts/ember_01_custody/issue_census.py",
+      "guard_ref": "src/ember/governance/scripts/ember_01_custody/issue_census.py",
       "guard_kind": "test",
       "evidence": "PR #810; tests/ember_01_custody/test_issue_census.py (master-blob binding, closure-proof rejection, content-bound snapshot recompute)"
     }

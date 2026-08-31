@@ -21,12 +21,12 @@ from urllib.parse import urlparse
 
 try:
     from .prediction_contract import ContractError, load_predictions
-except ImportError:  # Direct execution: python scripts/ember_restart/contract.py
+except ImportError:  # Direct execution: python src/ember/governance/scripts/ember_restart/contract.py
     from prediction_contract import ContractError, load_predictions
 
 try:
     from . import source_authority
-except ImportError:  # Direct execution: python scripts/ember_restart/contract.py
+except ImportError:  # Direct execution: python src/ember/governance/scripts/ember_restart/contract.py
     import source_authority
 
 
@@ -129,7 +129,7 @@ R1_ENTRY_SCHEMA = "ember-r1-warm100-entry-v2"
 GOVERNED_REMOTE = "https://github.com/wordingone/ember"
 GOVERNED_REMOTE_REF = "refs/heads/master"
 R1_ENTRY_SOURCE_FILES = {
-    "contract": "scripts/ember_restart/contract.py",
+    "contract": "src/ember/governance/scripts/ember_restart/contract.py",
     "cli_train": "tools/ember-cli/src/commands/train.ts",
     "certified_consumer": "tools/ember-restart-3b/certified_train_launch.py",
     "ember_lab_verify": "runtime/ember-lab/src/training_verify.rs",
@@ -2399,7 +2399,7 @@ def main(argv: list[str] | None = None) -> int:
             refusal: dict[str, Any] = {
                 "schema": "ember-r1-warm100-entry-refusal-v1",
                 "source_commit": args.source_commit,
-                "validator": "scripts/ember_restart/contract.py r1-entry",
+                "validator": "src/ember/governance/scripts/ember_restart/contract.py r1-entry",
                 "result": "REFUSED",
                 "valid": False,
                 "errors": [str(exc)],

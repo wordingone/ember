@@ -11,7 +11,7 @@ Each of the nine legs in `verify_ember01_completion.py` needs a fingerprint key 
 
 - verifier code identity: sha256 of the leg's own source file(s) at the pinned commit
   (e.g. leg 8 -> `scripts/verify_authority_conservation.py`; legs 1/2/6/9 ->
-  `scripts/ember_01_custody/census.py` + `issue_census.py`; legs 3/4 ->
+  `src/ember/governance/scripts/ember_01_custody/census.py` + `issue_census.py`; legs 3/4 ->
   `scripts/ember_01_identity/*.py`). Cheapest to get: `git show <pinned_commit>:<path> |
   sha256sum` inside the pinned worktree, no working-tree read needed.
 - exact repository inputs: content hash of every file the leg reads, all already
@@ -52,7 +52,7 @@ commit that edits this file, not a follow-up).
 
 `manifests/ember-01-custody/root-spec.json`'s `registered-worktree-registry` /
 `registered-worktree-material-registry` roots (scan modes `git_worktree_registry` /
-`git_worktree_material_registry` in `scripts/ember_01_custody/census.py`) enumerate and
+`git_worktree_material_registry` in `src/ember/governance/scripts/ember_01_custody/census.py`) enumerate and
 byte-hash EVERY worktree registered against whatever machine path they are bound to via
 `/custody set` — which, on the operator's machine, includes worktrees under ACTIVE
 development, not just the pinned verification worktree. `census.py` already does

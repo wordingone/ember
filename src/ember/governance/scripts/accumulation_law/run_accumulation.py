@@ -1352,7 +1352,7 @@ def run_gpu(n_rounds: int, n_candidates: int, receipt_path: Path,
     # the GPU in a different process, this reports the full oversubscribable
     # pool as "free" and the assert below passes on a fully occupied GPU --
     # the exact fail-open this issue diagnosed. Ground truth is nvidia-smi,
-    # queried cross-process; see scripts/vram_ground_truth.py.
+    # queried cross-process; see src/ember/governance/scripts/vram_ground_truth.py.
     import sys
     from pathlib import Path as _Path
     sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))

@@ -2929,7 +2929,7 @@ def _run_er4(args) -> None:
 
     Validates that image-present vs image-ablated ΔNLL is measurable and
     the paired Wilcoxon test is implementable. Per prereg:
-    docs/archive/pre-restart/v0-multimodal-floor-probe-prereg.md (MR-8).
+    docs/domains/governance/archive/pre-restart/v0-multimodal-floor-probe-prereg.md (MR-8).
 
     Receipt: harness_built=true, validated_on_local_holdout=true,
              mechanism_proven=true, er4_pass=true.

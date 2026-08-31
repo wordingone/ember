@@ -46,7 +46,7 @@ Live chain (each step fail-closed on the previous step's receipt):
 6. **Checkpoint floor probes** — frozen protocol in
    `src/ember/governance/scripts/fp23_probe_prereg.py` (bar: ≥1.0 verified L1 episode per
    governed minute at the 2B checkpoint; one retry at 4B); executed by
-   `scripts/fp24_verdict.py`; the kill path additionally requires a
+   `src/ember/governance/scripts/fp24_verdict.py`; the kill path additionally requires a
    receipted curriculum-synthesis attempt (`scripts/fp29_kill_synthesis_gate.py`).
 7. **Accumulation round 1** — frozen prereg `scripts/fp27_round1_prereg.py`
    (split discipline, sampling pins, frozen verdict vocabulary);

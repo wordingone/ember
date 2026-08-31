@@ -45,7 +45,7 @@ import hashlib
 import json
 from typing import Any, Mapping
 
-# The optimizer-realization schema + result that scripts/ember_restart/contract.py binds
+# The optimizer-realization schema + result that src/ember/governance/scripts/ember_restart/contract.py binds
 # (contract.py ~line 798-799). The realization receipt authorises the optimizer whose
 # state bytes are projected into the manifest.
 OPTIMIZER_REALIZATION_SCHEMA = "ember-optimizer-realization-v1"

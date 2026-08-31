@@ -4,7 +4,7 @@
 """launch_gate.py -- W2 preregistration sec.4 launch-gate hook.
 
 "Before either arm launches ... contamination_recheck must report 0 matches
-or the launch gate refuses" (docs/spec/w2-scale-preregistration-v1.md sec.4).
+or the launch gate refuses" (docs/domains/governance/spec/w2-scale-preregistration-v1.md sec.4).
 
 No W2 runner file exists yet (grepped scripts/ + receipts/ + docs/ for
 w2_scale*/w2-scale*: nothing but this precondition's own frozen spec and the

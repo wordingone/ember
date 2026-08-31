@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """f2_schedule_generator.py -- C8 pre-launch obligation O4 (issue #582; spec: the
 F1-F4 fill amendment on issue #123, comment 4928342201, section 3 "F2 -- criterion
 (gated vs A-schedule, same operator)"). CPU-only, zero deps beyond hashlib/json.
@@ -206,7 +209,7 @@ def _round_half_away_from_zero(x: float) -> int:
 
 def flops_per_step(param_count: int, batch: int, seq: int) -> float:
     """6*N*tokens/step -- the SAME dense-transformer FLOPs/step convention as
-    scripts/cbase_grow_live.py::_flops_per_step (Kaplan et al. 2020 /
+    src/ember/governance/scripts/cbase_grow_live.py::_flops_per_step (Kaplan et al. 2020 /
     Chinchilla fwd+bwd estimate). Reimplemented (not imported) rather than
     reused by import: cbase_grow_live.py pulls in timeshare_pretrain /
     cbase_grow_dryrun (the real training stack), which would break this

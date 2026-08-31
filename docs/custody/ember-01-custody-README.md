@@ -80,7 +80,7 @@ are never closure proof.
 
 From a clean checkout invoke:
 
-    python -B scripts/ember_01_custody/census.py
+    python -B src/ember/governance/scripts/ember_01_custody/census.py
       --root-spec manifests/ember-01-custody/root-spec.json
       --benchmark-registry manifests/ember-01-custody/benchmark-registry.json
       --issue-census manifests/ember-01-custody/public-issue-census.json

@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """build_decontam_batch.py -- W2 preregistration sec.4 decontamination precondition
-(docs/spec/w2-scale-preregistration-v1.md, FROZEN 2026-07-04).
+(docs/domains/governance/spec/w2-scale-preregistration-v1.md, FROZEN 2026-07-04).
 
 Rebuilds the held-out capability-point eval batch with window-level dedup applied
 as a FILTER at construction time, not a post-hoc check: any held-out candidate
@@ -542,7 +542,7 @@ def write_receipt(result: dict, *, receipt_dir: str = RECEIPT_DIR) -> str:
     receipt = {
         "schema": "w2-heldout-decontam/v1",
         "ts": ts,
-        "spec_ref": "docs/spec/w2-scale-preregistration-v1.md#4-decontamination-precondition",
+        "spec_ref": "docs/domains/governance/spec/w2-scale-preregistration-v1.md#4-decontamination-precondition",
         "reused_matcher": "src/ember/governance/scripts/w1_collapse_control_run.py:contamination_recheck "
                           "(same convention as scratch/corpus-wire/contamination_check.py) "
                           "-- unmodified, called as a construction-time FILTER here instead "

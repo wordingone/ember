@@ -139,7 +139,7 @@ function validateManifest(manifest: Record<string, unknown>, expectedSourceCommi
     throw new Error("governed dispatch resource lease is invalid");
   }
   // governed_vertical is not CPU-paced and presents no window today (truth-declared, not
-  // aspirational -- see runtime/ember-lab/scripts/c8_prelaunch/issue675/q2_dispatch_manifest.py).
+  // aspirational -- see runtime/ember-lab/src/ember/governance/scripts/c8_prelaunch/issue675/q2_dispatch_manifest.py).
   if (cpuPacingClass !== "unpaced") {
     throw new Error("governed dispatch cpu_pacing_class does not match the governed_vertical authority");
   }

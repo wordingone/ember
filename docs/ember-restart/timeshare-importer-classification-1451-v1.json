@@ -29,7 +29,7 @@
       "path": "scripts/train_multimodal_v0.py",
       "classification": "historical_only",
       "import_outcome": "execution_denied_by_own_guard",
-      "sha256": "0ae5789accfc69ad7061ad4cb40066a45162b547f356b98eaa2babbaf9fd9f3a",
+      "sha256": "79ff398cc219de6d6b1dfe4dd905a713bbe09e4c5c2430e014138475b34a4e2a",
       "module_scope": true,
       "nested_import_count": 0
     }

@@ -5,7 +5,7 @@
 This change builds and validates a CPU-only `READY_FOR_COMPUTE` packet for the
 R1 WARM-100 entry. It does not launch training, produce a checkpoint, evaluate
 a model, or claim an R1 exit. The packet keeps the existing
-`scripts/ember_restart/contract.py` R1-entry validator and
+`src/ember/governance/scripts/ember_restart/contract.py` R1-entry validator and
 `tools/ember-restart-3b/certified_train_launch.py` consumer authoritative.
 
 ## Inputs and authorities

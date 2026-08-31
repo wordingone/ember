@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import os
 import runpy
 import sys
@@ -18,4 +21,4 @@ sys.argv = ["d_gate.py", "--live",
             "--n-tasks", "0", "--k", "8", "--seed", "16",
             "--surface", "fp25-recall-28-trained"]
 sys.path.insert(0, f"{NC}/scripts")
-runpy.run_path(f"{NC}/scripts/d_gate.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/d_gate.py", run_name="__main__")

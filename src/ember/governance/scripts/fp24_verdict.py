@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp24_verdict.py — execute the FROZEN fp-23 checkpoint-probe verdicts on
 REAL v0 checkpoint receipts (#139, successor to fp-23 #135).
 

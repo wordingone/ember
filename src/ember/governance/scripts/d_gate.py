@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """d_gate.py — D-gate: artifact quarantine falsifier (eng-32, issue #114).
 
 Claim shape: "gain G on surface S is carried by artifact A."
@@ -122,7 +125,50 @@ def _exact_paired_ci(vec_a: list, vec_b: list, conf: float = 0.95) -> dict:
     scripts_dir = str(_HERE)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    from stats_exact import newcombe_paired_ci  # noqa: E402
+    # issue2015 exact-local-import:scripts/stats_exact.py
+    import importlib.util as _ember_0ad50f51eb437c22_importlib
+    import sys as _ember_0ad50f51eb437c22_sys
+    from pathlib import Path as _ember_0ad50f51eb437c22_Path
+    _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parents[4].joinpath('scripts', 'stats_exact.py')
+    if not _ember_0ad50f51eb437c22_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/stats_exact.py')
+    _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'scripts.stats_exact', 'stats_exact')
+    _ember_0ad50f51eb437c22_existing = []
+    for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+        _ember_0ad50f51eb437c22_candidate = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
+        if _ember_0ad50f51eb437c22_candidate is not None and all(_ember_0ad50f51eb437c22_candidate is not item for item in _ember_0ad50f51eb437c22_existing):
+            _ember_0ad50f51eb437c22_existing.append(_ember_0ad50f51eb437c22_candidate)
+    if len(_ember_0ad50f51eb437c22_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/stats_exact.py')
+    if _ember_0ad50f51eb437c22_existing:
+        _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_existing[0]
+        _ember_0ad50f51eb437c22_observed = getattr(_ember_0ad50f51eb437c22_module, '__file__', None)
+        if _ember_0ad50f51eb437c22_observed is None or _ember_0ad50f51eb437c22_Path(_ember_0ad50f51eb437c22_observed).resolve() != _ember_0ad50f51eb437c22_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/stats_exact.py')
+    else:
+        _ember_0ad50f51eb437c22_spec = _ember_0ad50f51eb437c22_importlib.spec_from_file_location('_ember_issue2015_0ad50f51eb437c22', _ember_0ad50f51eb437c22_path)
+        if _ember_0ad50f51eb437c22_spec is None or _ember_0ad50f51eb437c22_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/stats_exact.py')
+        _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_importlib.module_from_spec(_ember_0ad50f51eb437c22_spec)
+        for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+            _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
+            if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+            _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
+        try:
+            _ember_0ad50f51eb437c22_spec.loader.exec_module(_ember_0ad50f51eb437c22_module)
+        except BaseException:
+            for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+                if _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias) is _ember_0ad50f51eb437c22_module:
+                    _ember_0ad50f51eb437c22_sys.modules.pop(_ember_0ad50f51eb437c22_alias, None)
+            raise
+    for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+        _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
+        if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+        _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
+    newcombe_paired_ci = getattr(_ember_0ad50f51eb437c22_module, 'newcombe_paired_ci')
+    # issue2015 exact-local-import-end:scripts/stats_exact.py  # noqa: E402
 
     n = len(vec_a)
     b = sum(1 for a_, b_ in zip(vec_a, vec_b) if a_ and not b_)
@@ -189,7 +235,50 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     scripts_dir = str(_HERE)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    import w4_eval  # noqa: E402
+    # issue2015 exact-local-import:scripts/w4_eval.py
+    import importlib.util as _ember_35cf90ffec8cbce1_importlib
+    import sys as _ember_35cf90ffec8cbce1_sys
+    from pathlib import Path as _ember_35cf90ffec8cbce1_Path
+    _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parents[4].joinpath('scripts', 'w4_eval.py')
+    if not _ember_35cf90ffec8cbce1_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w4_eval.py')
+    _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'scripts.w4_eval', 'w4_eval')
+    _ember_35cf90ffec8cbce1_existing = []
+    for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+        _ember_35cf90ffec8cbce1_candidate = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
+        if _ember_35cf90ffec8cbce1_candidate is not None and all(_ember_35cf90ffec8cbce1_candidate is not item for item in _ember_35cf90ffec8cbce1_existing):
+            _ember_35cf90ffec8cbce1_existing.append(_ember_35cf90ffec8cbce1_candidate)
+    if len(_ember_35cf90ffec8cbce1_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w4_eval.py')
+    if _ember_35cf90ffec8cbce1_existing:
+        _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_existing[0]
+        _ember_35cf90ffec8cbce1_observed = getattr(_ember_35cf90ffec8cbce1_module, '__file__', None)
+        if _ember_35cf90ffec8cbce1_observed is None or _ember_35cf90ffec8cbce1_Path(_ember_35cf90ffec8cbce1_observed).resolve() != _ember_35cf90ffec8cbce1_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w4_eval.py')
+    else:
+        _ember_35cf90ffec8cbce1_spec = _ember_35cf90ffec8cbce1_importlib.spec_from_file_location('_ember_issue2015_35cf90ffec8cbce1', _ember_35cf90ffec8cbce1_path)
+        if _ember_35cf90ffec8cbce1_spec is None or _ember_35cf90ffec8cbce1_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w4_eval.py')
+        _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_importlib.module_from_spec(_ember_35cf90ffec8cbce1_spec)
+        for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+            _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
+            if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+            _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
+        try:
+            _ember_35cf90ffec8cbce1_spec.loader.exec_module(_ember_35cf90ffec8cbce1_module)
+        except BaseException:
+            for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+                if _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias) is _ember_35cf90ffec8cbce1_module:
+                    _ember_35cf90ffec8cbce1_sys.modules.pop(_ember_35cf90ffec8cbce1_alias, None)
+            raise
+    for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+        _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
+        if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+        _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
+    w4_eval = _ember_35cf90ffec8cbce1_module
+    # issue2015 exact-local-import-end:scripts/w4_eval.py  # noqa: E402
 
     # Build minimal args object mirroring w4_eval.run_arm expectations
     class _A:
@@ -200,7 +289,52 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     a.max_new = 512
     a.temp = 0.8
     a.seed = seed
-    from w4_eval import load_split, task_pass_vector, filter_problems_by_ids  # noqa: E402
+    # issue2015 exact-local-import:scripts/w4_eval.py
+    import importlib.util as _ember_35cf90ffec8cbce1_importlib
+    import sys as _ember_35cf90ffec8cbce1_sys
+    from pathlib import Path as _ember_35cf90ffec8cbce1_Path
+    _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parents[4].joinpath('scripts', 'w4_eval.py')
+    if not _ember_35cf90ffec8cbce1_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w4_eval.py')
+    _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'scripts.w4_eval', 'w4_eval')
+    _ember_35cf90ffec8cbce1_existing = []
+    for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+        _ember_35cf90ffec8cbce1_candidate = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
+        if _ember_35cf90ffec8cbce1_candidate is not None and all(_ember_35cf90ffec8cbce1_candidate is not item for item in _ember_35cf90ffec8cbce1_existing):
+            _ember_35cf90ffec8cbce1_existing.append(_ember_35cf90ffec8cbce1_candidate)
+    if len(_ember_35cf90ffec8cbce1_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w4_eval.py')
+    if _ember_35cf90ffec8cbce1_existing:
+        _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_existing[0]
+        _ember_35cf90ffec8cbce1_observed = getattr(_ember_35cf90ffec8cbce1_module, '__file__', None)
+        if _ember_35cf90ffec8cbce1_observed is None or _ember_35cf90ffec8cbce1_Path(_ember_35cf90ffec8cbce1_observed).resolve() != _ember_35cf90ffec8cbce1_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w4_eval.py')
+    else:
+        _ember_35cf90ffec8cbce1_spec = _ember_35cf90ffec8cbce1_importlib.spec_from_file_location('_ember_issue2015_35cf90ffec8cbce1', _ember_35cf90ffec8cbce1_path)
+        if _ember_35cf90ffec8cbce1_spec is None or _ember_35cf90ffec8cbce1_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w4_eval.py')
+        _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_importlib.module_from_spec(_ember_35cf90ffec8cbce1_spec)
+        for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+            _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
+            if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+            _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
+        try:
+            _ember_35cf90ffec8cbce1_spec.loader.exec_module(_ember_35cf90ffec8cbce1_module)
+        except BaseException:
+            for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+                if _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias) is _ember_35cf90ffec8cbce1_module:
+                    _ember_35cf90ffec8cbce1_sys.modules.pop(_ember_35cf90ffec8cbce1_alias, None)
+            raise
+    for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
+        _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
+        if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+        _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
+    load_split = getattr(_ember_35cf90ffec8cbce1_module, 'load_split')
+    task_pass_vector = getattr(_ember_35cf90ffec8cbce1_module, 'task_pass_vector')
+    filter_problems_by_ids = getattr(_ember_35cf90ffec8cbce1_module, 'filter_problems_by_ids')
+    # issue2015 exact-local-import-end:scripts/w4_eval.py  # noqa: E402
 
     args_split = getattr(args, "split", "validation")
     task_ids_file = getattr(args, "task_ids_file", None)
@@ -437,7 +571,51 @@ def _selftest():
     scripts_dir = str(_HERE)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    from stats_exact import newcombe_paired_ci, wilson_ci  # noqa: E402
+    # issue2015 exact-local-import:scripts/stats_exact.py
+    import importlib.util as _ember_0ad50f51eb437c22_importlib
+    import sys as _ember_0ad50f51eb437c22_sys
+    from pathlib import Path as _ember_0ad50f51eb437c22_Path
+    _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parents[4].joinpath('scripts', 'stats_exact.py')
+    if not _ember_0ad50f51eb437c22_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/stats_exact.py')
+    _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'scripts.stats_exact', 'stats_exact')
+    _ember_0ad50f51eb437c22_existing = []
+    for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+        _ember_0ad50f51eb437c22_candidate = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
+        if _ember_0ad50f51eb437c22_candidate is not None and all(_ember_0ad50f51eb437c22_candidate is not item for item in _ember_0ad50f51eb437c22_existing):
+            _ember_0ad50f51eb437c22_existing.append(_ember_0ad50f51eb437c22_candidate)
+    if len(_ember_0ad50f51eb437c22_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/stats_exact.py')
+    if _ember_0ad50f51eb437c22_existing:
+        _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_existing[0]
+        _ember_0ad50f51eb437c22_observed = getattr(_ember_0ad50f51eb437c22_module, '__file__', None)
+        if _ember_0ad50f51eb437c22_observed is None or _ember_0ad50f51eb437c22_Path(_ember_0ad50f51eb437c22_observed).resolve() != _ember_0ad50f51eb437c22_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/stats_exact.py')
+    else:
+        _ember_0ad50f51eb437c22_spec = _ember_0ad50f51eb437c22_importlib.spec_from_file_location('_ember_issue2015_0ad50f51eb437c22', _ember_0ad50f51eb437c22_path)
+        if _ember_0ad50f51eb437c22_spec is None or _ember_0ad50f51eb437c22_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/stats_exact.py')
+        _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_importlib.module_from_spec(_ember_0ad50f51eb437c22_spec)
+        for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+            _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
+            if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+            _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
+        try:
+            _ember_0ad50f51eb437c22_spec.loader.exec_module(_ember_0ad50f51eb437c22_module)
+        except BaseException:
+            for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+                if _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias) is _ember_0ad50f51eb437c22_module:
+                    _ember_0ad50f51eb437c22_sys.modules.pop(_ember_0ad50f51eb437c22_alias, None)
+            raise
+    for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
+        _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
+        if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+        _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
+    newcombe_paired_ci = getattr(_ember_0ad50f51eb437c22_module, 'newcombe_paired_ci')
+    wilson_ci = getattr(_ember_0ad50f51eb437c22_module, 'wilson_ci')
+    # issue2015 exact-local-import-end:scripts/stats_exact.py  # noqa: E402
 
     # Pin: newcombe_paired_ci(b=0, c=10, n=20) — all discordant pairs favor base
     # Expected: both bounds negative (base strictly dominated arm2)

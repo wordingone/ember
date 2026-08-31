@@ -28,7 +28,7 @@
     {"consumer_id":"publication-gate","path":"src/ember/governance/scripts/check_publication_gate.py","category":"publication_report","evidence_sha256":"cf67b801f0d7249b00a8dea6ae7df9717d08b91233aa806505bac6b12655cb7b"},
     {"consumer_id":"borrowed-cli-default","path":"tools/ember-cli/src/model-config.ts","category":"borrowed_reference","evidence_sha256":"c430974e1506d6517fc15d326f66405782ab60c51ade8e7589fe8a39dc96305a"},
     {"consumer_id":"watchdog-outage","path":"tools/ember-cli/scripts/liveness-watchdog.ps1","category":"process_registry_watchdog","evidence_sha256":"c54f95e18875cbbfd8af46944233730eecb313fc395a18b9c85a9edac30afaf6"},
-    {"consumer_id":"parameter-growth","path":"scripts/cbase_grow_live.py","category":"parameter_identity","evidence_sha256":"3cadf04ec0453286a412ac9a08e880d3aae4d7a2b17312482238072a6b8d6cd7"},
+    {"consumer_id":"parameter-growth","path":"src/ember/governance/scripts/cbase_grow_live.py","category":"parameter_identity","evidence_sha256":"3cadf04ec0453286a412ac9a08e880d3aae4d7a2b17312482238072a6b8d6cd7"},
     {"consumer_id":"tokenizer-freeze","path":"scripts/tokenizer_freeze.py","category":"tokenizer_data_lineage","evidence_sha256":"36341f991f50e1e59590333191448a4a0155fc1edaaa2d994fbf45a5a637949f"},
     {"consumer_id":"mechanism-dispatch","path":"scripts/ember_mvp_cycle.py","category":"mechanism_identity","evidence_sha256":"52c5fa47e39ac3436798cfa6e48d5fed082ceb9a246e736196b2dc81f23eb301"},
     {"consumer_id":"receipt-store","path":"scripts/ember_gate_receipt_store.py","category":"receipt_identity","evidence_sha256":"7342e8a5f997627ae5b94ee4bf93789aebb303abe226d40eed7bdc741086109e"}

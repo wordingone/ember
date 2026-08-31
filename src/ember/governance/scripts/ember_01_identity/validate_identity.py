@@ -846,7 +846,7 @@ def validate_manifest(
     # cond3 optimizer CONTRACT-half + B4 REQUIRED-half (ember01plan.md SS B4
     # L1061-1082): when a manifest declares the optimizer contract identity
     # (implementation / hyperparameters / state_format -- the fields
-    # scripts/ember_restart/contract.py binds to a signed REALIZED
+    # src/ember/governance/scripts/ember_restart/contract.py binds to a signed REALIZED
     # ember-optimizer-realization-v1 receipt -- PLUS the 5 B4 residual identity
     # fields: implementation_source_sha256, param_group_mapping_convention,
     # param_name_optimizer_id_mapping_sha256, realization_receipt_sha256,

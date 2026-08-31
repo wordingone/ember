@@ -1140,7 +1140,7 @@ split from sub-1B PRETRAIN claims (regime mismatch).
 
 **Verdict:** envelope NON-EMPTY → no hardware escalation. v0 =
 0.37B/QAT/Muon-with-AdamW-switch-rule/7.4B tokens, checkpoints at
-1B/2B/4B; full table + config in `docs/research/fp19-envelope.md`.
+1B/2B/4B; full table + config in `docs/domains/governance/research/fp19-envelope.md`.
 
 **Successors:** fp-22 = v0 corpus + verify-floor world (license-clean
 mix per §8.15d; the world a 0.3B core can clear). eng-33 = timeshare

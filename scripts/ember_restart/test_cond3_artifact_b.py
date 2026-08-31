@@ -41,7 +41,51 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_01_identity"))
 import torch  # noqa: E402
 
 from checkpoint_save_load_identity_binding import measure_checkpoint_identity  # noqa: E402
-from seat_identity_bridge import derive_seat_identity, require_admitted_seat  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py
+import importlib.util as _ember_26b6c24e1679e1f8_importlib
+import sys as _ember_26b6c24e1679e1f8_sys
+from pathlib import Path as _ember_26b6c24e1679e1f8_Path
+_ember_26b6c24e1679e1f8_path = _ember_26b6c24e1679e1f8_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'seat_identity_bridge.py')
+if not _ember_26b6c24e1679e1f8_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
+_ember_26b6c24e1679e1f8_aliases = ('_ember_issue2015_26b6c24e1679e1f8', 'scripts.ember_restart.seat_identity_bridge', 'seat_identity_bridge')
+_ember_26b6c24e1679e1f8_existing = []
+for _ember_26b6c24e1679e1f8_alias in _ember_26b6c24e1679e1f8_aliases:
+    _ember_26b6c24e1679e1f8_candidate = _ember_26b6c24e1679e1f8_sys.modules.get(_ember_26b6c24e1679e1f8_alias)
+    if _ember_26b6c24e1679e1f8_candidate is not None and all(_ember_26b6c24e1679e1f8_candidate is not item for item in _ember_26b6c24e1679e1f8_existing):
+        _ember_26b6c24e1679e1f8_existing.append(_ember_26b6c24e1679e1f8_candidate)
+if len(_ember_26b6c24e1679e1f8_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
+if _ember_26b6c24e1679e1f8_existing:
+    _ember_26b6c24e1679e1f8_module = _ember_26b6c24e1679e1f8_existing[0]
+    _ember_26b6c24e1679e1f8_observed = getattr(_ember_26b6c24e1679e1f8_module, '__file__', None)
+    if _ember_26b6c24e1679e1f8_observed is None or _ember_26b6c24e1679e1f8_Path(_ember_26b6c24e1679e1f8_observed).resolve() != _ember_26b6c24e1679e1f8_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
+else:
+    _ember_26b6c24e1679e1f8_spec = _ember_26b6c24e1679e1f8_importlib.spec_from_file_location('_ember_issue2015_26b6c24e1679e1f8', _ember_26b6c24e1679e1f8_path)
+    if _ember_26b6c24e1679e1f8_spec is None or _ember_26b6c24e1679e1f8_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
+    _ember_26b6c24e1679e1f8_module = _ember_26b6c24e1679e1f8_importlib.module_from_spec(_ember_26b6c24e1679e1f8_spec)
+    for _ember_26b6c24e1679e1f8_alias in _ember_26b6c24e1679e1f8_aliases:
+        _ember_26b6c24e1679e1f8_prior = _ember_26b6c24e1679e1f8_sys.modules.get(_ember_26b6c24e1679e1f8_alias)
+        if _ember_26b6c24e1679e1f8_prior is not None and _ember_26b6c24e1679e1f8_prior is not _ember_26b6c24e1679e1f8_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
+        _ember_26b6c24e1679e1f8_sys.modules[_ember_26b6c24e1679e1f8_alias] = _ember_26b6c24e1679e1f8_module
+    try:
+        _ember_26b6c24e1679e1f8_spec.loader.exec_module(_ember_26b6c24e1679e1f8_module)
+    except BaseException:
+        for _ember_26b6c24e1679e1f8_alias in _ember_26b6c24e1679e1f8_aliases:
+            if _ember_26b6c24e1679e1f8_sys.modules.get(_ember_26b6c24e1679e1f8_alias) is _ember_26b6c24e1679e1f8_module:
+                _ember_26b6c24e1679e1f8_sys.modules.pop(_ember_26b6c24e1679e1f8_alias, None)
+        raise
+for _ember_26b6c24e1679e1f8_alias in _ember_26b6c24e1679e1f8_aliases:
+    _ember_26b6c24e1679e1f8_prior = _ember_26b6c24e1679e1f8_sys.modules.get(_ember_26b6c24e1679e1f8_alias)
+    if _ember_26b6c24e1679e1f8_prior is not None and _ember_26b6c24e1679e1f8_prior is not _ember_26b6c24e1679e1f8_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
+    _ember_26b6c24e1679e1f8_sys.modules[_ember_26b6c24e1679e1f8_alias] = _ember_26b6c24e1679e1f8_module
+derive_seat_identity = getattr(_ember_26b6c24e1679e1f8_module, 'derive_seat_identity')
+require_admitted_seat = getattr(_ember_26b6c24e1679e1f8_module, 'require_admitted_seat')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py  # noqa: E402
 
 
 def _sha256_file(path: Path) -> str:

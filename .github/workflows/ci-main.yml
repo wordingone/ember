@@ -43,7 +43,7 @@ jobs:
       - name: Verify evergreen front-door references
         run: python -B src/ember/governance/scripts/check_docs_freshness.py --front-door
       - name: Verify generated continuity status
-        run: python -B scripts/gen_readme_status.py --check --generated-status
+        run: python -B src/ember/governance/scripts/gen_readme_status.py --check --generated-status
       - name: Verify canonical documentation information system
         run: |
           python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py

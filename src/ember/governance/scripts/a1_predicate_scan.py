@@ -639,7 +639,7 @@ def main() -> int:
         "suite_a": {
             "status": "RESOLVED",
             "convention": "strict any-match non-self, W=13 "
-                          "(docs/spec/w2-scale-preregistration-v1.md sec.4: "
+                          "(docs/domains/governance/spec/w2-scale-preregistration-v1.md sec.4: "
                           "'contamination_recheck must report 0 matches or the "
                           "launch gate refuses')",
             "value": suite_a_value,
