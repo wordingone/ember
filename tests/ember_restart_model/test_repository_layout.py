@@ -170,7 +170,7 @@ def test_specialist_authorities_declare_canonical_preference(name: str) -> None:
     "relative",
     [
         "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
-        "tests/ember_restart_model/domain-governance/test_a1_certified_launch.py",
+        "tests/ember_restart_model/test_a1_certified_launch.py",
         "tests/ember_restart_model/test_certified_train_launch.py",
         "tests/ember_restart_model/test_checkpoint_artifacts.py",
         "tests/ember_restart_model/test_counter_cli.py",

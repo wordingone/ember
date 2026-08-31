@@ -91,7 +91,7 @@ Files:
 
 - Modify tools/ember-restart-3b/certified_train_launch.py
 - Modify tools/ember-restart-3b/run_vertical_slice.py
-- Modify tests/ember_restart_model/domain-governance/test_a1_certified_launch.py
+- Modify tests/ember_restart_model/test_a1_certified_launch.py
 - Modify tests/ember_restart_model/test_vertical_slice.py
 
 Steps:
