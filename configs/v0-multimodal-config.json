@@ -9,7 +9,7 @@
   "ticket": "V0-MULTIMODAL-CONFIG",
   "version": 1,
   "authored": "2026-06-16",
-  "basis": "configs/v0-pretrain-config.json (frozen v3) + the lead/state/nc-ladder/docs/ember-restart/ember-multimodal-v0-config-spec.md (eng-421)",
+  "basis": "configs/v0-pretrain-config.json (frozen v3) + the lead/state/nc-ladder/docs/domains/governance/ember-restart/ember-multimodal-v0-config-spec.md (eng-421)",
   "rule": "Extends v0-pretrain-config.json with multimodal locks. All v0 fields carry forward unchanged. DO NOT modify v0-pretrain-config.json (frozen at v3). This config is the target for ember-multimodal-v0 training.",
   "extends": "configs/v0-pretrain-config.json",
   "multimodal": {

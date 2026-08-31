@@ -51,7 +51,7 @@
   ],
   "live_consumer_rewrites": [
     ".github/workflows/ci-pr.yml",
-    "docs/guides/START-HERE.md",
+    "docs/domains/governance/guides/START-HERE.md",
     "docs/spec/conditions-v1.md",
     "docs/superpowers/plans/2026-08-08-windows-desktop-install.md",
     "docs/superpowers/specs/2026-08-08-windows-desktop-install-design.md",
@@ -67,7 +67,7 @@
     "scripts/prepare-ember-cockpit.ps1",
     "scripts/r0_claim_executor.py",
     "scripts/test_r0_claim_machinery.py",
-    "scripts/test_verify_nosource_operability.py",
+    "src/ember/governance/scripts/test_verify_nosource_operability.py",
     "tests/test_c_auto_claim_contract.py",
     "tests/test_c_auto_claim_integrity.py",
     "tests/test_ember_root_launcher.py",

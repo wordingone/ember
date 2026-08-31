@@ -215,7 +215,7 @@ the strongest evidence this is the reading the program intended.
 Section 2's "warmup = min(2% of budget, the c03 recipe's absolute warmup)" referenced an
 "absolute warmup" constant that does not exist anywhere in the repo (grepped for
 `warmup_steps`, zero hits outside worktrees/fixtures). RULED: implement the rule properly
-rather than disclose-and-diverge. `scripts/w1_collapse_control_run.py`'s
+rather than disclose-and-diverge. `src/ember/governance/scripts/w1_collapse_control_run.py`'s
 `cosine_warmup_frac` / `apply_cosine_warmup` / `run_phase2_live` now accept an OPTIONAL
 `warmup_steps` override (default `None`, byte-identical prior behavior for every
 pre-existing caller -- additive reuse, unit-tested regression, never a fork). The absolute
@@ -231,7 +231,7 @@ P1 envelope-sweep runner build lane's disclosed findings (PR #434); the runner's
 text and this deviation note describe the SAME three items from the two sides (finding vs
 ruling).
 
-**Receipts:** PR #434 (`feat/p1-envelope-sweep-runner`, `scripts/p1_envelope_sweep.py` +
+**Receipts:** PR #434 (`feat/p1-envelope-sweep-runner`, `src/ember/governance/scripts/p1_envelope_sweep.py` +
 `scripts/test_p1_envelope_sweep.py` + this warmup-override commit); no run receipt yet --
 point 3's gate probe has not completed clean (two unrelated environmental blockers,
 reported in the same PR: a 13GiB contiguous-allocation failure in the reused corpus loader,

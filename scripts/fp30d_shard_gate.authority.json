@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "scripts/fp30d_shard_gate.py",
-  "artifact_sha256": "b126e666938f6f6505e08eb6755d8bfe892cb31ba1080976e71d09f44bb0d6d7",
+  "artifact_sha256": "1bd8dcfec83e32dce5d8099845d09eedadc919e4dced0be81195fd889267e4cb",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

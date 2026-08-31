@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """rung_boundary_momentum_transplant.py — Branch-A boundary-policy wiring
 (issue #524, cell M4).
 
@@ -72,7 +75,7 @@ BOUNDARY_POLICY = (
     "transplant-with-verified-buffer (Branch A, adjudicated: "
     "receipts/cbase-grow-rung2-event-b513-b4rerun-b3.json, transplant "
     "cos_alignment=0.9536 >= 0.82, reset cos_alignment=0.7397 in [0.70,0.78] "
-    "per docs/spec/rung2-stabilize-config-respec-v1.md section 5's "
+    "per docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md section 5's "
     "pre-registered rule)"
 )
 
@@ -106,7 +109,7 @@ def transplant_muon_ff_momentum(pre_model_state: dict, pre_opt_state: dict, *,
     Returns a dict with post_grow_momentum_state_dict (the widened
     momentum buffers, same key convention as a model state_dict, ready for
     the caller to seed into the post-grow CPUOffloadOptimizer/Muon state),
-    plus the two receipt fields docs/spec/rung2-stabilize-config-respec-v1.md
+    plus the two receipt fields docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md
     section 5 makes MANDATORY: pre_buffer_rms_consumed (aggregate rms over
     every consumed pre-grow buffer, flattened+concatenated) and
     resolved_lr_muon (passthrough, never a script constant).

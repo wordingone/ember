@@ -1,4 +1,7 @@
-"""test_launch_gate.py -- hermetic fixture tests for scripts/w2_heldout/launch_gate.py.
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""test_launch_gate.py -- hermetic fixture tests for src/ember/governance/scripts/w2_heldout/launch_gate.py.
 
 Real code (launch_gate.refuse_or_pass / assert_launch_allowed), synthetic-only
 data (tempfile.TemporaryDirectory() per case, tiny made-up token rows) -- same
@@ -17,7 +20,51 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from launch_gate import refuse_or_pass, assert_launch_allowed  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/w2_heldout/launch_gate.py
+import importlib.util as _ember_010558b39c5df353_importlib
+import sys as _ember_010558b39c5df353_sys
+from pathlib import Path as _ember_010558b39c5df353_Path
+_ember_010558b39c5df353_path = _ember_010558b39c5df353_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'w2_heldout', 'launch_gate.py')
+if not _ember_010558b39c5df353_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w2_heldout/launch_gate.py')
+_ember_010558b39c5df353_aliases = ('_ember_issue2015_010558b39c5df353', 'launch_gate', 'scripts.w2_heldout.launch_gate')
+_ember_010558b39c5df353_existing = []
+for _ember_010558b39c5df353_alias in _ember_010558b39c5df353_aliases:
+    _ember_010558b39c5df353_candidate = _ember_010558b39c5df353_sys.modules.get(_ember_010558b39c5df353_alias)
+    if _ember_010558b39c5df353_candidate is not None and all(_ember_010558b39c5df353_candidate is not item for item in _ember_010558b39c5df353_existing):
+        _ember_010558b39c5df353_existing.append(_ember_010558b39c5df353_candidate)
+if len(_ember_010558b39c5df353_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w2_heldout/launch_gate.py')
+if _ember_010558b39c5df353_existing:
+    _ember_010558b39c5df353_module = _ember_010558b39c5df353_existing[0]
+    _ember_010558b39c5df353_observed = getattr(_ember_010558b39c5df353_module, '__file__', None)
+    if _ember_010558b39c5df353_observed is None or _ember_010558b39c5df353_Path(_ember_010558b39c5df353_observed).resolve() != _ember_010558b39c5df353_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w2_heldout/launch_gate.py')
+else:
+    _ember_010558b39c5df353_spec = _ember_010558b39c5df353_importlib.spec_from_file_location('_ember_issue2015_010558b39c5df353', _ember_010558b39c5df353_path)
+    if _ember_010558b39c5df353_spec is None or _ember_010558b39c5df353_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w2_heldout/launch_gate.py')
+    _ember_010558b39c5df353_module = _ember_010558b39c5df353_importlib.module_from_spec(_ember_010558b39c5df353_spec)
+    for _ember_010558b39c5df353_alias in _ember_010558b39c5df353_aliases:
+        _ember_010558b39c5df353_prior = _ember_010558b39c5df353_sys.modules.get(_ember_010558b39c5df353_alias)
+        if _ember_010558b39c5df353_prior is not None and _ember_010558b39c5df353_prior is not _ember_010558b39c5df353_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w2_heldout/launch_gate.py')
+        _ember_010558b39c5df353_sys.modules[_ember_010558b39c5df353_alias] = _ember_010558b39c5df353_module
+    try:
+        _ember_010558b39c5df353_spec.loader.exec_module(_ember_010558b39c5df353_module)
+    except BaseException:
+        for _ember_010558b39c5df353_alias in _ember_010558b39c5df353_aliases:
+            if _ember_010558b39c5df353_sys.modules.get(_ember_010558b39c5df353_alias) is _ember_010558b39c5df353_module:
+                _ember_010558b39c5df353_sys.modules.pop(_ember_010558b39c5df353_alias, None)
+        raise
+for _ember_010558b39c5df353_alias in _ember_010558b39c5df353_aliases:
+    _ember_010558b39c5df353_prior = _ember_010558b39c5df353_sys.modules.get(_ember_010558b39c5df353_alias)
+    if _ember_010558b39c5df353_prior is not None and _ember_010558b39c5df353_prior is not _ember_010558b39c5df353_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w2_heldout/launch_gate.py')
+    _ember_010558b39c5df353_sys.modules[_ember_010558b39c5df353_alias] = _ember_010558b39c5df353_module
+refuse_or_pass = getattr(_ember_010558b39c5df353_module, 'refuse_or_pass')
+assert_launch_allowed = getattr(_ember_010558b39c5df353_module, 'assert_launch_allowed')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w2_heldout/launch_gate.py  # noqa: E402
 
 
 SEQ = 4

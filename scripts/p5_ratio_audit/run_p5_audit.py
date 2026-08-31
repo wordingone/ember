@@ -64,7 +64,7 @@ N/A -- never assumed):
     receipt (never hardcodes it) and treats it as spec-critical: it drives
     both the rho_spec N/A-with-reason path AND the cross-width state-
     provenance-mismatch guard on rho_SR (see STATE + LR PINS below).
-  - net2net grow path: scripts/cbase_grow_dryrun.py::widen_state_dict
+  - net2net grow path: src/ember/governance/scripts/cbase_grow_dryrun.py::widen_state_dict
     (line ~85) -- EXACT function-preserving duplication: gate_proj/up_proj
     rows -> cat([w, w]); down_proj columns -> cat([w*0.5, w*0.5], dim=1).
     No noise term anywhere in this operator (grep-confirmed across
@@ -125,7 +125,7 @@ ruled:
                  below).
     GROW      -- ff_widening_net2net at step 730 -- the SAME deterministic
                  duplication already grounded above
-                 (scripts/cbase_grow_dryrun.py::widen_state_dict): no
+                 (src/ember/governance/scripts/cbase_grow_dryrun.py::widen_state_dict): no
                  noise term, function-preserving.
     POST-GROW -- .../rung1-20260703T155447Z/stabilize/checkpoints/
                  step-00000766 (4.7GB; model.pt sha256
@@ -379,7 +379,7 @@ RATIO_NAMES = ("rho_sr", "rho_noise", "rho_rank", "rho_grow", "rho_spec",
 # beyond its known prefix), edit ONLY this dict.
 # ff-shape naming-collision guard (v1.2 ruling item 4): NOT a manifest field
 # (grep-confirmed against scripts/cbase_grow_rung.py and
-# scripts/cbase_grow_dryrun.py -- both derive ff from the LOADED tensor's own
+# src/ember/governance/scripts/cbase_grow_dryrun.py -- both derive ff from the LOADED tensor's own
 # shape: `ff_seed = int(m_state["backbone_model.layers.0.mlp.gate_proj.weight"]
 # .shape[0])`, never from a manifest key). load_real_checkpoint() below
 # reproduces that exact check; RUNG1_LINEAGE's "expected_ff" is compared
@@ -628,7 +628,7 @@ def _import_timeshare_pretrain():
 
 def _import_production_widen():
     """Import the REAL production net2net widen operator
-    (scripts/cbase_grow_dryrun.py::widen_state_dict) for the live path --
+    (src/ember/governance/scripts/cbase_grow_dryrun.py::widen_state_dict) for the live path --
     the live path runs against REAL checkpoints with REAL production key
     names ("backbone_model.layers.{i}.mlp.{gate,up,down}_proj.weight"), so
     it imports the actual function rather than the self-contained toy copy
@@ -1020,7 +1020,7 @@ def rho_sr_per_class(tensor_ratios: list) -> float | None:
 
 def net2net_widen_linear(gate_or_up_weight, down_weight):
     """Self-contained copy of the net2net FF-widen surgery documented in
-    scripts/cbase_grow_dryrun.py (module docstring, line ~12-18): exact
+    src/ember/governance/scripts/cbase_grow_dryrun.py (module docstring, line ~12-18): exact
     function-preserving duplication.
       gate/up rows:  cat([w, w], dim=0)          -- duplicate FF rows
       down columns:  cat([w*0.5, w*0.5], dim=1)  -- halve + duplicate cols
@@ -1396,7 +1396,7 @@ def build_real_d_comm_closures(pre_model_state, pre_opt_state, post_model_state,
     re-derived. gate_key/up_key/down_key: the production key names for one
     transformer layer's SwiGLU MLP tensors
     ("backbone_model.layers.{i}.mlp.{gate,up,down}_proj.weight"). G uses the
-    REAL production widen_state_dict (scripts/cbase_grow_dryrun.py,
+    REAL production widen_state_dict (src/ember/governance/scripts/cbase_grow_dryrun.py,
     imported via _import_production_widen() -- NOT the self-contained toy
     copy net2net_widen_linear that --selftest/--dry-run use). U_k uses
     pre-grow's own (parent-carried) momentum_buffer + LR; U_{k+1} uses

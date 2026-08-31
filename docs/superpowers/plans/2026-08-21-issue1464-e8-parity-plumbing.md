@@ -16,7 +16,7 @@
 - No production code is written before its named test fails for the missing behavior.
 - `grad_norm` is the L2 norm over every registered parameter whose gradient is non-`None`, including 1-D parameters, before update or release.
 - The E7 v2 estimator is seed-order invariant normalized pooled population sigma; no raw-key alias.
-- `scripts/r1_e8_validator.py` remains unchanged.
+- `src/ember/governance/scripts/r1_e8_validator.py` remains unchanged.
 - Every producer uses exclusive no-overwrite output creation and exact input hash reopening.
 - The full local baseline may finish only with the exact same 20 named pre-existing failures and no additional or substituted failure.
 
@@ -99,7 +99,7 @@ In `tests/test_r1_e8_validator.py`, add a live-v1-shaped E7 fixture with only `{
 
 Run: `python -B -m pytest tests/test_r1_e8_validator.py -q`
 
-Expected: PASS with no diff in `scripts/r1_e8_validator.py`.
+Expected: PASS with no diff in `src/ember/governance/scripts/r1_e8_validator.py`.
 
 ### Task 3: No-overwrite parity producer
 

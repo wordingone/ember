@@ -53,7 +53,7 @@ GUARD_SUPPORT_FILES = [
     "scripts/authority_supersession_gate.py",
     "scripts/verify_authority_supersession_crosswalk.py",
     "scripts/oldest_issue_disposition.py",
-    "scripts/receipt_check.py",
+    "src/ember/governance/scripts/receipt_check.py",
     "tools/frozen-receipt-exceptions.json",
     "docs/authority/INVARIANT.md",
     "docs/domains/governance/authority/STATE.md",

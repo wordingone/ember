@@ -6,7 +6,7 @@
 NOT enforced. Reproduce-first + fix verification.
 
 FAIL half (pre-fix state, reproduced against the real repo receipts, read-only):
-  scripts/token_shards_v0.py's TOKEN-SHARDS-V0 receipt for shards-v0 declares
+  src/ember/governance/scripts/token_shards_v0.py's TOKEN-SHARDS-V0 receipt for shards-v0 declares
   1,666,837,789 fineweb_edu content_tokens with no exclusion marker anywhere in
   the schema, and scripts/timeshare_pretrain.py's PackedShardLoader (pre-#1436)
   had no parameter that could ever skip an offset range -- every window drawn
@@ -14,7 +14,7 @@ FAIL half (pre-fix state, reproduced against the real repo receipts, read-only):
   is closed:
 
 PASS half (this fix):
-  1. scripts/fineweb_exclusion.py derives the fineweb_edu token-offset range
+  1. src/ember/governance/scripts/fineweb_exclusion.py derives the fineweb_edu token-offset range
      PROGRAMMATICALLY from the real, on-disk, receipt-validated shard bytes
      (never a hardcoded literal) and the range matches the L3 audit's
      independently-derived figure exactly: [4,055,121,325, 5,723,508,974).

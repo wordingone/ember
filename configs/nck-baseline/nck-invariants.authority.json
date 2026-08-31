@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "configs/nck-baseline/nck-invariants.json",
-  "artifact_sha256": "3498360cfa754c7e511ab608a4b9f9d03ce5230625ea1487d3763427ec8d2d80",
+  "artifact_sha256": "23d843329be7f83ef80c03a9b275b10554a8801eb2734d584302508051204a12",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

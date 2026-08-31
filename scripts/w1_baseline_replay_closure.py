@@ -11,7 +11,7 @@ aa48f6ee...): the live run exited on match at step 50 WITHOUT ever saving a
 step50 checkpoint -- only the certified step25 resume checkpoint persists.
 
 THIS IS A REPLAY, NOT A REIMPLEMENTATION. Every model/data/optimizer/eval
-code path is IMPORTED from scripts/w1_collapse_control_run.py and
+code path is IMPORTED from src/ember/governance/scripts/w1_collapse_control_run.py and
 scripts/timeshare_pretrain.py -- the exact modules the live run used (see
 receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json's own "All model/
 eval code imported ... never reimplemented" method line, and
@@ -1022,7 +1022,7 @@ def _selftest() -> None:
 
 
 # ---------------------------------------------------------------------------
-# commit-margin probe (best-effort; scripts/governor.py at HEAD exposes only
+# commit-margin probe (best-effort; src/ember/governance/scripts/governor.py at HEAD exposes only
 # a VRAM preflight()/env_limits() -- confirmed by reading the module
 # directly, no commit_margin_preflight function exists in this tree, so this
 # is a disclosed, non-blocking psutil-based diagnostic alongside the

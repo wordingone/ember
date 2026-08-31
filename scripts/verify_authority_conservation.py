@@ -160,7 +160,7 @@ AUTHORITY_DOMAIN_DIRECTORY = PurePosixPath("docs/domains/governance/authority")
 
 
 def authority_canonical_relative_path(name: str) -> PurePosixPath:
-    if name in {"GOAL.md", "STATE.md"}:
+    if name in {"GOAL.md", "STATE.md", "INVARIANT.md"}:
         return AUTHORITY_DOMAIN_DIRECTORY / name
     return AUTHORITY_DIRECTORY / name
 
@@ -168,7 +168,7 @@ def authority_canonical_relative_path(name: str) -> PurePosixPath:
 def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
     old_rel = PurePosixPath(name)
     canonical_rel = authority_canonical_relative_path(name)
-    if name == "STATE.md":
+    if name in {"STATE.md", "INVARIANT.md"}:
         return (old_rel, AUTHORITY_DIRECTORY / name, canonical_rel)
     return (old_rel, canonical_rel)
 
@@ -341,7 +341,7 @@ def canonical_authority_reference(root: Path, name: str) -> str:
     canonical_rel = authority_canonical_relative_path(name).as_posix()
     if (root / canonical_rel).is_file() and not (root / name).is_file():
         return canonical_rel
-    if name == "STATE.md":
+    if name in {"STATE.md", "INVARIANT.md"}:
         docs_rel = (AUTHORITY_DIRECTORY / name).as_posix()
         if (root / docs_rel).is_file() and not (root / name).is_file():
             return docs_rel
@@ -2673,7 +2673,7 @@ def check_changed_artifact_bindings(
         ("docs/ember-floor-contract.md", "docs/contracts/ember-floor-contract.md"),
         ("docs/custody-disposition-20260708.md", "docs/custody/custody-disposition-20260708.md"),
         ("docs/r1-exit-evidence-inventory-20260805.md", "docs/custody/r1-exit-evidence-inventory-20260805.md"),
-        ("docs/START-HERE.md", "docs/guides/START-HERE.md"),
+        ("docs/START-HERE.md", "docs/domains/governance/guides/START-HERE.md"),
         ("docs/PROBLEMS.md", "docs/roadmap/PROBLEMS.md"),
         ("docs/README.md", "docs/DOCS-README.md"),
         ("CONTINUITY.md", "docs/authority/CONTINUITY.md"),
@@ -2684,6 +2684,33 @@ def check_changed_artifact_bindings(
         ("docs/authority/STATE.md", "docs/domains/governance/authority/STATE.md"),
         ("GOAL.md", "docs/domains/governance/authority/GOAL.md"),
     )
+
+    # issue2015: git's rename detection supplies the PRE-RENAME path for each
+    # destination, which is the only way the prior revision of a moved file can be
+    # read at all. It deliberately does NOT extend migration_pairs: authorizing a
+    # cross-workstream path rewrite is the declared map's job (#2032), and feeding
+    # an untracked heuristic into that tuple would re-admit exactly the unreviewable
+    # route the map exists to replace.
+    prior_path_by_destination: dict[str, str] = {}
+    migration_command = ["git", "diff"]
+    if staged:
+        migration_command.append("--cached")
+    if changed_range:
+        migration_command.append(changed_range)
+    migration_command.extend(["--find-renames", "--name-status", "-z"])
+    migration_result = subprocess.run(migration_command, cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+    if migration_result.returncode == 0:
+        fields = migration_result.stdout.split("\0")
+        cursor = 0
+        while cursor < len(fields) and fields[cursor]:
+            status = fields[cursor]
+            cursor += 1
+            if status.startswith(("R", "C")) and cursor + 1 < len(fields):
+                source, destination = fields[cursor], fields[cursor + 1]
+                cursor += 2
+                prior_path_by_destination[destination] = source
+            else:
+                cursor += 1
 
     def exact_path_migration_only(
         normalized: str,
@@ -2697,7 +2724,7 @@ def check_changed_artifact_bindings(
         else:
             return False
         prior = subprocess.run(
-            ["git", "show", f"{prior_revision}:{normalized}"],
+            ["git", "show", f"{prior_revision}:{prior_path_by_destination.get(normalized, normalized)}"],
             cwd=root,
             capture_output=True,
             text=True,
@@ -2705,8 +2732,10 @@ def check_changed_artifact_bindings(
             errors="replace",
             check=False,
         )
-        if prior.returncode != 0 or prior.stdout == staged_text:
+        if prior.returncode != 0:
             return False
+        if prior.stdout == staged_text:
+            return normalized in prior_path_by_destination
         transformed = prior.stdout
         sentinels: dict[str, str] = {}
         for index, (_, destination) in enumerate(pairs):

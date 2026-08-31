@@ -12,7 +12,7 @@ Reference shapes recognized (per spec):
   - @-prefixed:       @docs/spec/math-core-v1.md
   - backtick-quoted:  `scripts/check_goal_citations.py`
     (the path may appear anywhere inside the backtick span, e.g.
-    `python scripts/governor.py --selftest` still yields scripts/governor.py)
+    `python src/ember/governance/scripts/governor.py --selftest` still yields src/ember/governance/scripts/governor.py)
 
 Templated placeholders (containing < > { } or a glob *) are extracted but
 SKIPPED as non-concrete (e.g. `receipts/tally-<ts>.json`,

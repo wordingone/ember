@@ -6,7 +6,7 @@ scorer (issue #757, refs #735).
 
 PROBLEM (executable evidence, external falsifier 2026-07-11, cited in #757):
 Leg-B of the W1 baseline program (arc_challenge / hellaswag / mmlu_pro on the
-Ember W1 checkpoint) cannot run through scripts/serve_cbase_openai.py +
+Ember W1 checkpoint) cannot run through src/ember/governance/scripts/serve_cbase_openai.py +
 installed lm_eval LocalCompletionsAPI: CompletionRequest.prompt is str-only
 so lm_eval's default tokenized_requests=True 422s; the decoded-string
 fallback returns HTTP 200 with NO logprobs object (the server always calls

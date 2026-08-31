@@ -1623,7 +1623,7 @@ def _sandbox_closure_repo(root: Path, *, entrypoint: str = "import json\n") -> P
                 "schema_version": "ember-training-dependency-closure-v1",
                 "entrypoints": ["tools/entrypoint.py"],
                 "dynamic_entrypoints": [],
-                "code": ["scripts/training_closure.py"],
+                "code": ["src/ember/governance/scripts/training_closure.py"],
                 "data": ["configs/training.json"],
                 "dynamic_call_sites": {},
             },

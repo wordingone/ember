@@ -39,36 +39,36 @@ EMBER_LAB_PIPE = r"\\.\pipe\ember-lab"
 
 EXIT_SOURCE_PATHS = {
     "E1": (
-        "scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
         "tools/ember-restart-3b/semantic_stream.py",
         "tools/ember-restart-3b/pretrain.py",
     ),
     "E2": (
-        "scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
         "tools/ember-restart-3b/pretrain.py",
     ),
     "E3": (
-        "scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/checkpoint_artifacts.py",
     ),
     "E4": (
-        "scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
     ),
     "E5": (
-        "scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
         "src/ember/governance/scripts/frontier_receipt.py",
         "scripts/energy_proxy_logger.py",
     ),
     "E6": (
-        "scripts/r1_exit_battery.py",
-        "scripts/forecast_recalibration.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/forecast_recalibration.py",
     ),
-    "E7": ("scripts/r1_exit_battery.py",),
+    "E7": ("src/ember/governance/scripts/r1_exit_battery.py",),
     "E8": (
-        "scripts/r1_exit_battery.py",
+        "src/ember/governance/scripts/r1_exit_battery.py",
         "scripts/density_ab_a1.py",
     ),
 }

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """W1b fp32 bf16-tie discriminator (issue #355): seed checkpoint (unwidened
 continuation source) vs grown checkpoint (grow arm), same certified eval
 batch, forward-only.
@@ -11,7 +14,7 @@ family (differing only in FF width across a grow step), and is itself the
 artifact that closes the gap for future re-checks.
 
 Same protocol both times: all model/eval code imported from
-scripts/w1_collapse_control_run.py and scripts/timeshare_pretrain.py, never
+src/ember/governance/scripts/w1_collapse_control_run.py and scripts/timeshare_pretrain.py, never
 reimplemented. eval_loss_fn is the SAME function both arms and both dtypes
 use; only the model's parameter dtype differs between the bf16 and fp32
 evals of a given arm. The certified eval batch is rebuilt via
@@ -43,13 +46,59 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import torch  # noqa: E402
-from w1_collapse_control_run import (  # noqa: E402
-    load_json, derive_real_arch_config, derive_continuation_arch,
-    build_real_model, load_continuation_checkpoint,
-    verify_checkpoint_key_shape_parity, eval_loss_fn,
-    rebuild_batch_from_decontam_receipt, DEFAULT_PRICING_RECEIPT,
-    derive_rung_receipt_from_manifest,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/w1_collapse_control_run.py
+import importlib.util as _ember_85e76a5cb35a8ea2_importlib
+import sys as _ember_85e76a5cb35a8ea2_sys
+from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+if not _ember_85e76a5cb35a8ea2_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')
+_ember_85e76a5cb35a8ea2_existing = []
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_candidate = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_candidate is not None and all(_ember_85e76a5cb35a8ea2_candidate is not item for item in _ember_85e76a5cb35a8ea2_existing):
+        _ember_85e76a5cb35a8ea2_existing.append(_ember_85e76a5cb35a8ea2_candidate)
+if len(_ember_85e76a5cb35a8ea2_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+if _ember_85e76a5cb35a8ea2_existing:
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_existing[0]
+    _ember_85e76a5cb35a8ea2_observed = getattr(_ember_85e76a5cb35a8ea2_module, '__file__', None)
+    if _ember_85e76a5cb35a8ea2_observed is None or _ember_85e76a5cb35a8ea2_Path(_ember_85e76a5cb35a8ea2_observed).resolve() != _ember_85e76a5cb35a8ea2_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_collapse_control_run.py')
+else:
+    _ember_85e76a5cb35a8ea2_spec = _ember_85e76a5cb35a8ea2_importlib.spec_from_file_location('_ember_issue2015_85e76a5cb35a8ea2', _ember_85e76a5cb35a8ea2_path)
+    if _ember_85e76a5cb35a8ea2_spec is None or _ember_85e76a5cb35a8ea2_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_importlib.module_from_spec(_ember_85e76a5cb35a8ea2_spec)
+    for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+        _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+        if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+        _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+    try:
+        _ember_85e76a5cb35a8ea2_spec.loader.exec_module(_ember_85e76a5cb35a8ea2_module)
+    except BaseException:
+        for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+            if _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias) is _ember_85e76a5cb35a8ea2_module:
+                _ember_85e76a5cb35a8ea2_sys.modules.pop(_ember_85e76a5cb35a8ea2_alias, None)
+        raise
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+load_json = getattr(_ember_85e76a5cb35a8ea2_module, 'load_json')
+derive_real_arch_config = getattr(_ember_85e76a5cb35a8ea2_module, 'derive_real_arch_config')
+derive_continuation_arch = getattr(_ember_85e76a5cb35a8ea2_module, 'derive_continuation_arch')
+build_real_model = getattr(_ember_85e76a5cb35a8ea2_module, 'build_real_model')
+load_continuation_checkpoint = getattr(_ember_85e76a5cb35a8ea2_module, 'load_continuation_checkpoint')
+verify_checkpoint_key_shape_parity = getattr(_ember_85e76a5cb35a8ea2_module, 'verify_checkpoint_key_shape_parity')
+eval_loss_fn = getattr(_ember_85e76a5cb35a8ea2_module, 'eval_loss_fn')
+rebuild_batch_from_decontam_receipt = getattr(_ember_85e76a5cb35a8ea2_module, 'rebuild_batch_from_decontam_receipt')
+DEFAULT_PRICING_RECEIPT = getattr(_ember_85e76a5cb35a8ea2_module, 'DEFAULT_PRICING_RECEIPT')
+derive_rung_receipt_from_manifest = getattr(_ember_85e76a5cb35a8ea2_module, 'derive_rung_receipt_from_manifest')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w1_collapse_control_run.py
 from timeshare_pretrain import load_checkpoint, PackedShardLoader  # noqa: E402
 
 
@@ -128,7 +177,7 @@ def run_paired_fp32_check(*, repo_root: str, shard_dir: str,
         "ticket": "W1B-FP32-REEVAL-CHECK",
         "issue": "#355",
         "schema": "w1b-fp32-check/v1",
-        "method": ("All model/eval code imported from scripts/w1_collapse_control_run.py "
+        "method": ("All model/eval code imported from src/ember/governance/scripts/w1_collapse_control_run.py "
                    "and scripts/timeshare_pretrain.py, never reimplemented. eval_loss_fn is "
                    "the SAME function both arms and both dtypes use; only the model's "
                    "parameter dtype differs between the bf16 and fp32 evals of a given arm. "

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # eng_sync.sh — engineering-tracker enforcement (runs from the cron tick).
 #
 # Contract being enforced (issues #1-#10, label `eng`):
@@ -102,7 +105,7 @@ for r in sorted(rows,key=lambda x:x['number']):
 
 # Receipt-schema sweep (report-only; fail-closed lives at write time via checked_write)
 echo "--- receipt_check sweep (report-only) ---"
-python scripts/receipt_check.py --all receipts 2>&1 || true
+python src/ember/governance/scripts/receipt_check.py --all receipts 2>&1 || true
 echo "--- end receipt_check sweep ---"
 
 echo "ENG_SYNC_DONE (receipt: receipts/eng-sync-$TS.json)"

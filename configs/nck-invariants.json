@@ -1,5 +1,5 @@
 {
-  "note": "Protected-invariant manifest for NC-K boot checksum layer. This file and its baseline copy (configs/nck-baseline/) must match at boot. Do not edit manually; regenerate via scripts/nck/invariants.py --update-manifest.",
+  "note": "Protected-invariant manifest for NC-K boot checksum layer. This file and its baseline copy (configs/nck-baseline/) must match at boot. Do not edit manually; regenerate via src/ember/governance/scripts/nck/invariants.py --update-manifest.",
   "protected_paths": [
     {
       "label": "three-test-gain-gate",
@@ -23,7 +23,7 @@
     },
     {
       "label": "invariants-py",
-      "path": "scripts/nck/invariants.py",
+      "path": "src/ember/governance/scripts/nck/invariants.py",
       "sha256": "7bbf1ae76dfd6a331ceed1fc67e7fe75a2c567e130e25dc6ee211e80c33d8320"
     },
     {

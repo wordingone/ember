@@ -45,8 +45,95 @@ try:
     from nck.event_loop import Event, Action
     from nck.replay_rig import REPLAY_EPOCH
 except ImportError:  # direct-script import fallback, same style as the rig
-    from event_loop import Event, Action  # type: ignore[no-redef]
-    from replay_rig import REPLAY_EPOCH  # type: ignore[no-redef]
+    # issue2015 exact-local-import:src/ember/governance/scripts/nck/event_loop.py
+    import importlib.util as _ember_a1f9d0d912b78a85_importlib
+    import sys as _ember_a1f9d0d912b78a85_sys
+    from pathlib import Path as _ember_a1f9d0d912b78a85_Path
+    _ember_a1f9d0d912b78a85_path = _ember_a1f9d0d912b78a85_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'event_loop.py')
+    if not _ember_a1f9d0d912b78a85_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/nck/event_loop.py')
+    _ember_a1f9d0d912b78a85_aliases = ('_ember_issue2015_a1f9d0d912b78a85', 'event_loop', 'scripts.nck.event_loop')
+    _ember_a1f9d0d912b78a85_existing = []
+    for _ember_a1f9d0d912b78a85_alias in _ember_a1f9d0d912b78a85_aliases:
+        _ember_a1f9d0d912b78a85_candidate = _ember_a1f9d0d912b78a85_sys.modules.get(_ember_a1f9d0d912b78a85_alias)
+        if _ember_a1f9d0d912b78a85_candidate is not None and all(_ember_a1f9d0d912b78a85_candidate is not item for item in _ember_a1f9d0d912b78a85_existing):
+            _ember_a1f9d0d912b78a85_existing.append(_ember_a1f9d0d912b78a85_candidate)
+    if len(_ember_a1f9d0d912b78a85_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/nck/event_loop.py')
+    if _ember_a1f9d0d912b78a85_existing:
+        _ember_a1f9d0d912b78a85_module = _ember_a1f9d0d912b78a85_existing[0]
+        _ember_a1f9d0d912b78a85_observed = getattr(_ember_a1f9d0d912b78a85_module, '__file__', None)
+        if _ember_a1f9d0d912b78a85_observed is None or _ember_a1f9d0d912b78a85_Path(_ember_a1f9d0d912b78a85_observed).resolve() != _ember_a1f9d0d912b78a85_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/nck/event_loop.py')
+    else:
+        _ember_a1f9d0d912b78a85_spec = _ember_a1f9d0d912b78a85_importlib.spec_from_file_location('_ember_issue2015_a1f9d0d912b78a85', _ember_a1f9d0d912b78a85_path)
+        if _ember_a1f9d0d912b78a85_spec is None or _ember_a1f9d0d912b78a85_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/nck/event_loop.py')
+        _ember_a1f9d0d912b78a85_module = _ember_a1f9d0d912b78a85_importlib.module_from_spec(_ember_a1f9d0d912b78a85_spec)
+        for _ember_a1f9d0d912b78a85_alias in _ember_a1f9d0d912b78a85_aliases:
+            _ember_a1f9d0d912b78a85_prior = _ember_a1f9d0d912b78a85_sys.modules.get(_ember_a1f9d0d912b78a85_alias)
+            if _ember_a1f9d0d912b78a85_prior is not None and _ember_a1f9d0d912b78a85_prior is not _ember_a1f9d0d912b78a85_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/nck/event_loop.py')
+            _ember_a1f9d0d912b78a85_sys.modules[_ember_a1f9d0d912b78a85_alias] = _ember_a1f9d0d912b78a85_module
+        try:
+            _ember_a1f9d0d912b78a85_spec.loader.exec_module(_ember_a1f9d0d912b78a85_module)
+        except BaseException:
+            for _ember_a1f9d0d912b78a85_alias in _ember_a1f9d0d912b78a85_aliases:
+                if _ember_a1f9d0d912b78a85_sys.modules.get(_ember_a1f9d0d912b78a85_alias) is _ember_a1f9d0d912b78a85_module:
+                    _ember_a1f9d0d912b78a85_sys.modules.pop(_ember_a1f9d0d912b78a85_alias, None)
+            raise
+    for _ember_a1f9d0d912b78a85_alias in _ember_a1f9d0d912b78a85_aliases:
+        _ember_a1f9d0d912b78a85_prior = _ember_a1f9d0d912b78a85_sys.modules.get(_ember_a1f9d0d912b78a85_alias)
+        if _ember_a1f9d0d912b78a85_prior is not None and _ember_a1f9d0d912b78a85_prior is not _ember_a1f9d0d912b78a85_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/nck/event_loop.py')
+        _ember_a1f9d0d912b78a85_sys.modules[_ember_a1f9d0d912b78a85_alias] = _ember_a1f9d0d912b78a85_module
+    Event = getattr(_ember_a1f9d0d912b78a85_module, 'Event')
+    Action = getattr(_ember_a1f9d0d912b78a85_module, 'Action')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/nck/event_loop.py  # type: ignore[no-redef]
+    # issue2015 exact-local-import:src/ember/governance/scripts/nck/replay_rig.py
+    import importlib.util as _ember_3f61c7f9cf27fed5_importlib
+    import sys as _ember_3f61c7f9cf27fed5_sys
+    from pathlib import Path as _ember_3f61c7f9cf27fed5_Path
+    _ember_3f61c7f9cf27fed5_path = _ember_3f61c7f9cf27fed5_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'replay_rig.py')
+    if not _ember_3f61c7f9cf27fed5_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/nck/replay_rig.py')
+    _ember_3f61c7f9cf27fed5_aliases = ('_ember_issue2015_3f61c7f9cf27fed5', 'replay_rig', 'scripts.nck.replay_rig')
+    _ember_3f61c7f9cf27fed5_existing = []
+    for _ember_3f61c7f9cf27fed5_alias in _ember_3f61c7f9cf27fed5_aliases:
+        _ember_3f61c7f9cf27fed5_candidate = _ember_3f61c7f9cf27fed5_sys.modules.get(_ember_3f61c7f9cf27fed5_alias)
+        if _ember_3f61c7f9cf27fed5_candidate is not None and all(_ember_3f61c7f9cf27fed5_candidate is not item for item in _ember_3f61c7f9cf27fed5_existing):
+            _ember_3f61c7f9cf27fed5_existing.append(_ember_3f61c7f9cf27fed5_candidate)
+    if len(_ember_3f61c7f9cf27fed5_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/nck/replay_rig.py')
+    if _ember_3f61c7f9cf27fed5_existing:
+        _ember_3f61c7f9cf27fed5_module = _ember_3f61c7f9cf27fed5_existing[0]
+        _ember_3f61c7f9cf27fed5_observed = getattr(_ember_3f61c7f9cf27fed5_module, '__file__', None)
+        if _ember_3f61c7f9cf27fed5_observed is None or _ember_3f61c7f9cf27fed5_Path(_ember_3f61c7f9cf27fed5_observed).resolve() != _ember_3f61c7f9cf27fed5_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/nck/replay_rig.py')
+    else:
+        _ember_3f61c7f9cf27fed5_spec = _ember_3f61c7f9cf27fed5_importlib.spec_from_file_location('_ember_issue2015_3f61c7f9cf27fed5', _ember_3f61c7f9cf27fed5_path)
+        if _ember_3f61c7f9cf27fed5_spec is None or _ember_3f61c7f9cf27fed5_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/nck/replay_rig.py')
+        _ember_3f61c7f9cf27fed5_module = _ember_3f61c7f9cf27fed5_importlib.module_from_spec(_ember_3f61c7f9cf27fed5_spec)
+        for _ember_3f61c7f9cf27fed5_alias in _ember_3f61c7f9cf27fed5_aliases:
+            _ember_3f61c7f9cf27fed5_prior = _ember_3f61c7f9cf27fed5_sys.modules.get(_ember_3f61c7f9cf27fed5_alias)
+            if _ember_3f61c7f9cf27fed5_prior is not None and _ember_3f61c7f9cf27fed5_prior is not _ember_3f61c7f9cf27fed5_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/nck/replay_rig.py')
+            _ember_3f61c7f9cf27fed5_sys.modules[_ember_3f61c7f9cf27fed5_alias] = _ember_3f61c7f9cf27fed5_module
+        try:
+            _ember_3f61c7f9cf27fed5_spec.loader.exec_module(_ember_3f61c7f9cf27fed5_module)
+        except BaseException:
+            for _ember_3f61c7f9cf27fed5_alias in _ember_3f61c7f9cf27fed5_aliases:
+                if _ember_3f61c7f9cf27fed5_sys.modules.get(_ember_3f61c7f9cf27fed5_alias) is _ember_3f61c7f9cf27fed5_module:
+                    _ember_3f61c7f9cf27fed5_sys.modules.pop(_ember_3f61c7f9cf27fed5_alias, None)
+            raise
+    for _ember_3f61c7f9cf27fed5_alias in _ember_3f61c7f9cf27fed5_aliases:
+        _ember_3f61c7f9cf27fed5_prior = _ember_3f61c7f9cf27fed5_sys.modules.get(_ember_3f61c7f9cf27fed5_alias)
+        if _ember_3f61c7f9cf27fed5_prior is not None and _ember_3f61c7f9cf27fed5_prior is not _ember_3f61c7f9cf27fed5_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/nck/replay_rig.py')
+        _ember_3f61c7f9cf27fed5_sys.modules[_ember_3f61c7f9cf27fed5_alias] = _ember_3f61c7f9cf27fed5_module
+    REPLAY_EPOCH = getattr(_ember_3f61c7f9cf27fed5_module, 'REPLAY_EPOCH')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/nck/replay_rig.py  # type: ignore[no-redef]
 
 
 class SeatRefuse(Exception):

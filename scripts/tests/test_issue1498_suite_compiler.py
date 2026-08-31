@@ -337,7 +337,7 @@ def test_r2_compilation_is_tokenizer_and_compiler_bound() -> None:
 def test_real_r2_adapter_rederives_single_authority_and_refuses_hash_tamper() -> None:
     suite = ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
     tokenizer = ROOT / "domains/model/tokenizer/tokenizer.json"
-    compiler = ROOT / "scripts/r1_cheap_probe_suite.py"
+    compiler = ROOT / "src/ember/governance/scripts/r1_cheap_probe_suite.py"
     suite_sha, tokenizer_sha, compiler_sha = (_sha(path.read_bytes()) for path in (suite, tokenizer, compiler))
     registry, meta = load_compiled_source_suite(
         suite, suite_sha, tokenizer, tokenizer_sha, compiler_sha
@@ -415,12 +415,12 @@ def test_d04_superseding_amendment_binds_single_authority_and_consumers() -> Non
     }
     assert implementations == {
         "compiler": {
-            "path": "scripts/r1_cheap_probe_suite.py",
-            "sha256": _sha((ROOT / "scripts/r1_cheap_probe_suite.py").read_bytes()),
+            "path": "src/ember/governance/scripts/r1_cheap_probe_suite.py",
+            "sha256": _sha((ROOT / "src/ember/governance/scripts/r1_cheap_probe_suite.py").read_bytes()),
         },
         "r1_runner": {
-            "path": "scripts/r1_frozen_eval_runner.py",
-            "sha256": _sha((ROOT / "scripts/r1_frozen_eval_runner.py").read_bytes()),
+            "path": "src/ember/governance/scripts/r1_frozen_eval_runner.py",
+            "sha256": _sha((ROOT / "src/ember/governance/scripts/r1_frozen_eval_runner.py").read_bytes()),
         },
         "r2_consumer": {
             "path": "scripts/r2_cheap_probe_battery.py",

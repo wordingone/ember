@@ -17,10 +17,10 @@ plain prose, must match the exact case of a path returned by `git ls-files`. An 
 file cannot mask a defect. Example:
 
 ```markdown
-Run `scripts/receipt_check.py --all` to validate receipts.
+Run `src/ember/governance/scripts/receipt_check.py --all` to validate receipts.
 ```
 
-The checker verifies that `scripts/receipt_check.py` is tracked with exact case. Its frozen prose
+The checker verifies that `src/ember/governance/scripts/receipt_check.py` is tracked with exact case. Its frozen prose
 grammar covers `.py`, `.md`, `.json`, `.txt`, `.sh`, `.yml`, `.yaml`, `.toml`, and `.ps1`.
 
 **Defect class:** `broken_path_reference`

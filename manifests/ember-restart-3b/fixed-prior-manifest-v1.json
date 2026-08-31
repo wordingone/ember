@@ -3327,7 +3327,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "Fail-closed receipt writer; quarantines invalid bytes rather than deleting completed runs' results.",
-      "path": "scripts/receipt_write.py",
+      "path": "src/ember/governance/scripts/receipt_write.py",
       "sha256": "860c04b934e21a1cca3e86e403b229333d7af99baf46ee9da05fa091a2848848",
       "size_bytes": 10365
     },
@@ -3335,7 +3335,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "Frozen receipt validator behind the writer.",
-      "path": "scripts/receipt_check.py",
+      "path": "src/ember/governance/scripts/receipt_check.py",
       "sha256": "1d0895435df1cb8054332f6ae46528bb7b1fad12f5d3cf91ee9d883a4b38ea04",
       "size_bytes": 15205
     },
@@ -3351,7 +3351,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "GPU power sampler and trapezoidal integrator (energy-law sec4.2).",
-      "path": "scripts/joules.py",
+      "path": "src/ember/governance/scripts/joules.py",
       "sha256": "359608bf956d1b7082591c4a2f5fe39fe303b099e47f77b1d0917051d429c956",
       "size_bytes": 13536
     },

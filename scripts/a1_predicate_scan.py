@@ -23,9 +23,9 @@ corpus artifacts are DISCLOSED, NOT independently scanned, with reasons:
     any contamination these could carry.
 
 Reuses, never reimplements, the project's proven contamination matcher:
-  - scripts/w1_collapse_control_run.py: contamination_recheck (serial),
+  - src/ember/governance/scripts/w1_collapse_control_run.py: contamination_recheck (serial),
     CONTAMINATION_WINDOW_TOKENS/ROLL_BASE
-  - scripts/w2_heldout/build_decontam_batch_mp.py: contamination_recheck_mp
+  - src/ember/governance/scripts/w2_heldout/build_decontam_batch_mp.py: contamination_recheck_mp
     (parallelized wrapper, IDENTICAL semantics/receipt contract), the
     canonical read_window_tokens / cheap_shard_sizes /
     _cumulative_token_offsets window reconstruction, batch_sha256
@@ -48,7 +48,7 @@ Encoding matches the FROZEN production tokenizer under the SAME
 "added-token-matching-disabled-v1" semantics that built shards-v0
 (domains/model/tokenizer/tokenizer.json, added_tokens table stripped in memory, each
 special literal probe-encoded to prove ids<8 are unreachable from text) --
-verbatim-quoted from scripts/token_shards_v0.py's _production_tokenizer.
+verbatim-quoted from src/ember/governance/scripts/token_shards_v0.py's _production_tokenizer.
 
 Usage:
   python scripts/a1_predicate_scan.py \\
@@ -109,7 +109,7 @@ def load_stripped_tokenizer(tokenizer_json_path: str, expected_sha: "str|None" =
     """Load the frozen tokenizer under production ENCODE_SEMANTICS
     (added-token-matching-disabled-v1): strip added_tokens table in memory,
     probe-encode each special literal to prove ids<8 are unreachable from
-    text. Verbatim-reused convention from scripts/token_shards_v0.py's
+    text. Verbatim-reused convention from src/ember/governance/scripts/token_shards_v0.py's
     _production_tokenizer(match_added_tokens=False).
 
     Pre-existing, unrelated-to-this-PR defect worked around here (disclosed,
@@ -702,7 +702,7 @@ def main() -> int:
             "path": args.tokenizer_label,
             "sha256": tok_sha,
             **({"custody": args.tokenizer_custody} if args.tokenizer_custody else {}),
-            "encode_semantics": "added-token-matching-disabled-v1 (scripts/token_shards_v0.py)",
+            "encode_semantics": "added-token-matching-disabled-v1 (src/ember/governance/scripts/token_shards_v0.py)",
             "orphaned_merge_workaround": {
                 "n_merges_total": n_merges_total,
                 "n_dropped_orphan_merges": n_dropped_orphan_merges,
@@ -715,8 +715,8 @@ def main() -> int:
         },
         "matcher": {
             "reused_from": [
-                "scripts/w1_collapse_control_run.py:contamination_recheck",
-                "scripts/w2_heldout/build_decontam_batch_mp.py:contamination_recheck_mp",
+                "src/ember/governance/scripts/w1_collapse_control_run.py:contamination_recheck",
+                "src/ember/governance/scripts/w2_heldout/build_decontam_batch_mp.py:contamination_recheck_mp",
             ],
             "method": result.get("method"),
             "n_workers_requested": n_workers,

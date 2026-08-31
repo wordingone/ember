@@ -170,7 +170,7 @@ def duplicate_check(root: Path, name_a: str, name_b: str) -> dict[str, Any]:
 def _receipt(ticket: str, body: dict[str, Any]) -> dict[str, Any]:
     """Wrap ``body`` in the repository's receipt floor: ticket, ts, authority, invariant.
 
-    ``scripts/receipt_check.py`` requires ``ticket``/``ts`` on every JSON file under
+    ``src/ember/governance/scripts/receipt_check.py`` requires ``ticket``/``ts`` on every JSON file under
     ``receipts/``, requires ``invariant_sha256`` to equal the repository constant on receipts
     timestamped after the genesis cutover, and requires ``sha_convention`` whenever any KEY
     NAME matches the sha256 pattern anywhere in the first three levels of nesting -- which

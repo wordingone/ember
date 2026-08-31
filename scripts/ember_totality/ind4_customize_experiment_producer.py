@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ind4_customize_experiment_producer.py -- C-IND, IND-4 CUSTOMIZE+EXPERIMENT
 producer (DG-W2g board pass, refs C-IND legs).
 
@@ -6,7 +9,7 @@ Produces the two receipts test_c_ind.py's _validate_ind4() requires, both
 from EXECUTED runs of real, already-existing repo machinery -- no
 hand-crafted JSON:
 
-  leg="customize" -- exercises scripts/v0_config_check.py's real check()
+  leg="customize" -- exercises src/ember/governance/scripts/v0_config_check.py's real check()
     function against a SANDBOX COPY of the live configs/v0-pretrain-config.json
     (the live file itself is never touched). "before" is the untouched
     sandbox copy (must be green, matching the live contract); "after" is the
@@ -126,7 +129,7 @@ def build_customize_receipt() -> dict:
             "green": after_violations == [],
         },
         "edit_caught_by_checker": edit_caught,
-        "checker_module": "scripts/v0_config_check.py",
+        "checker_module": "src/ember/governance/scripts/v0_config_check.py",
         "ts": _now_ts(),
     }
 

@@ -1667,7 +1667,7 @@ _C_ORGANISM_DECOY = {
     "rows": [
         {"path": "docs/audit/seed-graph-notes.md", "category": "documentation_receipt_spec",
          "added_lines": 12, "deleted_lines": 0},
-        {"path": "scripts/governor.py", "category": "code", "added_lines": 5, "deleted_lines": 0},
+        {"path": "src/ember/governance/scripts/governor.py", "category": "code", "added_lines": 5, "deleted_lines": 0},
         {"path": "docs/growth-notes.md", "category": "documentation_receipt_spec",
          "added_lines": 3, "deleted_lines": 0,
          "note": "discusses ingestion pipelines and deletion of stale rows"},

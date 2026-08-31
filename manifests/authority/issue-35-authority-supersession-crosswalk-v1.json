@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-authority-supersession-crosswalk-v1",
   "repository": "wordingone/ember",
-  "source_commit": "3706b8ba0dfe698d6dce41bc9b25c04d954a97b6",
+  "source_commit": "3072a5eb77716bab674a4ad88f9ae23678ee01fe",
   "current_authority": {
     "matrix_path": "docs/authority/ember-authority-matrix.md",
     "matrix_sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db",
@@ -4564,7 +4564,7 @@
       "source_registry": "LEGACY-CONDITIONS",
       "source_id": "C-AUTHORITY",
       "source_kind": "legacy_condition",
-      "statement": "- **C-AUTHORITY — Authority and totality conservation.** R: the current tree passes the seven-leg EMBER-00 conservation certificate: invariant bytes unchanged; D-001 through D-062 present and classified; all governing surfaces conserve the 3B native text-image-audio-reasoning-tool birth and >27B destination; lower-precedence artifacts cannot authorize sub-3B, borrowed-lineage, modality-reduced, model-mediated, or mechanism-erasing work; every known artifact identity is qualified; and this authority-only goal makes no model, training, runtime, benchmark, or capability completion claim. Does NOT count: prose agreement without executable mutations; a verifier absent from repository, dispatch, merge, or board gates; a historical config that remains executable; a borrowed backend presented as Ember. CHK: `scripts/ember_totality/test_c_authority.py` executes `scripts/verify_authority_conservation.py`; GREEN iff every certificate leg passes. ✗ `invalid_authority_drift`, `invalid_goal_binding`, `invalid_identity_conflation`.",
+      "statement": "- **C-AUTHORITY — Authority and totality conservation.** R: the current tree passes the seven-leg EMBER-00 conservation certificate: invariant bytes unchanged; D-001 through D-062 present and classified; all governing surfaces conserve the 3B native text-image-audio-reasoning-tool birth and >27B destination; lower-precedence artifacts cannot authorize sub-3B, borrowed-lineage, modality-reduced, model-mediated, or mechanism-erasing work; every known artifact identity is qualified; and this authority-only goal makes no model, training, runtime, benchmark, or capability completion claim. Does NOT count: prose agreement without executable mutations; a verifier absent from repository, dispatch, merge, or board gates; a historical config that remains executable; a borrowed backend presented as Ember. CHK: `src/ember/governance/scripts/ember_totality/test_c_authority.py` executes `scripts/verify_authority_conservation.py`; GREEN iff every certificate leg passes. ✗ `invalid_authority_drift`, `invalid_goal_binding`, `invalid_identity_conflation`.",
       "disposition": "SUPERSEDED",
       "targets": [
         "EMBER-05"
@@ -5224,5 +5224,5 @@
       "completion_credit": false
     }
   ],
-  "crosswalk_sha256": "6bd264b8916cb501ef24a68b344b375774dcd647ae25a2cca1d84a4fda2a1d74"
+  "crosswalk_sha256": "f9fa26ee6ce483ad4f9bde2efda9fe121dce4edefe67376d0abe4455ea795cd8"
 }

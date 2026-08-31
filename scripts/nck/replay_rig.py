@@ -48,7 +48,7 @@ except ImportError:
     except ImportError as _e:
         raise SystemExit(
             f"RIG_REFUSE: cannot import event_loop shapes: {_e}. "
-            "scripts/nck/event_loop.py must be present."
+            "src/ember/governance/scripts/nck/event_loop.py must be present."
         ) from _e
 
 # ---------------------------------------------------------------------------

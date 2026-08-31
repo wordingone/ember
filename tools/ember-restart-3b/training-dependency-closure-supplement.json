@@ -9,12 +9,12 @@
   ],
   "dynamic_entrypoints": [],
   "code": [
-    "scripts/forecast_recalibration.py",
+    "src/ember/governance/scripts/forecast_recalibration.py",
     "scripts/frontier_receipt.py",
-    "scripts/r1_cheap_probe_suite.py",
-    "scripts/r1_e8_validator.py",
-    "scripts/r1_exit_battery.py",
-    "scripts/r1_frozen_eval_runner.py"
+    "src/ember/governance/scripts/r1_cheap_probe_suite.py",
+    "src/ember/governance/scripts/r1_e8_validator.py",
+    "src/ember/governance/scripts/r1_exit_battery.py",
+    "src/ember/governance/scripts/r1_frozen_eval_runner.py"
   ],
   "data": [],
   "dynamic_call_sites": {},

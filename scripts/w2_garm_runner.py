@@ -28,7 +28,7 @@ and the rung-2 dossier citation all diverge between what #113/#108 assume
 exists and what is actually committed anywhere).
 
 Launch gates (both imported, both hard-refuse):
-  (a) W2 sec.4 decontamination gate -- scripts/w2_heldout/launch_gate.py's
+  (a) W2 sec.4 decontamination gate -- src/ember/governance/scripts/w2_heldout/launch_gate.py's
       refuse_or_pass, imported and exercised against ISOLATED toy fixtures
       (never the shared receipts/ember-c-scale default glob -- a fabricated
       dry-run receipt must never be mistaken for a real decontamination
@@ -100,8 +100,8 @@ sys.path.insert(0, os.path.join(HERE, "growth_refutation"))
 sys.path.insert(0, os.path.join(HERE, "w2_heldout"))
 
 import capacity  # scripts/growth_refutation/capacity.py -- reused, not edited
-import launch_gate  # scripts/w2_heldout/launch_gate.py -- reused, not edited
-import governor  # scripts/governor.py -- reused, not edited
+import launch_gate  # src/ember/governance/scripts/w2_heldout/launch_gate.py -- reused, not edited
+import governor  # src/ember/governance/scripts/governor.py -- reused, not edited
 import w2_derive_s_config  # issue #108's tool -- reused, not edited
 
 ISSUE_REF = "#113"

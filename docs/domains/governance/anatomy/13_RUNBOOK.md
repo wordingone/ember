@@ -33,7 +33,7 @@ Each probe prints exactly one `RED <reason>` / `GREEN <reason>` /
 ## Validate a new receipt before committing it
 
 ```bash
-python scripts/receipt_check.py --file receipts/<subdir>/<name>.json
+python src/ember/governance/scripts/receipt_check.py --file receipts/<subdir>/<name>.json
 ```
 Fails closed (non-zero exit) on any schema-floor violation — fix before
 committing, per 10_RECEIPTS_PROVENANCE.md.

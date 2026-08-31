@@ -500,7 +500,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #
 # Deliberately EXCLUDED after a real search turned up no confirmed writer (these
 # stay unresolvable, honestly, rather than guessed): cbase-grow-dryrun-*.json
-# (its own receipt's "script" field claims scripts/cbase_grow_dryrun.py, which
+# (its own receipt's "script" field claims src/ember/governance/scripts/cbase_grow_dryrun.py, which
 # does not exist on disk -- a stale pointer, not a convention); wheel-bound-*.json (no
 # writer found anywhere in scripts/); arm-a-benchmark-*/arm-b-benchmark-*/
 # benchmark-c-arm-*.json (no writer found); ember-totality-*.json (the spec
@@ -1133,7 +1133,7 @@ def _collect_candidate_field_values(d, depth=0, max_depth=2):
 def _extract_script_tokens(value):
     """Extract script-path tokens from a candidate-field value. Handles the
     plain str/list[str] shapes plus one additional shape confirmed present in
-    16+ generator scripts (e.g. scripts/econ_pass.py:387, scripts/joules.py:234,
+    16+ generator scripts (e.g. scripts/econ_pass.py:387, src/ember/governance/scripts/joules.py:234,
     scripts/manifest_sha.py:169): `"generator": {"path": "scripts/x.py",
     "sha256": "..."}`. Without this, a receipt using that widely-shared shape
     parks its own real script path unread and falls through to unresolvable

@@ -1,6 +1,9 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_w1b_continuation.py -- hermetic regression tests for:
 
-  #355 (W1b unwidened-continuation control): scripts/w1_collapse_control_run.py
+  #355 (W1b unwidened-continuation control): src/ember/governance/scripts/w1_collapse_control_run.py
     gains a resume-from-checkpoint-UNWIDENED mode (--continue-from). NO
     from-scratch init when given; refuses fail-closed on a missing or
     architecture-mismatched checkpoint; the receipt carries both the mode

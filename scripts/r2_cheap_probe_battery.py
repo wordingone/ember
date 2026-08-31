@@ -110,7 +110,7 @@ confidence LEVEL, not a method. The previously disclosed implementation, now
 ratified by D-03, is the Wilson
 score interval (scripts/power.py's `wilson()`, imported not reimplemented
 -- the same tool this repo already uses for "single-arm floors" per
-docs/archive/pre-restart/r2-prereg.md's "single-arm floors read as Wilson intervals" precedent)
+docs/domains/governance/archive/pre-restart/r2-prereg.md's "single-arm floors read as Wilson intervals" precedent)
 for metric_type="proportion" probes, substituting the ONE-SIDED z for T-24
 in place of the two-sided default. A nonparametric bootstrap path is
 provided (`one_sided_lower_bootstrap`, sec2's named 10,000-resample

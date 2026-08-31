@@ -14,7 +14,7 @@
 # plaintext; three modes, checked in this priority order:
 #   1. env var  REPO_GUARD_NAMES        = pipe-separated names (CI injects from a secret), or
 #   2. local file tools/.repo-guard-denylist (one name per line; git-ignored), or
-#   3. committed tools/repo-guard-denylist.sha256 (one sha256-per-lowercase-name;
+#   3. committed src/ember/infrastructure/tools/repo-guard-denylist.sha256 (one sha256-per-lowercase-name;
 #      contains no reversible names, safe to commit) via tools/check_names_hashed.py.
 # Modes 1/2 take precedence when present (exact string match on the real names).
 # Mode 3 lets CI enforce the same invariant with no secret at all. If none of the
@@ -230,7 +230,7 @@ PATHFRAG_SELF_EXCLUDE_ARGS=()
 for relative in \
   'tools/repo-guard.sh' \
   'tools/check_names_hashed.py' \
-  'tools/repo-guard-denylist.sha256'
+  'src/ember/infrastructure/tools/repo-guard-denylist.sha256'
 do
   if surface_bytes_match "$relative"; then
     PATHFRAG_SELF_EXCLUDE_ARGS+=(":(exclude)$relative")
@@ -250,7 +250,7 @@ fi
 
 # ---- 3. no operator names in tracked text (denylist supplied at runtime) --
 # Priority: REPO_GUARD_NAMES env > local plaintext tools/.repo-guard-denylist >
-# committed hashed tools/repo-guard-denylist.sha256 (via check_names_hashed.py) >
+# committed hashed src/ember/infrastructure/tools/repo-guard-denylist.sha256 (via check_names_hashed.py) >
 # unusable (CI fail-closed / local skip).
 #
 # tools/repo-guard-names-exclude.cfg lists path-prefixes (one per line) that
@@ -299,7 +299,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     else
       ok "names" "none found"
     fi
-  elif [ -f "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" ]; then
+  elif [ -f "$KERNEL_ROOT/src/ember/infrastructure/tools/repo-guard-denylist.sha256" ]; then
     HASHED_SELF_ARGS=()
     if [ "$KERNEL_ROOT" != "$SUBJECT_ROOT" ]; then
       HASHED_SELF_ARGS+=(--scan-guard-surfaces)
@@ -307,7 +307,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     HASHED_OUT="$(
       bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_names_hashed.py" \
         --root "$SUBJECT_ROOT" \
-        --denylist "$KERNEL_ROOT/tools/repo-guard-denylist.sha256" \
+        --denylist "$KERNEL_ROOT/src/ember/infrastructure/tools/repo-guard-denylist.sha256" \
         --names-exclude "$NAMES_EXCLUDE_FILE" "${HASHED_SELF_ARGS[@]}" 2>&1
     )"
     HASHED_RC=$?
@@ -318,7 +318,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
       *) # denylist file present but unusable (empty after comment-stripping) — same
          # unusable-denylist branch as if no file existed at all.
          if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-           printf 'FAIL [names] hashed denylist present but unusable (tools/repo-guard-denylist.sha256); aborting\n'
+           printf 'FAIL [names] hashed denylist present but unusable (src/ember/infrastructure/tools/repo-guard-denylist.sha256); aborting\n'
            exit 2
          else
            printf 'skip [names] hashed denylist unusable (local run) — structural checks still enforced\n'
@@ -327,7 +327,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
     esac
   else
     if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-      printf 'FAIL [names] denylist required in protected context (set REPO_GUARD_NAMES secret, tools/.repo-guard-denylist, or commit tools/repo-guard-denylist.sha256); aborting\n'
+      printf 'FAIL [names] denylist required in protected context (set REPO_GUARD_NAMES secret, tools/.repo-guard-denylist, or commit src/ember/infrastructure/tools/repo-guard-denylist.sha256); aborting\n'
       exit 2
     else
       printf 'skip [names] no denylist (local run) — structural checks still enforced\n'
@@ -575,7 +575,7 @@ for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTION
   OLD_REL="$AUTHORITY_NAME"
   NEW_REL="docs/authority/$AUTHORITY_NAME"
   DOMAIN_REL=""
-  if [ "$AUTHORITY_NAME" = "GOAL.md" ] || [ "$AUTHORITY_NAME" = "STATE.md" ]; then
+  if [ "$AUTHORITY_NAME" = "GOAL.md" ] || [ "$AUTHORITY_NAME" = "STATE.md" ] || [ "$AUTHORITY_NAME" = "INVARIANT.md" ]; then
     DOMAIN_REL="docs/domains/governance/authority/$AUTHORITY_NAME"
   fi
   OLD_PRESENT=0

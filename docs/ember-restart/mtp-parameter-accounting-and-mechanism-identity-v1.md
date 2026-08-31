@@ -20,7 +20,7 @@ The historical c03 base count excludes MTP:
 
 The machine-readable source is
 `model.parameter_accounting` in `configs/v0-pretrain-config.json`.
-`scripts/v0_config_check.py` rejects a wrong base, a head count/dimension
+`src/ember/governance/scripts/v0_config_check.py` rejects a wrong base, a head count/dimension
 mismatch, an arithmetic mismatch, or a wrong mechanism identity.
 
 This is declaration-level accounting. Issue #688 remains open for the live

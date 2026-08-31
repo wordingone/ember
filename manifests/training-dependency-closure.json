@@ -2,7 +2,7 @@
   "schema_version": "ember-training-dependency-closure-v1",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
-  "purpose": "The certified launch chain binds THIS path set, not the repository tip. A merge that touches nothing here cannot invalidate a pending launch certificate; a merge that touches anything here correctly demands re-verification. scripts/training_closure.py walks the entrypoints and FAILS if anything reachable lies outside this declaration, if a declared path is absent, or if a member reaches code through subprocess/importlib/runpy/__import__ without a dynamic_call_sites entry -- so the boundary is machine-enforced and an undeclared dynamic edge is a red rather than a gap.",
+  "purpose": "The certified launch chain binds THIS path set, not the repository tip. A merge that touches nothing here cannot invalidate a pending launch certificate; a merge that touches anything here correctly demands re-verification. src/ember/governance/scripts/training_closure.py walks the entrypoints and FAILS if anything reachable lies outside this declaration, if a declared path is absent, or if a member reaches code through subprocess/importlib/runpy/__import__ without a dynamic_call_sites entry -- so the boundary is machine-enforced and an undeclared dynamic edge is a red rather than a gap.",
   "path_canonicalization": "Every path is repo-relative POSIX, exactly as git records it. The closure hash sorts these paths, hashes each file's bytes, and hashes the concatenation, so it is identical on every checkout of the same tree.",
   "entrypoints": [
     "tools/ember-restart-3b/certified_train_launch.py",
@@ -12,10 +12,10 @@
     "tools/ember-restart-3b/run_vertical_slice.py"
   ],
   "dynamic_entrypoints": [
-    "scripts/governor.py",
+    "src/ember/governance/scripts/governor.py",
     "tools/ember-restart-3b/launch_packet.py"
   ],
-  "dynamic_entrypoints_note": "Programs the run path loads through spec_from_file_location or spawns from a path assembled out of several literals, which no static walk can recover: run_vertical_slice exec-loads scripts/governor.py (a different top-level directory) before any CUDA allocation, and launch_packet.py is the launch-surface program whose bytes the certificate already binds as launch_packet_sha256. Declaring one still subjects ITS imports to the walk.",
+  "dynamic_entrypoints_note": "Programs the run path loads through spec_from_file_location or spawns from a path assembled out of several literals, which no static walk can recover: run_vertical_slice exec-loads src/ember/governance/scripts/governor.py (a different top-level directory) before any CUDA allocation, and launch_packet.py is the launch-surface program whose bytes the certificate already binds as launch_packet_sha256. Declaring one still subjects ITS imports to the walk.",
   "code": [
     "tools/corpus_connectors/pdf_to_utf8.py",
     "tools/corpus_connectors/receipt.py",
@@ -56,10 +56,10 @@
     "scripts/ember_dispatch_token.py",
     "scripts/energy_proxy_logger.py",
     "scripts/git_env_hardening.py",
-    "scripts/receipt_check.py",
-    "scripts/receipt_write.py",
-    "scripts/run_attempt_registry.py",
-    "scripts/training_closure.py"
+    "src/ember/governance/scripts/receipt_check.py",
+    "src/ember/governance/scripts/receipt_write.py",
+    "src/ember/governance/scripts/run_attempt_registry.py",
+    "src/ember/governance/scripts/training_closure.py"
   ],
   "data": [
     "tools/launchers/Ember.cmd",
@@ -80,14 +80,14 @@
     "tools/ember-restart-3b/certified_train_launch.py": [
       "scripts/artifact_custody_gate.py",
       "scripts/git_env_hardening.py",
-      "scripts/training_closure.py",
+      "src/ember/governance/scripts/training_closure.py",
       "tools/ember-restart-3b/a1_energy_apportionment.py",
       "tools/ember-restart-3b/a1_execution.py",
       "tools/ember-restart-3b/disk_budget_runner.py",
       "tools/ember-restart-3b/run_vertical_slice.py",
       "scripts/ember_dispatch_token.py",
       "scripts/energy_proxy_logger.py",
-      "scripts/run_attempt_registry.py"
+      "src/ember/governance/scripts/run_attempt_registry.py"
     ],
     "scripts/artifact_custody_gate.py": [],
     "tools/ember-restart-3b/disk_budget_runner.py": [],
@@ -100,7 +100,7 @@
       "tools/ember-restart-3b/verify_capability_record.py"
     ],
     "tools/ember-restart-3b/run_vertical_slice.py": [
-      "scripts/governor.py",
+      "src/ember/governance/scripts/governor.py",
       "tools/ember-restart-3b/parameter_counter.py",
       "tools/ember-restart-3b/verify_training_data.py"
     ],

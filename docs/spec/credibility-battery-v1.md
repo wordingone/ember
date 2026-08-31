@@ -1,7 +1,7 @@
 # Credibility battery v1 — the 15-question evidence registry
 
 Source: [issue #487](https://github.com/wordingone/ember/issues/487) (2026-07-08), which this
-document lands verbatim as a standing registry. Read `docs/guides/START-HERE.md` first if any term below
+document lands verbatim as a standing registry. Read `docs/domains/governance/guides/START-HERE.md` first if any term below
 is unfamiliar.
 
 ## The operator-set bar (verbatim, 2026-07-08)
@@ -89,7 +89,7 @@ currently banked (an honest zero, not a gap).
 
 **Check it yourself:**
 - `receipts/cbase-grow-rung2-event-grow-rung2-20260708-real-b3.json` — walked field-by-field in
-  `docs/guides/START-HERE.md` §3. `d_comm = 0.156090`, `cos_alignment = 0.988060`, band `iii`.
+  `docs/domains/governance/guides/START-HERE.md` §3. `d_comm = 0.156090`, `cos_alignment = 0.988060`, band `iii`.
 - [issue #449](https://github.com/wordingone/ember/issues/449) — the frozen measurement protocol
   and its later amendment (the u_pre provenance correction; see the START-HERE walkthrough).
 
@@ -154,12 +154,12 @@ a leakage predicate); no at-scale capability delta has survived it yet.
 the stated verdict — not asserted, not hand-waved.
 
 **Grade: STRONG as a process, WEAK as coverage** (issue #487): the board mechanically re-derives
-verdicts from artifacts (this same PR's `docs/guides/START-HERE.md` §3 is one worked example — a
+verdicts from artifacts (this same PR's `docs/domains/governance/guides/START-HERE.md` §3 is one worked example — a
 falsified provenance line was caught and amended, in the open, not silently); custody coverage
 itself is not yet fully clean.
 
 **Check it yourself:**
-- `docs/guides/START-HERE.md` §3 — the `b3` receipt's `u_pre` provenance falsification and its
+- `docs/domains/governance/guides/START-HERE.md` §3 — the `b3` receipt's `u_pre` provenance falsification and its
   correction, worked end to end.
 - `docs/custody/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
   currently-cited-but-missing receipt path (governed by
@@ -316,7 +316,7 @@ process-invariants), code-gated, honestly re-derived from artifacts every run.
 ## How to use this battery
 
 Pick any row above, open the path(s) it cites, and check the grade against the artifact yourself —
-this is the concrete instance of `docs/guides/START-HERE.md` §5's "verify one claim yourself" recipe.
+this is the concrete instance of `docs/domains/governance/guides/START-HERE.md` §5's "verify one claim yourself" recipe.
 Grades change only when a new PR cites the receipt that moved them (standing rule 1); this
 document is re-graded by the stranger-audit protocol on its own cadence (standing rule 3, issue
 #481).

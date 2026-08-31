@@ -68,7 +68,7 @@ def build_sandbox_repo(
                 "schema_version": "ember-training-dependency-closure-v1",
                 "entrypoints": ["tools/entrypoint.py"],
                 "dynamic_entrypoints": [],
-                "code": ["scripts/training_closure.py", *code],
+                "code": ["src/ember/governance/scripts/training_closure.py", *code],
                 "data": ["configs/training.json", *data],
                 "dynamic_call_sites": dynamic_call_sites or {},
                 "dynamic_call_site_notes": {

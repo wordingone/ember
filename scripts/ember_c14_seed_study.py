@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_c14_seed_study.py — C14 seed-sensitivity CPU study (issue #4 comment
 "8j" pre-registered follow-up to C14 attempt 19,
 receipts/ember-c14-owned-run/live-20260703T154830Z.json, verdict
@@ -15,7 +18,7 @@ single-run deltas (attempt 20+) are interpretable against a baseline
 variance, not read as if they were noise-free.
 
 SUBSTRATE (CPU-cheap, reuses the runner's OWN machinery, never
-reimplemented): scripts/ember_c14_owned_run.py --dry-run — CPU, toy core
+reimplemented): src/ember/governance/scripts/ember_c14_owned_run.py --dry-run — CPU, toy core
 (TinyPolicyTransformer), but the FULL rig path (run_rig() + every
 GatePredicate + check_guards()) via that file's own corpus generator, and
 critically: --dry-run supports --corpus-v3-resample /
@@ -309,7 +312,7 @@ def main() -> int:
             "seed": seed,
             "invocation_argv": run["argv"],
             "code_path": (
-                "dry-run-class: scripts/ember_c14_owned_run.py --dry-run "
+                "dry-run-class: src/ember/governance/scripts/ember_c14_owned_run.py --dry-run "
                 "(CPU, TinyPolicyTransformer toy core) via run_rig() + full "
                 "GatePredicate/check_guards() stack, same corpus generator "
                 "and same corpus-v3 dynamic-resample / checkpoint-eval "
@@ -387,7 +390,7 @@ def main() -> int:
         },
         "code_path": (
             "dry-run-class (CPU, TinyPolicyTransformer toy core) via "
-            "scripts/ember_c14_owned_run.py --dry-run, NOT the live-class "
+            "src/ember/governance/scripts/ember_c14_owned_run.py --dry-run, NOT the live-class "
             "real-owned-core path -- see honesty_note."
         ),
         "seeds_requested": seeds,
@@ -425,7 +428,7 @@ def main() -> int:
         "honesty_note": (
             "This study runs on the CPU dry-run/toy-core substrate, not the "
             "real ~368M-param owned core attempt 19 trained. "
-            "scripts/ember_c14_owned_run.py's --dry-run path DOES express "
+            "src/ember/governance/scripts/ember_c14_owned_run.py's --dry-run path DOES express "
             "the FULL protocol including the dynamic corpus-v3 exemplar-"
             "resampling phase (--corpus-v3-resample/--corpus-v3-resample-"
             "start-step and --eval-checkpoint-interval are wired into "

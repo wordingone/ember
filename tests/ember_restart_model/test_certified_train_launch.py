@@ -2063,7 +2063,7 @@ def install_closure(repo: pathlib.Path) -> str:
                 "schema_version": "ember-training-dependency-closure-v1",
                 "entrypoints": ["tools/entrypoint.py"],
                 "dynamic_entrypoints": [],
-                "code": ["scripts/training_closure.py"],
+                "code": ["src/ember/governance/scripts/training_closure.py"],
                 "data": ["configs/training.json"],
                 "dynamic_call_sites": {},
             },
@@ -4682,7 +4682,7 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
     single-capability continuation route) -- there was no certified way to
     launch a telemetered, clean-genesis WARM-100 canary through
     run_vertical_slice.py's "semantic" subcommand. Extending allowed_modes
-    itself was rejected as the cure (scripts/r1_exit_battery.py's headline
+    itself was rejected as the cure (src/ember/governance/scripts/r1_exit_battery.py's headline
     finding): _require_scope_subset hard-requires allowed_modes ==
     ["governed-vertical"] exactly, so this route is authorized through the
     certificate's separate allowed_semantic_canary_modes key instead, exactly

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """milestone_leg_test.py -- hermetic unit tests + RED-then-GREEN sandbox proof for
-scripts/ember_totality/milestone_leg.py (Class-2 item 2, docs/audit/class2-unwatched-
+src/ember/governance/scripts/ember_totality/milestone_leg.py (Class-2 item 2, docs/audit/class2-unwatched-
 mandates-recon-20260704.md #2, parent gh issue #35 DISPATCH 3 of 3).
 
 Unlike enforcement_leg_test.py's precedent (which had to fixture-mimic

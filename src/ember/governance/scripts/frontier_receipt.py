@@ -16,7 +16,7 @@ advantage claim carries the matched-control delta legs ...; (8) INVARIANT stamps
 F3 + F4." R1 instance (section 3): "R1-E5: first closed-boundary frontier
 receipt per section 5.4 with energy_boundary: DEGRADED_PROXY".
 
-Same fail-closed posture as scripts/forecast_recalibration.py: any leg that
+Same fail-closed posture as src/ember/governance/scripts/forecast_recalibration.py: any leg that
 cannot be assembled from evidence refuses with the missing basis NAMED, exit 2,
 and NO receipt written -- a partial frontier point must never mint one.
 Thresholds (T-01, T-06) are bound at runtime through r1_exit_battery

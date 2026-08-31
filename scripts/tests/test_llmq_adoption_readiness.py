@@ -16,7 +16,7 @@ from scripts.llmq_adoption_readiness import assess
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_PATH = "scripts/llmq_adoption_readiness.py"
 SOURCE_SHA = hashlib.sha256((REPO_ROOT / SOURCE_PATH).read_bytes()).hexdigest()
-DESIGN_PATH = "docs/spec/llmq/adoption-design-v1.json"
+DESIGN_PATH = "docs/domains/governance/spec/llmq/adoption-design-v1.json"
 DESIGN_SHA = hashlib.sha256((REPO_ROOT / DESIGN_PATH).read_bytes()).hexdigest()
 MECHANISM_PATH = "docs/spec/llmq/mechanism-attribution-v1.json"
 MECHANISM_SHA = hashlib.sha256((REPO_ROOT / MECHANISM_PATH).read_bytes()).hexdigest()
