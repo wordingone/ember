@@ -7,7 +7,7 @@
 
 REPLAY, NEVER REIMPLEMENTATION: model/optimizer/checkpoint construction is
 imported from w1_collapse_control_run.py and timeshare_pretrain.py -- the
-SAME historical modules scripts/w1_baseline_replay_closure.py (#738) and
+SAME historical modules src/ember/governance/scripts/w1_baseline_replay_closure.py (#738) and
 the original live run used. Tiny-fixture sizing (_tiny_real_arch,
 PHASE2_SEED_HISTORICAL) and path defaults are imported from
 w1_baseline_replay_closure itself (its sibling, same issue #735 toolchain)
@@ -417,7 +417,7 @@ def bind_real_arch_config_sha(real_arch: dict, expected_config_sha256: str) -> d
         "measured_config_sha256": measured,
         "expected_config_sha256": expected_config_sha256,
         "source": (
-            "scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 "
+            "src/ember/governance/scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 "
             "-- frozen at the #735/#738 closure landing, independently "
             "derived there via the SAME config_sha(real_config_dict("
             "real_arch)) call over that receipt's own real_arch"),

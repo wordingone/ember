@@ -93,14 +93,14 @@ held-out derivation, and an amendment never re-rolls AC4 (DEV-005 / the amendmen
 `ac4_anchoring`). Content binding preserves the rule's substance — the launch builds
 from a tree carrying the exact frozen declaration — while removing only the
 squash-merge-broken ancestry mechanics. The binding remains fail-closed on content
-mismatch (`scripts/a1_freeze_consumer.py` REFUSE[DECL_ABSENT_IN_BUILD_REF] /
+mismatch (`src/ember/governance/scripts/a1_freeze_consumer.py` REFUSE[DECL_ABSENT_IN_BUILD_REF] /
 REFUSE[DECL_ALTERED_IN_BUILD_REF]; negative-tested).
 
 **Who owns the call:** the coordinator (ruling R3, PR #645, dated 2026-07-10); this
 entry executes it. **Receipts:**
 `receipts/eval-suite-freeze/a1-freeze-admission-example-*.json` (the consumer's
 admission receipt discloses `pointer_is_ancestor_of_build_ref` plus the declaration
-sha256 at pointer / on disk / at build-ref), `scripts/a1_freeze_consumer.py` +
+sha256 at pointer / on disk / at build-ref), `src/ember/governance/scripts/a1_freeze_consumer.py` +
 `tests/test_a1_freeze_consumer.py` (PR #645). Relates to issues #631, #593, #487.
 
 ---

@@ -12,7 +12,7 @@
     "affected_exit_criteria": ["R1-E7", "R2-E3", "R2-E4", "F-03"],
     "registry_state": "HASH_PINNED_TEXT_AUTHORITY",
     "source_manifest": {
-      "path": "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
+      "path": "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
       "sha256": "b08073b505581bd4cc634f9ca5c3a872755de867db26dd83fe27406f858288a3",
       "schema": "ember02-r1-r2-cheap-probe-suite/v1",
       "rows": 64

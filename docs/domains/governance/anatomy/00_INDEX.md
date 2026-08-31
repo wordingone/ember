@@ -31,7 +31,7 @@ into prose that outruns the receipts.
 | 09 | TOOLING_AND_CLI | `tools/ember-cli/`, `scripts/ember_avir_cli_launch_entry.py` |
 | 10 | RECEIPTS_PROVENANCE | `src/ember/governance/scripts/receipt_check.py`, `src/ember/governance/scripts/receipt_write.py`, the genesis invariant |
 | 11 | TOTALITY_BOARD_CONDITIONS | `src/ember/governance/scripts/ember_totality/ember_totality_spec.py`, the 41-condition registry |
-| 12 | COCKPIT_OBSERVATORY | `tools/ember-cli/src/core/ember-world-state.ts`, `scripts/ember_cobs_capture.py` |
+| 12 | COCKPIT_OBSERVATORY | `tools/ember-cli/src/core/ember-world-state.ts`, `src/ember/governance/scripts/ember_cobs_capture.py` |
 | 13 | RUNBOOK | day-to-day operator commands, reproduced from real recent sessions |
 | 14 | MODEL_CARD | honest current-state model card (no owned checkpoint yet) |
 | 15 | TECHNICAL_REPORT | current totality-board snapshot and how to read it |

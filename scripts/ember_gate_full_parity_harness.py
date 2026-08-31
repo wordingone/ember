@@ -139,7 +139,7 @@ SURFACE_SPECS: list[dict[str, Any]] = [
     {
         "surface_id": "native_goal_organ",
         "name": "Native Codex goal-mode organ",
-        "reference_evidence": ["docs/domains/governance/authority/GOAL.md", "tools/reference-goal-mode/goal-mode.ps1", "scripts/ember_gate_goal_mode_parity_adapter.py"],
+        "reference_evidence": ["docs/domains/governance/authority/GOAL.md", "src/ember/infrastructure/tools/reference-goal-mode/goal-mode.ps1", "scripts/ember_gate_goal_mode_parity_adapter.py"],
         "required_cleanroom_surface": "Resident goal organ that parses goal, reads receipts, selects blocker, compiles action, runs/delegates, verifies, writes receipt, and preserves next blocker without Codex steering.",
     },
     {

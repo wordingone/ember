@@ -25,12 +25,12 @@ src/ember/governance/scripts/c04_pretrain_prestage.py
 src/ember/governance/scripts/c8_prelaunch/compute_mde.py
 src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py
 scripts/c8_prelaunch/q2_rho_leg.py
-scripts/c8_prelaunch/run_ledger.py
+src/ember/governance/scripts/c8_prelaunch/run_ledger.py
 src/ember/governance/scripts/cbase_grow_rung2_event.py
 src/ember/governance/scripts/check_docs_freshness.py
 src/ember/governance/scripts/check_energy_law_theory.py
 src/ember/governance/scripts/check_goal_citations.py
-scripts/ckpt_locality.py
+src/ember/governance/scripts/ckpt_locality.py
 src/ember/governance/scripts/cockpit_watchdog.py
 scripts/corpus_acquire_selftest.py
 scripts/corpus_mix_selftest.py
@@ -42,7 +42,7 @@ src/ember/governance/scripts/ember_c_e2b_founder_likeness.py
 scripts/ember_candidate_generator_selftest.py
 scripts/ember_cbase_avir_augment.py
 src/ember/governance/scripts/ember_cbase_avir_data.py
-scripts/ember_cbase_avir_data_v2.py
+src/ember/governance/scripts/ember_cbase_avir_data_v2.py
 scripts/ember_cbase_launch.py
 scripts/ember_cbase_mixture.py
 scripts/ember_cbase_s6_acceptance.py
@@ -106,7 +106,7 @@ scripts/ember_scienceagentbench_artifact_materialization_selftest.py
 scripts/ember_state_substrate.py
 scripts/ember_state_substrate_selftest.py
 scripts/ember_tiny_bitnet_comparison_selftest.py
-scripts/ember_totality/c_comprehensive_receipts_custody_test.py
+src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py
 scripts/ember_totality/c_custody_dictkey_citations_test.py
 scripts/ember_totality/c_custody_extraction_cures_test.py
 scripts/ember_totality/c_custody_pattern_citation_test.py
@@ -165,7 +165,7 @@ scripts/nck/selftest_c10_resident.py
 scripts/nck/selftest_cu_console.py
 src/ember/governance/scripts/nck/selftest_event_loop.py
 scripts/nck/selftest_invariants.py
-scripts/nck/selftest_replay_rig.py
+src/ember/governance/scripts/nck/selftest_replay_rig.py
 scripts/nck/selftest_seat_adapter.py
 scripts/paper/contamination_scan.py
 src/ember/governance/scripts/receipt_write.py
@@ -213,7 +213,7 @@ scripts/train_multimodal_v0.py
 scripts/trajgate_phase0_signal_gate.py
 src/ember/governance/scripts/v0_pretrain_launch_gate.py
 scripts/verify_authority_conservation.py
-scripts/w1_baseline_replay_closure.py
+src/ember/governance/scripts/w1_baseline_replay_closure.py
 src/ember/governance/scripts/w1_collapse_control_run.py
 scripts/w1_fullstate_resume_verify.py
 src/ember/governance/scripts/w2_derive_s_config.py

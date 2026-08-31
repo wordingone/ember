@@ -180,7 +180,7 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
                 "-p",
                 "no:cacheprovider",
                 "src/ember/governance/scripts/tests/test_authority_conservation.py",
-                "scripts/tests/test_authority_completion.py",
+                "src/ember/governance/scripts/tests/test_authority_completion.py",
                 "scripts/tests/test_registry_authority_gate.py",
                 "scripts/tests/test_pr_authority_binding.py",
             ],

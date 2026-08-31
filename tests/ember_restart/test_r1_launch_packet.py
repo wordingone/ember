@@ -40,7 +40,7 @@ CERTIFIED_SUPPORT = _load_test_support(
     "r1_packet_certified_support",
 )
 TEXT_SUPPORT = _load_test_support(
-    "tests/ember_restart_model/test_text_lab_corpus.py",
+    "tests/ember_restart_model/domain-governance/test_text_lab_corpus.py",
     "r1_packet_text_support",
 )
 TEXT_AUTHORITY = _load_test_support(

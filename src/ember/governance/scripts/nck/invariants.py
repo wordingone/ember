@@ -32,7 +32,7 @@ Architecture
     dedup_contract dict naming the journal field used for deduplication.
 
 Clean-room rule: no the predecessor CLI source was read.  Only in-repo spec docs and
-the #260 event_loop.py were consulted.  See docs/archive/pre-restart/nck-invariants-v0.md for
+the #260 event_loop.py were consulted.  See docs/domains/governance/archive/pre-restart/nck-invariants-v0.md for
 full provenance attestation.
 """
 

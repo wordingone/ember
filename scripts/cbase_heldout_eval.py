@@ -613,7 +613,7 @@ def load_v5_live_model(checkpoint_dir: str|Path, *, route: str|None, device: str
             "max_position_embeddings":binding["max_position_embeddings"],
         },
         "v5_loader_source":{
-            "path":"scripts/legb_live_candidate_v5_scorer.py",
+            "path":"src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
             "sha256":_sha256(loader_path),
         },
     }

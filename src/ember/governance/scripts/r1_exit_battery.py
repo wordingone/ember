@@ -3466,7 +3466,7 @@ def run_selftest() -> None:
             manifest_sha = hashlib.sha256((ckpt / "checkpoint-manifest.json").read_bytes()).hexdigest()
             suite_path = run / "frozen-eval-suite.json"
             suite_path.write_bytes(
-                (REPO_ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_bytes()
+                (REPO_ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_bytes()
             )
             suite_sha = hashlib.sha256(suite_path.read_bytes()).hexdigest()
             _suite_raw, suite = frozen_eval._load_suite(suite_path, suite_sha)

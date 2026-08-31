@@ -311,7 +311,7 @@ function requireDispatchBinding(bindings: unknown, kind: string, path: string, s
 }
 
 // Legal snake_case spellings for the two required closed-choice dispatch-manifest fields
-// (runtime/ember-lab/src/lib.rs DispatchCpuPacingClass / DispatchWindowContract). Kept here
+// (domains/runtime/runtime/ember-lab/src/lib.rs DispatchCpuPacingClass / DispatchWindowContract). Kept here
 // rather than imported so this transport has no compile-time dependency on the Rust crate;
 // keep in sync by hand if the enums ever grow a variant.
 const CPU_PACING_CLASS_LEGAL_VALUES = ["unpaced", "governed"] as const;

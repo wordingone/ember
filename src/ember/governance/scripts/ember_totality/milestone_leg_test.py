@@ -93,7 +93,7 @@ def _write_valid_fixture_tree(root: Path) -> None:
     spec_dir = docs_dir / "spec"
     spec_dir.mkdir(parents=True, exist_ok=True)
 
-    # docs/contracts/ember-completeness.md -- exactly C1..C55, one row each.
+    # docs/domains/governance/contracts/ember-completeness.md -- exactly C1..C55, one row each.
     completeness_lines = [f"| C{n} | piece{n} | desc{n} | test{n} | receipt{n} |" for n in range(1, 56)]
     (docs_dir / "ember-completeness.md").write_text(
         "# Completeness\n\n" + "\n".join(completeness_lines) + "\n", encoding="utf-8"
@@ -261,7 +261,7 @@ def test_condition_row_c0_no_longer_breaks_legacy_parse():
         _write_valid_fixture_tree(root)
         # the exact live-tree shape: a bare-digit board-condition row ("C0") sharing
         # ember-completeness.md with the 55 legacy C1..C55 rows, citing the condition
-        # registry the same way the real docs/contracts/ember-completeness.md:79 row does.
+        # registry the same way the real docs/domains/governance/contracts/ember-completeness.md:79 row does.
         completeness_path = root / "docs" / "ember-completeness.md"
         text = completeness_path.read_text(encoding="utf-8")
         text += ("| C0 | S3 | No additional loops before resident-training preconditions "

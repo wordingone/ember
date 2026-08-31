@@ -283,210 +283,210 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 6,
       "target": "receipts/ember-c-scale/c-scale-gap-report-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 6,
       "target": "scratch/c-scale-assembler/fixtures/",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 18,
       "target": "receipts/cbase-grow-rung/cbase-grow-rung-20260703T053225Z-import-edition.json",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 19,
       "target": "receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 22,
       "target": "receipts/cbase-grow-rung/cbase-grow-rung-20260703T053225Z-import-edition.json",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 33,
       "target": "receipts/ember-c-scale/w2-transition-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 34,
       "target": "receipts/r3-feasibility/r3-feasibility-phaseb-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 35,
       "target": "receipts/ember-c-scale/w2-transition-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 46,
       "target": "receipts/ember-c-scale/c-scale-s3-flops-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 49,
       "target": "receipts/ember-c-scale/c-scale-s3-deletion-arm-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 50,
       "target": "receipts/ember-c-scale/c-scale-s3-working-set-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 67,
       "target": "receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 74,
       "target": "receipts/r3-feasibility/r3-feasibility-phaseb-fixture-20990101T000000Z.json",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 81,
       "target": "receipts/ember-c-scale/w2-decontam-20260704T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 89,
       "target": "receipts/ember-c-scale/c-scale-s3-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 89,
       "target": "scratch/c-scale-assembler/fixtures/",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 106,
       "target": "receipts/r3-feasibility/r3-feasibility-phaseb-20260705T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 108,
       "target": "receipts/ember-c-scale/w2-decontam-20260705T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 112,
       "target": "receipts/ember-c-scale/w2-growth-arm-20260705T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 114,
       "target": "receipts/ember-c-scale/c-scale-s3-flops-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 118,
       "target": "receipts/ember-c-scale/c-scale-execution-receipt-20260705T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 124,
       "target": "receipts/ember-c-scale/c-scale-gap-report-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 124,
       "target": "scratch/c-scale-assembler/fixtures/",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 138,
       "target": "docs/spec/w1-token-collapse-control-v1.md",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 145,
       "target": "docs/spec/c-base.md",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 152,
       "target": "receipts/ember-c-scale/c-scale-s3-deletion-arm-",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 152,
       "target": "scratch/c-scale-assembler/fixtures/",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 173,
       "target": "receipts/r3-feasibility/r3-feasibility-phaseb-20260705T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "document": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
       "line": 174,
       "target": "receipts/ember-c-scale/w2-decontam-20260705T",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/c52-scaffold-off-test-v1.md",
+      "document": "docs/domains/governance/archive/pre-restart/c52-scaffold-off-test-v1.md",
       "line": 8,
       "target": "receipts/c52-scaffold-off-",
       "visible_classification": "historical"
@@ -563,7 +563,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/nck-invariants-v0.md",
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
       "line": 186,
       "target": "docs/receipts-only-truth.md",
       "visible_classification": "historical"
@@ -913,98 +913,98 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 18,
       "target": "receipts/tally-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 28,
       "target": "docs/technique-registry.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 36,
       "target": "receipts/schedule",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 47,
       "target": "state/infra5-proto",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 73,
       "target": "docs/kernel-v1-freeze-spec.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 74,
       "target": "baseline/admission/ledger-ingest/candidate-pool",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 79,
       "target": "docs/c52-scaffold-off-test-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 82,
       "target": "docs/sp6b-duty-battery-spec-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 93,
       "target": "docs/closed-issues-enumeration.txt",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 94,
       "target": "docs/technique-registry.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 151,
       "target": "receipts/tally-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 156,
       "target": "receipts/tally-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 223,
       "target": "receipts/c-enforcement",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/contracts/ember-completeness.md",
+      "document": "docs/domains/governance/contracts/ember-completeness.md",
       "line": 223,
       "target": "receipts/spend-annex-20260707T030421Z.json",
       "visible_classification": "reference"

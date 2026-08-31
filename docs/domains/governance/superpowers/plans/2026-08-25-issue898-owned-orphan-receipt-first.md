@@ -25,8 +25,8 @@
 ### Task 1: Extract an exact owned-orphan verifier
 
 **Files:**
-- Modify: `runtime/ember-lab/src/lib.rs:11299-11440`
-- Modify: `runtime/ember-lab/src/lib.rs:11521-11535`
+- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:11299-11440`
+- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:11521-11535`
 
 **Interfaces:**
 - Produces: `open_verified_owned_job(row: &JobProcessRow, rights: OwnedJobRights) -> Result<VerifiedOwnedJob>`, whose handles retain PID/start token/executable/Job Object membership; `OwnedJobRights::QueryOnly` and `OwnedJobRights::QueryAndTerminate`.
@@ -64,8 +64,8 @@ Include access masks, diff, hashes, and raw tests.
 ### Task 2: Receipt-before-termination state machine
 
 **Files:**
-- Modify: `runtime/ember-lab/src/lib.rs:6999-7044`
-- Modify: `runtime/ember-lab/src/lib.rs:11521-11643`
+- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:6999-7044`
+- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs:11521-11643`
 - Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs` beside reconciliation tests
 
 **Interfaces:**
@@ -131,7 +131,7 @@ Include one exact decision receipt's raw/self hashes and JSON, event rows, proce
 ### Task 3: Reconciliation regression and immutable handoff
 
 **Files:**
-- Verify: `runtime/ember-lab/src/lib.rs`
+- Verify: `domains/runtime/runtime/ember-lab/src/lib.rs`
 - Verify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs`
 - Verify: `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
@@ -159,7 +159,7 @@ Expected: zero failures and no detached process or monitor remains.
 Run:
 
 ```text
-rg -n "terminate_job_object_by_name|TerminateJobObject|TerminateProcess|PROCESS_TERMINATE" runtime/ember-lab/src/lib.rs
+rg -n "terminate_job_object_by_name|TerminateJobObject|TerminateProcess|PROCESS_TERMINATE" domains/runtime/runtime/ember-lab/src/lib.rs
 git diff --check
 git status --short
 ```

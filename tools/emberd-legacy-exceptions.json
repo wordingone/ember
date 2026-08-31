@@ -11,7 +11,7 @@
     },
     {
       "path": "manifests/ember-01-custody/public-issue-census.json",
-      "sha256": "4fa33104803206661d519d4b747fc7f28051fe5a8aec19a93bbcfad63857a149",
+      "sha256": "09b71266744e05b867a7379d13554bd5afc7789af76dcc190930fbbe3c16fb5b",
       "reason": "verbatim cached GitHub issue titles for two still-open issues whose real titles literally start with 'emberd'; renaming the cache would make it diverge from the live source it censuses. See docs/naming-migrations.md."
     },
     {

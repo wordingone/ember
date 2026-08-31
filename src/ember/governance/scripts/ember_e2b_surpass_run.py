@@ -183,7 +183,7 @@ SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending nor
 RECEIPT_DIR = REPO / "receipts"
 SMOKE_DIR = REPO / "scratch" / "ember-e2b-surpass-dryrun"  # NON-canonical; never receipts/
 
-# Verbatim from ember-goalforge/scripts/ember_totality/test_c_e2b.py's own
+# Verbatim from ember-goalforge/src/ember/governance/scripts/ember_totality/test_c_e2b.py's own
 # INVALID_TOKENS — never emit these as a real verdict-carrying receipt.
 INVALID_TOKENS = ["invalid_e2b_unpaired", "invalid_single_leg_surpass"]
 

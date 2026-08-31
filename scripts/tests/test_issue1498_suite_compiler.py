@@ -154,7 +154,7 @@ def test_selection_is_closed_deterministic_and_exclusion_bound(tmp_path: Path) -
         expected_exclusion_sha256=_sha(exclusion_raw),
     )
 
-    canonical = ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
+    canonical = ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
     loaded = load_source_manifest(canonical, _sha(canonical.read_bytes()))
     assert len(loaded["tasks"]) == 64
 
@@ -278,7 +278,7 @@ def test_manifest_binds_effective_selection_exclusion_policy_and_t24() -> None:
     ],
 )
 def test_frozen_authority_refuses_every_bound_surface_tamper(tmp_path: Path, mutation) -> None:
-    value = deepcopy(json.loads((ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_text()))
+    value = deepcopy(json.loads((ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_text()))
     mutation(value)
     path = tmp_path / "tampered.json"
     path.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
@@ -335,7 +335,7 @@ def test_r2_compilation_is_tokenizer_and_compiler_bound() -> None:
 
 
 def test_real_r2_adapter_rederives_single_authority_and_refuses_hash_tamper() -> None:
-    suite = ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
+    suite = ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
     tokenizer = ROOT / "domains/model/tokenizer/tokenizer.json"
     compiler = ROOT / "src/ember/governance/scripts/r1_cheap_probe_suite.py"
     suite_sha, tokenizer_sha, compiler_sha = (_sha(path.read_bytes()) for path in (suite, tokenizer, compiler))
@@ -408,7 +408,7 @@ def test_d04_superseding_amendment_binds_single_authority_and_consumers() -> Non
     assert amendment["decision"]["id"] == "D-04"
     assert amendment["decision"]["registry_state"] == "HASH_PINNED_TEXT_AUTHORITY"
     assert amendment["decision"]["source_manifest"] == {
-        "path": "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
+        "path": "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
         "sha256": _sha(suite_path.read_bytes()),
         "schema": "ember02-r1-r2-cheap-probe-suite/v1",
         "rows": 64,

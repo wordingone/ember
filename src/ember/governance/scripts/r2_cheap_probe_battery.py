@@ -7,7 +7,7 @@ battery runner (issue #1435).
 
 ============================================================================
 CURRENT D-04 AUTHORITY (#1498): the accepted battery is the exact hash-pinned
-text manifest in docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json.  R2 must
+text manifest in docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json.  R2 must
 receive it through --source-suite and deterministically compile token IDs from
 the separately hash-bound tokenizer and compiler.  DEFAULT_PROBE_REGISTRY
 remains empty deliberately so omission of those bindings refuses rather than

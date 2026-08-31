@@ -20,7 +20,7 @@ This script:
   3. records the CORRECTED premise + the lineage-binding gate rule (the gate binds ONE
      exact checkpoint lineage and scans every training input THAT lineage consumed --
      shards-v0 is sufficient ONLY for a lineage that consumed only shards-v0), which
-     scripts/a1_freeze_consumer.py (deliverable 5) enforces.
+     src/ember/governance/scripts/a1_freeze_consumer.py (deliverable 5) enforces.
 
 Emits an append-only lineage receipt chained by sha256 to the published scan receipt
 (never edited).
@@ -233,7 +233,7 @@ def main() -> int:
             "input that declared lineage consumed. shards-v0 alone is a sufficient universe ONLY "
             "for a lineage that consumed only shards-v0; a lineage that also consumed eval-derived "
             "RL/SFT worlds requires those inputs scanned too. A claim whose lineage is not fully "
-            "declared-and-scanned is INADMISSIBLE. Enforced by scripts/a1_freeze_consumer.py "
+            "declared-and-scanned is INADMISSIBLE. Enforced by src/ember/governance/scripts/a1_freeze_consumer.py "
             "(#631 deliverable 5) via its required --lineage-manifest."),
         "scope": "this correction does NOT retract the shards-v0 scan (suite-a CLEAN, suite-b "
                  "147-exclusion set stands); it removes the false universal framing and installs "

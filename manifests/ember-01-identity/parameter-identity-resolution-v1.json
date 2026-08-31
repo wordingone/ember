@@ -188,7 +188,7 @@
       "category": "parameter_identity",
       "evidence_sha256": "79b43c5fc2b85313ae3484c956c38069dda5f6a1ad27404f3a070ff560119135",
       "line": 89,
-      "path": "scripts/ember_01_identity/census_consumers.py",
+      "path": "src/ember/governance/scripts/ember_01_identity/census_consumers.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {

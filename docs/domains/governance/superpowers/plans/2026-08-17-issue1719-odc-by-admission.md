@@ -23,7 +23,7 @@
 **Files:**
 - Modify through canonical remint only: `data/ember-restart-3b/owned-text-lab-input-identity-v2.json`
 - Modify through canonical remint only: `data/ember-restart-3b/text-lab-authority-index-v1.json`
-- Modify: `tests/ember_restart_model/test_text_lab_corpus.py`
+- Modify: `tests/ember_restart_model/domain-governance/test_text_lab_corpus.py`
 - Modify: `tools/ember-restart-3b/text_lab_corpus.py`
 
 **Interfaces:**
@@ -49,7 +49,7 @@ Add `ConnectorReceiptAdapterTests.test_rejects_odc_by_claim_without_exact_readme
 Run:
 
 ```text
-bash tools/run-python-hidden.sh tests/ember_restart_model/test_text_lab_corpus.py ConnectorReceiptAdapterTests.test_adapts_exact_odc_by_hf_dataset_card_license ConnectorReceiptAdapterTests.test_rejects_odc_by_claim_without_exact_readme_declaration
+bash tools/run-python-hidden.sh tests/ember_restart_model/domain-governance/test_text_lab_corpus.py ConnectorReceiptAdapterTests.test_adapts_exact_odc_by_hf_dataset_card_license ConnectorReceiptAdapterTests.test_rejects_odc_by_claim_without_exact_readme_declaration
 ```
 
 Expected: two tests run; the positive fails because `odc-by` is absent from the closed map, while the negative regression passes.

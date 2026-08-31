@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/ember_cbase_avir_data_v2.py",
-  "artifact_sha256": "30fa1b23dfe5f4bc695b1ee5231c718b97bb847ade80d469941bae0ab756d14e",
+  "artifact_path": "src/ember/governance/scripts/ember_cbase_avir_data_v2.py",
+  "artifact_sha256": "bd6ae7a108d9f7744f0059cf79a691cbdfeaa70ed0ae53ceb1f4f157f13e3681",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

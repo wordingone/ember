@@ -61,7 +61,7 @@ GUARD_SUPPORT_FILES = [
     "README.md",
     "docs/authority/CONTINUITY.md",
     "docs/authority/REDACTIONS.md",
-    "docs/contracts/ember-completeness.md",
+    "docs/domains/governance/contracts/ember-completeness.md",
     "docs/authority/ember-authority-matrix.md",
     "docs/contracts/ember-floor-contract.md",
     "docs/contracts/goal-clear-protocol.md",

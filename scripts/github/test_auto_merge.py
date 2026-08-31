@@ -14,7 +14,7 @@ def meta() -> dict:
         "isDraft": False,
         "autoMergeRequest": None,
         "baseRefName": "master",
-        "files": [{"path": "runtime/ember-lab/src/lib.rs"}],
+        "files": [{"path": "domains/runtime/runtime/ember-lab/src/lib.rs"}],
         "changedFiles": 1,
         "labels": [{"name": "merge:auto-approved"}],
     }

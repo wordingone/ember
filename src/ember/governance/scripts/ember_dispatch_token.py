@@ -31,7 +31,7 @@ caller (env, argv) supplies: the daemon binary is the one committed build
 output at `runtime/ember-lab/target/{release,debug}/ember-lab.exe`, and the
 source identity hash is computed over the same seven files, the same
 length-delimited way, as `ember_lab_source_hash()` in
-`runtime/ember-lab/src/lib.rs`. The named pipe's real OS server process is
+`domains/runtime/runtime/ember-lab/src/lib.rs`. The named pipe's real OS server process is
 authenticated (PID + binary path + binary hash, via
 `GetNamedPipeServerProcessId`/`QueryFullProcessImageNameW`) before a single
 byte of its RPC response is trusted, and the daemon's own self-reported
@@ -44,7 +44,7 @@ spawned subprocess. This is load-bearing, not a style choice: the daemon
 authenticates dispatch-token consumption by comparing the named pipe's real
 client PID (`GetNamedPipeClientProcessId`, `runtime/ember-lab/src/rpc.rs`)
 against the PID it recorded when it spawned this job
-(`runtime/ember-lab/src/lib.rs::consume_dispatch_token`, `row.pid`). A
+(`domains/runtime/runtime/ember-lab/src/lib.rs::consume_dispatch_token`, `row.pid`). A
 helper subprocess connecting to the pipe on this process's behalf would
 present the subprocess's own PID, which is never the PID the daemon
 recorded -- every real dispatched call would refuse unconditionally. The
@@ -85,10 +85,10 @@ _RPC_DEADLINE_SECONDS = 10
 _PIPE_CONNECT_RETRY_MILLISECONDS = 100
 _PIPE_CONNECT_RETRY_SECONDS = 2
 
-# Mirrors `ember_lab_source_hash()` in runtime/ember-lab/src/lib.rs byte-for-byte:
+# Mirrors `ember_lab_source_hash()` in domains/runtime/runtime/ember-lab/src/lib.rs byte-for-byte:
 # same 7 relative files, same order, same length-prefixed sha256 digest.
 _EMBER_LAB_SOURCE_RELATIVE = (
-    "runtime/ember-lab/src/lib.rs",
+    "domains/runtime/runtime/ember-lab/src/lib.rs",
     "runtime/ember-lab/src/data_catalog.rs",
     "runtime/ember-lab/src/rpc.rs",
     "domains/runtime/runtime/ember-lab/src/main.rs",

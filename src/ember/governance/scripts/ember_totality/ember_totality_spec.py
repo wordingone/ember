@@ -374,7 +374,7 @@ I_MEMBERS = {
         "src/ember/governance/scripts/check_goal_citations.py",
         "src/ember/governance/scripts/check_publication_gate.py",
         "src/ember/governance/scripts/ember_tally.py",
-        "scripts/ember_tally_checks.py",
+        "src/ember/governance/scripts/ember_tally_checks.py",
     ],
 }
 

@@ -54,7 +54,7 @@ INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e
 # Same value as src/ember/governance/scripts/receipt_check.py's GENESIS_TS (committerDate of the
 # genesis merge commit 9c89f7f66, "genesis: entrench constitutional invariant
 # (#281)") -- duplicated rather than imported, matching the existing
-# scripts/test_receipt_check_invariant.py precedent of a standalone constant
+# src/ember/governance/scripts/test_receipt_check_invariant.py precedent of a standalone constant
 # so this probe stays self-contained (test_c11.py-style: no cross-script
 # import chain for a status probe).
 GENESIS_TS = "2026-07-06T14:13:23-07:00"

@@ -2664,7 +2664,7 @@ def check_changed_artifact_bindings(
 
     migration_pairs = (
         ("docs/ember-authority-matrix.md", "docs/authority/ember-authority-matrix.md"),
-        ("docs/ember-completeness.md", "docs/contracts/ember-completeness.md"),
+        ("docs/ember-completeness.md", "docs/domains/governance/contracts/ember-completeness.md"),
         ("docs/registry-dispatch-gate-spec-v0.md", "docs/contracts/registry-dispatch-gate-spec-v0.md"),
         ("docs/nc2-own-technique-contract.md", "docs/contracts/nc2-own-technique-contract.md"),
         ("docs/goal-mode-mechanism.md", "docs/contracts/goal-mode-mechanism.md"),

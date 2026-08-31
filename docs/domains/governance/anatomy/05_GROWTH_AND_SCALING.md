@@ -3,10 +3,10 @@
 ## C-GROW: function-preserving capacity growth
 
 Condition `C-GROW` (`docs/domains/governance/spec/conditions-v1.md` §4.2; check function
-`chk_cgrow` in `scripts/ember_tally_checks.py`) requires a MEASURED
+`chk_cgrow` in `src/ember/governance/scripts/ember_tally_checks.py`) requires a MEASURED
 function-preserving grow step with fewer FLOPs than training the grown
 target from scratch. Two mechanisms are recognized
-(`scripts/ember_tally_checks.py`, `CGROW_VALID_MECHANISMS`):
+(`src/ember/governance/scripts/ember_tally_checks.py`, `CGROW_VALID_MECHANISMS`):
 
 - **v2 `ff_widening_net2net`** — widen the FFN (net2net-style), preserving
   function via logit/loss-delta tolerances (`CGROW_LOSS_DELTA_TOL_CEIL =

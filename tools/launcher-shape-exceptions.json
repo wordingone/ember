@@ -36,7 +36,7 @@
       "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
-      "path": "scripts/c8_prelaunch/test_governed_run_launcher.py",
+      "path": "src/ember/governance/scripts/c8_prelaunch/test_governed_run_launcher.py",
       "sha256": "32eb3b192436a1a89923bd2881731a0e75f59e6e6fc507fcb2c67a33451a38eb",
       "reason": "hermetic unit test for the historical governed-run adapter. It creates a temporary worker fixture and exercises timeout, cancellation, manifest, and receipt behavior without addressing any production run or persistent custody root."
     },
@@ -47,7 +47,7 @@
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "ea43e48434b1e6715f043fd7db8aba4edd066a889ffa9715006f6b6f7355c230",
+      "sha256": "9330cf72f931825637622868e75f7730be64c6a2ed0fd05b536a232149897a30",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {

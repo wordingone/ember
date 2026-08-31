@@ -59,7 +59,7 @@ Run only `test_host_setup_contract.py`, then the whole
 
 **Files:**
 
-- Modify: `runtime/ember-lab/src/lib.rs`
+- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs`
 - Modify: `src/ember/governance/scripts/ember_dispatch_token.py`
 - Modify: `scripts/tests/test_ember_dispatch_token.py`
 - Modify: `runtime/ember-lab/tests/dispatch_manifest.rs`
@@ -121,7 +121,7 @@ Run the two host/launcher files together and review the execution receipt bytes.
 **Files:**
 
 - Modify: `runtime/ember-lab/Cargo.toml`
-- Modify: `runtime/ember-lab/src/lib.rs`
+- Modify: `domains/runtime/runtime/ember-lab/src/lib.rs`
 - Modify: `domains/runtime/runtime/ember-lab/tests/control_plane.rs` or colocated unit tests
 
 ### Step 1: Write failing pure event tests
