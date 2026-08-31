@@ -14,7 +14,8 @@ import math
 import os
 import re
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +108,59 @@ _ISSUE1946_FORWARD_OWNERS = (
     "precision", "launch_graph_synchronization",
 )
 
+
+
+def issue2024_profiler_configuration() -> dict[str, bool]:
+    return {
+        "profile_memory": True,
+        "record_shapes": True,
+        "with_stack": True,
+    }
+
+
+def _issue2024_decimal_text(value: object) -> str:
+    return format(Decimal(str(value)), "f")
+
+
+def build_issue2024_event_ledger(
+    events: Iterable[Any],
+    *,
+    declared_self_device_time_total_us: str,
+) -> dict[str, object]:
+    rows: list[dict[str, object]] = []
+    ledger_total = Decimal("0")
+    for event in events:
+        stack = [str(frame) for frame in event.stack]
+        if not stack:
+            raise ValueError("ISSUE2024_EVENT_SOURCE_STACK_REQUIRED")
+        parent = event.cpu_parent
+        if parent is None or getattr(parent, "id", None) is None:
+            raise ValueError("ISSUE2024_EVENT_CPU_PARENT_REQUIRED")
+        shapes = event.input_shapes
+        if shapes is None:
+            raise ValueError("ISSUE2024_EVENT_INPUT_SHAPES_REQUIRED")
+        device_time = Decimal(str(event.self_device_time_total))
+        ledger_total += device_time
+        rows.append({
+            "cpu_parent_id": int(parent.id),
+            "event_id": int(event.id),
+            "input_shapes": shapes,
+            "key": str(event.key),
+            "self_device_time_us": _issue2024_decimal_text(device_time),
+            "source_stack": stack,
+        })
+
+    declared_total = Decimal(declared_self_device_time_total_us)
+    gap_ns = abs(declared_total - ledger_total) * Decimal("1000")
+    if gap_ns > Decimal("1"):
+        raise ValueError(f"ISSUE2024_EVENT_RECONCILIATION_MISS:{gap_ns}")
+    return {
+        "schema_version": "ember-issue2024-full-precision-event-ledger-v1",
+        "declared_self_device_time_total_us": _issue2024_decimal_text(declared_total),
+        "ledger_self_device_time_total_us": _issue2024_decimal_text(ledger_total),
+        "reconciliation_gap_ns": int(gap_ns),
+        "events": rows,
+    }
 
 def _issue1946_event_inside_marker(event: object, marker: str) -> bool:
     parent = getattr(event, "cpu_parent", None)
