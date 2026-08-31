@@ -118,6 +118,29 @@ def issue2024_profiler_configuration() -> dict[str, bool]:
     }
 
 
+def issue2024_profile_mode(mode: str) -> dict[str, str]:
+    rows = {
+        "issue2024-arm-a": {
+            "policy_mode": "issue1946-arm-a",
+            "output_name": "issue2024-arm-a-stack-ledger.json",
+        },
+        "issue2024-arm-b": {
+            "policy_mode": "issue1946-arm-b",
+            "output_name": "issue2024-arm-b-stack-ledger.json",
+        },
+    }
+    try:
+        return dict(rows[mode])
+    except KeyError as error:
+        raise ValueError("unknown #2024 profile mode") from error
+
+
+def profiler_configuration_for_mode(mode: str) -> dict[str, bool]:
+    if mode in {"issue2024-arm-a", "issue2024-arm-b"}:
+        return issue2024_profiler_configuration()
+    return {"profile_memory": True, "record_shapes": True, "with_stack": False}
+
+
 def _issue2024_decimal_text(value: object) -> str:
     return format(Decimal(str(value)), "f")
 
@@ -128,8 +151,13 @@ def build_issue2024_event_ledger(
     declared_self_device_time_total_us: str,
 ) -> dict[str, object]:
     rows: list[dict[str, object]] = []
+    event_ids: set[int] = set()
     ledger_total = Decimal("0")
     for event in events:
+        event_id = int(event.id)
+        if event_id in event_ids:
+            raise ValueError(f"ISSUE2024_EVENT_ID_DUPLICATE:{event_id}")
+        event_ids.add(event_id)
         stack = [str(frame) for frame in event.stack]
         if not stack:
             raise ValueError("ISSUE2024_EVENT_SOURCE_STACK_REQUIRED")
@@ -143,7 +171,7 @@ def build_issue2024_event_ledger(
         ledger_total += device_time
         rows.append({
             "cpu_parent_id": int(parent.id),
-            "event_id": int(event.id),
+            "event_id": event_id,
             "input_shapes": shapes,
             "key": str(event.key),
             "self_device_time_us": _issue2024_decimal_text(device_time),
@@ -1364,10 +1392,17 @@ def run_formal_packed_arm(
 def run_issue1946_profile(
     args: argparse.Namespace, *, mode: str,
 ) -> dict[str, object]:
-    """Run the fixed one-update preflight or one fresh-process 64-update arm."""
+    """Run the fixed preflight/arms or the stack-ledger measurement successor."""
 
-    if mode not in {"issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b"}:
+    allowed_modes = {
+        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
+        "issue2024-arm-a", "issue2024-arm-b",
+    }
+    if mode not in allowed_modes:
         raise ValueError("unknown #1946 profile mode")
+    issue2024 = mode.startswith("issue2024-")
+    successor_mode = issue2024_profile_mode(mode) if issue2024 else None
+    policy_mode = successor_mode["policy_mode"] if successor_mode is not None else mode
     if args.live is not True:
         raise RuntimeError("#1946 profile execution requires explicit --live")
     repo_root = args.repo_root.resolve(strict=True)
@@ -1375,11 +1410,11 @@ def run_issue1946_profile(
     canonical_runner, custody_root = _canonical_disk_budget_runner_authority()
     if not artifact_root.is_relative_to(custody_root):
         raise ValueError("#1946 artifact root escapes canonical runner custody")
-    output_name = {
+    output_name = successor_mode["output_name"] if successor_mode is not None else {
         "issue1946-preflight": "issue1946-instrument-preflight.json",
         "issue1946-arm-a": "issue1946-arm-a-recompute-on.json",
         "issue1946-arm-b": "issue1946-arm-b-recompute-off.json",
-    }[mode]
+    }[policy_mode]
     output_path = artifact_root / output_name
     trace_path = output_path.with_suffix(".profiler-trace.json")
     if output_path.exists() or trace_path.exists():
@@ -1422,7 +1457,7 @@ def run_issue1946_profile(
     selected_count = getattr(selection, "receipt", {}).get("selected_record_count")
     if selected_count != 4096:
         raise ValueError("#1946 requires the exact 4096-record bound selection")
-    packs = 1 if mode == "issue1946-preflight" else 64
+    packs = 1 if policy_mode == "issue1946-preflight" else 64
     execution = prepare_packed_execution_slice(
         selection=selection,
         config=RestartDecoderConfig.from_contract(config_path),
@@ -1437,7 +1472,7 @@ def run_issue1946_profile(
     preflight_binding: dict[str, str] | None = None
     arm_a_binding: dict[str, object] | None = None
     arm_a: dict[str, object] | None = None
-    if mode == "issue1946-arm-a":
+    if policy_mode == "issue1946-arm-a":
         preflight_receipt, preflight_raw_sha256 = _load_self_hashed_json(
             args.preflight_receipt, "#1946 preflight receipt",
         )
@@ -1451,7 +1486,7 @@ def run_issue1946_profile(
             "preflight_raw_sha256": preflight_raw_sha256,
             "preflight_self_sha256": str(preflight["self_sha256"]),
         }
-    if mode == "issue1946-arm-b":
+    if policy_mode == "issue1946-arm-b":
         arm_a_receipt, arm_a_raw_sha256 = _load_self_hashed_json(
             args.arm_a_receipt, "#1946 Arm A receipt",
         )
@@ -1482,7 +1517,7 @@ def run_issue1946_profile(
                 seed=args.seed,
             )
         except MemoryError as error:
-            if mode != "issue1946-arm-b" or arm_a is None:
+            if policy_mode != "issue1946-arm-b" or arm_a is None:
                 raise
             required_bytes, free_bytes = _issue1946_safety_margin_failure_bytes(error)
             safety_receipt = build_issue1946_oom_arm_receipt(
@@ -1520,10 +1555,10 @@ def run_issue1946_profile(
                 "receipt_self_sha256": self_sha256,
                 "measured_vram_gap_bytes": safety_receipt["measured_vram_gap_bytes"],
             }
-        if mode == "issue1946-arm-b":
+        if policy_mode == "issue1946-arm-b":
             config = dataclasses.replace(config, gradient_checkpointing=False)
             model.config = config
-        expected_checkpointing = mode != "issue1946-arm-b"
+        expected_checkpointing = policy_mode != "issue1946-arm-b"
         if bool(model.config.gradient_checkpointing) is not expected_checkpointing:
             raise RuntimeError("#1946 recompute policy did not bind every layer")
         parameter_sha256 = all_parameter_sha256(model)
@@ -1541,11 +1576,12 @@ def run_issue1946_profile(
         observed_kernel_rows: list[dict[str, object]] = []
         forward_owner_device_time_us = {owner: 0.0 for owner in _ISSUE1946_FORWARD_OWNERS}
         forward_unmapped_device_time_us = 0.0
-        profiler_indexes = [0] if mode == "issue1946-preflight" else list(range(16, 24))
+        profiler_indexes = [0] if policy_mode == "issue1946-preflight" else list(range(16, 24))
+        issue2024_event_ledger: dict[str, object] | None = None
 
         def trace_ready(profiler: Any) -> None:
-            nonlocal forward_unmapped_device_time_us
-            profiler.export_chrome_trace(str(trace_path))
+            nonlocal forward_unmapped_device_time_us, issue2024_event_ledger
+            unmapped_events: list[Any] = []
             for event in profiler.events():
                 name = str(event.key)
                 self_device_time_us = float(getattr(event, "self_device_time_total", 0.0))
@@ -1558,6 +1594,8 @@ def run_issue1946_profile(
                 if inside_forward and self_device_time_us > 0:
                     if owner is None:
                         forward_unmapped_device_time_us += self_device_time_us
+                        if issue2024:
+                            unmapped_events.append(event)
                     else:
                         forward_owner_device_time_us[owner] += self_device_time_us
                 if any(marker in name for marker in ("mm", "addmm", "linear")):
@@ -1570,16 +1608,23 @@ def run_issue1946_profile(
                         "inside_forward_loss_marker": inside_forward,
                         "forward_owner": owner,
                     })
+            if issue2024:
+                if issue2024_event_ledger is not None:
+                    raise RuntimeError("ISSUE2024_PROFILER_CALLBACK_REPEATED")
+                issue2024_event_ledger = build_issue2024_event_ledger(
+                    unmapped_events,
+                    declared_self_device_time_total_us=str(forward_unmapped_device_time_us),
+                )
+            # The canonical in-memory ledger is complete before this secondary export.
+            profiler.export_chrome_trace(str(trace_path))
 
-        wait_updates = 0 if mode == "issue1946-preflight" else 16
-        active_updates = 1 if mode == "issue1946-preflight" else 8
+        wait_updates = 0 if policy_mode == "issue1946-preflight" else 16
+        active_updates = 1 if policy_mode == "issue1946-preflight" else 8
         profiler = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=wait_updates, warmup=0, active=active_updates, repeat=1),
             on_trace_ready=trace_ready,
-            record_shapes=True,
-            profile_memory=True,
-            with_stack=False,
+            **profiler_configuration_for_mode(mode),
         )
 
         def update_telemetry(_row: Mapping[str, object]) -> None:
@@ -1618,7 +1663,7 @@ def run_issue1946_profile(
                     progress_callback=update_telemetry,
                     max_packs=packs,
                     measure_single_record_reference=True,
-                    complete_update_data_stall_seconds=(0.1 if mode == "issue1946-preflight" else 0.0),
+                    complete_update_data_stall_seconds=(0.1 if policy_mode == "issue1946-preflight" else 0.0),
                     measure_complete_update_cuda_events=True,
                     stream_complete_update_data_readiness=True,
                 )
@@ -1630,7 +1675,7 @@ def run_issue1946_profile(
             finally:
                 energy_tracker.stop()
         if oom_error is not None:
-            if mode != "issue1946-arm-b":
+            if policy_mode != "issue1946-arm-b":
                 raise oom_error
             match = re.search(r"Tried to allocate ([0-9.]+) (KiB|MiB|GiB)", str(oom_error))
             if match is None:
@@ -1699,6 +1744,12 @@ def run_issue1946_profile(
             raise RuntimeError("#1946 profiler trace contains no actual material linear kernel event")
         if sum(forward_owner_device_time_us.values()) + forward_unmapped_device_time_us <= 0:
             raise RuntimeError("#1946 profiler trace contains no forward-marker device-time evidence")
+        if issue2024 and (
+            issue2024_event_ledger is None
+            or not issue2024_event_ledger.get("events")
+            or int(issue2024_event_ledger.get("reconciliation_gap_ns", 2)) > 1
+        ):
+            raise RuntimeError("ISSUE2024_EVENT_LEDGER_NONTERMINAL")
         trace_sha256 = _sha256_path(trace_path)
         hidden = int(config.hidden_size)
         material_shapes = [
@@ -1728,6 +1779,8 @@ def run_issue1946_profile(
                 ],
             },
         }
+        if issue2024:
+            kernel_trace["full_precision_unmapped_event_ledger"] = issue2024_event_ledger
         identity = {
             "execution_source_commit": execution_source_commit,
             "parameter_sha256": parameter_sha256,
@@ -1744,7 +1797,7 @@ def run_issue1946_profile(
             "execution_record_order_sha256": execution["execution_record_order_sha256"],
             "execution_tokens_sha256": execution["execution_tokens_sha256"],
         }
-        if mode == "issue1946-preflight":
+        if policy_mode == "issue1946-preflight":
             event_seconds = segment["complete_update_cuda_event_seconds"][0]
             receipt = build_issue1946_preflight_receipt(
                 identity={
@@ -1773,7 +1826,7 @@ def run_issue1946_profile(
             receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
         else:
             receipt = build_issue1946_arm_receipt(
-                policy="WHOLE_LAYER_RECOMPUTE" if mode == "issue1946-arm-a" else "DISABLED_EVERY_LAYER",
+                policy="WHOLE_LAYER_RECOMPUTE" if policy_mode == "issue1946-arm-a" else "DISABLED_EVERY_LAYER",
                 identity=identity,
                 update_seconds=segment["step_timings_seconds"],
                 phase_seconds=segment["complete_update_phase_timings_seconds"],
@@ -1810,16 +1863,23 @@ def run_issue1946_profile(
             unsigned = dict(receipt)
             unsigned.pop("self_sha256")
             receipt = dict(unsigned)
+            if issue2024:
+                receipt["claim_boundary"] = (
+                    "ISSUE2024_MEASUREMENT_IDENTITY_ONLY_NO_SPEEDUP_TREATMENT_VALIDITY_"
+                    "LEARNING_20K_PARENT_CLOSE_OR_CAMPAIGN_CREDIT"
+                )
             receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
         raw_sha256, self_sha256 = _write_json_no_replace(output_path, receipt)
         return {
-            "result": "ISSUE1946_PROFILE_COMPLETE",
+            "result": "ISSUE2024_STACK_LEDGER_COMPLETE" if issue2024 else "ISSUE1946_PROFILE_COMPLETE",
             "mode": mode,
             "receipt_path": str(output_path),
             "receipt_raw_sha256": raw_sha256,
             "receipt_self_sha256": self_sha256,
             "profiler_trace_sha256": trace_sha256,
-            "arm_a_first_warmup_temperature_c": (power_rows[0]["temperature_c"] if mode == "issue1946-arm-a" else None),
+            "arm_a_first_warmup_temperature_c": (
+                power_rows[0]["temperature_c"] if policy_mode == "issue1946-arm-a" else None
+            ),
         }
     finally:
         del optimizer
@@ -1935,21 +1995,22 @@ def main() -> int:
         "durable-preflight", "formal-preflight", "durable-bf16",
         "bf16", "stage2", "diagnostic-graph-bf16",
         "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
+        "issue2024-arm-a", "issue2024-arm-b",
     ):
         child = subparsers.add_parser(name)
         _add_runtime_arguments(
             child,
             packs=name in {"formal-preflight", "bf16", "stage2", "diagnostic-graph-bf16"},
         )
-        if name.startswith("issue1946-"):
+        if name.startswith("issue1946-") or name.startswith("issue2024-"):
             child.add_argument("--execution-source-commit", required=True)
         else:
             child.set_defaults(execution_source_commit=None)
-        if name == "issue1946-arm-a":
+        if name in {"issue1946-arm-a", "issue2024-arm-a"}:
             child.add_argument("--preflight-receipt", type=Path, required=True)
         else:
             child.set_defaults(preflight_receipt=None)
-        if name == "issue1946-arm-b":
+        if name in {"issue1946-arm-b", "issue2024-arm-b"}:
             child.add_argument("--arm-a-receipt", type=Path, required=True)
         else:
             child.set_defaults(arm_a_receipt=None)
@@ -1978,7 +2039,10 @@ def main() -> int:
             accelerated=args.command == "stage2",
             diagnostic_graph_bf16=args.command == "diagnostic-graph-bf16",
         )
-    elif args.command in {"issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b"}:
+    elif args.command in {
+        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
+        "issue2024-arm-a", "issue2024-arm-b",
+    }:
         if args.artifact_root is None:
             parser.error(f"{args.command} requires --artifact-root")
         result = run_issue1946_profile(args, mode=args.command)
