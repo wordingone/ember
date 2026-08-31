@@ -30,10 +30,10 @@ SHA = "a" * 40
 EVIDENCE_SHA256 = "b" * 64
 
 EMBER_LAB_SOURCE_FIXTURE = (
-    ("domains/runtime/runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
+    ("runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
     ("runtime/ember-lab/src/data_catalog.rs", b"fixture data catalog\\n"),
     ("runtime/ember-lab/src/rpc.rs", b"fixture rpc\\n"),
-    ("domains/runtime/runtime/ember-lab/src/main.rs", b"fixture main\\n"),
+    ("runtime/ember-lab/src/main.rs", b"fixture main\\n"),
     ("runtime/ember-lab/src/training_verify.rs", b"fixture training verify\\n"),
     ("runtime/ember-lab/Cargo.toml", b"[package]\\nname='fixture'\\n"),
     ("runtime/ember-lab/Cargo.lock", b"# fixture lock\\n"),
@@ -1983,7 +1983,7 @@ def _rewrite_completion(
 
 class ProducerSchemaBindingTest(unittest.TestCase):
     """Bind the consumer's completion-receipt expectations to the REAL
-    producer (src/ember/governance/scripts/verify_ember01_completion.py) so schema drift breaks CI
+    producer (scripts/verify_ember01_completion.py) so schema drift breaks CI
     instead of the launch (issue #1300)."""
 
     def test_leg_state_constant_matches_producer(self) -> None:
@@ -2063,7 +2063,7 @@ def install_closure(repo: pathlib.Path) -> str:
                 "schema_version": "ember-training-dependency-closure-v1",
                 "entrypoints": ["tools/entrypoint.py"],
                 "dynamic_entrypoints": [],
-                "code": ["src/ember/governance/scripts/training_closure.py"],
+                "code": ["scripts/training_closure.py"],
                 "data": ["configs/training.json"],
                 "dynamic_call_sites": {},
             },
@@ -4682,7 +4682,7 @@ class SemanticCanaryRoutingTests(unittest.TestCase):
     single-capability continuation route) -- there was no certified way to
     launch a telemetered, clean-genesis WARM-100 canary through
     run_vertical_slice.py's "semantic" subcommand. Extending allowed_modes
-    itself was rejected as the cure (src/ember/governance/scripts/r1_exit_battery.py's headline
+    itself was rejected as the cure (scripts/r1_exit_battery.py's headline
     finding): _require_scope_subset hard-requires allowed_modes ==
     ["governed-vertical"] exactly, so this route is authorized through the
     certificate's separate allowed_semantic_canary_modes key instead, exactly

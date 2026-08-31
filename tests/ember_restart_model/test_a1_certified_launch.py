@@ -18,50 +18,7 @@ from unittest import mock
 
 import pytest
 
-# issue2015 exact-local-import:tests/ember_restart_model/test_certified_train_launch.py
-import importlib.util as _ember_b39270af35322225_importlib
-import sys as _ember_b39270af35322225_sys
-from pathlib import Path as _ember_b39270af35322225_Path
-_ember_b39270af35322225_path = _ember_b39270af35322225_Path(__file__).resolve().parents[3].joinpath('tests', 'ember_restart_model', 'test_certified_train_launch.py')
-if not _ember_b39270af35322225_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tests/ember_restart_model/test_certified_train_launch.py')
-_ember_b39270af35322225_aliases = ('_ember_issue2015_b39270af35322225', 'test_certified_train_launch', 'tests.ember_restart_model.test_certified_train_launch')
-_ember_b39270af35322225_existing = []
-for _ember_b39270af35322225_alias in _ember_b39270af35322225_aliases:
-    _ember_b39270af35322225_candidate = _ember_b39270af35322225_sys.modules.get(_ember_b39270af35322225_alias)
-    if _ember_b39270af35322225_candidate is not None and all(_ember_b39270af35322225_candidate is not item for item in _ember_b39270af35322225_existing):
-        _ember_b39270af35322225_existing.append(_ember_b39270af35322225_candidate)
-if len(_ember_b39270af35322225_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tests/ember_restart_model/test_certified_train_launch.py')
-if _ember_b39270af35322225_existing:
-    _ember_b39270af35322225_module = _ember_b39270af35322225_existing[0]
-    _ember_b39270af35322225_observed = getattr(_ember_b39270af35322225_module, '__file__', None)
-    if _ember_b39270af35322225_observed is None or _ember_b39270af35322225_Path(_ember_b39270af35322225_observed).resolve() != _ember_b39270af35322225_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tests/ember_restart_model/test_certified_train_launch.py')
-else:
-    _ember_b39270af35322225_spec = _ember_b39270af35322225_importlib.spec_from_file_location('_ember_issue2015_b39270af35322225', _ember_b39270af35322225_path)
-    if _ember_b39270af35322225_spec is None or _ember_b39270af35322225_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tests/ember_restart_model/test_certified_train_launch.py')
-    _ember_b39270af35322225_module = _ember_b39270af35322225_importlib.module_from_spec(_ember_b39270af35322225_spec)
-    for _ember_b39270af35322225_alias in _ember_b39270af35322225_aliases:
-        _ember_b39270af35322225_prior = _ember_b39270af35322225_sys.modules.get(_ember_b39270af35322225_alias)
-        if _ember_b39270af35322225_prior is not None and _ember_b39270af35322225_prior is not _ember_b39270af35322225_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tests/ember_restart_model/test_certified_train_launch.py')
-        _ember_b39270af35322225_sys.modules[_ember_b39270af35322225_alias] = _ember_b39270af35322225_module
-    try:
-        _ember_b39270af35322225_spec.loader.exec_module(_ember_b39270af35322225_module)
-    except BaseException:
-        for _ember_b39270af35322225_alias in _ember_b39270af35322225_aliases:
-            if _ember_b39270af35322225_sys.modules.get(_ember_b39270af35322225_alias) is _ember_b39270af35322225_module:
-                _ember_b39270af35322225_sys.modules.pop(_ember_b39270af35322225_alias, None)
-        raise
-for _ember_b39270af35322225_alias in _ember_b39270af35322225_aliases:
-    _ember_b39270af35322225_prior = _ember_b39270af35322225_sys.modules.get(_ember_b39270af35322225_alias)
-    if _ember_b39270af35322225_prior is not None and _ember_b39270af35322225_prior is not _ember_b39270af35322225_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tests/ember_restart_model/test_certified_train_launch.py')
-    _ember_b39270af35322225_sys.modules[_ember_b39270af35322225_alias] = _ember_b39270af35322225_module
-launch_fixtures = _ember_b39270af35322225_module
-# issue2015 exact-local-import-end:tests/ember_restart_model/test_certified_train_launch.py
+from . import test_certified_train_launch as launch_fixtures
 
 
 ROOT = Path(__file__).resolve().parents[2]
