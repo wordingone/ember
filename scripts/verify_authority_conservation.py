@@ -141,7 +141,7 @@ REQUIRED_SURFACES = [
     "docs/contracts/goal-mode-mechanism.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
-    "docs/spec/conditions-v1.md",
+    "docs/domains/governance/spec/conditions-v1.md",
     "docs/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
@@ -237,6 +237,7 @@ GOVERNING_SURFACE_MIGRATIONS = {
     "docs/contracts/goal-mode-mechanism.md": "docs/goal-mode-mechanism.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md": "docs/registry-dispatch-gate-spec-v0.md",
     AUTHORITY_MATRIX: "docs/ember-authority-matrix.md",
+    "docs/domains/governance/spec/conditions-v1.md": "docs/spec/conditions-v1.md",
 }
 HISTORICAL_EXECUTABLES = [
     "scripts/conv_c03_muon_ns3_live.py",
@@ -2548,6 +2549,119 @@ def check_changed_artifact_bindings(
             raise OSError(shown.stderr.strip() or f"cannot read {object_name}")
         return shown.stdout
 
+    def git_object_exists(object_name: str) -> bool:
+        probe = subprocess.run(
+            ["git", "cat-file", "-e", object_name],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        return probe.returncode == 0
+
+    declared_migration_pairs: tuple[tuple[str, str], ...] = ()
+    migration_map_prefix = "manifests/authority/path-migrations/"
+    migration_map_paths = sorted(
+        path
+        for path in changed_paths
+        if path.startswith(migration_map_prefix) and path.endswith(".json")
+    )
+    if expected_workstream is not None and migration_map_paths:
+        parsed_pairs: list[tuple[str, str]] = []
+        seen_sources: set[str] = set()
+        seen_targets: set[str] = set()
+        maps_valid = True
+        for map_path in migration_map_paths:
+            try:
+                map_text = read_candidate_text(map_path)
+                if map_text is None:
+                    raise ValueError("candidate bytes are absent")
+                payload = json.loads(map_text)
+                if not isinstance(payload, dict) or set(payload) != {
+                    "goal_id",
+                    "next_executed_outcome",
+                    "renames",
+                    "schema_version",
+                    "workstream_id",
+                }:
+                    raise ValueError("map must use the closed v1 top-level schema")
+                if payload.get("schema_version") != "ember-exact-path-migration-map/v1":
+                    raise ValueError("schema_version is not ember-exact-path-migration-map/v1")
+                if not validate_artifact_binding(
+                    map_text,
+                    ".json",
+                    active_goal,
+                    next_outcome,
+                    allowed_workstreams,
+                ) or payload.get("workstream_id") != expected_workstream:
+                    raise ValueError("map authority must equal the declared PR workstream")
+                renames = payload.get("renames")
+                if not isinstance(renames, list) or not renames:
+                    raise ValueError("renames must be a non-empty list")
+                for index, row in enumerate(renames):
+                    if not isinstance(row, dict) or set(row) != {
+                        "source_path",
+                        "target_path",
+                    }:
+                        raise ValueError(f"renames[{index}] must use the closed v1 row schema")
+                    source = row.get("source_path")
+                    target = row.get("target_path")
+                    if not all(isinstance(path, str) and path for path in (source, target)):
+                        raise ValueError(f"renames[{index}] paths must be non-empty strings")
+                    assert isinstance(source, str) and isinstance(target, str)
+                    for label, path in (("source_path", source), ("target_path", target)):
+                        normalized_path = PurePosixPath(path).as_posix()
+                        if (
+                            path != normalized_path
+                            or path.startswith("/")
+                            or "\\" in path
+                            or ":" in path
+                            or any(part in {"", ".", ".."} for part in path.split("/"))
+                        ):
+                            raise ValueError(f"renames[{index}] {label} is not a safe repository path")
+                    if source == target:
+                        raise ValueError(f"renames[{index}] source and target are identical")
+                    if source in seen_sources or target in seen_targets:
+                        raise ValueError("rename sources and targets must each be unique")
+                    seen_sources.add(source)
+                    seen_targets.add(target)
+                    parsed_pairs.append((source, target))
+            except Exception as exc:
+                maps_valid = False
+                errors.append(
+                    finding(
+                        4,
+                        "artifact.path_migration_map_invalid",
+                        f"{map_path}: {exc}",
+                    )
+                )
+        if maps_valid:
+            prior_revision = "HEAD" if staged else range_base
+            endpoint_revision = None if staged else range_endpoint
+            assert prior_revision is not None
+            for source, target in parsed_pairs:
+                source_before = git_object_exists(f"{prior_revision}:{source}")
+                target_before = git_object_exists(f"{prior_revision}:{target}")
+                source_after = git_object_exists(f":{source}") if staged else bool(
+                    endpoint_revision and git_object_exists(f"{endpoint_revision}:{source}")
+                )
+                target_after = git_object_exists(f":{target}") if staged else bool(
+                    endpoint_revision and git_object_exists(f"{endpoint_revision}:{target}")
+                )
+                if not source_before or target_before or source_after or not target_after:
+                    maps_valid = False
+                    errors.append(
+                        finding(
+                            4,
+                            "artifact.path_migration_rename_missing",
+                            f"{source} -> {target}: requires source deleted and newly-created target in this diff",
+                        )
+                    )
+            if maps_valid:
+                declared_migration_pairs = tuple(parsed_pairs)
+
     migration_pairs = (
         ("docs/ember-authority-matrix.md", "docs/authority/ember-authority-matrix.md"),
         ("docs/ember-completeness.md", "docs/contracts/ember-completeness.md"),
@@ -2571,7 +2685,11 @@ def check_changed_artifact_bindings(
         ("GOAL.md", "docs/domains/governance/authority/GOAL.md"),
     )
 
-    def exact_path_migration_only(normalized: str, staged_text: str) -> bool:
+    def exact_path_migration_only(
+        normalized: str,
+        staged_text: str,
+        pairs: tuple[tuple[str, str], ...] = migration_pairs,
+    ) -> bool:
         if staged:
             prior_revision = "HEAD"
         elif range_base is not None:
@@ -2591,13 +2709,13 @@ def check_changed_artifact_bindings(
             return False
         transformed = prior.stdout
         sentinels: dict[str, str] = {}
-        for index, (_, destination) in enumerate(migration_pairs):
+        for index, (_, destination) in enumerate(pairs):
             sentinel = f"__EMBER_AUTHORITY_PATH_{index}__"
             if sentinel in transformed:
                 return False
             transformed = transformed.replace(destination, sentinel)
             sentinels[sentinel] = destination
-        for source, destination in migration_pairs:
+        for source, destination in pairs:
             transformed = transformed.replace(source, destination)
         for sentinel, destination in sentinels.items():
             transformed = transformed.replace(sentinel, destination)
@@ -2774,6 +2892,18 @@ def check_changed_artifact_bindings(
             continue
         workstream = next(iter(workstreams))
         if expected_workstream is not None and workstream != expected_workstream:
+            if declared_migration_pairs and exact_path_migration_only(
+                normalized, artifact_text, declared_migration_pairs
+            ):
+                if not workstream_path_allowed(normalized, workstream, scopes):
+                    errors.append(
+                        finding(
+                            4,
+                            "artifact.workstream_scope",
+                            f"{normalized}: outside the exclusive scope of {workstream}",
+                        )
+                    )
+                continue
             errors.append(
                 finding(
                     4,

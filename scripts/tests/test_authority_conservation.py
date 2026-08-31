@@ -1769,6 +1769,141 @@ def test_staged_authority_path_migration_rejects_mixed_behavior_change(
     }, payload
 
 
+def stage_cross_workstream_path_migration(
+    root: Path,
+    *,
+    extra_consumer_bytes: str = "",
+    consumer_path: str = "tools/ember-restart-3b/consumer.py",
+) -> None:
+    """Stage one tracked rename plus an exact 02B consumer path rewrite."""
+    write_valid_fixture(root)
+    git_fixture(root, "init")
+    git_fixture(root, "config", "user.email", "fixture@example.invalid")
+    git_fixture(root, "config", "user.name", "fixture")
+    legacy = root / "legacy" / "module.py"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(
+        "# goal_id: EMBER-02\n"
+        "# workstream_id: EMBER-02A\n"
+        "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
+        "VALUE = 1\n",
+        encoding="utf-8",
+    )
+    consumer = root / Path(*consumer_path.split("/"))
+    consumer.parent.mkdir(parents=True, exist_ok=True)
+    consumer.write_text(
+        "# goal_id: EMBER-02\n"
+        "# workstream_id: EMBER-02B\n"
+        "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
+        'MODULE_PATH = "legacy/module.py"\n',
+        encoding="utf-8",
+    )
+    git_fixture(root, "add", ".")
+    git_fixture(root, "commit", "-m", "fixture")
+
+    destination = root / "src" / "module.py"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    git_fixture(root, "mv", "legacy/module.py", "src/module.py")
+    consumer.write_text(
+        consumer.read_text(encoding="utf-8").replace(
+            "legacy/module.py", "src/module.py"
+        )
+        + extra_consumer_bytes,
+        encoding="utf-8",
+    )
+    migration = (
+        root
+        / "manifests"
+        / "authority"
+        / "path-migrations"
+        / "fixture-migration-v1.json"
+    )
+    migration.parent.mkdir(parents=True, exist_ok=True)
+    migration.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-exact-path-migration-map/v1",
+                "goal_id": "EMBER-02",
+                "workstream_id": "EMBER-02A",
+                "next_executed_outcome": (
+                    "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+                ),
+                "renames": [
+                    {
+                        "source_path": "legacy/module.py",
+                        "target_path": "src/module.py",
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    git_fixture(root, "add", ".")
+
+
+def check_staged_for_pr_workstream(root: Path, expected: str) -> list[dict[str, object]]:
+    verifier = load_verifier_module()
+    errors: list[dict[str, object]] = []
+    verifier.check_changed_artifact_bindings(
+        root,
+        copy.deepcopy(VALID_POLICY),
+        errors,
+        staged=True,
+        expected_workstream=expected,
+    )
+    return errors
+
+
+def test_tracked_exact_rename_map_authorizes_cross_workstream_path_only_delta(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(tmp_path)
+
+    assert check_staged_for_pr_workstream(tmp_path, "EMBER-02A") == []
+
+
+def test_tracked_exact_rename_map_rejects_path_rewrite_plus_one_extra_byte(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(
+        tmp_path, extra_consumer_bytes='print("semantic change")\n'
+    )
+
+    errors = check_staged_for_pr_workstream(tmp_path, "EMBER-02A")
+    assert "artifact.pr_workstream_mismatch" in {
+        item["code"] for item in errors
+    }, errors
+
+
+def test_tracked_exact_rename_map_does_not_bypass_owner_scope(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(
+        tmp_path, consumer_path="scripts/consumer.py"
+    )
+
+    errors = check_staged_for_pr_workstream(tmp_path, "EMBER-02A")
+    assert "artifact.workstream_scope" in {
+        item["code"] for item in errors
+    }, errors
+
+
+def test_tracked_exact_rename_map_cannot_authorize_an_unperformed_rename(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(tmp_path)
+    git_fixture(tmp_path, "mv", "src/module.py", "legacy/module.py")
+    git_fixture(tmp_path, "add", ".")
+
+    errors = check_staged_for_pr_workstream(tmp_path, "EMBER-02A")
+    assert "artifact.path_migration_rename_missing" in {
+        item["code"] for item in errors
+    }, errors
+
+
 def test_changed_range_exact_path_migration_preserves_historical_authority(
     tmp_path: Path,
 ) -> None:
