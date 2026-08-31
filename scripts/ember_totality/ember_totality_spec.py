@@ -202,7 +202,7 @@ NON_PROBE_TEST_FILES = {
 
 # Stable board ordering: the program order from the goal §4. This IS the
 # runner's own declared registry, checked at startup against
-# docs/spec/conditions-v1.md (registry sync / close condition, eng-contracts
+# docs/domains/governance/spec/conditions-v1.md (registry sync / close condition, eng-contracts
 # v1 §9). Keep in sync by construction, not by hand: if this list and the
 # spec ever diverge, main() aborts the whole run before any probe executes.
 ORDER = [
@@ -260,7 +260,7 @@ I_MEMBERS = {
     # laundering pattern, closed at the hash layer).
     "goal_md": [
         "docs/domains/governance/authority/GOAL.md",
-        "docs/spec/conditions-v1.md",
+        "docs/domains/governance/spec/conditions-v1.md",
         "docs/spec/operator-acceptance-v1.md",
     ],
     # + receipt_semantic_check.py: "S1-S7 is the sharpest tooth."
@@ -760,7 +760,7 @@ def registry_sync_check():
             f"  in registry, missing from runner ORDER: {missing_from_runner}\n"
             f"  in runner ORDER, not in registry:        {extra_in_runner}\n"
             "  Fix: sync ORDER/FILENAME_ID in this file, or correct "
-            "docs/spec/conditions-v1.md if the registry itself drifted.\n"
+            "docs/domains/governance/spec/conditions-v1.md if the registry itself drifted.\n"
         )
         sys.exit(3)
 

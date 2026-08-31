@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
-"""Fail-closed tests for scripts/ember_dispatch_token.py (#1344).
+"""Fail-closed tests for src/ember/governance/scripts/ember_dispatch_token.py (#1344).
 
 These pin the refusal-without-token / pass-with-token contract every
 inventoried Ember entry point relies on. Most cases here mock the

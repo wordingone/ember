@@ -28,7 +28,7 @@ executed. Dependabot remains governed by its narrower existing schema.
 new-component coverage. It has no network access and accepts only caller-supplied paths and
 repository roots.
 
-`scripts/check_docs_freshness.py` calls the same parser over the complete ember-cli spec directory,
+`src/ember/governance/scripts/check_docs_freshness.py` calls the same parser over the complete ember-cli spec directory,
 so scheduled/local freshness checks include the operator-visible body.
 
 `scripts/github/live_pr_policy.py` invokes the trusted parser with separate base and subject roots.

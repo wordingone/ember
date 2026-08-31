@@ -564,7 +564,7 @@ obligation at minimum; the non-commercial umbrella arguably covers the
 act of generating training data for a model with commercial intent);
 **1.5B/7B episodes = clean.**
 
-**(b) Provenance census (`scripts/fp6_provenance.py`, selftest PASS,
+**(b) Provenance census (`src/ember/governance/scripts/fp6_provenance.py`, selftest PASS,
 receipt `fp6-provenance-20260610T235623Z.json`):** episodes.jsonl =
 **1,909 arc-dsl-mit** (Hodel arc-dsl solvers + re-arc verifier variants —
 HUMAN expert code, not model output; origins seed-dsl-orig 399 /
@@ -621,7 +621,7 @@ regression on the measured floor, the dual of the 22.1% ext-FPR. Who
 checks the checker?
 
 **Answer — the existing verified ledger does, and the gate now exists as
-an artifact (`scripts/fp8_vgate.py`, selftest PASS, receipt
+an artifact (`src/ember/governance/scripts/fp8_vgate.py`, selftest PASS, receipt
 `fp8-vgate-20260611T001730Z.json`).** Every verified W-code episode's
 asserts re-executed in the production sandbox under (a) raw `==` and (b)
 a reference strict comparator (exact-type-tagged leaves, kind-tagged
@@ -1220,7 +1220,7 @@ the r2 arms, same as r1).
 its own theta filter never reaches training; control would mirror the
 wrong set. My #112 gate verified interlock + receipt shape
 (config-only PR) but not the data path against the registered arm.
-Fix-forward: `scripts/t2_r2w.py` (deviation recorded in-receipt +
+Fix-forward: `src/ember/governance/scripts/t2_r2w.py` (deviation recorded in-receipt +
 prereg appendix) implements the registered semantics (W view +
 ext-clean + theta(0,0.5] + matched control); dry-run receipted before
 live; mtp/grpo correct as built (verified in source). Lesson: a

@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_proc.py — STATUS PROBE for Ember goal condition C-PROC.
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-PROC (docs/domains/governance/authority/GOAL.md §13). R: the
+Registry text: docs/domains/governance/spec/conditions-v1.md §4.2 C-PROC (docs/domains/governance/authority/GOAL.md §13). R: the
 delegation/review record the OPERATOR can see (public-repo issues, milestones,
 PRs) is CURRENT with the work record — work never runs ahead of its visible
 process reflection.

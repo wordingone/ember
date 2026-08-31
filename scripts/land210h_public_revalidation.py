@@ -100,7 +100,7 @@ EXPECTED_LANDED_PATHS = {
 }
 IMPORT_CLOSURE_PATHS = (
     "scripts/ember_avir_tasks.py",
-    "scripts/ember_avir_harness.py",
+    "src/ember/governance/scripts/ember_avir_harness.py",
     "src/ember/governance/scripts/governor.py",
     "scripts/timeshare_pretrain.py",
 )

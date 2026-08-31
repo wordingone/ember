@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """q2_rho_leg.py — Q2 loss-gap bridge CPU leg (issue #662).
 
 Frozen spec: issue #449 comment 4932624437 ("Q2 loss-gap bridge — derivation
@@ -34,7 +37,7 @@ fields under its own label):
       per-step updates from the cached momentum via explicit NS5 (Newton-
       Schulz quintic zeropower iteration, coefficients (3.4445, -4.7750,
       2.0315), 5 steps -- byte-identical reuse of
-      scripts/p5_ratio_audit/run_p5_audit.py::_muon_step_in_copy, the SAME
+      src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py::_muon_step_in_copy, the SAME
       function the live B3 event phase used to produce
       receipts/cbase-grow-rung2-event-b513-b4rerun-b3.json's arms.*
       .d_comm_fields; no math is re-derived here). Adjudicates eta-inclusive

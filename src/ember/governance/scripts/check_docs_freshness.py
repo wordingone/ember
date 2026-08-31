@@ -24,11 +24,99 @@ from pathlib import Path
 from datetime import datetime
 
 try:
-    from scripts.ember_cli_spec_policy import SpecPolicyError, load_spec_nodes
+    # issue2015 exact-local-import:scripts/ember_cli_spec_policy.py
+    import importlib.util as _ember_4907e63ef2f25e2e_importlib
+    import sys as _ember_4907e63ef2f25e2e_sys
+    from pathlib import Path as _ember_4907e63ef2f25e2e_Path
+    _ember_4907e63ef2f25e2e_path = _ember_4907e63ef2f25e2e_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_cli_spec_policy.py')
+    if not _ember_4907e63ef2f25e2e_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_cli_spec_policy.py')
+    _ember_4907e63ef2f25e2e_aliases = ('_ember_issue2015_4907e63ef2f25e2e', 'ember_cli_spec_policy', 'scripts.ember_cli_spec_policy')
+    _ember_4907e63ef2f25e2e_existing = []
+    for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+        _ember_4907e63ef2f25e2e_candidate = _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias)
+        if _ember_4907e63ef2f25e2e_candidate is not None and all(_ember_4907e63ef2f25e2e_candidate is not item for item in _ember_4907e63ef2f25e2e_existing):
+            _ember_4907e63ef2f25e2e_existing.append(_ember_4907e63ef2f25e2e_candidate)
+    if len(_ember_4907e63ef2f25e2e_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_cli_spec_policy.py')
+    if _ember_4907e63ef2f25e2e_existing:
+        _ember_4907e63ef2f25e2e_module = _ember_4907e63ef2f25e2e_existing[0]
+        _ember_4907e63ef2f25e2e_observed = getattr(_ember_4907e63ef2f25e2e_module, '__file__', None)
+        if _ember_4907e63ef2f25e2e_observed is None or _ember_4907e63ef2f25e2e_Path(_ember_4907e63ef2f25e2e_observed).resolve() != _ember_4907e63ef2f25e2e_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_cli_spec_policy.py')
+    else:
+        _ember_4907e63ef2f25e2e_spec = _ember_4907e63ef2f25e2e_importlib.spec_from_file_location('_ember_issue2015_4907e63ef2f25e2e', _ember_4907e63ef2f25e2e_path)
+        if _ember_4907e63ef2f25e2e_spec is None or _ember_4907e63ef2f25e2e_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_cli_spec_policy.py')
+        _ember_4907e63ef2f25e2e_module = _ember_4907e63ef2f25e2e_importlib.module_from_spec(_ember_4907e63ef2f25e2e_spec)
+        for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+            _ember_4907e63ef2f25e2e_prior = _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias)
+            if _ember_4907e63ef2f25e2e_prior is not None and _ember_4907e63ef2f25e2e_prior is not _ember_4907e63ef2f25e2e_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_cli_spec_policy.py')
+            _ember_4907e63ef2f25e2e_sys.modules[_ember_4907e63ef2f25e2e_alias] = _ember_4907e63ef2f25e2e_module
+        try:
+            _ember_4907e63ef2f25e2e_spec.loader.exec_module(_ember_4907e63ef2f25e2e_module)
+        except BaseException:
+            for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+                if _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias) is _ember_4907e63ef2f25e2e_module:
+                    _ember_4907e63ef2f25e2e_sys.modules.pop(_ember_4907e63ef2f25e2e_alias, None)
+            raise
+    for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+        _ember_4907e63ef2f25e2e_prior = _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias)
+        if _ember_4907e63ef2f25e2e_prior is not None and _ember_4907e63ef2f25e2e_prior is not _ember_4907e63ef2f25e2e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_cli_spec_policy.py')
+        _ember_4907e63ef2f25e2e_sys.modules[_ember_4907e63ef2f25e2e_alias] = _ember_4907e63ef2f25e2e_module
+    SpecPolicyError = getattr(_ember_4907e63ef2f25e2e_module, 'SpecPolicyError')
+    load_spec_nodes = getattr(_ember_4907e63ef2f25e2e_module, 'load_spec_nodes')
+    # issue2015 exact-local-import-end:scripts/ember_cli_spec_policy.py
 except ModuleNotFoundError as exc:
     if exc.name not in {"scripts", "scripts.ember_cli_spec_policy"}:
         raise
-    from ember_cli_spec_policy import SpecPolicyError, load_spec_nodes
+    # issue2015 exact-local-import:scripts/ember_cli_spec_policy.py
+    import importlib.util as _ember_4907e63ef2f25e2e_importlib
+    import sys as _ember_4907e63ef2f25e2e_sys
+    from pathlib import Path as _ember_4907e63ef2f25e2e_Path
+    _ember_4907e63ef2f25e2e_path = _ember_4907e63ef2f25e2e_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_cli_spec_policy.py')
+    if not _ember_4907e63ef2f25e2e_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_cli_spec_policy.py')
+    _ember_4907e63ef2f25e2e_aliases = ('_ember_issue2015_4907e63ef2f25e2e', 'ember_cli_spec_policy', 'scripts.ember_cli_spec_policy')
+    _ember_4907e63ef2f25e2e_existing = []
+    for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+        _ember_4907e63ef2f25e2e_candidate = _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias)
+        if _ember_4907e63ef2f25e2e_candidate is not None and all(_ember_4907e63ef2f25e2e_candidate is not item for item in _ember_4907e63ef2f25e2e_existing):
+            _ember_4907e63ef2f25e2e_existing.append(_ember_4907e63ef2f25e2e_candidate)
+    if len(_ember_4907e63ef2f25e2e_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_cli_spec_policy.py')
+    if _ember_4907e63ef2f25e2e_existing:
+        _ember_4907e63ef2f25e2e_module = _ember_4907e63ef2f25e2e_existing[0]
+        _ember_4907e63ef2f25e2e_observed = getattr(_ember_4907e63ef2f25e2e_module, '__file__', None)
+        if _ember_4907e63ef2f25e2e_observed is None or _ember_4907e63ef2f25e2e_Path(_ember_4907e63ef2f25e2e_observed).resolve() != _ember_4907e63ef2f25e2e_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_cli_spec_policy.py')
+    else:
+        _ember_4907e63ef2f25e2e_spec = _ember_4907e63ef2f25e2e_importlib.spec_from_file_location('_ember_issue2015_4907e63ef2f25e2e', _ember_4907e63ef2f25e2e_path)
+        if _ember_4907e63ef2f25e2e_spec is None or _ember_4907e63ef2f25e2e_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_cli_spec_policy.py')
+        _ember_4907e63ef2f25e2e_module = _ember_4907e63ef2f25e2e_importlib.module_from_spec(_ember_4907e63ef2f25e2e_spec)
+        for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+            _ember_4907e63ef2f25e2e_prior = _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias)
+            if _ember_4907e63ef2f25e2e_prior is not None and _ember_4907e63ef2f25e2e_prior is not _ember_4907e63ef2f25e2e_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_cli_spec_policy.py')
+            _ember_4907e63ef2f25e2e_sys.modules[_ember_4907e63ef2f25e2e_alias] = _ember_4907e63ef2f25e2e_module
+        try:
+            _ember_4907e63ef2f25e2e_spec.loader.exec_module(_ember_4907e63ef2f25e2e_module)
+        except BaseException:
+            for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+                if _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias) is _ember_4907e63ef2f25e2e_module:
+                    _ember_4907e63ef2f25e2e_sys.modules.pop(_ember_4907e63ef2f25e2e_alias, None)
+            raise
+    for _ember_4907e63ef2f25e2e_alias in _ember_4907e63ef2f25e2e_aliases:
+        _ember_4907e63ef2f25e2e_prior = _ember_4907e63ef2f25e2e_sys.modules.get(_ember_4907e63ef2f25e2e_alias)
+        if _ember_4907e63ef2f25e2e_prior is not None and _ember_4907e63ef2f25e2e_prior is not _ember_4907e63ef2f25e2e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_cli_spec_policy.py')
+        _ember_4907e63ef2f25e2e_sys.modules[_ember_4907e63ef2f25e2e_alias] = _ember_4907e63ef2f25e2e_module
+    SpecPolicyError = getattr(_ember_4907e63ef2f25e2e_module, 'SpecPolicyError')
+    load_spec_nodes = getattr(_ember_4907e63ef2f25e2e_module, 'load_spec_nodes')
+    # issue2015 exact-local-import-end:scripts/ember_cli_spec_policy.py
 
 
 PATH_EXTENSIONS = r"py|md|json|txt|sh|yml|yaml|toml|ps1"

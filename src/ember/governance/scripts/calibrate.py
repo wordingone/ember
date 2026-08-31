@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """calibrate — P(verify) elicitation scoring (eng #6, audit §8.2).
 
 Judgment's verifiable core: before sampling, the model states P(verify) per

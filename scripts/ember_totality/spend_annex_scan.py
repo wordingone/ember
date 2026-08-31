@@ -791,7 +791,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
     (re.compile(r"^eng38-b-multi-1-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: producer==<engineer identity redacted>, build_method notes 'built inline per "
      "delegation rule' -- a hand-authored build-completion receipt; its own build_path_2 field "
-     "names an existing script (scripts/corpus_patch_encode.py) as the THING BUILT, not as this "
+     "names an existing script (src/ember/governance/scripts/corpus_patch_encode.py) as the THING BUILT, not as this "
      "receipt's generator (that script has no receipt-writing code of its own)."),
     (re.compile(r"^eng421-multimodal-config-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: producer==<engineer identity redacted>, ac_command is an inline "

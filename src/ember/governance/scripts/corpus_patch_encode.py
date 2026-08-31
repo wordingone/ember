@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """corpus_patch_encode.py — encode images as 48×48px patches for multimodal training.
 
 Spec: configs/v0-multimodal-config.json vision_embedder (patch_px=48, in_dim=6912).

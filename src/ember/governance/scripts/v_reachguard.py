@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """v_reachguard.py — object-graph reachability guard for the sandbox (#86, eng-23).
 
 Closes the SECOND live-confirmed false-accept class from the soundness probe

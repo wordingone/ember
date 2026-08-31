@@ -38,7 +38,7 @@ GOVERNING_SURFACES = [
     "docs/contracts/goal-mode-mechanism.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
-    "docs/spec/conditions-v1.md",
+    "docs/domains/governance/spec/conditions-v1.md",
     "docs/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
@@ -2372,7 +2372,7 @@ def _crosswalk_fixture(
             {
                 "registry_id": "legacy",
                 "evidence": [
-                    {"path": "docs/spec/conditions-v1.md", "sha256": evidence_sha}
+                    {"path": "docs/domains/governance/spec/conditions-v1.md", "sha256": evidence_sha}
                 ],
             }
         ],
@@ -2424,7 +2424,7 @@ def test_crosswalk_content_repin_without_moving_source_commit_is_rejected(
         if item["code"] == "authority.crosswalk_source_commit_stale"
     ]
     assert stale, errors
-    assert "legacy:docs/spec/conditions-v1.md" in stale[0]["detail"]
+    assert "legacy:docs/domains/governance/spec/conditions-v1.md" in stale[0]["detail"]
     assert "a" * 40 in stale[0]["detail"]
 
 

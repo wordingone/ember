@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp8_vgate.py — verifier-change regression gate (#63, fp-8).
 
 fp-5 confirmed two unguarded false-accept classes in V (`__eq__` dispatch,
@@ -152,8 +155,94 @@ def load_mbpp_episodes():
 
 def main():
     sys.path.insert(0, f"{NC}/scripts")
-    from t1_probe import execute_batch
-    from w1_mbpp import load_split
+    # issue2015 exact-local-import:scripts/t1_probe.py
+    import importlib.util as _ember_c32cf5e860218889_importlib
+    import sys as _ember_c32cf5e860218889_sys
+    from pathlib import Path as _ember_c32cf5e860218889_Path
+    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
+    if not _ember_c32cf5e860218889_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t1_probe.py')
+    _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'scripts.t1_probe', 't1_probe')
+    _ember_c32cf5e860218889_existing = []
+    for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+        _ember_c32cf5e860218889_candidate = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
+        if _ember_c32cf5e860218889_candidate is not None and all(_ember_c32cf5e860218889_candidate is not item for item in _ember_c32cf5e860218889_existing):
+            _ember_c32cf5e860218889_existing.append(_ember_c32cf5e860218889_candidate)
+    if len(_ember_c32cf5e860218889_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t1_probe.py')
+    if _ember_c32cf5e860218889_existing:
+        _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_existing[0]
+        _ember_c32cf5e860218889_observed = getattr(_ember_c32cf5e860218889_module, '__file__', None)
+        if _ember_c32cf5e860218889_observed is None or _ember_c32cf5e860218889_Path(_ember_c32cf5e860218889_observed).resolve() != _ember_c32cf5e860218889_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t1_probe.py')
+    else:
+        _ember_c32cf5e860218889_spec = _ember_c32cf5e860218889_importlib.spec_from_file_location('_ember_issue2015_c32cf5e860218889', _ember_c32cf5e860218889_path)
+        if _ember_c32cf5e860218889_spec is None or _ember_c32cf5e860218889_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t1_probe.py')
+        _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_importlib.module_from_spec(_ember_c32cf5e860218889_spec)
+        for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+            _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
+            if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+            _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
+        try:
+            _ember_c32cf5e860218889_spec.loader.exec_module(_ember_c32cf5e860218889_module)
+        except BaseException:
+            for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+                if _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias) is _ember_c32cf5e860218889_module:
+                    _ember_c32cf5e860218889_sys.modules.pop(_ember_c32cf5e860218889_alias, None)
+            raise
+    for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+        _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
+        if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+        _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
+    execute_batch = getattr(_ember_c32cf5e860218889_module, 'execute_batch')
+    # issue2015 exact-local-import-end:scripts/t1_probe.py
+    # issue2015 exact-local-import:scripts/w1_mbpp.py
+    import importlib.util as _ember_53a439835d3991b4_importlib
+    import sys as _ember_53a439835d3991b4_sys
+    from pathlib import Path as _ember_53a439835d3991b4_Path
+    _ember_53a439835d3991b4_path = _ember_53a439835d3991b4_Path(__file__).resolve().parents[4].joinpath('scripts', 'w1_mbpp.py')
+    if not _ember_53a439835d3991b4_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w1_mbpp.py')
+    _ember_53a439835d3991b4_aliases = ('_ember_issue2015_53a439835d3991b4', 'scripts.w1_mbpp', 'w1_mbpp')
+    _ember_53a439835d3991b4_existing = []
+    for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
+        _ember_53a439835d3991b4_candidate = _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias)
+        if _ember_53a439835d3991b4_candidate is not None and all(_ember_53a439835d3991b4_candidate is not item for item in _ember_53a439835d3991b4_existing):
+            _ember_53a439835d3991b4_existing.append(_ember_53a439835d3991b4_candidate)
+    if len(_ember_53a439835d3991b4_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w1_mbpp.py')
+    if _ember_53a439835d3991b4_existing:
+        _ember_53a439835d3991b4_module = _ember_53a439835d3991b4_existing[0]
+        _ember_53a439835d3991b4_observed = getattr(_ember_53a439835d3991b4_module, '__file__', None)
+        if _ember_53a439835d3991b4_observed is None or _ember_53a439835d3991b4_Path(_ember_53a439835d3991b4_observed).resolve() != _ember_53a439835d3991b4_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w1_mbpp.py')
+    else:
+        _ember_53a439835d3991b4_spec = _ember_53a439835d3991b4_importlib.spec_from_file_location('_ember_issue2015_53a439835d3991b4', _ember_53a439835d3991b4_path)
+        if _ember_53a439835d3991b4_spec is None or _ember_53a439835d3991b4_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w1_mbpp.py')
+        _ember_53a439835d3991b4_module = _ember_53a439835d3991b4_importlib.module_from_spec(_ember_53a439835d3991b4_spec)
+        for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
+            _ember_53a439835d3991b4_prior = _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias)
+            if _ember_53a439835d3991b4_prior is not None and _ember_53a439835d3991b4_prior is not _ember_53a439835d3991b4_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w1_mbpp.py')
+            _ember_53a439835d3991b4_sys.modules[_ember_53a439835d3991b4_alias] = _ember_53a439835d3991b4_module
+        try:
+            _ember_53a439835d3991b4_spec.loader.exec_module(_ember_53a439835d3991b4_module)
+        except BaseException:
+            for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
+                if _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias) is _ember_53a439835d3991b4_module:
+                    _ember_53a439835d3991b4_sys.modules.pop(_ember_53a439835d3991b4_alias, None)
+            raise
+    for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
+        _ember_53a439835d3991b4_prior = _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias)
+        if _ember_53a439835d3991b4_prior is not None and _ember_53a439835d3991b4_prior is not _ember_53a439835d3991b4_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w1_mbpp.py')
+        _ember_53a439835d3991b4_sys.modules[_ember_53a439835d3991b4_alias] = _ember_53a439835d3991b4_module
+    load_split = getattr(_ember_53a439835d3991b4_module, 'load_split')
+    # issue2015 exact-local-import-end:scripts/w1_mbpp.py
 
     problems = {p["id"]: p for p in load_split("train")}
     eps = load_mbpp_episodes()

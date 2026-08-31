@@ -2,7 +2,7 @@
   "schema": "ember02-r2-cheap-probe-amendment/v1",
   "issue": 1442,
   "extends": [
-    "docs/spec/ember02-preregistration-v1.md",
+    "docs/domains/governance/spec/ember02-preregistration-v1.md",
     "docs/spec/ember02-preregistration-thresholds-v1.json"
   ],
   "decision": {

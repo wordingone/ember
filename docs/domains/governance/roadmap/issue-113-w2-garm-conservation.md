@@ -21,7 +21,7 @@ The file-set reconciliation landed in PR #117 (merge
 landed in PR #209 (merge `7e32941cd5fb68199634c5e3519e6a8b671aa7e5`).
 The issue's 2026-07-06 acceptance comment records that dry-run boundary as
 complete. Current master retains the fail-closed historical runner at
-`scripts/w2_garm_runner.py`.
+`src/ember/governance/scripts/w2_garm_runner.py`.
 
 No real #113 GPU-leg receipt exists. This ruling therefore makes no growth,
 training, checkpoint, capability, or matched-control result claim.

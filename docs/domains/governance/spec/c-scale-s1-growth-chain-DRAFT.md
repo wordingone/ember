@@ -45,9 +45,9 @@ on the next free GPU window after the C-EFF composition A/B (which holds first c
 composition A/B has since landed (§4 below) — its own next step (real-shard confirmation) is still
 open, which is separately relevant to S1's throughput basis, not a blocker on S1 itself.
 
-### 1.2 `docs/spec/conditions-v1.md` C-SCALE registry text — the W1 fields, verbatim
+### 1.2 `docs/domains/governance/spec/conditions-v1.md` C-SCALE registry text — the W1 fields, verbatim
 
-`docs/spec/conditions-v1.md` (§4.2, C-SCALE): the CHK a scale-credibility receipt must record —
+`docs/domains/governance/spec/conditions-v1.md` (§4.2, C-SCALE): the CHK a scale-credibility receipt must record —
 
 > {operating_capability_point (>3B), W1:{measured_tokens_to_base, projected_dense_tokens_to_base,
 > token_bill_collapse_ratio>1, growth_lineage_from_cbase_seed, no_borrowed_weights_load_bearing=true},
@@ -488,7 +488,7 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 
 ## Citations
 
-`GOAL.md` · `docs/spec/conditions-v1.md` · `docs/spec/growth-v1.md` ·
+`GOAL.md` · `docs/domains/governance/spec/conditions-v1.md` · `docs/spec/growth-v1.md` ·
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
 `docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `scripts/ember_totality/test_c_scale.py` ·
 `src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·

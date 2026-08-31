@@ -12,7 +12,7 @@
   "exceptions": [
     {
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "6d4c69a27f999f69693252ef5ae4b187858032e36434e2e4137e4ea5bd11b483",
+      "sha256": "2c7dec68b17da266b94d1ef636ab47dfb2439fcd72c7830721ccfb739e5cc44f",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -27,7 +27,7 @@
     },
     {
       "path": "src/ember/governance/scripts/forecast_recalibration.py",
-      "sha256": "f2f3c3501c2c07109cf7b4a9e9b8c50d298928e589e1670fb36e80df28801ee5",
+      "sha256": "9d707ecdc6ab7ec2262d762907f7c446e43f5a0f949a210ad311d71c9d568127",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "cc81c5814a26cd88fd5da4abe5520cdfc3343f37f9b206a38e51ade2cbe5fd03",
+      "sha256": "ce45f46691870bcdeccd894a35c38451074e10e7c3985f2a0de0b0d9f6251cf6",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -52,7 +52,7 @@
     },
     {
       "path": "tools/repo_guard_selftest.py",
-      "sha256": "338f5596bbee3424bb9e821a4845e90906df9751840ad6dbfc29837f6f84cbad",
+      "sha256": "c37baa7736d460fdc53e0c249a3617cff84b6e2fc27a999cb9add5316fd4f20a",
       "reason": "repository-policy selftest names the governed training entry only inside a deliberate refusal fixture; it does not import, execute, or dispatch that entry"
     }
   ]

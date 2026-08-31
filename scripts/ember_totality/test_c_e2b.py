@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_e2b.py — STATUS PROBE for Ember goal condition C-E2B.
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-E2B. R: the from-scratch owned
+Registry text: docs/domains/governance/spec/conditions-v1.md §4.2 C-E2B. R: the from-scratch owned
 core (no borrowed weights load-bearing) beats Gemma-E2B-swapped-into-Ember's-
 own-seat on BOTH legs at matched governed budget, with the paired protocol
 frozen BEFORE any verdict: (i) Ember-work (verified, transferring, deletion-

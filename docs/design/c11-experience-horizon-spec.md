@@ -1,7 +1,7 @@
 # C11 — Experience-horizon capability delta, spec v1
 
 Canonical spec for totality condition **C11** as defined in
-`docs/spec/conditions-v1.md` (C11 row). `conditions-v1.md` names this file and
+`docs/domains/governance/spec/conditions-v1.md` (C11 row). `conditions-v1.md` names this file and
 sets the contract; this file makes the contract machine-checkable and is the
 authority `scripts/ember_totality/test_c11.py` implements.
 

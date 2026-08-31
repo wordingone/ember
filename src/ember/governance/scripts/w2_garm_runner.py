@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w2_garm_runner.py -- issue #113: W2 G-arm runner (grow rung-1 terminal to
 2x FF, train per preregistration, emit the frozen dump contract).
 
@@ -79,10 +82,10 @@ and launch_gate.py are imported only for their gate logic, never wired into
 the dump); LF line endings; no commits performed by this script.
 
 Usage:
-  CUDA_VISIBLE_DEVICES= python scripts/w2_garm_runner.py --dry-run \
+  CUDA_VISIBLE_DEVICES= python src/ember/governance/scripts/w2_garm_runner.py --dry-run \
       --out-dir scratch/w2-garm/dry-run/<label>
 
-  python scripts/w2_garm_runner.py --live   # refuses unconditionally here
+  python src/ember/governance/scripts/w2_garm_runner.py --live   # refuses unconditionally here
 """
 from __future__ import annotations
 

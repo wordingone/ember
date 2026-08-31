@@ -20,7 +20,7 @@ map to that receipt, not a replacement for reading it.
 - Evaluation (06): `C1` RED (hash-verify gap), `C2`/`C3`/`C6` GREEN, `C4`/`C5` RED (harness-interface reachability), `C7`/`C8` RED
 - Governance (07, 11): `C-PORT` GREEN
 - Cockpit (12): `C-OBS` RED (receipt-visibility gap over real, existing adapter code), `C-IND` RED (depends on C-OBS)
-- Roll-ups: `C-MANIFEST` GREEN (docs/contracts/ember-completeness.md enumerates all 81 rows), `C-TALLY` RED by definition (a 38-way conjunction roll-up — GREEN requires every other STATE-condition GREEN first; see `docs/spec/conditions-v1.md` §4.3)
+- Roll-ups: `C-MANIFEST` GREEN (docs/contracts/ember-completeness.md enumerates all 81 rows), `C-TALLY` RED by definition (a 38-way conjunction roll-up — GREEN requires every other STATE-condition GREEN first; see `docs/domains/governance/spec/conditions-v1.md` §4.3)
 
 ## H4 — verifier-free judgment (honest status)
 
@@ -45,5 +45,5 @@ judgment remains H4's open problem, tracked in
 This report, and the anatomy set it summarizes, describe real, on-disk state
 as of the cited board render. They make no claim beyond that: not
 completion, not checkpoint existence, not benchmark scores, not that H4 is
-solved. See `docs/spec/conditions-v1.md` §4.3-4.4 for what "GOAL SATISFIED"
+solved. See `docs/domains/governance/spec/conditions-v1.md` §4.3-4.4 for what "GOAL SATISFIED"
 actually requires and how far the current board is from it.

@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 r"""energy_proxy_logger.py -- the DEGRADED_PROXY energy logger of
-docs/spec/ember02-preregistration-v1.md sec5.3.
+docs/domains/governance/spec/ember02-preregistration-v1.md sec5.3.
 
 Emits the frozen sec5.3 `energy` block: an integrated proxy over the run, never a
 TDP multiplication, with the boundary flag stated plainly as the program's
@@ -567,7 +567,7 @@ def run_smoke(duration_s: float, receipt_path: str | None,
         "workstream_id": RECEIPT_WORKSTREAM_ID,
         "next_executed_outcome": ("EMBER-02 first sufficiently pretrained "
                                   "clean-genesis 3B Ember"),
-        "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.3",
+        "prereg_section": "docs/domains/governance/spec/ember02-preregistration-v1.md sec5.3",
         "purpose": ("R1 entry gate: energy-proxy logger smoke-tested pre-birth "
                     "(sec3 R1 Entry)"),
         "result": "MEASURED",
@@ -793,7 +793,7 @@ def run_watch(pidfile_path: str, receipt_path: str, ticket: str) -> int:
         "workstream_id": RECEIPT_WORKSTREAM_ID,
         "next_executed_outcome": ("EMBER-02 first sufficiently pretrained "
                                   "clean-genesis 3B Ember"),
-        "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.3",
+        "prereg_section": "docs/domains/governance/spec/ember02-preregistration-v1.md sec5.3",
         "purpose": ("R1 credited-run energy proxy: integrated over the "
                     "certified child's lifetime (sec5.4 leg 5)"),
         "result": "MEASURED",

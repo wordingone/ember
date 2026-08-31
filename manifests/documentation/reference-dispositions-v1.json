@@ -549,14 +549,14 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/nck-event-loop-v0.md",
+      "document": "docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md",
       "line": 47,
       "target": "state/nck-journal.jsonl",
       "visible_classification": "historical"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/nck-event-loop-v0.md",
+      "document": "docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md",
       "line": 76,
       "target": "state/nck-heartbeat.txt",
       "visible_classification": "historical"
@@ -2614,119 +2614,119 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 38,
       "target": "docs/goal-archive/GOAL-20260630-pre-goalforge.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 41,
       "target": "docs/goal-archive.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 140,
       "target": "docs/cleanup/readiness/credential/benchmark-shopping",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 148,
       "target": "docs/ember-debt-ledger.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 163,
       "target": "docs/c11-experience-horizon-spec.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 170,
       "target": "docs/spec/milestones-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 182,
       "target": "state/comms/receipts/rollback/native",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 295,
       "target": "docs/spec/operator-independence-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 353,
       "target": "docs/ENTRY-MAP.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 370,
       "target": "docs/spec/publication-v1.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 379,
       "target": "scratch/ember_totality/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 401,
       "target": "receipts/escalation/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 402,
       "target": "receipts/escalation/override-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 412,
       "target": "docs/audit/c-ladm-sec1-1-admission-recon-20260704.md",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 432,
       "target": "receipts/autonomy-ladder/",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 468,
       "target": "receipts/tally-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/conditions-v1.md",
+      "document": "docs/domains/governance/spec/conditions-v1.md",
       "line": 530,
       "target": "data/seeds",
       "visible_classification": "reference"
@@ -2768,14 +2768,14 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/ember02-preregistration-v1.md",
+      "document": "docs/domains/governance/spec/ember02-preregistration-v1.md",
       "line": 191,
       "target": "tokenizer/optimizer",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/spec/ember02-preregistration-v1.md",
+      "document": "docs/domains/governance/spec/ember02-preregistration-v1.md",
       "line": 285,
       "target": "data/seed",
       "visible_classification": "reference"
@@ -3104,28 +3104,28 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/verification/ember-cli-485-rung1-reverify-20260710.md",
+      "document": "docs/domains/governance/verification/ember-cli-485-rung1-reverify-20260710.md",
       "line": 14,
       "target": "state/activity-ledger.jsonl",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/verification/ember-cli-485-rung1-reverify-20260710.md",
+      "document": "docs/domains/governance/verification/ember-cli-485-rung1-reverify-20260710.md",
       "line": 40,
       "target": "tools/ember-cli/state/activity-ledger.jsonl",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/verification/ember-cli-485-rung1-reverify-20260710.md",
+      "document": "docs/domains/governance/verification/ember-cli-485-rung1-reverify-20260710.md",
       "line": 65,
       "target": "receipts/acceptance/rung1-reverify-proof.json",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/verification/ember-cli-485-rung1-reverify-20260710.md",
+      "document": "docs/domains/governance/verification/ember-cli-485-rung1-reverify-20260710.md",
       "line": 72,
       "target": "tools/ember-cli/src/scratchpad/rung1-reverify-20260710.ts",
       "visible_classification": "reference"

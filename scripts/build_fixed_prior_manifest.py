@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """build_fixed_prior_manifest.py -- build and verify the sec5.2 fixed-prior manifest.
 
-docs/spec/ember02-preregistration-v1.md sec5.2 requires ONE versioned manifest,
+docs/domains/governance/spec/ember02-preregistration-v1.md sec5.2 requires ONE versioned manifest,
 committed before R1 and referenced by hash from every rung receipt, enumerating
 every non-learned prior -- training loop, kernels, ember-cli, deterministic tools,
 corpora + acquisition provenance, benchmark payloads, solver/compiler versions,
@@ -294,7 +294,7 @@ INVENTORY: tuple[dict, ...] = (
          provenance="The ember-owned-rung admission contract config validated at "
                     "dispatch."),
     dict(category="configuration", kind="file",
-         path="docs/spec/ember02-preregistration-v1.md",
+         path="docs/domains/governance/spec/ember02-preregistration-v1.md",
          provenance="The pre-registration this run is hash-pinned to "
                     "(`--prereg <sha256>`)."),
     dict(category="configuration", kind="file",
@@ -465,7 +465,7 @@ def build_manifest() -> dict:
         "workstream_id": "EMBER-02A",
         "next_executed_outcome": ("EMBER-02 first sufficiently pretrained "
                                   "clean-genesis 3B Ember"),
-        "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.2",
+        "prereg_section": "docs/domains/governance/spec/ember02-preregistration-v1.md sec5.2",
         "purpose": ("Fixed-prior manifest: every non-learned prior with sha256 and "
                     "provenance, referenced by hash from every rung receipt."),
         "sha_convention": SHA_CONVENTION,

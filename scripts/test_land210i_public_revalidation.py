@@ -39,7 +39,7 @@ class Land210iPublicRevalidationTests(unittest.TestCase):
         env = dict(os.environ)
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         result = subprocess.run(
-            [sys.executable, "-B", "scripts/ember_avir_harness.py", "--selftest"],
+            [sys.executable, "-B", "src/ember/governance/scripts/ember_avir_harness.py", "--selftest"],
             cwd=ROOT,
             env=env,
             text=True,

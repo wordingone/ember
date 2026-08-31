@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Forecast-recalibration receipt generator -- R1-E6 (issue #1464).
 
-Prereg authority: docs/spec/ember02-preregistration-v1.md (pin 3d48d387), section 3
+Prereg authority: docs/domains/governance/spec/ember02-preregistration-v1.md (pin 3d48d387), section 3
 common structure, closing receipts clause: "forecast-recalibration receipt:
 predicted vs measured step time, tokens/s, proxy-joules/token, peak VRAM, loss
 trajectory". This script produces that receipt for one run root against one

@@ -50,7 +50,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file_
 # cover every real invocation shape, and the dropped candidate never resolved to
 # anything -- a latent probe defect if it were ever reached first.
 _NC_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
-# The §4 condition-bullet prose now lives in docs/spec/conditions-v1.md (the
+# The §4 condition-bullet prose now lives in docs/domains/governance/spec/conditions-v1.md (the
 # canonical registry, docs/domains/governance/authority/GOAL.md §4 header); docs/domains/governance/authority/GOAL.md itself is tried too (its §4
 # may inline amendments/bullets directly). Order = most-authoritative first.
 # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial legacy

@@ -140,7 +140,7 @@ import r1_frozen_eval_runner as frozen_eval
 from r1_e8_validator import validate_e8
 
 ISSUE_REF = "#1463"
-PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
+PREREG_DOC = "docs/domains/governance/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
 RECEIPT_SCHEMA = "r1-exit-battery/v1"
 RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
@@ -1416,7 +1416,7 @@ def check_r1_e4(run_root: Path, thresholds: dict[str, Any], *, run_id: str | Non
 FRONTIER_SCHEMA = "ember02-frontier-receipt/v1"
 E5_GOAL_ID = "EMBER-02"
 E5_WORKSTREAM_ID = "EMBER-02A"
-E5_PREREG_PATH = "docs/spec/ember02-preregistration-v1.md"
+E5_PREREG_PATH = "docs/domains/governance/spec/ember02-preregistration-v1.md"
 E5_ADMISSION_CONFIG_PATH = "configs/ember-restart-3b.json"
 E5_INVARIANT_PATH = "docs/domains/governance/authority/INVARIANT.md"
 E5_TOKENIZER_RECEIPT_PATH = "receipts/ember-restart-3b/tokenizer-reconstruction-issue534-v1.json"

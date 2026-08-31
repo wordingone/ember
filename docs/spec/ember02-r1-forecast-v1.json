@@ -2,7 +2,7 @@
   "schema_version": "ember02-r1-forecast/v1",
   "authored_utc": "2026-08-06T05:25:00Z",
   "prereg": {
-    "doc": "docs/spec/ember02-preregistration-v1.md",
+    "doc": "docs/domains/governance/spec/ember02-preregistration-v1.md",
     "pin": "3d48d387",
     "clause": "section 3 common structure, closing receipts: forecast-recalibration receipt carries predicted vs measured step time, tokens/s, proxy-joules/token, peak VRAM, loss trajectory"
   },

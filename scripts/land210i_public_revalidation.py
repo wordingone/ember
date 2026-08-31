@@ -86,7 +86,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 EXPECTED_SCRIPT_PATHS = {
     "scripts/ember_avir_cli_launch_entry.py",
-    "scripts/ember_avir_harness.py",
+    "src/ember/governance/scripts/ember_avir_harness.py",
     "scripts/ember_avir_observe.py",
     "scripts/ember_avir_tasks.py",
 }
@@ -259,11 +259,11 @@ def validate_current_harness(path: Path) -> dict[str, Any]:
             f"expected {EXPECTED_CURRENT_HARNESS_SHA256}, got {digest}"
         )
     source = path.read_text(encoding="utf-8", errors="strict")
-    compile(source, "scripts/ember_avir_harness.py", "exec")
+    compile(source, "src/ember/governance/scripts/ember_avir_harness.py", "exec")
     if "with patch.object(Path, \"home\"" not in source:
         raise ValueError("current harness does not exercise the real home-resolution seam")
     return {
-        "path": "scripts/ember_avir_harness.py",
+        "path": "src/ember/governance/scripts/ember_avir_harness.py",
         "sha256": digest,
         "session_selection_regression_repaired": True,
     }
@@ -276,7 +276,7 @@ def validate_current_files(root: Path, historical: dict[str, Any]) -> dict[str, 
     repaired = 0
     for path in sorted(EXPECTED_ALL_PATHS):
         current = sha256_file(root / path)
-        if path == "scripts/ember_avir_harness.py":
+        if path == "src/ember/governance/scripts/ember_avir_harness.py":
             validate_current_harness(root / path)
             if current == expected[path]:
                 raise ValueError("current harness repair is not distinguishable from landing")
@@ -340,7 +340,7 @@ def validate_cpu_replay(root: Path) -> dict[str, Any]:
             ["usage: ember_avir_observe.py"],
         ),
         (
-            ["scripts/ember_avir_harness.py", "--selftest"],
+            ["src/ember/governance/scripts/ember_avir_harness.py", "--selftest"],
             [
                 "T15/find_session_jsonl/session_id pinning",
                 "T15/find_session_jsonl/mtime fallback",

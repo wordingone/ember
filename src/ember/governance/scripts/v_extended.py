@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """v_extended.py — W-code V hardening: MBPP+ extended-test FPR (eng #7).
 
 V-soundness caveat (kernel freeze spec; Liu et al. NeurIPS 2023,
@@ -61,7 +64,50 @@ def build_harness(src, plus_test, imports=()):
     _scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)))
     if _scripts not in sys.path:
         sys.path.insert(0, _scripts)
-    from v_compare import STRICT_SRC  # noqa: PLC0415
+    # issue2015 exact-local-import:scripts/v_compare.py
+    import importlib.util as _ember_a8d35c9fcd11d83e_importlib
+    import sys as _ember_a8d35c9fcd11d83e_sys
+    from pathlib import Path as _ember_a8d35c9fcd11d83e_Path
+    _ember_a8d35c9fcd11d83e_path = _ember_a8d35c9fcd11d83e_Path(__file__).resolve().parents[4].joinpath('scripts', 'v_compare.py')
+    if not _ember_a8d35c9fcd11d83e_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/v_compare.py')
+    _ember_a8d35c9fcd11d83e_aliases = ('_ember_issue2015_a8d35c9fcd11d83e', 'scripts.v_compare', 'v_compare')
+    _ember_a8d35c9fcd11d83e_existing = []
+    for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
+        _ember_a8d35c9fcd11d83e_candidate = _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias)
+        if _ember_a8d35c9fcd11d83e_candidate is not None and all(_ember_a8d35c9fcd11d83e_candidate is not item for item in _ember_a8d35c9fcd11d83e_existing):
+            _ember_a8d35c9fcd11d83e_existing.append(_ember_a8d35c9fcd11d83e_candidate)
+    if len(_ember_a8d35c9fcd11d83e_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/v_compare.py')
+    if _ember_a8d35c9fcd11d83e_existing:
+        _ember_a8d35c9fcd11d83e_module = _ember_a8d35c9fcd11d83e_existing[0]
+        _ember_a8d35c9fcd11d83e_observed = getattr(_ember_a8d35c9fcd11d83e_module, '__file__', None)
+        if _ember_a8d35c9fcd11d83e_observed is None or _ember_a8d35c9fcd11d83e_Path(_ember_a8d35c9fcd11d83e_observed).resolve() != _ember_a8d35c9fcd11d83e_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/v_compare.py')
+    else:
+        _ember_a8d35c9fcd11d83e_spec = _ember_a8d35c9fcd11d83e_importlib.spec_from_file_location('_ember_issue2015_a8d35c9fcd11d83e', _ember_a8d35c9fcd11d83e_path)
+        if _ember_a8d35c9fcd11d83e_spec is None or _ember_a8d35c9fcd11d83e_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/v_compare.py')
+        _ember_a8d35c9fcd11d83e_module = _ember_a8d35c9fcd11d83e_importlib.module_from_spec(_ember_a8d35c9fcd11d83e_spec)
+        for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
+            _ember_a8d35c9fcd11d83e_prior = _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias)
+            if _ember_a8d35c9fcd11d83e_prior is not None and _ember_a8d35c9fcd11d83e_prior is not _ember_a8d35c9fcd11d83e_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/v_compare.py')
+            _ember_a8d35c9fcd11d83e_sys.modules[_ember_a8d35c9fcd11d83e_alias] = _ember_a8d35c9fcd11d83e_module
+        try:
+            _ember_a8d35c9fcd11d83e_spec.loader.exec_module(_ember_a8d35c9fcd11d83e_module)
+        except BaseException:
+            for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
+                if _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias) is _ember_a8d35c9fcd11d83e_module:
+                    _ember_a8d35c9fcd11d83e_sys.modules.pop(_ember_a8d35c9fcd11d83e_alias, None)
+            raise
+    for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
+        _ember_a8d35c9fcd11d83e_prior = _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias)
+        if _ember_a8d35c9fcd11d83e_prior is not None and _ember_a8d35c9fcd11d83e_prior is not _ember_a8d35c9fcd11d83e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/v_compare.py')
+        _ember_a8d35c9fcd11d83e_sys.modules[_ember_a8d35c9fcd11d83e_alias] = _ember_a8d35c9fcd11d83e_module
+    STRICT_SRC = getattr(_ember_a8d35c9fcd11d83e_module, 'STRICT_SRC')
+    # issue2015 exact-local-import-end:scripts/v_compare.py  # noqa: PLC0415
     from fp8_vgate import split_assert  # noqa: PLC0415
 
     instrumented = []
@@ -101,7 +147,50 @@ def main():
 
     sys.path.insert(0, f"{NC}/scripts")
     from datasets import load_dataset
-    from t1_probe import execute_batch
+    # issue2015 exact-local-import:scripts/t1_probe.py
+    import importlib.util as _ember_c32cf5e860218889_importlib
+    import sys as _ember_c32cf5e860218889_sys
+    from pathlib import Path as _ember_c32cf5e860218889_Path
+    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
+    if not _ember_c32cf5e860218889_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t1_probe.py')
+    _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'scripts.t1_probe', 't1_probe')
+    _ember_c32cf5e860218889_existing = []
+    for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+        _ember_c32cf5e860218889_candidate = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
+        if _ember_c32cf5e860218889_candidate is not None and all(_ember_c32cf5e860218889_candidate is not item for item in _ember_c32cf5e860218889_existing):
+            _ember_c32cf5e860218889_existing.append(_ember_c32cf5e860218889_candidate)
+    if len(_ember_c32cf5e860218889_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t1_probe.py')
+    if _ember_c32cf5e860218889_existing:
+        _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_existing[0]
+        _ember_c32cf5e860218889_observed = getattr(_ember_c32cf5e860218889_module, '__file__', None)
+        if _ember_c32cf5e860218889_observed is None or _ember_c32cf5e860218889_Path(_ember_c32cf5e860218889_observed).resolve() != _ember_c32cf5e860218889_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t1_probe.py')
+    else:
+        _ember_c32cf5e860218889_spec = _ember_c32cf5e860218889_importlib.spec_from_file_location('_ember_issue2015_c32cf5e860218889', _ember_c32cf5e860218889_path)
+        if _ember_c32cf5e860218889_spec is None or _ember_c32cf5e860218889_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t1_probe.py')
+        _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_importlib.module_from_spec(_ember_c32cf5e860218889_spec)
+        for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+            _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
+            if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+            _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
+        try:
+            _ember_c32cf5e860218889_spec.loader.exec_module(_ember_c32cf5e860218889_module)
+        except BaseException:
+            for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+                if _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias) is _ember_c32cf5e860218889_module:
+                    _ember_c32cf5e860218889_sys.modules.pop(_ember_c32cf5e860218889_alias, None)
+            raise
+    for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
+        _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
+        if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+        _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
+    execute_batch = getattr(_ember_c32cf5e860218889_module, 'execute_batch')
+    # issue2015 exact-local-import-end:scripts/t1_probe.py
 
     plus = {int(r["task_id"]): r for r in
             load_dataset("evalplus/mbppplus", split="test")}

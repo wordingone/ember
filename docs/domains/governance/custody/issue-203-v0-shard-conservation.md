@@ -80,7 +80,7 @@ silently dropped:
 
 | Historical #203 mechanism | Current status | Current owner and binding |
 | --- | --- | --- |
-| v0 token-shard admission and `shards-v0` files | `REMOVED` from current Ember Lab admission | Current custody spine: completed roadmap issue #1115 plus `docs/custody/ember-01-custody-README.md` and `docs/roadmap/certificates/EMBER-01.md` |
+| v0 token-shard admission and `shards-v0` files | `REMOVED` from current Ember Lab admission | Current custody spine: completed roadmap issue #1115 plus `docs/custody/ember-01-custody-README.md` and `docs/domains/governance/roadmap/certificates/EMBER-01.md` |
 | v0-00025 recurrence characterization | `SUPERSEDED` as an executable path; obligation retained | EMBER-01 reopening rule `EMBER-01.REOPEN.001`; exact bytes must be restored before recomputation |
 | 26-shard self-duplication quantification | `SUPERSEDED` as an executable path; obligation retained | EMBER-01 receipt/root census and future exact-byte re-verification |
 | rebuild/drop/accept-with-disclosure decision | `DEPRECATED_ABSORBED`; audit recommendation preserved | Exact-hash dedup/rebuild under EMBER-01.REOPEN.001 after byte custody is restored; no current rebuilt shard is inferred |
@@ -96,7 +96,7 @@ does not create a second corpus, shard, receipt, benchmark, or launcher owner.
 
 The durable owner is the completed EMBER-01 custody/identity contract formerly
 tracked by issue #1115 and now carried by
-`docs/roadmap/certificates/EMBER-01.md`. No new permanent tracker is created.
+`docs/domains/governance/roadmap/certificates/EMBER-01.md`. No new permanent tracker is created.
 The transfer is append-only and lossless: #203's byte identity, 26-shard scope,
 recurrence question, cure choice, disclosure boundary, and W1 comparability
 obligation remain named above. If exact v0 bytes or a consumer that bypasses

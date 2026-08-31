@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_scale.py — STATUS PROBE for Ember goal condition C-SCALE (the APEX).
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-SCALE. R: the self-modification
+Registry text: docs/domains/governance/spec/conditions-v1.md §4.2 C-SCALE. R: the self-modification
 gain demonstrated at a non-toy operating point reached by measured growth from
 the owned seed, such that BOTH hold — (i) dense-undismissable (capability-per-
 compute strictly above the 6·N·D dense scaling-law PROJECTION at matched

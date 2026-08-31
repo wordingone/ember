@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "scripts/ember_totality/test_c_tally.py",
-  "artifact_sha256": "f29381b843dfb2a71a4c04ceacfdb6869cc01451869338dbedff2e80ef0889b0",
+  "artifact_sha256": "d853a1eb3feae987be4afc3fb182399e23f9f19a9e66a12998fffb2b2d3f9bb4",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

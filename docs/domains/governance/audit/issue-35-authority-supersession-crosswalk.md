@@ -24,7 +24,7 @@ verifier is `scripts/verify_authority_supersession_crosswalk.py`.
 - Seven reported documentation-divergence slots. Four are recoverable from the
   issue body; three remain explicit custody gaps.
 - M1 through M55 from `docs/contracts/ember-completeness.md`.
-- Every legacy condition parsed from `docs/spec/conditions-v1.md`, including
+- Every legacy condition parsed from `docs/domains/governance/spec/conditions-v1.md`, including
   C-MANIFEST and C-MILE.
 
 `CUSTODY_GAP` means “known to have existed, source identity or wording not

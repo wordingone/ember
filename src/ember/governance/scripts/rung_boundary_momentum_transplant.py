@@ -23,7 +23,7 @@ post-grow optimizer ... reset_optimizer_on_resume=True skips that load").
 Production defaults to Branch B (reset) by omission, not by adjudicated
 law. The only existing transplant + fail-closed code
 (scripts/cbase_grow_rung2_event.py's `_pushforward_gate_momentum` +
-scripts/p5_ratio_audit/run_p5_audit.py's `EngagementFailure`) lives in the
+src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py's `EngagementFailure`) lives in the
 FORENSIC/measurement path (the b3/b4 d_comm arms comparison), not in a
 form a production stabilize launcher can call. This module is that
 reusable, production-callable form -- reusing both pieces, not
@@ -55,9 +55,52 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cbase_grow_dryrun import widen_state_dict  # noqa: E402 -- reused, never reimplemented
-from p5_ratio_audit.run_p5_audit import (  # noqa: E402 -- reused, never reimplemented
-    EngagementFailure, resolve_gate_momentum_buffer, rms,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
+import importlib.util as _ember_ba82af0721d80c9f_importlib
+import sys as _ember_ba82af0721d80c9f_sys
+from pathlib import Path as _ember_ba82af0721d80c9f_Path
+_ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+if not _ember_ba82af0721d80c9f_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+_ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
+_ember_ba82af0721d80c9f_existing = []
+for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+    _ember_ba82af0721d80c9f_candidate = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+    if _ember_ba82af0721d80c9f_candidate is not None and all(_ember_ba82af0721d80c9f_candidate is not item for item in _ember_ba82af0721d80c9f_existing):
+        _ember_ba82af0721d80c9f_existing.append(_ember_ba82af0721d80c9f_candidate)
+if len(_ember_ba82af0721d80c9f_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+if _ember_ba82af0721d80c9f_existing:
+    _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_existing[0]
+    _ember_ba82af0721d80c9f_observed = getattr(_ember_ba82af0721d80c9f_module, '__file__', None)
+    if _ember_ba82af0721d80c9f_observed is None or _ember_ba82af0721d80c9f_Path(_ember_ba82af0721d80c9f_observed).resolve() != _ember_ba82af0721d80c9f_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+else:
+    _ember_ba82af0721d80c9f_spec = _ember_ba82af0721d80c9f_importlib.spec_from_file_location('_ember_issue2015_ba82af0721d80c9f', _ember_ba82af0721d80c9f_path)
+    if _ember_ba82af0721d80c9f_spec is None or _ember_ba82af0721d80c9f_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_importlib.module_from_spec(_ember_ba82af0721d80c9f_spec)
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+    try:
+        _ember_ba82af0721d80c9f_spec.loader.exec_module(_ember_ba82af0721d80c9f_module)
+    except BaseException:
+        for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+            if _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias) is _ember_ba82af0721d80c9f_module:
+                _ember_ba82af0721d80c9f_sys.modules.pop(_ember_ba82af0721d80c9f_alias, None)
+        raise
+for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+    _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+    if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+EngagementFailure = getattr(_ember_ba82af0721d80c9f_module, 'EngagementFailure')
+resolve_gate_momentum_buffer = getattr(_ember_ba82af0721d80c9f_module, 'resolve_gate_momentum_buffer')
+rms = getattr(_ember_ba82af0721d80c9f_module, 'rms')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
 
 MOMENTUM_RMS_FAIL_CLOSED_THRESHOLD = 1e-10  # matches cbase_grow_rung2_event.py's own gate-only check
 

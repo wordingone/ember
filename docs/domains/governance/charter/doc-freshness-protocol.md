@@ -3,13 +3,13 @@
 **Purpose:** Enforce that public-facing documentation in the ember repository remains accurate, reachable, and up-to-date.
 
 **Enforcement:** Every pull request and every push to master runs two deterministic named gates:
-`scripts/check_docs_freshness.py --front-door` and
+`src/ember/governance/scripts/check_docs_freshness.py --front-door` and
 `scripts/gen_readme_status.py --check --generated-status`. The unscoped commands remain local
 full-audit tools and retain their branch-inventory, claims-index, and wall-age checks.
 
 ## What the checker verifies
 
-The `scripts/check_docs_freshness.py` script enforces four categories of correctness:
+The `src/ember/governance/scripts/check_docs_freshness.py` script enforces four categories of correctness:
 
 ### 1. Front-door path references resolve
 Every path candidate in `README.md` and `docs/authority/CONTINUITY.md`, whether backticked or
@@ -60,13 +60,13 @@ deterministic merge gate checks placement and uniqueness without consulting wall
 
 ```bash
 # Quick check (exit 0 if clean, 1 if defects)
-python scripts/check_docs_freshness.py
+python src/ember/governance/scripts/check_docs_freshness.py
 
 # See defects as markdown report
-python scripts/check_docs_freshness.py --fix-report
+python src/ember/governance/scripts/check_docs_freshness.py --fix-report
 
 # Run selftests (verify checker logic)
-python scripts/check_docs_freshness.py --selftest
+python src/ember/governance/scripts/check_docs_freshness.py --selftest
 ```
 
 ## Merge-gate integration
@@ -74,7 +74,7 @@ python scripts/check_docs_freshness.py --selftest
 Both scoped checks run before merge and again on master:
 
 ```bash
-python scripts/check_docs_freshness.py --front-door
+python src/ember/governance/scripts/check_docs_freshness.py --front-door
 python scripts/gen_readme_status.py --check --generated-status
 # Exits 0 if clean, 1 if defects found
 ```
@@ -122,7 +122,7 @@ If the checker detects a defect that requires architectural change (e.g., the do
 
 ## See also
 
-- `scripts/check_docs_freshness.py` — the implementation
+- `src/ember/governance/scripts/check_docs_freshness.py` — the implementation
 - `src/ember/governance/scripts/build_claims_index.py` — regenerates receipts index
 - `scripts/README.md` — scripts taxonomy
 - `README.md` — repository structure and reproduction guide

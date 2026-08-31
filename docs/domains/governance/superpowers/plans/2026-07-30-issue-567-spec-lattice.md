@@ -35,7 +35,7 @@
 ### Task 2: Freshness integration
 
 **Files:**
-- Modify: `scripts/check_docs_freshness.py`
+- Modify: `src/ember/governance/scripts/check_docs_freshness.py`
 - Modify: `tests/test_docs_freshness_observational.py`
 - Modify: `tools/ember-cli/specs/services-prompt-suggestion.md`
 
@@ -72,7 +72,7 @@
 **Files:**
 - Verify all changed files above.
 
-- [ ] Run focused tests, `python -B scripts/check_docs_freshness.py --repo .`, `python -B scripts/github/workflow_policy.py --root .`, and repository guard.
+- [ ] Run focused tests, `python -B src/ember/governance/scripts/check_docs_freshness.py --repo .`, `python -B scripts/github/workflow_policy.py --root .`, and repository guard.
 - [ ] Confirm `git diff --check`, exact scope, and clean generated state.
 - [ ] Commit, push, open the canonical self-review PR, obtain exact-head review, and require `guard`, `compiled-lifecycle`, and `ci-pr`.
 - [ ] Squash merge, verify trusted `ci-main`, recapture issue #567, execute the trusted close-half only if every issue clause is proven, and record rollback evidence.

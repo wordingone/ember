@@ -53,7 +53,7 @@
     "tools/ember-restart-3b/verify_capability_record.py",
     "tools/ember-restart-3b/verify_training_data.py",
     "src/ember/governance/scripts/artifact_custody_gate.py",
-    "scripts/ember_dispatch_token.py",
+    "src/ember/governance/scripts/ember_dispatch_token.py",
     "scripts/energy_proxy_logger.py",
     "scripts/git_env_hardening.py",
     "src/ember/governance/scripts/receipt_check.py",
@@ -85,7 +85,7 @@
       "tools/ember-restart-3b/a1_execution.py",
       "tools/ember-restart-3b/disk_budget_runner.py",
       "tools/ember-restart-3b/run_vertical_slice.py",
-      "scripts/ember_dispatch_token.py",
+      "src/ember/governance/scripts/ember_dispatch_token.py",
       "scripts/energy_proxy_logger.py",
       "src/ember/governance/scripts/run_attempt_registry.py"
     ],

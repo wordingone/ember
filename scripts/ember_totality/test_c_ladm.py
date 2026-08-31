@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_ladm.py — STATUS PROBE for Ember goal condition C-LADM.
 
-Registry text: docs/spec/conditions-v1.md sec 4.2 C-LADM (docs/domains/governance/authority/GOAL.md sec 1 item 1, "sec-1-1").
+Registry text: docs/domains/governance/spec/conditions-v1.md sec 4.2 C-LADM (docs/domains/governance/authority/GOAL.md sec 1 item 1, "sec-1-1").
 R: the verified-episode LEDGER admission rules -- world-provided ground truth (verifier
 verdict recorded), no self-admitted episodes, matched-control pool membership -- actually
 hold on every admitted row, not merely asserted in prose. Board CHK for the trust boundary
@@ -52,7 +52,7 @@ Rules enforced (recon dossier sec3, frozen 2026-07-04) and their mechanization:
      to catch).
   [RULING R5, control_pool.jsonl integrity, 2026-07-04] -- MACHINE-CHECKED, dual-source:
      this probe's OWN sha256 read of control_pool.jsonl taken immediately before and after
-     shelling out to scripts/ledger_dedup.py's existing byte-unchanged assertion (invoked
+     shelling out to src/ember/governance/scripts/ledger_dedup.py's existing byte-unchanged assertion (invoked
      against TEMP view/receipt outputs -- never the live receipts/ledger/views/ tree or a new
      receipts/ file -- so this probe never writes anywhere under the live ledger). If
      ledger_dedup.py cannot be invoked cleanly (env/path issue), that is disclosed as its own

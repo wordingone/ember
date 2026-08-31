@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-authority-supersession-crosswalk-v1",
   "repository": "wordingone/ember",
-  "source_commit": "40332a6af0f840c842416eef0e19c29ff062acb9",
+  "source_commit": "38982c56bbc453b73fec83e0cdb5e5cad7ab7a0f",
   "current_authority": {
     "matrix_path": "docs/authority/ember-authority-matrix.md",
     "matrix_sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db",
@@ -331,7 +331,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ]
@@ -449,7 +449,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ]
@@ -2732,7 +2732,7 @@
           "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -2757,7 +2757,7 @@
           "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -2782,7 +2782,7 @@
           "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -2807,7 +2807,7 @@
           "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -2832,7 +2832,7 @@
           "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -2857,7 +2857,7 @@
           "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3435,7 +3435,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3460,7 +3460,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3485,7 +3485,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3510,7 +3510,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3535,7 +3535,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3560,7 +3560,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -3585,7 +3585,7 @@
           "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
         },
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4530,14 +4530,14 @@
       "source_registry": "LEGACY-CONDITIONS",
       "source_id": "C-INV",
       "source_kind": "legacy_condition",
-      "statement": "- **C-INV — Constitutional invariant persisted, stamped, and chained.** R: docs/domains/governance/authority/INVARIANT.md exists at repo root with the canonical hash; docs/authority/GOAL.md pins the hash; every post-genesis artifact (manifest, receipt, board totality) carries the invariant_sha256 stamp and passes verification; board receipts chain by predecessor hash from genesis. Does NOT count: docs/domains/governance/authority/INVARIANT.md missing or hash mismatch (BREACH — not UNEVALUABLE — the receipt is written anyway with invariant_breach:true); post-genesis artifact unstamped or mis-stamped; chain link broken; incidents ledger missing or unaudited. ✗ `invariant_breach`, `invariant_unstamped_receipt`, `invariant_chain_broken`, `invariant_incidents_missing`. CHK (per `scripts/ember_totality/test_c_invariant.py`): docs/domains/governance/authority/INVARIANT.md file exists and hashes correctly to INVARIANT_SHA256; docs/authority/GOAL.md pin line matches; (genesis state) structure ready for post-genesis stamping; incident ledger structure ready.",
+      "statement": "- **C-INV — Constitutional invariant persisted, stamped, and chained.** R: docs/domains/governance/authority/INVARIANT.md exists at repo root with the canonical hash; docs/authority/GOAL.md pins the hash; every post-genesis artifact (manifest, receipt, board totality) carries the invariant_sha256 stamp and passes verification; board receipts chain by predecessor hash from genesis. Does NOT count: docs/domains/governance/authority/INVARIANT.md missing or hash mismatch (BREACH — not UNEVALUABLE — the receipt is written anyway with invariant_breach:true); post-genesis artifact unstamped or mis-stamped; chain link broken; incidents ledger missing or unaudited. ✗ `invariant_breach`, `invariant_unstamped_receipt`, `invariant_chain_broken`, `invariant_incidents_missing`. CHK (per `src/ember/governance/scripts/ember_totality/test_c_invariant.py`): docs/domains/governance/authority/INVARIANT.md file exists and hashes correctly to INVARIANT_SHA256; docs/authority/GOAL.md pin line matches; (genesis state) structure ready for post-genesis stamping; incident ledger structure ready.",
       "disposition": "SUPERSEDED",
       "targets": [
         "EMBER-04"
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4554,7 +4554,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4571,7 +4571,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4588,7 +4588,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4605,7 +4605,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4622,7 +4622,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4639,7 +4639,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4656,7 +4656,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4673,7 +4673,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4690,7 +4690,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4707,7 +4707,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4724,7 +4724,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4741,7 +4741,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4758,7 +4758,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4775,7 +4775,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4792,7 +4792,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4809,7 +4809,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4826,7 +4826,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4843,7 +4843,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4860,7 +4860,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4877,7 +4877,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4894,7 +4894,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4911,7 +4911,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4928,7 +4928,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4945,7 +4945,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4962,7 +4962,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4979,7 +4979,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -4996,7 +4996,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5013,7 +5013,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5030,7 +5030,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5047,7 +5047,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5064,7 +5064,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5081,7 +5081,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5098,7 +5098,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5115,7 +5115,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5132,7 +5132,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5149,7 +5149,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5166,7 +5166,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5183,7 +5183,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5200,7 +5200,7 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
@@ -5217,12 +5217,12 @@
       ],
       "evidence": [
         {
-          "path": "docs/spec/conditions-v1.md",
+          "path": "docs/domains/governance/spec/conditions-v1.md",
           "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
         }
       ],
       "completion_credit": false
     }
   ],
-  "crosswalk_sha256": "e8895820c1970b9a7733f68a96119a7f239b5e3e4df53d37a8f9a247c02e475e"
+  "crosswalk_sha256": "d7bb2d6286fef97f08c36cf0ccafe9bc7ebed8116a2da76c4c25b1f9e4bbd7b7"
 }
