@@ -252,7 +252,7 @@ fail MBPP+ extended, frontier 27.1% — receipt v-extended-20260610T215421Z).
 What raises soundness WITHOUT a model judge, and where does tightening stop
 paying?
 
-**Survey verdict (draft docs/research/drafts/fp2-v-ceiling-draft.md, gated):**
+**Survey verdict (draft docs/domains/governance/research/drafts/fp2-v-ceiling-draft.md, gated):**
 the draft's five-layer stack is directionally right but its cumulative-FPR
 table (22% → 3–6%) is UNVERIFIED estimation — no local receipt exists for
 any layer's reduction; adopted as hypothesis, never as a number. Two

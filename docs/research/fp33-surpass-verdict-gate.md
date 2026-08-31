@@ -2,7 +2,7 @@
 
 **Pre-registered before any leg receipt exists** (fp-39/fp-44 discipline). Scorer:
 `scripts/fp33_surpass_verdict.py` (`FP33_SURPASS_VERDICT_SELFTEST_PASS`, 17 cases).
-Contract frozen in `docs/archive/pre-restart/fp33-surpass-prereg-v1.md`; this doc holds the receipt
+Contract frozen in `docs/domains/governance/archive/pre-restart/fp33-surpass-prereg-v1.md`; this doc holds the receipt
 schema + the decision-machine notes. Decision logic is FROZEN in the scorer.
 
 ## Why this gate exists

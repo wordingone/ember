@@ -266,7 +266,7 @@ def test_condition_row_c0_no_longer_breaks_legacy_parse():
         text = completeness_path.read_text(encoding="utf-8")
         text += ("| C0 | S3 | No additional loops before resident-training preconditions "
                  "(registry: @docs/domains/governance/spec/conditions-v1.md) | per its own R:/CHK text in "
-                 "conditions-v1; probe scripts/ember_totality/test_c0.py | "
+                 "conditions-v1; probe src/ember/governance/scripts/ember_totality/test_c0.py | "
                  "— (none certified) | OPEN |\n")
         completeness_path.write_text(text, encoding="utf-8")
 

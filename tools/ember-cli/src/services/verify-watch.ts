@@ -25,7 +25,7 @@
 // (including the live repoRoot checkout the cockpit itself runs from) is never touched by
 // this pipeline and never needs to wait for it.
 //
-// Residual scope (disclosed, not fixed here -- see notes/1371-slice2-fingerprint-cache.md
+// Residual scope (disclosed, not fixed here -- see domains/governance/notes/1371-slice2-fingerprint-cache.md
 // in this issue's staging note): the custody census's OPERATOR-MACHINE roots (bound via
 // `/custody set`, e.g. `registered-worktree-registry` / `registered-worktree-material-
 // registry`) still read live machine paths outside the pinned worktree, because those

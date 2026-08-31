@@ -314,7 +314,7 @@
       "category": "parameter_identity",
       "evidence_sha256": "9ccd42b5fc38492cdac21dd2a0f4a88ee2e2eff77e0b9ca6596422bef291bbf0",
       "line": 858,
-      "path": "scripts/ember_c_e2b_paired_run.py",
+      "path": "src/ember/governance/scripts/ember_c_e2b_paired_run.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {

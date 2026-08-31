@@ -37,7 +37,7 @@ CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
         "scripts/ember_restart/contract.py",
         "src/ember/governance/scripts/ember_restart/prediction_contract.py",
         "scripts/ember_restart/seat_identity_bridge.py",
-        "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
+        "src/ember/governance/scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
         "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
         "tools/ember-restart-3b/parameter_counter.py",
         *_IDENTITY_STATIC_EVIDENCE,

@@ -16,7 +16,7 @@ LADDER RUNG THIS ANSWERS, quoted verbatim from docs/spec/ceff-lever-ladder.md
   composes with the bf16-NS5 dtype path -- an interaction that has never
   been tested (§c, C4)."
 
-  §(c) C4 measurement protocol: "re-run scripts/fp35_fused_muon_kernel_ab.py
+  §(c) C4 measurement protocol: "re-run src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py
   with the bf16-NS5 patch applied to the chain before compiling it; if the
   bench-shape cell keeps >=1.02x, integrate into a full production-recipe
   cell." Kill criterion: "compiled-bf16 cell <1.02x OR fails the existing
@@ -47,7 +47,7 @@ checked -- STRICTER than the June precedent, a strictly-added kill
 surface, never a tolerance retrofit.
 
 WHERE THE TWO LEGS LIVE (read, not re-derived)
-  Fused-kernel leg : scripts/fp35_fused_muon_kernel_ab.py -- wraps the NS5
+  Fused-kernel leg : src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py -- wraps the NS5
     chain in torch.compile(fn, mode="reduce-overhead", fullgraph=False).
     Measured 1.0885x / 1.0811x (two independent runs,
     receipts/fp35-fused-muon-kernel-ab-20260612T215202Z.json and

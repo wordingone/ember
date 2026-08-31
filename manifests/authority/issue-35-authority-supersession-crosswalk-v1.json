@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-authority-supersession-crosswalk-v1",
   "repository": "wordingone/ember",
-  "source_commit": "38982c56bbc453b73fec83e0cdb5e5cad7ab7a0f",
+  "source_commit": "63efa4298c7627dca385bbef208713a8d5bbba4b",
   "current_authority": {
     "matrix_path": "docs/authority/ember-authority-matrix.md",
     "matrix_sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db",
@@ -5224,5 +5224,5 @@
       "completion_credit": false
     }
   ],
-  "crosswalk_sha256": "d7bb2d6286fef97f08c36cf0ccafe9bc7ebed8116a2da76c4c25b1f9e4bbd7b7"
+  "crosswalk_sha256": "fe7ad6677a4790f3fec2937c7aee449921396cf8ce542135dddee9022ae77a7a"
 }

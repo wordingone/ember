@@ -154,7 +154,7 @@ def test_d04_authority_supersedes_d03_with_one_hash_pinned_text_manifest():
     assert record["schema"] == battery.R2_AUTHORITY_SCHEMA
     assert record["issue"] == 1498
     assert record["supersedes"] == {
-        "path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+        "path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
         "sha256": "e95de0f81900ef76d8d7a2b81e6147e631234016262d04073913b371dbeccd56",
     }
 

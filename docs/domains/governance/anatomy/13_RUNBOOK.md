@@ -25,7 +25,7 @@ Never `git worktree add` directly — see 02_REPO_TOPOLOGY.md.
 
 ```bash
 python scripts/ember_totality/test_c_proc.py
-python scripts/ember_totality/test_c_anat.py
+python src/ember/governance/scripts/ember_totality/test_c_anat.py
 ```
 Each probe prints exactly one `RED <reason>` / `GREEN <reason>` /
 `UNEVALUABLE <reason>` line and exits 0.

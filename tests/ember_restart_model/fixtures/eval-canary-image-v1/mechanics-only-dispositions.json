@@ -9,7 +9,7 @@
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_owned_vision_scenes.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_packed_specialist_probe.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_packed_specialist_run.py"},
-    {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_pretrain.py"},
+    {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/domain-governance/test_pretrain.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_sparse_successor.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_specialist_stream.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_training_acceleration.py"},

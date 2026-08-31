@@ -402,8 +402,8 @@ def test_d04_superseding_amendment_binds_single_authority_and_consumers() -> Non
 
     assert amendment["issue"] == 1498
     assert amendment["supersedes"] == {
-        "path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
-        "sha256": _sha((ROOT / "docs/spec/ember02-r2-cheap-probe-amendment-v1.json").read_bytes()),
+        "path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
+        "sha256": _sha((ROOT / "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json").read_bytes()),
     }
     assert amendment["decision"]["id"] == "D-04"
     assert amendment["decision"]["registry_state"] == "HASH_PINNED_TEXT_AUTHORITY"
