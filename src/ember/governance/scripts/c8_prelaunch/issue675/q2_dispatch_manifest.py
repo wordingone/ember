@@ -443,7 +443,7 @@ def build_dispatch_manifest(
         },
         # governed_vertical is not actually CPU-paced today (no enforcement lane exists yet)
         # and this producer spawns a headless training process -- truth-declared, not
-        # aspirational. See domains/runtime/runtime/ember-lab/src/lib.rs DispatchCpuPacingClass/
+        # aspirational. See runtime/ember-lab/src/lib.rs DispatchCpuPacingClass/
         # DispatchWindowContract.
         "cpu_pacing_class": "unpaced",
         "window_contract": "headless_no_windows",

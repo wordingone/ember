@@ -68,9 +68,9 @@ PRIVATE_TERM_REPLACEMENTS = (
 TRANSLATIONS = {
     (
         "EMBER-00",
-        f"Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile the verified discrepancies in `{PRIVATE_ROOT}\\avir\\{PRIMARY_FOUNDER.lower()}\\state\\ember-dissonance-ledger.md` into the highest amendable Ember authority without weakening or rewriting `docs/domains/governance/authority/INVARIANT.md`.",
+        f"Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile the verified discrepancies in `{PRIVATE_ROOT}\\avir\\{PRIMARY_FOUNDER.lower()}\\state\\ember-dissonance-ledger.md` into the highest amendable Ember authority without weakening or rewriting `docs/authority/INVARIANT.md`.",
     ): (
-        "Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile every verified discrepancy in the preserved discrepancy ledger and its content-addressed evidence into the highest amendable Ember authority without weakening or rewriting `docs/domains/governance/authority/INVARIANT.md`."
+        "Make Ember's governing surfaces describe one exact project: the sovereign foundation intelligence, the creation primitive, the organism, its body, and the general local AI laboratory. Reconcile every verified discrepancy in the preserved discrepancy ledger and its content-addressed evidence into the highest amendable Ember authority without weakening or rewriting `docs/authority/INVARIANT.md`."
     ),
     (
         "EMBER-00",

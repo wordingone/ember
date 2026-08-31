@@ -21,7 +21,7 @@ never from a spec's prose or a model's self-report:
                                  ADDITIONALLY (identity-manifest binding, closes a verified
                                  laundering gap): the receipt must name an `identity_manifest`
                                  field whose target validates cleanly through
-                                 `src/ember/governance/scripts/ember_01_identity/validate_identity.py`'s
+                                 `scripts/ember_01_identity/validate_identity.py`'s
                                  `validate_manifest` — a hand-authored receipt with no bound,
                                  validated identity does not satisfy this conjunct regardless
                                  of its earned metric.
@@ -52,7 +52,7 @@ never from a spec's prose or a model's self-report:
                                  ADDITIONALLY (identity-manifest binding, closes a verified
                                  laundering gap): the receipt must name an `identity_manifest`
                                  field whose target validates cleanly through
-                                 `src/ember/governance/scripts/ember_01_identity/validate_identity.py`'s
+                                 `scripts/ember_01_identity/validate_identity.py`'s
                                  `validate_manifest` — otherwise the outer-pass/param/real-world
                                  shape rides in with no validated claim of WHICH model produced
                                  it, and this conjunct stays RED.
@@ -258,7 +258,7 @@ def resolve_local_ref(ref):
 # no validation of WHICH model produced it). Shared by conjuncts (b) earned_growth_rung and
 # (d) bootstrap_pass_real_world: a capability receipt qualifies for either conjunct only if
 # it ALSO names an `identity_manifest` field whose target validates cleanly through
-# src/ember/governance/scripts/ember_01_identity/validate_identity.py's validate_manifest. Fails CLOSED: no
+# scripts/ember_01_identity/validate_identity.py's validate_manifest. Fails CLOSED: no
 # `identity_manifest` field, an unimportable validator, an unreadable/unparseable manifest
 # file, or any IdentityValidationError finding all resolve to ok=False with a stated reason
 # -- never a silent pass and never a crash.
@@ -271,13 +271,13 @@ def _check_identity_manifest(receipt):
         return False, "receipt names no identity_manifest field"
 
     try:
-        # issue2015 exact-local-import:src/ember/governance/scripts/ember_01_identity/validate_identity.py
+        # issue2015 exact-local-import:scripts/ember_01_identity/validate_identity.py
         import importlib.util as _ember_f289ed8a6472ef21_importlib
         import sys as _ember_f289ed8a6472ef21_sys
         from pathlib import Path as _ember_f289ed8a6472ef21_Path
         _ember_f289ed8a6472ef21_path = _ember_f289ed8a6472ef21_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'validate_identity.py')
         if not _ember_f289ed8a6472ef21_path.is_file():
-            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_01_identity/validate_identity.py')
         _ember_f289ed8a6472ef21_aliases = ('_ember_issue2015_f289ed8a6472ef21', 'ember_01_identity.validate_identity', 'scripts.ember_01_identity.validate_identity', 'validate_identity')
         _ember_f289ed8a6472ef21_existing = []
         for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
@@ -285,21 +285,21 @@ def _check_identity_manifest(receipt):
             if _ember_f289ed8a6472ef21_candidate is not None and all(_ember_f289ed8a6472ef21_candidate is not item for item in _ember_f289ed8a6472ef21_existing):
                 _ember_f289ed8a6472ef21_existing.append(_ember_f289ed8a6472ef21_candidate)
         if len(_ember_f289ed8a6472ef21_existing) > 1:
-            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_01_identity/validate_identity.py')
         if _ember_f289ed8a6472ef21_existing:
             _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_existing[0]
             _ember_f289ed8a6472ef21_observed = getattr(_ember_f289ed8a6472ef21_module, '__file__', None)
             if _ember_f289ed8a6472ef21_observed is None or _ember_f289ed8a6472ef21_Path(_ember_f289ed8a6472ef21_observed).resolve() != _ember_f289ed8a6472ef21_path:
-                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_01_identity/validate_identity.py')
         else:
             _ember_f289ed8a6472ef21_spec = _ember_f289ed8a6472ef21_importlib.spec_from_file_location('_ember_issue2015_f289ed8a6472ef21', _ember_f289ed8a6472ef21_path)
             if _ember_f289ed8a6472ef21_spec is None or _ember_f289ed8a6472ef21_spec.loader is None:
-                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_01_identity/validate_identity.py')
             _ember_f289ed8a6472ef21_module = _ember_f289ed8a6472ef21_importlib.module_from_spec(_ember_f289ed8a6472ef21_spec)
             for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
                 _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
                 if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
-                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_01_identity/validate_identity.py')
                 _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
             try:
                 _ember_f289ed8a6472ef21_spec.loader.exec_module(_ember_f289ed8a6472ef21_module)
@@ -311,11 +311,11 @@ def _check_identity_manifest(receipt):
         for _ember_f289ed8a6472ef21_alias in _ember_f289ed8a6472ef21_aliases:
             _ember_f289ed8a6472ef21_prior = _ember_f289ed8a6472ef21_sys.modules.get(_ember_f289ed8a6472ef21_alias)
             if _ember_f289ed8a6472ef21_prior is not None and _ember_f289ed8a6472ef21_prior is not _ember_f289ed8a6472ef21_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_identity/validate_identity.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_01_identity/validate_identity.py')
             _ember_f289ed8a6472ef21_sys.modules[_ember_f289ed8a6472ef21_alias] = _ember_f289ed8a6472ef21_module
         IdentityValidationError = getattr(_ember_f289ed8a6472ef21_module, 'IdentityValidationError')
         validate_manifest = getattr(_ember_f289ed8a6472ef21_module, 'validate_manifest')
-        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_identity/validate_identity.py
+        # issue2015 exact-local-import-end:scripts/ember_01_identity/validate_identity.py
     except Exception as e:  # noqa: BLE001 — fail-closed on any import defect
         return False, f"identity validator unavailable: {type(e).__name__}: {e}"
 
@@ -1234,7 +1234,7 @@ def _selftest():
 
     # Read the real valid-identity manifest fixture BEFORE REPO_ROOT is repointed at the
     # temp workspace below, so the identity-manifest-binding fixtures validate through the
-    # real src/ember/governance/scripts/ember_01_identity/validate_identity.py against the real positive fixture
+    # real scripts/ember_01_identity/validate_identity.py against the real positive fixture
     # — never a hand-rolled stand-in.
     valid_identity_manifest_text = (
         orig_root / "tests" / "ember_01_identity" / "fixtures" / "valid-identity-v1.json"

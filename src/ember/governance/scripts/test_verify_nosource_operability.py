@@ -47,7 +47,7 @@ def _write(path: Path, content: str) -> None:
 def _minimal_ember_root(root: Path) -> None:
     """Root markers only -- no launcher, no registered commands. Every test
     below adds exactly the artifacts its scenario needs on top of this."""
-    _write(root / "docs/domains/governance/authority/INVARIANT.md", "placeholder\n")
+    _write(root / "docs/authority/INVARIANT.md", "placeholder\n")
     _write(root / "docs/domains/governance/authority/GOAL.md", "placeholder\n")
     _write(
         root / "tools/ember-cli/src/package.json",

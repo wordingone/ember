@@ -73,7 +73,7 @@ def test_motion_requires_explicit_predecessor_authority(tmp_path):
         "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
         encoding="utf-8",
     )
-    (tmp_path / "docs/domains/governance/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
+    (tmp_path / "docs/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "authority"], cwd=tmp_path, check=True)
     manifest_path, manifest_sha = build_run_import_manifest(tmp_path, ["CUDA kernels (cuBLAS matmul, elementwise)"], output_path=tmp_path / "manifest.json")
@@ -143,7 +143,7 @@ def test_motion_cli_accepts_explicit_predecessor_authority_roundtrip(tmp_path):
         "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
         encoding="utf-8",
     )
-    (tmp_path / "docs/domains/governance/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
+    (tmp_path / "docs/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "cli-authority"], cwd=tmp_path, check=True)
     manifest_path, manifest_sha = build_run_import_manifest(
@@ -177,7 +177,7 @@ def test_board_rejects_cross_producer_predecessor(tmp_path):
         "| CUDA kernels (cuBLAS matmul, elementwise) | x | component |\n",
         encoding="utf-8",
     )
-    (tmp_path / "docs/domains/governance/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
+    (tmp_path / "docs/authority/INVARIANT.md").write_text("owned", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-qm", "board-authority"], cwd=tmp_path, check=True)
     manifest_path, manifest_sha = build_run_import_manifest(

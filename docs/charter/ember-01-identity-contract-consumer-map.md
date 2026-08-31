@@ -12,7 +12,7 @@ canonical checkpoint, authorize a network, or modify a production consumer.
 
 The machine schema is
 `manifests/ember-01-identity/schema-v1.json`. The executable semantics are in
-`src/ember/governance/scripts/ember_01_identity/validate_identity.py`. The schema closes the set of
+`scripts/ember_01_identity/validate_identity.py`. The schema closes the set of
 fields; the validator enforces relationships that JSON Schema cannot express.
 The runtime validator loads this exact checked-in schema and reports
 `schema.validation` findings before applying semantic admission rules; the CLI
@@ -280,8 +280,8 @@ The machine receipt is `consumer-census-stability-v1.json`.
 
 ```text
 python -B -m pytest -q -p no:cacheprovider tests/ember_01_identity
-python -B src/ember/governance/scripts/ember_01_identity/census_consumers.py --root . --root-locator-spec manifests/ember-01-identity/consumer-census-roots-v1.json --replay-profile portable --semantics-manifest manifests/ember-01-identity/consumer-semantics-v1.json --consumer-scope manifests/ember-01-identity/consumer-scope-v1.json --adjudication-manifest manifests/ember-01-identity/consumer-adjudication-v1.json --output <portable-output.json>
-python -B src/ember/governance/scripts/ember_01_identity/validate_identity.py tests/ember_01_identity/fixtures/valid-identity-v1.json
+python -B scripts/ember_01_identity/census_consumers.py --root . --root-locator-spec manifests/ember-01-identity/consumer-census-roots-v1.json --replay-profile portable --semantics-manifest manifests/ember-01-identity/consumer-semantics-v1.json --consumer-scope manifests/ember-01-identity/consumer-scope-v1.json --adjudication-manifest manifests/ember-01-identity/consumer-adjudication-v1.json --output <portable-output.json>
+python -B scripts/ember_01_identity/validate_identity.py tests/ember_01_identity/fixtures/valid-identity-v1.json
 ```
 
 The portable replay requires no host-root environment variables. Full

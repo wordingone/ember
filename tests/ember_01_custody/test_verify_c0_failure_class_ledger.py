@@ -34,7 +34,7 @@ def _closed_guarded_row(class_id: str) -> dict:
         "title": f"{class_id} title",
         "birth_relevance": f"{class_id} birth relevance",
         "state": "CLOSED_GUARDED",
-        "guard_ref": "src/ember/governance/scripts/ember_01_custody/census.py:build_root_census",
+        "guard_ref": "scripts/ember_01_custody/census.py:build_root_census",
         "guard_kind": "test",
         "evidence": "synthetic test row",
     }
@@ -114,7 +114,7 @@ def test_dangling_guard_ref_is_red_before_fix(tmp_path: Path) -> None:
 
 def test_dangling_guard_ref_fixed_by_pointing_at_real_symbol(tmp_path: Path) -> None:
     ledger = _complete_all_closed_ledger()
-    ledger["classes"][0]["guard_ref"] = "src/ember/governance/scripts/ember_01_custody/census.py:build_root_census"
+    ledger["classes"][0]["guard_ref"] = "scripts/ember_01_custody/census.py:build_root_census"
     ledger_path = tmp_path / "ledger.json"
     ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
 
@@ -126,7 +126,7 @@ def test_dangling_guard_ref_fixed_by_pointing_at_real_symbol(tmp_path: Path) -> 
 
 def test_dangling_guard_ref_missing_symbol_in_real_file_is_red(tmp_path: Path) -> None:
     ledger = _complete_all_closed_ledger()
-    ledger["classes"][0]["guard_ref"] = "src/ember/governance/scripts/ember_01_custody/census.py:this_symbol_does_not_exist"
+    ledger["classes"][0]["guard_ref"] = "scripts/ember_01_custody/census.py:this_symbol_does_not_exist"
     ledger_path = tmp_path / "ledger.json"
     ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
 
@@ -284,7 +284,7 @@ def test_blocking_row_with_guard_ref_is_red() -> None:
     ledger = _complete_all_closed_ledger()
     a_class = ledger["classes"][0]["class_id"]
     row = _blocking_row(a_class)
-    row["guard_ref"] = "src/ember/governance/scripts/ember_01_custody/census.py:build_root_census"
+    row["guard_ref"] = "scripts/ember_01_custody/census.py:build_root_census"
     ledger["classes"][0] = row
 
     verdict_errors, normalized = _validate_row_shim(row)
@@ -440,7 +440,7 @@ def test_non_test_guard_ref_skips_collectability_probe(tmp_path: Path) -> None:
     census.py:build_root_census) is out of scope for the collectability probe and
     keeps the prior bytes+symbol-only behavior -- never pytest-collected."""
     ledger = _complete_all_closed_ledger()
-    ledger["classes"][0]["guard_ref"] = "src/ember/governance/scripts/ember_01_custody/census.py:build_root_census"
+    ledger["classes"][0]["guard_ref"] = "scripts/ember_01_custody/census.py:build_root_census"
     ledger_path = tmp_path / "ledger.json"
     ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
 

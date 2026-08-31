@@ -67,7 +67,7 @@
       "state": "CLOSED_GUARDED",
       "guard_ref": "tests/ember_01_custody/test_crash_survival_guard.py:test_resume_guard_mutation_guard_is_load_bearing",
       "guard_kind": "test",
-      "evidence": "scripts/ember_01_custody/crash_survival_guard.py:resume_guard -- the named-missing synthetic-crash resume probe, built on top of the existing checkpoint save/load identity binding (src/ember/governance/scripts/ember_01_identity/checkpoint_save_load_identity_binding.py:measure_checkpoint_identity, reused directly, never reimplemented) rather than a new identity mechanism. simulate_mid_crash_write() produces a genuine mid-crash artifact: a real torch checkpoint (multi-tensor, saved with torch.save) truncated to a fraction of its original byte length -- exactly what a process killed mid-fwrite (OOM-kill, native crash, power loss) leaves on disk. resume_guard() attempts to measure the shard via the trusted binding path and returns REJECTED (never an uncaught exception a caller could skip past) when the shard cannot be safely measured -- the shape a truncated write always takes. Regression suite tests/ember_01_custody/test_crash_survival_guard.py (11 tests, zero real Ember checkpoints, zero GPU): a complete checkpoint is ACCEPTED; truncation at 0%/10%/50%/90%/99% of the original length is REJECTED in every case; a missing checkpoint path is REJECTED as a resume-time verdict, not an exception; simulate_mid_crash_write fails closed on an out-of-range truncate_fraction; CLI exit-code parity; and a mutation-proof test (test_resume_guard_mutation_guard_is_load_bearing) showing the same mid-crash-truncated checkpoint is wrongly ACCEPTED if the fail-closed except clause is neutralized to swallow the identity-mismatch signal."
+      "evidence": "scripts/ember_01_custody/crash_survival_guard.py:resume_guard -- the named-missing synthetic-crash resume probe, built on top of the existing checkpoint save/load identity binding (scripts/ember_01_identity/checkpoint_save_load_identity_binding.py:measure_checkpoint_identity, reused directly, never reimplemented) rather than a new identity mechanism. simulate_mid_crash_write() produces a genuine mid-crash artifact: a real torch checkpoint (multi-tensor, saved with torch.save) truncated to a fraction of its original byte length -- exactly what a process killed mid-fwrite (OOM-kill, native crash, power loss) leaves on disk. resume_guard() attempts to measure the shard via the trusted binding path and returns REJECTED (never an uncaught exception a caller could skip past) when the shard cannot be safely measured -- the shape a truncated write always takes. Regression suite tests/ember_01_custody/test_crash_survival_guard.py (11 tests, zero real Ember checkpoints, zero GPU): a complete checkpoint is ACCEPTED; truncation at 0%/10%/50%/90%/99% of the original length is REJECTED in every case; a missing checkpoint path is REJECTED as a resume-time verdict, not an exception; simulate_mid_crash_write fails closed on an out-of-range truncate_fraction; CLI exit-code parity; and a mutation-proof test (test_resume_guard_mutation_guard_is_load_bearing) showing the same mid-crash-truncated checkpoint is wrongly ACCEPTED if the fail-closed except clause is neutralized to swallow the identity-mismatch signal."
     },
     {
       "class_id": "TEXT_LAB_DATA_AUTHORITY",
@@ -76,7 +76,7 @@
       "state": "CLOSED_GUARDED",
       "guard_ref": "tests/ember_01_custody/test_text_lab_data_authority_guard.py:test_authority_comparison_mutation_guard_is_load_bearing",
       "guard_kind": "test",
-      "evidence": "scripts/ember_01_custody/text_lab_data_authority_guard.py:verify_shard_census_authority -- the named-missing cycle-start cross-reference. The existing admission consumer (src/ember/governance/scripts/ember_01_identity/validate_identity.py, accepted_input / admission.training_input_authority) binds ONE claim per whole checkpoint at admission time; it never checks that every INDIVIDUAL shard a training cycle is about to consume carries that same authority. This guard closes that gap: given a receipted training-shard census (schema ember-training-shard-census-v1: cycle_id + a non-empty list of shard_id/authority_id/input_id triples) it fails closed unless EVERY shard's authority_id and input_id exactly equal the live accepted-training-input-authorities-v1.json registry's active CURRENT_EXECUTABLE authority -- reusing validate_identity._pinned_accepted_training_input() directly (never a reimplementation) so this guard can never drift from what the production admission consumer accepts. Regression suite tests/ember_01_custody/test_text_lab_data_authority_guard.py (16 tests, zero live lab data -- census fixtures are synthetic shard-source declarations, not real training shard bytes): all-shards-bound-to-active-authority accepted; a single stale/mismatched/missing authority_id or input_id on any one shard REJECTED naming that shard; empty shard list and malformed census schema REJECTED (never vacuously accepted); live-registry round-trip through the file-driven CLI entry point (cycle_start_guard); and a mutation-proof test (test_authority_comparison_mutation_guard_is_load_bearing) showing a genuinely stale-authority shard is wrongly ACCEPTED if the per-shard comparison is neutralized."
+      "evidence": "scripts/ember_01_custody/text_lab_data_authority_guard.py:verify_shard_census_authority -- the named-missing cycle-start cross-reference. The existing admission consumer (scripts/ember_01_identity/validate_identity.py, accepted_input / admission.training_input_authority) binds ONE claim per whole checkpoint at admission time; it never checks that every INDIVIDUAL shard a training cycle is about to consume carries that same authority. This guard closes that gap: given a receipted training-shard census (schema ember-training-shard-census-v1: cycle_id + a non-empty list of shard_id/authority_id/input_id triples) it fails closed unless EVERY shard's authority_id and input_id exactly equal the live accepted-training-input-authorities-v1.json registry's active CURRENT_EXECUTABLE authority -- reusing validate_identity._pinned_accepted_training_input() directly (never a reimplementation) so this guard can never drift from what the production admission consumer accepts. Regression suite tests/ember_01_custody/test_text_lab_data_authority_guard.py (16 tests, zero live lab data -- census fixtures are synthetic shard-source declarations, not real training shard bytes): all-shards-bound-to-active-authority accepted; a single stale/mismatched/missing authority_id or input_id on any one shard REJECTED naming that shard; empty shard list and malformed census schema REJECTED (never vacuously accepted); live-registry round-trip through the file-driven CLI entry point (cycle_start_guard); and a mutation-proof test (test_authority_comparison_mutation_guard_is_load_bearing) showing a genuinely stale-authority shard is wrongly ACCEPTED if the per-shard comparison is neutralized."
     },
     {
       "class_id": "CHECKPOINT_SHARD_CONTRADICTION",
@@ -92,7 +92,7 @@
       "title": "R1 / RECORD-COHERENT: custody-root census incomplete",
       "birth_relevance": "EMBER-01 leg 1 (R1 subset): an operator-machine root that is claimed as custody but never bound in the census is an unverifiable authority claim, violating R1 (no external loss/reward masquerading as owned signal).",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "src/ember/governance/scripts/ember_01_custody/census.py:build_root_census",
+      "guard_ref": "scripts/ember_01_custody/census.py:build_root_census",
       "guard_kind": "test",
       "evidence": "PR #809, PR #810; tests/ember_01_custody/test_census.py (build_root_census exercised on resolved/unresolved/empty-string roots)"
     },
@@ -101,7 +101,7 @@
       "title": "R2 / RECORD-COHERENT: artifact custody census incomplete",
       "birth_relevance": "EMBER-01 leg 2 (R2 subset): a benchmark or receipt claimed as evidence whose cited path is untracked, unparseable, or missing a direct mandate is not real custody, violating R2 (the update signal must be the computation, not an assertion).",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "src/ember/governance/scripts/ember_01_custody/census.py:validate_benchmark_registry",
+      "guard_ref": "scripts/ember_01_custody/census.py:validate_benchmark_registry",
       "guard_kind": "test",
       "evidence": "PR #810; tests/ember_01_custody/test_census.py (validate_benchmark_registry exercised for direct-mandate-missing and malformed-registry cases)"
     },
@@ -110,9 +110,9 @@
       "title": "R3 / RECORD-COHERENT: identity round-trip on an owned checkpoint",
       "birth_relevance": "EMBER-01 leg 3 (R3 subset): an owned checkpoint whose identity manifest cannot round-trip (or that a tampered checkpoint still validates) breaks the fail-closed identity binding, violating R3 (self-modification must change behavior traceably).",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
+      "guard_ref": "scripts/ember_01_identity/validate_identity.py",
       "guard_kind": "test",
-      "evidence": "PR #809; tests/ember_01_identity/test_validate_identity.py; EMBER-01 leg 3/leg 4 (identity fail-closed on tampered checkpoint) in src/ember/governance/scripts/verify_ember01_completion.py"
+      "evidence": "PR #809; tests/ember_01_identity/test_validate_identity.py; EMBER-01 leg 3/leg 4 (identity fail-closed on tampered checkpoint) in scripts/verify_ember01_completion.py"
     },
     {
       "class_id": "R8_AUTHORITY_CONSERVATION",
@@ -128,7 +128,7 @@
       "title": "R9 / RECORD-COHERENT: public issue census freeze",
       "birth_relevance": "EMBER-01 leg 9 (R9 subset): an unfrozen or unreconciled public-issue disposition ledger lets a closed-in-word issue remain open-in-fact (or vice versa), corrupting the one-ground-truth issue record R9 requires.",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "src/ember/governance/scripts/ember_01_custody/issue_census.py",
+      "guard_ref": "scripts/ember_01_custody/issue_census.py",
       "guard_kind": "test",
       "evidence": "PR #810; tests/ember_01_custody/test_issue_census.py (master-blob binding, closure-proof rejection, content-bound snapshot recompute)"
     }

@@ -348,7 +348,7 @@ REQUESTED_SCOPE_KEYS = {
     "artifact_root",
     "custody_root",
 }
-# Mirrors the EXACT emission of src/ember/governance/scripts/verify_ember01_completion.py (the
+# Mirrors the EXACT emission of scripts/verify_ember01_completion.py (the
 # producer is the source of truth): top-level goal_id is the ACTIVE goal
 # ("EMBER-02"); the EMBER-01 subject binding is completion_subject_goal_id.
 COMPLETION_RECEIPT_KEYS = {
@@ -367,7 +367,7 @@ COMPLETION_RECEIPT_KEYS = {
     "selection",
     "authority_certificate",
 }
-# src/ember/governance/scripts/verify_ember01_completion.py RESOLVED_TRUE -- lowercase-hyphen form.
+# scripts/verify_ember01_completion.py RESOLVED_TRUE -- lowercase-hyphen form.
 COMPLETION_LEG_RESOLVED_TRUE = "resolved-true"
 
 # Mirrors the receipt runtime/ember-lab/src/training_verify.rs::run assembles.
@@ -388,16 +388,16 @@ TRAINING_VERIFY_RECEIPT_KEYS = {
     "ember_lab_source_sha256",
 }
 
-# Must remain byte-identical to domains/runtime/runtime/ember-lab/src/lib.rs::
+# Must remain byte-identical to runtime/ember-lab/src/lib.rs::
 # `ember_lab_source_hash`.  The Rust producer hashes these seven embedded
 # files in this order, prefixing each payload with its little-endian u64 byte
 # length.  Re-deriving the value here makes the receipt's self-identity
 # fields load-bearing at the launch consumer rather than merely present.
 EMBER_LAB_SOURCE_RELATIVE_PATHS = (
-    "domains/runtime/runtime/ember-lab/src/lib.rs",
+    "runtime/ember-lab/src/lib.rs",
     "runtime/ember-lab/src/data_catalog.rs",
     "runtime/ember-lab/src/rpc.rs",
-    "domains/runtime/runtime/ember-lab/src/main.rs",
+    "runtime/ember-lab/src/main.rs",
     "runtime/ember-lab/src/training_verify.rs",
     "runtime/ember-lab/Cargo.toml",
     "runtime/ember-lab/Cargo.lock",

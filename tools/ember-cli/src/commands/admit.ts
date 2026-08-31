@@ -66,7 +66,7 @@ const CLAIM_BOUNDARY = [
 export const ADMISSION_CONSUMER_COMMANDS = {
   identity: [
     "python",
-    "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
+    "scripts/ember_01_identity/validate_identity.py",
     "role:identity_manifest",
     "--checkpoint",
     "role:checkpoint",
@@ -91,7 +91,7 @@ export const ADMISSION_CONSUMER_COMMANDS = {
   ],
 } as const;
 const ADMISSION_CONSUMER_ENTRYPOINTS = {
-  identity: "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
+  identity: "scripts/ember_01_identity/validate_identity.py",
   restart: "src/ember/governance/scripts/ember_restart/cli_seat.py",
 } as const;
 function canonicalJson(value: unknown): string {

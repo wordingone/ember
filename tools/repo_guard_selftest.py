@@ -55,7 +55,7 @@ GUARD_SUPPORT_FILES = [
     "scripts/oldest_issue_disposition.py",
     "src/ember/governance/scripts/receipt_check.py",
     "tools/frozen-receipt-exceptions.json",
-    "docs/domains/governance/authority/INVARIANT.md",
+    "docs/authority/INVARIANT.md",
     "docs/domains/governance/authority/STATE.md",
     "docs/authority/GOVERNANCE.md",
     "README.md",
@@ -260,6 +260,11 @@ def run_guard_from_trusted_kernel(
     return proc.returncode, proc.stdout + proc.stderr
 
 
+def hashed_denylist_path(root: Path) -> Path:
+    path = root / "src" / "ember" / "infrastructure" / "tools" / "repo-guard-denylist.sha256"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
 def make_split_kernel(test_word: str) -> Path:
     """Build the smallest real trusted kernel with a test-only hashed denylist."""
     kernel = Path(tempfile.mkdtemp(prefix="repo-guard-kernel-"))
@@ -276,7 +281,7 @@ def make_split_kernel(test_word: str) -> Path:
         target = kernel / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
-    (kernel / "tools" / "repo-guard-denylist.sha256").write_text(
+    hashed_denylist_path(kernel).write_text(
         hashlib.sha256(test_word.encode("utf-8")).hexdigest() + "\n",
         encoding="utf-8",
         newline="\n",
@@ -298,7 +303,7 @@ def test_red_name_via_hash_match():
     tmp = make_fixture("fix/selftest-red-name")
     try:
         test_word = "widgetcotestonly"  # single token: the checker splits on non-letters
-        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashed_denylist_path(tmp).write_text(
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
@@ -723,7 +728,7 @@ def test_green_invalid_branch_is_advisory_for_exact_open_pr_head():
 def test_green_hashed_denylist_no_match():
     tmp = make_fixture("fix/selftest-green-hashed")
     try:
-        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashed_denylist_path(tmp).write_text(
             sha256_lower("somenamethatneverappears") + "\n", encoding="utf-8", newline="\n",
         )
         (tmp / "docs").mkdir(exist_ok=True)
@@ -765,7 +770,7 @@ def test_red_name_outside_exclude_scope():
     tmp = make_fixture("fix/selftest-red-outside-exclude")
     try:
         test_word = "widgetcotestonly"
-        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashed_denylist_path(tmp).write_text(
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
@@ -792,7 +797,7 @@ def test_green_name_inside_excluded_path():
     tmp = make_fixture("fix/selftest-green-excluded-path")
     try:
         test_word = "widgetcotestonly"
-        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashed_denylist_path(tmp).write_text(
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
@@ -817,7 +822,7 @@ def test_green_name_inside_excluded_path():
 def test_ci_fail_closed_empty_hashed_denylist():
     tmp = make_fixture("fix/selftest-ci-empty-hashed")
     try:
-        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashed_denylist_path(tmp).write_text(
             "# only comments, no real entries\n", encoding="utf-8", newline="\n",
         )
         (tmp / "docs").mkdir(exist_ok=True)
@@ -867,7 +872,7 @@ def test_trusted_kernel_ignores_subject_guard_and_helpers():
             encoding="utf-8",
             newline="\n",
         )
-        (tmp / "docs/domains/governance/authority/INVARIANT.md").unlink()
+        (tmp / "docs/authority/INVARIANT.md").unlink()
         commit_fixture(tmp)
 
         rc, out = run_guard_from_trusted_kernel(
@@ -1334,7 +1339,7 @@ def test_red_names_hashed_staged_bypass_worktree_restore():
     tmp = make_fixture("fix/selftest-red-names-hashed-staged-bypass")
     try:
         test_word = "widgetcotestonly"
-        (tmp / "tools" / "repo-guard-denylist.sha256").write_text(
+        hashed_denylist_path(tmp).write_text(
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )

@@ -11,4 +11,4 @@ They cannot create technical evidence by declaration.
 Smallest safe verification: run the CPU-only authority command in the
 [verification guide](../../guides/VERIFY.md). Canonical mutable state is
 [`docs/authority/CONTINUITY.md`](../../authority/CONTINUITY.md), and unamendable identity is
-[`docs/domains/governance/authority/INVARIANT.md`](../../authority/INVARIANT.md).
+[`docs/authority/INVARIANT.md`](../../authority/INVARIANT.md).

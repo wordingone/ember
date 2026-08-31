@@ -60,7 +60,7 @@
           "size_bytes": 277
         }
       ],
-      "path": "src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py",
+      "path": "scripts/ember_01_identity/parameter_identity_binding.py",
       "roots": [
         "measure_live_checkpoint",
         "verify_parameter_identity_binding"
@@ -489,7 +489,7 @@
           "size_bytes": 3111
         }
       ],
-      "path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
+      "path": "scripts/ember_01_identity/validate_identity.py",
       "roots": [
         "main"
       ],
@@ -774,7 +774,7 @@
           "size_bytes": 98
         }
       ],
-      "path": "src/ember/governance/scripts/verify_ember01_completion.py",
+      "path": "scripts/verify_ember01_completion.py",
       "roots": [
         "_cond4_execution_evidence",
         "_cond4_surface_manifest",

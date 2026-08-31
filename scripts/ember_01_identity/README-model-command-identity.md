@@ -8,13 +8,13 @@
 
 `tools/ember-cli/src/commands/model.ts` binds the operator-facing `/model status` and
 `/model load` surfaces to checkpoint identity by spawning
-`src/ember/governance/scripts/ember_01_identity/validate_identity.py` as a subprocess (`_resolveModelIdentity`).
+`scripts/ember_01_identity/validate_identity.py` as a subprocess (`_resolveModelIdentity`).
 This document is the contract between the two sides.
 
 ## Invocation
 
 ```
-<python> src/ember/governance/scripts/ember_01_identity/validate_identity.py <manifestPath> [--checkpoint <checkpointPath>]
+<python> scripts/ember_01_identity/validate_identity.py <manifestPath> [--checkpoint <checkpointPath>]
 ```
 
 - `<python>` — `EMBER_PYTHON_BIN` env override, default `python` (matches the convention in
@@ -48,7 +48,7 @@ envelope collapses to a single `null` return.
 **any** of the following holds:
 
 - the manifest file does not exist at `manifestPath`
-- `src/ember/governance/scripts/ember_01_identity/validate_identity.py` does not exist at the resolved repo root
+- `scripts/ember_01_identity/validate_identity.py` does not exist at the resolved repo root
 - the subprocess throws, times out (30s), or exits non-zero
 - stdout is not parseable JSON
 - the parsed payload's `ok` field is not literally `true`

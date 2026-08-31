@@ -180,7 +180,7 @@ class EvalCanaryImageContractTests(unittest.TestCase):
         disposition = json.loads(DISPOSITIONS.read_text(encoding="utf-8"))
         expected_paths = {
             path.relative_to(ROOT).as_posix()
-            for path in (ROOT / "tests" / "ember_restart_model").glob("test_*.py")
+            for path in (ROOT / "tests" / "ember_restart_model").rglob("test_*.py")
             if path.resolve() != Path(__file__).resolve()
             and (
                 "image_patches" in path.read_text(encoding="utf-8")
