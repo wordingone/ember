@@ -139,7 +139,15 @@ else
   FAIL=1
 fi
 
-# ---- 1d. redaction tokens must never become executable formatting syntax --
+# ---- 1d. repository data-manifest path bindings must resolve and hash ----
+if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" \
+  "$KERNEL_ROOT/tools/ember-restart-3b/check_manifest_path_bindings.py" --root "$SUBJECT_ROOT"; then
+  :
+else
+  FAIL=1
+fi
+
+# ---- 1e. redaction tokens must never become executable formatting syntax --
 # Frozen receipts/prose may truthfully mention placeholders. The trusted
 # checker rejects only the runtime-crashing boundary: a redacted token used as
 # a percent-format or str.format operand (issue #502).
