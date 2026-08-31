@@ -5,7 +5,7 @@
 `INVARIANT.md` is Ember's sole unamendable identity surface. `GOAL.md` is the
 highest amendable authority beneath it: "Lower-precedence files may implement
 and test it; they cannot reduce, defer, replace, or reinterpret it" (GOAL.md
-line 4-5). `docs/spec/conditions-v1.md` holds the machine-checkable condition
+line 4-5). `docs/domains/governance/spec/conditions-v1.md` holds the machine-checkable condition
 registry that implements GOAL.md's completion bar.
 
 ## The EMBER_AUTHORITY_V1 block

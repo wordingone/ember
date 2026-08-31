@@ -60,7 +60,7 @@ Run only `test_host_setup_contract.py`, then the whole
 **Files:**
 
 - Modify: `runtime/ember-lab/src/lib.rs`
-- Modify: `scripts/ember_dispatch_token.py`
+- Modify: `src/ember/governance/scripts/ember_dispatch_token.py`
 - Modify: `scripts/tests/test_ember_dispatch_token.py`
 - Modify: `runtime/ember-lab/tests/dispatch_manifest.rs`
 

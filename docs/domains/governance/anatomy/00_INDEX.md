@@ -1,7 +1,7 @@
 # 00 — Anatomy Index
 
 This directory (`docs/anatomy/`) is the canonical 16-doc architecture set for
-Ember (condition C-ANAT, `docs/spec/conditions-v1.md` §4.2, invalid-token
+Ember (condition C-ANAT, `docs/domains/governance/spec/conditions-v1.md` §4.2, invalid-token
 `invalid_anatomy_incomplete`). Each doc describes one real subsystem as it
 exists in this repository **today**, cites real file paths for every claim,
 and states plainly where a subsystem is designed but not yet built rather

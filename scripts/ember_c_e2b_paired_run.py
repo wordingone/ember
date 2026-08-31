@@ -177,7 +177,7 @@ def _ts_iso() -> str:
 
 _PROTOCOL_BODY_TEMPLATE = """# C-E2B paired-legs protocol (frozen {ts})
 
-Frozen BEFORE any verdict per docs/spec/conditions-v1.md §4.2 C-E2B and
+Frozen BEFORE any verdict per docs/domains/governance/spec/conditions-v1.md §4.2 C-E2B and
 ember-goalforge/scripts/ember_totality/test_c_e2b.py's check_paired_surpass().
 This file's own name carries the freeze timestamp; test_c_e2b.py requires
 that timestamp to sort strictly before any receipt's `ts` field that cites

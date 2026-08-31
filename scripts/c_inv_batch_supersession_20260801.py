@@ -7,7 +7,7 @@
 Context: gh #700 (scope-transferred from #281) left a residual set of
 post-genesis receipts that are missing/mismatched on invariant_sha256 and
 are past ERRATA_CUTOFF_TS, so errata coverage is closed for all of them
-(scripts/ember_totality/test_c_invariant.py). Some of that residual set
+(src/ember/governance/scripts/ember_totality/test_c_invariant.py). Some of that residual set
 already has bespoke public-lineage revalidation producers (land210g/h/i/j,
 ind3/ind4/ind5, cbase-grow-rung, 580rerun, attribution-702 -- 16 rows already
 in docs/ledgers/receipt-supersessions.jsonl). This script covers the next slice:

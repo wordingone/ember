@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+from __future__ import annotations
+
 
 import hashlib
 import json
@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 AMENDMENT = ROOT / "docs/spec/ember02-a1-lower-bound-only-amendment-v2.json"
-PREREG = ROOT / "docs/spec/ember02-preregistration-v1.md"
+PREREG = ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md"
 THRESHOLDS = ROOT / "docs/spec/ember02-preregistration-thresholds-v1.json"
 
 
@@ -40,7 +40,7 @@ class A1LowerBoundAmendmentContractTests(unittest.TestCase):
         self.assertEqual(
             self.amendment["supersedes"],
             {
-                "path": "docs/spec/ember02-preregistration-v1.md",
+                "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
                 "sha256": sha256(PREREG),
                 "preregistration_pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
                 "scope": "section-4-A1-both-tiers-fail-only",

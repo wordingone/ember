@@ -36,7 +36,7 @@ type ReadGitBlob = (repoRoot: string, commit: string, relativePath: string) => U
 
 const TRUSTED_DEVELOPMENT_SOURCE_FILES = [
   "configs/ember-restart-3b.json",
-  "scripts/ember_restart/development_cli_seat.py",
+  "src/ember/governance/scripts/ember_restart/development_cli_seat.py",
   "src/ember/governance/scripts/ember_restart/prediction_contract.py",
   "scripts/ember_restart_eval_checkpoint_consumer.py",
   "scripts/ember_restart_eval_raw_forward.py",
@@ -283,7 +283,7 @@ export function captureDevelopmentResolver(
     }
     capturedFiles.set(relativePath, bundleBytes);
   }
-  const resolverRelative = "scripts/ember_restart/development_cli_seat.py";
+  const resolverRelative = "src/ember/governance/scripts/ember_restart/development_cli_seat.py";
   const resolverBytes = capturedFiles.get(resolverRelative);
   if (resolverBytes === undefined) {
     throw new Error("trusted runtime resolver was not captured");

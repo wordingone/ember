@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t2_cap.py — cluster-cap wrapper for t2_round.build_dataset (eng #101).
 
 Extends the existing per-task bits-weighted cap (frontier.DEFAULT_CAPS) one
@@ -86,7 +89,50 @@ def freshness_check(ledger_path, control_pool_path, view_path,
     This implements the gate-added AC from the #102 review: membership must
     be consumed from a fresh --backfill, never a stale incremental stamp.
     """
-    from ledger_dedup import build_view  # single source
+    # issue2015 exact-local-import:src/ember/governance/scripts/ledger_dedup.py
+    import importlib.util as _ember_341a7292e44a83b4_importlib
+    import sys as _ember_341a7292e44a83b4_sys
+    from pathlib import Path as _ember_341a7292e44a83b4_Path
+    _ember_341a7292e44a83b4_path = _ember_341a7292e44a83b4_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ledger_dedup.py')
+    if not _ember_341a7292e44a83b4_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ledger_dedup.py')
+    _ember_341a7292e44a83b4_aliases = ('_ember_issue2015_341a7292e44a83b4', 'ledger_dedup', 'scripts.ledger_dedup')
+    _ember_341a7292e44a83b4_existing = []
+    for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+        _ember_341a7292e44a83b4_candidate = _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias)
+        if _ember_341a7292e44a83b4_candidate is not None and all(_ember_341a7292e44a83b4_candidate is not item for item in _ember_341a7292e44a83b4_existing):
+            _ember_341a7292e44a83b4_existing.append(_ember_341a7292e44a83b4_candidate)
+    if len(_ember_341a7292e44a83b4_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ledger_dedup.py')
+    if _ember_341a7292e44a83b4_existing:
+        _ember_341a7292e44a83b4_module = _ember_341a7292e44a83b4_existing[0]
+        _ember_341a7292e44a83b4_observed = getattr(_ember_341a7292e44a83b4_module, '__file__', None)
+        if _ember_341a7292e44a83b4_observed is None or _ember_341a7292e44a83b4_Path(_ember_341a7292e44a83b4_observed).resolve() != _ember_341a7292e44a83b4_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ledger_dedup.py')
+    else:
+        _ember_341a7292e44a83b4_spec = _ember_341a7292e44a83b4_importlib.spec_from_file_location('_ember_issue2015_341a7292e44a83b4', _ember_341a7292e44a83b4_path)
+        if _ember_341a7292e44a83b4_spec is None or _ember_341a7292e44a83b4_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ledger_dedup.py')
+        _ember_341a7292e44a83b4_module = _ember_341a7292e44a83b4_importlib.module_from_spec(_ember_341a7292e44a83b4_spec)
+        for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+            _ember_341a7292e44a83b4_prior = _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias)
+            if _ember_341a7292e44a83b4_prior is not None and _ember_341a7292e44a83b4_prior is not _ember_341a7292e44a83b4_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ledger_dedup.py')
+            _ember_341a7292e44a83b4_sys.modules[_ember_341a7292e44a83b4_alias] = _ember_341a7292e44a83b4_module
+        try:
+            _ember_341a7292e44a83b4_spec.loader.exec_module(_ember_341a7292e44a83b4_module)
+        except BaseException:
+            for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+                if _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias) is _ember_341a7292e44a83b4_module:
+                    _ember_341a7292e44a83b4_sys.modules.pop(_ember_341a7292e44a83b4_alias, None)
+            raise
+    for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+        _ember_341a7292e44a83b4_prior = _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias)
+        if _ember_341a7292e44a83b4_prior is not None and _ember_341a7292e44a83b4_prior is not _ember_341a7292e44a83b4_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ledger_dedup.py')
+        _ember_341a7292e44a83b4_sys.modules[_ember_341a7292e44a83b4_alias] = _ember_341a7292e44a83b4_module
+    build_view = getattr(_ember_341a7292e44a83b4_module, 'build_view')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ledger_dedup.py  # single source
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_view = os.path.join(tmpdir, "dedup-cluster.jsonl")

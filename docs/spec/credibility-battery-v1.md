@@ -64,7 +64,7 @@ corpus-manifest/budget/eval-suite, with one receipt naming all five.
 loop receipts, but the *program-level* from-scratch baseline is not yet a single closed artifact.
 
 **Check it yourself:**
-- `docs/spec/conditions-v1.md` §4.2, condition `C1` — the CHK a discovery receipt must pass
+- `docs/domains/governance/spec/conditions-v1.md` §4.2, condition `C1` — the CHK a discovery receipt must pass
   (sources + hashes + rationale + in-tree hash-verify).
 - `receipts/ember-post-resident-discovery/benchmark-discovery-20260620T230519Z.json`,
   `receipts/ember-post-resident-discovery/benchmark-discovery-20260621T070500Z.json`,
@@ -104,7 +104,7 @@ filed; the momentum-side ablation is only half-valid pending a re-measure (the s
 **Check it yourself:**
 - `receipts/ember-d3-native-loop/d3-native-loop-20260704T161315Z-c3-wall-time-rerun-redacted-edition.json`
   and `receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T-redacted-edition.json` —
-  executed instances of this repo's fixed A/B/C/Deleted contract (`docs/spec/conditions-v1.md`
+  executed instances of this repo's fixed A/B/C/Deleted contract (`docs/domains/governance/spec/conditions-v1.md`
   §6), the general mechanism this question's ablation runs against.
 - **Disclosed gap:** issue #487 cites a receipt, `d3-native-loop-20260708T221708Z.json` (the
   specific 1.0 → 0.054 collapse number), generated locally in this repository's working tree but
@@ -122,7 +122,7 @@ training-claim dense control (W2 S-arm) is designed but not yet executed.
 
 **Check it yourself:**
 - `receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T-redacted-edition.json` — the
-  board's `C3` `GREEN` evidence: a real equal-budget A/B/C arm contract (`docs/spec/conditions-v1.md`
+  board's `C3` `GREEN` evidence: a real equal-budget A/B/C arm contract (`docs/domains/governance/spec/conditions-v1.md`
   §4.2, condition `C3`).
 - `receipts/ember-c-scale/w2-garm-108-verification-w2-garm-dryrun-20260706T043654Z.json` and the
   sibling `w2-garm-*-w2-garm-dryrun-20260706T043654Z.json` files — the W2 S-arm design
@@ -140,7 +140,7 @@ artifact — proven by a held-out split with a leakage predicate run against it 
 a leakage predicate); no at-scale capability delta has survived it yet.
 
 **Check it yourself:**
-- `docs/spec/conditions-v1.md` §4.2, condition `C2` — the held-out-task CHK (frozen-before-run,
+- `docs/domains/governance/spec/conditions-v1.md` §4.2, condition `C2` — the held-out-task CHK (frozen-before-run,
   no label-read in the candidate path).
 - `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
   `C-SCALE`, `RED`: no at-scale capability point currently clears.
@@ -309,7 +309,7 @@ process-invariants), code-gated, honestly re-derived from artifacts every run.
   board receipt in this checkout: 7-GREEN / 28-RED / 2-UNEVALUABLE / 3-AUDIT-PENDING-EPOCH.
   `docs/authority/CONTINUITY.md` generated status (`scripts/gen_readme_status.py`) always points
   at whichever receipt is newest in its selected receipt root.
-- `docs/spec/conditions-v1.md` — the full registry these rows are checked against.
+- `docs/domains/governance/spec/conditions-v1.md` — the full registry these rows are checked against.
 
 ---
 

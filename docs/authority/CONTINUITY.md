@@ -109,7 +109,7 @@ certificate minted 2026-08-05: nine of nine certificate legs resolved-true,
 zero unresolved failures, bound to public commit
 `323be9da58a7527f3526d4a9a839ae2b5765bfd1`. The public record, custody
 bindings, and redaction disclosure are in
-`docs/roadmap/certificates/EMBER-01.md`. The certificate credits no model, no
+`docs/domains/governance/roadmap/certificates/EMBER-01.md`. The certificate credits no model, no
 training, and no capability to EMBER-01; the EMBER-02 boundary above is
 unchanged by it.
 

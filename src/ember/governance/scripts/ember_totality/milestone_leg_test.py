@@ -265,7 +265,7 @@ def test_condition_row_c0_no_longer_breaks_legacy_parse():
         completeness_path = root / "docs" / "ember-completeness.md"
         text = completeness_path.read_text(encoding="utf-8")
         text += ("| C0 | S3 | No additional loops before resident-training preconditions "
-                 "(registry: @docs/spec/conditions-v1.md) | per its own R:/CHK text in "
+                 "(registry: @docs/domains/governance/spec/conditions-v1.md) | per its own R:/CHK text in "
                  "conditions-v1; probe scripts/ember_totality/test_c0.py | "
                  "— (none certified) | OPEN |\n")
         completeness_path.write_text(text, encoding="utf-8")
@@ -292,7 +292,7 @@ def test_genuine_legacy_gap_still_fails_after_fix():
         _write_valid_fixture_tree(root)
         completeness_path = root / "docs" / "ember-completeness.md"
         text = completeness_path.read_text(encoding="utf-8")
-        text += "| C0 | S3 | (registry: @docs/spec/conditions-v1.md) | ... | ... | OPEN |\n"
+        text += "| C0 | S3 | (registry: @docs/domains/governance/spec/conditions-v1.md) | ... | ... | OPEN |\n"
         completeness_path.write_text(text, encoding="utf-8")
         _break_one_milestone_target(root, n=30)
 

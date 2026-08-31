@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_legib.py — STATUS PROBE for Ember goal condition C-LEGIB.
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-LEGIB (gh issue #13,
+Registry text: docs/domains/governance/spec/conditions-v1.md §4.2 C-LEGIB (gh issue #13,
 mandate-coverage sweep 2026-07-02: "the repo-legibility surface [single-file
 entry map; cold-read re-probe green; no internal contradiction] has no
 condition, no probe, no ticket"). R: the repo is LEGIBLE to a fresh reader

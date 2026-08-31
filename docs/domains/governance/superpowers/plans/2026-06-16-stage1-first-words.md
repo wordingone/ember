@@ -57,7 +57,7 @@ Expected: `V0_LAUNCH_GATE_SELFTEST_PASS`.
 ### Task 3: Stage-1 Encoding and Rung-0 Validation
 
 **Files:**
-- Existing: `scripts/corpus_patch_encode.py`
+- Existing: `src/ember/governance/scripts/corpus_patch_encode.py`
 - Existing: `scripts/train_multimodal_v0.py`
 
 - [ ] **Step 1: Encode the curated training raw dir**

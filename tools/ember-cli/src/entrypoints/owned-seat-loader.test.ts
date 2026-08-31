@@ -24,7 +24,7 @@ describe("owned seat loader", () => {
     const sourceCommit = "a".repeat(40);
     const trustedSources = [
       "configs/ember-restart-3b.json",
-      "scripts/ember_restart/development_cli_seat.py",
+      "src/ember/governance/scripts/ember_restart/development_cli_seat.py",
       "src/ember/governance/scripts/ember_restart/prediction_contract.py",
       "scripts/ember_restart_eval_checkpoint_consumer.py",
       "scripts/ember_restart_eval_raw_forward.py",
@@ -46,7 +46,7 @@ describe("owned seat loader", () => {
       for (const relativePath of runtimeFiles) {
         const path = join(root, relativePath);
         mkdirSync(resolve(path, ".."), { recursive: true });
-        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+        writeFileSync(path, relativePath === "src/ember/governance/scripts/ember_restart/development_cli_seat.py"
           ? "# exact resolver\n"
           : "exact:" + relativePath + "\n");
       }
@@ -113,7 +113,7 @@ describe("owned seat loader", () => {
       const sourceCommit = "a".repeat(40);
       const trustedSources = [
         "configs/ember-restart-3b.json",
-        "scripts/ember_restart/development_cli_seat.py",
+        "src/ember/governance/scripts/ember_restart/development_cli_seat.py",
         "src/ember/governance/scripts/ember_restart/prediction_contract.py",
         "scripts/ember_restart_eval_checkpoint_consumer.py",
         "scripts/ember_restart_eval_raw_forward.py",
@@ -134,7 +134,7 @@ describe("owned seat loader", () => {
       for (const relativePath of runtimeFiles) {
         const path = join(root, relativePath);
         mkdirSync(resolve(path, ".."), { recursive: true });
-        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+        writeFileSync(path, relativePath === "src/ember/governance/scripts/ember_restart/development_cli_seat.py"
           ? "# exact resolver\n"
           : "exact:" + relativePath + "\n");
       }
@@ -405,7 +405,7 @@ describe("owned seat loader", () => {
     const sourceCommit = "a".repeat(40);
     const trustedSources = [
       "configs/ember-restart-3b.json",
-      "scripts/ember_restart/development_cli_seat.py",
+      "src/ember/governance/scripts/ember_restart/development_cli_seat.py",
       "src/ember/governance/scripts/ember_restart/prediction_contract.py",
       "scripts/ember_restart_eval_checkpoint_consumer.py",
       "scripts/ember_restart_eval_raw_forward.py",
@@ -427,7 +427,7 @@ describe("owned seat loader", () => {
       for (const relativePath of runtimeFiles) {
         const path = join(root, relativePath);
         mkdirSync(resolve(path, ".."), { recursive: true });
-        writeFileSync(path, relativePath === "scripts/ember_restart/development_cli_seat.py"
+        writeFileSync(path, relativePath === "src/ember/governance/scripts/ember_restart/development_cli_seat.py"
           ? "# exact resolver\n"
           : "exact:" + relativePath + "\n");
       }

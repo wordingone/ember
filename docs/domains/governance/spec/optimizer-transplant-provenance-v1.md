@@ -9,7 +9,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 Issue #677's unsafe historical BUILD path is explicitly execution-denied before
 it reads or writes a checkpoint. Its only archived successor route is the
 verified materialize-to-custody path. The reusable admission boundary is
-`scripts/optimizer_transplant_provenance.py`; any current or future
+`src/ember/governance/scripts/optimizer_transplant_provenance.py`; any current or future
 owned-training path that performs an optimizer transplant must consume this
 contract rather than revive the unreceipted BUILD path.
 

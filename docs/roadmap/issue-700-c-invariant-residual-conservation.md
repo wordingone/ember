@@ -23,7 +23,7 @@ rows and the executable zero-uncovered condition.
 ## Fresh current-master RED census
 
 A read-only call to
-`scripts/ember_totality/test_c_invariant.py::check_stamped_receipts()` at the
+`src/ember/governance/scripts/ember_totality/test_c_invariant.py::check_stamped_receipts()` at the
 public-master basis, without invoking its receipt-writing `main()`, returned
 RED:
 

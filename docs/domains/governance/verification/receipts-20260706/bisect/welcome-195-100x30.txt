@@ -1,0 +1,30 @@
+╭─ ember ──────────────────────────────────────────────────────────────────────────────────────────╮
+│    ▀       ember  v0.0.0                                 Tips for getting started                │
+│   ▀▀▀      inference + training, on this machine         ────────────────────────                │
+│  ▀▀▀▀▀     qwen3.6-27b · Local                           Run /init to create an EMBER.md file…   │
+│   ▀▀▀      <TEMP_WORKSPACE>…      Try "what changed on the board today?"  │
+│    ▀                                                     Recent activity                         │
+│                                                          ───────────────                         │
+│                                                          No recent activity                      │
+│                                                          /resume for more                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+❯                                                                                                   
+○ observe · ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ctrl+t to show tasks 

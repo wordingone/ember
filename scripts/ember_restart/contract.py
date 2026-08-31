@@ -135,7 +135,7 @@ R1_ENTRY_SOURCE_FILES = {
     "ember_lab_verify": "runtime/ember-lab/src/training_verify.rs",
 }
 R1_ENTRY_PINNED_FILES = {
-    "prereg_sha256": "docs/spec/ember02-preregistration-v1.md",
+    "prereg_sha256": "docs/domains/governance/spec/ember02-preregistration-v1.md",
     "config_sha256": "configs/ember-restart-3b.json",
     "fixed_prior_manifest_sha256": "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
 }

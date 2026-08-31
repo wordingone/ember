@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_disc.py -- STATUS PROBE for Ember goal condition C-DISC.
 
-Registry text: docs/spec/conditions-v1.md sec 4.2 C-DISC (gh issue #94, Class-2 unwatched-
+Registry text: docs/domains/governance/spec/conditions-v1.md sec 4.2 C-DISC (gh issue #94, Class-2 unwatched-
 mandate recon rank #1, docs/audit/class2-unwatched-mandates-recon-20260704.md #3). R: GOAL
 sec 8's program-level disconfirmation triggers (the project's own "central conjecture false"
 kill signal -- EARNED_GROWTH, H0_CEILING, B2_BOOTSTRAP) are machine-evaluated on every board

@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_mile.py -- STATUS PROBE for Ember goal condition C-MILE.
 
-Registry text: docs/spec/conditions-v1.md SS4.2 C-MILE (Class-2 item 2, docs/audit/
+Registry text: docs/domains/governance/spec/conditions-v1.md SS4.2 C-MILE (Class-2 item 2, docs/audit/
 class2-unwatched-mandates-recon-20260704.md #2, parent gh issue #35). R: the milestone
 lattice (docs/spec/milestones-v1.md sections A/C/D) EXECUTES and returns a coherent
 verdict against its own source-of-truth inputs -- a GREEN board can never again coexist

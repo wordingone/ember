@@ -69,7 +69,7 @@ GUARD_SUPPORT_FILES = [
     "docs/contracts/nc2-own-technique-contract.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
-    "docs/spec/conditions-v1.md",
+    "docs/domains/governance/spec/conditions-v1.md",
     "docs/ledgers/technique-registry.jsonl",
     "configs/nck-baseline/nck-invariants.json",
     "configs/nck-baseline/nck-invariants.authority.json",

@@ -78,7 +78,7 @@ def _durable_repo_root(repo_root: Path) -> Path:
 def canonical_ember_lab_binary(repo_root: Path) -> Path | None:
     """The one repository-governed daemon/CLI binary -- never a caller-supplied path.
 
-    Mirrors ``scripts/ember_dispatch_token.py::_canonical_ember_lab_binary`` exactly:
+    Mirrors ``src/ember/governance/scripts/ember_dispatch_token.py::_canonical_ember_lab_binary`` exactly:
     the same two candidate build outputs, the same containment check. Always
     resolved against the durable main-tree root (``_durable_repo_root``), even
     when ``repo_root`` names a worktree -- there is exactly one governed build,

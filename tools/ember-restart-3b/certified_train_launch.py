@@ -232,7 +232,7 @@ SEMANTIC_REPRODUCTION_TARGET_KEYS = {
 # defined canary shape today is the prereg's T-01 WARM-100 rung. A second
 # canary shape could be added here later without a certificate schema change.
 SEMANTIC_CANARY_MODES = {"warm-100"}
-# T-01 = 100 consecutive steps (docs/spec/ember02-preregistration-v1.md). This
+# T-01 = 100 consecutive steps (docs/domains/governance/spec/ember02-preregistration-v1.md). This
 # is an ENTRY minimum on what this route may launch, not a copy of the prereg
 # threshold itself -- adjudicating R1-E1/R1-E2 against telemetry evidence
 # stays src/ember/governance/scripts/r1_exit_battery.py's job, never this launcher's.

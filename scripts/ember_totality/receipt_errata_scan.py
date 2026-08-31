@@ -47,7 +47,50 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
-import test_c_invariant as c_inv  # noqa: E402  (reuse root/constants/scan logic)
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_totality/test_c_invariant.py
+import importlib.util as _ember_a3cfd3f0311b99ed_importlib
+import sys as _ember_a3cfd3f0311b99ed_sys
+from pathlib import Path as _ember_a3cfd3f0311b99ed_Path
+_ember_a3cfd3f0311b99ed_path = _ember_a3cfd3f0311b99ed_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'test_c_invariant.py')
+if not _ember_a3cfd3f0311b99ed_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
+_ember_a3cfd3f0311b99ed_aliases = ('_ember_issue2015_a3cfd3f0311b99ed', 'scripts.ember_totality.test_c_invariant', 'test_c_invariant')
+_ember_a3cfd3f0311b99ed_existing = []
+for _ember_a3cfd3f0311b99ed_alias in _ember_a3cfd3f0311b99ed_aliases:
+    _ember_a3cfd3f0311b99ed_candidate = _ember_a3cfd3f0311b99ed_sys.modules.get(_ember_a3cfd3f0311b99ed_alias)
+    if _ember_a3cfd3f0311b99ed_candidate is not None and all(_ember_a3cfd3f0311b99ed_candidate is not item for item in _ember_a3cfd3f0311b99ed_existing):
+        _ember_a3cfd3f0311b99ed_existing.append(_ember_a3cfd3f0311b99ed_candidate)
+if len(_ember_a3cfd3f0311b99ed_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
+if _ember_a3cfd3f0311b99ed_existing:
+    _ember_a3cfd3f0311b99ed_module = _ember_a3cfd3f0311b99ed_existing[0]
+    _ember_a3cfd3f0311b99ed_observed = getattr(_ember_a3cfd3f0311b99ed_module, '__file__', None)
+    if _ember_a3cfd3f0311b99ed_observed is None or _ember_a3cfd3f0311b99ed_Path(_ember_a3cfd3f0311b99ed_observed).resolve() != _ember_a3cfd3f0311b99ed_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
+else:
+    _ember_a3cfd3f0311b99ed_spec = _ember_a3cfd3f0311b99ed_importlib.spec_from_file_location('_ember_issue2015_a3cfd3f0311b99ed', _ember_a3cfd3f0311b99ed_path)
+    if _ember_a3cfd3f0311b99ed_spec is None or _ember_a3cfd3f0311b99ed_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
+    _ember_a3cfd3f0311b99ed_module = _ember_a3cfd3f0311b99ed_importlib.module_from_spec(_ember_a3cfd3f0311b99ed_spec)
+    for _ember_a3cfd3f0311b99ed_alias in _ember_a3cfd3f0311b99ed_aliases:
+        _ember_a3cfd3f0311b99ed_prior = _ember_a3cfd3f0311b99ed_sys.modules.get(_ember_a3cfd3f0311b99ed_alias)
+        if _ember_a3cfd3f0311b99ed_prior is not None and _ember_a3cfd3f0311b99ed_prior is not _ember_a3cfd3f0311b99ed_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
+        _ember_a3cfd3f0311b99ed_sys.modules[_ember_a3cfd3f0311b99ed_alias] = _ember_a3cfd3f0311b99ed_module
+    try:
+        _ember_a3cfd3f0311b99ed_spec.loader.exec_module(_ember_a3cfd3f0311b99ed_module)
+    except BaseException:
+        for _ember_a3cfd3f0311b99ed_alias in _ember_a3cfd3f0311b99ed_aliases:
+            if _ember_a3cfd3f0311b99ed_sys.modules.get(_ember_a3cfd3f0311b99ed_alias) is _ember_a3cfd3f0311b99ed_module:
+                _ember_a3cfd3f0311b99ed_sys.modules.pop(_ember_a3cfd3f0311b99ed_alias, None)
+        raise
+for _ember_a3cfd3f0311b99ed_alias in _ember_a3cfd3f0311b99ed_aliases:
+    _ember_a3cfd3f0311b99ed_prior = _ember_a3cfd3f0311b99ed_sys.modules.get(_ember_a3cfd3f0311b99ed_alias)
+    if _ember_a3cfd3f0311b99ed_prior is not None and _ember_a3cfd3f0311b99ed_prior is not _ember_a3cfd3f0311b99ed_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
+    _ember_a3cfd3f0311b99ed_sys.modules[_ember_a3cfd3f0311b99ed_alias] = _ember_a3cfd3f0311b99ed_module
+c_inv = _ember_a3cfd3f0311b99ed_module
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_totality/test_c_invariant.py  # noqa: E402  (reuse root/constants/scan logic)
 
 ROOT = c_inv.ROOT
 RECEIPTS = c_inv.RECEIPTS

@@ -9,13 +9,13 @@ bullets; both genuinely unmanifested, board shows GREEN").
 Issue #715 root cause: test_c_manifest.py's `_CID_RE` separator alternation
 had no bare "." token, so the two goal-file bullets that use a period
 separator -- "- **C-MANIFEST.** ..." and "- **C-TALLY.** ..." (both in
-docs/spec/conditions-v1.md S4.3, the two roll-up/meta-conditions) -- never
+docs/domains/governance/spec/conditions-v1.md S4.3, the two roll-up/meta-conditions) -- never
 matched and silently vanished from the planned-piece denominator (probe
 counted 38 vs the true count, which was 40 at fix time and has since grown
 to 41 as the registry gained further conditions -- see conditions-v1.md
 line 451's own running tally). This regression suite proves BOTH halves of
 the fix stay true against PRODUCTION-SHAPED inputs -- the real
-docs/spec/conditions-v1.md and docs/contracts/ember-completeness.md files copied
+docs/domains/governance/spec/conditions-v1.md and docs/contracts/ember-completeness.md files copied
 byte-for-byte into an isolated fixture root, never a helper-invented mini
 goal/manifest shape:
 

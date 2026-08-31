@@ -48,7 +48,7 @@ is self-describing without a second hop:
 
 | dir | files | contents |
 |---|---|---|
-| `ember_totality/` | 47 | the condition-registry test suite — `test_c0.py`..`test_c15.py` etc. map 1:1 to the numbered conditions in `docs/spec/conditions-v1.md`, plus `ember_totality_spec.py` (the totality/tally spec) and `enforcement_leg_test.py` |
+| `ember_totality/` | 47 | the condition-registry test suite — `test_c0.py`..`test_c15.py` etc. map 1:1 to the numbered conditions in `docs/domains/governance/spec/conditions-v1.md`, plus `ember_totality_spec.py` (the totality/tally spec) and `enforcement_leg_test.py` |
 | `nck/` | 19 | NC-K, the resident event-driven harness kernel (`docs/domains/governance/archive/pre-restart/nck-spec-v0.md`) — event loop, invariants, checkpoint/activation receipts, e2e proof, selftests. Frozen and sha256-pinned per script in `manifests/governance/kernel-v1.0.manifest` |
 | `w2_heldout/` | 10 | W2-stage held-out/decontamination batch building (`build_decontam_batch*.py`, `decon_scan_worker.py`, `launch_gate.py`) |
 | `ember_phase5_c7/` | 9 | phase-5 work on condition C7 (self-growing operator): curriculum corpus, cycle runner, deletion test |
@@ -72,7 +72,7 @@ asserted as an authoritative name.
 | `ember_*` | 112 | ember-cli / ember-system components not yet moved into a `ember_phaseN_*` subdir: gates, D3 loop pieces, bitnet core, field-level contribution proof, etc. |
 | `fpN_*` | 81 | "FP" (falsification-probe) tickets, one file family per numbered FP ticket (FP3 through FP45 observed) — each is a one-shot experiment tied to a specific `fpNN-*` receipt/doc pair |
 | `tN_*` / `tNc_*` | 52 | numbered pipeline-stage runners (T0 preflight through T5), each stage split into smoke/selftest/control-arm/quantization variants (inferred from content — no separate T-stage glossary found) |
-| `cN_*` (all `c04_*`) | 22 | the C04 experiment family: design-bench sweeps, compile probes, dynamo patch, fp8 A/B, grid, budget, optimizer pick. **Not** the same namespace as the `C0`–`C15`/`C-SCALE` board conditions in `docs/spec/conditions-v1.md` — the collision is coincidental (ticket prefix vs. condition ID) |
+| `cN_*` (all `c04_*`) | 22 | the C04 experiment family: design-bench sweeps, compile probes, dynamo patch, fp8 A/B, grid, budget, optimizer pick. **Not** the same namespace as the `C0`–`C15`/`C-SCALE` board conditions in `docs/domains/governance/spec/conditions-v1.md` — the collision is coincidental (ticket prefix vs. condition ID) |
 | `wN_*` | 19 | numbered stage runners W1/W2/W4 (held-out floor evals, ingest, control-delta repair) — the organized subset of this family lives in `w2_heldout/` |
 | `gN_*` (`g1_*`) | 12 | G1 paired-round runs: base/control/GRPO/MTP/SFT arms across r1w/r2w rounds |
 | `density_*` | 10 | density-ablation A/B experiment (`density_ab_*`) + sensitivity probe |

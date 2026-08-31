@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_enf.py — STATUS PROBE for Ember goal condition C-ENF.
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-ENF (gh issue #38, Class-2
+Registry text: docs/domains/governance/spec/conditions-v1.md §4.2 C-ENF (gh issue #38, Class-2
 cure, parent #35). R: the standalone enforcement layer (publication gate +
 energy-law checker) EXECUTES and returns coherent verdicts — a GREEN board
 can never again coexist with a silently broken/tampered enforcement layer.

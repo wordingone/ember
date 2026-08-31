@@ -5,7 +5,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 -->
 # R1 (WARM-100) exit-evidence inventory — 20260805
 
-Authority: `docs/spec/ember02-preregistration-v1.md` §3 "R1 — WARM-100" (exits R1-E1..E8,
+Authority: `docs/domains/governance/spec/ember02-preregistration-v1.md` §3 "R1 — WARM-100" (exits R1-E1..E8,
 kill criteria) + `docs/spec/ember02-preregistration-thresholds-v1.json` (T-01..T-09, F-11).
 Subject run named by the task brief: `<custody>/r1-warm100-20260804` — `<custody>` is the
 off-tree live-receipts custody root on the training host; absolute local paths never appear

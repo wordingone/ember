@@ -4,7 +4,7 @@
 > the audit date and are not all true against today's bytes: `GOAL.md` now carries an
 > explicit >27B total-parameter destination (`competitive_reference_parameters`,
 > `minimum_total_parameters_exclusive`), so ">27B total capacity — absent" no longer
-> holds; and `docs/spec/conditions-v1.md` does regulate sub-quadratic substitution
+> holds; and `docs/domains/governance/spec/conditions-v1.md` does regulate sub-quadratic substitution
 > (`invalid_substrate_downgrade`), so read "zero mentions" as an audit-date claim at
 > best. §6 is the maintained tail — for the live frontier read
 > `docs/design/inference-to-training-translation-v1.md` and

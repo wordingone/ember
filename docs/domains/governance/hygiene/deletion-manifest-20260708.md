@@ -52,7 +52,7 @@ categorized conclusions.
    - One-shot experiment-arm driver scripts, invoked directly by an
      external MCP/CLI call (`train_start`-style) rather than imported or
      linked from another tracked file. Confirmed example:
-     `scripts/w2_garm_runner.py` is zero-ref by this scan yet is the
+     `src/ember/governance/scripts/w2_garm_runner.py` is zero-ref by this scan yet is the
      subject of the *same-day* tracked commit "W2 G-arm runner spec filed
      (#113)" — its coordination lives in a GitHub issue, not a tracked
      doc. Several multi-arm comparison families (`g1_r1w_*` / `g1_r2w_*`,

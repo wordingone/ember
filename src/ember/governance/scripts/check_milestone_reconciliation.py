@@ -93,7 +93,7 @@ _SECTION_A_ROW_RE = re.compile(r"^\|\s*M(\d+)\s*\|(.*)\|(.*)\|\s*$")
 _COMPLETENESS_ROW_RE = re.compile(r"^\|\s*C(\d+)\s*\|")
 
 # The 55 legacy rows share docs/contracts/ember-completeness.md with board-CONDITION rows
-# (docs/spec/conditions-v1.md's own registry). A condition can use a bare-digit id (e.g.
+# (docs/domains/governance/spec/conditions-v1.md's own registry). A condition can use a bare-digit id (e.g.
 # C0) that collides with _COMPLETENESS_ROW_RE's own C<digits> pattern -- discovered live,
 # 2026-07-04: a "C0" row (board condition, not a legacy milestone) made
 # parse_completeness_ids() see {0, 1, ..., 55} != the expected {1, ..., 55}, raising a

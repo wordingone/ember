@@ -2,7 +2,7 @@
 
 ## What a "condition" is
 
-`docs/spec/conditions-v1.md` is "the canonical registry of machine-checkable
+`docs/domains/governance/spec/conditions-v1.md` is "the canonical registry of machine-checkable
 goal conditions" — 41 total entries: 39 primary conditions (`C(-1)`, `C0`
 through `C15`, and the named conditions `C-EFF`, `C-BASE`, `C-PORT`,
 `C-FED`, `C-GROW`, `C-ORGANISM`, `C-OBS`, `C-ANAT`, `C-SCALE`, `C-E2B`,

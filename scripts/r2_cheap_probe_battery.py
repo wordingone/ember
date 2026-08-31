@@ -15,7 +15,7 @@ silently substituting an implicit or independently authored token authority.
 The D-03 discussion below is retained as historical rationale only.
 ============================================================================
 
-docs/spec/ember02-preregistration-v1.md refers to "the frozen cheap-probe
+docs/domains/governance/spec/ember02-preregistration-v1.md refers to "the frozen cheap-probe
 battery" four times, in the present tense, as an artifact that already
 exists and is already frozen:
 
@@ -209,7 +209,7 @@ if HERE not in sys.path:
 
 ISSUE_REF = "#1435"
 AUTHORITY_ISSUE_REF = "#1498"
-PREREG_DOC = "docs/spec/ember02-preregistration-v1.md"
+PREREG_DOC = "docs/domains/governance/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
 R2_AUTHORITY_DOC = "docs/spec/ember02-r2-cheap-probe-amendment-v2.json"
 R2_AUTHORITY_SCHEMA = "ember02-r2-cheap-probe-amendment/v2"

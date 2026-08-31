@@ -25,7 +25,7 @@ waived). `C6` requires a complete, reusable, rerun-reproduced recipe (commands
 
 ## The anti-gaming C1–C5 protocol (conditions-v1.md §4.2, NOT GOAL.md's C1-C5)
 
-`docs/spec/conditions-v1.md` disambiguates three unrelated "C" numbering
+`docs/domains/governance/spec/conditions-v1.md` disambiguates three unrelated "C" numbering
 schemes sharing this repo. This file's own §4.2 protocol — benchmark
 discovery, held-out task, equal-budget, before-after, positive-delta — is the
 anti-fraud checklist a performance CLAIM must pass; it runs on the totality
