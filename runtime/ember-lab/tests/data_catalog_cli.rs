@@ -8,15 +8,19 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static SANDBOX_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn sandbox() -> PathBuf {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
+    let sequence = SANDBOX_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
-        "ember-lab-data-catalog-cli-{}-{nonce}",
+        "ember-lab-data-catalog-cli-{}-{nonce}-{sequence}",
         std::process::id()
     ));
     fs::create_dir_all(&path).unwrap();

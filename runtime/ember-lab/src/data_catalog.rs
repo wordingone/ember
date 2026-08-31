@@ -232,13 +232,14 @@ pub(crate) fn import_manifest(
 }
 
 fn merge_records(existing: &[Value], incoming: &[Value]) -> Result<Vec<Value>> {
-    let mut merged = existing.to_vec();
+    let mut merged: BTreeMap<(usize, String), Value> = existing
+        .iter()
+        .cloned()
+        .map(|record| (record_sort_key(&record), record))
+        .collect();
     for record in incoming {
         let identity = record_sort_key(record);
-        if let Some(current) = merged
-            .iter()
-            .find(|candidate| record_sort_key(candidate) == identity)
-        {
+        if let Some(current) = merged.get(&identity) {
             if current != record {
                 return invalid(format!(
                     "record identity {}/{} is already bound to different bytes",
@@ -247,21 +248,21 @@ fn merge_records(existing: &[Value], incoming: &[Value]) -> Result<Vec<Value>> {
                 ));
             }
         } else {
-            merged.push(record.clone());
+            merged.insert(identity, record.clone());
         }
     }
-    merged.sort_by_key(record_sort_key);
-    Ok(merged)
+    Ok(merged.into_values().collect())
 }
 
 fn merge_edges(existing: &[Value], incoming: &[Value]) -> Result<Vec<Value>> {
-    let mut merged = existing.to_vec();
+    let mut merged: BTreeMap<(usize, String, String, i64), Value> = existing
+        .iter()
+        .cloned()
+        .map(|edge| (edge_sort_key(&edge), edge))
+        .collect();
     for edge in incoming {
         let identity = edge_sort_key(edge);
-        if let Some(current) = merged
-            .iter()
-            .find(|candidate| edge_sort_key(candidate) == identity)
-        {
+        if let Some(current) = merged.get(&identity) {
             if current != edge {
                 return invalid(format!(
                     "edge identity is already bound to different bytes: {:?}",
@@ -269,11 +270,10 @@ fn merge_edges(existing: &[Value], incoming: &[Value]) -> Result<Vec<Value>> {
                 ));
             }
         } else {
-            merged.push(edge.clone());
+            merged.insert(identity, edge.clone());
         }
     }
-    merged.sort_by_key(edge_sort_key);
-    Ok(merged)
+    Ok(merged.into_values().collect())
 }
 
 pub(crate) fn export_manifest(conn: &Connection) -> Result<Vec<u8>> {
@@ -303,6 +303,7 @@ pub(crate) fn status(conn: &Connection) -> Result<Value> {
     )?)?;
     validate_edge_endpoints(&records, &edges)?;
     validate_required_relations(&records, &edges)?;
+    let relations = RelationIndex::from_edges(&edges)?;
 
     let mut record_counts: BTreeMap<&str, usize> =
         RECORD_KINDS.iter().map(|kind| (*kind, 0)).collect();
@@ -353,8 +354,8 @@ pub(crate) fn status(conn: &Connection) -> Result<Value> {
             continue;
         }
         let id = string_value(row, "id", "membership record")?;
-        let targets = outgoing_targets(&edges, "membership_object", "membership", id)?;
-        require_exactly_one(&targets, "membership", id, "membership_object")?;
+        let targets = relations.outgoing("membership_object", "membership", id);
+        require_exactly_one(targets, "membership", id, "membership_object")?;
         let bytes = object_bytes
             .get(&targets[0])
             .copied()
@@ -404,9 +405,9 @@ pub(crate) fn status(conn: &Connection) -> Result<Value> {
             "exclusion_reason": row.get("exclusion_reason").cloned().unwrap_or(Value::Null),
             "near_dup_ruling": string_value(row, "near_dup_ruling", "protected evaluation record")?,
             "ngram_ruling": string_value(row, "ngram_ruling", "protected evaluation record")?,
-            "object_ids": outgoing_targets(&edges, "evaluation_object", "protected_eval", id)?,
+            "object_ids": relations.outgoing("evaluation_object", "protected_eval", id),
             "overlap_state": string_value(row, "overlap_state", "protected evaluation record")?,
-            "receipt_ids": outgoing_targets(&edges, "evaluation_receipt", "protected_eval", id)?,
+            "receipt_ids": relations.outgoing("evaluation_receipt", "protected_eval", id),
         }));
     }
 
@@ -420,10 +421,10 @@ pub(crate) fn status(conn: &Connection) -> Result<Value> {
         consumers.push(json!({
             "attempt_id": id,
             "checkpoint_sha256": string_value(row, "checkpoint_sha256", "consumer attempt record")?,
-            "dataset_version_ids": outgoing_targets(&edges, "consumer_dataset", "consumer_attempt", id)?,
-            "evaluation_ids": outgoing_targets(&edges, "consumer_evaluation", "consumer_attempt", id)?,
+            "dataset_version_ids": relations.outgoing("consumer_dataset", "consumer_attempt", id),
+            "evaluation_ids": relations.outgoing("consumer_evaluation", "consumer_attempt", id),
             "model_sha256": string_value(row, "model_sha256", "consumer attempt record")?,
-            "receipt_ids": outgoing_targets(&edges, "consumer_receipt", "consumer_attempt", id)?,
+            "receipt_ids": relations.outgoing("consumer_receipt", "consumer_attempt", id),
             "state": string_value(row, "state", "consumer attempt record")?,
         }));
     }
@@ -1409,9 +1410,63 @@ fn validate_edge_endpoints(records: &[Value], edges: &[Value]) -> Result<()> {
     Ok(())
 }
 
+#[derive(Default)]
+struct RelationIndex {
+    outgoing: BTreeMap<(String, String, String), Vec<String>>,
+    incoming: BTreeMap<(String, String, String), Vec<String>>,
+}
+
+impl RelationIndex {
+    fn from_edges(edges: &[Value]) -> Result<Self> {
+        let mut index = Self::default();
+        for edge in edges {
+            let row = object(edge, "edge")?;
+            let edge_kind = string_value(row, "kind", "edge")?.to_string();
+            let from_kind = string_value(row, "from_kind", "edge")?.to_string();
+            let from_id = string_value(row, "from_id", "edge")?.to_string();
+            let to_kind = string_value(row, "to_kind", "edge")?.to_string();
+            let to_id = string_value(row, "to_id", "edge")?.to_string();
+            index
+                .outgoing
+                .entry((edge_kind.clone(), from_kind, from_id.clone()))
+                .or_default()
+                .push(to_id.clone());
+            index
+                .incoming
+                .entry((edge_kind, to_kind, to_id))
+                .or_default()
+                .push(from_id);
+        }
+        Ok(index)
+    }
+
+    fn outgoing(&self, edge_kind: &str, from_kind: &str, from_id: &str) -> &[String] {
+        self.outgoing
+            .get(&(
+                edge_kind.to_string(),
+                from_kind.to_string(),
+                from_id.to_string(),
+            ))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    fn incoming(&self, edge_kind: &str, to_kind: &str, to_id: &str) -> &[String] {
+        self.incoming
+            .get(&(
+                edge_kind.to_string(),
+                to_kind.to_string(),
+                to_id.to_string(),
+            ))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+}
+
 fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()> {
     validate_receipt_supersession(records, edges)?;
-    validate_not_run_evaluation_consumers(records, edges)?;
+    let relations = RelationIndex::from_edges(edges)?;
+    validate_not_run_evaluation_consumers_with_index(records, &relations)?;
     let mut admitted_training_objects = BTreeSet::new();
     let mut protected_evaluation_objects = BTreeSet::new();
     for record in records {
@@ -1420,17 +1475,17 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
         let id = string_value(row, "id", "record")?;
         match kind {
             "source" if string_value(row, "license_verdict", "source record")? == "accepted" => {
-                let objects = outgoing_targets(edges, "source_object", "source", id)?;
-                require_nonempty(&objects, "accepted source", id, "source_object")?;
+                let objects = relations.outgoing("source_object", "source", id);
+                require_nonempty(objects, "accepted source", id, "source_object")?;
                 for object_id in objects {
                     let receipts =
-                        outgoing_targets(edges, "object_receipt", "immutable_object", &object_id)?;
-                    require_nonempty(&receipts, "source object", &object_id, "object_receipt")?;
+                        relations.outgoing("object_receipt", "immutable_object", object_id);
+                    require_nonempty(receipts, "source object", object_id, "object_receipt")?;
                 }
             }
             "dataset_version" => {
-                let parents = outgoing_targets(edges, "dataset_parent", kind, id)?;
-                let transforms = outgoing_targets(edges, "dataset_transform", kind, id)?;
+                let parents = relations.outgoing("dataset_parent", kind, id);
+                let transforms = relations.outgoing("dataset_transform", kind, id);
                 match string_value(row, "version_class", "dataset version record")? {
                     "genesis" => {
                         if !parents.is_empty() || !transforms.is_empty() {
@@ -1441,25 +1496,21 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
                     }
                     "derived" => {
                         require_exactly_one(
-                            &parents,
+                            parents,
                             "derived dataset version",
                             id,
                             "dataset_parent",
                         )?;
                         require_exactly_one(
-                            &transforms,
+                            transforms,
                             "derived dataset version",
                             id,
                             "dataset_transform",
                         )?;
-                        let transform_parents = outgoing_targets(
-                            edges,
-                            "transform_parent",
-                            "transform",
-                            &transforms[0],
-                        )?;
+                        let transform_parents =
+                            relations.outgoing("transform_parent", "transform", &transforms[0]);
                         require_exactly_one(
-                            &transform_parents,
+                            transform_parents,
                             "dataset transform",
                             &transforms[0],
                             "transform_parent",
@@ -1476,25 +1527,25 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
             }
             "transform" => {
                 require_exactly_one(
-                    &outgoing_targets(edges, "transform_parent", kind, id)?,
+                    relations.outgoing("transform_parent", kind, id),
                     "transform",
                     id,
                     "transform_parent",
                 )?;
                 require_nonempty(
-                    &outgoing_targets(edges, "transform_input", kind, id)?,
+                    relations.outgoing("transform_input", kind, id),
                     "transform",
                     id,
                     "transform_input",
                 )?;
                 require_nonempty(
-                    &outgoing_targets(edges, "transform_output", kind, id)?,
+                    relations.outgoing("transform_output", kind, id),
                     "transform",
                     id,
                     "transform_output",
                 )?;
                 require_exactly_one(
-                    &outgoing_targets(edges, "transform_receipt", kind, id)?,
+                    relations.outgoing("transform_receipt", kind, id),
                     "transform",
                     id,
                     "transform_receipt",
@@ -1502,13 +1553,13 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
             }
             "membership" => {
                 require_exactly_one(
-                    &incoming_sources(edges, "version_membership", kind, id)?,
+                    relations.incoming("version_membership", kind, id),
                     "membership",
                     id,
                     "version_membership",
                 )?;
-                let objects = outgoing_targets(edges, "membership_object", kind, id)?;
-                require_exactly_one(&objects, "membership", id, "membership_object")?;
+                let objects = relations.outgoing("membership_object", kind, id);
+                require_exactly_one(objects, "membership", id, "membership_object")?;
                 let expected_object = format!(
                     "sha256:{}",
                     required_sha(row, "exact_sha256", "membership record")?
@@ -1525,8 +1576,8 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
                 }
             }
             "protected_eval" => {
-                let objects = outgoing_targets(edges, "evaluation_object", kind, id)?;
-                require_exactly_one(&objects, "protected evaluation", id, "evaluation_object")?;
+                let objects = relations.outgoing("evaluation_object", kind, id);
+                require_exactly_one(objects, "protected evaluation", id, "evaluation_object")?;
                 let expected_object = format!(
                     "sha256:{}",
                     required_sha(row, "test_set_sha256", "protected evaluation record")?
@@ -1541,7 +1592,7 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
                     protected_evaluation_objects.insert(objects[0].clone());
                 }
                 require_exactly_one(
-                    &outgoing_targets(edges, "evaluation_receipt", kind, id)?,
+                    relations.outgoing("evaluation_receipt", kind, id),
                     "protected evaluation",
                     id,
                     "evaluation_receipt",
@@ -1554,7 +1605,7 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
                     "consumer_receipt",
                 ] {
                     require_exactly_one(
-                        &outgoing_targets(edges, edge_kind, kind, id)?,
+                        relations.outgoing(edge_kind, kind, id),
                         "consumer attempt",
                         id,
                         edge_kind,
@@ -1564,7 +1615,7 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
             "experience" => {
                 for edge_kind in ["experience_consumer", "experience_receipt"] {
                     require_exactly_one(
-                        &outgoing_targets(edges, edge_kind, kind, id)?,
+                        relations.outgoing(edge_kind, kind, id),
                         "experience",
                         id,
                         edge_kind,
@@ -1573,7 +1624,7 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
             }
             "receipt" if string_value(row, "state", "receipt record")? == "superseded" => {
                 require_exactly_one(
-                    &incoming_sources(edges, "receipt_supersession", kind, id)?,
+                    relations.incoming("receipt_supersession", kind, id),
                     "superseded receipt",
                     id,
                     "receipt_supersession",
@@ -1593,7 +1644,16 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_not_run_evaluation_consumers(records: &[Value], edges: &[Value]) -> Result<()> {
+    let relations = RelationIndex::from_edges(edges)?;
+    validate_not_run_evaluation_consumers_with_index(records, &relations)
+}
+
+fn validate_not_run_evaluation_consumers_with_index(
+    records: &[Value],
+    relations: &RelationIndex,
+) -> Result<()> {
     let admitted_training_memberships: Vec<&Map<String, Value>> = records
         .iter()
         .filter_map(Value::as_object)
@@ -1611,9 +1671,9 @@ fn validate_not_run_evaluation_consumers(records: &[Value], edges: &[Value]) -> 
             continue;
         }
         let id = string_value(row, "id", "protected evaluation record")?;
-        let consumers = incoming_sources(edges, "consumer_evaluation", "protected_eval", id)?;
+        let consumers = relations.incoming("consumer_evaluation", "protected_eval", id);
         require_exactly_one(
-            &consumers,
+            consumers,
             "not_run protected evaluation",
             id,
             "consumer_evaluation",
@@ -1623,17 +1683,17 @@ fn validate_not_run_evaluation_consumers(records: &[Value], edges: &[Value]) -> 
                 "not_run protected evaluation {id} is not bound to an evaluation consumer"
             ));
         }
-        let evaluation_objects =
-            outgoing_targets(edges, "evaluation_object", "protected_eval", id)?;
+        let evaluation_objects = relations.outgoing("evaluation_object", "protected_eval", id);
         require_exactly_one(
-            &evaluation_objects,
+            evaluation_objects,
             "not_run protected evaluation",
             id,
             "evaluation_object",
         )?;
         for membership in &admitted_training_memberships {
             let membership_id = string_value(membership, "id", "membership record")?;
-            if outgoing_targets(edges, "membership_object", "membership", membership_id)?
+            if relations
+                .outgoing("membership_object", "membership", membership_id)
                 .contains(&evaluation_objects[0])
             {
                 return invalid(format!(
@@ -1711,44 +1771,6 @@ fn validate_receipt_supersession(records: &[Value], edges: &[Value]) -> Result<(
         }
     }
     Ok(())
-}
-
-fn outgoing_targets(
-    edges: &[Value],
-    edge_kind: &str,
-    from_kind: &str,
-    from_id: &str,
-) -> Result<Vec<String>> {
-    let mut targets = Vec::new();
-    for edge in edges {
-        let row = object(edge, "edge")?;
-        if string_value(row, "kind", "edge")? == edge_kind
-            && string_value(row, "from_kind", "edge")? == from_kind
-            && string_value(row, "from_id", "edge")? == from_id
-        {
-            targets.push(string_value(row, "to_id", "edge")?.to_string());
-        }
-    }
-    Ok(targets)
-}
-
-fn incoming_sources(
-    edges: &[Value],
-    edge_kind: &str,
-    to_kind: &str,
-    to_id: &str,
-) -> Result<Vec<String>> {
-    let mut sources = Vec::new();
-    for edge in edges {
-        let row = object(edge, "edge")?;
-        if string_value(row, "kind", "edge")? == edge_kind
-            && string_value(row, "to_kind", "edge")? == to_kind
-            && string_value(row, "to_id", "edge")? == to_id
-        {
-            sources.push(string_value(row, "from_id", "edge")?.to_string());
-        }
-    }
-    Ok(sources)
 }
 
 fn require_nonempty(values: &[String], subject: &str, id: &str, edge_kind: &str) -> Result<()> {
@@ -1954,6 +1976,7 @@ fn invalid_error(detail: impl Into<String>) -> EmberLabError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
 
     fn not_run_record() -> Value {
         json!({
@@ -2057,5 +2080,38 @@ mod tests {
             ),
         ];
         assert!(validate_not_run_evaluation_consumers(&[record, membership], &edges).is_err());
+    }
+
+    #[test]
+    fn relation_index_serves_row8_scale_without_per_record_edge_rescans() {
+        let edge_count = 50_000;
+        let edges: Vec<Value> = (0..edge_count)
+            .map(|index| {
+                edge(
+                    "membership_object",
+                    "membership",
+                    &format!("membership:row8:{index}"),
+                    "immutable_object",
+                    &format!("sha256:{index:064x}"),
+                )
+            })
+            .collect();
+
+        let started = Instant::now();
+        let relations = RelationIndex::from_edges(&edges).expect("row8 relation index");
+        for index in 0..edge_count {
+            assert_eq!(
+                relations.outgoing(
+                    "membership_object",
+                    "membership",
+                    &format!("membership:row8:{index}"),
+                ),
+                &[format!("sha256:{index:064x}")]
+            );
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "indexed row8 relation lookup exceeded 10 seconds"
+        );
     }
 }
