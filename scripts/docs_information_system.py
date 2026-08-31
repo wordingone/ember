@@ -636,9 +636,10 @@ def load_public_interpreter_binding(root: Path) -> dict[str, str]:
     ):
         raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
     relative_path = portable_interpreter_relative_path(relative)
-    interpreter = (root.resolve() / relative_path).resolve()
+    checkout_root = root.resolve()
+    interpreter = checkout_root / relative_path
     try:
-        interpreter.relative_to(root.resolve())
+        interpreter.relative_to(checkout_root)
     except ValueError as error:
         raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED") from error
     if not interpreter.is_file():
