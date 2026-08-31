@@ -37,7 +37,7 @@ one into another.
   sparse unified text-image-audio decoder with native reasoning and structured-tool use.
 - The domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrastructure, and Governance.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
-- Inspection starts at this root README and the [canonical start page](docs/guides/START-HERE.md).
+- Inspection starts at this root README and the [canonical start page](docs/domains/governance/guides/START-HERE.md).
   On Windows, `tools/launchers/Ember.cmd` is the operator entry. Python uses
   `manifests/python-environment-v1.json`; Rust uses `runtime/ember-lab/Cargo.toml`; `ember-cli` uses
   `tools/ember-cli/src/package.json`.
@@ -52,7 +52,7 @@ one into another.
   [reproducibility charter](docs/charter/REPRODUCIBILITY.md): bind an exact public source, replay
   documented commands, and verify source identities and receipts without hidden or local evidence.
 
-Start with the [first-reader route](docs/guides/START-HERE.md), or use the
+Start with the [first-reader route](docs/domains/governance/guides/START-HERE.md), or use the
 [documentation map](docs/DOCS-README.md) to choose a route by task, audience, or technical domain.
 
 ## Architecture
@@ -67,7 +67,7 @@ links each canonical overview.
 ## Inspect or install
 
 To inspect Ember, start at this repository-root README and continue through the
-[canonical `docs/guides/START-HERE.md` page](docs/guides/START-HERE.md). On Windows, `tools/launchers/Ember.cmd` is
+[canonical `docs/domains/governance/guides/START-HERE.md` page](docs/domains/governance/guides/START-HERE.md). On Windows, `tools/launchers/Ember.cmd` is
 the operator entry.
 
 Python dependency authority: manifests/python-environment-v1.json.
@@ -83,7 +83,7 @@ python tools/ember-restart-3b/python_environment.py install --receipt state\rece
 ```
 
 This requires a supported Windows Python environment and network access for dependencies; it does
-not require model weights or a GPU. See the [start guide](docs/guides/START-HERE.md) before using
+not require model weights or a GPU. See the [start guide](docs/domains/governance/guides/START-HERE.md) before using
 operator or training surfaces.
 
 ## Verify safely
@@ -97,7 +97,7 @@ python scripts/verify_authority_conservation.py --root .
 For a smaller demonstration of receipt semantics, run:
 
 ```text
-python scripts/receipt_check.py --selftest
+python src/ember/governance/scripts/receipt_check.py --selftest
 ```
 
 These checks require no credentials, weights, or GPU and grant no model capability. The
@@ -117,7 +117,7 @@ completion claim.
 
 - Understand the project: [system overview](docs/architecture/system-overview.md) and
   [glossary](docs/GLOSSARY.md).
-- Use or inspect it: [start guide](docs/guides/START-HERE.md).
+- Use or inspect it: [start guide](docs/domains/governance/guides/START-HERE.md).
 - Verify evidence: [verification guide](docs/guides/VERIFY.md) and
   [reproducibility charter](docs/charter/REPRODUCIBILITY.md).
 - Operate it: [operator documentation](docs/operator/README.md).

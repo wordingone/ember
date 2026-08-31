@@ -373,7 +373,7 @@ def _recovery_records(config_module, verifier_module) -> list:
 
 def _recovery_counter_receipt_verifier(counter_module):
     """Build the real closed-schema realization receipt (same shape as
-    tests/ember_restart_model/checkpoint_fixture.py's fixture_counter_receipt)
+    tests/ember_restart_model/domain-governance/checkpoint_fixture.py's fixture_counter_receipt)
     so write_checkpoint_artifacts' pre_publish_verifier gate is exercised for
     real, not bypassed with an empty stub."""
     import hashlib
@@ -400,7 +400,7 @@ def _recovery_counter_receipt_verifier(counter_module):
         # admit_quarantined_checkpoint re-reads the candidate's on-disk
         # "parameter-counter-receipt.json" and requires it to equal the
         # returned payload byte-for-byte (post-run judge file binding) --
-        # matches tests/ember_restart_model/checkpoint_fixture.py exactly.
+        # matches tests/ember_restart_model/domain-governance/checkpoint_fixture.py exactly.
         import json as _json
         (candidate / "parameter-counter-receipt.json").write_text(
             _json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")

@@ -2,7 +2,7 @@
  "ticket": "FP32-BOTTLENECK-LEDGER",
  "issue": 225,
  "gate": "<local-path>",
- "companion_prose": "docs/research/fp32-gpu-bottleneck-ledger.md",
+ "companion_prose": "docs/domains/governance/research/fp32-gpu-bottleneck-ledger.md",
  "provenance_classes": [
   "receipt",
   "command",

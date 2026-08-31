@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Unit tests for the #280 K1 respec (antisymmetric out-proj perturbation
 grow-operator cure) at CPU/toy-fixture scale. Written FIRST per the TDD
 floor (team-lead ratification, garmbuild113 lane, issue #113/#280).
@@ -45,7 +48,50 @@ from grow_respec_280 import (  # noqa: E402
     twin_cosine_audit, expected_twin_cosine, checkpoint_identity,
     schedule_position_block,
 )
-from cbase_grow_dryrun import widen_state_dict  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/cbase_grow_dryrun.py
+import importlib.util as _ember_e083c5df74f39043_importlib
+import sys as _ember_e083c5df74f39043_sys
+from pathlib import Path as _ember_e083c5df74f39043_Path
+_ember_e083c5df74f39043_path = _ember_e083c5df74f39043_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'cbase_grow_dryrun.py')
+if not _ember_e083c5df74f39043_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/cbase_grow_dryrun.py')
+_ember_e083c5df74f39043_aliases = ('_ember_issue2015_e083c5df74f39043', 'cbase_grow_dryrun', 'scripts.cbase_grow_dryrun')
+_ember_e083c5df74f39043_existing = []
+for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+    _ember_e083c5df74f39043_candidate = _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias)
+    if _ember_e083c5df74f39043_candidate is not None and all(_ember_e083c5df74f39043_candidate is not item for item in _ember_e083c5df74f39043_existing):
+        _ember_e083c5df74f39043_existing.append(_ember_e083c5df74f39043_candidate)
+if len(_ember_e083c5df74f39043_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/cbase_grow_dryrun.py')
+if _ember_e083c5df74f39043_existing:
+    _ember_e083c5df74f39043_module = _ember_e083c5df74f39043_existing[0]
+    _ember_e083c5df74f39043_observed = getattr(_ember_e083c5df74f39043_module, '__file__', None)
+    if _ember_e083c5df74f39043_observed is None or _ember_e083c5df74f39043_Path(_ember_e083c5df74f39043_observed).resolve() != _ember_e083c5df74f39043_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/cbase_grow_dryrun.py')
+else:
+    _ember_e083c5df74f39043_spec = _ember_e083c5df74f39043_importlib.spec_from_file_location('_ember_issue2015_e083c5df74f39043', _ember_e083c5df74f39043_path)
+    if _ember_e083c5df74f39043_spec is None or _ember_e083c5df74f39043_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/cbase_grow_dryrun.py')
+    _ember_e083c5df74f39043_module = _ember_e083c5df74f39043_importlib.module_from_spec(_ember_e083c5df74f39043_spec)
+    for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+        _ember_e083c5df74f39043_prior = _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias)
+        if _ember_e083c5df74f39043_prior is not None and _ember_e083c5df74f39043_prior is not _ember_e083c5df74f39043_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cbase_grow_dryrun.py')
+        _ember_e083c5df74f39043_sys.modules[_ember_e083c5df74f39043_alias] = _ember_e083c5df74f39043_module
+    try:
+        _ember_e083c5df74f39043_spec.loader.exec_module(_ember_e083c5df74f39043_module)
+    except BaseException:
+        for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+            if _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias) is _ember_e083c5df74f39043_module:
+                _ember_e083c5df74f39043_sys.modules.pop(_ember_e083c5df74f39043_alias, None)
+        raise
+for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+    _ember_e083c5df74f39043_prior = _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias)
+    if _ember_e083c5df74f39043_prior is not None and _ember_e083c5df74f39043_prior is not _ember_e083c5df74f39043_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cbase_grow_dryrun.py')
+    _ember_e083c5df74f39043_sys.modules[_ember_e083c5df74f39043_alias] = _ember_e083c5df74f39043_module
+widen_state_dict = getattr(_ember_e083c5df74f39043_module, 'widen_state_dict')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/cbase_grow_dryrun.py  # noqa: E402
 
 
 def _toy_state_dict(n_layers: int, hidden: int, ff_seed: int, seed: int = 0) -> dict:
@@ -142,7 +188,50 @@ def test_second_noise_scale_sensitivity_grid_cell():
 
 def test_function_preservation_exact_with_and_without_eps():
     print("Test 5: function preservation holds exactly, eps_sigma=0 AND eps_sigma>0 (real tiny model)...")
-    from cbase_grow_dryrun import build_model
+    # issue2015 exact-local-import:src/ember/governance/scripts/cbase_grow_dryrun.py
+    import importlib.util as _ember_e083c5df74f39043_importlib
+    import sys as _ember_e083c5df74f39043_sys
+    from pathlib import Path as _ember_e083c5df74f39043_Path
+    _ember_e083c5df74f39043_path = _ember_e083c5df74f39043_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'cbase_grow_dryrun.py')
+    if not _ember_e083c5df74f39043_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/cbase_grow_dryrun.py')
+    _ember_e083c5df74f39043_aliases = ('_ember_issue2015_e083c5df74f39043', 'cbase_grow_dryrun', 'scripts.cbase_grow_dryrun')
+    _ember_e083c5df74f39043_existing = []
+    for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+        _ember_e083c5df74f39043_candidate = _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias)
+        if _ember_e083c5df74f39043_candidate is not None and all(_ember_e083c5df74f39043_candidate is not item for item in _ember_e083c5df74f39043_existing):
+            _ember_e083c5df74f39043_existing.append(_ember_e083c5df74f39043_candidate)
+    if len(_ember_e083c5df74f39043_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/cbase_grow_dryrun.py')
+    if _ember_e083c5df74f39043_existing:
+        _ember_e083c5df74f39043_module = _ember_e083c5df74f39043_existing[0]
+        _ember_e083c5df74f39043_observed = getattr(_ember_e083c5df74f39043_module, '__file__', None)
+        if _ember_e083c5df74f39043_observed is None or _ember_e083c5df74f39043_Path(_ember_e083c5df74f39043_observed).resolve() != _ember_e083c5df74f39043_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/cbase_grow_dryrun.py')
+    else:
+        _ember_e083c5df74f39043_spec = _ember_e083c5df74f39043_importlib.spec_from_file_location('_ember_issue2015_e083c5df74f39043', _ember_e083c5df74f39043_path)
+        if _ember_e083c5df74f39043_spec is None or _ember_e083c5df74f39043_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/cbase_grow_dryrun.py')
+        _ember_e083c5df74f39043_module = _ember_e083c5df74f39043_importlib.module_from_spec(_ember_e083c5df74f39043_spec)
+        for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+            _ember_e083c5df74f39043_prior = _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias)
+            if _ember_e083c5df74f39043_prior is not None and _ember_e083c5df74f39043_prior is not _ember_e083c5df74f39043_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cbase_grow_dryrun.py')
+            _ember_e083c5df74f39043_sys.modules[_ember_e083c5df74f39043_alias] = _ember_e083c5df74f39043_module
+        try:
+            _ember_e083c5df74f39043_spec.loader.exec_module(_ember_e083c5df74f39043_module)
+        except BaseException:
+            for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+                if _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias) is _ember_e083c5df74f39043_module:
+                    _ember_e083c5df74f39043_sys.modules.pop(_ember_e083c5df74f39043_alias, None)
+            raise
+    for _ember_e083c5df74f39043_alias in _ember_e083c5df74f39043_aliases:
+        _ember_e083c5df74f39043_prior = _ember_e083c5df74f39043_sys.modules.get(_ember_e083c5df74f39043_alias)
+        if _ember_e083c5df74f39043_prior is not None and _ember_e083c5df74f39043_prior is not _ember_e083c5df74f39043_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cbase_grow_dryrun.py')
+        _ember_e083c5df74f39043_sys.modules[_ember_e083c5df74f39043_alias] = _ember_e083c5df74f39043_module
+    build_model = getattr(_ember_e083c5df74f39043_module, 'build_model')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/cbase_grow_dryrun.py
 
     cfg_model = {"vocab": 64, "hidden": 16, "layers": 2, "heads": 2, "seq": 32, "tied_embeddings": False}
     n_mtp = 1

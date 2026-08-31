@@ -489,14 +489,14 @@
       "category": "parameter_identity",
       "evidence_sha256": "be25851e3b08e79d31f611d45c2f1ec409f69d059951aca547e0595762473877",
       "line": 364,
-      "path": "scripts/serve_cbase_openai.py",
+      "path": "src/ember/governance/scripts/serve_cbase_openai.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {
       "category": "parameter_identity",
       "evidence_sha256": "5ff52faf3b9a8b1f1fb43b65347c49324dd7cfd2b41c9239dee5b0d53a867f82",
       "line": 382,
-      "path": "scripts/serve_cbase_openai.py",
+      "path": "src/ember/governance/scripts/serve_cbase_openai.py",
       "review_basis": "static keyword coincidence ('param_count' or similar term) in code unrelated to the identity manifest's parameter binding; does not validate or emit checkpoint-bound parameter identity"
     },
     {

@@ -570,7 +570,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/archive/pre-restart/r2-prereg.md",
+      "document": "docs/domains/governance/archive/pre-restart/r2-prereg.md",
       "line": 10,
       "target": "receipts/power-helper-20260612T2106",
       "visible_classification": "historical"
@@ -1718,7 +1718,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/guides/START-HERE.md",
+      "document": "docs/domains/governance/guides/START-HERE.md",
       "line": 92,
       "target": "docs/spec/energy-law-theory-v1.md",
       "visible_classification": "reference"
@@ -1935,7 +1935,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/exteroception-2026-06-10.md",
+      "document": "docs/domains/governance/research/exteroception-2026-06-10.md",
       "line": 30,
       "target": "src/services/search/",
       "visible_classification": "reference"
@@ -1956,14 +1956,14 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/fp32-gpu-bottleneck-ledger.md",
+      "document": "docs/domains/governance/research/fp32-gpu-bottleneck-ledger.md",
       "line": 11,
       "target": "receipts/fp32-baselines-",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/fp32-gpu-bottleneck-ledger.md",
+      "document": "docs/domains/governance/research/fp32-gpu-bottleneck-ledger.md",
       "line": 12,
       "target": "receipts/fp32-step-econ-",
       "visible_classification": "reference"
@@ -2138,35 +2138,35 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/nc2-technique-survey-2026-06.md",
+      "document": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
       "line": 10,
       "target": "docs/transformers/en/quantization/bitnet",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/nc2-technique-survey-2026-06.md",
+      "document": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
       "line": 78,
       "target": "docs/stable/generated/torch.optim.Muon.html",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/nc2-technique-survey-2026-06.md",
+      "document": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
       "line": 165,
       "target": "docs/trl/grpo_trainer",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/nc2-technique-survey-2026-06.md",
+      "document": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
       "line": 213,
       "target": "docs/transformers/en/quantization/bitnet",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/nc2-technique-survey-2026-06.md",
+      "document": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
       "line": 226,
       "target": "data/compute",
       "visible_classification": "reference"
@@ -2208,42 +2208,42 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/triton-windows-research-2026-06-10.md",
+      "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "line": 24,
       "target": "docs/bitsandbytes/main/en/installation",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/triton-windows-research-2026-06-10.md",
+      "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "line": 31,
       "target": "docs/stable/torch.compiler_troubleshooting.html",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/triton-windows-research-2026-06-10.md",
+      "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "line": 32,
       "target": "tokenizer/dataset",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/triton-windows-research-2026-06-10.md",
+      "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "line": 33,
       "target": "docs/get-started/install/windows-installation",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/triton-windows-research-2026-06-10.md",
+      "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "line": 103,
       "target": "docs/bitsandbytes/main/en/installation",
       "visible_classification": "reference"
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/research/triton-windows-research-2026-06-10.md",
+      "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "line": 109,
       "target": "docs/get-started/install/windows-installation",
       "visible_classification": "reference"
@@ -2264,7 +2264,7 @@
     },
     {
       "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-      "document": "docs/roadmap/issue-214-flame-observability-conservation.md",
+      "document": "docs/domains/governance/roadmap/issue-214-flame-observability-conservation.md",
       "line": 70,
       "target": "state/receipt-bound",
       "visible_classification": "reference"

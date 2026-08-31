@@ -6,7 +6,7 @@ What ember is, what it claims, and where each binding artifact lives.
 ## Evidence model (applies to everything below)
 
 - Claims come only from receipts of executed local jobs (`receipts/`,
-  floor-checked by `scripts/receipt_check.py`). Prose never carries a claim.
+  floor-checked by `src/ember/governance/scripts/receipt_check.py`). Prose never carries a claim.
 - Preregistration: analyses that judge a run are frozen BEFORE the run
   exists (executable constants + selftests, not prose intent).
 - Gates tighten on failure, never relax. Deviations from frozen constants
@@ -35,10 +35,10 @@ Live chain (each step fail-closed on the previous step's receipt):
    `manifests/corpus/`, totals frozen.
 2. **Tokenizer** — frozen 32k, byte-pinned (`tokenizer/`), reserved ids 0–7;
    real token total 6,973,632,296.
-3. **Shards** — `scripts/token_shards_v0.py --emit` writes packed uint16
+3. **Shards** — `src/ember/governance/scripts/token_shards_v0.py --emit` writes packed uint16
    shards out-of-tree; the receipt must reproduce the frozen total; a
    byte-scan validator re-derives invariants from the bytes.
-4. **Launch gate** — `scripts/v0_pretrain_launch_gate.py`, 8 rows
+4. **Launch gate** — `src/ember/governance/scripts/v0_pretrain_launch_gate.py`, 8 rows
    (corpus / tokenizer / shards / config / governor / world / budget /
    prereg), enforced inside the trainer interlock.
 5. **Governed dispatch** — `scripts/timeshare_pretrain.py --live` under the

@@ -44,7 +44,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The constitutional invariant hash every post-genesis receipt must carry
-# (scripts/receipt_check.py's post-genesis rule, enforced by repo-guard's
+# (src/ember/governance/scripts/receipt_check.py's post-genesis rule, enforced by repo-guard's
 # changed-receipts leg). IMPORTED from the checker rather than copied, so this
 # generator cannot drift from the authority that grades it.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -133,7 +133,7 @@ def main() -> int:
         "kind": "ember-c-obs-proof-pack-receipt",
         # Authority binding (scripts/verify_authority_conservation.py leg 4,
         # artifact.goal_binding) and the sha-claim convention every hash field in
-        # this receipt is computed under (scripts/receipt_check.py R2).
+        # this receipt is computed under (src/ember/governance/scripts/receipt_check.py R2).
         "goal_id": "EMBER-02",
         "workstream_id": "EMBER-02A",
         "next_executed_outcome": (

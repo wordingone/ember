@@ -1,8 +1,8 @@
 # 07 — Governor and Resource Management
 
-## scripts/governor.py
+## src/ember/governance/scripts/governor.py
 
-The canonical resource governor (`scripts/governor.py` docstring: "the
+The canonical resource governor (`src/ember/governance/scripts/governor.py` docstring: "the
 launch preconditions that keep this PC alive"), extracted from duplicated
 inline blocks in `t1_probe.load_model`, `t2_round.train_lora`, `t2_grpo`,
 `t2_mtp`, semantics kept byte-equivalent to the original inline logic.
@@ -27,7 +27,7 @@ prose.
 
 ## Selftest
 
-`python scripts/governor.py` runs a Windows-safe, no-torch selftest covering
+`python src/ember/governance/scripts/governor.py` runs a Windows-safe, no-torch selftest covering
 env parsing, the receipt-block shape, the device-adaptive precision ladder,
 and the in-run commit governor (all pure Python plus `ctypes` on win32); the
 fp8 matmul path is exercised separately.

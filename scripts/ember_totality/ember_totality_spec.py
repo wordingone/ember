@@ -254,7 +254,7 @@ I_MEMBERS = {
         "docs/spec/bootstrap-v1.md",
         "docs/spec/judge-admission-v1.md",
     ],
-    "governor": ["scripts/governor.py"],
+    "governor": ["src/ember/governance/scripts/governor.py"],
     # + conditions-v1.md (registry body) + operator-acceptance-v1.md (consent
     # schema) -- both change the bar without touching docs/domains/governance/authority/GOAL.md itself (R7 H1's
     # laundering pattern, closed at the hash layer).
@@ -266,8 +266,8 @@ I_MEMBERS = {
     # + receipt_semantic_check.py: "S1-S7 is the sharpest tooth."
     "receipts_discipline": [
         "docs/spec/receipts-v1.md",
-        "scripts/receipt_check.py",
-        "scripts/receipt_write.py",
+        "src/ember/governance/scripts/receipt_check.py",
+        "src/ember/governance/scripts/receipt_write.py",
         "scripts/receipt_semantic_check.py",
     ],
     # EXTENDS to M's item/data files the day they materialize (dated
@@ -1356,7 +1356,7 @@ def main():
         "receipt_type": "ember_totality_board",
         "ticket": "EMBER-TOTALITY-BOARD",
         "ts": ts,
-        # Required by scripts/receipt_check.py whenever any sha256 field is
+        # Required by src/ember/governance/scripts/receipt_check.py whenever any sha256 field is
         # present (here: invariant_checksum's per-file/member/combined
         # hashes) -- every hash in this receipt is a plain sha256 of the
         # named file's bytes on disk as-is, hex digest, no salt/transform.

@@ -7,7 +7,7 @@
   "exceptions": [
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "37ca8853fa3f8df24646c40f991a3a801fac95b7bac977de11659c064a4de0c9",
+      "sha256": "be5a651844c2e57f2078df3d69189cced11c526417c33d8d4aeee534bfe188be",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "path": "scripts/ember_gate_launch_packaging.py",
-      "sha256": "c462be8fab5e24a4ebdc7315e639612154c7a451c9e2bf65d3b9aad130076574",
+      "sha256": "ac2cd2658a12a3fcbad5890774210ce3bdad8fc93fd2c4f6c51b21c49520ebd4",
       "reason": "matched on its name, not its behaviour. It is a CLI parity harness: the child it creates is the packaged CLI under test with a 20-second timeout, never a training run."
     },
     {
@@ -42,12 +42,12 @@
     },
     {
       "path": "scripts/test_ember_cbase_launch.py",
-      "sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58",
+      "sha256": "31d1532dad56a84afddaf50c521b24d4c750b58ee01147f362cba9205a1bf34d",
       "reason": "CPU-only wrapper test with CUDA explicitly disabled. Its child commands are temporary stub-core fixtures used to prove STOP/CEILING_STOP and receipt shapes; it does not launch a GPU job or daemon."
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "b1a80605b78afa5847df72058125962926cb331f555c4a34c91016b3c6943dd5",
+      "sha256": "5eff3bea592a9ee54868f21493f5f76e7db0997d2db83710fddf591c483feb2d",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {

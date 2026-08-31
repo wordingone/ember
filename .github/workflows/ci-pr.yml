@@ -81,7 +81,7 @@ jobs:
         run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
       - name: Verify training closure and Python environment authority
         run: |
-          python -B scripts/training_closure.py --root .
+          python -B src/ember/governance/scripts/training_closure.py --root .
           python -B tools/ember-restart-3b/python_environment.py --root . verify
       - name: Run text-lab identity freshness regressions
         run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v

@@ -49,7 +49,7 @@ EXECUTION_DENIAL = (
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 EXPECTED_LANDED_PATHS = {
-    "scripts/convert_nf4_prequant.py",
+    "src/ember/governance/scripts/convert_nf4_prequant.py",
     "scripts/ember_cbase_avir_data.py",
     "scripts/ember_cbase_avir_data_v2.py",
     "scripts/test_ember_cbase_avir_data.py",
@@ -58,7 +58,7 @@ EXPECTED_LANDED_PATHS = {
 IMPORT_CLOSURE_PATHS = (
     "scripts/ember_avir_tasks.py",
     "scripts/ember_avir_harness.py",
-    "scripts/governor.py",
+    "src/ember/governance/scripts/governor.py",
     "scripts/timeshare_pretrain.py",
 )
 

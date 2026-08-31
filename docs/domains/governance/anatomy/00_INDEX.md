@@ -26,10 +26,10 @@ into prose that outruns the receipts.
 | 04 | TRAINING_PIPELINE | pretraining entry points, the resident/CPU launch paths, the in-run commit governor |
 | 05 | GROWTH_AND_SCALING | `scripts/ember_growth_harness.py`, the C-GROW mechanisms, C-SCALE |
 | 06 | EVALUATION_AND_BENCHMARKS | D3 native loop, the operator benchmark set, anti-gaming C1–C5 protocol |
-| 07 | GOVERNOR_AND_RESOURCE_MANAGEMENT | `scripts/governor.py` — VRAM/commit/device governance |
+| 07 | GOVERNOR_AND_RESOURCE_MANAGEMENT | `src/ember/governance/scripts/governor.py` — VRAM/commit/device governance |
 | 08 | PROMPT_REGISTRY | **does not exist yet** — stated plainly, not invented |
 | 09 | TOOLING_AND_CLI | `tools/ember-cli/`, `scripts/ember_avir_cli_launch_entry.py` |
-| 10 | RECEIPTS_PROVENANCE | `scripts/receipt_check.py`, `scripts/receipt_write.py`, the genesis invariant |
+| 10 | RECEIPTS_PROVENANCE | `src/ember/governance/scripts/receipt_check.py`, `src/ember/governance/scripts/receipt_write.py`, the genesis invariant |
 | 11 | TOTALITY_BOARD_CONDITIONS | `scripts/ember_totality/ember_totality_spec.py`, the 41-condition registry |
 | 12 | COCKPIT_OBSERVATORY | `tools/ember-cli/src/core/ember-world-state.ts`, `scripts/ember_cobs_capture.py` |
 | 13 | RUNBOOK | day-to-day operator commands, reproduced from real recent sessions |

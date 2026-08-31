@@ -17,7 +17,50 @@ from pathlib import Path
 import statistics
 from typing import Any
 
-from r1_exit_battery import pooled_sigma_seed
+# issue2015 exact-local-import:src/ember/governance/scripts/r1_exit_battery.py
+import importlib.util as _ember_2afec9f76b7cd933_importlib
+import sys as _ember_2afec9f76b7cd933_sys
+from pathlib import Path as _ember_2afec9f76b7cd933_Path
+_ember_2afec9f76b7cd933_path = _ember_2afec9f76b7cd933_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'r1_exit_battery.py')
+if not _ember_2afec9f76b7cd933_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/r1_exit_battery.py')
+_ember_2afec9f76b7cd933_aliases = ('_ember_issue2015_2afec9f76b7cd933', 'r1_exit_battery', 'scripts.r1_exit_battery')
+_ember_2afec9f76b7cd933_existing = []
+for _ember_2afec9f76b7cd933_alias in _ember_2afec9f76b7cd933_aliases:
+    _ember_2afec9f76b7cd933_candidate = _ember_2afec9f76b7cd933_sys.modules.get(_ember_2afec9f76b7cd933_alias)
+    if _ember_2afec9f76b7cd933_candidate is not None and all(_ember_2afec9f76b7cd933_candidate is not item for item in _ember_2afec9f76b7cd933_existing):
+        _ember_2afec9f76b7cd933_existing.append(_ember_2afec9f76b7cd933_candidate)
+if len(_ember_2afec9f76b7cd933_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/r1_exit_battery.py')
+if _ember_2afec9f76b7cd933_existing:
+    _ember_2afec9f76b7cd933_module = _ember_2afec9f76b7cd933_existing[0]
+    _ember_2afec9f76b7cd933_observed = getattr(_ember_2afec9f76b7cd933_module, '__file__', None)
+    if _ember_2afec9f76b7cd933_observed is None or _ember_2afec9f76b7cd933_Path(_ember_2afec9f76b7cd933_observed).resolve() != _ember_2afec9f76b7cd933_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/r1_exit_battery.py')
+else:
+    _ember_2afec9f76b7cd933_spec = _ember_2afec9f76b7cd933_importlib.spec_from_file_location('_ember_issue2015_2afec9f76b7cd933', _ember_2afec9f76b7cd933_path)
+    if _ember_2afec9f76b7cd933_spec is None or _ember_2afec9f76b7cd933_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/r1_exit_battery.py')
+    _ember_2afec9f76b7cd933_module = _ember_2afec9f76b7cd933_importlib.module_from_spec(_ember_2afec9f76b7cd933_spec)
+    for _ember_2afec9f76b7cd933_alias in _ember_2afec9f76b7cd933_aliases:
+        _ember_2afec9f76b7cd933_prior = _ember_2afec9f76b7cd933_sys.modules.get(_ember_2afec9f76b7cd933_alias)
+        if _ember_2afec9f76b7cd933_prior is not None and _ember_2afec9f76b7cd933_prior is not _ember_2afec9f76b7cd933_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/r1_exit_battery.py')
+        _ember_2afec9f76b7cd933_sys.modules[_ember_2afec9f76b7cd933_alias] = _ember_2afec9f76b7cd933_module
+    try:
+        _ember_2afec9f76b7cd933_spec.loader.exec_module(_ember_2afec9f76b7cd933_module)
+    except BaseException:
+        for _ember_2afec9f76b7cd933_alias in _ember_2afec9f76b7cd933_aliases:
+            if _ember_2afec9f76b7cd933_sys.modules.get(_ember_2afec9f76b7cd933_alias) is _ember_2afec9f76b7cd933_module:
+                _ember_2afec9f76b7cd933_sys.modules.pop(_ember_2afec9f76b7cd933_alias, None)
+        raise
+for _ember_2afec9f76b7cd933_alias in _ember_2afec9f76b7cd933_aliases:
+    _ember_2afec9f76b7cd933_prior = _ember_2afec9f76b7cd933_sys.modules.get(_ember_2afec9f76b7cd933_alias)
+    if _ember_2afec9f76b7cd933_prior is not None and _ember_2afec9f76b7cd933_prior is not _ember_2afec9f76b7cd933_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/r1_exit_battery.py')
+    _ember_2afec9f76b7cd933_sys.modules[_ember_2afec9f76b7cd933_alias] = _ember_2afec9f76b7cd933_module
+pooled_sigma_seed = getattr(_ember_2afec9f76b7cd933_module, 'pooled_sigma_seed')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/r1_exit_battery.py
 
 
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"

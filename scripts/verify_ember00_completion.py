@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Emit the EMBER-00 completion receipt from a clean detached checkout.
 
 The receipt is authority-only. It does not claim that training, a model,
@@ -202,8 +203,8 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
         ),
         (
             "c_authority_condition",
-            [py, "-B", "scripts/ember_totality/test_c_authority.py"],
-            ["python", "-B", "scripts/ember_totality/test_c_authority.py"],
+            [py, "-B", "src/ember/governance/scripts/ember_totality/test_c_authority.py"],
+            ["python", "-B", "src/ember/governance/scripts/ember_totality/test_c_authority.py"],
         ),
         (
             "pr_authority_binding",

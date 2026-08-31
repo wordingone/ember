@@ -38,7 +38,7 @@ Expected: receipt reports 20 nouns, at least 20 train pairs, exactly 20 heldout 
 ### Task 2: Local Manifest Launch Gate
 
 **Files:**
-- Modify: `scripts/v0_pretrain_launch_gate.py`
+- Modify: `src/ember/governance/scripts/v0_pretrain_launch_gate.py`
 
 - [ ] **Step 1: Accept local `image_path` matched-pair manifests**
 
@@ -50,7 +50,7 @@ Change the holdout check so records may carry `url` or `image_path`, plus `sha25
 
 - [ ] **Step 3: Run gate selftest**
 
-Run: `python scripts/v0_pretrain_launch_gate.py --selftest`
+Run: `python src/ember/governance/scripts/v0_pretrain_launch_gate.py --selftest`
 
 Expected: `V0_LAUNCH_GATE_SELFTEST_PASS`.
 

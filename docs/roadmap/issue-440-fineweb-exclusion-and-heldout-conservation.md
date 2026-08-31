@@ -42,7 +42,7 @@ the then-current source-blind gap. Merged PR #1456, reviewed head
 `75448febc5f469057ef18af189e3c80cf3ad07dc`, subsequently cured the default
 consumer path.
 
-Current `scripts/fineweb_exclusion.py` derives the exclusion from the
+Current `src/ember/governance/scripts/fineweb_exclusion.py` derives the exclusion from the
 TOKEN-SHARDS-V0 and assembly receipts rather than filenames. The default
 `PackedShardLoader` and launch gate skip overlapping windows and refuse
 unidentified streams, damaged rulings, geometry mismatch, or edits that would

@@ -27,7 +27,7 @@ APPROVED_DOC_PATHS = {
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/custody/custody-disposition-20260708.md",
     "docs/custody/r1-exit-evidence-inventory-20260805.md",
-    "docs/guides/START-HERE.md",
+    "docs/domains/governance/guides/START-HERE.md",
     "docs/roadmap/PROBLEMS.md",
 }
 

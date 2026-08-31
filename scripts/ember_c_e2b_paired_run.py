@@ -186,7 +186,7 @@ this file as `protocol_frozen_ref`.
 ## Legs (both required; a one-leg receipt is invalid_single_leg_surpass)
 
 1. **ember_work** -- C14-class task battery: the increment-modulo-8
-   executing-verifier corpus (scripts/ember_c14_owned_run.py::generate_corpus
+   executing-verifier corpus (src/ember/governance/scripts/ember_c14_owned_run.py::generate_corpus
    + _executing_verifier). Owned core answers via its native action-band
    interface (rlm_generate, greedy, temperature=0). E2B answers via a text
    prompt asking for `(state_val + 1) mod 8`; the first integer parsed from
@@ -213,7 +213,7 @@ the receipt's `matched_budget` block, owned_arm == e2b_arm always).
 
 ## Owned-core identity
 
-The Ember side of every comparison is scripts/ember_c14_owned_core.py's
+The Ember side of every comparison is src/ember/governance/scripts/ember_c14_owned_core.py's
 hash-verified owned seed (cbase-v0, models/cbase-smoke-run/checkpoints/
 step-00000610) wrapped in a fresh LoRA adapter -- CPU float32
 (no_borrowed_weights=true, quantized=false). No borrowed/quantized weight is

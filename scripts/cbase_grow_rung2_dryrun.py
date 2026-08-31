@@ -91,7 +91,7 @@ from cpu_offload_adamw import estimate_required_gib_offloaded, vram_preflight  #
 REPO = Path(__file__).resolve().parent.parent
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 # Constitutional invariant hash (receipt_check.py's post-genesis rule) -- cross-verified
-# against scripts/receipt_check.py's own INVARIANT_SHA256 constant, not hand-typed.
+# against src/ember/governance/scripts/receipt_check.py's own INVARIANT_SHA256 constant, not hand-typed.
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 SEED_CKPT = REPO / "models" / "cbase-grow-rung" / "rung1-20260703T155447Z" / "stabilize" / "checkpoints" / "step-00000766"

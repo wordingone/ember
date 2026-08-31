@@ -7,7 +7,7 @@
 Purpose: the plaintext names check (REPO_GUARD_NAMES env var or the git-ignored
 tools/.repo-guard-denylist file) requires a secret or a local-only file, neither of
 which is available in ordinary CI. This mode lets CI run the SAME check without ever
-holding the plaintext names: a committed tools/repo-guard-denylist.sha256 file stores
+holding the plaintext names: a committed src/ember/infrastructure/tools/repo-guard-denylist.sha256 file stores
 one sha256 digest per lowercase name, never the name itself. This script tokenizes
 tracked text files, hashes each candidate word, and compares against that committed
 set. Nothing reversible is published; the denylist file can be safely committed.
@@ -15,7 +15,7 @@ set. Nothing reversible is published; the denylist file can be safely committed.
 Two modes:
   --generate            read a plaintext denylist (one name per line, '#'-comments and
                          blank lines ignored) and write its sha256 set. Use this to
-                         (re)build tools/repo-guard-denylist.sha256 from a local-only
+                         (re)build src/ember/infrastructure/tools/repo-guard-denylist.sha256 from a local-only
                          plaintext file; never run this in a context that would print
                          or commit the plaintext input.
   (default) check mode  tokenize tracked text files under --root and report any word
@@ -68,7 +68,7 @@ SELF_EXCLUDE = {
     "tools/.repo-guard-denylist.example",
     "tools/repo-guard-names-exclude.cfg",
 }
-# Note: tools/repo-guard-denylist.sha256 is NOT excluded — its comments must be
+# Note: src/ember/infrastructure/tools/repo-guard-denylist.sha256 is NOT excluded — its comments must be
 # scanned to prevent raw names from appearing as metadata. Hash lines themselves
 # are safe (hex tokens don't match founder names).
 
@@ -256,7 +256,7 @@ def run_generate(plaintext_path: Path, out_path: Path) -> int:
         "# repo-guard hashed name denylist — GENERATED, committed, contains NO names.\n"
         "# One sha256(lowercase-name) per line. Regenerate with:\n"
         "#   python tools/check_names_hashed.py --generate "
-        "--denylist-plain <local-plaintext-file> --out tools/repo-guard-denylist.sha256\n"
+        "--denylist-plain <local-plaintext-file> --out src/ember/infrastructure/tools/repo-guard-denylist.sha256\n"
     )
     out_path.write_text(header + "\n".join(hashes) + "\n", encoding="utf-8", newline="\n")
     print(f"ok   [names-hashed:generate] wrote {len(hashes)} hash(es) to {out_path}")

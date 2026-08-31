@@ -76,7 +76,7 @@ missing capability (no CLI path today can both run ≥100 steps *and* record tel
 
 ## Deliverables produced against this inventory
 
-- `scripts/r1_exit_battery.py` — runs against real run-root bytes; for each of E1..E8 either
+- `src/ember/governance/scripts/r1_exit_battery.py` — runs against real run-root bytes; for each of E1..E8 either
   computes a real verdict from present evidence or emits a fail-closed `EVIDENCE_MISSING`
   refusal naming exactly the missing bytes. `--selftest` covers both paths per exit with
   hermetic synthetic fixtures (namespaced `SELFTEST_FIXTURE_*`), zero GPU/checkpoint bytes

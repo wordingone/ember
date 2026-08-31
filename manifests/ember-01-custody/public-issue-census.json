@@ -1354,7 +1354,7 @@
           "implementation_diff_sha256": "0b16d7744e4dd920d830076b84900bf31504d7f4e691b8fdb98c41d694dc6787",
           "implementation_paths": [
             "scripts/test_w1_recheck_cache.py",
-            "scripts/w1_collapse_control_run.py",
+            "src/ember/governance/scripts/w1_collapse_control_run.py",
             "scripts/w1_recheck_cache.py"
           ],
           "number": 351,
@@ -1394,7 +1394,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "scripts/w1_collapse_control_run.py",
+          "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
           "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Emit content-pinned corpus identity without raw shard paths and fail closed to external basename disclosure across Windows cross-drive paths.",
@@ -1405,7 +1405,7 @@
           "implementation_diff_sha256": "5d98571aedc956ddb35dfc0a8dbfb822653e23a7b463a9c94bd20a99e0ffcb2d",
           "implementation_paths": [
             "scripts/test_w1b_continuation.py",
-            "scripts/w1_collapse_control_run.py"
+            "src/ember/governance/scripts/w1_collapse_control_run.py"
           ],
           "number": 357,
           "verification_executed_at": "2026-07-13T12:25:49Z",
@@ -1599,7 +1599,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "scripts/w1_collapse_control_run.py",
+          "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
           "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Retain continuation_source_verification with checkpoint_dir, manifest SHA-256, on-disk model SHA-256, and match in both live and dry-run receipts.",
@@ -1610,7 +1610,7 @@
           "implementation_diff_sha256": "a011e95dd10b195d2f9df97dee23603ab296ae2d9d33bfb6bed11297b18ffbea",
           "implementation_paths": [
             "scripts/test_w1_live_gates.py",
-            "scripts/w1_collapse_control_run.py"
+            "src/ember/governance/scripts/w1_collapse_control_run.py"
           ],
           "number": 375,
           "verification_executed_at": "2026-07-13T12:26:37Z",
@@ -2184,7 +2184,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "scripts/w1_collapse_control_run.py",
+          "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
           "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Retain adaptive chunk-halving inside the sole serial contamination-recheck entry point, equivalent output, and a named out-of-memory failure at the configured floor.",
@@ -2195,7 +2195,7 @@
           "implementation_diff_sha256": "42b981ea1f9a9d690a8218d638f9ae1c853ad103f5549c8486914547b8b0a799",
           "implementation_paths": [
             "scripts/test_w1_contamination_recheck_scan_guard.py",
-            "scripts/w1_collapse_control_run.py"
+            "src/ember/governance/scripts/w1_collapse_control_run.py"
           ],
           "number": 445,
           "verification_executed_at": "2026-07-13T12:49:12Z",
@@ -2396,7 +2396,7 @@
           "verification_executed_at": "2026-07-13T12:27:38Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "scripts/receipt_check.py",
+          "verifier_path": "src/ember/governance/scripts/receipt_check.py",
           "verifier_sha256": "1d0895435df1cb8054332f6ae46528bb7b1fad12f5d3cf91ee9d883a4b38ea04"
         }
       ],
@@ -2563,7 +2563,7 @@
             "scripts/research/exposure_ledger.py",
             "scripts/research/test_exposure_ledger_mmap_forward.py",
             "scripts/test_w1b_fp32_check_mmap_forward.py",
-            "scripts/w1_collapse_control_run.py",
+            "src/ember/governance/scripts/w1_collapse_control_run.py",
             "scripts/w1b_fp32_check.py"
           ],
           "number": 575,
@@ -3265,7 +3265,7 @@
       "implementation_diff_sha256": "0b16d7744e4dd920d830076b84900bf31504d7f4e691b8fdb98c41d694dc6787",
       "implementation_paths": [
         "scripts/test_w1_recheck_cache.py",
-        "scripts/w1_collapse_control_run.py",
+        "src/ember/governance/scripts/w1_collapse_control_run.py",
         "scripts/w1_recheck_cache.py"
       ],
       "number": 351,
@@ -3276,7 +3276,7 @@
       "verifier_sha256": "d061541d3ad096819c0a84e261dc294660a13058300a446cea6d45f3c6eaabc3"
     },
     {
-      "artifact_path": "scripts/w1_collapse_control_run.py",
+      "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
       "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
       "criterion": "Emit content-pinned corpus identity without raw shard paths and fail closed to external basename disclosure across Windows cross-drive paths.",
@@ -3287,7 +3287,7 @@
       "implementation_diff_sha256": "5d98571aedc956ddb35dfc0a8dbfb822653e23a7b463a9c94bd20a99e0ffcb2d",
       "implementation_paths": [
         "scripts/test_w1b_continuation.py",
-        "scripts/w1_collapse_control_run.py"
+        "src/ember/governance/scripts/w1_collapse_control_run.py"
       ],
       "number": 357,
       "verification_executed_at": "2026-07-13T12:25:49Z",
@@ -3365,7 +3365,7 @@
       "verifier_sha256": "f32ba1731f19cd0f2f62330d05ab05db03b0b3f13b29a7bf4ada0335fadea1e3"
     },
     {
-      "artifact_path": "scripts/w1_collapse_control_run.py",
+      "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
       "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
       "criterion": "Retain continuation_source_verification with checkpoint_dir, manifest SHA-256, on-disk model SHA-256, and match in both live and dry-run receipts.",
@@ -3376,7 +3376,7 @@
       "implementation_diff_sha256": "a011e95dd10b195d2f9df97dee23603ab296ae2d9d33bfb6bed11297b18ffbea",
       "implementation_paths": [
         "scripts/test_w1_live_gates.py",
-        "scripts/w1_collapse_control_run.py"
+        "src/ember/governance/scripts/w1_collapse_control_run.py"
       ],
       "number": 375,
       "verification_executed_at": "2026-07-13T12:26:37Z",
@@ -3624,7 +3624,7 @@
       "verifier_sha256": "4301a0554cba31251684265bdf0d636b83ec28cf46cc309d88e6ba609f8a9240"
     },
     {
-      "artifact_path": "scripts/w1_collapse_control_run.py",
+      "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
       "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
       "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
       "criterion": "Retain adaptive chunk-halving inside the sole serial contamination-recheck entry point, equivalent output, and a named out-of-memory failure at the configured floor.",
@@ -3635,7 +3635,7 @@
       "implementation_diff_sha256": "42b981ea1f9a9d690a8218d638f9ae1c853ad103f5549c8486914547b8b0a799",
       "implementation_paths": [
         "scripts/test_w1_contamination_recheck_scan_guard.py",
-        "scripts/w1_collapse_control_run.py"
+        "src/ember/governance/scripts/w1_collapse_control_run.py"
       ],
       "number": 445,
       "verification_executed_at": "2026-07-13T12:49:12Z",
@@ -3735,7 +3735,7 @@
       "verification_executed_at": "2026-07-13T12:27:38Z",
       "verification_exit_code": 0,
       "verification_outcome": "independently_verified",
-      "verifier_path": "scripts/receipt_check.py",
+      "verifier_path": "src/ember/governance/scripts/receipt_check.py",
       "verifier_sha256": "1d0895435df1cb8054332f6ae46528bb7b1fad12f5d3cf91ee9d883a4b38ea04"
     },
     {
@@ -3794,7 +3794,7 @@
         "scripts/research/exposure_ledger.py",
         "scripts/research/test_exposure_ledger_mmap_forward.py",
         "scripts/test_w1b_fp32_check_mmap_forward.py",
-        "scripts/w1_collapse_control_run.py",
+        "src/ember/governance/scripts/w1_collapse_control_run.py",
         "scripts/w1b_fp32_check.py"
       ],
       "number": 575,
@@ -7384,12 +7384,12 @@
         {
           "blob_sha1": "5f7f012d71178acba25018cd3c1f27cb62fab093",
           "line": 11,
-          "path": "docs/research/non-compute-accelerators-2026-06-10.md"
+          "path": "docs/domains/governance/research/non-compute-accelerators-2026-06-10.md"
         },
         {
           "blob_sha1": "5f7f012d71178acba25018cd3c1f27cb62fab093",
           "line": 39,
-          "path": "docs/research/non-compute-accelerators-2026-06-10.md"
+          "path": "docs/domains/governance/research/non-compute-accelerators-2026-06-10.md"
         },
         {
           "blob_sha1": "2eb12d49f62a76bc7c3c8797476c496f2d2145df",
@@ -8074,12 +8074,12 @@
         {
           "blob_sha1": "0ce640b47cc7ca61a7f6b6ab735eeb5c75a77785",
           "line": 3,
-          "path": "scripts/ember_totality/milestone_leg.py"
+          "path": "src/ember/governance/scripts/ember_totality/milestone_leg.py"
         },
         {
           "blob_sha1": "0ce640b47cc7ca61a7f6b6ab735eeb5c75a77785",
           "line": 84,
-          "path": "scripts/ember_totality/milestone_leg.py"
+          "path": "src/ember/governance/scripts/ember_totality/milestone_leg.py"
         },
         {
           "blob_sha1": "1c78290d7f808b46efd11917872615f318e9e921",
@@ -8393,22 +8393,22 @@
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 24,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 1238,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 2497,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 3106,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "69b9779d93404ad419ecd2c4647f5258617bcfd1",
@@ -8625,12 +8625,12 @@
         {
           "blob_sha1": "b9d9274c091f17269f33cfd0f5df0f4c7f5341a4",
           "line": 20,
-          "path": "docs/research/triton-windows-research-2026-06-10.md"
+          "path": "docs/domains/governance/research/triton-windows-research-2026-06-10.md"
         },
         {
           "blob_sha1": "b9d9274c091f17269f33cfd0f5df0f4c7f5341a4",
           "line": 99,
-          "path": "docs/research/triton-windows-research-2026-06-10.md"
+          "path": "docs/domains/governance/research/triton-windows-research-2026-06-10.md"
         },
         {
           "blob_sha1": "76ae05e3a678b365a121091d705011c61071fec6",
@@ -8852,12 +8852,12 @@
         {
           "blob_sha1": "6407f4e1de20fc820708907c234ebe7316f5d8bf",
           "line": 1,
-          "path": "scripts/receipt_write.py"
+          "path": "src/ember/governance/scripts/receipt_write.py"
         },
         {
           "blob_sha1": "6407f4e1de20fc820708907c234ebe7316f5d8bf",
           "line": 204,
-          "path": "scripts/receipt_write.py"
+          "path": "src/ember/governance/scripts/receipt_write.py"
         },
         {
           "blob_sha1": "d6de52c1fa22229a2d0f6d43adec7e6460352ce5",
@@ -9210,22 +9210,22 @@
         {
           "blob_sha1": "43b6c12e084d0d96de1bfa2e5567acf5264ab741",
           "line": 1,
-          "path": "scripts/p1_envelope_sweep.py"
+          "path": "src/ember/governance/scripts/p1_envelope_sweep.py"
         },
         {
           "blob_sha1": "43b6c12e084d0d96de1bfa2e5567acf5264ab741",
           "line": 187,
-          "path": "scripts/p1_envelope_sweep.py"
+          "path": "src/ember/governance/scripts/p1_envelope_sweep.py"
         },
         {
           "blob_sha1": "43b6c12e084d0d96de1bfa2e5567acf5264ab741",
           "line": 370,
-          "path": "scripts/p1_envelope_sweep.py"
+          "path": "src/ember/governance/scripts/p1_envelope_sweep.py"
         },
         {
           "blob_sha1": "43b6c12e084d0d96de1bfa2e5567acf5264ab741",
           "line": 577,
-          "path": "scripts/p1_envelope_sweep.py"
+          "path": "src/ember/governance/scripts/p1_envelope_sweep.py"
         },
         {
           "blob_sha1": "b453a824af0542459991408d617791c98d2276bf",
@@ -9285,17 +9285,17 @@
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 508,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 1293,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 2123,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         }
       ],
       "number": 118,
@@ -9413,32 +9413,32 @@
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 259,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 275,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 1352,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 1476,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 2395,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         },
         {
           "blob_sha1": "e5facde783df13d3b2e921cd94d97eedff5b8890",
           "line": 2435,
-          "path": "scripts/w1_collapse_control_run.py"
+          "path": "src/ember/governance/scripts/w1_collapse_control_run.py"
         }
       ],
       "number": 121,
@@ -10287,7 +10287,7 @@
         {
           "blob_sha1": "a08ba004c23d03f713b8ea16d15be9f655ab6094",
           "line": 62,
-          "path": "docs/research/fp29-kill-synthesis-reconciliation.md"
+          "path": "docs/domains/governance/research/fp29-kill-synthesis-reconciliation.md"
         },
         {
           "blob_sha1": "ba4993a6ea173a5c259a24e017bb4c8e0f7991f6",
@@ -10874,7 +10874,7 @@
         {
           "blob_sha1": "a08ba004c23d03f713b8ea16d15be9f655ab6094",
           "line": 1,
-          "path": "docs/research/fp29-kill-synthesis-reconciliation.md"
+          "path": "docs/domains/governance/research/fp29-kill-synthesis-reconciliation.md"
         },
         {
           "blob_sha1": "782ed52b292fcd4e1593e67dd80ba3a971c004bd",
@@ -11096,7 +11096,7 @@
         {
           "blob_sha1": "893dcba64b8bd7390227eed5df83c8fc7f327b92",
           "line": 3,
-          "path": "docs/research/prereg-p0-probes-p5-p1tier0-v1.1.md"
+          "path": "docs/domains/governance/research/prereg-p0-probes-p5-p1tier0-v1.1.md"
         },
         {
           "blob_sha1": "89dea4a56ad9ab5e3b014693608bf689d884e476",
@@ -11754,7 +11754,7 @@
         {
           "blob_sha1": "893dcba64b8bd7390227eed5df83c8fc7f327b92",
           "line": 12,
-          "path": "docs/research/prereg-p0-probes-p5-p1tier0-v1.1.md"
+          "path": "docs/domains/governance/research/prereg-p0-probes-p5-p1tier0-v1.1.md"
         },
         {
           "blob_sha1": "4195c7c39e7d18d288b87651f44212faceedd5e1",
@@ -12683,12 +12683,12 @@
         {
           "blob_sha1": "35145d37238d8ba4abb026a529d1bab00c5589a6",
           "line": 17,
-          "path": "scripts/nck/event_loop.py"
+          "path": "src/ember/governance/scripts/nck/event_loop.py"
         },
         {
           "blob_sha1": "35145d37238d8ba4abb026a529d1bab00c5589a6",
           "line": 269,
-          "path": "scripts/nck/event_loop.py"
+          "path": "src/ember/governance/scripts/nck/event_loop.py"
         },
         {
           "blob_sha1": "9287595ef3c2550e0003b59e6a87eda1c267a882",
@@ -12744,22 +12744,22 @@
         {
           "blob_sha1": "35145d37238d8ba4abb026a529d1bab00c5589a6",
           "line": 22,
-          "path": "scripts/nck/event_loop.py"
+          "path": "src/ember/governance/scripts/nck/event_loop.py"
         },
         {
           "blob_sha1": "35145d37238d8ba4abb026a529d1bab00c5589a6",
           "line": 60,
-          "path": "scripts/nck/event_loop.py"
+          "path": "src/ember/governance/scripts/nck/event_loop.py"
         },
         {
           "blob_sha1": "35145d37238d8ba4abb026a529d1bab00c5589a6",
           "line": 768,
-          "path": "scripts/nck/event_loop.py"
+          "path": "src/ember/governance/scripts/nck/event_loop.py"
         },
         {
           "blob_sha1": "d9264c0d8fc9825d97bcd292c8e9b59e866f35c4",
           "line": 1,
-          "path": "scripts/nck/invariants.py"
+          "path": "src/ember/governance/scripts/nck/invariants.py"
         },
         {
           "blob_sha1": "9dfacb132d3fd18b9d42b7a2c81c9518dfeba91b",
@@ -12963,22 +12963,22 @@
         {
           "blob_sha1": "bf573791fbbf663844c973b1b7ac7154ebf308ab",
           "line": 89,
-          "path": "scripts/cbase_grow_dryrun.py"
+          "path": "src/ember/governance/scripts/cbase_grow_dryrun.py"
         },
         {
           "blob_sha1": "bf573791fbbf663844c973b1b7ac7154ebf308ab",
           "line": 94,
-          "path": "scripts/cbase_grow_dryrun.py"
+          "path": "src/ember/governance/scripts/cbase_grow_dryrun.py"
         },
         {
           "blob_sha1": "bf573791fbbf663844c973b1b7ac7154ebf308ab",
           "line": 99,
-          "path": "scripts/cbase_grow_dryrun.py"
+          "path": "src/ember/governance/scripts/cbase_grow_dryrun.py"
         },
         {
           "blob_sha1": "bf573791fbbf663844c973b1b7ac7154ebf308ab",
           "line": 112,
-          "path": "scripts/cbase_grow_dryrun.py"
+          "path": "src/ember/governance/scripts/cbase_grow_dryrun.py"
         },
         {
           "blob_sha1": "aa3ae3c905604d049cc49ef059d83528382379b4",
@@ -13224,12 +13224,12 @@
         {
           "blob_sha1": "09f2c4e341f8f37aec535e2c1f34a3bca12107f9",
           "line": 36,
-          "path": "scripts/receipt_check.py"
+          "path": "src/ember/governance/scripts/receipt_check.py"
         },
         {
           "blob_sha1": "09f2c4e341f8f37aec535e2c1f34a3bca12107f9",
           "line": 185,
-          "path": "scripts/receipt_check.py"
+          "path": "src/ember/governance/scripts/receipt_check.py"
         }
       ],
       "number": 281,
@@ -14953,7 +14953,7 @@
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 3,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "7213a2decdf74b68c6a88db282212f7b350f2a0e",
@@ -15360,7 +15360,7 @@
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 3,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "7747cc9b3fa2ce84349284ed9505317ccf045b77",
@@ -15551,27 +15551,27 @@
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 3,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 24,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 34,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 65,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "08ea63f69501ff2c5ecfa45b99be787fa86457f8",
           "line": 82,
-          "path": "docs/spec/rung2-stabilize-config-respec-v1.md"
+          "path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md"
         },
         {
           "blob_sha1": "7213a2decdf74b68c6a88db282212f7b350f2a0e",
@@ -16374,7 +16374,7 @@
         {
           "blob_sha1": "eeac1e738d6b33f1e34da534f5c048c29a5207e2",
           "line": 2,
-          "path": "scripts/serve_cbase_openai.py"
+          "path": "src/ember/governance/scripts/serve_cbase_openai.py"
         },
         {
           "blob_sha1": "98654e5a3cc15f515f08baa989feb72afd1678df",
@@ -20650,22 +20650,22 @@
         {
           "blob_sha1": "4da3508081ed8a74d364a0a5640a6e5090a319f9",
           "line": 129,
-          "path": "scripts/token_shards_v0.py"
+          "path": "src/ember/governance/scripts/token_shards_v0.py"
         },
         {
           "blob_sha1": "a84ed87422cb7b60eb72c368d055ad57de3bb6f8",
           "line": 174,
-          "path": "scripts/v0_pretrain_launch_gate.py"
+          "path": "src/ember/governance/scripts/v0_pretrain_launch_gate.py"
         },
         {
           "blob_sha1": "a84ed87422cb7b60eb72c368d055ad57de3bb6f8",
           "line": 650,
-          "path": "scripts/v0_pretrain_launch_gate.py"
+          "path": "src/ember/governance/scripts/v0_pretrain_launch_gate.py"
         },
         {
           "blob_sha1": "a84ed87422cb7b60eb72c368d055ad57de3bb6f8",
           "line": 951,
-          "path": "scripts/v0_pretrain_launch_gate.py"
+          "path": "src/ember/governance/scripts/v0_pretrain_launch_gate.py"
         },
         {
           "blob_sha1": "5849c360b10576e7316e362c119b894a056e1649",
@@ -21387,47 +21387,47 @@
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 69,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 75,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 98,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 147,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 157,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 419,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 484,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 510,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "6407f4e1de20fc820708907c234ebe7316f5d8bf",
           "line": 10,
-          "path": "scripts/receipt_write.py"
+          "path": "src/ember/governance/scripts/receipt_write.py"
         },
         {
           "blob_sha1": "c21d497a8f53ac59eb4d7cb21cccea44f87703c2",
@@ -22875,22 +22875,22 @@
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 69,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 77,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 147,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 419,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "4a93840fe8ea44a79cda87bbc1129af9daeed094",
@@ -23154,17 +23154,17 @@
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 69,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 147,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         },
         {
           "blob_sha1": "13862b1d8aba5cfc9ed3dd73e87d583d2155e9db",
           "line": 419,
-          "path": "scripts/governor.py"
+          "path": "src/ember/governance/scripts/governor.py"
         }
       ],
       "number": 763,

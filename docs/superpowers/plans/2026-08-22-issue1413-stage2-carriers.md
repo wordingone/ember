@@ -38,7 +38,7 @@
 ### Task 3: Real census execution and authority pin
 
 **Files:**
-- Add: `docs/spec/llmq/ember-training-signature-census-v1.json`
+- Add: `docs/domains/governance/spec/llmq/ember-training-signature-census-v1.json`
 - Extend: Carrier 1 tests as needed for immutable receipt pins.
 
 1. After Carrier 1 source review, execute the census on the governed real predecessor path with the normal GPU/disk/custody gates and zero activation.

@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/ember_c_scale_s3_producer.py",
-  "artifact_sha256": "5ed4d08c0e196e6b1b383dea584152947340bade4ef610d857febc13fd50278c",
+  "artifact_sha256": "9a6afd928a6b21ef13cf10729a60caa8f94b646327c65b2abd476f087993191d",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

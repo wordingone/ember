@@ -51,7 +51,7 @@ GOAL_FILE = ROOT / "docs/domains/governance/authority/GOAL.md"
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 # [PROBE-HARDEN cure] Genesis boundary for the post-genesis stamp scan below.
-# Same value as scripts/receipt_check.py's GENESIS_TS (committerDate of the
+# Same value as src/ember/governance/scripts/receipt_check.py's GENESIS_TS (committerDate of the
 # genesis merge commit 9c89f7f66, "genesis: entrench constitutional invariant
 # (#281)") -- duplicated rather than imported, matching the existing
 # scripts/test_receipt_check_invariant.py precedent of a standalone constant
@@ -162,7 +162,7 @@ def _parse_receipt_ts(ts: Any) -> Optional[float]:
     developmental-duration milestones (test_c11.py's TS_FMT,
     e.g. "20260707T053613Z"). Returns None on anything unparseable -- an
     unparseable ts is NEVER treated as a passing stamp check, it is simply
-    excluded from the post-genesis population (mirrors scripts/receipt_check.py's
+    excluded from the post-genesis population (mirrors src/ember/governance/scripts/receipt_check.py's
     _parse_ts: other schema rules own malformed timestamps, not this probe)."""
     if not isinstance(ts, str):
         return None
@@ -338,7 +338,7 @@ def check_stamped_receipts() -> tuple[bool, str]:
     board runs" -- it never did; board runs kept passing genesis unmodified).
     Execution-binding per test_c11.py's pattern: every JSON file actually on
     disk under receipts/ (recursive) is opened and its bytes parsed; nothing
-    is asserted from a hardcoded verdict. This mirrors scripts/receipt_check.py's
+    is asserted from a hardcoded verdict. This mirrors src/ember/governance/scripts/receipt_check.py's
     R4 rule (same GENESIS_TS/INVARIANT_SHA256 constants) but is re-implemented
     here directly (not imported) so the status probe stays self-contained,
     matching test_c11.py's no-cross-import convention.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Genuine C14 resident-training loop: RLM + iGRPO on a tiny owned nn.Module policy.
 
 Implements the PINNED mechanism from:
@@ -25,9 +28,6 @@ Run:
   python ember_resident_igrpo.py --test    # full unit-test suite (all assertions)
 """
 from __future__ import annotations
-# goal_id: EMBER-02
-# workstream_id: EMBER-02A
-# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import argparse
 import hashlib
@@ -2219,7 +2219,50 @@ def _run_tests(verbose: bool = True) -> tuple[bool, list[str]]:
     name = "envelope_block_carries_per_state_reward_norm_flag"
     try:
         import argparse as _argparse
-        import ember_c14_owned_run as _owned_run  # same scripts/ dir on sys.path
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_c14_owned_run.py
+        import importlib.util as _ember_bff9ce1e3d7dd466_importlib
+        import sys as _ember_bff9ce1e3d7dd466_sys
+        from pathlib import Path as _ember_bff9ce1e3d7dd466_Path
+        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
+        if not _ember_bff9ce1e3d7dd466_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_owned_run.py')
+        _ember_bff9ce1e3d7dd466_aliases = ('_ember_issue2015_bff9ce1e3d7dd466', 'ember_c14_owned_run', 'scripts.ember_c14_owned_run')
+        _ember_bff9ce1e3d7dd466_existing = []
+        for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+            _ember_bff9ce1e3d7dd466_candidate = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+            if _ember_bff9ce1e3d7dd466_candidate is not None and all(_ember_bff9ce1e3d7dd466_candidate is not item for item in _ember_bff9ce1e3d7dd466_existing):
+                _ember_bff9ce1e3d7dd466_existing.append(_ember_bff9ce1e3d7dd466_candidate)
+        if len(_ember_bff9ce1e3d7dd466_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+        if _ember_bff9ce1e3d7dd466_existing:
+            _ember_bff9ce1e3d7dd466_module = _ember_bff9ce1e3d7dd466_existing[0]
+            _ember_bff9ce1e3d7dd466_observed = getattr(_ember_bff9ce1e3d7dd466_module, '__file__', None)
+            if _ember_bff9ce1e3d7dd466_observed is None or _ember_bff9ce1e3d7dd466_Path(_ember_bff9ce1e3d7dd466_observed).resolve() != _ember_bff9ce1e3d7dd466_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_c14_owned_run.py')
+        else:
+            _ember_bff9ce1e3d7dd466_spec = _ember_bff9ce1e3d7dd466_importlib.spec_from_file_location('_ember_issue2015_bff9ce1e3d7dd466', _ember_bff9ce1e3d7dd466_path)
+            if _ember_bff9ce1e3d7dd466_spec is None or _ember_bff9ce1e3d7dd466_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_c14_owned_run.py')
+            _ember_bff9ce1e3d7dd466_module = _ember_bff9ce1e3d7dd466_importlib.module_from_spec(_ember_bff9ce1e3d7dd466_spec)
+            for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+                _ember_bff9ce1e3d7dd466_prior = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+                if _ember_bff9ce1e3d7dd466_prior is not None and _ember_bff9ce1e3d7dd466_prior is not _ember_bff9ce1e3d7dd466_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+                _ember_bff9ce1e3d7dd466_sys.modules[_ember_bff9ce1e3d7dd466_alias] = _ember_bff9ce1e3d7dd466_module
+            try:
+                _ember_bff9ce1e3d7dd466_spec.loader.exec_module(_ember_bff9ce1e3d7dd466_module)
+            except BaseException:
+                for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+                    if _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias) is _ember_bff9ce1e3d7dd466_module:
+                        _ember_bff9ce1e3d7dd466_sys.modules.pop(_ember_bff9ce1e3d7dd466_alias, None)
+                raise
+        for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+            _ember_bff9ce1e3d7dd466_prior = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+            if _ember_bff9ce1e3d7dd466_prior is not None and _ember_bff9ce1e3d7dd466_prior is not _ember_bff9ce1e3d7dd466_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+            _ember_bff9ce1e3d7dd466_sys.modules[_ember_bff9ce1e3d7dd466_alias] = _ember_bff9ce1e3d7dd466_module
+        _owned_run = _ember_bff9ce1e3d7dd466_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_c14_owned_run.py  # same scripts/ dir on sys.path
 
         ns_on = _argparse.Namespace(
             temp_schedule="1.5:1.0:384", entropy_beta=0.02, degenerate_resample=True,
@@ -2248,7 +2291,50 @@ def _run_tests(verbose: bool = True) -> tuple[bool, list[str]]:
     name = "envelope_block_carries_corpus_v3_resample_flag"
     try:
         import argparse as _argparse
-        import ember_c14_owned_run as _owned_run  # same scripts/ dir on sys.path
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_c14_owned_run.py
+        import importlib.util as _ember_bff9ce1e3d7dd466_importlib
+        import sys as _ember_bff9ce1e3d7dd466_sys
+        from pathlib import Path as _ember_bff9ce1e3d7dd466_Path
+        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
+        if not _ember_bff9ce1e3d7dd466_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_owned_run.py')
+        _ember_bff9ce1e3d7dd466_aliases = ('_ember_issue2015_bff9ce1e3d7dd466', 'ember_c14_owned_run', 'scripts.ember_c14_owned_run')
+        _ember_bff9ce1e3d7dd466_existing = []
+        for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+            _ember_bff9ce1e3d7dd466_candidate = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+            if _ember_bff9ce1e3d7dd466_candidate is not None and all(_ember_bff9ce1e3d7dd466_candidate is not item for item in _ember_bff9ce1e3d7dd466_existing):
+                _ember_bff9ce1e3d7dd466_existing.append(_ember_bff9ce1e3d7dd466_candidate)
+        if len(_ember_bff9ce1e3d7dd466_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+        if _ember_bff9ce1e3d7dd466_existing:
+            _ember_bff9ce1e3d7dd466_module = _ember_bff9ce1e3d7dd466_existing[0]
+            _ember_bff9ce1e3d7dd466_observed = getattr(_ember_bff9ce1e3d7dd466_module, '__file__', None)
+            if _ember_bff9ce1e3d7dd466_observed is None or _ember_bff9ce1e3d7dd466_Path(_ember_bff9ce1e3d7dd466_observed).resolve() != _ember_bff9ce1e3d7dd466_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_c14_owned_run.py')
+        else:
+            _ember_bff9ce1e3d7dd466_spec = _ember_bff9ce1e3d7dd466_importlib.spec_from_file_location('_ember_issue2015_bff9ce1e3d7dd466', _ember_bff9ce1e3d7dd466_path)
+            if _ember_bff9ce1e3d7dd466_spec is None or _ember_bff9ce1e3d7dd466_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_c14_owned_run.py')
+            _ember_bff9ce1e3d7dd466_module = _ember_bff9ce1e3d7dd466_importlib.module_from_spec(_ember_bff9ce1e3d7dd466_spec)
+            for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+                _ember_bff9ce1e3d7dd466_prior = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+                if _ember_bff9ce1e3d7dd466_prior is not None and _ember_bff9ce1e3d7dd466_prior is not _ember_bff9ce1e3d7dd466_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+                _ember_bff9ce1e3d7dd466_sys.modules[_ember_bff9ce1e3d7dd466_alias] = _ember_bff9ce1e3d7dd466_module
+            try:
+                _ember_bff9ce1e3d7dd466_spec.loader.exec_module(_ember_bff9ce1e3d7dd466_module)
+            except BaseException:
+                for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+                    if _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias) is _ember_bff9ce1e3d7dd466_module:
+                        _ember_bff9ce1e3d7dd466_sys.modules.pop(_ember_bff9ce1e3d7dd466_alias, None)
+                raise
+        for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+            _ember_bff9ce1e3d7dd466_prior = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+            if _ember_bff9ce1e3d7dd466_prior is not None and _ember_bff9ce1e3d7dd466_prior is not _ember_bff9ce1e3d7dd466_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+            _ember_bff9ce1e3d7dd466_sys.modules[_ember_bff9ce1e3d7dd466_alias] = _ember_bff9ce1e3d7dd466_module
+        _owned_run = _ember_bff9ce1e3d7dd466_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_c14_owned_run.py  # same scripts/ dir on sys.path
 
         ns_on = _argparse.Namespace(
             temp_schedule=None, entropy_beta=0.0, degenerate_resample=False,
@@ -2278,7 +2364,50 @@ def _run_tests(verbose: bool = True) -> tuple[bool, list[str]]:
     name = "envelope_block_carries_corpus_v3_resample_start_step"
     try:
         import argparse as _argparse
-        import ember_c14_owned_run as _owned_run  # same scripts/ dir on sys.path
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_c14_owned_run.py
+        import importlib.util as _ember_bff9ce1e3d7dd466_importlib
+        import sys as _ember_bff9ce1e3d7dd466_sys
+        from pathlib import Path as _ember_bff9ce1e3d7dd466_Path
+        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
+        if not _ember_bff9ce1e3d7dd466_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_owned_run.py')
+        _ember_bff9ce1e3d7dd466_aliases = ('_ember_issue2015_bff9ce1e3d7dd466', 'ember_c14_owned_run', 'scripts.ember_c14_owned_run')
+        _ember_bff9ce1e3d7dd466_existing = []
+        for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+            _ember_bff9ce1e3d7dd466_candidate = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+            if _ember_bff9ce1e3d7dd466_candidate is not None and all(_ember_bff9ce1e3d7dd466_candidate is not item for item in _ember_bff9ce1e3d7dd466_existing):
+                _ember_bff9ce1e3d7dd466_existing.append(_ember_bff9ce1e3d7dd466_candidate)
+        if len(_ember_bff9ce1e3d7dd466_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+        if _ember_bff9ce1e3d7dd466_existing:
+            _ember_bff9ce1e3d7dd466_module = _ember_bff9ce1e3d7dd466_existing[0]
+            _ember_bff9ce1e3d7dd466_observed = getattr(_ember_bff9ce1e3d7dd466_module, '__file__', None)
+            if _ember_bff9ce1e3d7dd466_observed is None or _ember_bff9ce1e3d7dd466_Path(_ember_bff9ce1e3d7dd466_observed).resolve() != _ember_bff9ce1e3d7dd466_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_c14_owned_run.py')
+        else:
+            _ember_bff9ce1e3d7dd466_spec = _ember_bff9ce1e3d7dd466_importlib.spec_from_file_location('_ember_issue2015_bff9ce1e3d7dd466', _ember_bff9ce1e3d7dd466_path)
+            if _ember_bff9ce1e3d7dd466_spec is None or _ember_bff9ce1e3d7dd466_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_c14_owned_run.py')
+            _ember_bff9ce1e3d7dd466_module = _ember_bff9ce1e3d7dd466_importlib.module_from_spec(_ember_bff9ce1e3d7dd466_spec)
+            for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+                _ember_bff9ce1e3d7dd466_prior = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+                if _ember_bff9ce1e3d7dd466_prior is not None and _ember_bff9ce1e3d7dd466_prior is not _ember_bff9ce1e3d7dd466_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+                _ember_bff9ce1e3d7dd466_sys.modules[_ember_bff9ce1e3d7dd466_alias] = _ember_bff9ce1e3d7dd466_module
+            try:
+                _ember_bff9ce1e3d7dd466_spec.loader.exec_module(_ember_bff9ce1e3d7dd466_module)
+            except BaseException:
+                for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+                    if _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias) is _ember_bff9ce1e3d7dd466_module:
+                        _ember_bff9ce1e3d7dd466_sys.modules.pop(_ember_bff9ce1e3d7dd466_alias, None)
+                raise
+        for _ember_bff9ce1e3d7dd466_alias in _ember_bff9ce1e3d7dd466_aliases:
+            _ember_bff9ce1e3d7dd466_prior = _ember_bff9ce1e3d7dd466_sys.modules.get(_ember_bff9ce1e3d7dd466_alias)
+            if _ember_bff9ce1e3d7dd466_prior is not None and _ember_bff9ce1e3d7dd466_prior is not _ember_bff9ce1e3d7dd466_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_owned_run.py')
+            _ember_bff9ce1e3d7dd466_sys.modules[_ember_bff9ce1e3d7dd466_alias] = _ember_bff9ce1e3d7dd466_module
+        _owned_run = _ember_bff9ce1e3d7dd466_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_c14_owned_run.py  # same scripts/ dir on sys.path
 
         ns_zero = _argparse.Namespace(
             temp_schedule=None, entropy_beta=0.0, degenerate_resample=False,

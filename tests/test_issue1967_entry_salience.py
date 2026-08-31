@@ -43,7 +43,7 @@ def assert_direct_install_route(text: str) -> None:
     normalized = " ".join(text.split())
     command_index = normalized.index(INSTALL_COMMAND)
     assert normalized.index("README") < command_index
-    assert normalized.index("docs/guides/START-HERE.md") < command_index
+    assert normalized.index("docs/domains/governance/guides/START-HERE.md") < command_index
     assert normalized.index("`tools/launchers/Ember.cmd` is the operator entry") < command_index
     assert normalized.index("Python uses") < command_index
     assert normalized.index("manifests/python-environment-v1.json") < command_index

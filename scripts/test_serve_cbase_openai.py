@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_serve_cbase_openai.py — CPU-only test suite for serve_cbase_openai.py (refs #508).
 
 Tests:
@@ -31,7 +34,50 @@ serve_module = None
 def lazy_import():
     global serve_module
     if serve_module is None:
-        import serve_cbase_openai
+        # issue2015 exact-local-import:src/ember/governance/scripts/serve_cbase_openai.py
+        import importlib.util as _ember_13a5bfc5e66693f8_importlib
+        import sys as _ember_13a5bfc5e66693f8_sys
+        from pathlib import Path as _ember_13a5bfc5e66693f8_Path
+        _ember_13a5bfc5e66693f8_path = _ember_13a5bfc5e66693f8_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'serve_cbase_openai.py')
+        if not _ember_13a5bfc5e66693f8_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/serve_cbase_openai.py')
+        _ember_13a5bfc5e66693f8_aliases = ('_ember_issue2015_13a5bfc5e66693f8', 'scripts.serve_cbase_openai', 'serve_cbase_openai')
+        _ember_13a5bfc5e66693f8_existing = []
+        for _ember_13a5bfc5e66693f8_alias in _ember_13a5bfc5e66693f8_aliases:
+            _ember_13a5bfc5e66693f8_candidate = _ember_13a5bfc5e66693f8_sys.modules.get(_ember_13a5bfc5e66693f8_alias)
+            if _ember_13a5bfc5e66693f8_candidate is not None and all(_ember_13a5bfc5e66693f8_candidate is not item for item in _ember_13a5bfc5e66693f8_existing):
+                _ember_13a5bfc5e66693f8_existing.append(_ember_13a5bfc5e66693f8_candidate)
+        if len(_ember_13a5bfc5e66693f8_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/serve_cbase_openai.py')
+        if _ember_13a5bfc5e66693f8_existing:
+            _ember_13a5bfc5e66693f8_module = _ember_13a5bfc5e66693f8_existing[0]
+            _ember_13a5bfc5e66693f8_observed = getattr(_ember_13a5bfc5e66693f8_module, '__file__', None)
+            if _ember_13a5bfc5e66693f8_observed is None or _ember_13a5bfc5e66693f8_Path(_ember_13a5bfc5e66693f8_observed).resolve() != _ember_13a5bfc5e66693f8_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/serve_cbase_openai.py')
+        else:
+            _ember_13a5bfc5e66693f8_spec = _ember_13a5bfc5e66693f8_importlib.spec_from_file_location('_ember_issue2015_13a5bfc5e66693f8', _ember_13a5bfc5e66693f8_path)
+            if _ember_13a5bfc5e66693f8_spec is None or _ember_13a5bfc5e66693f8_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/serve_cbase_openai.py')
+            _ember_13a5bfc5e66693f8_module = _ember_13a5bfc5e66693f8_importlib.module_from_spec(_ember_13a5bfc5e66693f8_spec)
+            for _ember_13a5bfc5e66693f8_alias in _ember_13a5bfc5e66693f8_aliases:
+                _ember_13a5bfc5e66693f8_prior = _ember_13a5bfc5e66693f8_sys.modules.get(_ember_13a5bfc5e66693f8_alias)
+                if _ember_13a5bfc5e66693f8_prior is not None and _ember_13a5bfc5e66693f8_prior is not _ember_13a5bfc5e66693f8_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/serve_cbase_openai.py')
+                _ember_13a5bfc5e66693f8_sys.modules[_ember_13a5bfc5e66693f8_alias] = _ember_13a5bfc5e66693f8_module
+            try:
+                _ember_13a5bfc5e66693f8_spec.loader.exec_module(_ember_13a5bfc5e66693f8_module)
+            except BaseException:
+                for _ember_13a5bfc5e66693f8_alias in _ember_13a5bfc5e66693f8_aliases:
+                    if _ember_13a5bfc5e66693f8_sys.modules.get(_ember_13a5bfc5e66693f8_alias) is _ember_13a5bfc5e66693f8_module:
+                        _ember_13a5bfc5e66693f8_sys.modules.pop(_ember_13a5bfc5e66693f8_alias, None)
+                raise
+        for _ember_13a5bfc5e66693f8_alias in _ember_13a5bfc5e66693f8_aliases:
+            _ember_13a5bfc5e66693f8_prior = _ember_13a5bfc5e66693f8_sys.modules.get(_ember_13a5bfc5e66693f8_alias)
+            if _ember_13a5bfc5e66693f8_prior is not None and _ember_13a5bfc5e66693f8_prior is not _ember_13a5bfc5e66693f8_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/serve_cbase_openai.py')
+            _ember_13a5bfc5e66693f8_sys.modules[_ember_13a5bfc5e66693f8_alias] = _ember_13a5bfc5e66693f8_module
+        serve_cbase_openai = _ember_13a5bfc5e66693f8_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/serve_cbase_openai.py
         serve_module = serve_cbase_openai
     return serve_module
 

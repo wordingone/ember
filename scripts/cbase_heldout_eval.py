@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed heldout NLL evaluator for timeshare/cbase checkpoints (#760).
 
-verify_slice_excludes_ruled_sources() consumes scripts/fineweb_exclusion.py
+verify_slice_excludes_ruled_sources() consumes src/ember/governance/scripts/fineweb_exclusion.py
 (#1436) to prove the frozen slice touches no byte owned by a RULED-excluded
 source (fineweb_edu today) before any window is scored -- never re-derives
 exclusion offsets or overlap arithmetic itself."""
@@ -256,7 +256,7 @@ def verify_trained_consumption_selection(manifest: Mapping[str,Any], *,
         raise HeldoutEvalRefusal("TRAINED_CONSUMPTION_VERDICT_INVALID")
 
 def _fineweb_exclusion_module():
-    """Import scripts/fineweb_exclusion.py (#1436) as a sibling module.
+    """Import src/ember/governance/scripts/fineweb_exclusion.py (#1436) as a sibling module.
     Explicit sys.path insertion mirrors that module's own pattern for
     importing token_shards_v0 -- defensive against pytest invocation
     contexts that don't already have scripts/ on sys.path."""
@@ -264,7 +264,50 @@ def _fineweb_exclusion_module():
     here=str(Path(__file__).resolve().parent)
     if here not in sys.path: sys.path.insert(0,here)
     try:
-        import fineweb_exclusion
+        # issue2015 exact-local-import:src/ember/governance/scripts/fineweb_exclusion.py
+        import importlib.util as _ember_d46db7ae0cab2934_importlib
+        import sys as _ember_d46db7ae0cab2934_sys
+        from pathlib import Path as _ember_d46db7ae0cab2934_Path
+        _ember_d46db7ae0cab2934_path = _ember_d46db7ae0cab2934_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fineweb_exclusion.py')
+        if not _ember_d46db7ae0cab2934_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fineweb_exclusion.py')
+        _ember_d46db7ae0cab2934_aliases = ('_ember_issue2015_d46db7ae0cab2934', 'fineweb_exclusion', 'scripts.fineweb_exclusion')
+        _ember_d46db7ae0cab2934_existing = []
+        for _ember_d46db7ae0cab2934_alias in _ember_d46db7ae0cab2934_aliases:
+            _ember_d46db7ae0cab2934_candidate = _ember_d46db7ae0cab2934_sys.modules.get(_ember_d46db7ae0cab2934_alias)
+            if _ember_d46db7ae0cab2934_candidate is not None and all(_ember_d46db7ae0cab2934_candidate is not item for item in _ember_d46db7ae0cab2934_existing):
+                _ember_d46db7ae0cab2934_existing.append(_ember_d46db7ae0cab2934_candidate)
+        if len(_ember_d46db7ae0cab2934_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/fineweb_exclusion.py')
+        if _ember_d46db7ae0cab2934_existing:
+            _ember_d46db7ae0cab2934_module = _ember_d46db7ae0cab2934_existing[0]
+            _ember_d46db7ae0cab2934_observed = getattr(_ember_d46db7ae0cab2934_module, '__file__', None)
+            if _ember_d46db7ae0cab2934_observed is None or _ember_d46db7ae0cab2934_Path(_ember_d46db7ae0cab2934_observed).resolve() != _ember_d46db7ae0cab2934_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/fineweb_exclusion.py')
+        else:
+            _ember_d46db7ae0cab2934_spec = _ember_d46db7ae0cab2934_importlib.spec_from_file_location('_ember_issue2015_d46db7ae0cab2934', _ember_d46db7ae0cab2934_path)
+            if _ember_d46db7ae0cab2934_spec is None or _ember_d46db7ae0cab2934_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/fineweb_exclusion.py')
+            _ember_d46db7ae0cab2934_module = _ember_d46db7ae0cab2934_importlib.module_from_spec(_ember_d46db7ae0cab2934_spec)
+            for _ember_d46db7ae0cab2934_alias in _ember_d46db7ae0cab2934_aliases:
+                _ember_d46db7ae0cab2934_prior = _ember_d46db7ae0cab2934_sys.modules.get(_ember_d46db7ae0cab2934_alias)
+                if _ember_d46db7ae0cab2934_prior is not None and _ember_d46db7ae0cab2934_prior is not _ember_d46db7ae0cab2934_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fineweb_exclusion.py')
+                _ember_d46db7ae0cab2934_sys.modules[_ember_d46db7ae0cab2934_alias] = _ember_d46db7ae0cab2934_module
+            try:
+                _ember_d46db7ae0cab2934_spec.loader.exec_module(_ember_d46db7ae0cab2934_module)
+            except BaseException:
+                for _ember_d46db7ae0cab2934_alias in _ember_d46db7ae0cab2934_aliases:
+                    if _ember_d46db7ae0cab2934_sys.modules.get(_ember_d46db7ae0cab2934_alias) is _ember_d46db7ae0cab2934_module:
+                        _ember_d46db7ae0cab2934_sys.modules.pop(_ember_d46db7ae0cab2934_alias, None)
+                raise
+        for _ember_d46db7ae0cab2934_alias in _ember_d46db7ae0cab2934_aliases:
+            _ember_d46db7ae0cab2934_prior = _ember_d46db7ae0cab2934_sys.modules.get(_ember_d46db7ae0cab2934_alias)
+            if _ember_d46db7ae0cab2934_prior is not None and _ember_d46db7ae0cab2934_prior is not _ember_d46db7ae0cab2934_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fineweb_exclusion.py')
+            _ember_d46db7ae0cab2934_sys.modules[_ember_d46db7ae0cab2934_alias] = _ember_d46db7ae0cab2934_module
+        fineweb_exclusion = _ember_d46db7ae0cab2934_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/fineweb_exclusion.py
     except ImportError as exc:
         raise HeldoutEvalRefusal(f"FINEWEB_EXCLUSION_MODULE_UNAVAILABLE: {exc}") from exc
     return fineweb_exclusion
@@ -284,7 +327,7 @@ def verify_slice_excludes_ruled_sources(manifest: Mapping[str,Any], *, shard_dir
     function instead requires the caller to supply a real shard_dir and is
     invoked only from the CLI's production path, against production receipts
     -- #760 build spec: "your harness must not re-implement exclusion;
-    consume the same module" (scripts/fineweb_exclusion.py, #1436).
+    consume the same module" (src/ember/governance/scripts/fineweb_exclusion.py, #1436).
 
     Checks each window's FULL read span -- global_token_start through
     source_global_token_end_exclusive when present (the seq+1+n_mtp bytes
@@ -415,7 +458,50 @@ def _v5_scorer_module():
     here=str(Path(__file__).resolve().parent)
     if here not in sys.path: sys.path.insert(0,here)
     try:
-        import legb_live_candidate_v5_scorer
+        # issue2015 exact-local-import:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py
+        import importlib.util as _ember_e20708112c9b9bf3_importlib
+        import sys as _ember_e20708112c9b9bf3_sys
+        from pathlib import Path as _ember_e20708112c9b9bf3_Path
+        _ember_e20708112c9b9bf3_path = _ember_e20708112c9b9bf3_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'legb_live_candidate_v5_scorer.py')
+        if not _ember_e20708112c9b9bf3_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
+        _ember_e20708112c9b9bf3_aliases = ('_ember_issue2015_e20708112c9b9bf3', 'legb_live_candidate_v5_scorer', 'scripts.legb_live_candidate_v5_scorer')
+        _ember_e20708112c9b9bf3_existing = []
+        for _ember_e20708112c9b9bf3_alias in _ember_e20708112c9b9bf3_aliases:
+            _ember_e20708112c9b9bf3_candidate = _ember_e20708112c9b9bf3_sys.modules.get(_ember_e20708112c9b9bf3_alias)
+            if _ember_e20708112c9b9bf3_candidate is not None and all(_ember_e20708112c9b9bf3_candidate is not item for item in _ember_e20708112c9b9bf3_existing):
+                _ember_e20708112c9b9bf3_existing.append(_ember_e20708112c9b9bf3_candidate)
+        if len(_ember_e20708112c9b9bf3_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
+        if _ember_e20708112c9b9bf3_existing:
+            _ember_e20708112c9b9bf3_module = _ember_e20708112c9b9bf3_existing[0]
+            _ember_e20708112c9b9bf3_observed = getattr(_ember_e20708112c9b9bf3_module, '__file__', None)
+            if _ember_e20708112c9b9bf3_observed is None or _ember_e20708112c9b9bf3_Path(_ember_e20708112c9b9bf3_observed).resolve() != _ember_e20708112c9b9bf3_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
+        else:
+            _ember_e20708112c9b9bf3_spec = _ember_e20708112c9b9bf3_importlib.spec_from_file_location('_ember_issue2015_e20708112c9b9bf3', _ember_e20708112c9b9bf3_path)
+            if _ember_e20708112c9b9bf3_spec is None or _ember_e20708112c9b9bf3_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
+            _ember_e20708112c9b9bf3_module = _ember_e20708112c9b9bf3_importlib.module_from_spec(_ember_e20708112c9b9bf3_spec)
+            for _ember_e20708112c9b9bf3_alias in _ember_e20708112c9b9bf3_aliases:
+                _ember_e20708112c9b9bf3_prior = _ember_e20708112c9b9bf3_sys.modules.get(_ember_e20708112c9b9bf3_alias)
+                if _ember_e20708112c9b9bf3_prior is not None and _ember_e20708112c9b9bf3_prior is not _ember_e20708112c9b9bf3_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
+                _ember_e20708112c9b9bf3_sys.modules[_ember_e20708112c9b9bf3_alias] = _ember_e20708112c9b9bf3_module
+            try:
+                _ember_e20708112c9b9bf3_spec.loader.exec_module(_ember_e20708112c9b9bf3_module)
+            except BaseException:
+                for _ember_e20708112c9b9bf3_alias in _ember_e20708112c9b9bf3_aliases:
+                    if _ember_e20708112c9b9bf3_sys.modules.get(_ember_e20708112c9b9bf3_alias) is _ember_e20708112c9b9bf3_module:
+                        _ember_e20708112c9b9bf3_sys.modules.pop(_ember_e20708112c9b9bf3_alias, None)
+                raise
+        for _ember_e20708112c9b9bf3_alias in _ember_e20708112c9b9bf3_aliases:
+            _ember_e20708112c9b9bf3_prior = _ember_e20708112c9b9bf3_sys.modules.get(_ember_e20708112c9b9bf3_alias)
+            if _ember_e20708112c9b9bf3_prior is not None and _ember_e20708112c9b9bf3_prior is not _ember_e20708112c9b9bf3_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
+            _ember_e20708112c9b9bf3_sys.modules[_ember_e20708112c9b9bf3_alias] = _ember_e20708112c9b9bf3_module
+        legb_live_candidate_v5_scorer = _ember_e20708112c9b9bf3_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py
     except ImportError as exc:
         raise HeldoutEvalRefusal(f"V5_LOADER_UNAVAILABLE: {exc}") from exc
     return legb_live_candidate_v5_scorer

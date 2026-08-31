@@ -85,7 +85,7 @@ off S1's lineage. S1's job is the chain of receipted grow-steps themselves.
 
 ### 2.1 What the operator actually widens
 
-`scripts/cbase_grow_dryrun.py::widen_state_dict` (execution tree — **absent as of 2026-07-03 in this
+`src/ember/governance/scripts/cbase_grow_dryrun.py::widen_state_dict` (execution tree — **absent as of 2026-07-03 in this
 contract tree**, same status `docs/spec/growth-v1.md` already flags; read cross-tree per the
 established import-edition convention) is the entire surgery, quoted in full:
 
@@ -306,9 +306,9 @@ directly bounds Option C in §6 below.
 
 ### 5.1 A version-drift finding: the contract tree's copy lacks the mechanism this section needs
 
-`scripts/v0_pretrain_launch_gate.py`'s `gate()`/`g_budget()` **in this contract tree** take no
+`src/ember/governance/scripts/v0_pretrain_launch_gate.py`'s `gate()`/`g_budget()` **in this contract tree** take no
 `requested_run` parameter at all (read directly, lines 383/540-553 of the contract-tree copy). The
-**execution tree's** copy of the identical filename (`scripts/v0_pretrain_launch_gate.py`, execution
+**execution tree's** copy of the identical filename (`src/ember/governance/scripts/v0_pretrain_launch_gate.py`, execution
 tree root) has a materially different, newer `g_budget(launch_date, shatter_fit=None, requested_run=None)` plus a
 `_requested_run_compute_fit()` helper and `MICRO_FIT_CEILING_FLOPS`/`MICRO_FIT_FRACTION` constants —
 the exact mechanism `scripts/cbase_grow_live.py` and the composition A/B receipt's own `g_budget`
@@ -478,7 +478,7 @@ pass=True
 
 Zero missing citations repo-wide. This document contributes 3 of the run's 22 documented-absent
 citations — the execution-tree-only paths it names and explicitly marks absent-in-contract-tree at
-the citation site: `scripts/cbase_grow_dryrun.py` (line 85), `scripts/cbase_grow_live.py` (line 162),
+the citation site: `src/ember/governance/scripts/cbase_grow_dryrun.py` (line 85), `scripts/cbase_grow_live.py` (line 162),
 `receipts/ceff-composition-ab-20260703T111351Z.json` (line 262) — each carries the "absent as of
 2026-07-03 in this contract tree" marker per the checker's own documented convention (§2 of its module
 docstring), confirmed directly against `receipts/citation-check-20260703T122221Z.json`'s
@@ -491,7 +491,7 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 `GOAL.md` · `docs/spec/conditions-v1.md` · `docs/spec/growth-v1.md` ·
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
 `docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `scripts/ember_totality/test_c_scale.py` ·
-`scripts/v0_pretrain_launch_gate.py` · `scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·
+`src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `scripts/cbase_grow_live.py` ·
 `scripts/timeshare_pretrain.py` · `scripts/check_goal_citations.py` ·
 `configs/v0-pretrain-config.json` ·
 `receipts/v0-live-20260623T105829Z.json` ·
@@ -551,7 +551,7 @@ either convention; honesty prefers the one that cannot be accused of padding.
 
 **D5 — G-budget path: NO rung depends on the blocked calendar/SHATTER path.** D1's Option B keeps
 every rung inside the micro-fit ceiling by construction, so S1 requires no fresh SHATTER receipt.
-Precondition landed with this block: the contract tree's `scripts/v0_pretrain_launch_gate.py` is
+Precondition landed with this block: the contract tree's `src/ember/governance/scripts/v0_pretrain_launch_gate.py` is
 synced byte-identical from the execution tree (the stale copy lacked the `requested_run` micro-fit
 mechanism this section's live results and every rung dispatch depend on; sha mismatch verified
 f3617d6a... vs 3e87a4d0... pre-sync).

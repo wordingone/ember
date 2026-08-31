@@ -29,7 +29,7 @@ from repository_layout import resolve_repository_authority  # noqa: E402
 
 
 # A certificate that carries closure_sha256 binds the TRAINING DEPENDENCY
-# CLOSURE (scripts/training_closure.py) instead of the whole repository tip, so
+# CLOSURE (src/ember/governance/scripts/training_closure.py) instead of the whole repository tip, so
 # a merge outside the closure no longer invalidates a pending launch.
 # public_master_sha stays the VERIFIED-AT commit either way. Certificates minted
 # before this field existed keep whole-tip equality.
@@ -37,7 +37,7 @@ from repository_layout import resolve_repository_authority  # noqa: E402
 # CERTIFICATE_KEYS and OPTIONAL_CERTIFICATE_KEYS are the key template the
 # out-of-repo mint producer reads (it already exec-loads this module), so
 # producer and consumer cannot skew.
-CLOSURE_MODULE_RELATIVE_PATH = "scripts/training_closure.py"
+CLOSURE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/training_closure.py"
 # Issue #1706: same load-out-of-the-tree-being-launched discipline as
 # CLOSURE_MODULE_RELATIVE_PATH, for the shared git-subprocess-env hardening.
 GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
@@ -235,7 +235,7 @@ SEMANTIC_CANARY_MODES = {"warm-100"}
 # T-01 = 100 consecutive steps (docs/spec/ember02-preregistration-v1.md). This
 # is an ENTRY minimum on what this route may launch, not a copy of the prereg
 # threshold itself -- adjudicating R1-E1/R1-E2 against telemetry evidence
-# stays scripts/r1_exit_battery.py's job, never this launcher's.
+# stays src/ember/governance/scripts/r1_exit_battery.py's job, never this launcher's.
 SEMANTIC_CANARY_MIN_STEPS = 100
 A1_RUN_SPEC_KEYS = {
     "a1_family",
@@ -315,7 +315,7 @@ AUTHORIZED_SCOPE_KEYS = {
 # SAME mechanism as allowed_training_capabilities, for the identical
 # reason: build_runner_argv routes on run-spec content alone and never
 # re-reads allowed_modes (extending allowed_modes is documented as NOT a cure
-# in scripts/r1_exit_battery.py -- any list other than exactly
+# in src/ember/governance/scripts/r1_exit_battery.py -- any list other than exactly
 # ["governed-vertical"] refuses every launch outright). A certificate must
 # explicitly opt in a canary mode here, or no canary route is authorized.
 OPTIONAL_AUTHORIZED_SCOPE_KEYS = {
@@ -570,7 +570,7 @@ def _matched_a3_self_digest_sha256(value: object) -> str:
     round-tripped through this module's own write path, and the receipt's
     `receipt_sha256` field must agree with the digest every other real
     consumer of this exact schema computes -- a1_execution.py's own A1-arm
-    minting and, more importantly, scripts/r1_e8_validator.py's
+    minting and, more importantly, src/ember/governance/scripts/r1_e8_validator.py's
     `_self_digest`/`_reopen_ref` (the check `validate_e8` actually runs on A3
     receipts). All three of those hash compact JSON with NO trailing
     newline; `_canonical_bytes` disagreed here only because nothing had ever

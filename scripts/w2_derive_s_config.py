@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w2_derive_s_config.py -- issue #108 frozen spec: W2 S-arm config derivation.
 
 Derives the S arm's from-scratch model config MECHANICALLY from the G arm's
@@ -19,7 +22,7 @@ config verbatim -- every field copied 1:1, `model.ff` included (it is
 already the grown value in the dump).
 
 G-ARM DUMP CONTRACT (the two files this tool consumes -- specified here since
-no W2 G-arm runner exists yet; scripts/w2_heldout/launch_gate.py's own
+no W2 G-arm runner exists yet; src/ember/governance/scripts/w2_heldout/launch_gate.py's own
 docstring confirms this precondition: "No W2 runner file exists yet"):
 
   <dump-dir>/config.json
@@ -33,7 +36,7 @@ docstring confirms this precondition: "No W2 runner file exists yet"):
       (the "no model loads" rail). Keys follow this repo's established
       naming (model.embed_tokens.weight, model.layers.<n>.mlp.gate_proj.
       weight, mtp_heads.<k>.weight, lm_head.weight -- grepped directly from
-      scripts/w1_collapse_control_run.py's RealW1Model).
+      src/ember/governance/scripts/w1_collapse_control_run.py's RealW1Model).
 
 Every REQUIRED config.json field is either present or the tool raises
 DerivationError -- never a default. Fields with an independent shape
@@ -55,7 +58,7 @@ axes).
 Verify mode (frozen spec point 4, the launch hook): re-derives fresh from
 the SAME dump and diffs against an on-disk S-arm config file; any mismatch
 is a fail-closed refusal, same GateResult/assert_launch_allowed shape as
-scripts/w2_heldout/launch_gate.py's sec.4 decontamination hook. A future W2
+src/ember/governance/scripts/w2_heldout/launch_gate.py's sec.4 decontamination hook. A future W2
 runner imports `assert_launch_allowed` from this module exactly the way it
 will import the same-named function from launch_gate.py.
 
@@ -348,7 +351,7 @@ def assert_launch_allowed(*, dump_dir: str, seed: int, s_config_path: str) -> Ga
     """Fail-closed one-liner for the future W2 runner: raises SystemExit on
     refusal so a caller that forgets to check `.allowed` still can't
     proceed past an unchecked call site. Same shape as
-    scripts/w2_heldout/launch_gate.py's assert_launch_allowed."""
+    src/ember/governance/scripts/w2_heldout/launch_gate.py's assert_launch_allowed."""
     result = refuse_or_pass(dump_dir=dump_dir, seed=seed, s_config_path=s_config_path)
     if not result.allowed:
         raise SystemExit(f"W2_S_CONFIG_LAUNCH_GATE_REFUSED: {result.reason}")

@@ -169,7 +169,7 @@ Run `git diff --check`, `git status --short`, and SHA-256 the modified files wit
 **Files:**
 - Modify: `runtime/ember-lab/src/lib.rs`
 - Modify: `runtime/ember-lab/tests/data_catalog.rs`
-- Modify: `runtime/ember-lab/tests/artifact_custody.rs`
+- Modify: `domains/runtime/runtime/ember-lab/tests/artifact_custody.rs`
 
 **Interfaces:**
 - Produces: schema version 7 and both foreign-pressure tables.

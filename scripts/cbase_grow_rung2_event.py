@@ -961,7 +961,7 @@ def phase_b2(args) -> dict:
                  "realized proof from the LOADED post-grow weights.",
         "eps": {"eps_sigma": args.eps_sigma, "eps_seed": args.eps_seed,
                 "banned_zero_assertion_passed": True},
-        "operator_sha256": operator_sha256, "operator_file": "scripts/cbase_grow_dryrun.py",
+        "operator_sha256": operator_sha256, "operator_file": "src/ember/governance/scripts/cbase_grow_dryrun.py",
         "cache": {"cache_path": _make_path_repo_relative(cache_path, data_root=data_root), "cache_hit": cache_hit,
                   "eps0_banned_cache_path": _make_path_repo_relative(eps0_banned_cache_path, data_root=data_root),
                   "distinct_from_eps0_cache": _make_path_repo_relative(cache_path, data_root=data_root) != _make_path_repo_relative(eps0_banned_cache_path, data_root=data_root)},

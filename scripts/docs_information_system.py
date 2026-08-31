@@ -329,7 +329,7 @@ def validate_commands_manifest(commands: dict[str, Any]) -> list[dict[str, Any]]
             "--root",
             ".",
         ],
-        "receipt-selftest": ["python", "scripts/receipt_check.py", "--selftest"],
+        "receipt-selftest": ["python", "src/ember/governance/scripts/receipt_check.py", "--selftest"],
         "verify-documentation": [
             "python",
             "scripts/docs_information_system.py",
@@ -356,7 +356,7 @@ def validate_public_command_docs(root: Path, rows: list[dict[str, Any]]) -> None
         if command not in verify_text:
             raise DocsInfoError(f"PUBLIC_COMMAND_DOC_DRIFT:docs/guides/VERIFY.md:{command_id}")
     bootstrap = rendered["bootstrap-python"]
-    for relative in ("README.md", "docs/guides/START-HERE.md"):
+    for relative in ("README.md", "docs/domains/governance/guides/START-HERE.md"):
         if bootstrap not in (root / relative).read_text(encoding="utf-8"):
             raise DocsInfoError(f"PUBLIC_COMMAND_DOC_DRIFT:{relative}:bootstrap-python")
 

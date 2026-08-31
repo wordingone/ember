@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-#!/usr/bin/env python3
 """Executable acceptance harness for the no-source operability gate.
 
 SCOPE LIMIT -- READ FIRST. This harness EXECUTES the root launcher scripts of
@@ -189,7 +189,7 @@ bytes the artifact does not control):
       `resolved-false`, with evidence naming the mismatch: the entry's bytes
       executed, but not from where the CLI actually lives, so the launcher
       did not invoke it in place.
-  L2  Launcher is documented: README.md or docs/guides/START-HERE.md names a
+  L2  Launcher is documented: README.md or docs/domains/governance/guides/START-HERE.md names a
       launcher that itself resolved-true, so a no-source reader can find a
       real one (documenting a decoy does not count).
   L3  Spine-function surface: each gate-named function (custody+identity,
@@ -276,7 +276,7 @@ from pathlib import Path
 
 LAUNCHER_CANDIDATE_SUFFIXES = {".cmd", ".bat", ".ps1", ".exe", ".sh"}
 LAUNCHER_NAME_HINT = re.compile(r"^(ember|launch|start|run)", re.IGNORECASE)
-DOC_FILES = ("README.md", "docs/guides/START-HERE.md")
+DOC_FILES = ("README.md", "docs/domains/governance/guides/START-HERE.md")
 COMMANDS_DIR = "tools/ember-cli/src/commands"
 PACKAGE_JSON = "tools/ember-cli/src/package.json"
 COMMAND_REGISTRY = "tools/ember-cli/src/command-registry.ts"

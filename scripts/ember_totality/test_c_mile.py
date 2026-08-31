@@ -146,7 +146,50 @@ def main():
 
     sys.path.insert(0, os.path.join(ROOT, "scripts", "ember_totality"))
     try:
-        from milestone_leg import run_milestone_leg  # noqa: E402
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_totality/milestone_leg.py
+        import importlib.util as _ember_4d009c91d4de1691_importlib
+        import sys as _ember_4d009c91d4de1691_sys
+        from pathlib import Path as _ember_4d009c91d4de1691_Path
+        _ember_4d009c91d4de1691_path = _ember_4d009c91d4de1691_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'milestone_leg.py')
+        if not _ember_4d009c91d4de1691_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/milestone_leg.py')
+        _ember_4d009c91d4de1691_aliases = ('_ember_issue2015_4d009c91d4de1691', 'milestone_leg', 'scripts.ember_totality.milestone_leg')
+        _ember_4d009c91d4de1691_existing = []
+        for _ember_4d009c91d4de1691_alias in _ember_4d009c91d4de1691_aliases:
+            _ember_4d009c91d4de1691_candidate = _ember_4d009c91d4de1691_sys.modules.get(_ember_4d009c91d4de1691_alias)
+            if _ember_4d009c91d4de1691_candidate is not None and all(_ember_4d009c91d4de1691_candidate is not item for item in _ember_4d009c91d4de1691_existing):
+                _ember_4d009c91d4de1691_existing.append(_ember_4d009c91d4de1691_candidate)
+        if len(_ember_4d009c91d4de1691_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_totality/milestone_leg.py')
+        if _ember_4d009c91d4de1691_existing:
+            _ember_4d009c91d4de1691_module = _ember_4d009c91d4de1691_existing[0]
+            _ember_4d009c91d4de1691_observed = getattr(_ember_4d009c91d4de1691_module, '__file__', None)
+            if _ember_4d009c91d4de1691_observed is None or _ember_4d009c91d4de1691_Path(_ember_4d009c91d4de1691_observed).resolve() != _ember_4d009c91d4de1691_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_totality/milestone_leg.py')
+        else:
+            _ember_4d009c91d4de1691_spec = _ember_4d009c91d4de1691_importlib.spec_from_file_location('_ember_issue2015_4d009c91d4de1691', _ember_4d009c91d4de1691_path)
+            if _ember_4d009c91d4de1691_spec is None or _ember_4d009c91d4de1691_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_totality/milestone_leg.py')
+            _ember_4d009c91d4de1691_module = _ember_4d009c91d4de1691_importlib.module_from_spec(_ember_4d009c91d4de1691_spec)
+            for _ember_4d009c91d4de1691_alias in _ember_4d009c91d4de1691_aliases:
+                _ember_4d009c91d4de1691_prior = _ember_4d009c91d4de1691_sys.modules.get(_ember_4d009c91d4de1691_alias)
+                if _ember_4d009c91d4de1691_prior is not None and _ember_4d009c91d4de1691_prior is not _ember_4d009c91d4de1691_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/milestone_leg.py')
+                _ember_4d009c91d4de1691_sys.modules[_ember_4d009c91d4de1691_alias] = _ember_4d009c91d4de1691_module
+            try:
+                _ember_4d009c91d4de1691_spec.loader.exec_module(_ember_4d009c91d4de1691_module)
+            except BaseException:
+                for _ember_4d009c91d4de1691_alias in _ember_4d009c91d4de1691_aliases:
+                    if _ember_4d009c91d4de1691_sys.modules.get(_ember_4d009c91d4de1691_alias) is _ember_4d009c91d4de1691_module:
+                        _ember_4d009c91d4de1691_sys.modules.pop(_ember_4d009c91d4de1691_alias, None)
+                raise
+        for _ember_4d009c91d4de1691_alias in _ember_4d009c91d4de1691_aliases:
+            _ember_4d009c91d4de1691_prior = _ember_4d009c91d4de1691_sys.modules.get(_ember_4d009c91d4de1691_alias)
+            if _ember_4d009c91d4de1691_prior is not None and _ember_4d009c91d4de1691_prior is not _ember_4d009c91d4de1691_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/milestone_leg.py')
+            _ember_4d009c91d4de1691_sys.modules[_ember_4d009c91d4de1691_alias] = _ember_4d009c91d4de1691_module
+        run_milestone_leg = getattr(_ember_4d009c91d4de1691_module, 'run_milestone_leg')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_totality/milestone_leg.py  # noqa: E402
     except Exception as e:  # missing/broken module IS the regression -- fail closed
         emit("RED", f"C-MILE: milestone_leg unimportable ({type(e).__name__}: {e}) "
                     f"-- the milestone-reconciliation leg itself is gone [invalid_milestone_regression]")

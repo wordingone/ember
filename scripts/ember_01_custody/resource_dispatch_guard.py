@@ -11,8 +11,8 @@ regression guard proves it is enforced" -- this module IS that guard.
 
 Prior art this reuses rather than reimplements:
   - VRAM floor pair (vram_fraction<=0.80, margin_gib_floor>=1.5) ==
-    scripts/v0_config_check.py's GOVERNOR_FLOOR, already the frozen contract
-    g_governor() in scripts/v0_pretrain_launch_gate.py checks against the
+    src/ember/governance/scripts/v0_config_check.py's GOVERNOR_FLOOR, already the frozen contract
+    g_governor() in src/ember/governance/scripts/v0_pretrain_launch_gate.py checks against the
     LAUNCH CONFIG. This module applies the SAME floor as a LIVE pre-dispatch
     counter read instead of a static config-value check -- a config can say
     vram_fraction<=0.80 while the box is already at 0.95 from something else
@@ -47,8 +47,8 @@ from typing import Optional
 
 # ---- Floors (prior-art pinned; tighten-only, changing a value is a contract
 # change and must be a disclosed decision, not a silent drift) ---------------
-VRAM_FRACTION_CAP = 0.80            # scripts/v0_config_check.py GOVERNOR_FLOOR
-VRAM_MARGIN_GIB_FLOOR = 1.5         # scripts/v0_config_check.py GOVERNOR_FLOOR
+VRAM_FRACTION_CAP = 0.80            # src/ember/governance/scripts/v0_config_check.py GOVERNOR_FLOOR
+VRAM_MARGIN_GIB_FLOOR = 1.5         # src/ember/governance/scripts/v0_config_check.py GOVERNOR_FLOOR
 COMMIT_CHARGE_FREE_FLOOR_GIB = 6.0  # visible-window-hygiene.md in-run commit governor;
                                      # build_fixed_prior_manifest.py HOST_GOVERNOR_FLOOR_BYTES
 

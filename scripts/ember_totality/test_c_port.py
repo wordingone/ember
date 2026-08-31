@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Ember totality test — Condition C-PORT (status probe / TDD).
 
 C-PORT — substrate portability: the organism survives its device
@@ -308,7 +311,7 @@ def main():
             if "roofline" not in gtxt and "device_relative" not in gtxt:
                 gov_gap.append("no device-relative throughput threshold")
         else:
-            gov_gap.append("scripts/governor.py absent")
+            gov_gap.append("src/ember/governance/scripts/governor.py absent")
         emit("RED",
              "C-PORT: NO device-portability receipt under receipts/ proving "
              "governor + a forward pass on a non-4090 (simulated/real) device "

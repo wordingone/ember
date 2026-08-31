@@ -5,14 +5,14 @@
 //! Training-scoped verify (issue #1400): a synchronous, GitHub-free check of EXACTLY the
 //! training dependency closure -- not the ~234k-file EMBER-01 completion census. It reads
 //! `manifests/training-dependency-closure.json` (the single closure declaration
-//! `scripts/training_closure.py` also reads), proves every declared member exists, hashes
-//! the declared set with the identical algorithm `scripts/training_closure.py::
+//! `src/ember/governance/scripts/training_closure.py` also reads), proves every declared member exists, hashes
+//! the declared set with the identical algorithm `src/ember/governance/scripts/training_closure.py::
 //! compute_closure_hash` uses, then verifies the input-identity/admission chain, the
 //! tokenizer/model-config identity, and (when a certificate is supplied) the certificate's
 //! `closure_sha256` binding plus the verified-at commit's ancestry.
 //!
 //! What this module deliberately does NOT do: re-walk Python imports/exec edges to prove
-//! the closure DECLARATION is honest (`scripts/training_closure.py::audit_closure`'s
+//! the closure DECLARATION is honest (`src/ember/governance/scripts/training_closure.py::audit_closure`'s
 //! reachability half). That is a boundary-drift guard that already runs in CI and again,
 //! live, inside `tools/ember-restart-3b/certified_train_launch.py::read_live_closure_sha256`
 //! immediately before a launch consumes this receipt. Porting a second Python-AST walker
@@ -87,7 +87,7 @@ pub struct ClosureManifest {
 }
 
 /// Load and shape-check the closure manifest at `root` -- the single declaration both this
-/// module and `scripts/training_closure.py::load_manifest` read; a file entering the
+/// module and `src/ember/governance/scripts/training_closure.py::load_manifest` read; a file entering the
 /// closure is picked up here automatically the next time this runs (#1400 acceptance 1:
 /// "derived from the #1332 closure definition, not hand-listed").
 pub fn load_manifest(root: &Path) -> Result<ClosureManifest> {
@@ -103,7 +103,7 @@ pub fn load_manifest(root: &Path) -> Result<ClosureManifest> {
     Ok(manifest)
 }
 
-/// Exactly `declared_paths()` in `scripts/training_closure.py`: the union of entrypoints,
+/// Exactly `declared_paths()` in `src/ember/governance/scripts/training_closure.py`: the union of entrypoints,
 /// dynamic_entrypoints, code, data, and the manifest's own relative path -- deduplicated and
 /// sorted (Rust `String` `Ord` is byte-wise UTF-8, identical to Python's default string sort
 /// for the ASCII repo-relative paths this manifest declares, so `BTreeSet` iteration order
@@ -134,7 +134,7 @@ pub fn missing_members(root: &Path, declared: &BTreeSet<String>) -> Vec<String> 
         .collect()
 }
 
-/// Exactly `compute_closure_hash()` in `scripts/training_closure.py`: sha256 over sorted
+/// Exactly `compute_closure_hash()` in `src/ember/governance/scripts/training_closure.py`: sha256 over sorted
 /// `"<relpath>\0<sha256(bytes)>\n"` records. Byte-parity with the Python implementation is
 /// load-bearing -- the certificate's `closure_sha256` must mean the same thing regardless of
 /// which implementation computed it -- and is pinned by a committed golden fixture plus a
@@ -656,7 +656,7 @@ fn main() {{
     /// dependency and no network. The companion python-shell-out parity test
     /// (`tests/training_closure_python_parity.rs`) is the second, slower half of the pin:
     /// it catches the case where this golden value itself drifted out of sync with a real
-    /// `scripts/training_closure.py` edit that nobody regenerated it for.
+    /// `src/ember/governance/scripts/training_closure.py` edit that nobody regenerated it for.
     #[test]
     fn closure_hash_matches_committed_golden_fixture() {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -692,7 +692,7 @@ fn main() {{
         assert_eq!(
             actual_hash, expected_hash,
             "closure hash drifted from the committed golden fixture -- if this is an \
-             INTENTIONAL algorithm change (in this module or scripts/training_closure.py), \
+             INTENTIONAL algorithm change (in this module or src/ember/governance/scripts/training_closure.py), \
              regenerate per tests/fixtures/training-closure-golden.json's own _comment; \
              otherwise this is a real byte-parity regression"
         );

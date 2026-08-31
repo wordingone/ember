@@ -16,7 +16,7 @@ the existing R1-E8 validator.
   stream, genesis, seed, schedule, and 100 matched steps.
 - `grad_norm` is measured before projection, optimizer update, clipping, or
   gradient release. Both tiers execute the same accumulator code.
-- The existing `scripts/r1_e8_validator.py` remains the arithmetic authority.
+- The existing `src/ember/governance/scripts/r1_e8_validator.py` remains the arithmetic authority.
   A producer may derive and serialize its expected values but may not redefine
   them.
 - All output creation is no-overwrite and self-digested. Every referenced input
