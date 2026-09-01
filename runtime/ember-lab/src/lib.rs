@@ -26,6 +26,7 @@ pub mod rehearsal;
 pub mod rpc;
 pub mod scratch;
 pub mod server_supervisor;
+pub mod storage_retention;
 pub mod training_verify;
 
 pub type Result<T> = std::result::Result<T, EmberLabError>;
@@ -3726,6 +3727,23 @@ impl Daemon {
                 |r| r.get(0),
             )
             .optional()?)
+    }
+
+    pub fn release_lease(&self, resource: &str, job_id: &str) -> Result<()> {
+        let mut conn = self.conn()?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "DELETE FROM leases WHERE resource=?1 AND owner_job_id=?2",
+            params![resource, job_id],
+        )?;
+        if changed != 1 {
+            return Err(EmberLabError::LeaseNotOwned {
+                resource: resource.into(),
+                job_id: job_id.into(),
+            });
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn plan_outage(

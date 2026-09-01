@@ -3,12 +3,17 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use crate::{
-    server_supervisor::ServerLiveCycleRequest, Daemon, ResourceGuardRearmRequest,
-    SchedulePrediction, MAX_DISPATCH_MANIFEST_BYTES,
+    hash_bytes, hash_file,
+    server_supervisor::ServerLiveCycleRequest,
+    storage_retention::{
+        reopen_remote_master, run_storage_reconcile, ExecutionReceipt, StorageReconcileRequest,
+    },
+    Daemon, ResourceGuardRearmRequest, SchedulePrediction, MAX_DISPATCH_MANIFEST_BYTES,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::io;
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -18,6 +23,120 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const MAX_ASSESSMENT_DIRECTORY_UTF8_BYTES: usize = 4096;
+const STORAGE_DAEMON_TERMINAL_SCHEMA: &str = "ember-storage-retention-daemon-terminal-v1";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StorageDaemonTerminalReceipt {
+    schema_version: String,
+    command_identity: String,
+    authenticated_client_pid: u32,
+    daemon_pid: u32,
+    daemon_binary_sha256: String,
+    lease_resource: String,
+    lease_released: bool,
+    policy_raw_sha256: String,
+    pin_set_sha256: String,
+    current_master: String,
+    execution_receipt_self_sha256: String,
+    self_sha256: String,
+}
+
+#[derive(Serialize)]
+struct StorageDaemonTerminalWithoutSelf<'a> {
+    schema_version: &'a str,
+    command_identity: &'a str,
+    authenticated_client_pid: u32,
+    daemon_pid: u32,
+    daemon_binary_sha256: &'a str,
+    lease_resource: &'a str,
+    lease_released: bool,
+    policy_raw_sha256: &'a str,
+    pin_set_sha256: &'a str,
+    current_master: &'a str,
+    execution_receipt_self_sha256: &'a str,
+}
+
+fn storage_daemon_terminal_without_self(
+    receipt: &StorageDaemonTerminalReceipt,
+) -> StorageDaemonTerminalWithoutSelf<'_> {
+    StorageDaemonTerminalWithoutSelf {
+        schema_version: &receipt.schema_version,
+        command_identity: &receipt.command_identity,
+        authenticated_client_pid: receipt.authenticated_client_pid,
+        daemon_pid: receipt.daemon_pid,
+        daemon_binary_sha256: &receipt.daemon_binary_sha256,
+        lease_resource: &receipt.lease_resource,
+        lease_released: receipt.lease_released,
+        policy_raw_sha256: &receipt.policy_raw_sha256,
+        pin_set_sha256: &receipt.pin_set_sha256,
+        current_master: &receipt.current_master,
+        execution_receipt_self_sha256: &receipt.execution_receipt_self_sha256,
+    }
+}
+
+fn persist_storage_daemon_terminal(
+    request: &StorageReconcileRequest,
+    command_identity: &str,
+    authenticated_client_pid: u32,
+    daemon_binary_sha256: &str,
+    lease_resource: &str,
+    execution: &ExecutionReceipt,
+) -> Result<StorageDaemonTerminalReceipt, Box<dyn std::error::Error>> {
+    let policy_raw_sha256 = hash_file(&request.policy)?;
+    let mut receipt = StorageDaemonTerminalReceipt {
+        schema_version: STORAGE_DAEMON_TERMINAL_SCHEMA.into(),
+        command_identity: command_identity.into(),
+        authenticated_client_pid,
+        daemon_pid: std::process::id(),
+        daemon_binary_sha256: daemon_binary_sha256.into(),
+        lease_resource: lease_resource.into(),
+        lease_released: true,
+        policy_raw_sha256,
+        pin_set_sha256: request.pin_set_sha256.clone(),
+        current_master: request.current_master.clone(),
+        execution_receipt_self_sha256: execution.self_sha256.clone(),
+        self_sha256: String::new(),
+    };
+    receipt.self_sha256 = hash_bytes(&serde_json::to_vec(&storage_daemon_terminal_without_self(
+        &receipt,
+    ))?);
+    let path = request.custody.join("daemon-terminal.json");
+    let mut bytes = serde_json::to_vec(&receipt)?;
+    bytes.push(b'\n');
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    file.write_all(&bytes)?;
+    file.sync_all()?;
+    Ok(receipt)
+}
+
+fn reopen_storage_daemon_terminal(
+    request: &StorageReconcileRequest,
+    daemon_binary_sha256: &str,
+    execution: &ExecutionReceipt,
+) -> Result<Option<StorageDaemonTerminalReceipt>, Box<dyn std::error::Error>> {
+    let path = request.custody.join("daemon-terminal.json");
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let receipt: StorageDaemonTerminalReceipt = serde_json::from_slice(&std::fs::read(path)?)?;
+    let expected_self_sha256 = hash_bytes(&serde_json::to_vec(
+        &storage_daemon_terminal_without_self(&receipt),
+    )?);
+    if receipt.schema_version != STORAGE_DAEMON_TERMINAL_SCHEMA
+        || receipt.self_sha256 != expected_self_sha256
+        || !receipt.lease_released
+        || receipt.lease_resource != "storage:state-models"
+        || receipt.daemon_binary_sha256 != daemon_binary_sha256
+        || receipt.policy_raw_sha256 != hash_file(&request.policy)?
+        || receipt.pin_set_sha256 != request.pin_set_sha256
+        || receipt.current_master != request.current_master
+        || receipt.execution_receipt_self_sha256 != execution.self_sha256
+    {
+        return Err(io::Error::other("storage daemon terminal receipt identity mismatch").into());
+    }
+    Ok(Some(receipt))
+}
 
 #[derive(Debug, Deserialize)]
 struct WireRequest {
@@ -535,6 +654,147 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Err(error) => (operation_error(id, error), false),
             }
         }
+        "storage_reconcile" => {
+            let params: StorageReconcileRequest = match decode(&id, request.params) {
+                Ok(value) => value,
+                Err(response) => return (response, false),
+            };
+            let Some(client_pid) = client_pid else {
+                return (
+                    invalid_request(
+                        id,
+                        "storage reconciliation requires an authenticated local client PID",
+                    ),
+                    false,
+                );
+            };
+            let reopened_pin_set_sha256 = match hash_file(&params.declarations) {
+                Ok(value) => value,
+                Err(error) => return (operation_error(id, error), false),
+            };
+            if params.pin_set_sha256 != reopened_pin_set_sha256 {
+                return (
+                    invalid_request(
+                        id,
+                        "storage reconciliation pin-set hash does not match reopened declarations",
+                    ),
+                    false,
+                );
+            }
+            let reopened_master = match reopen_remote_master(&params.repository_root) {
+                Ok(value) => value,
+                Err(error) => return (operation_error(id, error), false),
+            };
+            if params.current_master != reopened_master {
+                return (
+                    invalid_request(
+                        id,
+                        "storage reconciliation current-master does not match reopened origin/master",
+                    ),
+                    false,
+                );
+            }
+            let resource = "storage:state-models";
+            let executable = match std::env::current_exe() {
+                Ok(value) => value,
+                Err(error) => return (operation_error(id, error), false),
+            };
+            let executable_sha256 = match hash_file(&executable) {
+                Ok(value) => value,
+                Err(error) => return (operation_error(id, error), false),
+            };
+            if params.custody.join("daemon-terminal.json").is_file() {
+                let execution = match run_storage_reconcile(&params) {
+                    Ok(value) => value,
+                    Err(error) => return (operation_error(id, error), false),
+                };
+                let terminal =
+                    match reopen_storage_daemon_terminal(&params, &executable_sha256, &execution) {
+                        Ok(Some(value)) => value,
+                        Ok(None) => {
+                            return (
+                                operation_error(
+                                    id,
+                                    "storage daemon terminal disappeared during reopen",
+                                ),
+                                false,
+                            )
+                        }
+                        Err(error) => return (operation_error(id, error), false),
+                    };
+                return (
+                    success(
+                        id,
+                        json!({
+                            "command_identity": terminal.command_identity,
+                            "authenticated_client_pid": terminal.authenticated_client_pid,
+                            "daemon_pid": terminal.daemon_pid,
+                            "daemon_binary_sha256": terminal.daemon_binary_sha256,
+                            "lease_resource": terminal.lease_resource,
+                            "lease_released": terminal.lease_released,
+                            "daemon_terminal_self_sha256": terminal.self_sha256,
+                            "reopened": true,
+                            "execution_receipt": execution,
+                        }),
+                    ),
+                    false,
+                );
+            }
+            let operation_id = format!(
+                "storage-reconcile-{client_pid}-{}",
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            );
+            if let Err(error) = daemon.bind_identity(&operation_id, &executable, &executable_sha256)
+            {
+                return (operation_error(id, error), false);
+            }
+            if let Err(error) = daemon.acquire_lease(resource, &operation_id) {
+                return (operation_error(id, error), false);
+            }
+            let outcome = run_storage_reconcile(&params);
+            let released = daemon.release_lease(resource, &operation_id);
+            match (outcome, released) {
+                (Ok(receipt), Ok(())) => match persist_storage_daemon_terminal(
+                    &params,
+                    &operation_id,
+                    client_pid,
+                    &executable_sha256,
+                    resource,
+                    &receipt,
+                ) {
+                    Ok(terminal) => (
+                        success(
+                            id,
+                            json!({
+                                "command_identity": operation_id,
+                                "authenticated_client_pid": client_pid,
+                                "daemon_pid": std::process::id(),
+                                "daemon_binary_sha256": executable_sha256,
+                                "lease_resource": resource,
+                                "lease_released": true,
+                                "daemon_terminal_self_sha256": terminal.self_sha256,
+                                "reopened": false,
+                                "execution_receipt": receipt,
+                            }),
+                        ),
+                        false,
+                    ),
+                    Err(error) => (operation_error(id, error), false),
+                },
+                (Err(operation), Ok(())) => (operation_error(id, operation), false),
+                (Ok(_), Err(cleanup)) => (operation_error(id, cleanup), false),
+                (Err(operation), Err(cleanup)) => (
+                    operation_error(
+                        id,
+                        format!("operation={operation:?}; lease_cleanup={cleanup:?}"),
+                    ),
+                    false,
+                ),
+            }
+        }
         "shutdown" => (success(id, json!({"status": "shutting_down"})), true),
         method => (method_not_found(id, method), false),
     }
@@ -990,7 +1250,12 @@ pub fn serve_named_pipe(_daemon: Arc<Daemon>, _pipe_name: &str) -> io::Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{ServerCycleParams, WallObservationSnapshotParams};
+    use super::{dispatch, ServerCycleParams, WallObservationSnapshotParams, WireRequest};
+    use crate::storage_retention::{
+        CensusDeclaration, CustodyClass, Disposition, ReconcileOperation, StorageReconcileRequest,
+    };
+    use crate::Daemon;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn wall_snapshot_params_are_closed_and_preserve_negative_for_daemon_refusal() {
@@ -1035,5 +1300,203 @@ mod tests {
             "now_ms": 1,
         });
         assert!(serde_json::from_value::<ServerCycleParams>(value).is_err());
+    }
+
+    #[test]
+    fn storage_reconcile_runs_inside_daemon_lease_and_identical_second_call_reopens() {
+        let root = std::env::temp_dir().join(format!(
+            "ember-storage-rpc-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let models = root.join("models");
+        let state = root.join("state");
+        std::fs::create_dir_all(&models).unwrap();
+        std::fs::create_dir_all(&state).unwrap();
+        std::fs::write(models.join("kept.bin"), b"m").unwrap();
+        std::fs::write(state.join("kept.bin"), b"s").unwrap();
+        let policy = root.join("policy.json");
+        std::fs::write(
+            &policy,
+            serde_json::to_vec(&serde_json::json!({
+                "schema_version":"ember-storage-retention-policy-v1",
+                "filing_source_commit":"b".repeat(40),
+                "classes":[
+                    {"class":"models","canonical_root":"models","filing_total_bytes":12,
+                     "protected_lower_bound_bytes":10,"admitted_growth_envelope_bytes":1,
+                     "hard_quota_bytes":11,"keep_last_n":1,"grace_seconds":1,
+                     "protected_predicates":["active_process_root","open_run_custody","nonterminal_attempt","registered_campaign_evidence","independently_pinned_checkpoint","receipt_dependency","sole_verified_copy"],
+                     "eligibility_predicates":["reproducible","verified_duplicate_copy"],
+                     "compression_rule":"none",
+                     "maximum_reconcile_bytes":1},
+                    {"class":"state","canonical_root":"state","filing_total_bytes":12,
+                     "protected_lower_bound_bytes":10,"admitted_growth_envelope_bytes":1,
+                     "hard_quota_bytes":11,"keep_last_n":null,"grace_seconds":1,
+                     "protected_predicates":["active_process_root","open_run_custody","nonterminal_attempt","registered_campaign_evidence","receipt_dependency"],
+                     "eligibility_predicates":["reproducible","terminal_receipt_kernel"],
+                     "compression_rule":"terminal_receipt_kernel_v1",
+                     "maximum_reconcile_bytes":1}
+                ]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let declarations = root.join("declarations.json");
+        std::fs::write(
+            &declarations,
+            serde_json::to_vec(&vec![
+                CensusDeclaration {
+                    class: CustodyClass::Models,
+                    relative_path: "kept.bin".into(),
+                    disposition: Disposition::Protected,
+                    pin_reasons: vec!["fixture".into()],
+                    checkpoint: None,
+                    duplicate_witness: None,
+                    terminal_kernel_witness: None,
+                },
+                CensusDeclaration {
+                    class: CustodyClass::State,
+                    relative_path: "kept.bin".into(),
+                    disposition: Disposition::Protected,
+                    pin_reasons: vec!["fixture".into()],
+                    checkpoint: None,
+                    duplicate_witness: None,
+                    terminal_kernel_witness: None,
+                },
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        let remote_master = root.join(".git/refs/remotes/origin/master");
+        std::fs::create_dir_all(remote_master.parent().unwrap()).unwrap();
+        std::fs::write(&remote_master, format!("{}\n", "b".repeat(40))).unwrap();
+        let daemon = Daemon::open(&root.join("ember-lab.sqlite3")).unwrap();
+        let declaration_sha256 = crate::hash_file(&declarations).unwrap();
+        let request = StorageReconcileRequest {
+            repository_root: root.clone(),
+            policy,
+            declarations,
+            models_root: models,
+            state_root: state,
+            custody: root.join("custody"),
+            pin_set_sha256: declaration_sha256,
+            current_master: "b".repeat(40),
+            projected_growth: std::collections::BTreeMap::from([
+                (CustodyClass::Models, 0),
+                (CustodyClass::State, 0),
+            ]),
+            operation: ReconcileOperation::DryRun,
+        };
+        let mut unbound_request = request.clone();
+        unbound_request.pin_set_sha256 = "a".repeat(64);
+        unbound_request.custody = root.join("unbound-custody");
+        let (unbound_response, shutdown) = dispatch(
+            &daemon,
+            WireRequest {
+                jsonrpc: "2.0".into(),
+                id: serde_json::json!(0),
+                method: "storage_reconcile".into(),
+                params: serde_json::to_value(unbound_request).unwrap(),
+            },
+            Some(4242),
+        );
+        assert!(!shutdown);
+        assert!(
+            unbound_response.get("error").is_some(),
+            "{unbound_response}"
+        );
+        assert!(!root.join("unbound-custody").exists());
+        assert_eq!(daemon.lease_owner("storage:state-models").unwrap(), None);
+
+        let mut stale_master_request = request.clone();
+        stale_master_request.current_master = "c".repeat(40);
+        stale_master_request.custody = root.join("stale-master-custody");
+        let (stale_master_response, shutdown) = dispatch(
+            &daemon,
+            WireRequest {
+                jsonrpc: "2.0".into(),
+                id: serde_json::json!(0),
+                method: "storage_reconcile".into(),
+                params: serde_json::to_value(stale_master_request).unwrap(),
+            },
+            Some(4242),
+        );
+        assert!(!shutdown);
+        assert!(
+            stale_master_response.get("error").is_some(),
+            "{stale_master_response}"
+        );
+        assert!(!root.join("stale-master-custody").exists());
+        assert_eq!(daemon.lease_owner("storage:state-models").unwrap(), None);
+
+        let params = serde_json::to_value(request).unwrap();
+        let mut first_command_identity = None;
+        for id in [1, 2] {
+            let (response, shutdown) = dispatch(
+                &daemon,
+                WireRequest {
+                    jsonrpc: "2.0".into(),
+                    id: serde_json::json!(id),
+                    method: "storage_reconcile".into(),
+                    params: params.clone(),
+                },
+                Some(4242),
+            );
+            assert!(!shutdown);
+            assert_eq!(response["result"]["lease_released"], true, "{response}");
+            assert_eq!(
+                response["result"]["execution_receipt"]["result"], "DRY_RUN_PASS",
+                "{response}"
+            );
+            assert_eq!(daemon.lease_owner("storage:state-models").unwrap(), None);
+            assert_eq!(response["result"]["reopened"], id == 2, "{response}");
+            let command_identity = response["result"]["command_identity"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            if let Some(first) = &first_command_identity {
+                assert_eq!(&command_identity, first);
+            } else {
+                first_command_identity = Some(command_identity);
+            }
+            let daemon_terminal = root.join("custody").join("daemon-terminal.json");
+            assert!(daemon_terminal.is_file(), "{response}");
+            let persisted: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&daemon_terminal).unwrap()).unwrap();
+            assert_eq!(
+                persisted["schema_version"],
+                "ember-storage-retention-daemon-terminal-v1"
+            );
+            assert_eq!(persisted["lease_released"], true);
+            assert_eq!(
+                persisted["execution_receipt_self_sha256"],
+                response["result"]["execution_receipt"]["self_sha256"]
+            );
+            assert_eq!(
+                persisted["self_sha256"],
+                response["result"]["daemon_terminal_self_sha256"]
+            );
+        }
+        let daemon_terminal = root.join("custody").join("daemon-terminal.json");
+        let mut tampered: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&daemon_terminal).unwrap()).unwrap();
+        tampered["lease_released"] = serde_json::Value::Bool(false);
+        std::fs::write(&daemon_terminal, serde_json::to_vec(&tampered).unwrap()).unwrap();
+        let (response, shutdown) = dispatch(
+            &daemon,
+            WireRequest {
+                jsonrpc: "2.0".into(),
+                id: serde_json::json!(3),
+                method: "storage_reconcile".into(),
+                params,
+            },
+            Some(4242),
+        );
+        assert!(!shutdown);
+        assert!(response.get("error").is_some(), "{response}");
+        assert_eq!(daemon.lease_owner("storage:state-models").unwrap(), None);
     }
 }

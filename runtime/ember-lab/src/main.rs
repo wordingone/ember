@@ -110,6 +110,29 @@ struct CockpitCliArgs {
     receipt: Option<PathBuf>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StorageRetentionOperation {
+    DryRun,
+    Commit,
+    Resume,
+    Rollback,
+}
+
+struct StorageRetentionCliArgs {
+    pipe: String,
+    repository_root: PathBuf,
+    policy: PathBuf,
+    declarations: PathBuf,
+    models_root: PathBuf,
+    state_root: PathBuf,
+    custody: PathBuf,
+    pin_set_sha256: String,
+    current_master: String,
+    projected_models_bytes: u64,
+    projected_state_bytes: u64,
+    operation: StorageRetentionOperation,
+}
+
 struct CertifiedLaunchDaemonDefaults {
     db: PathBuf,
     pipe: String,
@@ -1763,7 +1786,7 @@ fn prepare_cockpit_launch_with(
 }
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab storage-reconcile --pipe <\\\\.\\pipe\\name> --repository-root <path> --policy <path> --declarations <path> --models-root <path> --state-root <path> --custody <path> --pin-set-sha256 <hex> --current-master <sha> --projected-models-bytes <n> --projected-state-bytes <n> --mode <dry-run|execute>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -1777,6 +1800,7 @@ enum Command {
     },
     Launch(CertifiedLaunchCliArgs),
     Cockpit(CockpitCliArgs),
+    StorageReconcile(StorageRetentionCliArgs),
     ResourceGuardRearm {
         pipe: String,
         frozen_observation_sha256: String,
@@ -1993,6 +2017,84 @@ where
     }))
 }
 
+fn parse_storage_retention_arguments<I>(mut args: I) -> Result<Command, String>
+where
+    I: Iterator<Item = String>,
+{
+    let mut policy = None;
+    let mut pipe = None;
+    let mut repository_root = None;
+    let mut declarations = None;
+    let mut models_root = None;
+    let mut state_root = None;
+    let mut custody = None;
+    let mut pin_set_sha256 = None;
+    let mut current_master = None;
+    let mut projected_models_bytes = None;
+    let mut projected_state_bytes = None;
+    let mut operation = None;
+    while let Some(flag) = args.next() {
+        let value = args
+            .next()
+            .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+        match flag.as_str() {
+            "--pipe" => pipe = Some(value),
+            "--repository-root" => repository_root = Some(PathBuf::from(value)),
+            "--policy" => policy = Some(PathBuf::from(value)),
+            "--declarations" => declarations = Some(PathBuf::from(value)),
+            "--models-root" => models_root = Some(PathBuf::from(value)),
+            "--state-root" => state_root = Some(PathBuf::from(value)),
+            "--custody" => custody = Some(PathBuf::from(value)),
+            "--pin-set-sha256" => pin_set_sha256 = Some(value),
+            "--current-master" => current_master = Some(value),
+            "--projected-models-bytes" => {
+                projected_models_bytes = Some(value.parse::<u64>().map_err(|_| {
+                    format!("invalid --projected-models-bytes {value:?}\n{}", usage())
+                })?)
+            }
+            "--projected-state-bytes" => {
+                projected_state_bytes = Some(value.parse::<u64>().map_err(|_| {
+                    format!("invalid --projected-state-bytes {value:?}\n{}", usage())
+                })?)
+            }
+            "--mode" => {
+                operation = Some(match value.as_str() {
+                    "dry-run" => StorageRetentionOperation::DryRun,
+                    "commit" => StorageRetentionOperation::Commit,
+                    "resume" => StorageRetentionOperation::Resume,
+                    "rollback" => StorageRetentionOperation::Rollback,
+                    _ => {
+                        return Err(format!(
+                            "unknown storage reconciliation mode {value}\n{}",
+                            usage()
+                        ))
+                    }
+                })
+            }
+            _ => return Err(format!("unknown argument {flag}\n{}", usage())),
+        }
+    }
+    Ok(Command::StorageReconcile(StorageRetentionCliArgs {
+        pipe: pipe.ok_or_else(|| format!("missing --pipe\n{}", usage()))?,
+        repository_root: repository_root
+            .ok_or_else(|| format!("missing --repository-root\n{}", usage()))?,
+        policy: policy.ok_or_else(|| format!("missing --policy\n{}", usage()))?,
+        declarations: declarations.ok_or_else(|| format!("missing --declarations\n{}", usage()))?,
+        models_root: models_root.ok_or_else(|| format!("missing --models-root\n{}", usage()))?,
+        state_root: state_root.ok_or_else(|| format!("missing --state-root\n{}", usage()))?,
+        custody: custody.ok_or_else(|| format!("missing --custody\n{}", usage()))?,
+        pin_set_sha256: pin_set_sha256
+            .ok_or_else(|| format!("missing --pin-set-sha256\n{}", usage()))?,
+        current_master: current_master
+            .ok_or_else(|| format!("missing --current-master\n{}", usage()))?,
+        projected_models_bytes: projected_models_bytes
+            .ok_or_else(|| format!("missing --projected-models-bytes\n{}", usage()))?,
+        projected_state_bytes: projected_state_bytes
+            .ok_or_else(|| format!("missing --projected-state-bytes\n{}", usage()))?,
+        operation: operation.ok_or_else(|| format!("missing --mode\n{}", usage()))?,
+    }))
+}
+
 fn parse_args() -> Result<Command, String> {
     let mut args = std::env::args().skip(1);
     let command = args.next().ok_or_else(|| usage().to_string())?;
@@ -2002,6 +2104,9 @@ fn parse_args() -> Result<Command, String> {
     }
     if command == "cockpit" {
         return parse_cockpit_arguments(args);
+    }
+    if command == "storage-reconcile" {
+        return parse_storage_retention_arguments(args);
     }
 
     if command == "verify-training" {
@@ -3072,6 +3177,39 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(completion.exit_code);
             }
         }
+        Command::StorageReconcile(cli) => {
+            let operation = match cli.operation {
+                StorageRetentionOperation::DryRun => "dry-run",
+                StorageRetentionOperation::Commit => "commit",
+                StorageRetentionOperation::Resume => "resume",
+                StorageRetentionOperation::Rollback => "rollback",
+            };
+            let result = call_rpc(
+                &cli.pipe,
+                &json!({
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"storage_reconcile",
+                    "params":{
+                        "repository_root":cli.repository_root,
+                        "policy":cli.policy,
+                        "declarations":cli.declarations,
+                        "models_root":cli.models_root,
+                        "state_root":cli.state_root,
+                        "custody":cli.custody,
+                    "pin_set_sha256":cli.pin_set_sha256,
+                    "current_master":cli.current_master,
+                    "projected_growth":{
+                        "models":cli.projected_models_bytes,
+                        "state":cli.projected_state_bytes
+                    },
+                    "operation":operation,
+                    }
+                }),
+                "storage-reconcile",
+            )?;
+            println!("{}", serde_json::to_string(&result)?);
+        }
         Command::ResourceGuardRearm {
             pipe,
             frozen_observation_sha256,
@@ -3230,7 +3368,9 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ember_lab::storage_retention::{CensusDeclaration, CustodyClass};
     use ember_lab::{JobSpec, ReceiptArtifact};
+    use std::fs;
 
     fn fixture_probe_execution_scope() -> Value {
         json!({
@@ -4278,5 +4418,173 @@ mod tests {
             "Inspect the operational receipt failure and fix the named readiness or evidence gate before retrying."
         );
         assert_eq!(receipt["rehearsal"]["failure"]["stage"], "post_dispatch");
+    }
+
+    #[test]
+    fn storage_reconcile_cli_is_one_closed_command_and_second_dry_run_is_idempotent() {
+        let root = std::env::temp_dir().join(format!(
+            "ember-storage-cli-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let models = root.join("models");
+        let state = root.join("state");
+        fs::create_dir_all(&models).unwrap();
+        fs::create_dir_all(&state).unwrap();
+        let remote_master = root.join(".git/refs/remotes/origin/master");
+        fs::create_dir_all(remote_master.parent().unwrap()).unwrap();
+        fs::write(&remote_master, format!("{}\n", "b".repeat(40))).unwrap();
+        fs::write(models.join("kept.bin"), b"m").unwrap();
+        fs::write(state.join("kept.bin"), b"s").unwrap();
+        let policy = root.join("policy.json");
+        fs::write(
+            &policy,
+            serde_json::to_vec(&json!({
+                "schema_version":"ember-storage-retention-policy-v1",
+                "filing_source_commit":"b".repeat(40),
+                "classes":[
+                    {"class":"models","canonical_root":"models","filing_total_bytes":12,
+                     "protected_lower_bound_bytes":10,"admitted_growth_envelope_bytes":1,
+                     "hard_quota_bytes":11,"keep_last_n":1,"grace_seconds":1,
+                     "protected_predicates":["active_process_root","open_run_custody","nonterminal_attempt","registered_campaign_evidence","independently_pinned_checkpoint","receipt_dependency","sole_verified_copy"],
+                     "eligibility_predicates":["reproducible","verified_duplicate_copy"],
+                     "compression_rule":"none",
+                     "maximum_reconcile_bytes":1},
+                    {"class":"state","canonical_root":"state","filing_total_bytes":12,
+                     "protected_lower_bound_bytes":10,"admitted_growth_envelope_bytes":1,
+                     "hard_quota_bytes":11,"keep_last_n":null,"grace_seconds":1,
+                     "protected_predicates":["active_process_root","open_run_custody","nonterminal_attempt","registered_campaign_evidence","receipt_dependency"],
+                     "eligibility_predicates":["reproducible","terminal_receipt_kernel"],
+                     "compression_rule":"terminal_receipt_kernel_v1",
+                     "maximum_reconcile_bytes":1}
+                ]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let declarations = root.join("declarations.json");
+        fs::write(
+            &declarations,
+            serde_json::to_vec(&vec![
+                CensusDeclaration {
+                    class: CustodyClass::Models,
+                    relative_path: "kept.bin".into(),
+                    disposition: ember_lab::storage_retention::Disposition::Protected,
+                    pin_reasons: vec!["fixture".into()],
+                    checkpoint: None,
+                    duplicate_witness: None,
+                    terminal_kernel_witness: None,
+                },
+                CensusDeclaration {
+                    class: CustodyClass::State,
+                    relative_path: "kept.bin".into(),
+                    disposition: ember_lab::storage_retention::Disposition::Protected,
+                    pin_reasons: vec!["fixture".into()],
+                    checkpoint: None,
+                    duplicate_witness: None,
+                    terminal_kernel_witness: None,
+                },
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        let custody = root.join("custody");
+        let make_request = || ember_lab::storage_retention::StorageReconcileRequest {
+            repository_root: root.clone(),
+            policy: policy.clone(),
+            declarations: declarations.clone(),
+            models_root: models.clone(),
+            state_root: state.clone(),
+            custody: custody.clone(),
+            pin_set_sha256: ember_lab::hash_file(&declarations).unwrap(),
+            current_master: "b".repeat(40),
+            projected_growth: std::collections::BTreeMap::from([
+                (CustodyClass::Models, 0),
+                (CustodyClass::State, 0),
+            ]),
+            operation: ember_lab::storage_retention::ReconcileOperation::DryRun,
+        };
+        let first = ember_lab::storage_retention::run_storage_reconcile(&make_request()).unwrap();
+        let second = ember_lab::storage_retention::run_storage_reconcile(&make_request()).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first.result, "DRY_RUN_PASS");
+        assert_eq!(fs::read(models.join("kept.bin")).unwrap(), b"m");
+        assert_eq!(fs::read(state.join("kept.bin")).unwrap(), b"s");
+    }
+
+    #[test]
+    fn storage_reconcile_cli_requires_and_preserves_projected_growth() {
+        let models_pin = "a".repeat(64);
+        let master_pin = "b".repeat(40);
+        let command = parse_storage_retention_arguments(
+            [
+                "--pipe",
+                "ember-storage-test",
+                "--repository-root",
+                "repo",
+                "--policy",
+                "policy.json",
+                "--declarations",
+                "declarations.json",
+                "--models-root",
+                "models",
+                "--state-root",
+                "state",
+                "--custody",
+                "custody",
+                "--pin-set-sha256",
+                &models_pin,
+                "--current-master",
+                &master_pin,
+                "--projected-models-bytes",
+                "123",
+                "--projected-state-bytes",
+                "456",
+                "--mode",
+                "dry-run",
+            ]
+            .into_iter()
+            .map(str::to_owned),
+        )
+        .unwrap();
+        let Command::StorageReconcile(args) = command else {
+            panic!("expected storage reconcile command");
+        };
+        assert_eq!(args.projected_models_bytes, 123);
+        assert_eq!(args.projected_state_bytes, 456);
+
+        let missing = match parse_storage_retention_arguments(
+            [
+                "--pipe",
+                "ember-storage-test",
+                "--repository-root",
+                "repo",
+                "--policy",
+                "policy.json",
+                "--declarations",
+                "declarations.json",
+                "--models-root",
+                "models",
+                "--state-root",
+                "state",
+                "--custody",
+                "custody",
+                "--pin-set-sha256",
+                &models_pin,
+                "--current-master",
+                &master_pin,
+                "--mode",
+                "dry-run",
+            ]
+            .into_iter()
+            .map(str::to_owned),
+        ) {
+            Ok(_) => panic!("missing projected growth unexpectedly parsed"),
+            Err(error) => error,
+        };
+        assert!(missing.contains("missing --projected-models-bytes"));
     }
 }
