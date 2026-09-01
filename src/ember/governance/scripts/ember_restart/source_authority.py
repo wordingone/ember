@@ -65,7 +65,7 @@ def _load_git_env_hardening():
     tests before being caught. File-path loading, relative to this module's
     own installation, works under every execution shape.
     """
-    module_path = Path(__file__).resolve().parents[1] / "git_env_hardening.py"
+    module_path = Path(__file__).resolve().parents[5] / "scripts" / "git_env_hardening.py"
     spec = importlib.util.spec_from_file_location(_GIT_ENV_HARDENING_MODULE_NAME, module_path)
     if spec is None or spec.loader is None:
         raise ValueError("source authority: git env hardening module cannot be loaded")
