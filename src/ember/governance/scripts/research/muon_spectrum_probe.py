@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(os.path.dirname(HERE))  # back to repo root
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")) # back to repo root
 RECEIPTS = os.path.join(REPO_ROOT, "receipts")
 SCRIPTS = os.path.join(REPO_ROOT, "scripts")
 sys.path.insert(0, SCRIPTS)

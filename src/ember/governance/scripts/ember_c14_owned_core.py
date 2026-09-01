@@ -138,7 +138,7 @@ _is_side_classifier = getattr(_ember_a15ae7b5497c49d1_module, '_is_side_classifi
 # issue2015 exact-local-import-end:scripts/ember_c14_contract_rig.py  # noqa: E402  guard (e), read verbatim
 import governor  # noqa: E402  single canonical VRAM-fraction-cap + margin-assert (CUDA path only)
 
-REPO = _SCRIPTS_DIR.parent
+REPO = Path(__file__).resolve().parents[4]
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 SEED_CKPT_DEFAULT = REPO / "models" / "cbase-smoke-run" / "checkpoints" / "step-00000610"
 # Frozen identity binding (design spec section 1, "Owned base (C-BASE, GREEN)").

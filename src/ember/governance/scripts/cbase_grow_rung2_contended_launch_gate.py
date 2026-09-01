@@ -141,7 +141,7 @@ for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
 ts = _ember_d9c5c82c124e1dc8_module
 # issue2015 exact-local-import-end:scripts/timeshare_pretrain.py                                      # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[4]
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 

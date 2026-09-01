@@ -55,7 +55,7 @@ except ImportError:
 # Constants
 # ---------------------------------------------------------------------------
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[5]
 BATTERY_PATH = REPO_ROOT / "docs" / "archive" / "pre-restart" / "sp6-duty-battery.jsonl"
 ENCODINGS_PATH = REPO_ROOT / "docs" / "archive" / "pre-restart" / "sp6-duty-battery-encodings.jsonl"
 

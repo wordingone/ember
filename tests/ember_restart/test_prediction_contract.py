@@ -13,7 +13,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "ember_restart" / "prediction_contract.py"
+SCRIPT = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "prediction_contract.py"
 SHA = "a" * 64
 
 
@@ -68,7 +68,7 @@ def run_cli(*args: object) -> subprocess.CompletedProcess[str]:
 
 def test_central_contract_remains_package_importable() -> None:
     result = subprocess.run(
-        [sys.executable, "-c", "from scripts.ember_restart import contract"],
+        [sys.executable, "-c", "from src.ember.governance.scripts.ember_restart import contract"],
         cwd=ROOT,
         text=True,
         capture_output=True,

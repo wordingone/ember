@@ -59,7 +59,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
 # issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py

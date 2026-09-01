@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = (
-    ROOT / "scripts" / "worktree_lifecycle.py",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "worktree_lifecycle.py",
     ROOT / "scripts" / "verify_authority_conservation.py",
     ROOT / "scripts" / "check_changed_receipts.py",
 )

@@ -1203,7 +1203,7 @@ def assess(source_root: Path, payload: dict) -> dict:
     source_receipt = payload.get("governed_source_receipt") if isinstance(payload.get("governed_source_receipt"), dict) else {}
     ember_lab_receipt = payload.get("ember_lab_build_receipt")
     live_assessment = _acquire_live_daemon_assessment(
-        Path(__file__).resolve().parents[1],
+        Path(__file__).resolve().parents[4],
         ember_lab_receipt.get("job_id") if isinstance(ember_lab_receipt, dict) else None,
     )
     source_authority_missing = _governed_source_missing(Path(source_root), payload, commit, source_sha)

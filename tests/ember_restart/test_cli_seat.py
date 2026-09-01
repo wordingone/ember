@@ -14,10 +14,19 @@ from test_contract import REPO_ROOT, _register_checkpoint_custody, _write_json
 # in-process axis-6 production-reach test imports the resolver module
 # directly (not just via subprocess) so it can spy on the exact call the
 # PRODUCTION default path makes into seat_identity_bridge.derive_seat_identity.
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_restart"))
+sys.path.insert(
+    0,
+    str(
+        Path(__file__).resolve().parents[2]
+        / "src" / "ember" / "governance" / "scripts" / "ember_restart"
+    ),
+)
 import cli_seat  # noqa: E402  (path must be inserted first)
 
-RESOLVER = REPO_ROOT / "scripts" / "ember_restart" / "cli_seat.py"
+RESOLVER = (
+    Path(__file__).resolve().parents[2]
+    / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "cli_seat.py"
+)
 CERT_FIXTURE_PATH = (
     REPO_ROOT / "tools" / "ember-cli" / "src" / "commands" / "__fixtures__" / "model-identity" / "manifest.json"
 )

@@ -65,7 +65,7 @@ from typing import Any
 
 SCHEMA = "run-attempt-registry/v1"
 REGISTRY_REL = "receipts/run-attempts.jsonl"
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 OUTCOMES = ("running", "completed", "failed", "aborted", "killed")
 TELEMETRY_SOURCE = "ember-restart-3b"
 # Authority binding (verified against docs/domains/governance/authority/GOAL.md by the trusted kernel; a
