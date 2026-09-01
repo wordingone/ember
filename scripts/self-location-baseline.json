@@ -1,9 +1,12 @@
 {
-  "baselined_row_count": 284,
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02A",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "baselined_row_count": 283,
   "expires_on": "2026-09-03",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
-  "maximum_rows": 284,
+  "maximum_rows": 283,
   "minted_on": "2026-09-01",
   "rows": [
     {
@@ -2240,23 +2243,12 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 112,
-      "path": "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: re.compile",
       "evaluated_path": null,
       "expectation": "repo_root",
       "expression": "re.compile('\\\\[artifact_root_source=(env|repo-root)\\\\]')",
       "expression_sha256": "29d3af4c68a22ddd0fa825c7bf1f58bed9e6e0a1437548d5687419ae8b8814ff",
-      "line": 321,
+      "line": 325,
       "path": "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
       "status": "UNEVALUABLE",
       "target": "ARTIFACT_ROOT_SOURCE_RE"
@@ -2575,7 +2567,7 @@
       "expectation": "repo_root",
       "expression": "os.path.join(ROOT, 'scripts', 'ember_totality', 'receipts-totality')",
       "expression_sha256": "40954e4d41a3a3b38debadf2a18476ad4d34bcb8f32866d171b9829bfc3da2c9",
-      "line": 60,
+      "line": 62,
       "path": "src/ember/governance/scripts/gen_readme_status.py",
       "status": "MISMATCH",
       "target": "DEFAULT_DATA_ROOT"
@@ -2978,10 +2970,10 @@
     },
     {
       "error": null,
-      "evaluated_path": "<root>/scripts/ember_restart",
+      "evaluated_path": "<root>/src/ember/governance/scripts/ember_restart",
       "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_restart'",
-      "expression_sha256": "c6f1157bf945351f27c4223915e815002c8c00221c3519e47b12a8c3e5c25a56",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_restart'",
+      "expression_sha256": "fbbc68b90774362b2a2550940d03adc88ed2f6c8ef58684e34d93a03f2de2be1",
       "line": 53,
       "path": "tests/ember_admission/test_designate_selection_produces_resolvable_seat.py",
       "status": "MISMATCH",
@@ -3132,5 +3124,5 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "7eb69704550f92d1e41ab88ee29faa1e38a31ab716b9131cbbe43729c4e63ed9"
+  "self_sha256": "5861def09f0f38a3d2e088053024a77cf045756ca8dbc5dfc475de0a55dd647f"
 }

@@ -275,7 +275,7 @@ def _check_identity_manifest(receipt):
         import importlib.util as _ember_f289ed8a6472ef21_importlib
         import sys as _ember_f289ed8a6472ef21_sys
         from pathlib import Path as _ember_f289ed8a6472ef21_Path
-        _ember_f289ed8a6472ef21_path = _ember_f289ed8a6472ef21_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'validate_identity.py')
+        _ember_f289ed8a6472ef21_path = _ember_f289ed8a6472ef21_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_01_identity', 'validate_identity.py')
         if not _ember_f289ed8a6472ef21_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_01_identity/validate_identity.py')
         _ember_f289ed8a6472ef21_aliases = ('_ember_issue2015_f289ed8a6472ef21', 'ember_01_identity.validate_identity', 'scripts.ember_01_identity.validate_identity', 'validate_identity')

@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "cbase_grow_rung.py"
-GOVERNOR = ROOT / "scripts" / "governor.py"
+GOVERNOR = ROOT / "src" / "ember" / "governance" / "scripts" / "governor.py"
 REFUSAL = (
     "historical_only: the sub-3B cbase growth-rung consumer and every "
     "importer are execution-denied"

@@ -22,7 +22,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-from scripts.ember_restart import contract
+from src.ember.governance.scripts.ember_restart import contract
 
 
 READY_CLAIM_BOUNDARY = {
