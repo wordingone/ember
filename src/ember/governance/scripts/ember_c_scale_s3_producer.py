@@ -118,7 +118,7 @@ sys.path.insert(0, os.path.join(LEGACY_SCRIPTS, "ember_totality"))
 import test_c_scale as c_scale           # noqa: E402 -- frozen probe, reused not reimplemented
 from receipt_write import checked_write  # noqa: E402
 
-SPEC_REF = "docs/spec/c-scale-s3-compute-protocol-v1.md"
+SPEC_REF = "docs/domains/governance/spec/c-scale-s3-compute-protocol-v1.md"
 ISSUE_REF = "#75"
 _ratio_ok = c_scale._ratio_ok  # imported directly -- never reimplemented
 
@@ -771,7 +771,7 @@ def run_deletion_arm(args) -> int:
         "operating_capability_point": rung1.get("params_unique_after"),
         "growth_map": {
             "mechanism": ("ff_widening_net2net (widen_state_dict, imported from "
-                          "scripts/cbase_grow_dryrun.py, never reimplemented)"),
+                          "src/ember/governance/scripts/cbase_grow_dryrun.py, never reimplemented)"),
             "ff_seed": ff_seed, "ff_grown": ff_grown,
             "surgery_math": ("gate_proj/up_proj: cat([w,w],dim=0); down_proj: "
                              "cat([w*0.5,w*0.5],dim=1) -- per rung-1 receipt's own grow_step"),
@@ -938,7 +938,7 @@ def _run_deletion_arm_synthetic_fallback(args, stamp: str, blocker: str) -> int:
 # ---------------------------------------------------------------------------
 
 def refuse_unless_gpu_authorized(args) -> None:
-    """Mirrors scripts/w1_collapse_control_run.py's refuse_unless_dry_run_safe
+    """Mirrors src/ember/governance/scripts/w1_collapse_control_run.py's refuse_unless_dry_run_safe
     exactly -- the interlock idiom for GPU-real work this builder never fires."""
     if not args.live and args.device == "cpu":
         return

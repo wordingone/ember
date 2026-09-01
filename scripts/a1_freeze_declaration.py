@@ -5,7 +5,7 @@
 """a1_freeze_declaration.py -- ember issue #593 deliverable 1: the A1
 eval-freeze DECLARATION receipt.
 
-Extends the freeze doc's receipt schema (docs/spec/eval-suite-freeze-v1.md
+Extends the freeze doc's receipt schema (docs/domains/governance/spec/eval-suite-freeze-v1.md
 "Freeze Receipt Schema") with the falsifier-fill A1 fields (refs #123 sec.1):
   - eval_freeze_hash: the commit sha pinning suites (a)+(b). Self-reference
     is impossible (a commit cannot contain its own sha), so the declaration
@@ -16,7 +16,7 @@ Extends the freeze doc's receipt schema (docs/spec/eval-suite-freeze-v1.md
   - freeze_ts: UTC at declaration. Every governed launch_ts must exceed it.
   - suite (a): the W2 sec.4 decontaminated held-out batch, pinned by sha.
   - suite (b): eval-suite-v1's SEVEN pinned datasets (GPQA-diamond EXCLUDED
-    per docs/ledgers/deviations.md DEV-004, battery-14 section).
+    per docs/domains/governance/ledgers/deviations.md DEV-004, battery-14 section).
 
 Usage:
   python scripts/a1_freeze_declaration.py \\
@@ -39,7 +39,50 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
-import receipt_write  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+receipt_write = _ember_66ee9e91637922dc_module
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
@@ -104,7 +147,7 @@ def main() -> int:
             "an ancestor of the ref they build from."),
         "suite_a": {
             "definition": "the decontaminated held-out batch per "
-                          "docs/spec/w2-scale-preregistration-v1.md sec.4",
+                          "docs/domains/governance/spec/w2-scale-preregistration-v1.md sec.4",
             "batch_sha256": heldout["batch_sha256"],
             "pin_receipt": args.heldout_receipt.replace(os.sep, "/"),
             "pin_receipt_sha256": file_sha256(os.path.join(REPO, args.heldout_receipt)),
@@ -116,7 +159,7 @@ def main() -> int:
         },
         "suite_b": {
             "definition": "eval-suite-v1's seven pinned datasets "
-                          "(docs/spec/eval-suite-freeze-v1.md, Status: Frozen, "
+                          "(docs/domains/governance/spec/eval-suite-freeze-v1.md, Status: Frozen, "
                           "effective 2026-07-08)",
             "pin_receipt": args.freeze_receipt.replace(os.sep, "/"),
             "pin_receipt_sha256": file_sha256(os.path.join(REPO, args.freeze_receipt)),
@@ -124,7 +167,7 @@ def main() -> int:
             "datasets": suite_b_datasets,
             "gpqa_diamond_exclusion": {
                 "status": "EXCLUDED from v1",
-                "mechanism": "docs/ledgers/deviations.md DEV-004 (battery-14 section) -- "
+                "mechanism": "docs/domains/governance/ledgers/deviations.md DEV-004 (battery-14 section) -- "
                              "the freeze doc's own amendment mechanism",
                 "rule": "a dataset pinned later joins a future suite VERSION; it "
                         "is never appended to a frozen one",

@@ -8,7 +8,7 @@ it).
 ## Create a worktree for a scoped fix
 
 ```bash
-python scripts/worktree_lifecycle.py create \
+python src/ember/governance/scripts/worktree_lifecycle.py create \
   --path <local-worktree-root>/<name> \
   --branch fix/<name> \
   --owner <you> \
@@ -24,8 +24,8 @@ Never `git worktree add` directly — see 02_REPO_TOPOLOGY.md.
 ## Run a single totality-board condition probe
 
 ```bash
-python scripts/ember_totality/test_c_proc.py
-python scripts/ember_totality/test_c_anat.py
+python src/ember/governance/scripts/ember_totality/test_c_proc.py
+python src/ember/governance/scripts/ember_totality/test_c_anat.py
 ```
 Each probe prints exactly one `RED <reason>` / `GREEN <reason>` /
 `UNEVALUABLE <reason>` line and exits 0.
@@ -33,7 +33,7 @@ Each probe prints exactly one `RED <reason>` / `GREEN <reason>` /
 ## Validate a new receipt before committing it
 
 ```bash
-python scripts/receipt_check.py --file receipts/<subdir>/<name>.json
+python src/ember/governance/scripts/receipt_check.py --file receipts/<subdir>/<name>.json
 ```
 Fails closed (non-zero exit) on any schema-floor violation — fix before
 committing, per 10_RECEIPTS_PROVENANCE.md.
@@ -84,5 +84,5 @@ title verbatim.
 This runbook covers the workflow this doc set's own authoring session
 actually exercised. It is not a complete operator manual — training-launch,
 GPU-window, and eval-harness runbooks live in their own docs
-(`docs/ember-restart/ember-restart-3b-governed-runner-v1.md` and similar) and are not
+(`docs/domains/governance/ember-restart/ember-restart-3b-governed-runner-v1.md` and similar) and are not
 duplicated here.

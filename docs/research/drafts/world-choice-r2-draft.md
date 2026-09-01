@@ -274,7 +274,7 @@ From `formalization-v0.md §7`, a training world is ADMITTED only if:
 ## References
 
 - **Formalization:** the lead, "Ember Formalization v0," 2026-06, §7 (world choice criterion).
-- **World Choice Analysis:** the lead, "`docs/research/world-choice.md`" 2026-06-10.
+- **World Choice Analysis:** the lead, "`docs/domains/governance/research/world-choice.md`" 2026-06-10.
 - **Decision Tree:** the lead, "`docs/research/r1w-g1-decision-tree.md`" 2026-06-10.
 - **ARC SOTA Survey:** the lead, "`docs/research/arc-llm-program-synthesis-sota.md`" 2026-06-09.
 - **Published Baselines:**

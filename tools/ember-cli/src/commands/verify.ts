@@ -190,7 +190,7 @@ export function renderVerifyStatus(state: VerifyJobState | null): string {
     lines.push(
       "",
       `note: the managed verification worktree could not be retired automatically: ${state.worktreeRetireError}`,
-      `  run \`python scripts/worktree_lifecycle.py --repo <repo> retire --path ${state.worktreePath ?? "<path above>"}\` ` +
+      `  run \`python src/ember/governance/scripts/worktree_lifecycle.py --repo <repo> retire --path ${state.worktreePath ?? "<path above>"}\` ` +
         `to clean it up, or leave it -- it expires on its own lease within a day.`,
     );
   }

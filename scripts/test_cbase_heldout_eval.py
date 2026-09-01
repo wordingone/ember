@@ -44,7 +44,50 @@ def build_real_corpus_fixture(nc_root, shard_root, *, clean_tokens=2000, fineweb
     import struct, sys
     scripts_dir = str(Path(__file__).resolve().parent)
     if scripts_dir not in sys.path: sys.path.insert(0, scripts_dir)
-    import token_shards_v0 as tsv
+    # issue2015 exact-local-import:src/ember/governance/scripts/token_shards_v0.py
+    import importlib.util as _ember_0c6ba95c4d327f51_importlib
+    import sys as _ember_0c6ba95c4d327f51_sys
+    from pathlib import Path as _ember_0c6ba95c4d327f51_Path
+    _ember_0c6ba95c4d327f51_path = _ember_0c6ba95c4d327f51_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'token_shards_v0.py')
+    if not _ember_0c6ba95c4d327f51_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/token_shards_v0.py')
+    _ember_0c6ba95c4d327f51_aliases = ('_ember_issue2015_0c6ba95c4d327f51', 'scripts.token_shards_v0', 'token_shards_v0')
+    _ember_0c6ba95c4d327f51_existing = []
+    for _ember_0c6ba95c4d327f51_alias in _ember_0c6ba95c4d327f51_aliases:
+        _ember_0c6ba95c4d327f51_candidate = _ember_0c6ba95c4d327f51_sys.modules.get(_ember_0c6ba95c4d327f51_alias)
+        if _ember_0c6ba95c4d327f51_candidate is not None and all(_ember_0c6ba95c4d327f51_candidate is not item for item in _ember_0c6ba95c4d327f51_existing):
+            _ember_0c6ba95c4d327f51_existing.append(_ember_0c6ba95c4d327f51_candidate)
+    if len(_ember_0c6ba95c4d327f51_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/token_shards_v0.py')
+    if _ember_0c6ba95c4d327f51_existing:
+        _ember_0c6ba95c4d327f51_module = _ember_0c6ba95c4d327f51_existing[0]
+        _ember_0c6ba95c4d327f51_observed = getattr(_ember_0c6ba95c4d327f51_module, '__file__', None)
+        if _ember_0c6ba95c4d327f51_observed is None or _ember_0c6ba95c4d327f51_Path(_ember_0c6ba95c4d327f51_observed).resolve() != _ember_0c6ba95c4d327f51_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/token_shards_v0.py')
+    else:
+        _ember_0c6ba95c4d327f51_spec = _ember_0c6ba95c4d327f51_importlib.spec_from_file_location('_ember_issue2015_0c6ba95c4d327f51', _ember_0c6ba95c4d327f51_path)
+        if _ember_0c6ba95c4d327f51_spec is None or _ember_0c6ba95c4d327f51_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/token_shards_v0.py')
+        _ember_0c6ba95c4d327f51_module = _ember_0c6ba95c4d327f51_importlib.module_from_spec(_ember_0c6ba95c4d327f51_spec)
+        for _ember_0c6ba95c4d327f51_alias in _ember_0c6ba95c4d327f51_aliases:
+            _ember_0c6ba95c4d327f51_prior = _ember_0c6ba95c4d327f51_sys.modules.get(_ember_0c6ba95c4d327f51_alias)
+            if _ember_0c6ba95c4d327f51_prior is not None and _ember_0c6ba95c4d327f51_prior is not _ember_0c6ba95c4d327f51_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/token_shards_v0.py')
+            _ember_0c6ba95c4d327f51_sys.modules[_ember_0c6ba95c4d327f51_alias] = _ember_0c6ba95c4d327f51_module
+        try:
+            _ember_0c6ba95c4d327f51_spec.loader.exec_module(_ember_0c6ba95c4d327f51_module)
+        except BaseException:
+            for _ember_0c6ba95c4d327f51_alias in _ember_0c6ba95c4d327f51_aliases:
+                if _ember_0c6ba95c4d327f51_sys.modules.get(_ember_0c6ba95c4d327f51_alias) is _ember_0c6ba95c4d327f51_module:
+                    _ember_0c6ba95c4d327f51_sys.modules.pop(_ember_0c6ba95c4d327f51_alias, None)
+            raise
+    for _ember_0c6ba95c4d327f51_alias in _ember_0c6ba95c4d327f51_aliases:
+        _ember_0c6ba95c4d327f51_prior = _ember_0c6ba95c4d327f51_sys.modules.get(_ember_0c6ba95c4d327f51_alias)
+        if _ember_0c6ba95c4d327f51_prior is not None and _ember_0c6ba95c4d327f51_prior is not _ember_0c6ba95c4d327f51_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/token_shards_v0.py')
+        _ember_0c6ba95c4d327f51_sys.modules[_ember_0c6ba95c4d327f51_alias] = _ember_0c6ba95c4d327f51_module
+    tsv = _ember_0c6ba95c4d327f51_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/token_shards_v0.py
     nc_root = Path(nc_root); shard_root = Path(shard_root)
     (nc_root/"receipts").mkdir(parents=True, exist_ok=True)
     (nc_root/"tokenizer").mkdir(parents=True, exist_ok=True)

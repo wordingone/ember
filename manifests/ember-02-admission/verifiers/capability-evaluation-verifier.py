@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Adjudicate a per-capability ember-3b-<capability>-capability-v1 criterion.
 
-Evidence class: evaluation. Invoked by scripts/ember_restart/contract.py as
+Evidence class: evaluation. Invoked by src/ember/governance/scripts/ember_restart/contract.py as
 
     python -I capability-evaluation-verifier.py \
         --capability <capability> --checkpoint-manifest <path> \

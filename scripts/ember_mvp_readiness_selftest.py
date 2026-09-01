@@ -231,7 +231,7 @@ def _real_proof_fixture(root: Path) -> Path:
             "goal_context_used": True,
             "goal_doc_hashes": [
                 {"path": "docs/archive/pre-restart/20260617-maximally-viable-product.md", "sha256": "sha256:" + "c" * 64},
-                {"path": "docs/archive/pre-restart/ember-mvp-v0.md", "sha256": "sha256:" + "d" * 64},
+                {"path": "docs/domains/governance/archive/pre-restart/ember-mvp-v0.md", "sha256": "sha256:" + "d" * 64},
             ],
             "dispatch_critical_state": {"next_action": "repeat_closed_cycle"},
             "preserves_dispatch_state": True,

@@ -8,7 +8,7 @@ this anatomy set was authored:
 (41 conditions: 14 GREEN / 23 RED / 1 UNEVALUABLE / 3 AUDIT-OK,
 `pct_complete: 36.8`). To get a FRESH snapshot rather than trust this
 report's numbers as they age, run the totality runner
-(`scripts/ember_totality/ember_totality_spec.py`, see 11_TOTALITY_BOARD_CONDITIONS.md
+(`src/ember/governance/scripts/ember_totality/ember_totality_spec.py`, see 11_TOTALITY_BOARD_CONDITIONS.md
 and 13_RUNBOOK.md) and read its newest receipt directly — this report is a
 map to that receipt, not a replacement for reading it.
 
@@ -20,7 +20,7 @@ map to that receipt, not a replacement for reading it.
 - Evaluation (06): `C1` RED (hash-verify gap), `C2`/`C3`/`C6` GREEN, `C4`/`C5` RED (harness-interface reachability), `C7`/`C8` RED
 - Governance (07, 11): `C-PORT` GREEN
 - Cockpit (12): `C-OBS` RED (receipt-visibility gap over real, existing adapter code), `C-IND` RED (depends on C-OBS)
-- Roll-ups: `C-MANIFEST` GREEN (docs/contracts/ember-completeness.md enumerates all 81 rows), `C-TALLY` RED by definition (a 38-way conjunction roll-up — GREEN requires every other STATE-condition GREEN first; see `docs/spec/conditions-v1.md` §4.3)
+- Roll-ups: `C-MANIFEST` GREEN (docs/domains/governance/contracts/ember-completeness.md enumerates all 81 rows), `C-TALLY` RED by definition (a 38-way conjunction roll-up — GREEN requires every other STATE-condition GREEN first; see `docs/domains/governance/spec/conditions-v1.md` §4.3)
 
 ## H4 — verifier-free judgment (honest status)
 
@@ -45,5 +45,5 @@ judgment remains H4's open problem, tracked in
 This report, and the anatomy set it summarizes, describe real, on-disk state
 as of the cited board render. They make no claim beyond that: not
 completion, not checkpoint existence, not benchmark scores, not that H4 is
-solved. See `docs/spec/conditions-v1.md` §4.3-4.4 for what "GOAL SATISFIED"
+solved. See `docs/domains/governance/spec/conditions-v1.md` §4.3-4.4 for what "GOAL SATISFIED"
 actually requires and how far the current board is from it.

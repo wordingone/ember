@@ -9,19 +9,60 @@ from pathlib import Path
 
 import pytest
 
-from scripts.r1_frozen_eval_runner import (
-    FrozenEvalRefusal,
-    _canonical_bytes,
-    _checkpoint_identity,
-    _load_suite,
-    _probe_results,
-    execute_frozen_eval,
-    validate_results_receipt,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/r1_frozen_eval_runner.py
+import importlib.util as _ember_df97174e3ec7fc7e_importlib
+import sys as _ember_df97174e3ec7fc7e_sys
+from pathlib import Path as _ember_df97174e3ec7fc7e_Path
+_ember_df97174e3ec7fc7e_path = _ember_df97174e3ec7fc7e_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'r1_frozen_eval_runner.py')
+if not _ember_df97174e3ec7fc7e_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/r1_frozen_eval_runner.py')
+_ember_df97174e3ec7fc7e_aliases = ('_ember_issue2015_df97174e3ec7fc7e', 'r1_frozen_eval_runner', 'scripts.r1_frozen_eval_runner')
+_ember_df97174e3ec7fc7e_existing = []
+for _ember_df97174e3ec7fc7e_alias in _ember_df97174e3ec7fc7e_aliases:
+    _ember_df97174e3ec7fc7e_candidate = _ember_df97174e3ec7fc7e_sys.modules.get(_ember_df97174e3ec7fc7e_alias)
+    if _ember_df97174e3ec7fc7e_candidate is not None and all(_ember_df97174e3ec7fc7e_candidate is not item for item in _ember_df97174e3ec7fc7e_existing):
+        _ember_df97174e3ec7fc7e_existing.append(_ember_df97174e3ec7fc7e_candidate)
+if len(_ember_df97174e3ec7fc7e_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/r1_frozen_eval_runner.py')
+if _ember_df97174e3ec7fc7e_existing:
+    _ember_df97174e3ec7fc7e_module = _ember_df97174e3ec7fc7e_existing[0]
+    _ember_df97174e3ec7fc7e_observed = getattr(_ember_df97174e3ec7fc7e_module, '__file__', None)
+    if _ember_df97174e3ec7fc7e_observed is None or _ember_df97174e3ec7fc7e_Path(_ember_df97174e3ec7fc7e_observed).resolve() != _ember_df97174e3ec7fc7e_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/r1_frozen_eval_runner.py')
+else:
+    _ember_df97174e3ec7fc7e_spec = _ember_df97174e3ec7fc7e_importlib.spec_from_file_location('_ember_issue2015_df97174e3ec7fc7e', _ember_df97174e3ec7fc7e_path)
+    if _ember_df97174e3ec7fc7e_spec is None or _ember_df97174e3ec7fc7e_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/r1_frozen_eval_runner.py')
+    _ember_df97174e3ec7fc7e_module = _ember_df97174e3ec7fc7e_importlib.module_from_spec(_ember_df97174e3ec7fc7e_spec)
+    for _ember_df97174e3ec7fc7e_alias in _ember_df97174e3ec7fc7e_aliases:
+        _ember_df97174e3ec7fc7e_prior = _ember_df97174e3ec7fc7e_sys.modules.get(_ember_df97174e3ec7fc7e_alias)
+        if _ember_df97174e3ec7fc7e_prior is not None and _ember_df97174e3ec7fc7e_prior is not _ember_df97174e3ec7fc7e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/r1_frozen_eval_runner.py')
+        _ember_df97174e3ec7fc7e_sys.modules[_ember_df97174e3ec7fc7e_alias] = _ember_df97174e3ec7fc7e_module
+    try:
+        _ember_df97174e3ec7fc7e_spec.loader.exec_module(_ember_df97174e3ec7fc7e_module)
+    except BaseException:
+        for _ember_df97174e3ec7fc7e_alias in _ember_df97174e3ec7fc7e_aliases:
+            if _ember_df97174e3ec7fc7e_sys.modules.get(_ember_df97174e3ec7fc7e_alias) is _ember_df97174e3ec7fc7e_module:
+                _ember_df97174e3ec7fc7e_sys.modules.pop(_ember_df97174e3ec7fc7e_alias, None)
+        raise
+for _ember_df97174e3ec7fc7e_alias in _ember_df97174e3ec7fc7e_aliases:
+    _ember_df97174e3ec7fc7e_prior = _ember_df97174e3ec7fc7e_sys.modules.get(_ember_df97174e3ec7fc7e_alias)
+    if _ember_df97174e3ec7fc7e_prior is not None and _ember_df97174e3ec7fc7e_prior is not _ember_df97174e3ec7fc7e_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/r1_frozen_eval_runner.py')
+    _ember_df97174e3ec7fc7e_sys.modules[_ember_df97174e3ec7fc7e_alias] = _ember_df97174e3ec7fc7e_module
+FrozenEvalRefusal = getattr(_ember_df97174e3ec7fc7e_module, 'FrozenEvalRefusal')
+_canonical_bytes = getattr(_ember_df97174e3ec7fc7e_module, '_canonical_bytes')
+_checkpoint_identity = getattr(_ember_df97174e3ec7fc7e_module, '_checkpoint_identity')
+_load_suite = getattr(_ember_df97174e3ec7fc7e_module, '_load_suite')
+_probe_results = getattr(_ember_df97174e3ec7fc7e_module, '_probe_results')
+execute_frozen_eval = getattr(_ember_df97174e3ec7fc7e_module, 'execute_frozen_eval')
+validate_results_receipt = getattr(_ember_df97174e3ec7fc7e_module, 'validate_results_receipt')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/r1_frozen_eval_runner.py
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CANONICAL_SUITE = ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
+CANONICAL_SUITE = ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json"
 _AUTHORITY = json.loads(CANONICAL_SUITE.read_text(encoding="utf-8"))
 _DEFAULT_OUTPUTS = {row["row_id"]: row["expected_output"] for row in _AUTHORITY["tasks"]}
 

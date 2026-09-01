@@ -39,7 +39,7 @@
       "public_manifest_bytes_present": false
     },
     "evidence_paths": [
-      "docs/ember-restart/integration-contract-v1.md",
+      "docs/domains/governance/ember-restart/integration-contract-v1.md",
       "manifests/ember-restart-eval-first-shared-raw-forward-v1.json",
       "manifests/ember-restart-execution-authorities-v1.json",
       "receipts/ember-restart-3b/native-cost-calibration-seed83-certificate.json"

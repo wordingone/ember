@@ -400,9 +400,9 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #
 #   c7-selftest-*.json                       scripts/ember_phase5_c7/c7_selftest.py:65
 #     SELFTEST_RECEIPT_PATH: pathlib.Path = RECEIPTS_DIR / f"c7-selftest-{_TS}.json"
-#   citation-check-*.json                    scripts/check_goal_citations.py:804
+#   citation-check-*.json                    src/ember/governance/scripts/check_goal_citations.py:804
 #     receipt_path = RECEIPTS_DIR / f"citation-check-{receipt['timestamp']}.json"
-#   publication-gate-*.json                  scripts/check_publication_gate.py:963
+#   publication-gate-*.json                  src/ember/governance/scripts/check_publication_gate.py:963
 #     receipt_path = RECEIPTS_DIR / f"publication-gate-{receipt['ts']}.json"
 #   proof-judge-admission-*.json             scripts/proofs/judge_admission_sweep.py:686
 #     out_path = out_dir / f"proof-judge-admission-{stamp}.json"
@@ -445,11 +445,11 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # nc2-manifest.json, not that receipt -- stays unresolvable, see exclusion note below):
 #   c12-cognitive-mode-ablation-*.json       scripts/ember_cognitive_mode_ablation.py:275
 #     out_path = out_dir / f"c12-cognitive-mode-ablation-{receipt['ts']}.json"
-#   cuda-graph-ab-*.json                     scripts/cuda_graph_ab.py:495
+#   cuda-graph-ab-*.json                     src/ember/governance/scripts/cuda_graph_ab.py:495
 #     out = os.path.join(RECEIPTS, f"cuda-graph-ab-{ts}.json")
-#   d-gate-*.json                            scripts/d_gate.py:405
+#   d-gate-*.json                            src/ember/governance/scripts/d_gate.py:405
 #     receipt_path = _RECEIPTS / f"d-gate-{artifact_stem}-{ts}.json"
-#   density-ab-verdict-*.json                scripts/density_ab_verdict.py:113,185,244
+#   density-ab-verdict-*.json                src/ember/governance/scripts/density_ab_verdict.py:113,185,244
 #     out = f"{RECEIPTS}/density-ab-verdict-{ts_now}.json"
 #   econ-pass-loopecon-adapter-*.json        scripts/econ_pass.py:242
 #     adapter_path = receipts_dir / f"econ-pass-loopecon-adapter-{ts}.json"
@@ -462,7 +462,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp33-e5-fp8-bench-*.json                 scripts/fp33_e5_fp8_bench.py:255
 #   fp33-fp8-linear-ab-*.json                scripts/fp33_fp8_linear_ab.py:380
 #   fp33-p1-native-fp8-probe-*.json          scripts/fp33_p1_native_fp8_probe.py:164
-#   fp35-fused-muon-kernel-ab-*.json         scripts/fp35_fused_muon_kernel_ab.py:545 (distinct from
+#   fp35-fused-muon-kernel-ab-*.json         src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py:545 (distinct from
 #     fp35-fused-muon-ab-*.json, no "kernel" -- that one has NO confirmed writer, excluded below)
 #   fp35d-k4096-steady-state-*.json          scripts/fp35d_k4096_steady_state.py:216
 #   fp35g-width-cond-fp8-ab-*.json           scripts/fp35g_width_cond_fp8_ab.py:484
@@ -500,7 +500,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #
 # Deliberately EXCLUDED after a real search turned up no confirmed writer (these
 # stay unresolvable, honestly, rather than guessed): cbase-grow-dryrun-*.json
-# (its own receipt's "script" field claims scripts/cbase_grow_dryrun.py, which
+# (its own receipt's "script" field claims src/ember/governance/scripts/cbase_grow_dryrun.py, which
 # does not exist on disk -- a stale pointer, not a convention); wheel-bound-*.json (no
 # writer found anywhere in scripts/); arm-a-benchmark-*/arm-b-benchmark-*/
 # benchmark-c-arm-*.json (no writer found); ember-totality-*.json (the spec
@@ -532,8 +532,8 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # unresolvable, honestly, rather than risk a self-referential carve-out.
 CONVENTION_MAP = [
     (re.compile(r"^c7-selftest-.*\.json$"), "scripts/ember_phase5_c7/c7_selftest.py"),
-    (re.compile(r"^citation-check-.*\.json$"), "scripts/check_goal_citations.py"),
-    (re.compile(r"^publication-gate-.*\.json$"), "scripts/check_publication_gate.py"),
+    (re.compile(r"^citation-check-.*\.json$"), "src/ember/governance/scripts/check_goal_citations.py"),
+    (re.compile(r"^publication-gate-.*\.json$"), "src/ember/governance/scripts/check_publication_gate.py"),
     (re.compile(r"^proof-judge-admission-.*\.json$"), "scripts/proofs/judge_admission_sweep.py"),
     (re.compile(r"^p-gate-.*\.json$"), "scripts/p_gate.py"),
     (re.compile(r"^training-throughput-anchor-check-all-.*\.json$"),
@@ -553,9 +553,9 @@ CONVENTION_MAP = [
     # --- second pass (gh issue #17 follow-up, 2026-07-03) ---
     # spend-annex-*.json deliberately NOT mapped here -- see comment above CONVENTION_MAP.
     (re.compile(r"^c12-cognitive-mode-ablation-.*\.json$"), "scripts/ember_cognitive_mode_ablation.py"),
-    (re.compile(r"^cuda-graph-ab-.*\.json$"), "scripts/cuda_graph_ab.py"),
-    (re.compile(r"^d-gate-.*\.json$"), "scripts/d_gate.py"),
-    (re.compile(r"^density-ab-verdict-.*\.json$"), "scripts/density_ab_verdict.py"),
+    (re.compile(r"^cuda-graph-ab-.*\.json$"), "src/ember/governance/scripts/cuda_graph_ab.py"),
+    (re.compile(r"^d-gate-.*\.json$"), "src/ember/governance/scripts/d_gate.py"),
+    (re.compile(r"^density-ab-verdict-.*\.json$"), "src/ember/governance/scripts/density_ab_verdict.py"),
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
     (re.compile(r"^fp10-idiom-.*\.json$"), "scripts/fp10_idiom.py"),
     (re.compile(r"^fp11-denominator-.*\.json$"), "scripts/fp11_denominator.py"),
@@ -566,7 +566,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp33-e5-fp8-bench-.*\.json$"), "scripts/fp33_e5_fp8_bench.py"),
     (re.compile(r"^fp33-fp8-linear-ab-.*\.json$"), "scripts/fp33_fp8_linear_ab.py"),
     (re.compile(r"^fp33-p1-native-fp8-probe-.*\.json$"), "scripts/fp33_p1_native_fp8_probe.py"),
-    (re.compile(r"^fp35-fused-muon-kernel-ab-.*\.json$"), "scripts/fp35_fused_muon_kernel_ab.py"),
+    (re.compile(r"^fp35-fused-muon-kernel-ab-.*\.json$"), "src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py"),
     (re.compile(r"^fp35d-k4096-steady-state-.*\.json$"), "scripts/fp35d_k4096_steady_state.py"),
     (re.compile(r"^fp35g-width-cond-fp8-ab-.*\.json$"), "scripts/fp35g_width_cond_fp8_ab.py"),
     (re.compile(r"^fp38-l9-flash-ab-.*\.json$"), "scripts/fp38_l9_flash_ab.py"),
@@ -757,7 +757,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "receipts/fp32-step-econ-20260612T213856Z.json, "
      "receipts/fp35c-weight-cache-ab-20260612T214509Z.json and "
      "docs/domains/governance/archive/pre-restart/compute-ceiling-program-v1.md -- no .py file in that commit; distinct from the "
-     "resolvable fp35-fused-muon-KERNEL-ab-*.json (scripts/fp35_fused_muon_kernel_ab.py)."),
+     "resolvable fp35-fused-muon-KERNEL-ab-*.json (src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py)."),
     (re.compile(r"^assembly-sha-as-manifest-adjudication-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: schema=='adjudication/v1', kind=='field_semantics' -- "
      "a hand-typed disposition of a historical field-semantics question, not a script output."),
@@ -791,7 +791,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
     (re.compile(r"^eng38-b-multi-1-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: producer==<engineer identity redacted>, build_method notes 'built inline per "
      "delegation rule' -- a hand-authored build-completion receipt; its own build_path_2 field "
-     "names an existing script (scripts/corpus_patch_encode.py) as the THING BUILT, not as this "
+     "names an existing script (src/ember/governance/scripts/corpus_patch_encode.py) as the THING BUILT, not as this "
      "receipt's generator (that script has no receipt-writing code of its own)."),
     (re.compile(r"^eng421-multimodal-config-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored: producer==<engineer identity redacted>, ac_command is an inline "
@@ -821,7 +821,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
     # --- Evidence (d) cross-branch unmerged (gh issue #431, 2026-07-08) -- restored via
     # the #415/#432 custody recovery; generating scripts confirmed real but off-branch.
     (re.compile(r"^ceff-composition-ab-20260703T111351Z\.json$"), "cross_branch_unmerged",
-     "evidence (d) cross-branch unmerged: generating script scripts/ember_ceff_composition_ab.py "
+     "evidence (d) cross-branch unmerged: generating script src/ember/governance/scripts/ember_ceff_composition_ab.py "
      "confirmed at commit 85e6d7f (write-site line 706, `path = os.path.join(RECEIPTS, "
      "f\"ceff-composition-ab-{ts}.json\")`, exact match); `git merge-base --is-ancestor 85e6d7f HEAD` "
      "is false -- that commit is reachable only from lane/ceff-ab-run and sibling branches, never "
@@ -1133,7 +1133,7 @@ def _collect_candidate_field_values(d, depth=0, max_depth=2):
 def _extract_script_tokens(value):
     """Extract script-path tokens from a candidate-field value. Handles the
     plain str/list[str] shapes plus one additional shape confirmed present in
-    16+ generator scripts (e.g. scripts/econ_pass.py:387, scripts/joules.py:234,
+    16+ generator scripts (e.g. scripts/econ_pass.py:387, src/ember/governance/scripts/joules.py:234,
     scripts/manifest_sha.py:169): `"generator": {"path": "scripts/x.py",
     "sha256": "..."}`. Without this, a receipt using that widely-shared shape
     parks its own real script path unread and falls through to unresolvable

@@ -526,7 +526,7 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:docs/authority/STATE.md",
-                                            "repo:scripts/legb_live_candidate_v5_scorer.py",
+                                            "repo:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
                                             "repo:receipts/legb-live-candidate/arc-challenge-live-r1-20260813T171614Z-receipt.json",
                                             "repo:receipts/legb-live-candidate/arc-challenge-live-r1-20260813T171614Z.jsonl",
                                             "issue:1433 executed against live ember-sparse-checkpoint-v5 candidate (checkpoint-vertical-slice-seed-830001, manifest sha256 4655a76b7e5b40396be8637f9aa0898ae94fc2321f2e75630d8f4ab83b555c0b), route=tool, full test split n=1172, acc 0.22098976109215018 / acc_norm 0.2901023890784983",
@@ -534,7 +534,7 @@
                                             "naming:the receipt/prediction filenames carry a live-r1 infix that predates the checkpoint-subject finding. The scored subject is checkpoint-vertical-slice-seed-830001, which is NOT the prereg R1 subject (manifest bf20f050). Filenames retained unrewritten; the receipt binding names the real subject and governs."
                                         ],
                            "split":  "test",
-                           "harness_path":  "repo:scripts/legb_live_candidate_v5_scorer.py",
+                           "harness_path":  "repo:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
                            "harness_identity":  {
                                                     "algorithm":  "sha256-byte-stream-v1",
                                                     "value":  "b8f18da1810cb59562d102c02efaf0a5e7edc868e4c3138cdaec7008736c2976"
@@ -613,13 +613,13 @@
                            "completion":  false,
                            "evidence":  [
                                             "repo:docs/authority/STATE.md",
-                                            "repo:scripts/legb_live_candidate_v5_scorer.py",
+                                            "repo:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
                                             "issue:1433 harness wired and proven against the live v5 candidate at bounded scale only (limit=100, exit 0, acc 0.27 / acc_norm 0.35). No full-scale result is claimed and none is admissible.",
                                             "defect:frozen suite pins HellaSwag test_split_sha256 6a78734fc71263f4257d9b52dbfd697830622b2eedb6473094120eed2d142a9f over the 10003-row TEST split, but the installed lm_eval task sets test_split null and scores the 10042-row VALIDATION split (upstream test is unlabeled) -- the frozen pin is NOT a hash of the scored bytes and cannot bind these predictions",
                                             "defect:full-scale HellaSwag cannot run against this architecture. repo:tools/ember-restart-3b/model.py defaults image_token_id to vocab_size-2 (31998) and audio_token_id to vocab_size-1 (31999); these are ordinary emittable tokenizer ids, not reserved markers. Any text tokenizing to either raises ValueError in _inject_modality (marker present, no raw modality values), so forward() is not total over text-only input. ARC-Challenge n=1172 never emitted them; HellaSwag's longest context does, and aborts on the first scored request. Fail-closed, so no silently wrong score was ever produced."
                                         ],
                            "split":  "validation",
-                           "harness_path":  "repo:scripts/legb_live_candidate_v5_scorer.py",
+                           "harness_path":  "repo:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
                            "harness_identity":  {
                                                     "algorithm":  "sha256-byte-stream-v1",
                                                     "value":  "b8f18da1810cb59562d102c02efaf0a5e7edc868e4c3138cdaec7008736c2976"

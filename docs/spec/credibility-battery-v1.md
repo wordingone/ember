@@ -1,7 +1,7 @@
 # Credibility battery v1 — the 15-question evidence registry
 
 Source: [issue #487](https://github.com/wordingone/ember/issues/487) (2026-07-08), which this
-document lands verbatim as a standing registry. Read `docs/guides/START-HERE.md` first if any term below
+document lands verbatim as a standing registry. Read `docs/domains/governance/guides/START-HERE.md` first if any term below
 is unfamiliar.
 
 ## The operator-set bar (verbatim, 2026-07-08)
@@ -64,7 +64,7 @@ corpus-manifest/budget/eval-suite, with one receipt naming all five.
 loop receipts, but the *program-level* from-scratch baseline is not yet a single closed artifact.
 
 **Check it yourself:**
-- `docs/spec/conditions-v1.md` §4.2, condition `C1` — the CHK a discovery receipt must pass
+- `docs/domains/governance/spec/conditions-v1.md` §4.2, condition `C1` — the CHK a discovery receipt must pass
   (sources + hashes + rationale + in-tree hash-verify).
 - `receipts/ember-post-resident-discovery/benchmark-discovery-20260620T230519Z.json`,
   `receipts/ember-post-resident-discovery/benchmark-discovery-20260621T070500Z.json`,
@@ -89,7 +89,7 @@ currently banked (an honest zero, not a gap).
 
 **Check it yourself:**
 - `receipts/cbase-grow-rung2-event-grow-rung2-20260708-real-b3.json` — walked field-by-field in
-  `docs/guides/START-HERE.md` §3. `d_comm = 0.156090`, `cos_alignment = 0.988060`, band `iii`.
+  `docs/domains/governance/guides/START-HERE.md` §3. `d_comm = 0.156090`, `cos_alignment = 0.988060`, band `iii`.
 - [issue #449](https://github.com/wordingone/ember/issues/449) — the frozen measurement protocol
   and its later amendment (the u_pre provenance correction; see the START-HERE walkthrough).
 
@@ -104,7 +104,7 @@ filed; the momentum-side ablation is only half-valid pending a re-measure (the s
 **Check it yourself:**
 - `receipts/ember-d3-native-loop/d3-native-loop-20260704T161315Z-c3-wall-time-rerun-redacted-edition.json`
   and `receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T-redacted-edition.json` —
-  executed instances of this repo's fixed A/B/C/Deleted contract (`docs/spec/conditions-v1.md`
+  executed instances of this repo's fixed A/B/C/Deleted contract (`docs/domains/governance/spec/conditions-v1.md`
   §6), the general mechanism this question's ablation runs against.
 - **Disclosed gap:** issue #487 cites a receipt, `d3-native-loop-20260708T221708Z.json` (the
   specific 1.0 → 0.054 collapse number), generated locally in this repository's working tree but
@@ -122,13 +122,13 @@ training-claim dense control (W2 S-arm) is designed but not yet executed.
 
 **Check it yourself:**
 - `receipts/ember-d3-native-loop/d3-native-loop-rerun-20260704T-redacted-edition.json` — the
-  board's `C3` `GREEN` evidence: a real equal-budget A/B/C arm contract (`docs/spec/conditions-v1.md`
+  board's `C3` `GREEN` evidence: a real equal-budget A/B/C arm contract (`docs/domains/governance/spec/conditions-v1.md`
   §4.2, condition `C3`).
 - `receipts/ember-c-scale/w2-garm-108-verification-w2-garm-dryrun-20260706T043654Z.json` and the
   sibling `w2-garm-*-w2-garm-dryrun-20260706T043654Z.json` files — the W2 S-arm design
   ([issue #108](https://github.com/wordingone/ember/issues/108)), captured as a **dry-run**, not a
   live execution — matching issue #487's "designed but never executed."
-- `docs/archive/pre-restart/c-scale-execution-graph.md` §"W2 Window" — states plainly that W2's fields are
+- `docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md` §"W2 Window" — states plainly that W2's fields are
   fixture-only (`ts 20990101`), no live receipt yet.
 
 ## Q5 — Reusable capacity vs. overfitting / leakage / bookkeeping
@@ -140,7 +140,7 @@ artifact — proven by a held-out split with a leakage predicate run against it 
 a leakage predicate); no at-scale capability delta has survived it yet.
 
 **Check it yourself:**
-- `docs/spec/conditions-v1.md` §4.2, condition `C2` — the held-out-task CHK (frozen-before-run,
+- `docs/domains/governance/spec/conditions-v1.md` §4.2, condition `C2` — the held-out-task CHK (frozen-before-run,
   no label-read in the candidate path).
 - `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
   `C-SCALE`, `RED`: no at-scale capability point currently clears.
@@ -154,14 +154,14 @@ a leakage predicate); no at-scale capability delta has survived it yet.
 the stated verdict — not asserted, not hand-waved.
 
 **Grade: STRONG as a process, WEAK as coverage** (issue #487): the board mechanically re-derives
-verdicts from artifacts (this same PR's `docs/guides/START-HERE.md` §3 is one worked example — a
+verdicts from artifacts (this same PR's `docs/domains/governance/guides/START-HERE.md` §3 is one worked example — a
 falsified provenance line was caught and amended, in the open, not silently); custody coverage
 itself is not yet fully clean.
 
 **Check it yourself:**
-- `docs/guides/START-HERE.md` §3 — the `b3` receipt's `u_pre` provenance falsification and its
+- `docs/domains/governance/guides/START-HERE.md` §3 — the `b3` receipt's `u_pre` provenance falsification and its
   correction, worked end to end.
-- `docs/custody/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
+- `docs/domains/governance/custody/custody-disposition-20260708.md` — the dated, row-by-row disposition record for every
   currently-cited-but-missing receipt path (governed by
   [issue #415](https://github.com/wordingone/ember/issues/415) and
   [PR #432](https://github.com/wordingone/ember/pull/432)).
@@ -180,7 +180,7 @@ of training, against the 24 GB card.
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — real, measured (not
   synthetic-estimated) VRAM: `total_gib: 23.988`, peak `used_gib: 19.465` under contended
   conditions (resident server never stopped).
-- `docs/ledgers/deviations.md` (the rung-2 production-stabilization deviation entry) — the frozen spec's
+- `docs/domains/governance/ledgers/deviations.md` (the rung-2 production-stabilization deviation entry) — the frozen spec's
   VRAM-resident-AdamW config is measured at an estimated **30.903 GiB required vs. 23.988 GiB
   total** — infeasible outright. Cure path:
   [issue #480](https://github.com/wordingone/ember/issues/480).
@@ -212,7 +212,7 @@ offload configuration itself is still unpriced.
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — a real CPU-offloaded
   optimizer + micro-batch/accum configuration (`arm: rung2-cpu-offload-cure-gpu-measured`, PR
   #429), including its own disclosed crash history (issue #446) and the mitigation used.
-- `docs/ledgers/deviations.md` — candidate cures (gradient checkpointing, batch reduction + grad
+- `docs/domains/governance/ledgers/deviations.md` — candidate cures (gradient checkpointing, batch reduction + grad
   accumulation) priced against the same receipt, with `MEASURE` slots explicitly marked
   `REGISTERED-PENDING` rather than asserted.
 
@@ -277,7 +277,7 @@ reference run has executed against it yet, so no capability claim can cite a sco
 is an upgrade from issue #487's original gap ("the frozen external eval suite does not exist in
 this repository yet") — the suite exists now; running it does not.
 
-`docs/spec/eval-suite-freeze-v1.md` (landed via PR #490) freezes 7 of 8 test splits by sha256
+`docs/domains/governance/spec/eval-suite-freeze-v1.md` (landed via PR #490) freezes 7 of 8 test splits by sha256
 (MMLU-Pro, GSM8K, MATH-500, ARC-Challenge, HumanEval+, MBPP, HellaSwag) plus the harness commit
 (`EleutherAI/lm-evaluation-harness@97a5e2c710e2b56b9dd48f367bb6fe87bbb2c176`); the 8th split,
 GPQA-diamond, is honestly `PIN-PENDING` — its automated download is blocked pending HuggingFace
@@ -286,7 +286,7 @@ Clauses) requires reference scores to be locally reproduced, never paper-quoted,
 first such run as still riding "the next free GPU window" — it has not happened yet.
 
 **Check it yourself:**
-- `docs/spec/eval-suite-freeze-v1.md` — suite composition, the harness pin, and both binding
+- `docs/domains/governance/spec/eval-suite-freeze-v1.md` — suite composition, the harness pin, and both binding
   clauses (Clause 1: text+code-only, explicitly insufficient for a C1 parity claim; Clause 2:
   local-reproduction-not-paper-quoted).
 - `receipts/eval-suite-freeze/eval-suite-freeze-v1.json` — the freeze receipt itself: per-split
@@ -307,16 +307,16 @@ process-invariants), code-gated, honestly re-derived from artifacts every run.
 **Check it yourself:**
 - `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
   board receipt in this checkout: 7-GREEN / 28-RED / 2-UNEVALUABLE / 3-AUDIT-PENDING-EPOCH.
-  `docs/authority/CONTINUITY.md` generated status (`scripts/gen_readme_status.py`) always points
+  `docs/authority/CONTINUITY.md` generated status (`src/ember/governance/scripts/gen_readme_status.py`) always points
   at whichever receipt is newest in its selected receipt root.
-- `docs/spec/conditions-v1.md` — the full registry these rows are checked against.
+- `docs/domains/governance/spec/conditions-v1.md` — the full registry these rows are checked against.
 
 ---
 
 ## How to use this battery
 
 Pick any row above, open the path(s) it cites, and check the grade against the artifact yourself —
-this is the concrete instance of `docs/guides/START-HERE.md` §5's "verify one claim yourself" recipe.
+this is the concrete instance of `docs/domains/governance/guides/START-HERE.md` §5's "verify one claim yourself" recipe.
 Grades change only when a new PR cites the receipt that moved them (standing rule 1); this
 document is re-graded by the stranger-audit protocol on its own cadence (standing rule 3, issue
 #481).

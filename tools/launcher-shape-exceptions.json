@@ -22,7 +22,7 @@
     },
     {
       "path": "scripts/ember_gate_launch_packaging.py",
-      "sha256": "c462be8fab5e24a4ebdc7315e639612154c7a451c9e2bf65d3b9aad130076574",
+      "sha256": "ac2cd2658a12a3fcbad5890774210ce3bdad8fc93fd2c4f6c51b21c49520ebd4",
       "reason": "matched on its name, not its behaviour. It is a CLI parity harness: the child it creates is the packaged CLI under test with a 20-second timeout, never a training run."
     },
     {
@@ -31,28 +31,28 @@
       "reason": "matched on its name, not its behaviour. It adapts the roadmap runner to a file-backed JSON transport; the child it creates is that runner, never a training run."
     },
     {
-      "path": "scripts/ember-desktop-deployment-selftest.ps1",
-      "sha256": "97129ed7d9ca1a6ba7d0ceefb3db7820e7bd76646b16737cddf3f475e6cfd336",
+      "path": "src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1",
+      "sha256": "8ed5cd52c86bb612c439bdb444f4f1ac086b00b212f3c2f339b768d807fb0339",
       "reason": "genuine hermetic deployment fixture. It creates fake application and runtime executables and invokes the installer only inside a unique temporary repository/install root; it never starts a training run or a production cockpit. The exact digest is required because filename-based test exclusions are forbidden."
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "3c0bd0abe80c6b1b4c04c7e1227b645cfd74648498854687c9de5bd256a3ebea",
+      "sha256": "d100f6d8c9ae0c9910a5e6f4a905120cbfad0f72b7aca57e253d9081a2d11c52",
       "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
-      "path": "scripts/c8_prelaunch/test_governed_run_launcher.py",
-      "sha256": "32eb3b192436a1a89923bd2881731a0e75f59e6e6fc507fcb2c67a33451a38eb",
+      "path": "src/ember/governance/scripts/c8_prelaunch/test_governed_run_launcher.py",
+      "sha256": "8969cd06d18d704bf9d5cd933bccd55902e6f7eb6b02b7a5a3182b3960314cb9",
       "reason": "hermetic unit test for the historical governed-run adapter. It creates a temporary worker fixture and exercises timeout, cancellation, manifest, and receipt behavior without addressing any production run or persistent custody root."
     },
     {
       "path": "scripts/test_ember_cbase_launch.py",
-      "sha256": "dfe827750ef7fbf072ce3676a66d6768a72408ddd6d05e789f5896946deb5e58",
+      "sha256": "31d1532dad56a84afddaf50c521b24d4c750b58ee01147f362cba9205a1bf34d",
       "reason": "CPU-only wrapper test with CUDA explicitly disabled. Its child commands are temporary stub-core fixtures used to prove STOP/CEILING_STOP and receipt shapes; it does not launch a GPU job or daemon."
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "b1a80605b78afa5847df72058125962926cb331f555c4a34c91016b3c6943dd5",
+      "sha256": "9330cf72f931825637622868e75f7730be64c6a2ed0fd05b536a232149897a30",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "path": "tests/test_ember_root_launcher.py",
-      "sha256": "46d7aceecb69bf0ea747abd3584b03844d1023a78b8e75f31b54829eb1a27f35",
+      "sha256": "1626215e538be15ce0deceb5da539261f3fe3357d11b44f478200df9cbad76f1",
       "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {

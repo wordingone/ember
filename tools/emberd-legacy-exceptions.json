@@ -11,7 +11,7 @@
     },
     {
       "path": "manifests/ember-01-custody/public-issue-census.json",
-      "sha256": "e973d2285a5c6799cb58f8fd86aef11f272e728779612ea1bf21dcbcc1c111a9",
+      "sha256": "09b71266744e05b867a7379d13554bd5afc7789af76dcc190930fbbe3c16fb5b",
       "reason": "verbatim cached GitHub issue titles for two still-open issues whose real titles literally start with 'emberd'; renaming the cache would make it diverge from the live source it censuses. See docs/naming-migrations.md."
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "3c0bd0abe80c6b1b4c04c7e1227b645cfd74648498854687c9de5bd256a3ebea",
+      "sha256": "d100f6d8c9ae0c9910a5e6f4a905120cbfad0f72b7aca57e253d9081a2d11c52",
       "reason": "preparation-only successor retains retired daemon spellings solely in fail-closed migration checks and operator guidance for legacy state; it never invokes that retired daemon"
     }
   ]

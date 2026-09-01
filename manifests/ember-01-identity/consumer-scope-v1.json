@@ -19,17 +19,17 @@
     }
   },
   "consumers": [
-    {"consumer_id":"owned-architecture","path":"scripts/serve_cbase_openai.py","category":"architecture_config","evidence_sha256":"efea23bb32b21b21e769cdf4a2098ecd916c26567abd8b77d3ef335dd0d32d4c"},
+    {"consumer_id":"owned-architecture","path":"src/ember/governance/scripts/serve_cbase_openai.py","category":"architecture_config","evidence_sha256":"efea23bb32b21b21e769cdf4a2098ecd916c26567abd8b77d3ef335dd0d32d4c"},
     {"consumer_id":"training-state","path":"scripts/timeshare_pretrain.py","category":"training_optimizer","evidence_sha256":"e6457d9d135b51bf2322f066123c9e92639d7841a337651a71c98038decd5173"},
     {"consumer_id":"checkpoint-writer","path":"scripts/timeshare_pretrain.py","category":"checkpoint_save_load","evidence_sha256":"0737f0c5b9d844b1906317cb55c5fd0689d4857254529a0d6cbe3d7b2006b150"},
     {"consumer_id":"model-lifecycle","path":"tools/ember-cli/src/services/model-lifecycle.ts","category":"serving_runtime","evidence_sha256":"8e2b185188dd14557154a1fd1fa05f7cee49a3b732fc1038773d27313cbda38d"},
     {"consumer_id":"operator-display","path":"tools/ember-cli/src/screens/repl.ts","category":"cli_operator_surface","evidence_sha256":"bc0ae17710e5c2fc84a2666c319d17f99d2c4034c283fd9aef7c5c51e92c31fc"},
     {"consumer_id":"benchmark-admission","path":"scripts/ember_research_benchmark_harness.py","category":"evaluation_benchmark","evidence_sha256":"358f3787e870c2185f4f2247d935817c49271de5d26a5ab140e512efc2ed23a2"},
-    {"consumer_id":"publication-gate","path":"scripts/check_publication_gate.py","category":"publication_report","evidence_sha256":"cf67b801f0d7249b00a8dea6ae7df9717d08b91233aa806505bac6b12655cb7b"},
+    {"consumer_id":"publication-gate","path":"src/ember/governance/scripts/check_publication_gate.py","category":"publication_report","evidence_sha256":"cf67b801f0d7249b00a8dea6ae7df9717d08b91233aa806505bac6b12655cb7b"},
     {"consumer_id":"borrowed-cli-default","path":"tools/ember-cli/src/model-config.ts","category":"borrowed_reference","evidence_sha256":"c430974e1506d6517fc15d326f66405782ab60c51ade8e7589fe8a39dc96305a"},
     {"consumer_id":"watchdog-outage","path":"tools/ember-cli/scripts/liveness-watchdog.ps1","category":"process_registry_watchdog","evidence_sha256":"c54f95e18875cbbfd8af46944233730eecb313fc395a18b9c85a9edac30afaf6"},
-    {"consumer_id":"parameter-growth","path":"scripts/cbase_grow_live.py","category":"parameter_identity","evidence_sha256":"3cadf04ec0453286a412ac9a08e880d3aae4d7a2b17312482238072a6b8d6cd7"},
-    {"consumer_id":"tokenizer-freeze","path":"scripts/tokenizer_freeze.py","category":"tokenizer_data_lineage","evidence_sha256":"36341f991f50e1e59590333191448a4a0155fc1edaaa2d994fbf45a5a637949f"},
+    {"consumer_id":"parameter-growth","path":"src/ember/governance/scripts/cbase_grow_live.py","category":"parameter_identity","evidence_sha256":"3cadf04ec0453286a412ac9a08e880d3aae4d7a2b17312482238072a6b8d6cd7"},
+    {"consumer_id":"tokenizer-freeze","path":"src/ember/governance/scripts/tokenizer_freeze.py","category":"tokenizer_data_lineage","evidence_sha256":"36341f991f50e1e59590333191448a4a0155fc1edaaa2d994fbf45a5a637949f"},
     {"consumer_id":"mechanism-dispatch","path":"scripts/ember_mvp_cycle.py","category":"mechanism_identity","evidence_sha256":"52c5fa47e39ac3436798cfa6e48d5fed082ceb9a246e736196b2dc81f23eb301"},
     {"consumer_id":"receipt-store","path":"scripts/ember_gate_receipt_store.py","category":"receipt_identity","evidence_sha256":"7342e8a5f997627ae5b94ee4bf93789aebb303abe226d40eed7bdc741086109e"}
   ]

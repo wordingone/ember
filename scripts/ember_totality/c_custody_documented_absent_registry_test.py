@@ -121,7 +121,7 @@ def test_registry_is_closed_and_bound_to_current_document_bytes() -> None:
     assert re.fullmatch(r"[0-9a-f]{40}", registry["source_commit"])
 
     source_document = registry["source_document"]
-    assert source_document == "docs/custody/custody-disposition-20260708.md"
+    assert source_document == "docs/domains/governance/custody/custody-disposition-20260708.md"
     source_path = ROOT / source_document
     assert subprocess.run(
         [

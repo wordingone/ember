@@ -7,7 +7,7 @@
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-  "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.2",
+  "prereg_section": "docs/domains/governance/spec/ember02-preregistration-v1.md sec5.2",
   "purpose": "Fixed-prior manifest: every non-learned prior with sha256 and provenance, referenced by hash from every rung receipt.",
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (scripts/manifest_sha.py convention); git-tracked files only",
@@ -3327,7 +3327,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "Fail-closed receipt writer; quarantines invalid bytes rather than deleting completed runs' results.",
-      "path": "scripts/receipt_write.py",
+      "path": "src/ember/governance/scripts/receipt_write.py",
       "sha256": "860c04b934e21a1cca3e86e403b229333d7af99baf46ee9da05fa091a2848848",
       "size_bytes": 10365
     },
@@ -3335,7 +3335,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "Frozen receipt validator behind the writer.",
-      "path": "scripts/receipt_check.py",
+      "path": "src/ember/governance/scripts/receipt_check.py",
       "sha256": "1d0895435df1cb8054332f6ae46528bb7b1fad12f5d3cf91ee9d883a4b38ea04",
       "size_bytes": 15205
     },
@@ -3351,7 +3351,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "GPU power sampler and trapezoidal integrator (energy-law sec4.2).",
-      "path": "scripts/joules.py",
+      "path": "src/ember/governance/scripts/joules.py",
       "sha256": "359608bf956d1b7082591c4a2f5fe39fe303b099e47f77b1d0917051d429c956",
       "size_bytes": 13536
     },
@@ -3367,7 +3367,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "Energy-law receipt-shape checker (P1 receipt-shape check, R2-E2).",
-      "path": "scripts/check_energy_law_theory.py",
+      "path": "src/ember/governance/scripts/check_energy_law_theory.py",
       "sha256": "94094c0d5a24a7247facd13c4c3d1f4602e250a4d78e01e827f32610810c1902",
       "size_bytes": 33156
     },
@@ -3375,7 +3375,7 @@
       "category": "deterministic_tools",
       "kind": "file",
       "provenance": "ember-owned-rung-v1 admission contract; the fail-closed prerequisite of sec1.",
-      "path": "scripts/ember_restart/contract.py",
+      "path": "src/ember/governance/scripts/ember_restart/contract.py",
       "sha256": "0c481589c0e513befead63c23322634d1200492a6c3f12e54193371191e1e3bb",
       "size_bytes": 116723
     },
@@ -3564,7 +3564,7 @@
       "category": "configuration",
       "kind": "file",
       "provenance": "The pre-registration this run is hash-pinned to (`--prereg <sha256>`).",
-      "path": "docs/spec/ember02-preregistration-v1.md",
+      "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
       "sha256": "a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51",
       "size_bytes": 41218
     },

@@ -27,7 +27,7 @@ machine-readable replay set is
 3. Exercise the receipt checker safely:
 
    ```text
-   python scripts/receipt_check.py --selftest
+   python src/ember/governance/scripts/receipt_check.py --selftest
    ```
 
    Requires CPU only and should emit its selftest pass sentinel.

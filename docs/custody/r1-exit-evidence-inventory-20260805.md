@@ -5,7 +5,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 -->
 # R1 (WARM-100) exit-evidence inventory — 20260805
 
-Authority: `docs/spec/ember02-preregistration-v1.md` §3 "R1 — WARM-100" (exits R1-E1..E8,
+Authority: `docs/domains/governance/spec/ember02-preregistration-v1.md` §3 "R1 — WARM-100" (exits R1-E1..E8,
 kill criteria) + `docs/spec/ember02-preregistration-thresholds-v1.json` (T-01..T-09, F-11).
 Subject run named by the task brief: `<custody>/r1-warm100-20260804` — `<custody>` is the
 off-tree live-receipts custody root on the training host; absolute local paths never appear
@@ -76,14 +76,14 @@ missing capability (no CLI path today can both run ≥100 steps *and* record tel
 
 ## Deliverables produced against this inventory
 
-- `scripts/r1_exit_battery.py` — runs against real run-root bytes; for each of E1..E8 either
+- `src/ember/governance/scripts/r1_exit_battery.py` — runs against real run-root bytes; for each of E1..E8 either
   computes a real verdict from present evidence or emits a fail-closed `EVIDENCE_MISSING`
   refusal naming exactly the missing bytes. `--selftest` covers both paths per exit with
   hermetic synthetic fixtures (namespaced `SELFTEST_FIXTURE_*`), zero GPU/checkpoint bytes
   required to run the tests.
 - Receipts land under `receipts/ember-02-r1-exits/` in this worktree (never in the
   off-tree custody root), via `receipt_write.checked_write` (same atomic
-  quarantine-on-invalid convention as `scripts/r2_cheap_probe_battery.py`).
+  quarantine-on-invalid convention as `src/ember/governance/scripts/r2_cheap_probe_battery.py`).
 - Needs-execution plan: see the battery's own `--exit e1..e8` refusal `result.needs` field
   (machine-readable) and the build task's final report (this file does not re-duplicate
   the argv list — it lives with the execution plan since some legs need engineering first,

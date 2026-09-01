@@ -23,14 +23,14 @@ import r1_frozen_eval_runner as runner  # noqa: E402
 
 
 CANONICAL_SUITE = json.loads(
-    (ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_text(encoding="utf-8")
+    (ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_text(encoding="utf-8")
 )
 SUITE_ID = CANONICAL_SUITE["suite_id"]
 
 
 def _write_json(path: Path, value: dict) -> str:
     raw = (
-        (ROOT / "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_bytes()
+        (ROOT / "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json").read_bytes()
         if value == CANONICAL_SUITE
         else json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     )

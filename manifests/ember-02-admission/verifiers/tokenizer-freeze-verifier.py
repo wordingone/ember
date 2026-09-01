@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Re-derive an owned-tokenizer freeze attestation from the frozen bytes.
 
-Evidence class: tokenizer_freeze. Invoked by scripts/ember_restart/contract.py as
+Evidence class: tokenizer_freeze. Invoked by src/ember/governance/scripts/ember_restart/contract.py as
 
     python -I tokenizer-freeze-verifier.py \
         --tokenizer <path> --training-script <path> --training-corpus-manifest <path>

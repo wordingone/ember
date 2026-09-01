@@ -9,13 +9,13 @@ bullets; both genuinely unmanifested, board shows GREEN").
 Issue #715 root cause: test_c_manifest.py's `_CID_RE` separator alternation
 had no bare "." token, so the two goal-file bullets that use a period
 separator -- "- **C-MANIFEST.** ..." and "- **C-TALLY.** ..." (both in
-docs/spec/conditions-v1.md S4.3, the two roll-up/meta-conditions) -- never
+docs/domains/governance/spec/conditions-v1.md S4.3, the two roll-up/meta-conditions) -- never
 matched and silently vanished from the planned-piece denominator (probe
 counted 38 vs the true count, which was 40 at fix time and has since grown
 to 41 as the registry gained further conditions -- see conditions-v1.md
 line 451's own running tally). This regression suite proves BOTH halves of
 the fix stay true against PRODUCTION-SHAPED inputs -- the real
-docs/spec/conditions-v1.md and docs/contracts/ember-completeness.md files copied
+docs/domains/governance/spec/conditions-v1.md and docs/domains/governance/contracts/ember-completeness.md files copied
 byte-for-byte into an isolated fixture root, never a helper-invented mini
 goal/manifest shape:
 
@@ -35,7 +35,7 @@ goal/manifest shape:
 
 Hermetic: every case builds its own fresh tempfile.TemporaryDirectory()
 fixture root, seeded from copies of the REAL repo files (never mutating the
-real tree), and runs the real scripts/ember_totality/test_c_manifest.py as a
+real tree), and runs the real src/ember/governance/scripts/ember_totality/test_c_manifest.py as a
 subprocess with EMBER_TOTALITY_ROOT pointed at that fixture -- exactly the
 isolation convention chk_controls/run_controls.py already uses for every
 other CHK-adequacy control in this package (see build_c_manifest() there for
@@ -149,7 +149,7 @@ def _delete_manifest_row(manifest_path: Path, condition_id: str) -> None:
     ]
     assert len(matches) == 1, (
         f"expected exactly one '{condition_id}' manifest row in the real "
-        f"docs/contracts/ember-completeness.md, found {len(matches)} -- fixture "
+        f"docs/domains/governance/contracts/ember-completeness.md, found {len(matches)} -- fixture "
         "assumption invalid, cannot construct the removal control"
     )
     del lines[matches[0]]

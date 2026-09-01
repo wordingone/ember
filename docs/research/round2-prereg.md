@@ -76,7 +76,7 @@ round-2 day (06-12) with the v0 pretrain timeshare (eng-33) untouched.
   §1.2 line "sft — t2_r2_sft" named the #112 wrapper; at the launch
   gate that wrapper's delegation was found to build from the FULL mixed
   ledger with flat caps (its theta filter computed but never consumed —
-  not the registered arm). Corrected runner `scripts/t2_r2w.py` trains
+  not the registered arm). Corrected runner `src/ember/governance/scripts/t2_r2w.py` trains
   the registered semantics: W-code view (regenerated from current
   ledger) → ext-clean → theta (0, 0.5] via r2_arms single-source rates
   → flat MAX_PER_TASK cap → train_lora; control mirrors the sft

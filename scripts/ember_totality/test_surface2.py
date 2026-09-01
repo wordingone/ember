@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_surface2.py — STATUS PROBE for Ember goal condition C-SURFACE2.
 
-Registry text: DRAFT, not yet landed in docs/spec/conditions-v1.md (see
+Registry text: DRAFT, not yet landed in docs/domains/governance/spec/conditions-v1.md (see
 scratch/surface2-registry-entry.md for the exact snippet). gh issue #11
 ("Surface-2 board probe: telemetry+steer receipts must be machine-checked,
 not just ticketed"), FROZEN SPEC v1 (author tick, issue #11 comment). R: the

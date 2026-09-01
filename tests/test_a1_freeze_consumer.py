@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_a1_freeze_consumer.py -- ember #631 deliverable 5 negative+positive tests.
 
 Reproduce-first for defect #5 ("no decisive consumer applies the freeze"): the FAIL
-half is that before scripts/a1_freeze_consumer.py, no executable surface bound the
+half is that before src/ember/governance/scripts/a1_freeze_consumer.py, no executable surface bound the
 freeze pointer + amendment (an executable-search finds zero consumers). The PASS half
 is this fail-closed consumer: it REFUSES on time-order violation, missing lineage, and
 split-sha drift, and ADMITS the happy path with per-dataset effective_filtered_sha256

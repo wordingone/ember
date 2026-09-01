@@ -2,7 +2,7 @@
   "schema_version": "ember02-r1-forecast/v1",
   "authored_utc": "2026-08-06T05:25:00Z",
   "prereg": {
-    "doc": "docs/spec/ember02-preregistration-v1.md",
+    "doc": "docs/domains/governance/spec/ember02-preregistration-v1.md",
     "pin": "3d48d387",
     "clause": "section 3 common structure, closing receipts: forecast-recalibration receipt carries predicted vs measured step time, tokens/s, proxy-joules/token, peak VRAM, loss trajectory"
   },
@@ -19,7 +19,7 @@
     "telemetry_file": "telemetry/specialist-canary.jsonl",
     "telemetry_sha256": "91df7b60b7ba571822090e472b128601bfc230a0e47f6275b70160e6c7b2803e",
     "series": "200 deduped train_step rows (steps 5..204, last occurrence per step) out of 1400 telemetry rows from 7 launch attempts",
-    "statistic_population": "every quantity below is computed on the DEDUPED last-occurrence-per-step series -- the exact statistic scripts/forecast_recalibration.py measures -- never on the raw 1400-row population (rev-1490 finding 5: mixing the two bases made the basis run miss its own band). Where the raw population informs a band edge, that is stated explicitly.",
+    "statistic_population": "every quantity below is computed on the DEDUPED last-occurrence-per-step series -- the exact statistic src/ember/governance/scripts/forecast_recalibration.py measures -- never on the raw 1400-row population (rev-1490 finding 5: mixing the two bases made the basis run miss its own band). Where the raw population informs a band edge, that is stated explicitly.",
     "checkpoint_manifest_sha256": "fefd8d44b840bbbd4879a53a05f7e58a41a50e547a00dcc07ac31058d3cbf3f1",
     "adjudication_note": "this continuation series was ruled non-credited for R1-E1/E2 (contiguous_from_step_1 false; issue #1464 adjudication 2026-08-06). It is used here solely as the measured basis for prediction, which is exactly what a prior run is for."
   },
@@ -59,5 +59,5 @@
       "method": "the deduped series' measured losses at the same absolute steps (its steps 5..204 sit on the same lineage schedule the from-1 run replays: the parent covered 1..4 and the canary's step-5 loss 6.93 equals ln-vocab random-init level, so the descent shape is expected to reproduce from step 1). CI widened to 0.5 because the from-1 run re-runs steps 1..4 under its own seed draw."
     }
   },
-  "falsifiability_note": "each quantity risks a wrong prediction: a from-1 run whose step time, throughput, VRAM, or loss anchors land outside these bands is a FORECAST-MISS to be recalibrated with receipts, never silently absorbed (prereg E-A / F-02 posture). Sanity check executed at authoring time: the basis run itself, re-measured by scripts/forecast_recalibration.py's own statistics, lands inside every band above (step_time 160.163, tokens/s 47.32, peak VRAM 20.152)."
+  "falsifiability_note": "each quantity risks a wrong prediction: a from-1 run whose step time, throughput, VRAM, or loss anchors land outside these bands is a FORECAST-MISS to be recalibrated with receipts, never silently absorbed (prereg E-A / F-02 posture). Sanity check executed at authoring time: the basis run itself, re-measured by src/ember/governance/scripts/forecast_recalibration.py's own statistics, lands inside every band above (step_time 160.163, tokens/s 47.32, peak VRAM 20.152)."
 }

@@ -5,7 +5,7 @@
 `INVARIANT.md` is Ember's sole unamendable identity surface. `GOAL.md` is the
 highest amendable authority beneath it: "Lower-precedence files may implement
 and test it; they cannot reduce, defer, replace, or reinterpret it" (GOAL.md
-line 4-5). `docs/spec/conditions-v1.md` holds the machine-checkable condition
+line 4-5). `docs/domains/governance/spec/conditions-v1.md` holds the machine-checkable condition
 registry that implements GOAL.md's completion bar.
 
 ## The EMBER_AUTHORITY_V1 block
@@ -45,7 +45,7 @@ and as part of the repo-guard pre-commit/pre-push hooks.
 
 ## The genesis invariant
 
-A separate, narrower invariant lives in `scripts/receipt_check.py`:
+A separate, narrower invariant lives in `src/ember/governance/scripts/receipt_check.py`:
 `INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"`,
 pinned at `GENESIS_TS = "2026-07-06T14:13:23-07:00"` (the committer date of
 commit `9c89f7f66`, tag `invariant-genesis`, "genesis: entrench

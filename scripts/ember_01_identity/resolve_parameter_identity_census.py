@@ -55,7 +55,50 @@ _IDENTITY_DIR = Path(__file__).resolve().parent
 if str(_IDENTITY_DIR) not in sys.path:
     sys.path.insert(0, str(_IDENTITY_DIR))
 
-from census_consumers import _source_role  # noqa: E402
+# issue2015 exact-local-import:scripts/ember_01_identity/census_consumers.py
+import importlib.util as _ember_21106b7bc55d9483_importlib
+import sys as _ember_21106b7bc55d9483_sys
+from pathlib import Path as _ember_21106b7bc55d9483_Path
+_ember_21106b7bc55d9483_path = _ember_21106b7bc55d9483_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_identity', 'census_consumers.py')
+if not _ember_21106b7bc55d9483_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_01_identity/census_consumers.py')
+_ember_21106b7bc55d9483_aliases = ('_ember_issue2015_21106b7bc55d9483', 'census_consumers', 'scripts.ember_01_identity.census_consumers')
+_ember_21106b7bc55d9483_existing = []
+for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
+    _ember_21106b7bc55d9483_candidate = _ember_21106b7bc55d9483_sys.modules.get(_ember_21106b7bc55d9483_alias)
+    if _ember_21106b7bc55d9483_candidate is not None and all(_ember_21106b7bc55d9483_candidate is not item for item in _ember_21106b7bc55d9483_existing):
+        _ember_21106b7bc55d9483_existing.append(_ember_21106b7bc55d9483_candidate)
+if len(_ember_21106b7bc55d9483_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_01_identity/census_consumers.py')
+if _ember_21106b7bc55d9483_existing:
+    _ember_21106b7bc55d9483_module = _ember_21106b7bc55d9483_existing[0]
+    _ember_21106b7bc55d9483_observed = getattr(_ember_21106b7bc55d9483_module, '__file__', None)
+    if _ember_21106b7bc55d9483_observed is None or _ember_21106b7bc55d9483_Path(_ember_21106b7bc55d9483_observed).resolve() != _ember_21106b7bc55d9483_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_01_identity/census_consumers.py')
+else:
+    _ember_21106b7bc55d9483_spec = _ember_21106b7bc55d9483_importlib.spec_from_file_location('_ember_issue2015_21106b7bc55d9483', _ember_21106b7bc55d9483_path)
+    if _ember_21106b7bc55d9483_spec is None or _ember_21106b7bc55d9483_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_01_identity/census_consumers.py')
+    _ember_21106b7bc55d9483_module = _ember_21106b7bc55d9483_importlib.module_from_spec(_ember_21106b7bc55d9483_spec)
+    for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
+        _ember_21106b7bc55d9483_prior = _ember_21106b7bc55d9483_sys.modules.get(_ember_21106b7bc55d9483_alias)
+        if _ember_21106b7bc55d9483_prior is not None and _ember_21106b7bc55d9483_prior is not _ember_21106b7bc55d9483_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_01_identity/census_consumers.py')
+        _ember_21106b7bc55d9483_sys.modules[_ember_21106b7bc55d9483_alias] = _ember_21106b7bc55d9483_module
+    try:
+        _ember_21106b7bc55d9483_spec.loader.exec_module(_ember_21106b7bc55d9483_module)
+    except BaseException:
+        for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
+            if _ember_21106b7bc55d9483_sys.modules.get(_ember_21106b7bc55d9483_alias) is _ember_21106b7bc55d9483_module:
+                _ember_21106b7bc55d9483_sys.modules.pop(_ember_21106b7bc55d9483_alias, None)
+        raise
+for _ember_21106b7bc55d9483_alias in _ember_21106b7bc55d9483_aliases:
+    _ember_21106b7bc55d9483_prior = _ember_21106b7bc55d9483_sys.modules.get(_ember_21106b7bc55d9483_alias)
+    if _ember_21106b7bc55d9483_prior is not None and _ember_21106b7bc55d9483_prior is not _ember_21106b7bc55d9483_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_01_identity/census_consumers.py')
+    _ember_21106b7bc55d9483_sys.modules[_ember_21106b7bc55d9483_alias] = _ember_21106b7bc55d9483_module
+_source_role = getattr(_ember_21106b7bc55d9483_module, '_source_role')
+# issue2015 exact-local-import-end:scripts/ember_01_identity/census_consumers.py  # noqa: E402
 from merge_adjudications import LANE_SCHEMA, merge_adjudication_lanes  # noqa: E402
 
 CENSUS_PATH = (

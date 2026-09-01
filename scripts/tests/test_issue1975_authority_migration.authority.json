@@ -1,10 +1,1 @@
-{
-  "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/tests/test_issue1975_authority_migration.py",
-  "artifact_sha256": "75c4fba80ec1b2fad8a07bfe6354db778643737a14446f7b35afc6d47f8a41e9",
-  "authority": {
-    "goal_id": "EMBER-02",
-    "workstream_id": "EMBER-02A",
-    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
-  }
-}
+{"artifact_path":"scripts/tests/test_issue1975_authority_migration.py","artifact_sha256":"75c4fba80ec1b2fad8a07bfe6354db778643737a14446f7b35afc6d47f8a41e9","authority":{"goal_id":"EMBER-02","next_executed_outcome":"EMBER-02 first sufficiently pretrained clean-genesis 3B Ember","workstream_id":"EMBER-02A"},"schema_version":"ember-content-addressed-authority-binding/v1"}

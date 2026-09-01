@@ -927,7 +927,7 @@ def test_r1_entry_mints_from_actual_on_disk_genesis_candidate(
         manifest_path,
         source_commit=manifest["source_commit"],
         source_root=REPO_ROOT,
-        prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+        prereg_path=REPO_ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md",
         config_path=REPO_ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
@@ -975,7 +975,51 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
     sufficiency credit is implied until the governed Ember CLI -> Ember Lab path
     supplies the missing runtime receipts.
     """
-    from scripts.ember_restart.contract import build_r1_warm100_entry, validate_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    validate_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'validate_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     governed_remote, governed_ref = hermetic_governed_remote
     manifest_path = _candidate_manifest(tmp_path)
@@ -987,7 +1031,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
         manifest_path,
         source_commit=manifest["source_commit"],
         source_root=REPO_ROOT,
-        prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+        prereg_path=REPO_ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md",
         config_path=REPO_ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
@@ -1047,7 +1091,50 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
 
 def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
     """A reachable but stale source tree cannot mint a current R1 entry."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     current = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
@@ -1067,7 +1154,7 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
             manifest_path,
             source_commit=stale,
             source_root=REPO_ROOT,
-            prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+            prereg_path=REPO_ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md",
             config_path=REPO_ROOT / "configs/ember-restart-3b.json",
             fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
             trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
@@ -1077,7 +1164,50 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
 
 def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
     """A dirty checkout cannot mint a source-authoritative R1 entry."""
-    from scripts.ember_restart.contract import build_r1_warm100_entry
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/contract.py
+    import importlib.util as _ember_3cb9868455ee2567_importlib
+    import sys as _ember_3cb9868455ee2567_sys
+    from pathlib import Path as _ember_3cb9868455ee2567_Path
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    if not _ember_3cb9868455ee2567_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
+    _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
+    _ember_3cb9868455ee2567_existing = []
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_candidate = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_candidate is not None and all(_ember_3cb9868455ee2567_candidate is not item for item in _ember_3cb9868455ee2567_existing):
+            _ember_3cb9868455ee2567_existing.append(_ember_3cb9868455ee2567_candidate)
+    if len(_ember_3cb9868455ee2567_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+    if _ember_3cb9868455ee2567_existing:
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_existing[0]
+        _ember_3cb9868455ee2567_observed = getattr(_ember_3cb9868455ee2567_module, '__file__', None)
+        if _ember_3cb9868455ee2567_observed is None or _ember_3cb9868455ee2567_Path(_ember_3cb9868455ee2567_observed).resolve() != _ember_3cb9868455ee2567_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/contract.py')
+    else:
+        _ember_3cb9868455ee2567_spec = _ember_3cb9868455ee2567_importlib.spec_from_file_location('_ember_issue2015_3cb9868455ee2567', _ember_3cb9868455ee2567_path)
+        if _ember_3cb9868455ee2567_spec is None or _ember_3cb9868455ee2567_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_module = _ember_3cb9868455ee2567_importlib.module_from_spec(_ember_3cb9868455ee2567_spec)
+        for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+            _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+            if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+            _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+        try:
+            _ember_3cb9868455ee2567_spec.loader.exec_module(_ember_3cb9868455ee2567_module)
+        except BaseException:
+            for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+                if _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias) is _ember_3cb9868455ee2567_module:
+                    _ember_3cb9868455ee2567_sys.modules.pop(_ember_3cb9868455ee2567_alias, None)
+            raise
+    for _ember_3cb9868455ee2567_alias in _ember_3cb9868455ee2567_aliases:
+        _ember_3cb9868455ee2567_prior = _ember_3cb9868455ee2567_sys.modules.get(_ember_3cb9868455ee2567_alias)
+        if _ember_3cb9868455ee2567_prior is not None and _ember_3cb9868455ee2567_prior is not _ember_3cb9868455ee2567_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/contract.py')
+        _ember_3cb9868455ee2567_sys.modules[_ember_3cb9868455ee2567_alias] = _ember_3cb9868455ee2567_module
+    build_r1_warm100_entry = getattr(_ember_3cb9868455ee2567_module, 'build_r1_warm100_entry')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
     manifest_path = _candidate_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -1093,7 +1223,7 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
                 manifest_path,
                 source_commit=manifest["source_commit"],
                 source_root=REPO_ROOT,
-                prereg_path=REPO_ROOT / "docs/spec/ember02-preregistration-v1.md",
+                prereg_path=REPO_ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md",
                 config_path=REPO_ROOT / "configs/ember-restart-3b.json",
                 fixed_prior_path=REPO_ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
                 trusted_verifier_registry=tmp_path / "trusted-verifiers.json",
@@ -1156,7 +1286,7 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(
             "--source-root",
             str(REPO_ROOT),
             "--prereg",
-            str(REPO_ROOT / "docs/spec/ember02-preregistration-v1.md"),
+            str(REPO_ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md"),
             "--config",
             str(REPO_ROOT / "configs/ember-restart-3b.json"),
             "--fixed-prior",
@@ -1192,7 +1322,7 @@ def test_r1_warm100_entry_cli_refusal_is_content_addressed(tmp_path: Path):
             "--source-root",
             str(REPO_ROOT),
             "--prereg",
-            str(REPO_ROOT / "docs/spec/ember02-preregistration-v1.md"),
+            str(REPO_ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md"),
             "--config",
             str(REPO_ROOT / "configs/ember-restart-3b.json"),
             "--fixed-prior",

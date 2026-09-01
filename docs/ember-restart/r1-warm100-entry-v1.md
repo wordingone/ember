@@ -4,7 +4,7 @@ next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B E
 
 # R1 WARM-100 entry adapter (schema v2)
 
-`scripts/ember_restart/contract.py r1-entry` is a thin producer/consumer
+`src/ember/governance/scripts/ember_restart/contract.py r1-entry` is a thin producer/consumer
 adapter around the existing `ember-owned-rung-v1` validator. It does not
 replace that validator and it does not launch a run. This file documents the
 adapter's current schema, `ember-r1-warm100-entry-v2`; the filename is kept
@@ -31,7 +31,7 @@ first then commit:
 - **`source_root` -> canonical checkout or managed worktree.** `source_root`
   must share the canonical checkout's Git common directory (a clone or fork
   has its own object store even with byte-identical contents) and must either
-  be that checkout itself or a `scripts/worktree_lifecycle.py`-managed
+  be that checkout itself or a `src/ember/governance/scripts/worktree_lifecycle.py`-managed
   worktree of it. An ad-hoc `git worktree add` that bypasses the lifecycle
   tool is refused, as is a missing or malformed worktree-lifecycle registry.
 - **`source_commit` -> governed-remote ancestry.** The governed remote's ref

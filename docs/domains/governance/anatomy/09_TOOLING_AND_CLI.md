@@ -28,10 +28,10 @@ declaring the harness usable.
 
 ## Related CLI/tooling scripts (repo-root scripts/, non-exhaustive)
 
-- `scripts/ember_avir_harness.py`, `scripts/ember_avir_observe.py`, `scripts/ember_avir_tasks.py` — the AVIR-side harness/observation/task surface
+- `src/ember/governance/scripts/ember_avir_harness.py`, `src/ember/governance/scripts/ember_avir_observe.py`, `src/ember/governance/scripts/ember_avir_tasks.py` — the AVIR-side harness/observation/task surface
 - `src/ember/governance/scripts/cockpit_watchdog.py` — a watchdog process for the cockpit (see 12_COCKPIT_OBSERVATORY.md)
-- `scripts/worktree_lifecycle.py` — the worktree CLI (see 02_REPO_TOPOLOGY.md)
-- `scripts/verify_authority_conservation.py`, `scripts/receipt_check.py`, `scripts/verify_nosource_operability.py` — CLI-invoked verifiers, run both standalone and inside repo-guard hooks
+- `src/ember/governance/scripts/worktree_lifecycle.py` — the worktree CLI (see 02_REPO_TOPOLOGY.md)
+- `scripts/verify_authority_conservation.py`, `src/ember/governance/scripts/receipt_check.py`, `src/ember/governance/scripts/verify_nosource_operability.py` — CLI-invoked verifiers, run both standalone and inside repo-guard hooks
 
 ## Current gaps — honestly stated
 

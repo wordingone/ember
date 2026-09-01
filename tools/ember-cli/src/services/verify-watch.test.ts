@@ -91,14 +91,14 @@ function mockRunner(opts: {
     if (executable === "git" && args[0] === "rev-parse") {
       return { status: 0, stdout: `${PINNED_COMMIT}\n`, stderr: "" };
     }
-    if (args.includes("scripts/worktree_lifecycle.py") && args.includes("create")) {
+    if (args.includes("src/ember/governance/scripts/worktree_lifecycle.py") && args.includes("create")) {
       return {
         status: 0,
         stdout: JSON.stringify({ status: "CREATED", path: opts.worktreePath, branch: null, detached: true }),
         stderr: "",
       };
     }
-    if (args.includes("scripts/worktree_lifecycle.py") && args.includes("retire")) {
+    if (args.includes("src/ember/governance/scripts/worktree_lifecycle.py") && args.includes("retire")) {
       if (opts.onRetire) return opts.onRetire(args);
       return { status: 0, stdout: JSON.stringify({ status: "RETIRED", path: opts.worktreePath }), stderr: "" };
     }
@@ -207,7 +207,7 @@ describe("startVerifyRun", () => {
 
     // Ordering: rev-parse -> create -> gh -> issue_census -> verifier -> retire.
     expect(calls[0]!.executable).toBe("git");
-    expect(calls[1]!.args).toContain("scripts/worktree_lifecycle.py");
+    expect(calls[1]!.args).toContain("src/ember/governance/scripts/worktree_lifecycle.py");
     expect(calls[1]!.args).toContain("create");
     expect(calls[1]!.args[calls[1]!.args.indexOf("--start-point") + 1]).toBe(PINNED_COMMIT);
     expect(calls[2]!.executable).toBe("gh");
@@ -224,7 +224,7 @@ describe("startVerifyRun", () => {
     expect(verifierArgs[bindingIndex + 1]).toBe("public-repository=/x");
 
     const retireArgs = calls[5]!.args;
-    expect(retireArgs).toContain("scripts/worktree_lifecycle.py");
+    expect(retireArgs).toContain("src/ember/governance/scripts/worktree_lifecycle.py");
     expect(retireArgs).toContain("retire");
     expect(retireArgs[retireArgs.indexOf("--path") + 1]).toBe(worktreePath);
   });

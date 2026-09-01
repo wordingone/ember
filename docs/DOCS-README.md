@@ -6,8 +6,8 @@ eight adopted technical domains. The machine-generated list of current and norma
 
 ## Audience routes
 
-- First-time reader: [`guides/START-HERE.md`](guides/START-HERE.md)
-- User or installer: [`guides/START-HERE.md`](guides/START-HERE.md)
+- First-time reader: [`domains/governance/guides/START-HERE.md`](domains/governance/guides/START-HERE.md)
+- User or installer: [`domains/governance/guides/START-HERE.md`](domains/governance/guides/START-HERE.md)
 - Contributor: [`contributing.md`](contributing.md)
 - Operator: [`operator/README.md`](operator/README.md)
 - Independent reproducer: [`guides/VERIFY.md`](guides/VERIFY.md)
@@ -18,7 +18,7 @@ eight adopted technical domains. The machine-generated list of current and norma
 - Understand the whole system: [`architecture/system-overview.md`](architecture/system-overview.md)
 - Define unfamiliar terms: [`GLOSSARY.md`](GLOSSARY.md)
 - Inspect exact mutable state: [`authority/CONTINUITY.md`](authority/CONTINUITY.md)
-- Inspect the public roadmap: [`roadmap/README.md`](roadmap/README.md)
+- Inspect the public roadmap: [`roadmap/README.md`](domains/governance/roadmap/README.md)
 - Validate this information system: [`guides/VERIFY.md`](guides/VERIFY.md)
 
 ## Technical domains

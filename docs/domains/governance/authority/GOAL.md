@@ -113,19 +113,19 @@ they cannot reduce, defer, replace, or reinterpret it.
     "unrecovered_direct_names_minimum": 2
   },
   "conservation_hashes": {
-    "authority_matrix_sha256": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
+    "authority_matrix_sha256": "D7E2AD4401CA11FAAAF289892838450842325516C9A08CA2AEA96FC1D4AF2D2F",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "F58069638F49A122A0BDC9CF03DD99E55CAD0B23C90BB830267F197BCF195791",
+      "docs/authority/CONTINUITY.md": "18FA870F27194696F6BBE8D12EBCD64B3AE22986AE8B5D0CB077191B0B205B3C",
       "docs/authority/GOVERNANCE.md": "186cdc1e2dcbd34f0dea1421e70cc8f70b7e9b906f3d04b2b2befdc5c69e980c",
-      "README.md": "C5389166A6A9086C7EA7EFD3E2580356D45F6CBA3D9D6D1953A4006328D1EB6D",
-      "docs/authority/ember-authority-matrix.md": "68FD3ED0F2D4630F8F7490BC570CFAD74B0372C2682D9D82A828A8784FBD8537",
+      "README.md": "5468CFBF418A70E8A1DB1BA76A380C368EB7594EB41C4EC8E88C6667DBAF496E",
+      "docs/authority/ember-authority-matrix.md": "D7E2AD4401CA11FAAAF289892838450842325516C9A08CA2AEA96FC1D4AF2D2F",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
       "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
       "docs/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/spec/conditions-v1.md": "9A3BA453CF5C73A76B0C79FD97C575929650BC8106E16879AF124B2015C60BB2"
+      "docs/domains/governance/spec/conditions-v1.md": "64AC0995C2DF611709902984CA39C95E9823521AF74701CF55FCF3B119EBC8AE"
     }
   },
   "authority_only_goal": false,
@@ -242,7 +242,7 @@ they cannot reduce, defer, replace, or reinterpret it.
     "docs/contracts/goal-mode-mechanism.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
-    "docs/spec/conditions-v1.md",
+    "docs/domains/governance/spec/conditions-v1.md",
     "docs/authority/ember-authority-matrix.md",
     "docs/authority/GOVERNANCE.md",
     "README.md",
@@ -265,7 +265,7 @@ they cannot reduce, defer, replace, or reinterpret it.
 ## Public roadmap hierarchy
 
 The complete milestone decomposition is published at
-[`docs/roadmap/README.md`](../../../roadmap/README.md). It has exactly four
+[`docs/domains/governance/roadmap/README.md`](../roadmap/README.md). It has exactly four
 surfaces: this constitutional goal, twelve version-controlled milestone
 contracts, one non-authoritative execution graph, and concrete GitHub
 issues/pull requests. The decomposition and tracking surfaces cannot reduce,

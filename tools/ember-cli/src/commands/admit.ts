@@ -84,7 +84,7 @@ export const ADMISSION_CONSUMER_COMMANDS = {
   ],
   restart: [
     "python",
-    "scripts/ember_restart/cli_seat.py",
+    "src/ember/governance/scripts/ember_restart/cli_seat.py",
     "role:restart_run_manifest",
     "--trusted-verifier-registry",
     "role:restart_trusted_verifier_registry",
@@ -92,7 +92,7 @@ export const ADMISSION_CONSUMER_COMMANDS = {
 } as const;
 const ADMISSION_CONSUMER_ENTRYPOINTS = {
   identity: "scripts/ember_01_identity/validate_identity.py",
-  restart: "scripts/ember_restart/cli_seat.py",
+  restart: "src/ember/governance/scripts/ember_restart/cli_seat.py",
 } as const;
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;

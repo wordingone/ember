@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Closed-boundary frontier-receipt generator -- R1-E5 (issue #1464).
 
-Prereg authority: docs/spec/ember02-preregistration-v1.md (pin 3d48d387) section 5.4:
+Prereg authority: docs/domains/governance/spec/ember02-preregistration-v1.md (pin 3d48d387) section 5.4:
 "A rung receipt is an admissible closed-boundary frontier point iff: (1) ledger
 complete, failed work included; (2) fixed-prior manifest hash-verified +
 learned-import attestation; (3) capability leg -- frozen held-out eval bound to
@@ -16,7 +16,7 @@ advantage claim carries the matched-control delta legs ...; (8) INVARIANT stamps
 F3 + F4." R1 instance (section 3): "R1-E5: first closed-boundary frontier
 receipt per section 5.4 with energy_boundary: DEGRADED_PROXY".
 
-Same fail-closed posture as scripts/forecast_recalibration.py: any leg that
+Same fail-closed posture as src/ember/governance/scripts/forecast_recalibration.py: any leg that
 cannot be assembled from evidence refuses with the missing basis NAMED, exit 2,
 and NO receipt written -- a partial frontier point must never mint one.
 Thresholds (T-01, T-06) are bound at runtime through r1_exit_battery
@@ -92,7 +92,7 @@ GOAL_ID = "EMBER-02"
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
 
-PREREG_PATH = "docs/spec/ember02-preregistration-v1.md"
+PREREG_PATH = "docs/domains/governance/spec/ember02-preregistration-v1.md"
 INVARIANT_PATH = "docs/authority/INVARIANT.md"
 ADMISSION_CONFIG_PATH = "configs/ember-restart-3b.json"
 TOKENIZER_RECONSTRUCTION_RECEIPT = "receipts/ember-restart-3b/tokenizer-reconstruction-issue534-v1.json"

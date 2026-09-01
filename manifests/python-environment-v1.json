@@ -698,7 +698,7 @@
       "required_marker": "Python dependency authority: manifests/python-environment-v1.json"
     },
     {
-      "path": "docs/research/triton-windows-research-2026-06-10.md",
+      "path": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
       "required_marker": "Python dependency authority: manifests/python-environment-v1.json"
     }
   ],

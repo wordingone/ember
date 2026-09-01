@@ -30,7 +30,7 @@ local, and a command-line `-c url.<X>.insteadOf=` addition does not retract
 a same-key entry already defined at the local-config level (`insteadOf` is
 multi-valued and merges by longest-prefix-match across every source, so an
 empty `-c` addition sits alongside the real one rather than replacing it --
-verified empirically, see `scripts/ember_restart/source_authority.py`'s
+verified empirically, see `src/ember/governance/scripts/ember_restart/source_authority.py`'s
 `resolve_governed_master` for the one call site where this is closed
 instead, by omitting local repository context from that call entirely,
 since it is the sole call in this codebase that never needed it).

@@ -5,7 +5,7 @@
 """CPU tests for issue #580 (PR A): the authoritative bidirectional
 name<->id optimizer-state mapping helper (timeshare_pretrain.
 build_optimizer_id_maps / split_param_groups_from_state_dict) and its two
-shared-module consumers in scripts/p5_ratio_audit/run_p5_audit.py --
+shared-module consumers in src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py --
 resolve_gate_momentum_buffer and enumerate_missing_optimizer_state_ids.
 
 Defect class (ground-truthed via #577): GLOBAL model-state-dict ordering
@@ -187,7 +187,50 @@ def test_ac1_ff_momentum_shape_match():
             f"(gitignored models/ tree; looked under {SEED_CKPT_RELATIVE!r}, "
             "set EMBER_MODELS_ROOT to override)")
 
-    from p5_ratio_audit.run_p5_audit import resolve_gate_momentum_buffer
+    # issue2015 exact-local-import:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
+    import importlib.util as _ember_ba82af0721d80c9f_importlib
+    import sys as _ember_ba82af0721d80c9f_sys
+    from pathlib import Path as _ember_ba82af0721d80c9f_Path
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    if not _ember_ba82af0721d80c9f_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
+    _ember_ba82af0721d80c9f_existing = []
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_candidate = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_candidate is not None and all(_ember_ba82af0721d80c9f_candidate is not item for item in _ember_ba82af0721d80c9f_existing):
+            _ember_ba82af0721d80c9f_existing.append(_ember_ba82af0721d80c9f_candidate)
+    if len(_ember_ba82af0721d80c9f_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    if _ember_ba82af0721d80c9f_existing:
+        _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_existing[0]
+        _ember_ba82af0721d80c9f_observed = getattr(_ember_ba82af0721d80c9f_module, '__file__', None)
+        if _ember_ba82af0721d80c9f_observed is None or _ember_ba82af0721d80c9f_Path(_ember_ba82af0721d80c9f_observed).resolve() != _ember_ba82af0721d80c9f_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    else:
+        _ember_ba82af0721d80c9f_spec = _ember_ba82af0721d80c9f_importlib.spec_from_file_location('_ember_issue2015_ba82af0721d80c9f', _ember_ba82af0721d80c9f_path)
+        if _ember_ba82af0721d80c9f_spec is None or _ember_ba82af0721d80c9f_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_importlib.module_from_spec(_ember_ba82af0721d80c9f_spec)
+        for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+            _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+            if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+            _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+        try:
+            _ember_ba82af0721d80c9f_spec.loader.exec_module(_ember_ba82af0721d80c9f_module)
+        except BaseException:
+            for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+                if _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias) is _ember_ba82af0721d80c9f_module:
+                    _ember_ba82af0721d80c9f_sys.modules.pop(_ember_ba82af0721d80c9f_alias, None)
+            raise
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+    resolve_gate_momentum_buffer = getattr(_ember_ba82af0721d80c9f_module, 'resolve_gate_momentum_buffer')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
 
     model_state, _id_maps_model = _get_model_state_and_maps()
     checked = 0
@@ -221,7 +264,50 @@ def test_ac2_zero_missing_against_real_seed_checkpoint():
             f"(gitignored models/ tree; looked under {SEED_CKPT_RELATIVE!r}, "
             "set EMBER_MODELS_ROOT to override)")
 
-    from p5_ratio_audit.run_p5_audit import enumerate_missing_optimizer_state_ids
+    # issue2015 exact-local-import:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
+    import importlib.util as _ember_ba82af0721d80c9f_importlib
+    import sys as _ember_ba82af0721d80c9f_sys
+    from pathlib import Path as _ember_ba82af0721d80c9f_Path
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    if not _ember_ba82af0721d80c9f_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
+    _ember_ba82af0721d80c9f_existing = []
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_candidate = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_candidate is not None and all(_ember_ba82af0721d80c9f_candidate is not item for item in _ember_ba82af0721d80c9f_existing):
+            _ember_ba82af0721d80c9f_existing.append(_ember_ba82af0721d80c9f_candidate)
+    if len(_ember_ba82af0721d80c9f_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    if _ember_ba82af0721d80c9f_existing:
+        _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_existing[0]
+        _ember_ba82af0721d80c9f_observed = getattr(_ember_ba82af0721d80c9f_module, '__file__', None)
+        if _ember_ba82af0721d80c9f_observed is None or _ember_ba82af0721d80c9f_Path(_ember_ba82af0721d80c9f_observed).resolve() != _ember_ba82af0721d80c9f_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    else:
+        _ember_ba82af0721d80c9f_spec = _ember_ba82af0721d80c9f_importlib.spec_from_file_location('_ember_issue2015_ba82af0721d80c9f', _ember_ba82af0721d80c9f_path)
+        if _ember_ba82af0721d80c9f_spec is None or _ember_ba82af0721d80c9f_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_importlib.module_from_spec(_ember_ba82af0721d80c9f_spec)
+        for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+            _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+            if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+            _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+        try:
+            _ember_ba82af0721d80c9f_spec.loader.exec_module(_ember_ba82af0721d80c9f_module)
+        except BaseException:
+            for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+                if _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias) is _ember_ba82af0721d80c9f_module:
+                    _ember_ba82af0721d80c9f_sys.modules.pop(_ember_ba82af0721d80c9f_alias, None)
+            raise
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+    enumerate_missing_optimizer_state_ids = getattr(_ember_ba82af0721d80c9f_module, 'enumerate_missing_optimizer_state_ids')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
 
     model_state, _id_maps_model = _get_model_state_and_maps()
     missing = enumerate_missing_optimizer_state_ids(model_state, opt_state)

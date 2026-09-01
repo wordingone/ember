@@ -1,7 +1,7 @@
 # EMBER-02 admission verifiers
 
 These five scripts are the executable trust root for `ember-owned-rung-v1` checkpoint
-claims. `scripts/ember_restart/contract.py` resolves them through
+claims. `src/ember/governance/scripts/ember_restart/contract.py` resolves them through
 `../trusted-verifiers-v1.json`, pins them by sha256, and runs each one with
 `sys.executable -I` and `cwd` set to the rung manifest's directory.
 

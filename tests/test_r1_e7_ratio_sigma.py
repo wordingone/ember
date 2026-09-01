@@ -84,7 +84,7 @@ def test_compose_e7_v2_binds_inputs_prereg_and_no_overwrite(tmp_path: Path) -> N
     _write_telemetry(telemetry_b, run_id="seed-b", gradients=[3.0] * 100)
     thresholds = ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
     prereg = {
-        "document": "docs/spec/ember02-preregistration-v1.md",
+        "document": "docs/domains/governance/spec/ember02-preregistration-v1.md",
         "pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
         "thresholds_sha256": _sha(thresholds),
     }

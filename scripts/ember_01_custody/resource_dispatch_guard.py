@@ -11,8 +11,8 @@ regression guard proves it is enforced" -- this module IS that guard.
 
 Prior art this reuses rather than reimplements:
   - VRAM floor pair (vram_fraction<=0.80, margin_gib_floor>=1.5) ==
-    scripts/v0_config_check.py's GOVERNOR_FLOOR, already the frozen contract
-    g_governor() in scripts/v0_pretrain_launch_gate.py checks against the
+    src/ember/governance/scripts/v0_config_check.py's GOVERNOR_FLOOR, already the frozen contract
+    g_governor() in src/ember/governance/scripts/v0_pretrain_launch_gate.py checks against the
     LAUNCH CONFIG. This module applies the SAME floor as a LIVE pre-dispatch
     counter read instead of a static config-value check -- a config can say
     vram_fraction<=0.80 while the box is already at 0.95 from something else
@@ -23,8 +23,8 @@ Prior art this reuses rather than reimplements:
     HOST_GOVERNOR_FLOOR_BYTES (6.0 GiB). That law governs mid-run; this
     module applies the identical floor PRE-dispatch, before the run starts.
   - GlobalMemoryStatusEx.ullAvailPageFile / ullTotalPageFile as the
-    commit-charge counter == scripts/cbase_grow_rung2_gpu_offload_probe.py's
-    _va_report and scripts/cbase_grow_rung2_event.py's phase_preflight
+    commit-charge counter == src/ember/governance/scripts/cbase_grow_rung2_gpu_offload_probe.py's
+    _va_report and src/ember/governance/scripts/cbase_grow_rung2_event.py's phase_preflight
     (commit_margin_gib_floor check), reused as the same Windows API call.
 
 Design (matches verify_c0_failure_class_ledger.py's own "honesty over green"
@@ -47,8 +47,8 @@ from typing import Optional
 
 # ---- Floors (prior-art pinned; tighten-only, changing a value is a contract
 # change and must be a disclosed decision, not a silent drift) ---------------
-VRAM_FRACTION_CAP = 0.80            # scripts/v0_config_check.py GOVERNOR_FLOOR
-VRAM_MARGIN_GIB_FLOOR = 1.5         # scripts/v0_config_check.py GOVERNOR_FLOOR
+VRAM_FRACTION_CAP = 0.80            # src/ember/governance/scripts/v0_config_check.py GOVERNOR_FLOOR
+VRAM_MARGIN_GIB_FLOOR = 1.5         # src/ember/governance/scripts/v0_config_check.py GOVERNOR_FLOOR
 COMMIT_CHARGE_FREE_FLOOR_GIB = 6.0  # visible-window-hygiene.md in-run commit governor;
                                      # build_fixed_prior_manifest.py HOST_GOVERNOR_FLOOR_BYTES
 

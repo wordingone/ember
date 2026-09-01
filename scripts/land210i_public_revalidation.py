@@ -21,7 +21,50 @@ from typing import Any, Callable
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from scripts.lib.invariant import stamp
+# issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
+import importlib.util as _ember_2560a87c017c05b0_importlib
+import sys as _ember_2560a87c017c05b0_sys
+from pathlib import Path as _ember_2560a87c017c05b0_Path
+_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+if not _ember_2560a87c017c05b0_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
+_ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')
+_ember_2560a87c017c05b0_existing = []
+for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+    _ember_2560a87c017c05b0_candidate = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+    if _ember_2560a87c017c05b0_candidate is not None and all(_ember_2560a87c017c05b0_candidate is not item for item in _ember_2560a87c017c05b0_existing):
+        _ember_2560a87c017c05b0_existing.append(_ember_2560a87c017c05b0_candidate)
+if len(_ember_2560a87c017c05b0_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+if _ember_2560a87c017c05b0_existing:
+    _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_existing[0]
+    _ember_2560a87c017c05b0_observed = getattr(_ember_2560a87c017c05b0_module, '__file__', None)
+    if _ember_2560a87c017c05b0_observed is None or _ember_2560a87c017c05b0_Path(_ember_2560a87c017c05b0_observed).resolve() != _ember_2560a87c017c05b0_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/lib/invariant.py')
+else:
+    _ember_2560a87c017c05b0_spec = _ember_2560a87c017c05b0_importlib.spec_from_file_location('_ember_issue2015_2560a87c017c05b0', _ember_2560a87c017c05b0_path)
+    if _ember_2560a87c017c05b0_spec is None or _ember_2560a87c017c05b0_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_importlib.module_from_spec(_ember_2560a87c017c05b0_spec)
+    for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+        _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+        if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+        _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+    try:
+        _ember_2560a87c017c05b0_spec.loader.exec_module(_ember_2560a87c017c05b0_module)
+    except BaseException:
+        for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+            if _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias) is _ember_2560a87c017c05b0_module:
+                _ember_2560a87c017c05b0_sys.modules.pop(_ember_2560a87c017c05b0_alias, None)
+        raise
+for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+    _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+    if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+stamp = getattr(_ember_2560a87c017c05b0_module, 'stamp')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/lib/invariant.py
 
 
 GOAL_ID = "EMBER-02"
@@ -43,9 +86,9 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 EXPECTED_SCRIPT_PATHS = {
     "scripts/ember_avir_cli_launch_entry.py",
-    "scripts/ember_avir_harness.py",
-    "scripts/ember_avir_observe.py",
-    "scripts/ember_avir_tasks.py",
+    "src/ember/governance/scripts/ember_avir_harness.py",
+    "src/ember/governance/scripts/ember_avir_observe.py",
+    "src/ember/governance/scripts/ember_avir_tasks.py",
 }
 EXPECTED_COMPANION_PATHS = {
     "data/ember_avir_tasks/train.jsonl",
@@ -216,11 +259,11 @@ def validate_current_harness(path: Path) -> dict[str, Any]:
             f"expected {EXPECTED_CURRENT_HARNESS_SHA256}, got {digest}"
         )
     source = path.read_text(encoding="utf-8", errors="strict")
-    compile(source, "scripts/ember_avir_harness.py", "exec")
+    compile(source, "src/ember/governance/scripts/ember_avir_harness.py", "exec")
     if "with patch.object(Path, \"home\"" not in source:
         raise ValueError("current harness does not exercise the real home-resolution seam")
     return {
-        "path": "scripts/ember_avir_harness.py",
+        "path": "src/ember/governance/scripts/ember_avir_harness.py",
         "sha256": digest,
         "session_selection_regression_repaired": True,
     }
@@ -233,7 +276,7 @@ def validate_current_files(root: Path, historical: dict[str, Any]) -> dict[str, 
     repaired = 0
     for path in sorted(EXPECTED_ALL_PATHS):
         current = sha256_file(root / path)
-        if path == "scripts/ember_avir_harness.py":
+        if path == "src/ember/governance/scripts/ember_avir_harness.py":
             validate_current_harness(root / path)
             if current == expected[path]:
                 raise ValueError("current harness repair is not distinguishable from landing")
@@ -293,11 +336,11 @@ def validate_cpu_replay(root: Path) -> dict[str, Any]:
             ["usage: ember_avir_cli_launch_entry.py"],
         ),
         (
-            ["scripts/ember_avir_observe.py", "--help"],
+            ["src/ember/governance/scripts/ember_avir_observe.py", "--help"],
             ["usage: ember_avir_observe.py"],
         ),
         (
-            ["scripts/ember_avir_harness.py", "--selftest"],
+            ["src/ember/governance/scripts/ember_avir_harness.py", "--selftest"],
             [
                 "T15/find_session_jsonl/session_id pinning",
                 "T15/find_session_jsonl/mtime fallback",
@@ -306,7 +349,7 @@ def validate_cpu_replay(root: Path) -> dict[str, Any]:
             ],
         ),
         (
-            ["scripts/ember_avir_tasks.py", "--test"],
+            ["src/ember/governance/scripts/ember_avir_tasks.py", "--test"],
             [
                 "load_split('train'): 24 tasks",
                 "load_split('heldout'): 20 tasks",

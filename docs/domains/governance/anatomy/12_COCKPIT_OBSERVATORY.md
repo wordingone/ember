@@ -2,7 +2,7 @@
 
 ## What C-OBS requires
 
-Condition `C-OBS` (`docs/spec/conditions-v1.md` §4.2, first-class & early)
+Condition `C-OBS` (`docs/domains/governance/spec/conditions-v1.md` §4.2, first-class & early)
 requires: (a) real adapters binding GOAL/ledger/receipts to an
 `EmberWorldState`, (b) click-to-evidence (a rendered claim resolves to its
 real source path + sha256), (c) a confirm-only encounter membrane (never
@@ -18,7 +18,7 @@ called fresh at boot by `tools/ember-cli/src/commands/world-state.ts`
 membrane referenced by requirement (c). `tools/ember-cli/src/core/
 monitor-render.ts` implements the render side of MONITOR.
 
-`scripts/ember_cobs_capture.py` is the proof-pack CAPTURE harness (gh issue
+`src/ember/governance/scripts/ember_cobs_capture.py` is the proof-pack CAPTURE harness (gh issue
 #10): it runs the real observatory —
 `tools/ember-cli/src/core/ember-world-state-repl.ts` — in a visible ConPTY
 (never headless, per operator rule), scripts a

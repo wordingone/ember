@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_c14_real_adapter.py — C14 real C-arm adapter for EmberModelV0Multimodal.
 
 Wires the train_multimodal_v0-hosted EmberModelV0Multimodal (the C-BASE owned core,
@@ -59,7 +62,50 @@ SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
-from build_multimodal_v0_model import build_multimodal_v0_model
+# issue2015 exact-local-import:src/ember/governance/scripts/build_multimodal_v0_model.py
+import importlib.util as _ember_d884e1c4828ea28b_importlib
+import sys as _ember_d884e1c4828ea28b_sys
+from pathlib import Path as _ember_d884e1c4828ea28b_Path
+_ember_d884e1c4828ea28b_path = _ember_d884e1c4828ea28b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'build_multimodal_v0_model.py')
+if not _ember_d884e1c4828ea28b_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/build_multimodal_v0_model.py')
+_ember_d884e1c4828ea28b_aliases = ('_ember_issue2015_d884e1c4828ea28b', 'build_multimodal_v0_model', 'scripts.build_multimodal_v0_model')
+_ember_d884e1c4828ea28b_existing = []
+for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+    _ember_d884e1c4828ea28b_candidate = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+    if _ember_d884e1c4828ea28b_candidate is not None and all(_ember_d884e1c4828ea28b_candidate is not item for item in _ember_d884e1c4828ea28b_existing):
+        _ember_d884e1c4828ea28b_existing.append(_ember_d884e1c4828ea28b_candidate)
+if len(_ember_d884e1c4828ea28b_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+if _ember_d884e1c4828ea28b_existing:
+    _ember_d884e1c4828ea28b_module = _ember_d884e1c4828ea28b_existing[0]
+    _ember_d884e1c4828ea28b_observed = getattr(_ember_d884e1c4828ea28b_module, '__file__', None)
+    if _ember_d884e1c4828ea28b_observed is None or _ember_d884e1c4828ea28b_Path(_ember_d884e1c4828ea28b_observed).resolve() != _ember_d884e1c4828ea28b_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/build_multimodal_v0_model.py')
+else:
+    _ember_d884e1c4828ea28b_spec = _ember_d884e1c4828ea28b_importlib.spec_from_file_location('_ember_issue2015_d884e1c4828ea28b', _ember_d884e1c4828ea28b_path)
+    if _ember_d884e1c4828ea28b_spec is None or _ember_d884e1c4828ea28b_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    _ember_d884e1c4828ea28b_module = _ember_d884e1c4828ea28b_importlib.module_from_spec(_ember_d884e1c4828ea28b_spec)
+    for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+        _ember_d884e1c4828ea28b_prior = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+        if _ember_d884e1c4828ea28b_prior is not None and _ember_d884e1c4828ea28b_prior is not _ember_d884e1c4828ea28b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+        _ember_d884e1c4828ea28b_sys.modules[_ember_d884e1c4828ea28b_alias] = _ember_d884e1c4828ea28b_module
+    try:
+        _ember_d884e1c4828ea28b_spec.loader.exec_module(_ember_d884e1c4828ea28b_module)
+    except BaseException:
+        for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+            if _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias) is _ember_d884e1c4828ea28b_module:
+                _ember_d884e1c4828ea28b_sys.modules.pop(_ember_d884e1c4828ea28b_alias, None)
+        raise
+for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+    _ember_d884e1c4828ea28b_prior = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+    if _ember_d884e1c4828ea28b_prior is not None and _ember_d884e1c4828ea28b_prior is not _ember_d884e1c4828ea28b_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    _ember_d884e1c4828ea28b_sys.modules[_ember_d884e1c4828ea28b_alias] = _ember_d884e1c4828ea28b_module
+build_multimodal_v0_model = getattr(_ember_d884e1c4828ea28b_module, 'build_multimodal_v0_model')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/build_multimodal_v0_model.py
 from train_multimodal_v0 import load_multimodal_config
 
 # Import the validated iGRPO primitives from the banked resident loop.

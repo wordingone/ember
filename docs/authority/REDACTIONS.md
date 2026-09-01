@@ -62,7 +62,7 @@ Three files hardcode an absolute path as a real runtime dependency, not as inert
 capture data — replacing the string with a placeholder token would have broken them.
 These got a minimal functional fix instead of a text redaction:
 
-- `scripts/research/muon_spectrum_probe.py` — `leg1_receipt_path` was a hardcoded
+- `src/ember/governance/scripts/research/muon_spectrum_probe.py` — `leg1_receipt_path` was a hardcoded
   local-drive absolute path used to open a real comparison receipt at runtime. Now
   computed repo-relatively via `Path(__file__).resolve().parents[2]`.
 - `tools/ember-cli/src/core/frontend-shell.ts` and
@@ -83,7 +83,7 @@ genuinely multi-segment absolute path to shorten). These are excluded by name fr
 `repo-guard.sh`'s path check (see `PATHPAT_EXCLUDE` in `tools/repo-guard.sh`), the same
 mechanism the guard already used to exclude itself:
 
-- `scripts/test_w1b_continuation.py`
+- `src/ember/governance/scripts/test_w1b_continuation.py`
 - `tools/ember-cli/src/core/monitor-render.test.ts`
 - `tools/ember-cli/src/components/homescreen-mock1-parity.test.ts`
 - `tools/ember-cli/src/components/logo-homescreen.test.ts`

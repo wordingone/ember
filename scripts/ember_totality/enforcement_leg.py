@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """enforcement_leg.py — board-wired pubgate enforcement leg (issue #38, Class-2 cure,
 sub-issue of #35).
 
@@ -69,14 +72,14 @@ class CheckerSpec:
 DEFAULT_CHECKERS: tuple = (
     CheckerSpec(
         name="check_publication_gate",
-        rel_path="scripts/check_publication_gate.py",
+        rel_path="src/ember/governance/scripts/check_publication_gate.py",
         args=(),
         verdict_regex=r"^OVERALL:\s*(GREEN|RED)\b",
         pass_values=("GREEN",),
     ),
     CheckerSpec(
         name="check_energy_law_theory",
-        rel_path="scripts/check_energy_law_theory.py",
+        rel_path="src/ember/governance/scripts/check_energy_law_theory.py",
         args=("--selftest",),
         verdict_regex=r"^selftest:\s*(ALL PASS|\d+ FAILED)\s*$",
         pass_values=("ALL PASS",),

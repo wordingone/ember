@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_ember_cbase_launch.py — TDD tests for ember_cbase_launch.py.
 
 CPU-only smoke + unit tests. Forces CUDA off (CUDA_VISIBLE_DEVICES='') before
@@ -437,7 +440,50 @@ class TestCPUSmokeStopPath(unittest.TestCase):
         """
         import ember_cbase_launch
         import ember_cbase_s6_acceptance
-        from ember_avir_tasks import load_split
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_avir_tasks.py
+        import importlib.util as _ember_6c243c4c73ac7e2b_importlib
+        import sys as _ember_6c243c4c73ac7e2b_sys
+        from pathlib import Path as _ember_6c243c4c73ac7e2b_Path
+        _ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
+        if not _ember_6c243c4c73ac7e2b_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_avir_tasks.py')
+        _ember_6c243c4c73ac7e2b_aliases = ('_ember_issue2015_6c243c4c73ac7e2b', 'ember_avir_tasks', 'scripts.ember_avir_tasks')
+        _ember_6c243c4c73ac7e2b_existing = []
+        for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+            _ember_6c243c4c73ac7e2b_candidate = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+            if _ember_6c243c4c73ac7e2b_candidate is not None and all(_ember_6c243c4c73ac7e2b_candidate is not item for item in _ember_6c243c4c73ac7e2b_existing):
+                _ember_6c243c4c73ac7e2b_existing.append(_ember_6c243c4c73ac7e2b_candidate)
+        if len(_ember_6c243c4c73ac7e2b_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+        if _ember_6c243c4c73ac7e2b_existing:
+            _ember_6c243c4c73ac7e2b_module = _ember_6c243c4c73ac7e2b_existing[0]
+            _ember_6c243c4c73ac7e2b_observed = getattr(_ember_6c243c4c73ac7e2b_module, '__file__', None)
+            if _ember_6c243c4c73ac7e2b_observed is None or _ember_6c243c4c73ac7e2b_Path(_ember_6c243c4c73ac7e2b_observed).resolve() != _ember_6c243c4c73ac7e2b_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_avir_tasks.py')
+        else:
+            _ember_6c243c4c73ac7e2b_spec = _ember_6c243c4c73ac7e2b_importlib.spec_from_file_location('_ember_issue2015_6c243c4c73ac7e2b', _ember_6c243c4c73ac7e2b_path)
+            if _ember_6c243c4c73ac7e2b_spec is None or _ember_6c243c4c73ac7e2b_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_avir_tasks.py')
+            _ember_6c243c4c73ac7e2b_module = _ember_6c243c4c73ac7e2b_importlib.module_from_spec(_ember_6c243c4c73ac7e2b_spec)
+            for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+                _ember_6c243c4c73ac7e2b_prior = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+                if _ember_6c243c4c73ac7e2b_prior is not None and _ember_6c243c4c73ac7e2b_prior is not _ember_6c243c4c73ac7e2b_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+                _ember_6c243c4c73ac7e2b_sys.modules[_ember_6c243c4c73ac7e2b_alias] = _ember_6c243c4c73ac7e2b_module
+            try:
+                _ember_6c243c4c73ac7e2b_spec.loader.exec_module(_ember_6c243c4c73ac7e2b_module)
+            except BaseException:
+                for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+                    if _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias) is _ember_6c243c4c73ac7e2b_module:
+                        _ember_6c243c4c73ac7e2b_sys.modules.pop(_ember_6c243c4c73ac7e2b_alias, None)
+                raise
+        for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+            _ember_6c243c4c73ac7e2b_prior = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+            if _ember_6c243c4c73ac7e2b_prior is not None and _ember_6c243c4c73ac7e2b_prior is not _ember_6c243c4c73ac7e2b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+            _ember_6c243c4c73ac7e2b_sys.modules[_ember_6c243c4c73ac7e2b_alias] = _ember_6c243c4c73ac7e2b_module
+        load_split = getattr(_ember_6c243c4c73ac7e2b_module, 'load_split')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_avir_tasks.py
 
         # Load train tasks to find t001.
         train_tasks = {t["id"]: t for t in load_split("train")}
@@ -868,8 +914,95 @@ class TestComputeTaskAnswerNonCircular(unittest.TestCase):
     def test_t001_content_matches_v2_pipeline(self):
         """_compute_task_answer(t001) file content must equal v2 _compute_answer."""
         import ember_cbase_launch
-        from ember_avir_tasks import load_split, setup_sandbox
-        from ember_cbase_avir_data_v2 import _compute_answer
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_avir_tasks.py
+        import importlib.util as _ember_6c243c4c73ac7e2b_importlib
+        import sys as _ember_6c243c4c73ac7e2b_sys
+        from pathlib import Path as _ember_6c243c4c73ac7e2b_Path
+        _ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
+        if not _ember_6c243c4c73ac7e2b_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_avir_tasks.py')
+        _ember_6c243c4c73ac7e2b_aliases = ('_ember_issue2015_6c243c4c73ac7e2b', 'ember_avir_tasks', 'scripts.ember_avir_tasks')
+        _ember_6c243c4c73ac7e2b_existing = []
+        for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+            _ember_6c243c4c73ac7e2b_candidate = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+            if _ember_6c243c4c73ac7e2b_candidate is not None and all(_ember_6c243c4c73ac7e2b_candidate is not item for item in _ember_6c243c4c73ac7e2b_existing):
+                _ember_6c243c4c73ac7e2b_existing.append(_ember_6c243c4c73ac7e2b_candidate)
+        if len(_ember_6c243c4c73ac7e2b_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+        if _ember_6c243c4c73ac7e2b_existing:
+            _ember_6c243c4c73ac7e2b_module = _ember_6c243c4c73ac7e2b_existing[0]
+            _ember_6c243c4c73ac7e2b_observed = getattr(_ember_6c243c4c73ac7e2b_module, '__file__', None)
+            if _ember_6c243c4c73ac7e2b_observed is None or _ember_6c243c4c73ac7e2b_Path(_ember_6c243c4c73ac7e2b_observed).resolve() != _ember_6c243c4c73ac7e2b_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_avir_tasks.py')
+        else:
+            _ember_6c243c4c73ac7e2b_spec = _ember_6c243c4c73ac7e2b_importlib.spec_from_file_location('_ember_issue2015_6c243c4c73ac7e2b', _ember_6c243c4c73ac7e2b_path)
+            if _ember_6c243c4c73ac7e2b_spec is None or _ember_6c243c4c73ac7e2b_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_avir_tasks.py')
+            _ember_6c243c4c73ac7e2b_module = _ember_6c243c4c73ac7e2b_importlib.module_from_spec(_ember_6c243c4c73ac7e2b_spec)
+            for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+                _ember_6c243c4c73ac7e2b_prior = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+                if _ember_6c243c4c73ac7e2b_prior is not None and _ember_6c243c4c73ac7e2b_prior is not _ember_6c243c4c73ac7e2b_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+                _ember_6c243c4c73ac7e2b_sys.modules[_ember_6c243c4c73ac7e2b_alias] = _ember_6c243c4c73ac7e2b_module
+            try:
+                _ember_6c243c4c73ac7e2b_spec.loader.exec_module(_ember_6c243c4c73ac7e2b_module)
+            except BaseException:
+                for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+                    if _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias) is _ember_6c243c4c73ac7e2b_module:
+                        _ember_6c243c4c73ac7e2b_sys.modules.pop(_ember_6c243c4c73ac7e2b_alias, None)
+                raise
+        for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+            _ember_6c243c4c73ac7e2b_prior = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+            if _ember_6c243c4c73ac7e2b_prior is not None and _ember_6c243c4c73ac7e2b_prior is not _ember_6c243c4c73ac7e2b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+            _ember_6c243c4c73ac7e2b_sys.modules[_ember_6c243c4c73ac7e2b_alias] = _ember_6c243c4c73ac7e2b_module
+        load_split = getattr(_ember_6c243c4c73ac7e2b_module, 'load_split')
+        setup_sandbox = getattr(_ember_6c243c4c73ac7e2b_module, 'setup_sandbox')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_avir_tasks.py
+        # issue2015 exact-local-import:src/ember/governance/scripts/ember_cbase_avir_data_v2.py
+        import importlib.util as _ember_81579232cbfd41ec_importlib
+        import sys as _ember_81579232cbfd41ec_sys
+        from pathlib import Path as _ember_81579232cbfd41ec_Path
+        _ember_81579232cbfd41ec_path = _ember_81579232cbfd41ec_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_cbase_avir_data_v2.py')
+        if not _ember_81579232cbfd41ec_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+        _ember_81579232cbfd41ec_aliases = ('_ember_issue2015_81579232cbfd41ec', 'ember_cbase_avir_data_v2', 'scripts.ember_cbase_avir_data_v2')
+        _ember_81579232cbfd41ec_existing = []
+        for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+            _ember_81579232cbfd41ec_candidate = _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias)
+            if _ember_81579232cbfd41ec_candidate is not None and all(_ember_81579232cbfd41ec_candidate is not item for item in _ember_81579232cbfd41ec_existing):
+                _ember_81579232cbfd41ec_existing.append(_ember_81579232cbfd41ec_candidate)
+        if len(_ember_81579232cbfd41ec_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+        if _ember_81579232cbfd41ec_existing:
+            _ember_81579232cbfd41ec_module = _ember_81579232cbfd41ec_existing[0]
+            _ember_81579232cbfd41ec_observed = getattr(_ember_81579232cbfd41ec_module, '__file__', None)
+            if _ember_81579232cbfd41ec_observed is None or _ember_81579232cbfd41ec_Path(_ember_81579232cbfd41ec_observed).resolve() != _ember_81579232cbfd41ec_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+        else:
+            _ember_81579232cbfd41ec_spec = _ember_81579232cbfd41ec_importlib.spec_from_file_location('_ember_issue2015_81579232cbfd41ec', _ember_81579232cbfd41ec_path)
+            if _ember_81579232cbfd41ec_spec is None or _ember_81579232cbfd41ec_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+            _ember_81579232cbfd41ec_module = _ember_81579232cbfd41ec_importlib.module_from_spec(_ember_81579232cbfd41ec_spec)
+            for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+                _ember_81579232cbfd41ec_prior = _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias)
+                if _ember_81579232cbfd41ec_prior is not None and _ember_81579232cbfd41ec_prior is not _ember_81579232cbfd41ec_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+                _ember_81579232cbfd41ec_sys.modules[_ember_81579232cbfd41ec_alias] = _ember_81579232cbfd41ec_module
+            try:
+                _ember_81579232cbfd41ec_spec.loader.exec_module(_ember_81579232cbfd41ec_module)
+            except BaseException:
+                for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+                    if _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias) is _ember_81579232cbfd41ec_module:
+                        _ember_81579232cbfd41ec_sys.modules.pop(_ember_81579232cbfd41ec_alias, None)
+                raise
+        for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+            _ember_81579232cbfd41ec_prior = _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias)
+            if _ember_81579232cbfd41ec_prior is not None and _ember_81579232cbfd41ec_prior is not _ember_81579232cbfd41ec_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+            _ember_81579232cbfd41ec_sys.modules[_ember_81579232cbfd41ec_alias] = _ember_81579232cbfd41ec_module
+        _compute_answer = getattr(_ember_81579232cbfd41ec_module, '_compute_answer')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_cbase_avir_data_v2.py
 
         train_tasks = {t["id"]: t for t in load_split("train")}
         task = train_tasks.get("t001")
@@ -1517,7 +1650,50 @@ class TestV0ConfigCheckV4(unittest.TestCase):
 
     def test_config_check_structural_green(self):
         """v0_config_check.check(cfg) returns no violations."""
-        import v0_config_check
+        # issue2015 exact-local-import:src/ember/governance/scripts/v0_config_check.py
+        import importlib.util as _ember_c8d1d1af4ec66d2d_importlib
+        import sys as _ember_c8d1d1af4ec66d2d_sys
+        from pathlib import Path as _ember_c8d1d1af4ec66d2d_Path
+        _ember_c8d1d1af4ec66d2d_path = _ember_c8d1d1af4ec66d2d_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_config_check.py')
+        if not _ember_c8d1d1af4ec66d2d_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_config_check.py')
+        _ember_c8d1d1af4ec66d2d_aliases = ('_ember_issue2015_c8d1d1af4ec66d2d', 'scripts.v0_config_check', 'v0_config_check')
+        _ember_c8d1d1af4ec66d2d_existing = []
+        for _ember_c8d1d1af4ec66d2d_alias in _ember_c8d1d1af4ec66d2d_aliases:
+            _ember_c8d1d1af4ec66d2d_candidate = _ember_c8d1d1af4ec66d2d_sys.modules.get(_ember_c8d1d1af4ec66d2d_alias)
+            if _ember_c8d1d1af4ec66d2d_candidate is not None and all(_ember_c8d1d1af4ec66d2d_candidate is not item for item in _ember_c8d1d1af4ec66d2d_existing):
+                _ember_c8d1d1af4ec66d2d_existing.append(_ember_c8d1d1af4ec66d2d_candidate)
+        if len(_ember_c8d1d1af4ec66d2d_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v0_config_check.py')
+        if _ember_c8d1d1af4ec66d2d_existing:
+            _ember_c8d1d1af4ec66d2d_module = _ember_c8d1d1af4ec66d2d_existing[0]
+            _ember_c8d1d1af4ec66d2d_observed = getattr(_ember_c8d1d1af4ec66d2d_module, '__file__', None)
+            if _ember_c8d1d1af4ec66d2d_observed is None or _ember_c8d1d1af4ec66d2d_Path(_ember_c8d1d1af4ec66d2d_observed).resolve() != _ember_c8d1d1af4ec66d2d_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v0_config_check.py')
+        else:
+            _ember_c8d1d1af4ec66d2d_spec = _ember_c8d1d1af4ec66d2d_importlib.spec_from_file_location('_ember_issue2015_c8d1d1af4ec66d2d', _ember_c8d1d1af4ec66d2d_path)
+            if _ember_c8d1d1af4ec66d2d_spec is None or _ember_c8d1d1af4ec66d2d_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v0_config_check.py')
+            _ember_c8d1d1af4ec66d2d_module = _ember_c8d1d1af4ec66d2d_importlib.module_from_spec(_ember_c8d1d1af4ec66d2d_spec)
+            for _ember_c8d1d1af4ec66d2d_alias in _ember_c8d1d1af4ec66d2d_aliases:
+                _ember_c8d1d1af4ec66d2d_prior = _ember_c8d1d1af4ec66d2d_sys.modules.get(_ember_c8d1d1af4ec66d2d_alias)
+                if _ember_c8d1d1af4ec66d2d_prior is not None and _ember_c8d1d1af4ec66d2d_prior is not _ember_c8d1d1af4ec66d2d_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_config_check.py')
+                _ember_c8d1d1af4ec66d2d_sys.modules[_ember_c8d1d1af4ec66d2d_alias] = _ember_c8d1d1af4ec66d2d_module
+            try:
+                _ember_c8d1d1af4ec66d2d_spec.loader.exec_module(_ember_c8d1d1af4ec66d2d_module)
+            except BaseException:
+                for _ember_c8d1d1af4ec66d2d_alias in _ember_c8d1d1af4ec66d2d_aliases:
+                    if _ember_c8d1d1af4ec66d2d_sys.modules.get(_ember_c8d1d1af4ec66d2d_alias) is _ember_c8d1d1af4ec66d2d_module:
+                        _ember_c8d1d1af4ec66d2d_sys.modules.pop(_ember_c8d1d1af4ec66d2d_alias, None)
+                raise
+        for _ember_c8d1d1af4ec66d2d_alias in _ember_c8d1d1af4ec66d2d_aliases:
+            _ember_c8d1d1af4ec66d2d_prior = _ember_c8d1d1af4ec66d2d_sys.modules.get(_ember_c8d1d1af4ec66d2d_alias)
+            if _ember_c8d1d1af4ec66d2d_prior is not None and _ember_c8d1d1af4ec66d2d_prior is not _ember_c8d1d1af4ec66d2d_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_config_check.py')
+            _ember_c8d1d1af4ec66d2d_sys.modules[_ember_c8d1d1af4ec66d2d_alias] = _ember_c8d1d1af4ec66d2d_module
+        v0_config_check = _ember_c8d1d1af4ec66d2d_module
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/v0_config_check.py
         cfg = self._load_config()
         violations = v0_config_check.check(cfg)
         self.assertEqual(

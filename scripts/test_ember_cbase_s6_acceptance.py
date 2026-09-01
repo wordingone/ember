@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_ember_cbase_s6_acceptance.py — TDD suite for the §6 acceptance harness.
 
 Runs against the REAL tiny_cpu_instance (build_multimodal_v0_model(cfg, live=False)).
@@ -38,15 +41,100 @@ import torch
 _HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
-from ember_avir_tasks import load_split, setup_sandbox
-from ember_cbase_avir_data_v2 import (
-    _make_write_entry,
-    _make_read_entry,
-    _make_end_turn_entry,
-    _compute_answer,
-    _build_session_entries,
-    _render_pretrain_text,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_avir_tasks.py
+import importlib.util as _ember_6c243c4c73ac7e2b_importlib
+import sys as _ember_6c243c4c73ac7e2b_sys
+from pathlib import Path as _ember_6c243c4c73ac7e2b_Path
+_ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
+if not _ember_6c243c4c73ac7e2b_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_avir_tasks.py')
+_ember_6c243c4c73ac7e2b_aliases = ('_ember_issue2015_6c243c4c73ac7e2b', 'ember_avir_tasks', 'scripts.ember_avir_tasks')
+_ember_6c243c4c73ac7e2b_existing = []
+for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+    _ember_6c243c4c73ac7e2b_candidate = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+    if _ember_6c243c4c73ac7e2b_candidate is not None and all(_ember_6c243c4c73ac7e2b_candidate is not item for item in _ember_6c243c4c73ac7e2b_existing):
+        _ember_6c243c4c73ac7e2b_existing.append(_ember_6c243c4c73ac7e2b_candidate)
+if len(_ember_6c243c4c73ac7e2b_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+if _ember_6c243c4c73ac7e2b_existing:
+    _ember_6c243c4c73ac7e2b_module = _ember_6c243c4c73ac7e2b_existing[0]
+    _ember_6c243c4c73ac7e2b_observed = getattr(_ember_6c243c4c73ac7e2b_module, '__file__', None)
+    if _ember_6c243c4c73ac7e2b_observed is None or _ember_6c243c4c73ac7e2b_Path(_ember_6c243c4c73ac7e2b_observed).resolve() != _ember_6c243c4c73ac7e2b_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_avir_tasks.py')
+else:
+    _ember_6c243c4c73ac7e2b_spec = _ember_6c243c4c73ac7e2b_importlib.spec_from_file_location('_ember_issue2015_6c243c4c73ac7e2b', _ember_6c243c4c73ac7e2b_path)
+    if _ember_6c243c4c73ac7e2b_spec is None or _ember_6c243c4c73ac7e2b_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_avir_tasks.py')
+    _ember_6c243c4c73ac7e2b_module = _ember_6c243c4c73ac7e2b_importlib.module_from_spec(_ember_6c243c4c73ac7e2b_spec)
+    for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+        _ember_6c243c4c73ac7e2b_prior = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+        if _ember_6c243c4c73ac7e2b_prior is not None and _ember_6c243c4c73ac7e2b_prior is not _ember_6c243c4c73ac7e2b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+        _ember_6c243c4c73ac7e2b_sys.modules[_ember_6c243c4c73ac7e2b_alias] = _ember_6c243c4c73ac7e2b_module
+    try:
+        _ember_6c243c4c73ac7e2b_spec.loader.exec_module(_ember_6c243c4c73ac7e2b_module)
+    except BaseException:
+        for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+            if _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias) is _ember_6c243c4c73ac7e2b_module:
+                _ember_6c243c4c73ac7e2b_sys.modules.pop(_ember_6c243c4c73ac7e2b_alias, None)
+        raise
+for _ember_6c243c4c73ac7e2b_alias in _ember_6c243c4c73ac7e2b_aliases:
+    _ember_6c243c4c73ac7e2b_prior = _ember_6c243c4c73ac7e2b_sys.modules.get(_ember_6c243c4c73ac7e2b_alias)
+    if _ember_6c243c4c73ac7e2b_prior is not None and _ember_6c243c4c73ac7e2b_prior is not _ember_6c243c4c73ac7e2b_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_avir_tasks.py')
+    _ember_6c243c4c73ac7e2b_sys.modules[_ember_6c243c4c73ac7e2b_alias] = _ember_6c243c4c73ac7e2b_module
+load_split = getattr(_ember_6c243c4c73ac7e2b_module, 'load_split')
+setup_sandbox = getattr(_ember_6c243c4c73ac7e2b_module, 'setup_sandbox')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_avir_tasks.py
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_cbase_avir_data_v2.py
+import importlib.util as _ember_81579232cbfd41ec_importlib
+import sys as _ember_81579232cbfd41ec_sys
+from pathlib import Path as _ember_81579232cbfd41ec_Path
+_ember_81579232cbfd41ec_path = _ember_81579232cbfd41ec_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_cbase_avir_data_v2.py')
+if not _ember_81579232cbfd41ec_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+_ember_81579232cbfd41ec_aliases = ('_ember_issue2015_81579232cbfd41ec', 'ember_cbase_avir_data_v2', 'scripts.ember_cbase_avir_data_v2')
+_ember_81579232cbfd41ec_existing = []
+for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+    _ember_81579232cbfd41ec_candidate = _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias)
+    if _ember_81579232cbfd41ec_candidate is not None and all(_ember_81579232cbfd41ec_candidate is not item for item in _ember_81579232cbfd41ec_existing):
+        _ember_81579232cbfd41ec_existing.append(_ember_81579232cbfd41ec_candidate)
+if len(_ember_81579232cbfd41ec_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+if _ember_81579232cbfd41ec_existing:
+    _ember_81579232cbfd41ec_module = _ember_81579232cbfd41ec_existing[0]
+    _ember_81579232cbfd41ec_observed = getattr(_ember_81579232cbfd41ec_module, '__file__', None)
+    if _ember_81579232cbfd41ec_observed is None or _ember_81579232cbfd41ec_Path(_ember_81579232cbfd41ec_observed).resolve() != _ember_81579232cbfd41ec_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+else:
+    _ember_81579232cbfd41ec_spec = _ember_81579232cbfd41ec_importlib.spec_from_file_location('_ember_issue2015_81579232cbfd41ec', _ember_81579232cbfd41ec_path)
+    if _ember_81579232cbfd41ec_spec is None or _ember_81579232cbfd41ec_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+    _ember_81579232cbfd41ec_module = _ember_81579232cbfd41ec_importlib.module_from_spec(_ember_81579232cbfd41ec_spec)
+    for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+        _ember_81579232cbfd41ec_prior = _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias)
+        if _ember_81579232cbfd41ec_prior is not None and _ember_81579232cbfd41ec_prior is not _ember_81579232cbfd41ec_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+        _ember_81579232cbfd41ec_sys.modules[_ember_81579232cbfd41ec_alias] = _ember_81579232cbfd41ec_module
+    try:
+        _ember_81579232cbfd41ec_spec.loader.exec_module(_ember_81579232cbfd41ec_module)
+    except BaseException:
+        for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+            if _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias) is _ember_81579232cbfd41ec_module:
+                _ember_81579232cbfd41ec_sys.modules.pop(_ember_81579232cbfd41ec_alias, None)
+        raise
+for _ember_81579232cbfd41ec_alias in _ember_81579232cbfd41ec_aliases:
+    _ember_81579232cbfd41ec_prior = _ember_81579232cbfd41ec_sys.modules.get(_ember_81579232cbfd41ec_alias)
+    if _ember_81579232cbfd41ec_prior is not None and _ember_81579232cbfd41ec_prior is not _ember_81579232cbfd41ec_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
+    _ember_81579232cbfd41ec_sys.modules[_ember_81579232cbfd41ec_alias] = _ember_81579232cbfd41ec_module
+_make_write_entry = getattr(_ember_81579232cbfd41ec_module, '_make_write_entry')
+_make_read_entry = getattr(_ember_81579232cbfd41ec_module, '_make_read_entry')
+_make_end_turn_entry = getattr(_ember_81579232cbfd41ec_module, '_make_end_turn_entry')
+_compute_answer = getattr(_ember_81579232cbfd41ec_module, '_compute_answer')
+_build_session_entries = getattr(_ember_81579232cbfd41ec_module, '_build_session_entries')
+_render_pretrain_text = getattr(_ember_81579232cbfd41ec_module, '_render_pretrain_text')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_cbase_avir_data_v2.py
 from ember_cbase_s6_acceptance import (
     score_core_on_task,
     accept_cbase,
@@ -399,7 +487,50 @@ def test_real_tiny_cpu_end_to_end():
     JSONL traces).  This test proves the harness handles a real untrained core
     gracefully — no exceptions, no hangs.
     """
-    from build_multimodal_v0_model import build_multimodal_v0_model
+    # issue2015 exact-local-import:src/ember/governance/scripts/build_multimodal_v0_model.py
+    import importlib.util as _ember_d884e1c4828ea28b_importlib
+    import sys as _ember_d884e1c4828ea28b_sys
+    from pathlib import Path as _ember_d884e1c4828ea28b_Path
+    _ember_d884e1c4828ea28b_path = _ember_d884e1c4828ea28b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'build_multimodal_v0_model.py')
+    if not _ember_d884e1c4828ea28b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    _ember_d884e1c4828ea28b_aliases = ('_ember_issue2015_d884e1c4828ea28b', 'build_multimodal_v0_model', 'scripts.build_multimodal_v0_model')
+    _ember_d884e1c4828ea28b_existing = []
+    for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+        _ember_d884e1c4828ea28b_candidate = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+        if _ember_d884e1c4828ea28b_candidate is not None and all(_ember_d884e1c4828ea28b_candidate is not item for item in _ember_d884e1c4828ea28b_existing):
+            _ember_d884e1c4828ea28b_existing.append(_ember_d884e1c4828ea28b_candidate)
+    if len(_ember_d884e1c4828ea28b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    if _ember_d884e1c4828ea28b_existing:
+        _ember_d884e1c4828ea28b_module = _ember_d884e1c4828ea28b_existing[0]
+        _ember_d884e1c4828ea28b_observed = getattr(_ember_d884e1c4828ea28b_module, '__file__', None)
+        if _ember_d884e1c4828ea28b_observed is None or _ember_d884e1c4828ea28b_Path(_ember_d884e1c4828ea28b_observed).resolve() != _ember_d884e1c4828ea28b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    else:
+        _ember_d884e1c4828ea28b_spec = _ember_d884e1c4828ea28b_importlib.spec_from_file_location('_ember_issue2015_d884e1c4828ea28b', _ember_d884e1c4828ea28b_path)
+        if _ember_d884e1c4828ea28b_spec is None or _ember_d884e1c4828ea28b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/build_multimodal_v0_model.py')
+        _ember_d884e1c4828ea28b_module = _ember_d884e1c4828ea28b_importlib.module_from_spec(_ember_d884e1c4828ea28b_spec)
+        for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+            _ember_d884e1c4828ea28b_prior = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+            if _ember_d884e1c4828ea28b_prior is not None and _ember_d884e1c4828ea28b_prior is not _ember_d884e1c4828ea28b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+            _ember_d884e1c4828ea28b_sys.modules[_ember_d884e1c4828ea28b_alias] = _ember_d884e1c4828ea28b_module
+        try:
+            _ember_d884e1c4828ea28b_spec.loader.exec_module(_ember_d884e1c4828ea28b_module)
+        except BaseException:
+            for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+                if _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias) is _ember_d884e1c4828ea28b_module:
+                    _ember_d884e1c4828ea28b_sys.modules.pop(_ember_d884e1c4828ea28b_alias, None)
+            raise
+    for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+        _ember_d884e1c4828ea28b_prior = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+        if _ember_d884e1c4828ea28b_prior is not None and _ember_d884e1c4828ea28b_prior is not _ember_d884e1c4828ea28b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+        _ember_d884e1c4828ea28b_sys.modules[_ember_d884e1c4828ea28b_alias] = _ember_d884e1c4828ea28b_module
+    build_multimodal_v0_model = getattr(_ember_d884e1c4828ea28b_module, 'build_multimodal_v0_model')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/build_multimodal_v0_model.py
     from train_multimodal_v0 import load_multimodal_config
     from ember_c14_real_adapter import EmberModelShell
 
@@ -440,7 +571,50 @@ def smoke_accept_cbase_tiny():
     floor_met=False (untrained core; R=0 on all samples).  The key invariant:
     no crash, summary fields populated, per_task list has 2 entries.
     """
-    from build_multimodal_v0_model import build_multimodal_v0_model
+    # issue2015 exact-local-import:src/ember/governance/scripts/build_multimodal_v0_model.py
+    import importlib.util as _ember_d884e1c4828ea28b_importlib
+    import sys as _ember_d884e1c4828ea28b_sys
+    from pathlib import Path as _ember_d884e1c4828ea28b_Path
+    _ember_d884e1c4828ea28b_path = _ember_d884e1c4828ea28b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'build_multimodal_v0_model.py')
+    if not _ember_d884e1c4828ea28b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    _ember_d884e1c4828ea28b_aliases = ('_ember_issue2015_d884e1c4828ea28b', 'build_multimodal_v0_model', 'scripts.build_multimodal_v0_model')
+    _ember_d884e1c4828ea28b_existing = []
+    for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+        _ember_d884e1c4828ea28b_candidate = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+        if _ember_d884e1c4828ea28b_candidate is not None and all(_ember_d884e1c4828ea28b_candidate is not item for item in _ember_d884e1c4828ea28b_existing):
+            _ember_d884e1c4828ea28b_existing.append(_ember_d884e1c4828ea28b_candidate)
+    if len(_ember_d884e1c4828ea28b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    if _ember_d884e1c4828ea28b_existing:
+        _ember_d884e1c4828ea28b_module = _ember_d884e1c4828ea28b_existing[0]
+        _ember_d884e1c4828ea28b_observed = getattr(_ember_d884e1c4828ea28b_module, '__file__', None)
+        if _ember_d884e1c4828ea28b_observed is None or _ember_d884e1c4828ea28b_Path(_ember_d884e1c4828ea28b_observed).resolve() != _ember_d884e1c4828ea28b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/build_multimodal_v0_model.py')
+    else:
+        _ember_d884e1c4828ea28b_spec = _ember_d884e1c4828ea28b_importlib.spec_from_file_location('_ember_issue2015_d884e1c4828ea28b', _ember_d884e1c4828ea28b_path)
+        if _ember_d884e1c4828ea28b_spec is None or _ember_d884e1c4828ea28b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/build_multimodal_v0_model.py')
+        _ember_d884e1c4828ea28b_module = _ember_d884e1c4828ea28b_importlib.module_from_spec(_ember_d884e1c4828ea28b_spec)
+        for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+            _ember_d884e1c4828ea28b_prior = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+            if _ember_d884e1c4828ea28b_prior is not None and _ember_d884e1c4828ea28b_prior is not _ember_d884e1c4828ea28b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+            _ember_d884e1c4828ea28b_sys.modules[_ember_d884e1c4828ea28b_alias] = _ember_d884e1c4828ea28b_module
+        try:
+            _ember_d884e1c4828ea28b_spec.loader.exec_module(_ember_d884e1c4828ea28b_module)
+        except BaseException:
+            for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+                if _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias) is _ember_d884e1c4828ea28b_module:
+                    _ember_d884e1c4828ea28b_sys.modules.pop(_ember_d884e1c4828ea28b_alias, None)
+            raise
+    for _ember_d884e1c4828ea28b_alias in _ember_d884e1c4828ea28b_aliases:
+        _ember_d884e1c4828ea28b_prior = _ember_d884e1c4828ea28b_sys.modules.get(_ember_d884e1c4828ea28b_alias)
+        if _ember_d884e1c4828ea28b_prior is not None and _ember_d884e1c4828ea28b_prior is not _ember_d884e1c4828ea28b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/build_multimodal_v0_model.py')
+        _ember_d884e1c4828ea28b_sys.modules[_ember_d884e1c4828ea28b_alias] = _ember_d884e1c4828ea28b_module
+    build_multimodal_v0_model = getattr(_ember_d884e1c4828ea28b_module, 'build_multimodal_v0_model')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/build_multimodal_v0_model.py
     from train_multimodal_v0 import load_multimodal_config
     from ember_c14_real_adapter import EmberModelShell
 

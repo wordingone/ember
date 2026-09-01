@@ -10,15 +10,58 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
-from scripts.llmq_adoption_readiness import assess
+# issue2015 exact-local-import:src/ember/governance/scripts/llmq_adoption_readiness.py
+import importlib.util as _ember_4ae2cd0e8ca5415d_importlib
+import sys as _ember_4ae2cd0e8ca5415d_sys
+from pathlib import Path as _ember_4ae2cd0e8ca5415d_Path
+_ember_4ae2cd0e8ca5415d_path = _ember_4ae2cd0e8ca5415d_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'llmq_adoption_readiness.py')
+if not _ember_4ae2cd0e8ca5415d_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/llmq_adoption_readiness.py')
+_ember_4ae2cd0e8ca5415d_aliases = ('_ember_issue2015_4ae2cd0e8ca5415d', 'llmq_adoption_readiness', 'scripts.llmq_adoption_readiness')
+_ember_4ae2cd0e8ca5415d_existing = []
+for _ember_4ae2cd0e8ca5415d_alias in _ember_4ae2cd0e8ca5415d_aliases:
+    _ember_4ae2cd0e8ca5415d_candidate = _ember_4ae2cd0e8ca5415d_sys.modules.get(_ember_4ae2cd0e8ca5415d_alias)
+    if _ember_4ae2cd0e8ca5415d_candidate is not None and all(_ember_4ae2cd0e8ca5415d_candidate is not item for item in _ember_4ae2cd0e8ca5415d_existing):
+        _ember_4ae2cd0e8ca5415d_existing.append(_ember_4ae2cd0e8ca5415d_candidate)
+if len(_ember_4ae2cd0e8ca5415d_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/llmq_adoption_readiness.py')
+if _ember_4ae2cd0e8ca5415d_existing:
+    _ember_4ae2cd0e8ca5415d_module = _ember_4ae2cd0e8ca5415d_existing[0]
+    _ember_4ae2cd0e8ca5415d_observed = getattr(_ember_4ae2cd0e8ca5415d_module, '__file__', None)
+    if _ember_4ae2cd0e8ca5415d_observed is None or _ember_4ae2cd0e8ca5415d_Path(_ember_4ae2cd0e8ca5415d_observed).resolve() != _ember_4ae2cd0e8ca5415d_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/llmq_adoption_readiness.py')
+else:
+    _ember_4ae2cd0e8ca5415d_spec = _ember_4ae2cd0e8ca5415d_importlib.spec_from_file_location('_ember_issue2015_4ae2cd0e8ca5415d', _ember_4ae2cd0e8ca5415d_path)
+    if _ember_4ae2cd0e8ca5415d_spec is None or _ember_4ae2cd0e8ca5415d_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/llmq_adoption_readiness.py')
+    _ember_4ae2cd0e8ca5415d_module = _ember_4ae2cd0e8ca5415d_importlib.module_from_spec(_ember_4ae2cd0e8ca5415d_spec)
+    for _ember_4ae2cd0e8ca5415d_alias in _ember_4ae2cd0e8ca5415d_aliases:
+        _ember_4ae2cd0e8ca5415d_prior = _ember_4ae2cd0e8ca5415d_sys.modules.get(_ember_4ae2cd0e8ca5415d_alias)
+        if _ember_4ae2cd0e8ca5415d_prior is not None and _ember_4ae2cd0e8ca5415d_prior is not _ember_4ae2cd0e8ca5415d_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/llmq_adoption_readiness.py')
+        _ember_4ae2cd0e8ca5415d_sys.modules[_ember_4ae2cd0e8ca5415d_alias] = _ember_4ae2cd0e8ca5415d_module
+    try:
+        _ember_4ae2cd0e8ca5415d_spec.loader.exec_module(_ember_4ae2cd0e8ca5415d_module)
+    except BaseException:
+        for _ember_4ae2cd0e8ca5415d_alias in _ember_4ae2cd0e8ca5415d_aliases:
+            if _ember_4ae2cd0e8ca5415d_sys.modules.get(_ember_4ae2cd0e8ca5415d_alias) is _ember_4ae2cd0e8ca5415d_module:
+                _ember_4ae2cd0e8ca5415d_sys.modules.pop(_ember_4ae2cd0e8ca5415d_alias, None)
+        raise
+for _ember_4ae2cd0e8ca5415d_alias in _ember_4ae2cd0e8ca5415d_aliases:
+    _ember_4ae2cd0e8ca5415d_prior = _ember_4ae2cd0e8ca5415d_sys.modules.get(_ember_4ae2cd0e8ca5415d_alias)
+    if _ember_4ae2cd0e8ca5415d_prior is not None and _ember_4ae2cd0e8ca5415d_prior is not _ember_4ae2cd0e8ca5415d_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/llmq_adoption_readiness.py')
+    _ember_4ae2cd0e8ca5415d_sys.modules[_ember_4ae2cd0e8ca5415d_alias] = _ember_4ae2cd0e8ca5415d_module
+assess = getattr(_ember_4ae2cd0e8ca5415d_module, 'assess')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/llmq_adoption_readiness.py
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_PATH = "scripts/llmq_adoption_readiness.py"
+SOURCE_PATH = "src/ember/governance/scripts/llmq_adoption_readiness.py"
 SOURCE_SHA = hashlib.sha256((REPO_ROOT / SOURCE_PATH).read_bytes()).hexdigest()
-DESIGN_PATH = "docs/spec/llmq/adoption-design-v1.json"
+DESIGN_PATH = "docs/domains/governance/spec/llmq/adoption-design-v1.json"
 DESIGN_SHA = hashlib.sha256((REPO_ROOT / DESIGN_PATH).read_bytes()).hexdigest()
-MECHANISM_PATH = "docs/spec/llmq/mechanism-attribution-v1.json"
+MECHANISM_PATH = "docs/domains/governance/spec/llmq/mechanism-attribution-v1.json"
 MECHANISM_SHA = hashlib.sha256((REPO_ROOT / MECHANISM_PATH).read_bytes()).hexdigest()
 
 

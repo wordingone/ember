@@ -21,14 +21,101 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from receipt_write import checked_write
-from loop_econ_gate import REQUIRED_FIELDS as DT6_REQUIRED_FIELDS, check_econ_gate
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py
+# issue2015 exact-local-import:src/ember/governance/scripts/loop_econ_gate.py
+import importlib.util as _ember_f7f7bf161a2ec86b_importlib
+import sys as _ember_f7f7bf161a2ec86b_sys
+from pathlib import Path as _ember_f7f7bf161a2ec86b_Path
+_ember_f7f7bf161a2ec86b_path = _ember_f7f7bf161a2ec86b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'loop_econ_gate.py')
+if not _ember_f7f7bf161a2ec86b_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/loop_econ_gate.py')
+_ember_f7f7bf161a2ec86b_aliases = ('_ember_issue2015_f7f7bf161a2ec86b', 'loop_econ_gate', 'scripts.loop_econ_gate')
+_ember_f7f7bf161a2ec86b_existing = []
+for _ember_f7f7bf161a2ec86b_alias in _ember_f7f7bf161a2ec86b_aliases:
+    _ember_f7f7bf161a2ec86b_candidate = _ember_f7f7bf161a2ec86b_sys.modules.get(_ember_f7f7bf161a2ec86b_alias)
+    if _ember_f7f7bf161a2ec86b_candidate is not None and all(_ember_f7f7bf161a2ec86b_candidate is not item for item in _ember_f7f7bf161a2ec86b_existing):
+        _ember_f7f7bf161a2ec86b_existing.append(_ember_f7f7bf161a2ec86b_candidate)
+if len(_ember_f7f7bf161a2ec86b_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/loop_econ_gate.py')
+if _ember_f7f7bf161a2ec86b_existing:
+    _ember_f7f7bf161a2ec86b_module = _ember_f7f7bf161a2ec86b_existing[0]
+    _ember_f7f7bf161a2ec86b_observed = getattr(_ember_f7f7bf161a2ec86b_module, '__file__', None)
+    if _ember_f7f7bf161a2ec86b_observed is None or _ember_f7f7bf161a2ec86b_Path(_ember_f7f7bf161a2ec86b_observed).resolve() != _ember_f7f7bf161a2ec86b_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/loop_econ_gate.py')
+else:
+    _ember_f7f7bf161a2ec86b_spec = _ember_f7f7bf161a2ec86b_importlib.spec_from_file_location('_ember_issue2015_f7f7bf161a2ec86b', _ember_f7f7bf161a2ec86b_path)
+    if _ember_f7f7bf161a2ec86b_spec is None or _ember_f7f7bf161a2ec86b_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/loop_econ_gate.py')
+    _ember_f7f7bf161a2ec86b_module = _ember_f7f7bf161a2ec86b_importlib.module_from_spec(_ember_f7f7bf161a2ec86b_spec)
+    for _ember_f7f7bf161a2ec86b_alias in _ember_f7f7bf161a2ec86b_aliases:
+        _ember_f7f7bf161a2ec86b_prior = _ember_f7f7bf161a2ec86b_sys.modules.get(_ember_f7f7bf161a2ec86b_alias)
+        if _ember_f7f7bf161a2ec86b_prior is not None and _ember_f7f7bf161a2ec86b_prior is not _ember_f7f7bf161a2ec86b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/loop_econ_gate.py')
+        _ember_f7f7bf161a2ec86b_sys.modules[_ember_f7f7bf161a2ec86b_alias] = _ember_f7f7bf161a2ec86b_module
+    try:
+        _ember_f7f7bf161a2ec86b_spec.loader.exec_module(_ember_f7f7bf161a2ec86b_module)
+    except BaseException:
+        for _ember_f7f7bf161a2ec86b_alias in _ember_f7f7bf161a2ec86b_aliases:
+            if _ember_f7f7bf161a2ec86b_sys.modules.get(_ember_f7f7bf161a2ec86b_alias) is _ember_f7f7bf161a2ec86b_module:
+                _ember_f7f7bf161a2ec86b_sys.modules.pop(_ember_f7f7bf161a2ec86b_alias, None)
+        raise
+for _ember_f7f7bf161a2ec86b_alias in _ember_f7f7bf161a2ec86b_aliases:
+    _ember_f7f7bf161a2ec86b_prior = _ember_f7f7bf161a2ec86b_sys.modules.get(_ember_f7f7bf161a2ec86b_alias)
+    if _ember_f7f7bf161a2ec86b_prior is not None and _ember_f7f7bf161a2ec86b_prior is not _ember_f7f7bf161a2ec86b_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/loop_econ_gate.py')
+    _ember_f7f7bf161a2ec86b_sys.modules[_ember_f7f7bf161a2ec86b_alias] = _ember_f7f7bf161a2ec86b_module
+DT6_REQUIRED_FIELDS = getattr(_ember_f7f7bf161a2ec86b_module, 'REQUIRED_FIELDS')
+check_econ_gate = getattr(_ember_f7f7bf161a2ec86b_module, 'check_econ_gate')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/loop_econ_gate.py
 
 TICKET = "EMBER-RESIDENT-TRAINING-GATE"
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
 REQUIRED_PAPERS = {"RLM", "iGRPO"}
 SUPERSEDED_PARALLEL_SPECS = [
-    Path("docs/archive/pre-restart/ember-mvp-v0.md"),
+    Path("docs/domains/governance/archive/pre-restart/ember-mvp-v0.md"),
     Path("docs/archive/pre-restart/20260617-maximally-viable-product.md"),
 ]
 def _repo_root() -> Path:
@@ -295,10 +382,10 @@ def load_paper_sources(index_path: Path) -> tuple[dict[str, Any], list[str]]:
 def inspect_clean_room_harness(repo: Path, full_parity_receipt: Path | None = None) -> tuple[dict[str, Any], list[str]]:
     required = [
         Path("docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md"),
-        Path("docs/archive/pre-restart/nck-event-loop-v0.md"),
-        Path("docs/archive/pre-restart/nck-invariants-v0.md"),
-        Path("scripts/nck/event_loop.py"),
-        Path("scripts/nck/invariants.py"),
+        Path("docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md"),
+        Path("docs/domains/governance/archive/pre-restart/nck-invariants-v0.md"),
+        Path("src/ember/governance/scripts/nck/event_loop.py"),
+        Path("src/ember/governance/scripts/nck/invariants.py"),
         Path("scripts/nck/nck_e2e_proof.py"),
         Path("receipts/nck-e2e-proof-20260612T142318Z.json"),
     ]
@@ -1109,7 +1196,7 @@ def build_gate_receipt(
     full_parity_receipt: Path | None = None,
 ) -> dict[str, Any]:
     goal_path = repo / "docs/domains/governance/authority/GOAL.md"
-    debt_path = repo / "docs/ledgers/ember-debt-ledger.md"
+    debt_path = repo / "docs/domains/governance/ledgers/ember-debt-ledger.md"
     errors: list[str] = []
     if not goal_path.exists():
         errors.append("goal_source.missing")
@@ -1297,7 +1384,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
             "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
         ),
-        "docs/ledgers/ember-debt-ledger.md": "ledger\n",
+        "docs/domains/governance/ledgers/ember-debt-ledger.md": "ledger\n",
         "docs/contracts/ember-floor-contract.md": (
             "<!-- EMBER_CONSERVATION_V1\n"
             "minimum_new_network_parameters=3000000000\n"
@@ -1328,11 +1415,11 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "No modality, mechanism family, benchmark obligation, or whole-stack requirement\n"
             "can be deferred out of the foundation model.\n"
         ),
-        "docs/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/domains/governance/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
-        "docs/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
-        "docs/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
+        "docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
+        "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md": "invariants\n",
         "docs/contracts/nc2-own-technique-contract.md": (
             "# Owned architecture and mechanism research contract (fixture mirror)\n\n"
             "## Unified decoder contract\n\n"
@@ -1354,8 +1441,8 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "AdamW optimizer\nselftest\nsmoke/live training paths\ncheckpoint/state_dict\n"
             "QK-norm\n2D RoPE\nreserved vocab\nsoft-token\nbidirectional span\n"
         ),
-        "scripts/nck/event_loop.py": "# event\n",
-        "scripts/nck/invariants.py": "# inv\n",
+        "src/ember/governance/scripts/nck/event_loop.py": "# event\n",
+        "src/ember/governance/scripts/nck/invariants.py": "# inv\n",
         "scripts/nck/nck_e2e_proof.py": "# proof\n",
     }.items():
         path = repo / rel
@@ -1617,7 +1704,7 @@ def main() -> int:
     changed = [Path(p) for p in args.changed_path] or [
         Path("scripts/ember_resident_training_gate.py"),
         Path("scripts/ember_resident_training_gate_selftest.py"),
-        Path("docs/ledgers/ember-debt-ledger.md"),
+        Path("docs/domains/governance/ledgers/ember-debt-ledger.md"),
         Path("docs/domains/governance/authority/GOAL.md"),
     ]
     receipt = build_gate_receipt(

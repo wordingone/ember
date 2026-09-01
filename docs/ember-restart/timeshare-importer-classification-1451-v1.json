@@ -1,7 +1,7 @@
 {
   "schema": "ember-timeshare-importer-classification-v1",
   "source": "scripts/timeshare_pretrain.py",
-  "source_sha256": "f085e56ff751b51859d0e139e055c9a96279a1caf4da5524c50ce1fae69dd77d",
+  "source_sha256": "ffdf814d4dcbd094276a8bf7073ac41fd96fd0393fd49fc85c0bdb52d95fbe3c",
   "import_denial": "execution_only",
   "execution_boundary": {
     "helper": "_historical_only_refusal",
@@ -13,7 +13,7 @@
       "path": "scripts/cbase_grow_rung.py",
       "classification": "historical_only",
       "import_outcome": "execution_denied_by_own_guard",
-      "sha256": "5fd9df2559d814614dc651b7ddcfa0fec41978fb53ea7e467f591c50512fff52",
+      "sha256": "7c03aaaf61e2f986a184210d4bcb176a383a9d9cdc6be68f2cfe41fc7068a5be",
       "module_scope": false,
       "nested_import_count": 2
     },
@@ -29,7 +29,7 @@
       "path": "scripts/train_multimodal_v0.py",
       "classification": "historical_only",
       "import_outcome": "execution_denied_by_own_guard",
-      "sha256": "705a79b525ece1f59082338d9dc1df85d62c141566b197578b6069ca5bce710a",
+      "sha256": "79ff398cc219de6d6b1dfe4dd905a713bbe09e4c5c2430e014138475b34a4e2a",
       "module_scope": true,
       "nested_import_count": 0
     }

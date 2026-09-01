@@ -10,7 +10,7 @@ mechanism_erasure=forbidden
 
 This is the executable D-001-through-D-062 conservation matrix required by
 docs/domains/governance/authority/GOAL.md. The legacy six-column M/C completeness manifest remains intact at
-`docs/contracts/ember-completeness.md` for diagnostic parsing and evidence custody; it
+`docs/domains/governance/contracts/ember-completeness.md` for diagnostic parsing and evidence custody; it
 is historical and is not the current authority denominator.
 
 Disposition semantics:

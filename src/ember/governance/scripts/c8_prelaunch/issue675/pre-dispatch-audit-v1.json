@@ -1,0 +1,70 @@
+{
+  "schema": "q2-actual-update-pre-dispatch-audit-v1",
+  "issue": 675,
+  "observed_at": "2026-08-10T07:33:42Z",
+  "public_master": "f3c92ba984711ee34e91c6bea90713e6c89b4b4d",
+  "producer": {
+    "path": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
+    "blob_sha": "5f4ec2f0ce9bef5bb42844f045ddea67e352703a",
+    "phase": "b3",
+    "persisted_actual_operands": ["grad_post_gate"],
+    "missing_terminal_operands": [
+      "exact_pre_target_tensor",
+      "reset_post_target_tensor",
+      "transplant_post_target_tensor",
+      "paired_losses",
+      "non_target_byte_identity_manifest"
+    ],
+    "historical_import_refusal": "historical_only: the sub-3B cbase trainer and every importer are execution-denied"
+  },
+  "consumer": {
+    "path": "scripts/c8_prelaunch/q2_actual_update_successor.py",
+    "sha256": "727b2b2763fd5aacb161637cce0a3814fbbda54e1c3165cd43cc96f80ef738c6",
+    "test_path": "tests/test_q2_actual_update_successor.py",
+    "test_sha256": "ed3b4b2f52f42cd106109e48d5da28e8f790c0cc97bfe986c298c6496a994382",
+    "test_result": "11 passed in 1.44s"
+  },
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "gpu_total_mib": 24564,
+    "gpu_free_mib": 22771,
+    "estimated_vram_gib": 18.253,
+    "minimum_dispatch_free_vram_bytes": 21746679808,
+    "b_free_bytes": 270164660224,
+    "minimum_b_free_bytes": 42949672960,
+    "seed_checkpoint_exists": true,
+    "seed_checkpoint_bytes": 4952314810,
+    "physical_available_bytes": 41811619840,
+    "available_pagefile_bytes": 56605114368,
+    "host_commit_peak_simulation_present": false
+  },
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "dispatch_schema": "ember-lab-dispatch-manifest-v3",
+    "required_profile": "governed_vertical",
+    "historical_cli_has_governed_vertical_entrypoint": false,
+    "capture_identities_rederived_from_bytes": false
+  },
+  "decision": "REFUSE_CURRENT_HEAD",
+  "reason_codes": [
+    "HISTORICAL_IMPORT_EXECUTION_DENIED",
+    "ACTUAL_OPERANDS_NOT_PERSISTED",
+    "DISPATCH_PROFILE_NOT_BOUND",
+    "CAPTURE_IDENTITIES_CALLER_AUTHORED",
+    "HOST_COMMIT_PEAK_NOT_SIMULATED"
+  ],
+  "credits": {
+    "actual_event": false,
+    "scientific_result": false,
+    "whole_step": false,
+    "material_loss_bridge": false,
+    "training": false,
+    "checkpoint": false,
+    "capability": false,
+    "issue_completion": false
+  },
+  "no_new_parallel_authority": true,
+  "receipt_sha256": "3c20ed8ca298949a09385efbd7a82f1ff3addce59908a8a98b81c00d58db14d2"
+}
