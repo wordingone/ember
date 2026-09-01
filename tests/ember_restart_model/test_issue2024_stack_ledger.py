@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import sys
+import hashlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -137,6 +139,7 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
         "reconciliation_gap_ns": 0,
         "events": [
             {
+                "ancestry_depth": 1,
                 "cpu_parent_id": 3,
                 "event_id": 7,
                 "input_shapes": [[2, 3], [3, 4]],
@@ -145,6 +148,7 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
                 "source_stack": ["tools/ember-restart-3b/model.py:41"],
             },
             {
+                "ancestry_depth": 1,
                 "cpu_parent_id": 7,
                 "event_id": 8,
                 "input_shapes": [[2, 3], [3, 4]],
@@ -321,3 +325,155 @@ def test_issue2024_ledger_refuses_duplicate_event_identity() -> None:
         subject.build_issue2024_event_ledger(
             [_event(), _event()], declared_self_device_time_total_us="20.000002"
         )
+
+
+def _union_receipt(mode: str, events: list[dict[str, object]]) -> dict[str, object]:
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue2024-union-measurement-v1",
+        "result": "PASS",
+        "mode": mode,
+        "claim_boundary": "UNION_COMPLETENESS_PROOF_ONLY_NO_FULL_ARM_OR_CLOSE_CREDIT",
+        "identity": {
+            "execution_source_commit": "a" * 40,
+            "execution_record_order_sha256": "b" * 64,
+            "execution_tokens_sha256": "c" * 64,
+            "seed": 83,
+        },
+        "profiler_update_indexes": [0, 1],
+        "kernel_trace": {
+            "full_precision_unmapped_event_ledger": {
+                "schema_version": "ember-issue2024-full-precision-event-ledger-v1",
+                "events": events,
+            }
+        },
+        "runtime_custody": {
+            "preflight_raw_sha256": "d" * 64,
+            "preflight_self_sha256": "e" * 64,
+        },
+    }
+    receipt["self_sha256"] = hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return receipt
+
+
+def _union_event(*, time: str = "10.0", stack: str = "model.py:41") -> dict[str, object]:
+    return {
+        "ancestry_depth": 2,
+        "cpu_parent_id": 3,
+        "event_id": 7,
+        "input_shapes": [[2, 3], [3, 4]],
+        "key": "aten::mm",
+        "profile_update_index": 0,
+        "self_device_time_us": time,
+        "source_stack": [stack],
+    }
+
+
+def test_issue2024_union_comparison_matches_structural_multiset_not_physical_time() -> None:
+    one_shot = _union_receipt("issue2024-union-one-shot", [_union_event(time="10.0")])
+    sharded = _union_receipt("issue2024-union-sharded", [_union_event(time="12.5")])
+    receipt = subject.build_issue2024_union_comparison_receipt(
+        one_shot,
+        sharded,
+        one_shot_raw_sha256="1" * 64,
+        sharded_raw_sha256="2" * 64,
+    )
+    assert receipt["result"] == "PASS"
+    assert receipt["execution_source_commit"] == "a" * 40
+    assert receipt["structural_multiset_rows"] == 1
+    assert receipt["structural_event_count"] == 1
+    assert receipt["physical_times"]["one_shot"] == ["10.0"]
+    assert receipt["physical_times"]["sharded"] == ["12.5"]
+
+
+@pytest.mark.parametrize(
+    "mutation,match",
+    [
+        ({"stack": "other.py:9"}, "STRUCTURAL_MULTISET_MISMATCH"),
+        ({"ancestry_depth": 3}, "STRUCTURAL_MULTISET_MISMATCH"),
+    ],
+)
+def test_issue2024_union_comparison_refuses_structural_drift(
+    mutation: dict[str, object], match: str
+) -> None:
+    left_event = _union_event()
+    right_event = _union_event()
+    if "stack" in mutation:
+        right_event["source_stack"] = [mutation["stack"]]
+    if "ancestry_depth" in mutation:
+        right_event["ancestry_depth"] = mutation["ancestry_depth"]
+    with pytest.raises(ValueError, match=match):
+        subject.build_issue2024_union_comparison_receipt(
+            _union_receipt("issue2024-union-one-shot", [left_event]),
+            _union_receipt("issue2024-union-sharded", [right_event]),
+            one_shot_raw_sha256="1" * 64,
+            sharded_raw_sha256="2" * 64,
+        )
+
+
+def test_issue2024_union_comparison_refuses_identity_or_preflight_drift() -> None:
+    one_shot = _union_receipt("issue2024-union-one-shot", [_union_event()])
+    sharded = _union_receipt("issue2024-union-sharded", [_union_event()])
+    sharded["identity"]["execution_source_commit"] = "f" * 40
+    sharded["self_sha256"] = hashlib.sha256(
+        json.dumps({k: v for k, v in sharded.items() if k != "self_sha256"}, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    with pytest.raises(ValueError, match="IDENTITY_MISMATCH"):
+        subject.build_issue2024_union_comparison_receipt(
+            one_shot,
+            sharded,
+            one_shot_raw_sha256="1" * 64,
+            sharded_raw_sha256="2" * 64,
+        )
+
+
+def test_issue2024_union_comparison_cli_is_no_overwrite() -> None:
+    parser = subject._build_argument_parser()
+    subparsers = next(
+        action
+        for action in parser._actions
+        if isinstance(action, subject.argparse._SubParsersAction)
+    )
+    options = {
+        option
+        for action in subparsers.choices["issue2024-union-compare"]._actions
+        for option in action.option_strings
+    }
+    assert options == {"-h", "--help", "--one-shot", "--sharded", "--output"}
+
+
+@pytest.mark.parametrize(
+    "mode", ["issue2024-union-one-shot", "issue2024-union-sharded"]
+)
+def test_issue2024_union_terminal_builder_accepts_exact_two_update_contract(mode: str) -> None:
+    event = _union_event()
+    receipt = subject.build_issue2024_union_measurement_receipt(
+        mode=mode,
+        identity={"execution_source_commit": "a" * 40},
+        update_seconds=[1.0, 2.0],
+        phase_seconds=[{}, {}],
+        profiler_update_indexes=[0, 1],
+        allocator_rows=[{}, {}],
+        power_rows=[{}, {}],
+        kernel_trace={
+            "full_precision_unmapped_event_ledger": {
+                "schema_version": "ember-issue2024-full-precision-event-ledger-v2",
+                "events": [event],
+                "reconciliation_gap_ns": 0,
+            }
+        },
+        checkpoint_cadence={
+            "in_measured_window": "NONE",
+            "checkpoint_every_updates": 3,
+            "callback_identity": "NO_OP",
+            "final_callback_timed": False,
+        },
+        runtime_custody={
+            "preflight_raw_sha256": "d" * 64,
+            "preflight_self_sha256": "e" * 64,
+        },
+    )
+    assert receipt["schema_version"] == "ember-issue2024-union-measurement-v1"
+    assert receipt["counts"] == {"complete_updates": 2, "profiler": 2}
+    assert subject._validate_self(receipt, mode) == receipt

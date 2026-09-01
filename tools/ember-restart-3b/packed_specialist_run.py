@@ -14,6 +14,7 @@ import math
 import os
 import re
 import shutil
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
@@ -280,6 +281,7 @@ def build_issue2024_event_ledger(
         if not stack or parent is None or getattr(parent, "id", None) is None or shapes is None:
             continue
         rows.append({
+            "ancestry_depth": ancestry_depth,
             "cpu_parent_id": int(parent.id),
             "event_id": event_id,
             "input_shapes": shapes,
@@ -348,6 +350,160 @@ def merge_issue2024_event_ledger_shards(
         "reconciliation_gap_ns": int(gap_ns),
         "events": events,
     }
+
+
+_ISSUE2024_UNION_KEY_FIELDS = (
+    "key", "input_shapes", "source_stack", "ancestry_depth",
+)
+
+
+def build_issue2024_union_measurement_receipt(
+    *,
+    mode: str,
+    identity: Mapping[str, object],
+    update_seconds: Sequence[float],
+    phase_seconds: Sequence[Mapping[str, object]],
+    profiler_update_indexes: Sequence[int],
+    allocator_rows: Sequence[Mapping[str, object]],
+    power_rows: Sequence[Mapping[str, object]],
+    kernel_trace: Mapping[str, object],
+    checkpoint_cadence: Mapping[str, object],
+    runtime_custody: Mapping[str, object],
+) -> dict[str, object]:
+    """Mint the bounded two-update measurement receipt without invoking the 64-update arm schema."""
+
+    if mode not in {"issue2024-union-one-shot", "issue2024-union-sharded"}:
+        raise ValueError("ISSUE2024_UNION_MODE_INVALID")
+    timings = [float(value) for value in update_seconds]
+    if len(timings) != 2 or any(not math.isfinite(value) or value <= 0 for value in timings):
+        raise ValueError("ISSUE2024_UNION_REQUIRES_TWO_POSITIVE_UPDATES")
+    if (
+        len(phase_seconds) != 2
+        or len(allocator_rows) != 2
+        or len(power_rows) != 2
+        or list(profiler_update_indexes) != [0, 1]
+    ):
+        raise ValueError("ISSUE2024_UNION_INSTRUMENT_SET_INVALID")
+    if dict(checkpoint_cadence) != {
+        "in_measured_window": "NONE",
+        "checkpoint_every_updates": 3,
+        "callback_identity": "NO_OP",
+        "final_callback_timed": False,
+    }:
+        raise ValueError("ISSUE2024_UNION_CHECKPOINT_CADENCE_INVALID")
+    execution_source = identity.get("execution_source_commit")
+    if not isinstance(execution_source, str) or _COMMIT.fullmatch(execution_source) is None:
+        raise ValueError("ISSUE2024_UNION_EXECUTION_SOURCE_INVALID")
+    ledger = kernel_trace.get("full_precision_unmapped_event_ledger")
+    if not isinstance(ledger, Mapping) or not isinstance(ledger.get("events"), list):
+        raise ValueError("ISSUE2024_UNION_LEDGER_MISSING")
+    if int(ledger.get("reconciliation_gap_ns", 2)) > 1 or not ledger["events"]:
+        raise ValueError("ISSUE2024_UNION_LEDGER_NONTERMINAL")
+    for row in ledger["events"]:
+        if not isinstance(row, Mapping) or any(field not in row for field in _ISSUE2024_UNION_KEY_FIELDS):
+            raise ValueError("ISSUE2024_UNION_STRUCTURAL_KEY_INCOMPLETE")
+    for name in ("preflight_raw_sha256", "preflight_self_sha256"):
+        _require_sha(runtime_custody.get(name), f"union {name}")
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue2024-union-measurement-v1",
+        "result": "PASS",
+        "mode": mode,
+        "claim_boundary": "UNION_COMPLETENESS_PROOF_ONLY_NO_FULL_ARM_OR_CLOSE_CREDIT",
+        "identity": dict(identity),
+        "counts": {"complete_updates": 2, "profiler": 2},
+        "update_seconds": timings,
+        "phase_seconds": [dict(row) for row in phase_seconds],
+        "profiler_update_indexes": [0, 1],
+        "allocator_rows": [dict(row) for row in allocator_rows],
+        "power_rows": [dict(row) for row in power_rows],
+        "kernel_trace": dict(kernel_trace),
+        "checkpoint_cadence": dict(checkpoint_cadence),
+        "runtime_custody": dict(runtime_custody),
+    }
+    receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+    return receipt
+
+
+def _issue2024_union_structural_rows(receipt: Mapping[str, object]) -> tuple[list[str], list[str]]:
+    kernel_trace = receipt.get("kernel_trace")
+    ledger = kernel_trace.get("full_precision_unmapped_event_ledger") if isinstance(kernel_trace, Mapping) else None
+    events = ledger.get("events") if isinstance(ledger, Mapping) else None
+    if not isinstance(events, list) or not events:
+        raise ValueError("ISSUE2024_UNION_LEDGER_MISSING")
+    structural: list[str] = []
+    physical_times: list[str] = []
+    for event in events:
+        if not isinstance(event, Mapping) or any(field not in event for field in _ISSUE2024_UNION_KEY_FIELDS):
+            raise ValueError("ISSUE2024_UNION_STRUCTURAL_KEY_INCOMPLETE")
+        structural.append(
+            json.dumps(
+                {field: event[field] for field in _ISSUE2024_UNION_KEY_FIELDS},
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            )
+        )
+        physical_times.append(str(event.get("self_device_time_us")))
+    return structural, physical_times
+
+
+def build_issue2024_union_comparison_receipt(
+    one_shot: Mapping[str, object],
+    sharded: Mapping[str, object],
+    *,
+    one_shot_raw_sha256: str,
+    sharded_raw_sha256: str,
+) -> dict[str, object]:
+    left = _validate_self(one_shot, "issue2024 one-shot")
+    right = _validate_self(sharded, "issue2024 sharded")
+    _require_sha(one_shot_raw_sha256, "issue2024 one-shot raw")
+    _require_sha(sharded_raw_sha256, "issue2024 sharded raw")
+    for receipt, expected_mode in (
+        (left, "issue2024-union-one-shot"),
+        (right, "issue2024-union-sharded"),
+    ):
+        if (
+            receipt.get("schema_version") != "ember-issue2024-union-measurement-v1"
+            or receipt.get("result") != "PASS"
+            or receipt.get("mode") != expected_mode
+            or receipt.get("profiler_update_indexes") != [0, 1]
+        ):
+            raise ValueError("ISSUE2024_UNION_RECEIPT_INVALID")
+    if left.get("identity") != right.get("identity"):
+        raise ValueError("ISSUE2024_UNION_IDENTITY_MISMATCH")
+    left_custody, right_custody = left.get("runtime_custody"), right.get("runtime_custody")
+    if not isinstance(left_custody, Mapping) or not isinstance(right_custody, Mapping):
+        raise ValueError("ISSUE2024_UNION_CUSTODY_MISSING")
+    for field in ("preflight_raw_sha256", "preflight_self_sha256"):
+        _require_sha(left_custody.get(field), f"one-shot {field}")
+        if left_custody.get(field) != right_custody.get(field):
+            raise ValueError("ISSUE2024_UNION_PREFLIGHT_MISMATCH")
+    left_rows, left_times = _issue2024_union_structural_rows(left)
+    right_rows, right_times = _issue2024_union_structural_rows(right)
+    left_multiset = dict(sorted(Counter(left_rows).items()))
+    right_multiset = dict(sorted(Counter(right_rows).items()))
+    if left_multiset != right_multiset:
+        raise ValueError("ISSUE2024_UNION_STRUCTURAL_MULTISET_MISMATCH")
+    identity = left["identity"]
+    receipt = {
+        "schema_version": "ember-issue2024-union-completeness-proof-v1",
+        "result": "PASS",
+        "claim_boundary": "TWO_UPDATE_UNION_COMPLETENESS_ONLY_NO_FULL_ARM_OR_CLOSE_CREDIT",
+        "execution_source_commit": identity["execution_source_commit"],
+        "one_shot_raw_sha256": one_shot_raw_sha256,
+        "one_shot_self_sha256": left["self_sha256"],
+        "sharded_raw_sha256": sharded_raw_sha256,
+        "sharded_self_sha256": right["self_sha256"],
+        "preflight_raw_sha256": left_custody["preflight_raw_sha256"],
+        "preflight_self_sha256": left_custody["preflight_self_sha256"],
+        "structural_key_fields": list(_ISSUE2024_UNION_KEY_FIELDS),
+        "structural_multiset_rows": len(left_multiset),
+        "structural_event_count": len(left_rows),
+        "structural_multiset_sha256": hashlib.sha256(_canonical(left_multiset)).hexdigest(),
+        "physical_times": {"one_shot": left_times, "sharded": right_times},
+    }
+    receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+    return receipt
 
 def _issue1946_event_inside_marker(event: object, marker: str) -> bool:
     parent = getattr(event, "cpu_parent", None)
@@ -2032,6 +2188,42 @@ def run_issue1946_profile(
                 "complete_update_timing_boundary": segment["complete_update_timing_boundary"],
             }
             receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+        elif mode in {"issue2024-union-one-shot", "issue2024-union-sharded"}:
+            union_runtime_custody = {
+                "canonical_disk_budget_runner": canonical_runner,
+                "b_floor_preflight": b_floor,
+                "process_id": os.getpid(),
+                "fresh_process_and_cuda_context_required": True,
+                "gpu_uuid": thermal_before["gpu_uuid"],
+                "governor": governor,
+                "memory_preflight": memory,
+                "thermal_before_allocation": thermal_before,
+                "execution_record_order_sha256": execution["execution_record_order_sha256"],
+                "execution_tokens_sha256": execution["execution_tokens_sha256"],
+                "accounting_spec_sha256": accounting["raw_sha256"],
+                "authority_crosswalk": authority_crosswalk,
+                "density_source_commit": args.source_commit,
+                "cuda_event_seconds": segment["complete_update_cuda_event_seconds"],
+                "complete_update_timing_boundary": segment["complete_update_timing_boundary"],
+                **(preflight_binding or {}),
+            }
+            receipt = build_issue2024_union_measurement_receipt(
+                mode=mode,
+                identity=identity,
+                update_seconds=segment["step_timings_seconds"],
+                phase_seconds=segment["complete_update_phase_timings_seconds"],
+                profiler_update_indexes=profiler_indexes,
+                allocator_rows=allocator_rows,
+                power_rows=power_rows,
+                kernel_trace=kernel_trace,
+                checkpoint_cadence={
+                    "in_measured_window": "NONE",
+                    "checkpoint_every_updates": packs + 1,
+                    "callback_identity": "NO_OP",
+                    "final_callback_timed": False,
+                },
+                runtime_custody=union_runtime_custody,
+            )
         else:
             receipt = build_issue1946_arm_receipt(
                 policy="WHOLE_LAYER_RECOMPUTE" if policy_mode == "issue1946-arm-a" else "DISABLED_EVERY_LAYER",
@@ -2234,6 +2426,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     issue1946_compare.add_argument("--arm-a", type=Path, required=True)
     issue1946_compare.add_argument("--arm-b", type=Path, required=True)
     issue1946_compare.add_argument("--output", type=Path, required=True)
+    issue2024_union_compare = subparsers.add_parser("issue2024-union-compare")
+    issue2024_union_compare.add_argument("--one-shot", type=Path, required=True)
+    issue2024_union_compare.add_argument("--sharded", type=Path, required=True)
+    issue2024_union_compare.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -2278,6 +2474,18 @@ def main() -> int:
         comparison_receipt["self_sha256"] = hashlib.sha256(_canonical(comparison_receipt)).hexdigest()
         _write_json_no_replace(args.output, comparison_receipt)
         result = comparison_receipt
+    elif args.command == "issue2024-union-compare":
+        if args.output.exists():
+            parser.error("issue2024 union comparison output is no-overwrite")
+        one_shot_raw = args.one_shot.read_bytes()
+        sharded_raw = args.sharded.read_bytes()
+        result = build_issue2024_union_comparison_receipt(
+            json.loads(one_shot_raw),
+            json.loads(sharded_raw),
+            one_shot_raw_sha256=hashlib.sha256(one_shot_raw).hexdigest(),
+            sharded_raw_sha256=hashlib.sha256(sharded_raw).hexdigest(),
+        )
+        _write_json_no_replace(args.output, result)
     else:
         result = compare_packed_paths(args.baseline, args.accelerated, args.output)
     print(json.dumps(result, sort_keys=True))
