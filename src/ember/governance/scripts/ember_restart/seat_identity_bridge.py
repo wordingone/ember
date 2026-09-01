@@ -67,7 +67,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-_IDENTITY_DIR = Path(__file__).resolve().parents[1] / "ember_01_identity"
+_IDENTITY_DIR = Path(__file__).resolve().parents[5] / "scripts" / "ember_01_identity"
 if str(_IDENTITY_DIR) not in sys.path:
     sys.path.insert(0, str(_IDENTITY_DIR))
 
