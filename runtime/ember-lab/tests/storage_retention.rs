@@ -59,6 +59,14 @@ fn raw(value: &Value) -> Vec<u8> {
 }
 
 #[test]
+fn issue1987_filed_policy_satisfies_the_strict_runtime_schema() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../manifests/issue1987-storage-retention-policy-v4.json");
+    let filed = fs::read(path).expect("issue1987 v4 policy must be filed");
+    parse_policy(&filed).expect("issue1987 v4 policy must satisfy the strict runtime schema");
+}
+
+#[test]
 fn current_master_is_reopened_from_repository_authority() {
     let root = std::env::temp_dir().join(format!(
         "ember-storage-master-authority-{}-{}",
