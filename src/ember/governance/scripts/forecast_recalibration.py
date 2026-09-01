@@ -49,7 +49,7 @@ SCHEMA_VERSION = "ember02-forecast-recalibration/v1"
 FORECAST_SCHEMA = "ember02-r1-forecast/v1"
 GENERATOR = "src/ember/governance/scripts/forecast_recalibration.py"
 SCALAR_QUANTITIES = ("step_time_ms", "tokens_per_second", "proxy_joules_per_token", "peak_vram_gib")
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class RecalibrationRefusal(RuntimeError):

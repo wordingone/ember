@@ -14,7 +14,7 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MODULE_PATH = ROOT / "scripts" / "training_closure.py"
+MODULE_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
 MANIFEST_PATH = "manifests/training-dependency-closure.json"
 
 
@@ -74,7 +74,10 @@ def build_repo(
         )
         + "\n",
     )
-    write_text(repo / "scripts" / "training_closure.py", MODULE_PATH.read_text(encoding="utf-8"))
+    write_text(
+        repo / "src" / "ember" / "governance" / "scripts" / "training_closure.py",
+        MODULE_PATH.read_text(encoding="utf-8"),
+    )
     return repo
 
 

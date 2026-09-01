@@ -34,7 +34,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MODULE_PATH = REPO_ROOT / "scripts" / "artifact_custody_gate.py"
+MODULE_PATH = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "artifact_custody_gate.py"
 
 
 def _load_module():

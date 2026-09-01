@@ -27,7 +27,7 @@
     },
     {
       "path": "src/ember/governance/scripts/forecast_recalibration.py",
-      "sha256": "9d707ecdc6ab7ec2262d762907f7c446e43f5a0f949a210ad311d71c9d568127",
+      "sha256": "d1964a4c66df7eb88ea57ec8c76febbaa21e3bacdc8db4666335d5baf1fc68d5",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "bee98f87a9a23fe85ae8c3b4121cd4b8276ac1b762c7110b9aaa0dbcebc6c90e",
+      "sha256": "c6ea360fdbe58ac713cfa61789e5f5622d76fdcffb971adcb9aa2086f5e00e37",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {

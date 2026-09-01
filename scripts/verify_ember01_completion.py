@@ -1521,7 +1521,14 @@ def closure_evidence_at(root: Path) -> tuple[str | None, str]:
     whose boundary is broken, and whoever reads the receipt has to tell those
     apart.
     """
-    module_path = Path(root) / "scripts" / "training_closure.py"
+    module_path = (
+        Path(root)
+        / "src"
+        / "ember"
+        / "governance"
+        / "scripts"
+        / "training_closure.py"
+    )
     specification = importlib.util.spec_from_file_location(
         "ember_training_closure", module_path
     )

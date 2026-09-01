@@ -1083,7 +1083,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py",
+          "artifact_path": "scripts/p5_ratio_audit/run_p5_audit.py",
           "artifact_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0",
           "closed_disposition": "unresolved",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
@@ -1094,14 +1094,14 @@
           "implementation_commit": "de667fe259ba22db2fa4c792f87a82698372ec97",
           "implementation_diff_sha256": "a4fe60210f9b99ec316e37ec5f113f9105d81bde1943751189b18694821394c1",
           "implementation_paths": [
-            "src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py"
+            "scripts/p5_ratio_audit/run_p5_audit.py"
           ],
           "number": 327,
           "unresolved_remainder": "The instrumentation is implemented, but the ad hoc AST check is unretained and the historical governed runtime is absent and execution-denied.",
           "verification_executed_at": "2026-07-13T12:05:27Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py",
+          "verifier_path": "scripts/p5_ratio_audit/run_p5_audit.py",
           "verifier_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0"
         }
       ],
@@ -1354,7 +1354,7 @@
           "implementation_diff_sha256": "0b16d7744e4dd920d830076b84900bf31504d7f4e691b8fdb98c41d694dc6787",
           "implementation_paths": [
             "scripts/test_w1_recheck_cache.py",
-            "src/ember/governance/scripts/w1_collapse_control_run.py",
+            "scripts/w1_collapse_control_run.py",
             "scripts/w1_recheck_cache.py"
           ],
           "number": 351,
@@ -1394,7 +1394,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
+          "artifact_path": "scripts/w1_collapse_control_run.py",
           "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Emit content-pinned corpus identity without raw shard paths and fail closed to external basename disclosure across Windows cross-drive paths.",
@@ -1404,14 +1404,14 @@
           "implementation_commit": "af31edf0501b166f663bebba849f09c1689747d5",
           "implementation_diff_sha256": "5d98571aedc956ddb35dfc0a8dbfb822653e23a7b463a9c94bd20a99e0ffcb2d",
           "implementation_paths": [
-            "src/ember/governance/scripts/test_w1b_continuation.py",
-            "src/ember/governance/scripts/w1_collapse_control_run.py"
+            "scripts/test_w1b_continuation.py",
+            "scripts/w1_collapse_control_run.py"
           ],
           "number": 357,
           "verification_executed_at": "2026-07-13T12:25:49Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "src/ember/governance/scripts/test_w1b_continuation.py",
+          "verifier_path": "scripts/test_w1b_continuation.py",
           "verifier_sha256": "87bfbcc37209e7cabb1a99b41e4af4835e463b278c0cdc5567bba5a797d40ade"
         }
       ],
@@ -1599,7 +1599,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
+          "artifact_path": "scripts/w1_collapse_control_run.py",
           "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Retain continuation_source_verification with checkpoint_dir, manifest SHA-256, on-disk model SHA-256, and match in both live and dry-run receipts.",
@@ -1610,7 +1610,7 @@
           "implementation_diff_sha256": "a011e95dd10b195d2f9df97dee23603ab296ae2d9d33bfb6bed11297b18ffbea",
           "implementation_paths": [
             "scripts/test_w1_live_gates.py",
-            "src/ember/governance/scripts/w1_collapse_control_run.py"
+            "scripts/w1_collapse_control_run.py"
           ],
           "number": 375,
           "verification_executed_at": "2026-07-13T12:26:37Z",
@@ -1649,7 +1649,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
+          "artifact_path": "scripts/ember_totality/ember_totality_spec.py",
           "artifact_sha256": "f352dfc0c8c24dcf3d068bf45168bcc5f961d557f2efeaaa7be4d2ad2af5a7a8",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "timestamped C-INV receipts without tracked genesis overwrite",
@@ -1659,14 +1659,14 @@
           "implementation_commit": "e115e020311566b149acda5f0336648fe71cb414",
           "implementation_diff_sha256": "def9481a085786bcfea981ad88a7ab9b1ce10e965b04643ad80648855fab9714",
           "implementation_paths": [
-            "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
-            "src/ember/governance/scripts/ember_totality/test_c_invariant.py"
+            "scripts/ember_totality/ember_totality_spec.py",
+            "scripts/ember_totality/test_c_invariant.py"
           ],
           "number": 377,
           "verification_executed_at": "2026-07-13T08:41:21Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "src/ember/governance/scripts/ember_totality/test_c_invariant.py",
+          "verifier_path": "scripts/ember_totality/test_c_invariant.py",
           "verifier_sha256": "17fade60065f839dda9fd97619f86197095c1b3c4f399ce7f6b0915d0134e4cc"
         }
       ],
@@ -2184,7 +2184,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
+          "artifact_path": "scripts/w1_collapse_control_run.py",
           "artifact_sha256": "22aaff1e0ab5ea94f9f19fd863d9f182f92a508749822bfc5fbf738f8808dd18",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Retain adaptive chunk-halving inside the sole serial contamination-recheck entry point, equivalent output, and a named out-of-memory failure at the configured floor.",
@@ -2195,7 +2195,7 @@
           "implementation_diff_sha256": "42b981ea1f9a9d690a8218d638f9ae1c853ad103f5549c8486914547b8b0a799",
           "implementation_paths": [
             "scripts/test_w1_contamination_recheck_scan_guard.py",
-            "src/ember/governance/scripts/w1_collapse_control_run.py"
+            "scripts/w1_collapse_control_run.py"
           ],
           "number": 445,
           "verification_executed_at": "2026-07-13T12:49:12Z",
@@ -2244,13 +2244,13 @@
           "implementation_commit": "3a683ce6208c6745617eb57d46a44d0b6580c971",
           "implementation_diff_sha256": "a4fe60210f9b99ec316e37ec5f113f9105d81bde1943751189b18694821394c1",
           "implementation_paths": [
-            "src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py"
+            "scripts/p5_ratio_audit/run_p5_audit.py"
           ],
           "number": 450,
           "verification_executed_at": "2026-07-13T07:54:20Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py",
+          "verifier_path": "scripts/p5_ratio_audit/run_p5_audit.py",
           "verifier_sha256": "6d4f51229a6b45f54fb71b8e4d8eecc9e0f56589d9027e24a7bea0889cbf16c0"
         }
       ],
@@ -2389,14 +2389,14 @@
           "implementation_diff_sha256": "904282b25aa8df7afcbab1c8346b0666fafa32719bcdafec93ca87825e0f0dee",
           "implementation_paths": [
             "receipts/cbase-grow-rung2-event-grow-rung2-20260709-remeasure-b3-gradpost.json",
-            "src/ember/governance/scripts/cbase_grow_rung2_gradpost_capture.py"
+            "scripts/cbase_grow_rung2_gradpost_capture.py"
           ],
           "number": 482,
           "unresolved_remainder": "The preregistered receipt is immutable and validator-PASS, but the decisive tensors, checkpoint, batch, and cache bytes are absent, so the scientific measurement cannot be independently recomputed from public master.",
           "verification_executed_at": "2026-07-13T12:27:38Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "src/ember/governance/scripts/receipt_check.py",
+          "verifier_path": "scripts/receipt_check.py",
           "verifier_sha256": "1d0895435df1cb8054332f6ae46528bb7b1fad12f5d3cf91ee9d883a4b38ea04"
         }
       ],
@@ -2563,7 +2563,7 @@
             "scripts/research/exposure_ledger.py",
             "scripts/research/test_exposure_ledger_mmap_forward.py",
             "scripts/test_w1b_fp32_check_mmap_forward.py",
-            "src/ember/governance/scripts/w1_collapse_control_run.py",
+            "scripts/w1_collapse_control_run.py",
             "scripts/w1b_fp32_check.py"
           ],
           "number": 575,
@@ -2711,7 +2711,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
+          "artifact_path": "scripts/ember_totality/ember_totality_spec.py",
           "artifact_sha256": "f352dfc0c8c24dcf3d068bf45168bcc5f961d557f2efeaaa7be4d2ad2af5a7a8",
           "closed_disposition": "unresolved",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
@@ -2722,7 +2722,7 @@
           "implementation_commit": "4f83d5b1713befa2d44e48d0096423ac3a41f7f2",
           "implementation_diff_sha256": "994bfe05f0c65bdb493addf86995315eb6df51c2a1aef1584cde01bec32db9d5",
           "implementation_paths": [
-            "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
+            "scripts/ember_totality/ember_totality_spec.py",
             "scripts/ember_totality/test_c_base.py"
           ],
           "number": 615,
@@ -2763,7 +2763,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
+          "artifact_path": "scripts/c8_prelaunch/c5c_readout.py",
           "artifact_sha256": "5339907ab72c63091e1866b8cf366766e6455aa8409bb5160ddfe90243690a3f",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "The frozen C5C readout keeps two rungs directional-only, uses a joint-bootstrap interval for W, and requires three rungs for uncertainty-aware monotone widening without changing F1-F3.",
@@ -2773,13 +2773,13 @@
           "implementation_commit": "2d4bfc9ecdf2df2c77dac884d1b42ee8d702228e",
           "implementation_diff_sha256": "b5905400005a2ba7486fb4ecfbe7fdbf0a7b296ad413b4f8b1afe4961e8a9a28",
           "implementation_paths": [
-            "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py"
+            "scripts/c8_prelaunch/c5c_readout.py"
           ],
           "number": 628,
           "verification_executed_at": "2026-07-13T11:33:26Z",
           "verification_exit_code": 0,
           "verification_outcome": "independently_verified",
-          "verifier_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
+          "verifier_path": "scripts/c8_prelaunch/c5c_readout.py",
           "verifier_sha256": "5339907ab72c63091e1866b8cf366766e6455aa8409bb5160ddfe90243690a3f"
         }
       ],
@@ -2814,7 +2814,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
+          "artifact_path": "scripts/c8_prelaunch/f2_schedule_generator.py",
           "artifact_sha256": "911c6db4ad38ae81182a56fa6a75a174ef22bdbd50fc221185a922d426639cba",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "The F2 generator and sweep bind every frozen input except k, reject the .10/.40 collision, define sweep/zero/tie/failure behavior, and map FLOPs to integer steps within two percent.",
@@ -2825,8 +2825,8 @@
           "implementation_diff_sha256": "75e7ab696cec1f1ad7a9f3f742b178426a0e3017929fdcf186434b459892132b",
           "implementation_paths": [
             "receipts/c8-prelaunch/f2-collision-repro-20260710T010000Z.json",
-            "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py",
-            "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
+            "scripts/c8_prelaunch/f2_placement_sweep.py",
+            "scripts/c8_prelaunch/f2_schedule_generator.py",
             "tests/test_f2_instance_commitment.py"
           ],
           "number": 629,
@@ -2894,9 +2894,9 @@
             "scripts/a1_beacon_grindability_repro.py",
             "scripts/a1_bmulti1_scan.py",
             "scripts/a1_corpus_lineage.py",
-            "src/ember/governance/scripts/a1_freeze_consumer.py",
+            "scripts/a1_freeze_consumer.py",
             "scripts/a1_heldout_beacon_select.py",
-            "src/ember/governance/scripts/a1_predicate_scan.py",
+            "scripts/a1_predicate_scan.py",
             "scripts/a1_quarantine_enum_v2.py",
             "scripts/a1_tokenizer_errata.py",
             "scripts/a1_tokenizer_mismatch_repro.py",
@@ -2994,7 +2994,7 @@
       "closure_proposed": false,
       "completion_proof": [
         {
-          "artifact_path": "src/ember/governance/scripts/cbase_grow_rung2_stabilize.py",
+          "artifact_path": "scripts/cbase_grow_rung2_stabilize.py",
           "artifact_sha256": "05a5491e3f4297caebb621cc937170d0883218a05623c62c0b21efb5fe43e89c",
           "commit": "fe4d9e2beb5a82573f3f59a5cb05fe9b2c1a097c",
           "criterion": "Require a real strict YYYY-MM-DD lineage-resume prefix, rejecting x, not-a-date, and 2026-99-99 while accepting a valid dated positive fixture.",
@@ -3004,7 +3004,7 @@
           "implementation_commit": "bce8fc8fc1d8072f47feb41452584ddc144b552c",
           "implementation_diff_sha256": "8457f5e2ff97e0dc259a0db70deceb21ad55e9ab2e259a1dfebacded9b76e1f1",
           "implementation_paths": [
-            "src/ember/governance/scripts/cbase_grow_rung2_stabilize.py",
+            "scripts/cbase_grow_rung2_stabilize.py",
             "tests/test_stabilize_v9_cure.py"
           ],
           "number": 665,
