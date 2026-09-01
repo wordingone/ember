@@ -63,6 +63,8 @@ def _connector_media_type(path: PurePosixPath) -> str:
         return "text/plain; charset=utf-8"
     if name.endswith(".jsonl.zst"):
         return "application/x-ndjson+zstd"
+    if name.endswith(".json.gz"):
+        return "application/json+gzip"
     media_types = {
         ".json": "application/json",
         ".jsonl": "application/x-ndjson",
