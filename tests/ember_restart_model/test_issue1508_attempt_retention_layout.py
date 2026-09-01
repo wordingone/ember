@@ -31,7 +31,7 @@ def load_module():
 
 
 def load_battery():
-    path = ROOT / "scripts" / "r1_exit_battery.py"
+    path = ROOT / "src" / "ember" / "governance" / "scripts" / "r1_exit_battery.py"
     spec = importlib.util.spec_from_file_location("r1_exit_battery", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -49,7 +49,7 @@ def load_frontier():
 
 
 def load_run_attempt_registry():
-    path = ROOT / "scripts" / "run_attempt_registry.py"
+    path = ROOT / "src" / "ember" / "governance" / "scripts" / "run_attempt_registry.py"
     spec = importlib.util.spec_from_file_location("run_attempt_registry", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -469,6 +469,8 @@ class Issue1508AttemptRetentionTests(unittest.TestCase):
                         paths["certificate"],
                         paths["ledger"],
                         paths["run_spec"],
+                        paths["certificate"].parent / "sha-binding-map.json",
+                        paths["certificate"].parent / "launch-authority-custody.json",
                         paths["completion"],
                         module._run_attempt_registry_log_path(launch),
                     )

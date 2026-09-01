@@ -6,8 +6,23 @@
   "exceptions": [
     {
       "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "ce71f9eb2c3f985fb09d6a60fb98a78b5ea22c51d196ed7f068c2e982d038f68",
+      "sha256": "bdaf1fdc8ecfc621126c8eff20afe82d18ada6fb4906e7855e3d36fd71baf7da",
       "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
+    },
+    {
+      "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
+      "sha256": "c898df21988301f7def1251708104140d558fb29c0ac67bcd62edd785a0d1c98",
+      "reason": "02B-owned certified-launch custody suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
+    },
+    {
+      "path": "tests/ember_restart_model/test_runner_preflight.py",
+      "sha256": "2b0122674c20c0f3f7946e795382bbe9c16b539d05aa14059b86fe51a7fded16",
+      "reason": "02B-owned production runner preflight suite after canonical consumer and tokenizer relocation; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
+    },
+    {
+      "path": "tools/ember-restart-3b/run_vertical_slice.py",
+      "sha256": "242c65e94ec72ae2d4da15631969e7dfe5b65db13a639b2acfbd0c35d980a24a",
+      "reason": "02B-owned production vertical runner after canonical governance and documentation consumer relocation; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     }
   ]
 }

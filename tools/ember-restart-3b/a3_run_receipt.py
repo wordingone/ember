@@ -64,7 +64,7 @@ from typing import Any
 from durable_io import atomic_create_durable
 
 HERE = Path(__file__).resolve().parent
-SCRIPTS = HERE.parent.parent / "scripts"
+SCRIPTS = HERE.parents[1] / "src" / "ember" / "governance" / "scripts"
 
 
 def _load_e8_validator():

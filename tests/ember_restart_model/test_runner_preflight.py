@@ -755,12 +755,17 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(8 * 10**9, 24 * 10**9)) as memory:
                 receipt = run_vertical_slice.governed_resource_preflight()
         fraction.assert_called_once()
-        memory.assert_called_once_with()
+        memory.assert_called_once_with(device=None)
         self.assertEqual(receipt["free_gb"], 8.0)
         self.assertEqual(receipt["total_gb"], 24.0)
         self.assertIn("vram_fraction", receipt)
         self.assertIn("margin_gb", receipt)
-        self.assertEqual(receipt["governor_source_sha256"], hashlib.sha256((ROOT / "scripts" / "governor.py").read_bytes()).hexdigest())
+        self.assertEqual(
+            receipt["governor_source_sha256"],
+            hashlib.sha256(
+                (ROOT / "src" / "ember" / "governance" / "scripts" / "governor.py").read_bytes()
+            ).hexdigest(),
+        )
         self.assertRegex(receipt["governor_source_sha256"], r"^[0-9a-f]{64}$")
 
     def test_semantic_runner_resource_refusal_prevents_cuda_probe(self) -> None:
@@ -2041,7 +2046,7 @@ class RunnerPreflightTests(unittest.TestCase):
     def test_authorized_records_rejects_a_schema_valid_shard_swapped_after_admission(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
-            for relative in ("configs", "tokenizer", "data/ember-restart-3b"):
+            for relative in ("configs", "domains/model/tokenizer", "data/ember-restart-3b"):
                 shutil.copytree(ROOT / relative, root / relative)
             tools = root / "tools" / "ember-restart-3b"
             tools.mkdir(parents=True)
