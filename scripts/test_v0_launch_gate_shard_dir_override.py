@@ -255,10 +255,13 @@ def test_g_shards_forwards_override_to_validator():
          mock.patch.object(gate_mod.glob, "glob",
                             return_value=[f"{gate_mod.NC}/receipts/token-shards-v0-x.json"]), \
          mock.patch.object(gate_mod.token_shards_v0, "validate_shards_receipt",
-                            return_value=[]) as mocked:
+                            return_value=[]) as mocked, \
+         mock.patch.object(gate_mod, "_shards_exclusion_check",
+                            return_value=("GREEN", "isolated")) as mocked_exclusion:
         st, dt = gate_mod.g_shards(shard_dir_override="/some/real/shard/dir")
     assert st == "GREEN", dt
     assert mocked.call_args.kwargs.get("shard_dir_override") == "/some/real/shard/dir"
+    mocked_exclusion.assert_called_once_with("token-shards-v0-x.json", {"fake": "receipt"})
 
 
 def test_gate_forwards_shard_dir_override_to_g_shards():
