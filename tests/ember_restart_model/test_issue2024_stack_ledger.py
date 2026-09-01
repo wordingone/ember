@@ -59,7 +59,7 @@ def test_issue2024_profiler_configuration_emits_runtime_source_stacks() -> None:
     assert any(event.stack for event in profiler.events())
 
 
-def test_issue2024_live_schedule_emits_exactly_one_trace_callback() -> None:
+def test_issue2024_live_schedule_streams_each_frozen_update_as_one_trace_callback() -> None:
     callback_count = 0
 
     def count_trace(_profiler: object) -> None:
@@ -69,7 +69,7 @@ def test_issue2024_live_schedule_emits_exactly_one_trace_callback() -> None:
     torch = subject.torch
     with torch.profiler.profile(
         activities=[torch.profiler.ProfilerActivity.CPU],
-        schedule=torch.profiler.schedule(wait=16, warmup=0, active=8, repeat=1),
+        schedule=subject.issue2024_streaming_profiler_schedule(list(range(16, 24))),
         on_trace_ready=count_trace,
         profile_memory=True,
         record_shapes=True,
@@ -80,7 +80,47 @@ def test_issue2024_live_schedule_emits_exactly_one_trace_callback() -> None:
             value @ value
             profiler.step()
 
-    assert callback_count == 1
+    assert callback_count == 8
+
+
+def test_issue2024_streaming_ledger_union_preserves_shard_identity_and_exact_sum() -> None:
+    first = subject.build_issue2024_event_ledger(
+        [_event(event_id=7, device_time_us="10.000001")],
+        declared_self_device_time_total_us="10.000001",
+    )
+    second = subject.build_issue2024_event_ledger(
+        [_event(event_id=7, device_time_us="2.000002")],
+        declared_self_device_time_total_us="2.000002",
+    )
+    merged = subject.merge_issue2024_event_ledger_shards([(16, first), (17, second)])
+    assert merged["profile_update_indexes"] == [16, 17]
+    assert merged["declared_self_device_time_total_us"] == "12.000003"
+    assert merged["ledger_self_device_time_total_us"] == "12.000003"
+    assert merged["reconciliation_gap_ns"] == 0
+    assert [(row["profile_update_index"], row["event_id"]) for row in merged["events"]] == [
+        (16, 7),
+        (17, 7),
+    ]
+
+
+def test_issue2024_union_proof_modes_bind_same_two_updates_to_distinct_collection_paths() -> None:
+    assert subject.issue2024_profile_mode("issue2024-union-one-shot") == {
+        "policy_mode": "issue1946-arm-a",
+        "output_name": "issue2024-union-one-shot-stack-ledger.json",
+    }
+    assert subject.issue2024_profile_mode("issue2024-union-sharded") == {
+        "policy_mode": "issue1946-arm-a",
+        "output_name": "issue2024-union-sharded-stack-ledger.json",
+    }
+    expected = {"packs": 2, "wait": 0, "active": 2, "update_indexes": [0, 1]}
+    assert subject.issue2024_profile_schedule(
+        "issue2024-union-one-shot", "issue1946-arm-a"
+    ) == expected
+    assert subject.issue2024_profile_schedule(
+        "issue2024-union-sharded", "issue1946-arm-a"
+    ) == expected
+    assert subject.issue2024_uses_streaming_schedule("issue2024-union-one-shot") is False
+    assert subject.issue2024_uses_streaming_schedule("issue2024-union-sharded") is True
 
 
 def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns() -> None:

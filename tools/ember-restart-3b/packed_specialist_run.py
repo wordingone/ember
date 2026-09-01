@@ -17,7 +17,7 @@ import shutil
 from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import torch
 from batch import decode_owned_packed_batch
@@ -76,6 +76,8 @@ ISSUE_PROFILE_MODES = (
     "issue1946-arm-a",
     "issue1946-arm-b",
     "issue2024-smoke",
+    "issue2024-union-one-shot",
+    "issue2024-union-sharded",
     "issue2024-arm-a",
     "issue2024-arm-b",
 )
@@ -137,6 +139,14 @@ def issue2024_profile_mode(mode: str) -> dict[str, str]:
             "policy_mode": "issue1946-arm-a",
             "output_name": "issue2024-smoke-stack-ledger.json",
         },
+        "issue2024-union-one-shot": {
+            "policy_mode": "issue1946-arm-a",
+            "output_name": "issue2024-union-one-shot-stack-ledger.json",
+        },
+        "issue2024-union-sharded": {
+            "policy_mode": "issue1946-arm-a",
+            "output_name": "issue2024-union-sharded-stack-ledger.json",
+        },
         "issue2024-arm-a": {
             "policy_mode": "issue1946-arm-a",
             "output_name": "issue2024-arm-a-stack-ledger.json",
@@ -153,7 +163,7 @@ def issue2024_profile_mode(mode: str) -> dict[str, str]:
 
 
 def profiler_configuration_for_mode(mode: str) -> dict[str, bool]:
-    if mode in {"issue2024-smoke", "issue2024-arm-a", "issue2024-arm-b"}:
+    if mode.startswith("issue2024-"):
         return issue2024_profiler_configuration()
     return {"profile_memory": True, "record_shapes": True, "with_stack": False}
 
@@ -161,7 +171,30 @@ def profiler_configuration_for_mode(mode: str) -> dict[str, bool]:
 def issue2024_profile_schedule(mode: str, policy_mode: str) -> dict[str, object]:
     if mode == "issue2024-smoke" or policy_mode == "issue1946-preflight":
         return {"packs": 1, "wait": 0, "active": 1, "update_indexes": [0]}
+    if mode in {"issue2024-union-one-shot", "issue2024-union-sharded"}:
+        return {"packs": 2, "wait": 0, "active": 2, "update_indexes": [0, 1]}
     return {"packs": 64, "wait": 16, "active": 8, "update_indexes": list(range(16, 24))}
+
+
+def issue2024_uses_streaming_schedule(mode: str) -> bool:
+    return mode != "issue2024-union-one-shot"
+
+
+def issue2024_streaming_profiler_schedule(
+    update_indexes: list[int],
+) -> Callable[[int], torch.profiler.ProfilerAction]:
+    if not update_indexes or update_indexes != sorted(set(update_indexes)) or update_indexes[0] < 0:
+        raise ValueError("ISSUE2024_PROFILE_UPDATE_INDEXES_INVALID")
+    targets = frozenset(update_indexes)
+
+    def schedule(step: int) -> torch.profiler.ProfilerAction:
+        return (
+            torch.profiler.ProfilerAction.RECORD_AND_SAVE
+            if step in targets
+            else torch.profiler.ProfilerAction.NONE
+        )
+
+    return schedule
 
 
 def _issue2024_decimal_text(value: object) -> str:
@@ -273,6 +306,47 @@ def build_issue2024_event_ledger(
         "excluded_zero_device_time_events": excluded_zero_device_time_events,
         "reconciliation_gap_ns": int(gap_ns),
         "events": rows,
+    }
+
+
+def merge_issue2024_event_ledger_shards(
+    shards: list[tuple[int, dict[str, object]]],
+) -> dict[str, object]:
+    indexes = [index for index, _ledger in shards]
+    if not shards or indexes != sorted(set(indexes)):
+        raise ValueError("ISSUE2024_LEDGER_SHARD_INDEXES_INVALID")
+    declared_total = Decimal("0")
+    ledger_total = Decimal("0")
+    events: list[dict[str, object]] = []
+    excluded: list[dict[str, object]] = []
+    for update_index, ledger in shards:
+        if (
+            ledger.get("schema_version") != "ember-issue2024-full-precision-event-ledger-v1"
+            or int(ledger.get("reconciliation_gap_ns", 2)) > 1
+        ):
+            raise ValueError(f"ISSUE2024_LEDGER_SHARD_NONTERMINAL:{update_index}")
+        declared_total += Decimal(str(ledger["declared_self_device_time_total_us"]))
+        ledger_total += Decimal(str(ledger["ledger_self_device_time_total_us"]))
+        events.extend(
+            {"profile_update_index": update_index, **dict(row)}
+            for row in ledger["events"]
+        )
+        excluded.extend(
+            {"profile_update_index": update_index, **dict(row)}
+            for row in ledger["excluded_zero_device_time_events"]
+        )
+    gap_ns = abs(declared_total - ledger_total) * Decimal("1000")
+    if gap_ns > Decimal("1"):
+        raise ValueError(f"ISSUE2024_EVENT_RECONCILIATION_MISS:{gap_ns}")
+    return {
+        "schema_version": "ember-issue2024-full-precision-event-ledger-v2",
+        "profile_update_indexes": indexes,
+        "declared_self_device_time_total_us": _issue2024_decimal_text(declared_total),
+        "ledger_self_device_time_total_us": _issue2024_decimal_text(ledger_total),
+        "excluded_self_device_time_total_us": "0",
+        "excluded_zero_device_time_events": excluded,
+        "reconciliation_gap_ns": int(gap_ns),
+        "events": events,
     }
 
 def _issue1946_event_inside_marker(event: object, marker: str) -> bool:
@@ -1660,11 +1734,15 @@ def run_issue1946_profile(
         forward_owner_device_time_us = {owner: 0.0 for owner in _ISSUE1946_FORWARD_OWNERS}
         forward_unmapped_device_time_us = 0.0
         profiler_indexes = list(profile_schedule["update_indexes"])
+        issue2024_streaming = issue2024 and issue2024_uses_streaming_schedule(mode)
         issue2024_event_ledger: dict[str, object] | None = None
+        issue2024_event_ledger_shards: list[tuple[int, dict[str, object]]] = []
+        issue2024_trace_shards: list[tuple[int, Path]] = []
 
         def trace_ready(profiler: Any) -> None:
             nonlocal forward_unmapped_device_time_us, issue2024_event_ledger
             unmapped_events: list[Any] = []
+            callback_unmapped_device_time_us = 0.0
             for event in profiler.events():
                 name = str(event.key)
                 self_device_time_us = float(getattr(event, "self_device_time_total", 0.0))
@@ -1678,6 +1756,7 @@ def run_issue1946_profile(
                     if owner is None:
                         forward_unmapped_device_time_us += self_device_time_us
                         if issue2024:
+                            callback_unmapped_device_time_us += self_device_time_us
                             unmapped_events.append(event)
                     else:
                         forward_owner_device_time_us[owner] += self_device_time_us
@@ -1691,21 +1770,44 @@ def run_issue1946_profile(
                         "inside_forward_loss_marker": inside_forward,
                         "forward_owner": owner,
                     })
-            if issue2024:
+            if issue2024_streaming:
+                callback_index = len(issue2024_event_ledger_shards)
+                if callback_index >= len(profiler_indexes):
+                    raise RuntimeError("ISSUE2024_PROFILER_CALLBACK_EXCESS")
+                update_index = profiler_indexes[callback_index]
+                shard = build_issue2024_event_ledger(
+                    unmapped_events,
+                    declared_self_device_time_total_us=str(callback_unmapped_device_time_us),
+                )
+                issue2024_event_ledger_shards.append((update_index, shard))
+                shard_trace_path = trace_path.with_name(
+                    f"{trace_path.stem}.update-{update_index}{trace_path.suffix}"
+                )
+                profiler.export_chrome_trace(str(shard_trace_path))
+                issue2024_trace_shards.append((update_index, shard_trace_path))
+            elif issue2024:
                 if issue2024_event_ledger is not None:
-                    raise RuntimeError("ISSUE2024_PROFILER_CALLBACK_REPEATED")
+                    raise RuntimeError("ISSUE2024_ONE_SHOT_CALLBACK_EXCESS")
                 issue2024_event_ledger = build_issue2024_event_ledger(
                     unmapped_events,
-                    declared_self_device_time_total_us=str(forward_unmapped_device_time_us),
+                    declared_self_device_time_total_us=str(callback_unmapped_device_time_us),
                 )
-            # The canonical in-memory ledger is complete before this secondary export.
-            profiler.export_chrome_trace(str(trace_path))
+                profiler.export_chrome_trace(str(trace_path))
+            else:
+                # The canonical in-memory ledger is complete before this secondary export.
+                profiler.export_chrome_trace(str(trace_path))
 
         wait_updates = int(profile_schedule["wait"])
         active_updates = int(profile_schedule["active"])
         profiler = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-            schedule=torch.profiler.schedule(wait=wait_updates, warmup=0, active=active_updates, repeat=1),
+            schedule=(
+                issue2024_streaming_profiler_schedule(profiler_indexes)
+                if issue2024_streaming
+                else torch.profiler.schedule(
+                    wait=wait_updates, warmup=0, active=active_updates, repeat=1
+                )
+            ),
             on_trace_ready=trace_ready,
             **profiler_configuration_for_mode(mode),
         )
@@ -1821,6 +1923,29 @@ def run_issue1946_profile(
             }
         if segment is None:
             raise RuntimeError("#1946 segment returned no result")
+        if issue2024_streaming:
+            if [index for index, _ledger in issue2024_event_ledger_shards] != profiler_indexes:
+                raise RuntimeError("ISSUE2024_PROFILE_UPDATE_SET_INCOMPLETE")
+            issue2024_event_ledger = merge_issue2024_event_ledger_shards(
+                issue2024_event_ledger_shards
+            )
+            trace_rows = [
+                {
+                    "profile_update_index": update_index,
+                    "path": shard_path.name,
+                    "raw_sha256": _sha256_path(shard_path),
+                }
+                for update_index, shard_path in issue2024_trace_shards
+            ]
+            trace_manifest: dict[str, object] = {
+                "schema_version": "ember-issue2024-profiler-trace-shards-v1",
+                "profile_update_indexes": profiler_indexes,
+                "traces": trace_rows,
+            }
+            trace_manifest["self_sha256"] = hashlib.sha256(
+                _canonical(trace_manifest)
+            ).hexdigest()
+            _write_json_no_replace(trace_path, trace_manifest)
         if not trace_path.exists():
             raise RuntimeError("#1946 profiler did not flush its immutable trace")
         if not observed_kernel_rows:
