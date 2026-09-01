@@ -11,11 +11,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.c8_prelaunch.governed_run_launcher import (
-    GovernedLaunchError,
-    load_launch_manifest,
-    run_governed_launch,
-)
+try:
+    from .governed_run_launcher import (
+        GovernedLaunchError,
+        load_launch_manifest,
+        run_governed_launch,
+    )
+except ImportError:  # Direct unittest discovery from this directory.
+    from governed_run_launcher import (
+        GovernedLaunchError,
+        load_launch_manifest,
+        run_governed_launch,
+    )
 
 
 class GovernedRunLauncherTests(unittest.TestCase):

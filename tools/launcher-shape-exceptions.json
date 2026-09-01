@@ -32,7 +32,7 @@
     },
     {
       "path": "src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1",
-      "sha256": "97129ed7d9ca1a6ba7d0ceefb3db7820e7bd76646b16737cddf3f475e6cfd336",
+      "sha256": "8ed5cd52c86bb612c439bdb444f4f1ac086b00b212f3c2f339b768d807fb0339",
       "reason": "genuine hermetic deployment fixture. It creates fake application and runtime executables and invokes the installer only inside a unique temporary repository/install root; it never starts a training run or a production cockpit. The exact digest is required because filename-based test exclusions are forbidden."
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "src/ember/governance/scripts/c8_prelaunch/test_governed_run_launcher.py",
-      "sha256": "32eb3b192436a1a89923bd2881731a0e75f59e6e6fc507fcb2c67a33451a38eb",
+      "sha256": "8969cd06d18d704bf9d5cd933bccd55902e6f7eb6b02b7a5a3182b3960314cb9",
       "reason": "hermetic unit test for the historical governed-run adapter. It creates a temporary worker fixture and exercises timeout, cancellation, manifest, and receipt behavior without addressing any production run or persistent custody root."
     },
     {

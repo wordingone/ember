@@ -30,11 +30,12 @@ function Get-TestCommit {
     return $value
 }
 try {
+    $sourceRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\..\..")).Path
     New-Item -ItemType Directory -Force -Path (Join-Path $repository "scripts") | Out-Null
     Add-Type -TypeDefinition 'namespace FixtureApp { public static class Program { public static int Main() { return 0; } } }' -OutputAssembly $fakeApplication -OutputType ConsoleApplication
     Add-Type -TypeDefinition 'namespace FixtureLab { public static class Program { public static int Main() { return 23; } } }' -OutputAssembly $fakeRuntime -OutputType ConsoleApplication
     foreach ($name in @("install-ember-desktop.ps1", "ember-window-placement.ps1")) {
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $repository "scripts\$name")
+        Copy-Item -LiteralPath (Join-Path $sourceRepository "scripts\$name") -Destination (Join-Path $repository "scripts\$name")
     }
     $script:Installer = Join-Path $repository "scripts\install-ember-desktop.ps1"
     $env:EMBER_SELFTEST_APPLICATION = $fakeApplication
