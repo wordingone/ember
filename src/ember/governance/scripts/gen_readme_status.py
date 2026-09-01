@@ -49,13 +49,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = str(Path(__file__).resolve().parents[4])
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from scripts.ember_totality import quarantine_sweep
 from scripts.ember_totality import tree_provenance
-from scripts.branch_inventory import InventoryError as BranchInventoryError
-from scripts.branch_inventory import check_inventory
+from branch_inventory import InventoryError as BranchInventoryError
+from branch_inventory import check_inventory
 
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
