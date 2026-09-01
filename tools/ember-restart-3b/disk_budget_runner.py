@@ -1,4 +1,5 @@
 import argparse
+import ctypes
 import hashlib
 import json
 import os
@@ -271,17 +272,129 @@ def _no_window_creationflags() -> int:
     return subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 
-def terminate_tree(process: subprocess.Popen[bytes]) -> None:
+class _JobObjectBasicLimitInformation(ctypes.Structure):
+    _fields_ = [
+        ("PerProcessUserTimeLimit", ctypes.c_longlong),
+        ("PerJobUserTimeLimit", ctypes.c_longlong),
+        ("LimitFlags", ctypes.c_ulong),
+        ("MinimumWorkingSetSize", ctypes.c_size_t),
+        ("MaximumWorkingSetSize", ctypes.c_size_t),
+        ("ActiveProcessLimit", ctypes.c_ulong),
+        ("Affinity", ctypes.c_size_t),
+        ("PriorityClass", ctypes.c_ulong),
+        ("SchedulingClass", ctypes.c_ulong),
+    ]
+
+
+class _IoCounters(ctypes.Structure):
+    _fields_ = [(name, ctypes.c_ulonglong) for name in (
+        "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+        "ReadTransferCount", "WriteTransferCount", "OtherTransferCount",
+    )]
+
+
+class _JobObjectExtendedLimitInformation(ctypes.Structure):
+    _fields_ = [
+        ("BasicLimitInformation", _JobObjectBasicLimitInformation),
+        ("IoInfo", _IoCounters),
+        ("ProcessMemoryLimit", ctypes.c_size_t),
+        ("JobMemoryLimit", ctypes.c_size_t),
+        ("PeakProcessMemoryUsed", ctypes.c_size_t),
+        ("PeakJobMemoryUsed", ctypes.c_size_t),
+    ]
+
+
+class _RetainedWindowsJob:
+    """Own the child tree through one retained kernel handle."""
+
+    _EXTENDED_LIMIT_INFORMATION = 9
+    _KILL_ON_JOB_CLOSE = 0x00002000
+
+    def __init__(self, process: subprocess.Popen[bytes]) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateJobObjectW.restype = ctypes.c_void_p
+        handle = kernel32.CreateJobObjectW(None, None)
+        if not handle:
+            raise OSError(ctypes.get_last_error(), "CreateJobObjectW failed")
+        self._kernel32 = kernel32
+        self._handle = ctypes.c_void_p(handle)
+        self._closed = False
+        limits = _JobObjectExtendedLimitInformation()
+        limits.BasicLimitInformation.LimitFlags = self._KILL_ON_JOB_CLOSE
+        if not kernel32.SetInformationJobObject(
+            self._handle,
+            self._EXTENDED_LIMIT_INFORMATION,
+            ctypes.byref(limits),
+            ctypes.sizeof(limits),
+        ):
+            error = ctypes.get_last_error()
+            kernel32.CloseHandle(self._handle)
+            self._closed = True
+            raise OSError(error, "SetInformationJobObject failed")
+        if not kernel32.AssignProcessToJobObject(
+            self._handle, ctypes.c_void_p(int(process._handle))
+        ):
+            error = ctypes.get_last_error()
+            kernel32.CloseHandle(self._handle)
+            self._closed = True
+            raise OSError(error, "AssignProcessToJobObject failed")
+
+    def terminate(self, exit_code: int) -> None:
+        if self._closed:
+            raise RuntimeError("retained Job Object handle is closed")
+        if not self._kernel32.TerminateJobObject(self._handle, int(exit_code)):
+            raise OSError(ctypes.get_last_error(), "TerminateJobObject failed")
+
+    def close(self) -> None:
+        if not self._closed:
+            if not self._kernel32.CloseHandle(self._handle):
+                raise OSError(ctypes.get_last_error(), "CloseHandle(Job Object) failed")
+            self._closed = True
+
+
+def _write_pretermination_receipt(
+    path: pathlib.Path,
+    *,
+    command: Sequence[str],
+    started_at_unix: float,
+    stop_reason: str,
+    child_pid: int,
+    retained_job: bool,
+) -> str:
+    payload: dict[str, object] = {
+        "schema_version": "ember-disk-budget-pretermination-v1",
+        "result": "TERMINATION_REQUIRED_RECEIPT_DURABLE",
+        "command": list(command),
+        "started_at_unix": started_at_unix,
+        "detected_at_unix": time.time(),
+        "stop_reason": stop_reason,
+        "child_pid": child_pid,
+        "retained_job_handle": retained_job,
+        "termination_attempted": False,
+    }
+    payload["self_sha256"] = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    raw = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("xb") as output:
+        output.write(raw)
+        output.flush()
+        os.fsync(output.fileno())
+    return hashlib.sha256(raw).hexdigest()
+
+
+def terminate_tree(
+    process: subprocess.Popen[bytes],
+    *,
+    retained_job: _RetainedWindowsJob | None = None,
+) -> None:
     if process.poll() is not None:
         return
     if sys.platform == "win32":
-        subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            creationflags=_no_window_creationflags(),
-        )
+        if retained_job is None:
+            raise RuntimeError("retained Windows Job Object is required for tree termination")
+        retained_job.terminate(125)
     else:
         process.terminate()
 
@@ -311,6 +424,8 @@ def run_budgeted(
     poll_seconds: float = 0.25,
 ) -> int:
     receipt_path = _require_receipt_within_write_root(receipt_path, write_roots)
+    if receipt_path.exists():
+        raise FileExistsError(f"refusing to overwrite runner receipt: {receipt_path}")
     budgets = _validate_budgets(max_write_gib)
     child_environment, child_cache_bindings, child_assertion_path = _child_cache_environment(write_roots)
     child_assertion_nonce = secrets.token_hex(16)
@@ -340,6 +455,8 @@ def run_budgeted(
     started_at = time.time()
     free_samples = [{"at_unix": started_at, "free_gib": start_free}]
     operating_reserve_breaches: set[str] = set()
+    pretermination_path = receipt_path.with_name(receipt_path.name + ".preterminate.json")
+    pretermination_raw_sha256: str | None = None
 
     def growth_with_receipt_reservation() -> dict[str, int]:
         return {
@@ -448,6 +565,10 @@ def run_budgeted(
             "stop_reason": stop_reason,
             "child_exit_code": child_exit_code,
             "termination_wait_timed_out": termination_wait_timed_out,
+            "pretermination_receipt_path": (
+                str(pretermination_path) if pretermination_raw_sha256 is not None else None
+            ),
+            "pretermination_receipt_raw_sha256": pretermination_raw_sha256,
             "runner_exit_code": 125 if outcome in {"STOPPED_BY_BUDGET", "CHILD_TERMINATION_TIMEOUT", "PRELAUNCH_REJECTED"} else child_exit_code or 0,
             "outcome": outcome,
         }
@@ -456,7 +577,11 @@ def run_budgeted(
             receipt["stop_reason"] = child_assertion_error
             receipt["runner_exit_code"] = 125
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
-        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        with receipt_path.open("x", encoding="utf-8") as output:
+            json.dump(receipt, output, indent=2)
+            output.write("\n")
+            output.flush()
+            os.fsync(output.fileno())
         return int(receipt["runner_exit_code"])
 
     if errors:
@@ -469,10 +594,31 @@ def run_budgeted(
         stderr=sys.stderr,
         creationflags=_no_window_creationflags(),
     )
+    retained_job: _RetainedWindowsJob | None = None
+    if sys.platform == "win32":
+        try:
+            retained_job = _RetainedWindowsJob(process)
+        except BaseException:
+            process.terminate()
+            process.wait(timeout=30)
+            raise
     child_started = True
     stop_reason = None
     child_exit_code: int | None = None
     termination_wait_timed_out = False
+
+    def receipt_before_termination(reason: str) -> None:
+        nonlocal pretermination_raw_sha256
+        if pretermination_raw_sha256 is None:
+            pretermination_raw_sha256 = _write_pretermination_receipt(
+                pretermination_path,
+                command=command,
+                started_at_unix=started_at,
+                stop_reason=reason,
+                child_pid=process.pid,
+                retained_job=retained_job is not None,
+            )
+
     try:
         while process.poll() is None:
             time.sleep(poll_seconds)
@@ -488,17 +634,22 @@ def run_budgeted(
                 or _reserve_stop_reason(observed_free)
             )
             if stop_reason:
-                terminate_tree(process)
+                receipt_before_termination(stop_reason)
+                terminate_tree(process, retained_job=retained_job)
                 break
         try:
             child_exit_code = process.wait(timeout=30)
         except subprocess.TimeoutExpired:
             termination_wait_timed_out = True
-            terminate_tree(process)
+            receipt_before_termination("child termination wait timed out")
+            terminate_tree(process, retained_job=retained_job)
             child_exit_code = process.poll()
     finally:
         if process.poll() is None:
-            terminate_tree(process)
+            receipt_before_termination("runner finally found owned child still active")
+            terminate_tree(process, retained_job=retained_job)
+        if retained_job is not None:
+            retained_job.close()
 
     if stop_reason:
         outcome = "STOPPED_BY_BUDGET"
