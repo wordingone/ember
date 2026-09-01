@@ -61,6 +61,8 @@ def _connector_media_type(path: PurePosixPath) -> str:
     name = path.name.lower()
     if name == ".gitattributes":
         return "text/plain; charset=utf-8"
+    if name.endswith(".jsonl.zst"):
+        return "application/x-ndjson+zstd"
     media_types = {
         ".json": "application/json",
         ".jsonl": "application/x-ndjson",
