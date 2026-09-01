@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path, PureWindowsPath
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 DOMAINS = ("mathematics", "statistics", "physics", "computer_science", "ml_ai", "training_infrastructure", "formal_logic", "software_engineering", "data_evaluation", "scientific_method", "application_worlds")

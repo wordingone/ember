@@ -22,11 +22,12 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governance"))
 
 from checkpoint_artifacts import CheckpointIdentityMismatch, load_checkpoint_artifacts
 from model import RestartDecoderConfig, UnifiedDecoder
 
-from .checkpoint_fixture import write_checkpoint_artifacts
+from checkpoint_fixture import write_checkpoint_artifacts
 
 
 def _tiny_config() -> RestartDecoderConfig:

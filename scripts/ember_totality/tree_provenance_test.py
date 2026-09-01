@@ -15,7 +15,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts import gen_readme_status
-from scripts.ember_totality import ember_totality_spec
+from src.ember.governance.scripts.ember_totality import ember_totality_spec
 from scripts.ember_totality import tree_provenance
 
 

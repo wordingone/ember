@@ -26,7 +26,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-TOTALITY_DIR = os.path.join(REPO_ROOT, "scripts", "ember_totality")
+TOTALITY_DIR = os.path.join(
+    REPO_ROOT, "src", "ember", "governance", "scripts", "ember_totality"
+)
 
 
 def _load_spec_module(unique_suffix):

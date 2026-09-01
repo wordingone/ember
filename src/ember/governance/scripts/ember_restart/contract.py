@@ -21,13 +21,16 @@ from urllib.parse import urlparse
 
 try:
     from .prediction_contract import ContractError, load_predictions
-except ImportError:  # Direct execution: python src/ember/governance/scripts/ember_restart/contract.py
-    from prediction_contract import ContractError, load_predictions
+except ImportError:  # Direct/dynamic execution from repository root.
+    from src.ember.governance.scripts.ember_restart.prediction_contract import (
+        ContractError,
+        load_predictions,
+    )
 
 try:
     from . import source_authority
-except ImportError:  # Direct execution: python src/ember/governance/scripts/ember_restart/contract.py
-    import source_authority
+except ImportError:  # Direct/dynamic execution from repository root.
+    from src.ember.governance.scripts.ember_restart import source_authority
 
 
 SCHEMA_VERSION = "ember-owned-rung-v1"

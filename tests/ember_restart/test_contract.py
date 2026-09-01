@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.ember_restart import contract
+from src.ember.governance.scripts.ember_restart import contract
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -680,7 +680,7 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
 
 
 def test_genesis_candidate_is_zero_step_entry_only_and_uses_real_checkpoint_bytes(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -694,7 +694,7 @@ def test_genesis_candidate_is_zero_step_entry_only_and_uses_real_checkpoint_byte
 
 
 def test_checkpoint_shard_resolution_is_version_gated(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     trained_root = tmp_path / "trained"
     trained_root.mkdir()
@@ -740,7 +740,7 @@ def test_checkpoint_shard_resolution_is_version_gated(tmp_path: Path):
 
 
 def test_genesis_expert_artifact_sha_is_distinct_from_tensor_genesis_sha(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -767,7 +767,7 @@ def test_genesis_expert_artifact_sha_is_distinct_from_tensor_genesis_sha(tmp_pat
 
 @pytest.mark.parametrize("field", ["global_step", "tokens_seen", "optimizer_steps"])
 def test_genesis_candidate_refuses_any_post_init_counter(tmp_path: Path, field: str):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -798,7 +798,7 @@ def test_genesis_candidate_refuses_any_post_init_counter(tmp_path: Path, field: 
     ],
 )
 def test_genesis_candidate_refuses_widened_claim_boundary(tmp_path: Path, field: str):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -817,7 +817,7 @@ def test_genesis_candidate_refuses_widened_claim_boundary(tmp_path: Path, field:
 
 @pytest.mark.parametrize("field", ["training", "training_data", "admission", "evaluations", "serving"])
 def test_genesis_candidate_refuses_every_post_training_surface(tmp_path: Path, field: str):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -835,7 +835,7 @@ def test_genesis_candidate_refuses_every_post_training_surface(tmp_path: Path, f
 
 
 def test_trained_schema_cannot_claim_genesis_stage(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _candidate_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -853,7 +853,7 @@ def test_trained_schema_cannot_claim_genesis_stage(tmp_path: Path):
 
 
 def test_genesis_schema_cannot_claim_trained_stage(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -871,7 +871,7 @@ def test_genesis_schema_cannot_claim_trained_stage(tmp_path: Path):
 
 
 def test_genesis_checkpoint_cursor_and_boundary_must_match_outer_claim(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -901,7 +901,7 @@ def test_genesis_checkpoint_cursor_and_boundary_must_match_outer_claim(tmp_path:
 def test_r1_entry_mints_from_actual_on_disk_genesis_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -946,7 +946,7 @@ def test_r1_entry_mints_from_actual_on_disk_genesis_candidate(
 
 
 def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPatch):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     observed: dict[str, object] = {}
 
@@ -1266,7 +1266,7 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(
     parsing, no override flags, same build_r1_warm100_entry call), with zero
     new CLI surface.
     """
-    from scripts.ember_restart import contract as contract_module
+    from src.ember.governance.scripts.ember_restart import contract as contract_module
 
     governed_remote, governed_ref = hermetic_governed_remote
     monkeypatch.setattr(contract_module, "GOVERNED_REMOTE", governed_remote)

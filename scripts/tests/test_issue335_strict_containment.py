@@ -9,7 +9,10 @@ import os
 from pathlib import Path
 
 
-SOURCE = Path(__file__).parents[1] / "w1_collapse_control_run.py"
+SOURCE = (
+    Path(__file__).resolve().parents[2]
+    / "src" / "ember" / "governance" / "scripts" / "w1_collapse_control_run.py"
+)
 
 
 def _load_classifier():

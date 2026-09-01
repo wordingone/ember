@@ -69,7 +69,10 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-_DEV_SEAT_MODULE_DIR = Path(__file__).resolve().parents[1] / "ember_restart"
+_DEV_SEAT_MODULE_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "src" / "ember" / "governance" / "scripts" / "ember_restart"
+)
 if str(_DEV_SEAT_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_DEV_SEAT_MODULE_DIR))
 

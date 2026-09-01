@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import training_acceleration
@@ -440,7 +440,7 @@ class TrainingSignatureCensusTests(unittest.TestCase):
                 census.write_receipt(output)
 
     def test_checked_in_census_is_the_exact_reviewed_full_route_authority(self) -> None:
-        path = ROOT / "docs" / "spec" / "llmq" / "ember-training-signature-census-v1.json"
+        path = ROOT / "docs" / "domains" / "governance" / "spec" / "llmq" / "ember-training-signature-census-v1.json"
         self.assertEqual(
             hashlib.sha256(path.read_bytes()).hexdigest(),
             "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c",

@@ -19,7 +19,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
     "check_docs_freshness",
-    REPO / "scripts" / "check_docs_freshness.py",
+    REPO / "src" / "ember" / "governance" / "scripts" / "check_docs_freshness.py",
 )
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -28,7 +28,7 @@ SPEC.loader.exec_module(MODULE)
 
 def test_direct_cli_entrypoint_imports_shared_spec_policy() -> None:
     result = subprocess.run(
-        [sys.executable, "-B", str(REPO / "scripts" / "check_docs_freshness.py"), "--help"],
+        [sys.executable, "-B", str(REPO / "src" / "ember" / "governance" / "scripts" / "check_docs_freshness.py"), "--help"],
         cwd=REPO,
         capture_output=True,
         text=True,
