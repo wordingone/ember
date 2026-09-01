@@ -718,7 +718,7 @@ def test_checked_in_information_system_is_terminal_green() -> None:
     module = load_module()
     receipt = module.check_repository(REPO_ROOT, run_commands=False)
     assert receipt["result"] == "PASS"
-    assert receipt["current_reference_reconciliation_count"] == 451
+    assert receipt["current_reference_reconciliation_count"] == 453
     assert receipt["metadata_document_count"] >= 12
     assert receipt["claim_count"] >= 8
 
@@ -739,7 +739,7 @@ def test_current_reference_reconciliation_replays_live_rows_and_refuses_drift(
         module.validate_current_reference_reconciliation(
             REPO_ROOT, reconciliation, frozen
         )
-    ) == 451
+    ) == 453
 
     drifted = json.loads(json.dumps(reconciliation))
     drifted["rows"].pop()
@@ -761,3 +761,34 @@ def test_current_reference_reconciliation_replays_live_rows_and_refuses_drift(
     )
     assert [row["target"] for row in filing] == ["data/README.md"]
     assert corrected == []
+
+
+def test_reference_dispositions_refuse_an_absent_document() -> None:
+    module = load_module()
+    dispositions = json.loads(
+        (REPO_ROOT / module.REFERENCE_DISPOSITIONS_PATH).read_text(encoding="utf-8")
+    )
+    dispositions["rows"][0]["document"] = "docs/planted-absent-document.md"
+    dispositions["row_set_sha256"] = module.sha256_bytes(
+        module.canonical_json(dispositions["rows"])
+    )
+    with pytest.raises(
+        module.DocsInfoError,
+        match="REFERENCE_DISPOSITION_DOCUMENT_MISSING",
+    ):
+        module.validate_reference_dispositions(REPO_ROOT, dispositions)
+
+
+def test_reference_reconciliation_generator_matches_checked_in_bytes() -> None:
+    module = load_module()
+    dispositions = json.loads(
+        (REPO_ROOT / module.REFERENCE_DISPOSITIONS_PATH).read_text(encoding="utf-8")
+    )
+    checked = json.loads(
+        (REPO_ROOT / module.CURRENT_REFERENCE_RECONCILIATION_PATH).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert module.build_current_reference_reconciliation(
+        REPO_ROOT, dispositions, checked
+    ) == checked
