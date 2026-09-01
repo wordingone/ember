@@ -24,6 +24,7 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governance"))
 from repository_layout import resolve_repository_authority  # noqa: E402
 
 _STREAM_MANIFEST_AUTHORITY = resolve_repository_authority(ROOT, "specialist_stream_manifest")
@@ -36,7 +37,7 @@ from checkpoint_artifacts import (
 import parameter_counter
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION, canonical_record_bytes, open_specialist_stream
 from model import RestartDecoderConfig, UnifiedDecoder
-from .checkpoint_fixture import write_checkpoint_artifacts
+from checkpoint_fixture import write_checkpoint_artifacts
 
 
 
@@ -102,6 +103,13 @@ def _write_external_genesis_fixture(root: Path) -> tuple[Path, Path, Path, str]:
 
 
 class CounterCliTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._bundle_test_directory = tempfile.TemporaryDirectory(dir="B:/tmp")
+        self.bundle_test_root = Path(self._bundle_test_directory.name)
+
+    def tearDown(self) -> None:
+        self._bundle_test_directory.cleanup()
+
     def test_counter_admits_closed_packed_fresh_genesis_specialist_lineage_without_external_parent(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64,
@@ -447,7 +455,7 @@ class CounterCliTests(unittest.TestCase):
     def test_p2b_tokenizer_runtime_bundle_is_closed_and_path_free(self) -> None:
         """P2B imports only a caller-supplied, content-addressed tokenizer bundle."""
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
-        bundle_parent = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]) / "bundle-closure"
+        bundle_parent = self.bundle_test_root / "bundle-closure"
         bundle_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=bundle_parent) as directory:
             root = Path(directory)
@@ -474,7 +482,7 @@ class CounterCliTests(unittest.TestCase):
     def test_p2b_tokenizer_runtime_bundle_rejects_record_drift_and_import_escape(self) -> None:
         """RECORD, metadata, and the private import boundary remain closed."""
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
-        bundle_parent = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]) / "bundle-drift"
+        bundle_parent = self.bundle_test_root / "bundle-drift"
         bundle_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=bundle_parent) as directory:
             root = Path(directory)
@@ -610,7 +618,7 @@ class CounterCliTests(unittest.TestCase):
         """An unlisted private-root module cannot execute during the final import window."""
 
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
-        bundle_parent = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]) / "bundle-transient-import"
+        bundle_parent = self.bundle_test_root / "bundle-transient-import"
         bundle_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=bundle_parent) as directory:
             root = Path(directory)
@@ -642,7 +650,7 @@ class CounterCliTests(unittest.TestCase):
         """Cleanup attempts every release without replacing a consumer failure."""
 
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
-        bundle_parent = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]) / "bundle-release-failure"
+        bundle_parent = self.bundle_test_root / "bundle-release-failure"
         bundle_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=bundle_parent) as directory:
             root = Path(directory)
@@ -925,7 +933,7 @@ class CounterCliTests(unittest.TestCase):
             "stream_build_receipt_sha256": receipt["stream_build_receipt_sha256"],
             "corpus_root_sha256": receipt["corpus_root_sha256"], "family_root_sha256": receipt["family_root_sha256"],
         }
-        bundle_test_root = Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"])
+        bundle_test_root = self.bundle_test_root
         bundle_test_root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=bundle_test_root) as directory:
             root = Path(directory)
@@ -1569,7 +1577,7 @@ class CounterCliTests(unittest.TestCase):
         manifest_bytes, build_bytes = canonical_manifest_path.read_bytes(), canonical_build_path.read_bytes()
         runtime_bundle = importlib.import_module("tokenizer_runtime_bundle")
         runtime_root, runtime_manifest, _ = runtime_bundle.materialize_tokenizer_runtime_bundle(
-            bundle_parent=Path(os.environ["EMBER_P2B_BUNDLE_TEST_ROOT"]),
+            bundle_parent=self.bundle_test_root,
         )
         self.addCleanup(shutil.rmtree, runtime_root, ignore_errors=True)
         runtime_authority = runtime_bundle.validate_tokenizer_runtime_bundle(

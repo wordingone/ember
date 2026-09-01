@@ -19,7 +19,7 @@ def fixture_counter_receipt(candidate: Path, manifest: dict[str, Any]) -> dict[s
         "model_config_sha256": manifest["model_config_sha256"],
         "subject_checkpoint_sha256": manifest["checkpoint_manifest_sha256"],
         "architecture_revision": manifest["architecture_revision"],
-        "counter_sha256": hashlib.sha256((Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
+        "counter_sha256": hashlib.sha256((Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b" / "parameter_counter.py").read_bytes()).hexdigest(),
         "active_expert_ids": manifest["active_expert_ids"],
         "expert_genesis_sha256": manifest["expert_genesis_sha256"],
         "expert_parameter_sha256": manifest["expert_parameter_sha256"],

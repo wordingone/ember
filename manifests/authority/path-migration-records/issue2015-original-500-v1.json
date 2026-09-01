@@ -1,0 +1,2510 @@
+{
+  "schema_version": "ember-exact-path-migration-record/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "original_map_raw_sha256": "a8225a623d0a08bb961266d762cbe65815623f6602c151ac2c6cb4b0da423d81",
+  "original_row_count": 500,
+  "original_rows": [
+    {
+      "source_path": "docs/architecture/domain-authority-v1.md",
+      "target_path": "docs/domains/governance/architecture/domain-authority-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/c-scale-execution-graph.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/c-scale-execution-graph.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/c52-scaffold-off-test-v1.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/c52-scaffold-off-test-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/density-ab-spec-v1.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/density-ab-spec-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/ember-mvp-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/ember-mvp-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/formalization-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/formalization-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/fp33-surpass-prereg-v1.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/fp33-surpass-prereg-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/index.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/index.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/nck-event-loop-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/nck-invariants-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/nck-spec-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/nck-spec-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/r2-prereg.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/r2-prereg.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/sp6-duty-battery-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/sp6-duty-battery-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/sp6-duty-battery.jsonl",
+      "target_path": "docs/domains/governance/archive/pre-restart/sp6-duty-battery.jsonl",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/sp6b-designation-rule-v0.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/sp6b-designation-rule-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/sp6b-duty-battery-spec-v1.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/sp6b-duty-battery-spec-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/archive/pre-restart/v0-multimodal-floor-probe-prereg.md",
+      "target_path": "docs/domains/governance/archive/pre-restart/v0-multimodal-floor-probe-prereg.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/authority/INVARIANT.md",
+      "target_path": "docs/domains/governance/authority/INVARIANT.md",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "docs/charter/ai-lab-corpus-charter.md",
+      "target_path": "docs/domains/governance/charter/ai-lab-corpus-charter.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/charter/nck-invariant-contract-v0.md",
+      "target_path": "docs/domains/governance/charter/nck-invariant-contract-v0.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/contracts/ember-completeness.md",
+      "target_path": "docs/domains/governance/contracts/ember-completeness.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/custody/custody-disposition-20260708.md",
+      "target_path": "docs/domains/governance/custody/custody-disposition-20260708.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/custody/vera-c1m-branch-deletion-predelete-receipt-v1.md",
+      "target_path": "docs/domains/governance/custody/vera-c1m-branch-deletion-predelete-receipt-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/design/inference-to-training-translation-v1.md",
+      "target_path": "docs/domains/governance/design/inference-to-training-translation-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ember-restart/ember-multimodal-v0-config-spec.md",
+      "target_path": "docs/domains/governance/ember-restart/ember-multimodal-v0-config-spec.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ember-restart/ember-restart-3b-governed-runner-v1.md",
+      "target_path": "docs/domains/governance/ember-restart/ember-restart-3b-governed-runner-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ember-restart/integration-contract-v1.md",
+      "target_path": "docs/domains/governance/ember-restart/integration-contract-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/guides/START-HERE.md",
+      "target_path": "docs/domains/governance/guides/START-HERE.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ledgers/deviations.md",
+      "target_path": "docs/domains/governance/ledgers/deviations.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ledgers/ember-debt-ledger.md",
+      "target_path": "docs/domains/governance/ledgers/ember-debt-ledger.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ledgers/receipt-supersessions.jsonl",
+      "target_path": "docs/domains/governance/ledgers/receipt-supersessions.jsonl",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/ledgers/technique-registry.md",
+      "target_path": "docs/domains/governance/ledgers/technique-registry.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/operations/windows-desktop-install.md",
+      "target_path": "docs/domains/governance/operations/windows-desktop-install.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/drafts/fp2-v-ceiling-draft.md",
+      "target_path": "docs/domains/governance/research/drafts/fp2-v-ceiling-draft.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/exteroception-2026-06-10.md",
+      "target_path": "docs/domains/governance/research/exteroception-2026-06-10.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/floor-probes-20260611/bias_analysis.py",
+      "target_path": "docs/domains/governance/research/floor-probes-20260611/bias_analysis.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/floor-probes-20260611/final_verdict.md",
+      "target_path": "docs/domains/governance/research/floor-probes-20260611/final_verdict.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/floor-probes-20260611/train.log",
+      "target_path": "docs/domains/governance/research/floor-probes-20260611/train.log",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/floor-probes-20260611/train_config.json",
+      "target_path": "docs/domains/governance/research/floor-probes-20260611/train_config.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/floor-probes-20260611/verify_ste_cost.md",
+      "target_path": "docs/domains/governance/research/floor-probes-20260611/verify_ste_cost.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp19-envelope.md",
+      "target_path": "docs/domains/governance/research/fp19-envelope.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp21b-132-scope-under-fp26.md",
+      "target_path": "docs/domains/governance/research/fp21b-132-scope-under-fp26.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp22-corpus-world.md",
+      "target_path": "docs/domains/governance/research/fp22-corpus-world.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp27-round1-prereg.md",
+      "target_path": "docs/domains/governance/research/fp27-round1-prereg.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp29-kill-synthesis-reconciliation.md",
+      "target_path": "docs/domains/governance/research/fp29-kill-synthesis-reconciliation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp32-gpu-bottleneck-ledger.md",
+      "target_path": "docs/domains/governance/research/fp32-gpu-bottleneck-ledger.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp42-compile-feasibility.md",
+      "target_path": "docs/domains/governance/research/fp42-compile-feasibility.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/fp44-horizon-equiv-gate.md",
+      "target_path": "docs/domains/governance/research/fp44-horizon-equiv-gate.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/nc2-technique-survey-2026-06.md",
+      "target_path": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/non-compute-accelerators-2026-06-10.md",
+      "target_path": "docs/domains/governance/research/non-compute-accelerators-2026-06-10.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/p4-clean-corpus-map-v1.md",
+      "target_path": "docs/domains/governance/research/p4-clean-corpus-map-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/prereg-p0-probes-p5-p1tier0-v1.1.md",
+      "target_path": "docs/domains/governance/research/prereg-p0-probes-p5-p1tier0-v1.1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/receipt-delta-analysis-2026-06-10.md",
+      "target_path": "docs/domains/governance/research/receipt-delta-analysis-2026-06-10.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/sp1-thesearch-ember-map.md",
+      "target_path": "docs/domains/governance/research/sp1-thesearch-ember-map.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/sp2-owned-core-persistence-gates.md",
+      "target_path": "docs/domains/governance/research/sp2-owned-core-persistence-gates.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/subq-term-resolution.md",
+      "target_path": "docs/domains/governance/research/subq-term-resolution.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/teacher-system-2026-06-10.md",
+      "target_path": "docs/domains/governance/research/teacher-system-2026-06-10.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/triton-windows-research-2026-06-10.md",
+      "target_path": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/v0-launch-gate.md",
+      "target_path": "docs/domains/governance/research/v0-launch-gate.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/world-choice-r2.md",
+      "target_path": "docs/domains/governance/research/world-choice-r2.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/research/world-choice.md",
+      "target_path": "docs/domains/governance/research/world-choice.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/README.md",
+      "target_path": "docs/domains/governance/roadmap/README.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/certificates/EMBER-01.md",
+      "target_path": "docs/domains/governance/roadmap/certificates/EMBER-01.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-113-w2-garm-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-113-w2-garm-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-124-flywheel-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-124-flywheel-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-125-owned-core-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-125-owned-core-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-126-envelope-sweep-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-126-envelope-sweep-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-1281-c-invariant-identity-residual-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-1281-c-invariant-identity-residual-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-140-live-telemetry-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-140-live-telemetry-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-154-operator-session-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-154-operator-session-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-200-thread-goal-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-200-thread-goal-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-206-research-priority-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-206-research-priority-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-214-flame-observability-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-214-flame-observability-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-242-live-verification-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-242-live-verification-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-280-grow-symmetry-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-280-grow-symmetry-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-321-ocr-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-321-ocr-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-339-w1-interpretation-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-339-w1-interpretation-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-345-w1-check-battery-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-345-w1-check-battery-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-37-mechanism-redesign-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-37-mechanism-redesign-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-370-persistent-window-index-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-370-persistent-window-index-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-440-fineweb-exclusion-and-heldout-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-440-fineweb-exclusion-and-heldout-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-449-dcomm-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-449-dcomm-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-466-rung2-grow-event-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-466-rung2-grow-event-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-480-rung2-stabilize-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-480-rung2-stabilize-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-483-loop-revival-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-483-loop-revival-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-485-agentic-activity-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-485-agentic-activity-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-518-activity-transcript-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-518-activity-transcript-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-552-paper-evidence-shields-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-552-paper-evidence-shields-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-562-native-liveness-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-562-native-liveness-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-565-resident-colleague-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-565-resident-colleague-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-594-optimizer-hot-loop-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-594-optimizer-hot-loop-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-627-v9-supersession.md",
+      "target_path": "docs/domains/governance/roadmap/issue-627-v9-supersession.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-649-659-corpus-domain-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-649-659-corpus-domain-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-676-bitnet-twin-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-676-bitnet-twin-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-685-reference-tokenizer-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-685-reference-tokenizer-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-688-mtp-accounting-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-688-mtp-accounting-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-696-ember-lab-supersession.md",
+      "target_path": "docs/domains/governance/roadmap/issue-696-ember-lab-supersession.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-701-fixed-capability-growth-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-701-fixed-capability-growth-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-702-offload-attribution-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-702-offload-attribution-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-703-ppm-floor-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-703-ppm-floor-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-704-int8-optimizer-state-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-704-int8-optimizer-state-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-705-capability-metric-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-705-capability-metric-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-711-curriculum-ordering-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-711-curriculum-ordering-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-735-baseline-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-735-baseline-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-739-ordering-apparatus-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-739-ordering-apparatus-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-757-scorer-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-757-scorer-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-764-factor1-microbench-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-764-factor1-microbench-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-774-yield-window-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-774-yield-window-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-779-phase0-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-779-phase0-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-782-ppm-stage2-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-782-ppm-stage2-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-785-grow-dryrun-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-785-grow-dryrun-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-786-access-violation-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-786-access-violation-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-787-step-time-executor-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-787-step-time-executor-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-812-real-corpus-to-checkpoint-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-812-real-corpus-to-checkpoint-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-869-gradient-accumulation-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-869-gradient-accumulation-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-872-frozen-evaluator-set-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-872-frozen-evaluator-set-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/issue-894-cockpit-conservation.md",
+      "target_path": "docs/domains/governance/roadmap/issue-894-cockpit-conservation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-03.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-03.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-04.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-04.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-06.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-06.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-07.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-07.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-08.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-08.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-09.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-09.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-10.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-10.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-11-issue-99-transfer.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-11-issue-99-transfer.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/roadmap/milestones/EMBER-11.md",
+      "target_path": "docs/domains/governance/roadmap/milestones/EMBER-11.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "target_path": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/c-scale-s3-compute-protocol-v1.md",
+      "target_path": "docs/domains/governance/spec/c-scale-s3-compute-protocol-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/conditions-v1.md",
+      "target_path": "docs/domains/governance/spec/conditions-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/ember02-llmq-adoption-readiness-v1.md",
+      "target_path": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/ember02-preregistration-v1.md",
+      "target_path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
+      "target_path": "docs/domains/governance/spec/ember02-r1-r2-cheap-probe-suite-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+      "target_path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.md",
+      "target_path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/ember02-r2-cheap-probe-amendment-v2.json",
+      "target_path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v2.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/eval-suite-freeze-v1.md",
+      "target_path": "docs/domains/governance/spec/eval-suite-freeze-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/llmq/adoption-design-v1.json",
+      "target_path": "docs/domains/governance/spec/llmq/adoption-design-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/llmq/ember-training-signature-census-v1.json",
+      "target_path": "docs/domains/governance/spec/llmq/ember-training-signature-census-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/llmq/mechanism-attribution-v1.json",
+      "target_path": "docs/domains/governance/spec/llmq/mechanism-attribution-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/llmq/training-signature-census-v1.md",
+      "target_path": "docs/domains/governance/spec/llmq/training-signature-census-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/optimizer-transplant-provenance-v1.md",
+      "target_path": "docs/domains/governance/spec/optimizer-transplant-provenance-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/p1-envelope-sweep-prereg-v1.md",
+      "target_path": "docs/domains/governance/spec/p1-envelope-sweep-prereg-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/publishability-adjudication-v1.md",
+      "target_path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/rung2-stabilize-config-respec-v1.md",
+      "target_path": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/train-launch-operability-v1.md",
+      "target_path": "docs/domains/governance/spec/train-launch-operability-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/update-survival-preflight-v1.md",
+      "target_path": "docs/domains/governance/spec/update-survival-preflight-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/spec/w2-scale-preregistration-v1.md",
+      "target_path": "docs/domains/governance/spec/w2-scale-preregistration-v1.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-06-16-stage1-first-words.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-06-16-stage1-first-words.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-22-worktree-lifecycle-guard.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-22-worktree-lifecycle-guard.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-24-ember-cli-checkpoint-load.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-24-ember-cli-checkpoint-load.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-25-ember-cli-prompt-input-border.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-27-ember-roadmap-publication.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-27-ember-roadmap-publication.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-29-github-work-system-remediation.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-29-github-work-system-remediation.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-30-issue-567-spec-lattice.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-30-issue-567-spec-lattice.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-07-31-native-fixed-viewport-tui.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-07-31-native-fixed-viewport-tui.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-08-owned-process-containment.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-08-owned-process-containment.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-08-windows-desktop-install.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-08-windows-desktop-install.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-11-installed-authority-marker-migration.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-11-installed-authority-marker-migration.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-17-issue1433-legb-warm100-scorer.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-17-issue1433-legb-warm100-scorer.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-17-issue1719-odc-by-admission.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-17-issue1719-odc-by-admission.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-18-issue1296-fresh-genesis-launch-packet.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-18-issue1296-fresh-genesis-launch-packet.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-21-issue1464-e8-parity-plumbing.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-21-issue1464-e8-parity-plumbing.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-21-issue1464-e8-tier2-mechanism.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-21-issue1464-e8-tier2-mechanism.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-22-issue1413-activation-consumer.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-22-issue1413-activation-consumer.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-22-issue1413-checkpoint-projection-repair.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-22-issue1413-checkpoint-projection-repair.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-22-issue1413-stage2-ab-execution.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-22-issue1413-stage2-ab-execution.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-22-issue1413-stage2-carriers.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-22-issue1413-stage2-carriers.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-23-issue1413-packed-throughput.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-23-issue1413-packed-throughput.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-23-issue898-job-memory-envelope-observability.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-24-issue898-renderer-census-evidence.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-24-issue898-renderer-census-evidence.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-foreign-pressure-sentinel.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-25-issue898-owned-orphan-receipt-first.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "target_path": "docs/domains/governance/superpowers/plans/2026-08-28-issue1962-c3-a-map.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-07-22-worktree-lifecycle-guard-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-07-22-worktree-lifecycle-guard-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-07-24-ember-cli-checkpoint-load-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-07-24-ember-cli-checkpoint-load-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-07-25-ember-cli-prompt-input-border-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-07-25-ember-cli-prompt-input-border-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-07-27-ember-roadmap-publication-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-07-27-ember-roadmap-publication-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-07-30-issue-567-spec-lattice-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-07-30-issue-567-spec-lattice-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-08-owned-process-containment-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-08-owned-process-containment-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-08-windows-desktop-install-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-08-windows-desktop-install-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-11-installed-authority-marker-migration-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-11-installed-authority-marker-migration-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-21-issue1464-e8-tier2-mechanism-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-21-issue1464-e8-tier2-mechanism-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-23-issue1413-packed-throughput-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-23-issue1413-packed-throughput-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-23-issue898-installed-cockpit-soak-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-23-issue898-installed-cockpit-soak-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md",
+      "target_path": "docs/domains/governance/superpowers/specs/2026-08-23-issue898-job-memory-envelope-observability-design.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/ember-cli-485-rung1-reverify-20260710.md",
+      "target_path": "docs/domains/governance/verification/ember-cli-485-rung1-reverify-20260710.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/bisect-manifest.json",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/bisect-manifest.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-172-100x30.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-172-100x30.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-172-140x50.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-172-140x50.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-172-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-172-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-187-100x30.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-187-100x30.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-187-140x50.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-187-140x50.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-187-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-187-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-195-100x30.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-195-100x30.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-195-140x50.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-195-140x50.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-195-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-195-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-new-100x30.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-new-100x30.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-new-140x50.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-new-140x50.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/bisect/welcome-new-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/bisect/welcome-new-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/01-welcome.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/01-welcome.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/02-slash_dropdown_open.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/02-slash_dropdown_open.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/03-slash_dropdown_filter_go.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/03-slash_dropdown_filter_go.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/04-input_cleared.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/04-input_cleared.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/05-goal_view_empty.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/05-goal_view_empty.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/06-goal_set_ack.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/06-goal_set_ack.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/07-goal_continuation_inflight.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/07-goal_continuation_inflight.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/08-goal_view_active.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/08-goal_view_active.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/09-goal_clear_ack.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/09-goal_clear_ack.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/10-observatory.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/10-observatory.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/11-watch_on.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/11-watch_on.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/12-watch_second_call.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/12-watch_second_call.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/13-model_status.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/13-model_status.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/14-model_unload_external_noop.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/14-model_unload_external_noop.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/15-finetune_start.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/15-finetune_start.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/16-unknown_command.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/16-unknown_command.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/17-shift_tab_permcycle_1.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/17-shift_tab_permcycle_1.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/18-shift_tab_permcycle_2.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/18-shift_tab_permcycle_2.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/19-ctrl_t_taskpanel.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/19-ctrl_t_taskpanel.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/20-esc_interrupt.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/20-esc_interrupt.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/21-chat_turn_submitted.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/21-chat_turn_submitted.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/22-chat_turn_result_gotReply_false.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/22-chat_turn_result_gotReply_false.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/drive-213x35/_steplog.json",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/drive-213x35/_steplog.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe-raw/raw-bytes-after-resize-back-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe-raw/raw-bytes-after-resize-back-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe-raw/raw-bytes-after-resize-to-100x30.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe-raw/raw-bytes-after-resize-to-100x30.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe-raw/snapshot-after-noop-write.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe-raw/snapshot-after-noop-write.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe-raw/snapshot-after-resize-100x30.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe-raw/snapshot-after-resize-100x30.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe-raw/snapshot-after-resize-back-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe-raw/snapshot-after-resize-back-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe/resize-back-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe/resize-back-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "docs/verification/receipts-20260706/resize-probe/resize-before-213x35.txt",
+      "target_path": "docs/domains/governance/verification/receipts-20260706/resize-probe/resize-before-213x35.txt",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "notes/1371-slice2-fingerprint-cache.md",
+      "target_path": "domains/governance/notes/1371-slice2-fingerprint-cache.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "runtime/ember-lab/src/lib.rs",
+      "target_path": "domains/runtime/runtime/ember-lab/src/lib.rs",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "runtime/ember-lab/src/main.rs",
+      "target_path": "domains/runtime/runtime/ember-lab/src/main.rs",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "runtime/ember-lab/tests/artifact_custody.rs",
+      "target_path": "domains/runtime/runtime/ember-lab/tests/artifact_custody.rs",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "runtime/ember-lab/tests/control_plane.rs",
+      "target_path": "domains/runtime/runtime/ember-lab/tests/control_plane.rs",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "schemas/architecture/domain-authority-v1.schema.json",
+      "target_path": "domains/governance/schemas/architecture/domain-authority-v1.schema.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "schemas/loop-graph/authority-graph-v2.schema.json",
+      "target_path": "domains/governance/schemas/loop-graph/authority-graph-v2.schema.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/README.md",
+      "target_path": "src/ember/governance/scripts/README.md",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/_muon_smallfoot_retry_runner.py",
+      "target_path": "src/ember/governance/scripts/_muon_smallfoot_retry_runner.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/a1_exclusion_amendment.py",
+      "target_path": "src/ember/governance/scripts/a1_exclusion_amendment.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/a1_freeze_consumer.py",
+      "target_path": "src/ember/governance/scripts/a1_freeze_consumer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/a1_predicate_scan.py",
+      "target_path": "src/ember/governance/scripts/a1_predicate_scan.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/accumulation_law/run_accumulation.py",
+      "target_path": "src/ember/governance/scripts/accumulation_law/run_accumulation.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/accumulation_law/test_accumulation_verify.py",
+      "target_path": "src/ember/governance/scripts/accumulation_law/test_accumulation_verify.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/artifact_custody_gate.py",
+      "target_path": "src/ember/governance/scripts/artifact_custody_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/bits_account.py",
+      "target_path": "src/ember/governance/scripts/bits_account.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/branch_inventory.py",
+      "target_path": "src/ember/governance/scripts/branch_inventory.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/build_multimodal_v0_model.py",
+      "target_path": "src/ember/governance/scripts/build_multimodal_v0_model.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_batched_ns5_bench.py",
+      "target_path": "src/ember/governance/scripts/c04_batched_ns5_bench.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_chunk_tf32_lever.py",
+      "target_path": "src/ember/governance/scripts/c04_chunk_tf32_lever.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_lever_throughput.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_lever_throughput.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_probe4.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_probe4.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_probe5.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_probe5.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_probe6.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_probe6.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_probe7.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_probe7.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_probe8.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_probe8.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_compile_probe9.py",
+      "target_path": "src/ember/governance/scripts/c04_compile_probe9.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_bench.py",
+      "target_path": "src/ember/governance/scripts/c04_design_bench.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_c03-h1024-d20.py",
+      "target_path": "src/ember/governance/scripts/c04_design_c03-h1024-d20.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_c03-h1024-d20_full_fused_adamw_b16.py",
+      "target_path": "src/ember/governance/scripts/c04_design_c03-h1024-d20_full_fused_adamw_b16.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_c03-h1024-d20_muon_ns3_b16.py",
+      "target_path": "src/ember/governance/scripts/c04_design_c03-h1024-d20_muon_ns3_b16.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_h2048-d12.py",
+      "target_path": "src/ember/governance/scripts/c04_design_h2048-d12.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_h2048-d14.py",
+      "target_path": "src/ember/governance/scripts/c04_design_h2048-d14.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_h2304-d12.py",
+      "target_path": "src/ember/governance/scripts/c04_design_h2304-d12.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_design_h2560-d12.py",
+      "target_path": "src/ember/governance/scripts/c04_design_h2560-d12.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_dynamo_patch.py",
+      "target_path": "src/ember/governance/scripts/c04_dynamo_patch.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_eager_bf16_throughput.py",
+      "target_path": "src/ember/governance/scripts/c04_eager_bf16_throughput.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_fp8_ab.py",
+      "target_path": "src/ember/governance/scripts/c04_fp8_ab.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_harness.py",
+      "target_path": "src/ember/governance/scripts/c04_harness.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_optimizer_pick.py",
+      "target_path": "src/ember/governance/scripts/c04_optimizer_pick.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_pick_rehearsal.py",
+      "target_path": "src/ember/governance/scripts/c04_pick_rehearsal.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_pretrain_prestage.py",
+      "target_path": "src/ember/governance/scripts/c04_pretrain_prestage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c04_receipt3.py",
+      "target_path": "src/ember/governance/scripts/c04_receipt3.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/c5c_readout.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/c5c_readout.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/compute_mde.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/compute_mde.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/f2_placement_sweep.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/f2_placement_sweep.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/f2_schedule_generator.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/governed_run_launcher.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/governed_run_launcher.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/capture-manifest-schema-v1.json",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/capture-manifest-schema-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/cpu-packet-v1.json",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/cpu-packet-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/pre-dispatch-audit-v1.json",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/pre-dispatch-audit-v1.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/pre-dispatch-audit-v2.json",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/pre-dispatch-audit-v2.json",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_actual_event_adapter.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_actual_event_adapter.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_actual_update_successor.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_actual_update_successor.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_capture_adjudicator.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_capture_adjudicator.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_capture_loader.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_capture_loader.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_capture_writer.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_capture_writer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_cleanup_receipt.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_cleanup_receipt.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_dispatch_manifest.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_dispatch_manifest.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_event_inputs.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_event_inputs.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_governed_event_producer.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_governed_event_producer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_gradient_lineage.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_gradient_lineage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_host_commit_probe.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_host_commit_probe.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_host_commit_simulation.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_host_commit_simulation.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_input_manifest_builder.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_input_manifest_builder.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_measured_dry_run.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_measured_dry_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_model_lineage.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_model_lineage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_momentum_lineage.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_momentum_lineage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_muon_primitives.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_muon_primitives.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_producer_contract.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_producer_contract.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_rung2_runtime.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_rung2_runtime.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/q2_terminal_chain.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/q2_terminal_chain.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_actual_event_adapter.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_actual_event_adapter.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_actual_update_successor.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_actual_update_successor.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_capture_adjudicator.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_capture_adjudicator.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_capture_loader.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_capture_loader.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_capture_writer.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_capture_writer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_cleanup_receipt.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_cleanup_receipt.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_dispatch_manifest_plan.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_dispatch_manifest_plan.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_event_inputs.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_event_inputs.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_governed_event_producer.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_governed_event_producer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_gradient_lineage.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_gradient_lineage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_host_commit_probe.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_host_commit_probe.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_host_commit_simulation.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_host_commit_simulation.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_input_manifest_builder.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_input_manifest_builder.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_measured_dry_run.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_measured_dry_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_model_lineage.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_model_lineage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_momentum_lineage.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_momentum_lineage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_muon_primitives.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_muon_primitives.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_producer_contract.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_producer_contract.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_rung2_runtime.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_rung2_runtime.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/issue675/tests/test_terminal_chain.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/issue675/tests/test_terminal_chain.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/run_ledger.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/run_ledger.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c8_prelaunch/test_governed_run_launcher.py",
+      "target_path": "src/ember/governance/scripts/c8_prelaunch/test_governed_run_launcher.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/c_inv_batch_supersession_20260801.py",
+      "target_path": "src/ember/governance/scripts/c_inv_batch_supersession_20260801.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/calibrate.py",
+      "target_path": "src/ember/governance/scripts/calibrate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/calibration_decomp.py",
+      "target_path": "src/ember/governance/scripts/calibration_decomp.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_before_after_replay.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_before_after_replay.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_dryrun.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_dryrun.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_live.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_live.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_live_fp_check_memory_test.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_live_fp_check_memory_test.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_attribution_702.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_attribution_702.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_contended_launch_gate.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_contended_launch_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_dryrun.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_dryrun.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_eps0_fingerprint.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_eps0_fingerprint.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_event.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_gpu_offload_probe.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_gpu_offload_probe.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_gradpost_capture.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_gradpost_capture.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_real_nullmodel_precheck.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_real_nullmodel_precheck.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_real_nullmodel_run.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_real_nullmodel_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_spectral_measurement.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_spectral_measurement.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_spectral_nonequivalence_check.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_spectral_nonequivalence_check.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_stabilize.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_stabilize.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_stabilize_pace_smoke.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_stabilize_pace_smoke.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_grow_rung2_vacuity_check.py",
+      "target_path": "src/ember/governance/scripts/cbase_grow_rung2_vacuity_check.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_smoke_verify_live.py",
+      "target_path": "src/ember/governance/scripts/cbase_smoke_verify_live.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_v0_segment_bf16ns5_live.py",
+      "target_path": "src/ember/governance/scripts/cbase_v0_segment_bf16ns5_live.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cbase_v0_segment_live.py",
+      "target_path": "src/ember/governance/scripts/cbase_v0_segment_live.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/check_docs_freshness.py",
+      "target_path": "src/ember/governance/scripts/check_docs_freshness.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/check_energy_law_theory.py",
+      "target_path": "src/ember/governance/scripts/check_energy_law_theory.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/check_goal_citations.py",
+      "target_path": "src/ember/governance/scripts/check_goal_citations.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/check_publication_gate.py",
+      "target_path": "src/ember/governance/scripts/check_publication_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ckpt_locality.py",
+      "target_path": "src/ember/governance/scripts/ckpt_locality.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/compare_remote_branch_salvage_captures.py",
+      "target_path": "src/ember/governance/scripts/compare_remote_branch_salvage_captures.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cond4_behavior_surface.py",
+      "target_path": "src/ember/governance/scripts/cond4_behavior_surface.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/conv_c03_full_fused_adamw.py",
+      "target_path": "src/ember/governance/scripts/conv_c03_full_fused_adamw.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/conv_c03_full_fused_adamw_live.py",
+      "target_path": "src/ember/governance/scripts/conv_c03_full_fused_adamw_live.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/conv_c03_muon_ns3.py",
+      "target_path": "src/ember/governance/scripts/conv_c03_muon_ns3.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/conv_c03_muon_split.py",
+      "target_path": "src/ember/governance/scripts/conv_c03_muon_split.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/convert_nf4_prequant.py",
+      "target_path": "src/ember/governance/scripts/convert_nf4_prequant.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/corpus_patch_encode.py",
+      "target_path": "src/ember/governance/scripts/corpus_patch_encode.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/cuda_graph_ab.py",
+      "target_path": "src/ember/governance/scripts/cuda_graph_ab.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/d_gate.py",
+      "target_path": "src/ember/governance/scripts/d_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/density_ab_a1.py",
+      "target_path": "src/ember/governance/scripts/density_ab_a1.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/density_ab_verdict.py",
+      "target_path": "src/ember/governance/scripts/density_ab_verdict.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember-desktop-deployment-selftest.ps1",
+      "target_path": "src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_01_custody/census.py",
+      "target_path": "src/ember/governance/scripts/ember_01_custody/census.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/ember_01_custody/issue_census.py",
+      "target_path": "src/ember/governance/scripts/ember_01_custody/issue_census.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/ember_01_identity/census_consumers.py",
+      "target_path": "src/ember/governance/scripts/ember_01_identity/census_consumers.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
+      "target_path": "src/ember/governance/scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/ember_01_identity/parameter_identity_binding.py",
+      "target_path": "src/ember/governance/scripts/ember_01_identity/parameter_identity_binding.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/ember_01_identity/validate_identity.py",
+      "target_path": "src/ember/governance/scripts/ember_01_identity/validate_identity.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/ember_avir_harness.py",
+      "target_path": "src/ember/governance/scripts/ember_avir_harness.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_avir_observe.py",
+      "target_path": "src/ember/governance/scripts/ember_avir_observe.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_avir_tasks.py",
+      "target_path": "src/ember/governance/scripts/ember_avir_tasks.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_c14_owned_core.py",
+      "target_path": "src/ember/governance/scripts/ember_c14_owned_core.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_c14_owned_run.py",
+      "target_path": "src/ember/governance/scripts/ember_c14_owned_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_c_e2b_e2b_arm.py",
+      "target_path": "src/ember/governance/scripts/ember_c_e2b_e2b_arm.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_c_e2b_founder_likeness.py",
+      "target_path": "src/ember/governance/scripts/ember_c_e2b_founder_likeness.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_c_e2b_paired_run.py",
+      "target_path": "src/ember/governance/scripts/ember_c_e2b_paired_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_cbase_avir_data.py",
+      "target_path": "src/ember/governance/scripts/ember_cbase_avir_data.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_cbase_avir_data_v2.py",
+      "target_path": "src/ember/governance/scripts/ember_cbase_avir_data_v2.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_ceff_composition_ab.py",
+      "target_path": "src/ember/governance/scripts/ember_ceff_composition_ab.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_cobs_capture.py",
+      "target_path": "src/ember/governance/scripts/ember_cobs_capture.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_cobs_proof_pack_receipt.py",
+      "target_path": "src/ember/governance/scripts/ember_cobs_proof_pack_receipt.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_d6_bf16_momentum_ab.py",
+      "target_path": "src/ember/governance/scripts/ember_d6_bf16_momentum_ab.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_dispatch_token.py",
+      "target_path": "src/ember/governance/scripts/ember_dispatch_token.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_e2b_surpass_run.py",
+      "target_path": "src/ember/governance/scripts/ember_e2b_surpass_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_gate_process_supervision.py",
+      "target_path": "src/ember/governance/scripts/ember_gate_process_supervision.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_gate_process_supervision_selftest.py",
+      "target_path": "src/ember/governance/scripts/ember_gate_process_supervision_selftest.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_restart/cli_seat.py",
+      "target_path": "src/ember/governance/scripts/ember_restart/cli_seat.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_restart/contract.py",
+      "target_path": "src/ember/governance/scripts/ember_restart/contract.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_restart/development_cli_seat.py",
+      "target_path": "src/ember/governance/scripts/ember_restart/development_cli_seat.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_restart/prediction_contract.py",
+      "target_path": "src/ember/governance/scripts/ember_restart/prediction_contract.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_restart/seat_identity_bridge.py",
+      "target_path": "src/ember/governance/scripts/ember_restart/seat_identity_bridge.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_restart/source_authority.py",
+      "target_path": "src/ember/governance/scripts/ember_restart/source_authority.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_tally_checks.py",
+      "target_path": "src/ember/governance/scripts/ember_tally_checks.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/c_comprehensive_receipts_custody_test.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/check_registry_sync.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/check_registry_sync.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/ember_totality_spec.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/ember_totality_spec.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/milestone_leg.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/milestone_leg.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/milestone_leg_test.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/milestone_leg_test.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c0.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c0.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_anat.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_anat.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_authority.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_authority.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_e2b.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_e2b.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_grow.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_grow.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_invariant.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_invariant.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_manifest.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_manifest.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_proc.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_proc.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ember_totality/test_c_scale.py",
+      "target_path": "src/ember/governance/scripts/ember_totality/test_c_scale.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/endpoint_identity.py",
+      "target_path": "src/ember/governance/scripts/endpoint_identity.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/exp711_intervals.py",
+      "target_path": "src/ember/governance/scripts/exp711_intervals.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/expc1/run_expc1_rank_sweep.py",
+      "target_path": "src/ember/governance/scripts/expc1/run_expc1_rank_sweep.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/finalize_remote_branch_salvage.py",
+      "target_path": "src/ember/governance/scripts/finalize_remote_branch_salvage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fineweb_exclusion.py",
+      "target_path": "src/ember/governance/scripts/fineweb_exclusion.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/forecast_recalibration.py",
+      "target_path": "src/ember/governance/scripts/forecast_recalibration.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp16_census.py",
+      "target_path": "src/ember/governance/scripts/fp16_census.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp19_bench.py",
+      "target_path": "src/ember/governance/scripts/fp19_bench.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp24_verdict.py",
+      "target_path": "src/ember/governance/scripts/fp24_verdict.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp26_prereg.py",
+      "target_path": "src/ember/governance/scripts/fp26_prereg.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp27_round1_prereg.py",
+      "target_path": "src/ember/governance/scripts/fp27_round1_prereg.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp28_v0_coverage.py",
+      "target_path": "src/ember/governance/scripts/fp28_v0_coverage.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp29_kill_synthesis_gate.py",
+      "target_path": "src/ember/governance/scripts/fp29_kill_synthesis_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp35_fused_muon_kernel_ab.py",
+      "target_path": "src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp44_horizon_equiv_gate.py",
+      "target_path": "src/ember/governance/scripts/fp44_horizon_equiv_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp45_batched_ns5_ab.py",
+      "target_path": "src/ember/governance/scripts/fp45_batched_ns5_ab.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp6_provenance.py",
+      "target_path": "src/ember/governance/scripts/fp6_provenance.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/fp8_vgate.py",
+      "target_path": "src/ember/governance/scripts/fp8_vgate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/gen_readme_status.py",
+      "target_path": "src/ember/governance/scripts/gen_readme_status.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/governor.py",
+      "target_path": "src/ember/governance/scripts/governor.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/growth_refutation/capacity.py",
+      "target_path": "src/ember/governance/scripts/growth_refutation/capacity.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/heartbeat_runner.py",
+      "target_path": "src/ember/governance/scripts/heartbeat_runner.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/joules.py",
+      "target_path": "src/ember/governance/scripts/joules.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/ledger_dedup.py",
+      "target_path": "src/ember/governance/scripts/ledger_dedup.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/legb_inprocess_scorer.py",
+      "target_path": "src/ember/governance/scripts/legb_inprocess_scorer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/legb_live_candidate_v5_scorer.py",
+      "target_path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/lib/invariant.py",
+      "target_path": "src/ember/governance/scripts/lib/invariant.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/llmq_adoption_readiness.py",
+      "target_path": "src/ember/governance/scripts/llmq_adoption_readiness.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/loop_econ_gate.py",
+      "target_path": "src/ember/governance/scripts/loop_econ_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/nck/event_loop.py",
+      "target_path": "src/ember/governance/scripts/nck/event_loop.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/nck/invariants.py",
+      "target_path": "src/ember/governance/scripts/nck/invariants.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/nck/replay_rig.py",
+      "target_path": "src/ember/governance/scripts/nck/replay_rig.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/nck/selftest_event_loop.py",
+      "target_path": "src/ember/governance/scripts/nck/selftest_event_loop.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/nck/selftest_replay_rig.py",
+      "target_path": "src/ember/governance/scripts/nck/selftest_replay_rig.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/optimizer_transplant_provenance.py",
+      "target_path": "src/ember/governance/scripts/optimizer_transplant_provenance.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/p1_envelope_sweep.py",
+      "target_path": "src/ember/governance/scripts/p1_envelope_sweep.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/p5_ratio_audit/run_p5_audit.py",
+      "target_path": "src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/r1_cheap_probe_suite.py",
+      "target_path": "src/ember/governance/scripts/r1_cheap_probe_suite.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/r1_e8_validator.py",
+      "target_path": "src/ember/governance/scripts/r1_e8_validator.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/r1_exit_battery.py",
+      "target_path": "src/ember/governance/scripts/r1_exit_battery.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/r1_frozen_eval_runner.py",
+      "target_path": "src/ember/governance/scripts/r1_frozen_eval_runner.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/r2_cheap_probe_battery.py",
+      "target_path": "src/ember/governance/scripts/r2_cheap_probe_battery.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/receipt_check.py",
+      "target_path": "src/ember/governance/scripts/receipt_check.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/receipt_write.py",
+      "target_path": "src/ember/governance/scripts/receipt_write.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/registry_gate_selftest.py",
+      "target_path": "src/ember/governance/scripts/registry_gate_selftest.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/research/muon_spectrum_probe.py",
+      "target_path": "src/ember/governance/scripts/research/muon_spectrum_probe.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/run_attempt_registry.py",
+      "target_path": "src/ember/governance/scripts/run_attempt_registry.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/rung_boundary_momentum_transplant.py",
+      "target_path": "src/ember/governance/scripts/rung_boundary_momentum_transplant.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/serve_cbase_openai.py",
+      "target_path": "src/ember/governance/scripts/serve_cbase_openai.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/serving_registry.py",
+      "target_path": "src/ember/governance/scripts/serving_registry.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/t2_r2w.py",
+      "target_path": "src/ember/governance/scripts/t2_r2w.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/test_receipt_check_invariant.py",
+      "target_path": "src/ember/governance/scripts/test_receipt_check_invariant.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/test_verify_nosource_operability.py",
+      "target_path": "src/ember/governance/scripts/test_verify_nosource_operability.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/test_w1b_continuation.py",
+      "target_path": "src/ember/governance/scripts/test_w1b_continuation.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/tests/test_authority_completion.py",
+      "target_path": "src/ember/governance/scripts/tests/test_authority_completion.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/tests/test_authority_conservation.py",
+      "target_path": "src/ember/governance/scripts/tests/test_authority_conservation.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/token_shards_v0.py",
+      "target_path": "src/ember/governance/scripts/token_shards_v0.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/tokenizer_freeze.py",
+      "target_path": "src/ember/governance/scripts/tokenizer_freeze.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/training_closure.py",
+      "target_path": "src/ember/governance/scripts/training_closure.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/v0_config_check.py",
+      "target_path": "src/ember/governance/scripts/v0_config_check.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/v0_pretrain_launch_gate.py",
+      "target_path": "src/ember/governance/scripts/v0_pretrain_launch_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/v_extended.py",
+      "target_path": "src/ember/governance/scripts/v_extended.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/v_reachguard.py",
+      "target_path": "src/ember/governance/scripts/v_reachguard.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/verify_ember01_completion.py",
+      "target_path": "src/ember/governance/scripts/verify_ember01_completion.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "scripts/verify_nosource_operability.py",
+      "target_path": "src/ember/governance/scripts/verify_nosource_operability.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/vram_ground_truth.py",
+      "target_path": "src/ember/governance/scripts/vram_ground_truth.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w1_baseline_replay_closure.py",
+      "target_path": "src/ember/governance/scripts/w1_baseline_replay_closure.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w1_collapse_control_run.py",
+      "target_path": "src/ember/governance/scripts/w1_collapse_control_run.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w2_derive_s_config.py",
+      "target_path": "src/ember/governance/scripts/w2_derive_s_config.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w2_garm_runner.py",
+      "target_path": "src/ember/governance/scripts/w2_garm_runner.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w2_heldout/build_decontam_batch_mp.py",
+      "target_path": "src/ember/governance/scripts/w2_heldout/build_decontam_batch_mp.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w2_heldout/decon_scan_worker.py",
+      "target_path": "src/ember/governance/scripts/w2_heldout/decon_scan_worker.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/w2_heldout/launch_gate.py",
+      "target_path": "src/ember/governance/scripts/w2_heldout/launch_gate.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "scripts/worktree_lifecycle.py",
+      "target_path": "src/ember/governance/scripts/worktree_lifecycle.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "tests/ember_restart_model/checkpoint_fixture.py",
+      "target_path": "tests/ember_restart_model/domain-governance/checkpoint_fixture.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_certified_launch.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_certified_launch.py",
+      "disposition": "excluded"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_tier2_checkpoint.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_tier2_checkpoint.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_tier2_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_tier2_contract.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_integrity.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_integrity.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_host_setup_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_host_setup_contract.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_launch_packet.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_launch_packet.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_pretrain.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_pretrain.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_runner_preflight.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_runner_preflight.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_text_lab_corpus.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_text_lab_corpus.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_training_acceleration.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_training_acceleration.py",
+      "disposition": "performed-002"
+    },
+    {
+      "source_path": "tools/check_no_temp.py",
+      "target_path": "src/ember/infrastructure/tools/check_no_temp.py",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "tools/no_temp_allowlist",
+      "target_path": "src/ember/infrastructure/tools/no_temp_allowlist",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "tools/reference-goal-mode/goal-mode.ps1",
+      "target_path": "src/ember/infrastructure/tools/reference-goal-mode/goal-mode.ps1",
+      "disposition": "performed-001"
+    },
+    {
+      "source_path": "tools/repo-guard-denylist.sha256",
+      "target_path": "src/ember/infrastructure/tools/repo-guard-denylist.sha256",
+      "disposition": "performed-001"
+    }
+  ]
+}

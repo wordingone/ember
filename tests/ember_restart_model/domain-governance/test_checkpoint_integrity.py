@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 import base64
 import tempfile
@@ -14,14 +15,22 @@ from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import load_checkpoint_artifacts
 from pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
-from .checkpoint_fixture import write_checkpoint_artifacts
+_CHECKPOINT_FIXTURE_PATH = Path(__file__).resolve().with_name("checkpoint_fixture.py")
+_CHECKPOINT_FIXTURE_SPEC = importlib.util.spec_from_file_location(
+    "_ember_issue2015_checkpoint_fixture", _CHECKPOINT_FIXTURE_PATH
+)
+if _CHECKPOINT_FIXTURE_SPEC is None or _CHECKPOINT_FIXTURE_SPEC.loader is None:
+    raise ImportError(f"EXACT_LOCAL_IMPORT_SPEC_INVALID:{_CHECKPOINT_FIXTURE_PATH}")
+_CHECKPOINT_FIXTURE = importlib.util.module_from_spec(_CHECKPOINT_FIXTURE_SPEC)
+_CHECKPOINT_FIXTURE_SPEC.loader.exec_module(_CHECKPOINT_FIXTURE)
+write_checkpoint_artifacts = _CHECKPOINT_FIXTURE.write_checkpoint_artifacts
 
 
 

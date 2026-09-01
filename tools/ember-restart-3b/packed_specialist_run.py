@@ -1769,7 +1769,7 @@ def run_durable_resume_leg(args: argparse.Namespace) -> dict[str, object]:
             raise RuntimeError("packed durable runtime allocation disappeared")
         genesis_hashes = live_model.expert_bank_genesis_hashes()
         optimizer_contract = load_optimizer_contract(config_path)
-        integration_contract = repo_root / "docs" / "ember-restart" / "integration-contract-v1.md"
+        integration_contract = repo_root / "docs" / "domains" / "governance" / "ember-restart" / "integration-contract-v1.md"
 
         def checkpoint_callback(
             global_step: int,
