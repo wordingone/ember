@@ -80,6 +80,10 @@ blocked operations remain denied regardless of goal state. The next executable
 command becomes runnable only when its prerequisite receipts exist; running it
 earlier must fail closed.
 
+A roadmap milestone is complete only when its public certificate record exists under
+`docs/domains/governance/roadmap/certificates/`. Issues, pull requests, board state, checkpoints,
+and prose status are supporting evidence or work state; none substitutes for that certificate.
+
 EMBER-01 is COMPLETE. Its nine certificate legs stood resolved-true in one run
 on 2026-08-02 and again at the current tip on 2026-08-04, and SPINE_CERTIFIED
 was declared on that basis. The evidence is committed under

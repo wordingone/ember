@@ -548,7 +548,7 @@ def test_question_destination_refuses_unknown_canonical_id(tmp_path: Path) -> No
         ],
     }
     routes = {
-        "schema_version": "ember-reader-question-destinations-v2",
+        "schema_version": "ember-reader-question-destinations-v3",
         "instrument_sha256": "frozen",
         "routes": [
             {
@@ -582,7 +582,7 @@ def test_frozen_reader_source_requires_canonical_disposition(tmp_path: Path) -> 
         ],
     }
     mapping = {
-        "schema_version": "ember-reader-question-destinations-v2",
+        "schema_version": "ember-reader-question-destinations-v3",
         "instrument_sha256": "frozen",
         "source_dispositions": [],
         "routes": [
@@ -621,7 +621,7 @@ def test_reader_study_requires_exactly_two_eligible_complete_passes() -> None:
     module = load_module()
     questions = [f"Q{i}" for i in range(1, 9)]
     study = {
-        "schema_version": "ember-doc-reader-study-v2",
+        "schema_version": "ember-doc-reader-study-v3",
         "instrument_sha256": module.READER_INSTRUMENT_SHA256,
         "questions": questions,
         "readers": [
@@ -652,11 +652,11 @@ def test_reader_study_requires_exactly_two_eligible_complete_passes() -> None:
         module.score_reader_study(study)
 
 
-def test_v2_reader_study_refuses_v1_schema_hash_and_reader_id_reuse(monkeypatch) -> None:
+def test_v3_reader_study_refuses_predecessor_schema_hash_and_reader_id_reuse(monkeypatch) -> None:
     module = load_module()
     questions = [f"Q{i}" for i in range(1, 9)]
     study = {
-        "schema_version": "ember-doc-reader-study-v2",
+        "schema_version": "ember-doc-reader-study-v3",
         "instrument_sha256": module.READER_INSTRUMENT_SHA256,
         "questions": questions,
         "readers": [
@@ -679,8 +679,8 @@ def test_v2_reader_study_refuses_v1_schema_hash_and_reader_id_reuse(monkeypatch)
         ],
     }
     for field, stale in (
-        ("schema_version", "ember-doc-reader-study-v1"),
-        ("instrument_sha256", "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b"),
+        ("schema_version", "ember-doc-reader-study-v2"),
+        ("instrument_sha256", "ccca620e2b8d5759f8aa89c7862baa0a25d7cac89f725ea45639c67ece3ab91e"),
     ):
         candidate = json.loads(json.dumps(study))
         candidate[field] = stale
@@ -701,17 +701,26 @@ def test_v2_reader_study_refuses_v1_schema_hash_and_reader_id_reuse(monkeypatch)
         module.score_reader_study(study)
 
 
-def test_v2_reader_instrument_hashes_rederive_and_q3_is_atomic() -> None:
+def test_v3_reader_instrument_hashes_rederive_and_q7_is_atomic() -> None:
     module = load_module()
     instrument = json.loads(
-        (REPO_ROOT / "manifests/documentation/reader-study-instrument-v2.json").read_bytes()
+        (REPO_ROOT / "manifests/documentation/reader-study-instrument-v3.json").read_bytes()
     )
     module.validate_reader_instrument(REPO_ROOT, instrument)
     questions = {row["question_id"]: row["question"] for row in instrument["questions"]}
-    assert questions["Q3"] == (
-        "State Ember's certified current model/training status, then state the full EMBER-02 "
-        "target including approximate parameter range, modalities, reasoning, and structured-tool role."
+    assert questions["Q7"] == (
+        "Where does exact mutable state live, and what public record establishes roadmap "
+        "milestone completion?"
     )
+
+
+def test_q7_destination_explains_public_certificate_completion_record() -> None:
+    continuity = (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
+    normalized = " ".join(continuity.split())
+    assert (
+        "A roadmap milestone is complete only when its public certificate record exists under "
+        "`docs/domains/governance/roadmap/certificates/`."
+    ) in normalized
 
 
 def test_checked_in_information_system_is_terminal_green() -> None:

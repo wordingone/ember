@@ -24,14 +24,14 @@ PUBLIC_PYTHON_LAUNCHER_SHA256 = "f4570528882408c6c0bdc5bcd4fb945b60a6e2770287875
 METADATA_PATH = Path("manifests/documentation/current-documents-v1.json")
 CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
 COMMANDS_PATH = Path("manifests/documentation/public-commands-v1.json")
-QUESTION_DESTINATIONS_PATH = Path("manifests/documentation/reader-question-destinations-v2.json")
+QUESTION_DESTINATIONS_PATH = Path("manifests/documentation/reader-question-destinations-v3.json")
 REFERENCE_DISPOSITIONS_PATH = Path("manifests/documentation/reference-dispositions-v1.json")
 CURRENT_REFERENCE_RECONCILIATION_PATH = Path(
     "manifests/documentation/current-reference-reconciliation-v1.json"
 )
-READER_INSTRUMENT_PATH = Path("manifests/documentation/reader-study-instrument-v2.json")
-READER_INSTRUMENT_V1_PATH = Path("manifests/documentation/reader-study-instrument-v1.json")
-READER_INSTRUMENT_SHA256 = "ccca620e2b8d5759f8aa89c7862baa0a25d7cac89f725ea45639c67ece3ab91e"
+READER_INSTRUMENT_PATH = Path("manifests/documentation/reader-study-instrument-v3.json")
+READER_INSTRUMENT_V2_PATH = Path("manifests/documentation/reader-study-instrument-v2.json")
+READER_INSTRUMENT_SHA256 = "a35d62bfc3085a8162cbda7064c834d03213e86e318a3fcbdd096755948cb391"
 PREDECESSOR_READER_ID_SHA256S = {
     "c66bd342cb4e5e1432c2eb601d2f2ce784aff6da5b15f14e10e3c0e0f4facfd7",
     "58e1156648c53a55ce490437ee7a1cec562ad37b8cf3bf343faa2db81ab840d4",
@@ -402,7 +402,7 @@ def validate_public_command_docs(root: Path, rows: list[dict[str, Any]]) -> None
 def validate_question_destinations(
     root: Path, mapping: dict[str, Any], rows: list[dict[str, Any]], instrument: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    if mapping.get("schema_version") != "ember-reader-question-destinations-v2":
+    if mapping.get("schema_version") != "ember-reader-question-destinations-v3":
         raise DocsInfoError("QUESTION_DESTINATION_SCHEMA_INVALID")
     if mapping.get("instrument_sha256") != instrument.get("instrument_sha256"):
         raise DocsInfoError("QUESTION_DESTINATION_INSTRUMENT_MISMATCH")
@@ -474,37 +474,37 @@ def validate_reader_instrument(root: Path, instrument: dict[str, Any]) -> None:
         "schema_version",
         "self_sha256",
         "threshold",
-    } or instrument.get("schema_version") != "ember-issue1951-reader-instrument-v2":
-        raise DocsInfoError("READER_INSTRUMENT_V2_SCHEMA_INVALID")
+    } or instrument.get("schema_version") != "ember-issue1951-reader-instrument-v3":
+        raise DocsInfoError("READER_INSTRUMENT_V3_SCHEMA_INVALID")
     contract = {key: instrument[key] for key in READER_INSTRUMENT_FIELDS}
     if instrument.get("instrument_sha256") != READER_INSTRUMENT_SHA256 or sha256_bytes(
         canonical_compact(contract)
     ) != READER_INSTRUMENT_SHA256:
-        raise DocsInfoError("READER_INSTRUMENT_V2_HASH_INVALID")
+        raise DocsInfoError("READER_INSTRUMENT_V3_HASH_INVALID")
     unsigned = dict(instrument)
     claimed_self = unsigned.pop("self_sha256", None)
     if claimed_self != sha256_bytes(canonical_compact(unsigned)):
-        raise DocsInfoError("READER_INSTRUMENT_V2_SELF_HASH_INVALID")
-    predecessor = load_json(root / READER_INSTRUMENT_V1_PATH)
+        raise DocsInfoError("READER_INSTRUMENT_V3_SELF_HASH_INVALID")
+    predecessor = load_json(root / READER_INSTRUMENT_V2_PATH)
     expected_contract = {key: predecessor[key] for key in READER_INSTRUMENT_FIELDS}
     expected_questions = json.loads(json.dumps(expected_contract["questions"]))
-    q3 = next(row for row in expected_questions if row.get("question_id") == "Q3")
-    q3["question"] = (
-        "State Ember's certified current model/training status, then state the full EMBER-02 "
-        "target including approximate parameter range, modalities, reasoning, and structured-tool role."
+    q7 = next(row for row in expected_questions if row.get("question_id") == "Q7")
+    q7["question"] = (
+        "Where does exact mutable state live, and what public record establishes roadmap "
+        "milestone completion?"
     )
     expected_contract["questions"] = expected_questions
     if contract != expected_contract:
-        raise DocsInfoError("READER_INSTRUMENT_V2_SEMANTIC_DRIFT")
+        raise DocsInfoError("READER_INSTRUMENT_V3_SEMANTIC_DRIFT")
     authority = instrument.get("authority")
     if (
         not isinstance(authority, dict)
         or authority.get("predecessor_instrument_sha256")
-        != "f6d851c10dcc7a19dcc6f5c8bdca72344933764aedb244fb92bfc2c48d5d288b"
+        != "ccca620e2b8d5759f8aa89c7862baa0a25d7cac89f725ea45639c67ece3ab91e"
         or set(authority.get("excluded_predecessor_reader_id_sha256s", []))
         != PREDECESSOR_READER_ID_SHA256S
     ):
-        raise DocsInfoError("READER_INSTRUMENT_V2_PREDECESSOR_BINDING_INVALID")
+        raise DocsInfoError("READER_INSTRUMENT_V3_PREDECESSOR_BINDING_INVALID")
 
 
 def reference_target_resolves(root: Path, document: Path, target: str) -> bool:
@@ -1019,7 +1019,7 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
 
 
 def score_reader_study(study: dict[str, Any]) -> dict[str, Any]:
-    if study.get("schema_version") != "ember-doc-reader-study-v2":
+    if study.get("schema_version") != "ember-doc-reader-study-v3":
         raise DocsInfoError("READER_STUDY_SCHEMA_INVALID")
     if study.get("instrument_sha256") != READER_INSTRUMENT_SHA256:
         raise DocsInfoError("READER_STUDY_INSTRUMENT_INVALID")
@@ -1052,7 +1052,7 @@ def score_reader_study(study: dict[str, Any]) -> dict[str, Any]:
             correct += 1
         elapsed[str(reader_id)] = int(reader.get("elapsed_seconds", 0))
     return {
-        "schema_version": "ember-doc-reader-study-receipt-v2",
+        "schema_version": "ember-doc-reader-study-receipt-v3",
         "result": "PASS",
         "reader_count": 2,
         "question_count": 8,
