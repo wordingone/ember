@@ -371,6 +371,7 @@ def test_bulk_connector_projects_exact_supported_media_types_and_refuses_unknown
         files=[
             (".gitattributes", b"*.parquet filter=lfs"),
             ("lean_workbook.json", b"{}"),
+            ("shard_00000000_processed.jsonl.zst", b"compressed ndjson fixture"),
             ("README.md", b"# Lean Workbook"),
             ("wkbk_1009.parquet", b"PAR1fixture"),
         ],
@@ -388,6 +389,7 @@ def test_bulk_connector_projects_exact_supported_media_types_and_refuses_unknown
         ".gitattributes": "text/plain; charset=utf-8",
         "README.md": "text/markdown; charset=utf-8",
         "lean_workbook.json": "application/json",
+        "shard_00000000_processed.jsonl.zst": "application/x-ndjson+zstd",
         "wkbk_1009.parquet": "application/vnd.apache.parquet",
     }
 
