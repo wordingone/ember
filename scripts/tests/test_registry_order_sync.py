@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, REPO_ROOT)
 
-from scripts.ember_totality import ember_totality_spec
+from src.ember.governance.scripts.ember_totality import ember_totality_spec
 
 
 def test_order_matches_registry():

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.ember_totality import test_c_invariant as target
+from src.ember.governance.scripts.ember_totality import test_c_invariant as target
 
 
 class GoalInvariantPinTests(unittest.TestCase):

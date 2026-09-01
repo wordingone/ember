@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts import ember_dispatch_token as token
+from src.ember.governance.scripts import ember_dispatch_token as token
 
 VALID_TOKEN = "a" * 64
 VALID_PIPE = r"\\.\pipe\ember-lab-1234"

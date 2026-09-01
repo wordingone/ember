@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts import check_scripts_tests_collection as guard
 
@@ -54,3 +55,22 @@ def test_run_collection_uses_repo_scripts_tests_and_reports_count(monkeypatch: p
     assert report.collected == 386
     assert captured["command"][-2:] == ["-q", "scripts/tests"]
     assert captured["cwd"] == Path("C:/repo")
+
+
+def test_ci_pr_runs_complete_scripts_tests_collection_guard() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = yaml.safe_load(
+        (root / ".github/workflows/ci-pr.yml").read_text(encoding="utf-8")
+    )
+    python_steps = workflow["jobs"]["python"]["steps"]
+    matches = [
+        step
+        for step in python_steps
+        if step.get("name") == "Guard complete scripts/tests collection"
+    ]
+    assert matches == [
+        {
+            "name": "Guard complete scripts/tests collection",
+            "run": "python -B scripts/check_scripts_tests_collection.py --minimum 380",
+        }
+    ]

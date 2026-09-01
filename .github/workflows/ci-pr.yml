@@ -35,8 +35,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.12"
-      - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0" "huggingface_hub==1.22.0"
+      - run: python -m pip install "pytest==8.4.1" "PyYAML==6.0.2" "jsonschema==4.26.0" "cryptography==49.0.0" "huggingface_hub==1.22.0" "tokenizers==0.22.2" "numpy==2.2.6"
+      - run: python -m pip install "torch==2.13.0" --index-url https://download.pytorch.org/whl/cpu
       - run: python -m pip install --editable .
+      - name: Guard complete scripts/tests collection
+        run: python -B scripts/check_scripts_tests_collection.py --minimum 380
       - name: Compile changed governance tooling
         run: python -B -m compileall -q scripts/github
       - name: Bootstrap exact-head live PR policy (read-only)
