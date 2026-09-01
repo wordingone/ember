@@ -1,0 +1,48 @@
+{
+  "schema_version": "ember-exact-path-migration-map/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "renames": [
+    {
+      "source_path": "tests/ember_restart_model/checkpoint_fixture.py",
+      "target_path": "tests/ember_restart_model/domain-governance/checkpoint_fixture.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_tier2_checkpoint.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_tier2_checkpoint.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_tier2_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_tier2_contract.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_integrity.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_integrity.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_host_setup_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_host_setup_contract.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_launch_packet.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_launch_packet.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_pretrain.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_pretrain.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_runner_preflight.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_runner_preflight.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_text_lab_corpus.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_text_lab_corpus.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_training_acceleration.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_training_acceleration.py"
+    }
+  ]
+}

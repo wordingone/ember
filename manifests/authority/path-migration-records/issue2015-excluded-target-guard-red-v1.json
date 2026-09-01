@@ -1,0 +1,22 @@
+{
+  "schema_version": "ember-path-migration-negative-gate-receipt/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "result": "RED_AS_EXPECTED",
+  "base_commit": "a190f5d64b9a244e89add25f9a761696ebbd1a64",
+  "test_path": "tests/ember_restart_model/domain-governance/test_issue2015_path_migration_partition.py",
+  "test_sha256": "6747f0f5a9a524fe1dd956fd25830692068ec5584df59e08a57f7951c15870e6",
+  "planted_shim": {
+    "excluded_source_path": "scripts/ember_01_identity/validate_identity.py",
+    "excluded_target_segments": ["src", "ember", "governance", "scripts", "ember_01_identity", "validate_identity.py"],
+    "shim_sha256": "340d07e20b3491dc44f14c2b0770c6ba1102ab41dc9545dfa7ecf6a713e5f9a5",
+    "custody": "INTENT_TO_ADD_ONLY_REMOVED_AFTER_RED_RUN_NEVER_COMMITTED"
+  },
+  "command": "powershell.exe -NoLogo -NoProfile -NonInteractive -File C:\\Users\\Admin\\.codex\\headless-python.ps1 -- -m pytest -q tests/ember_restart_model/domain-governance/test_issue2015_path_migration_partition.py -k every_excluded_row_preserves_only",
+  "observed_exit_code": 1,
+  "observed_failure_test": "test_every_excluded_row_preserves_only_its_original_source",
+  "observed_failure": "AssertionError: planted excluded target exists",
+  "green_followup_command": "powershell.exe -NoLogo -NoProfile -NonInteractive -File C:\\Users\\Admin\\.codex\\headless-python.ps1 -- -m pytest -q tests/ember_restart_model/domain-governance/test_issue2015_path_migration_partition.py",
+  "claim_boundary": "DELIBERATE_NEGATIVE_GATE_WIRING_ONLY_NO_MIGRATION_OR_CLOSURE_CREDIT"
+}

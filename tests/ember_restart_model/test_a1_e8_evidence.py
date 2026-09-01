@@ -17,7 +17,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools" / "ember-restart-3b"
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
 
 
 def _load_module(path: Path, name: str):

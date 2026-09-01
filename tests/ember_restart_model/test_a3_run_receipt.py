@@ -4,7 +4,7 @@
 """Real-path closure tests for the R1-E8 A3-arm run receipt producer.
 
 The happy-path test mints a receipt from real fixture artifacts and passes it,
-unmocked, through BOTH real downstream consumers: scripts/r1_e8_validator.py's own
+unmocked, through BOTH real downstream consumers: src/ember/governance/scripts/r1_e8_validator.py's own
 `_validate_run`, and certified_train_launch.py's matched-A3 verification reached
 through its public entrypoint `validate_certified_request` against a real valid A1
 launch bundle (the hand-built matched-a3-run.json swapped for the minted one).
@@ -215,13 +215,13 @@ def test_mint_a3_run_receipt_passes_both_real_downstream_consumers() -> None:
         ).hexdigest()
         unsigned = {key: value for key, value in doc.items() if key != "receipt_sha256"}
         # Self-digest convention: compact JSON, no trailing newline, ensure_ascii
-        # False -- matching scripts/r1_e8_validator.py's `_self_digest` exactly
+        # False -- matching src/ember/governance/scripts/r1_e8_validator.py's `_self_digest` exactly
         # (see fix(training): align matched-A3 self-digest convention, #1464).
         assert doc["receipt_sha256"] == hashlib.sha256(
             json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
-        # Real consumer 1 (bare check): scripts/r1_e8_validator.py's own
+        # Real consumer 1 (bare check): src/ember/governance/scripts/r1_e8_validator.py's own
         # _validate_run, unmocked. Does not check digest format on its own.
         validator = _load_validator()
         validator._validate_run(doc, arm="A3", tier=None, t06=T06)  # must not raise
@@ -234,7 +234,7 @@ def test_one_minted_a3_receipt_passes_both_full_real_pipelines_unmocked() -> Non
     must satisfy BOTH real full pipelines that actually reopen and
     self-digest a matched A3 run receipt in production:
 
-      (a) scripts/r1_e8_validator.py's `_reopen_ref(..., self_digest=True)`,
+      (a) src/ember/governance/scripts/r1_e8_validator.py's `_reopen_ref(..., self_digest=True)`,
           the exact call `validate_e8` makes on the a3_run reference -- NOT
           the bare `_validate_run`, which never checks digest format.
       (b) certified_train_launch.py's matched-A3 verification, reached
@@ -271,7 +271,7 @@ def test_one_minted_a3_receipt_passes_both_full_real_pipelines_unmocked() -> Non
             }
         )
 
-        # (a) scripts/r1_e8_validator.py's real self-digest-checking reopen.
+        # (a) src/ember/governance/scripts/r1_e8_validator.py's real self-digest-checking reopen.
         minted_sha256 = hashlib.sha256(matched_path.read_bytes()).hexdigest()
         doc, digest = validator._reopen_ref(
             matched_path.parent,

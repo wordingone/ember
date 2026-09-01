@@ -23,7 +23,6 @@ from typing import Any, Iterator, Mapping
 _COUNTER_MODULE_DIRECTORY = Path(__file__).resolve().parent
 if str(_COUNTER_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_COUNTER_MODULE_DIRECTORY))
-from repository_layout import allowed_authority_pin_tuples, resolve_repository_authority  # noqa: E402
 
 _P2B_STREAM_CORPUS_ROOT_SHA256 = "42d1aac14c1e59563d348b7a53ce83dcce499a48217569d7d00a3966199141ab"
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
@@ -303,6 +302,8 @@ def _validate_packed_fresh_genesis_specialist_lineage(
 
 
 def validate_p2b_stream_episode(episode: Mapping[str, Any], *, active_expert: str) -> dict[str, Any]:
+    from repository_layout import allowed_authority_pin_tuples
+
     """Validate the closed stream-selection episode; legacy execution-slice episodes remain disjoint."""
 
     canonical_record_bytes, selection_cursor_schema_version, _training_cursor_schema_version, _open_specialist_stream = _specialist_stream_api()
@@ -373,6 +374,8 @@ def validate_p2b_counter_stream_authority(
     stream_manifest_bytes: bytes, stream_build_receipt_bytes: bytes,
 ) -> dict[str, Any]:
     """Require caller-bound stream artifacts before counter admission of a P2B episode."""
+    from repository_layout import resolve_repository_authority
+
     _canonical_record_bytes, _selection_cursor_schema_version, _training_cursor_schema_version, open_specialist_stream = _specialist_stream_api()
     normalized = validate_p2b_stream_episode(episode, active_expert=active_expert)
     if not isinstance(stream_manifest_bytes, bytes) or not isinstance(stream_build_receipt_bytes, bytes):

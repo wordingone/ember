@@ -20,6 +20,7 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT))
 
 import run_vertical_slice
 import parameter_counter
@@ -132,7 +133,7 @@ def _inventory_expert_file_hashes(inventory: Path) -> dict[str, str]:
 
 
 def _register_custody(candidate: Path) -> Path:
-    from scripts import artifact_custody_gate as gate
+    from src.ember.governance.scripts import artifact_custody_gate as gate
 
     binary = gate.canonical_ember_lab_binary(ROOT)
     if binary is None:
@@ -182,7 +183,7 @@ def test_genesis_producer_mints_physical_manifest_last_candidate(
     assert manifest["genesis_claim_boundary"]["optimizer_steps"] == 0
     assert not any(target.parent.glob(".genesis.staging-*"))
 
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     custody_db = _register_custody(target)
     validated = contract.validate_manifest(
@@ -208,7 +209,7 @@ def test_genesis_producer_mints_physical_manifest_last_candidate(
         manifest_path,
         source_commit="5" * 40,
         source_root=ROOT,
-        prereg_path=ROOT / "docs/spec/ember02-preregistration-v1.md",
+        prereg_path=ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md",
         config_path=ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=target / "trusted-verifiers.json",
