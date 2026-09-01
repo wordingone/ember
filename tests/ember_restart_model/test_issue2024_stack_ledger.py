@@ -106,6 +106,44 @@ def test_issue2024_streaming_ledger_union_preserves_shard_identity_and_exact_sum
     ]
 
 
+def test_issue2024_offline_trace_parser_preserves_union_structural_key(tmp_path: Path) -> None:
+    trace = tmp_path / "trace.json"
+    trace.write_text(json.dumps({"traceEvents": [
+        {
+            "ph": "X", "cat": "user_annotation", "name": subject.COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+            "pid": 4, "tid": 8, "ts": 10, "dur": 100, "args": {"External id": 1},
+        },
+        {
+            "ph": "X", "cat": "cpu_op", "name": "aten::gather",
+            "pid": 4, "tid": 8, "ts": 20, "dur": 20,
+            "args": {
+                "External id": 7,
+                "Input Dims": [[32000, 2048], [], [960, 2048]],
+                "Call stack": "model.py(1): forward;packed_specialist_run.py(2): main;",
+            },
+        },
+        {
+            "ph": "X", "cat": "kernel", "name": "gather_kernel",
+            "pid": 0, "tid": 7, "ts": 25, "dur": 4.544,
+            "args": {"External id": 7},
+        },
+    ]}), encoding="utf-8")
+
+    ledger = subject.build_issue2024_event_ledger_from_trace(
+        trace, hidden=2048, vocab_size=32000,
+    )
+
+    assert ledger["reconciliation_gap_ns"] == 0
+    assert ledger["events"] == [{
+        "ancestry_depth": 1,
+        "cpu_parent_id": 7,
+        "event_id": 7,
+        "event_ordinal": 0,
+        "input_shapes": [[32000, 2048], [], [960, 2048]],
+        "key": "aten::gather",
+        "self_device_time_us": "4.544",
+        "source_stack": ["model.py(1): forward", "packed_specialist_run.py(2): main"],
+    }]
 def test_issue2024_union_proof_modes_bind_same_two_updates_to_distinct_collection_paths() -> None:
     assert subject.issue2024_profile_mode("issue2024-union-one-shot") == {
         "policy_mode": "issue1946-arm-a",
@@ -385,6 +423,53 @@ def _union_event(*, time: str = "10.0", stack: str = "model.py:41") -> dict[str,
     }
 
 
+def _shard_receipt(index: int) -> dict[str, object]:
+    ledger = subject.build_issue2024_event_ledger(
+        [_event(event_id=7 + index, device_time_us="1.0")],
+        declared_self_device_time_total_us="1.0",
+    )
+    return subject.build_issue2024_union_shard_receipt(
+        profile_update_index=index,
+        identity={"execution_source_commit": "a" * 40},
+        update_seconds=[1.0, 2.0],
+        phase_seconds=[{"index": 0}, {"index": 1}],
+        allocator_rows=[{"index": 0}, {"index": 1}],
+        power_rows=[{"index": 0}, {"index": 1}],
+        kernel_trace={
+            "sha256": str(index + 1) * 64,
+            "layer_count": 12,
+            "material_linear_shapes": [{"fprop": [64, 15, 2048, 6144]}] * 5,
+            "observed_kernels": [],
+            "full_precision_unmapped_event_ledger": ledger,
+        },
+        checkpoint_cadence={
+            "in_measured_window": "NONE",
+            "checkpoint_every_updates": 3,
+            "callback_identity": "NO_OP",
+            "final_callback_timed": False,
+        },
+        runtime_custody={
+            "preflight_raw_sha256": "d" * 64,
+            "preflight_self_sha256": "e" * 64,
+        },
+    )
+
+
+def test_issue2024_two_fresh_process_shards_merge_to_terminal_union_receipt() -> None:
+    shard_0 = _shard_receipt(0)
+    shard_1 = _shard_receipt(1)
+    merged = subject.merge_issue2024_union_shard_receipts([
+        (shard_0, "8" * 64),
+        (shard_1, "9" * 64),
+    ])
+    assert merged["result"] == "PASS"
+    assert merged["mode"] == "issue2024-union-sharded"
+    assert merged["profiler_update_indexes"] == [0, 1]
+    assert merged["update_seconds"] == [1.0, 2.0]
+    assert [row["profile_update_index"] for row in merged["kernel_trace"]["full_precision_unmapped_event_ledger"]["events"]] == [0, 1]
+    assert [row["receipt_raw_sha256"] for row in merged["runtime_custody"]["offline_trace_shards"]] == ["8" * 64, "9" * 64]
+
+
 def test_issue2024_union_comparison_matches_structural_multiset_not_physical_time() -> None:
     one_shot = _union_receipt("issue2024-union-one-shot", [_union_event(time="10.0")])
     sharded = _union_receipt("issue2024-union-sharded", [_union_event(time="12.5")])
@@ -398,8 +483,57 @@ def test_issue2024_union_comparison_matches_structural_multiset_not_physical_tim
     assert receipt["execution_source_commit"] == "a" * 40
     assert receipt["structural_multiset_rows"] == 1
     assert receipt["structural_event_count"] == 1
+    assert receipt["one_shot_only_structural_count"] == 0
+    assert receipt["sharded_only_structural_count"] == 0
+    assert receipt["structural_key_fields"] == [
+        "key", "input_shapes", "source_stack", "ancestry_depth",
+    ]
     assert receipt["physical_times"]["one_shot"] == ["10.0"]
     assert receipt["physical_times"]["sharded"] == ["12.5"]
+
+
+def test_issue2024_shared_offline_parser_negative_detects_planted_union_asymmetry(
+    tmp_path: Path,
+) -> None:
+    def parsed_events(name: str, external_ids: list[int]) -> list[dict[str, object]]:
+        events: list[dict[str, object]] = [{
+            "ph": "X", "cat": "user_annotation",
+            "name": subject.COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+            "pid": 4, "tid": 8, "ts": 10, "dur": 100,
+            "args": {"External id": 1},
+        }]
+        for external_id in external_ids:
+            events.extend((
+                {
+                    "ph": "X", "cat": "cpu_op", "name": "aten::gather",
+                    "pid": 4, "tid": 8, "ts": 20 + external_id, "dur": 20,
+                    "args": {
+                        "External id": external_id,
+                        "Input Dims": [[32000, 2048], [], [960, 2048]],
+                        "Call stack": "model.py(1): forward;packed_specialist_run.py(2): main;",
+                    },
+                },
+                {
+                    "ph": "X", "cat": "kernel", "name": "gather_kernel",
+                    "pid": 0, "tid": 7, "ts": 25 + external_id, "dur": 4.544,
+                    "args": {"External id": external_id},
+                },
+            ))
+        trace = tmp_path / f"{name}.json"
+        trace.write_text(json.dumps({"traceEvents": events}), encoding="utf-8")
+        return subject.build_issue2024_event_ledger_from_trace(
+            trace, hidden=2048, vocab_size=32000,
+        )["events"]
+
+    one_shot_events = parsed_events("one-shot", [7])
+    sharded_events = parsed_events("sharded-planted-extra", [7, 8])
+    with pytest.raises(ValueError, match="STRUCTURAL_MULTISET_MISMATCH"):
+        subject.build_issue2024_union_comparison_receipt(
+            _union_receipt("issue2024-union-one-shot", one_shot_events),
+            _union_receipt("issue2024-union-sharded", sharded_events),
+            one_shot_raw_sha256="1" * 64,
+            sharded_raw_sha256="2" * 64,
+        )
 
 
 @pytest.mark.parametrize(

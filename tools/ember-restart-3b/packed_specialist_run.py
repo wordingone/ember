@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import faulthandler
 import gc
 import hashlib
 import json
@@ -313,6 +314,127 @@ def build_issue2024_event_ledger(
     }
 
 
+def _iter_issue2024_chrome_events(path: Path) -> Iterable[Mapping[str, object]]:
+    """Stream ``traceEvents`` from a Kineto Chrome trace without loading it whole."""
+
+    decoder = json.JSONDecoder()
+    marker = '"traceEvents"'
+    buffer = ""
+    cursor = 0
+    in_events = False
+    with path.open("r", encoding="utf-8") as handle:
+        while True:
+            if cursor > 1 << 20:
+                buffer = buffer[cursor:]
+                cursor = 0
+            chunk = handle.read(1 << 20)
+            if chunk:
+                buffer += chunk
+            if not in_events:
+                found = buffer.find(marker, cursor)
+                if found >= 0:
+                    bracket = buffer.find("[", found + len(marker))
+                    if bracket >= 0:
+                        cursor = bracket + 1
+                        in_events = True
+                elif len(buffer) > len(marker):
+                    cursor = len(buffer) - len(marker)
+            if in_events:
+                while True:
+                    while cursor < len(buffer) and buffer[cursor] in " \t\r\n,":
+                        cursor += 1
+                    if cursor < len(buffer) and buffer[cursor] == "]":
+                        return
+                    try:
+                        event, end = decoder.raw_decode(buffer, cursor)
+                    except json.JSONDecodeError:
+                        break
+                    cursor = end
+                    if isinstance(event, Mapping):
+                        yield event
+            if not chunk:
+                raise ValueError("ISSUE2024_TRACE_EVENTS_TRUNCATED")
+
+
+def build_issue2024_event_ledger_from_trace(
+    trace_path: Path, *, hidden: int, vocab_size: int,
+) -> dict[str, object]:
+    """Rebuild the structural ledger solely from an immutable exported trace."""
+
+    marker_intervals: dict[tuple[int, int], list[tuple[Decimal, Decimal]]] = {}
+    device_time_by_external_id: dict[int, Decimal] = {}
+    for event in _iter_issue2024_chrome_events(trace_path):
+        category = event.get("cat")
+        args = event.get("args")
+        if not isinstance(args, Mapping):
+            continue
+        if category == "kernel" and "External id" in args:
+            external_id = int(args["External id"])
+            device_time_by_external_id[external_id] = (
+                device_time_by_external_id.get(external_id, Decimal("0"))
+                + Decimal(str(event.get("dur", 0)))
+            )
+        elif category in {"cpu_op", "user_annotation"} and event.get("name") == COMPLETE_UPDATE_FORWARD_LOSS_MARKER:
+            start = Decimal(str(event.get("ts", 0)))
+            end = start + Decimal(str(event.get("dur", 0)))
+            key = (int(event.get("pid", -1)), int(event.get("tid", -1)))
+            marker_intervals.setdefault(key, []).append((start, end))
+    if not marker_intervals:
+        raise ValueError("ISSUE2024_TRACE_FORWARD_MARKER_REQUIRED")
+
+    rows: list[dict[str, object]] = []
+    total = Decimal("0")
+    for event in _iter_issue2024_chrome_events(trace_path):
+        if event.get("cat") != "cpu_op":
+            continue
+        args = event.get("args")
+        if not isinstance(args, Mapping) or "External id" not in args:
+            continue
+        external_id = int(args["External id"])
+        device_time = device_time_by_external_id.get(external_id, Decimal("0"))
+        if device_time <= 0:
+            continue
+        key = (int(event.get("pid", -1)), int(event.get("tid", -1)))
+        timestamp = Decimal(str(event.get("ts", 0)))
+        if not any(start <= timestamp <= end for start, end in marker_intervals.get(key, ())):
+            continue
+        name = str(event.get("name"))
+        shapes = args.get("Input Dims")
+        if _issue1946_forward_owner(
+            name, shapes, hidden=hidden, vocab_size=vocab_size,
+        ) is not None:
+            continue
+        call_stack = args.get("Call stack")
+        stack = (
+            [frame.replace("/", "\\") for frame in str(call_stack).split(";") if frame]
+            if call_stack is not None else []
+        )
+        if not stack or shapes is None:
+            raise ValueError(f"ISSUE2024_TRACE_EVENT_METADATA_REFUSED:{external_id}")
+        rows.append({
+            "ancestry_depth": 1,
+            "cpu_parent_id": external_id,
+            "event_id": external_id,
+            "event_ordinal": len(rows),
+            "input_shapes": shapes,
+            "key": name,
+            "self_device_time_us": _issue2024_decimal_text(device_time),
+            "source_stack": stack,
+        })
+        total += device_time
+    if not rows:
+        raise ValueError("ISSUE2024_TRACE_LEDGER_EMPTY")
+    return {
+        "schema_version": "ember-issue2024-full-precision-event-ledger-v1",
+        "declared_self_device_time_total_us": _issue2024_decimal_text(total),
+        "ledger_self_device_time_total_us": _issue2024_decimal_text(total),
+        "excluded_self_device_time_total_us": "0",
+        "excluded_zero_device_time_events": [],
+        "reconciliation_gap_ns": 0,
+        "events": rows,
+    }
+
+
 def merge_issue2024_event_ledger_shards(
     shards: list[tuple[int, dict[str, object]]],
 ) -> dict[str, object]:
@@ -426,6 +548,166 @@ def build_issue2024_union_measurement_receipt(
     return receipt
 
 
+def build_issue2024_union_shard_receipt(
+    *,
+    profile_update_index: int,
+    identity: Mapping[str, object],
+    update_seconds: Sequence[float],
+    phase_seconds: Sequence[Mapping[str, object]],
+    allocator_rows: Sequence[Mapping[str, object]],
+    power_rows: Sequence[Mapping[str, object]],
+    kernel_trace: Mapping[str, object],
+    checkpoint_cadence: Mapping[str, object],
+    runtime_custody: Mapping[str, object],
+) -> dict[str, object]:
+    if profile_update_index not in {0, 1}:
+        raise ValueError("ISSUE2024_SHARD_INDEX_INVALID")
+    if not all(len(rows) == 2 for rows in (update_seconds, phase_seconds, allocator_rows, power_rows)):
+        raise ValueError("ISSUE2024_SHARD_TWO_UPDATE_EXECUTION_REQUIRED")
+    ledger = kernel_trace.get("full_precision_unmapped_event_ledger")
+    if (
+        not isinstance(ledger, Mapping)
+        or ledger.get("schema_version") != "ember-issue2024-full-precision-event-ledger-v1"
+        or not ledger.get("events")
+        or int(ledger.get("reconciliation_gap_ns", 2)) > 1
+    ):
+        raise ValueError("ISSUE2024_SHARD_OFFLINE_LEDGER_NONTERMINAL")
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue2024-union-shard-v1",
+        "result": "PASS",
+        "mode": "issue2024-union-sharded",
+        "profile_update_index": profile_update_index,
+        "identity": dict(identity),
+        "update_seconds": [float(value) for value in update_seconds],
+        "phase_seconds": [dict(row) for row in phase_seconds],
+        "allocator_rows": [dict(row) for row in allocator_rows],
+        "power_rows": [dict(row) for row in power_rows],
+        "kernel_trace": dict(kernel_trace),
+        "checkpoint_cadence": dict(checkpoint_cadence),
+        "runtime_custody": dict(runtime_custody),
+        "claim_boundary": "SINGLE_FRESH_PROCESS_OFFLINE_TRACE_SHARD_ONLY_NO_UNION_OR_CLOSE_CREDIT",
+    }
+    receipt["self_sha256"] = hashlib.sha256(_canonical(receipt)).hexdigest()
+    return receipt
+
+
+def merge_issue2024_union_shard_receipts(
+    shard_rows: Sequence[tuple[Mapping[str, object], str]],
+) -> dict[str, object]:
+    if len(shard_rows) != 2:
+        raise ValueError("ISSUE2024_EXACTLY_TWO_SHARDS_REQUIRED")
+    validated = sorted(
+        [(_validate_self(row, "issue2024 shard"), _require_sha(raw, "issue2024 shard raw"))
+         for row, raw in shard_rows],
+        key=lambda item: int(item[0].get("profile_update_index", -1)),
+    )
+    if [row[0].get("profile_update_index") for row in validated] != [0, 1]:
+        raise ValueError("ISSUE2024_SHARD_SET_INVALID")
+    left, right = validated[0][0], validated[1][0]
+    if left.get("identity") != right.get("identity"):
+        raise ValueError("ISSUE2024_SHARD_IDENTITY_MISMATCH")
+    for row in (left, right):
+        if (
+            row.get("schema_version") != "ember-issue2024-union-shard-v1"
+            or row.get("result") != "PASS"
+            or row.get("mode") != "issue2024-union-sharded"
+        ):
+            raise ValueError("ISSUE2024_SHARD_RECEIPT_INVALID")
+    ledgers = [
+        row["kernel_trace"]["full_precision_unmapped_event_ledger"]
+        for row in (left, right)
+    ]
+    merged_ledger = merge_issue2024_event_ledger_shards([(0, ledgers[0]), (1, ledgers[1])])
+    kernel_trace = {
+        "sha256": hashlib.sha256(_canonical({
+            "shard_trace_sha256": [row["kernel_trace"]["sha256"] for row in (left, right)]
+        })).hexdigest(),
+        "path": "TWO_IMMUTABLE_SHARD_TRACES",
+        "layer_count": left["kernel_trace"]["layer_count"],
+        "material_linear_shapes": left["kernel_trace"]["material_linear_shapes"],
+        "observed_kernels": [
+            kernel
+            for row in (left, right)
+            for kernel in row["kernel_trace"].get("observed_kernels", [])
+        ],
+        "forward_owner_device_time_us": {},
+        "forward_unmapped_device_time_us": merged_ledger["ledger_self_device_time_total_us"],
+        "owner_weight_provenance": {
+            "source_rows": "OFFLINE_EXPORTED_TRACE_ONLY",
+            "update_indexes": [0, 1],
+            "marker": COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+            "deduplication_metric": "kernel_duration_by_external_id",
+        },
+        "full_precision_unmapped_event_ledger": merged_ledger,
+    }
+    runtime = dict(left["runtime_custody"])
+    runtime["fresh_process_and_cuda_context_required"] = True
+    runtime["offline_trace_shards"] = [
+        {
+            "profile_update_index": index,
+            "receipt_raw_sha256": validated[index][1],
+            "receipt_self_sha256": row["self_sha256"],
+            "trace_raw_sha256": row["kernel_trace"]["sha256"],
+        }
+        for index, row in enumerate((left, right))
+    ]
+    return build_issue2024_union_measurement_receipt(
+        mode="issue2024-union-sharded",
+        identity=left["identity"],
+        update_seconds=[left["update_seconds"][0], right["update_seconds"][1]],
+        phase_seconds=[left["phase_seconds"][0], right["phase_seconds"][1]],
+        profiler_update_indexes=[0, 1],
+        allocator_rows=[left["allocator_rows"][0], right["allocator_rows"][1]],
+        power_rows=[left["power_rows"][0], right["power_rows"][1]],
+        kernel_trace=kernel_trace,
+        checkpoint_cadence=left["checkpoint_cadence"],
+        runtime_custody=runtime,
+    )
+
+
+def derive_issue2024_offline_measurement_receipt(
+    parent: Mapping[str, object], *, parent_raw_sha256: str, trace_path: Path,
+) -> dict[str, object]:
+    validated = _validate_self(parent, "issue2024 parent measurement")
+    _require_sha(parent_raw_sha256, "issue2024 parent raw")
+    if (
+        validated.get("schema_version") != "ember-issue2024-union-measurement-v1"
+        or validated.get("mode") not in {"issue2024-union-one-shot", "issue2024-union-sharded"}
+        or validated.get("result") != "PASS"
+    ):
+        raise ValueError("ISSUE2024_OFFLINE_PARENT_INVALID")
+    trace_sha256 = _sha256_path(trace_path)
+    kernel = validated.get("kernel_trace")
+    if not isinstance(kernel, Mapping) or kernel.get("sha256") != trace_sha256:
+        raise ValueError("ISSUE2024_OFFLINE_TRACE_BINDING_MISMATCH")
+    shapes = kernel.get("material_linear_shapes")
+    if not isinstance(shapes, list) or len(shapes) < 5:
+        raise ValueError("ISSUE2024_OFFLINE_SHAPE_AUTHORITY_MISSING")
+    hidden = int(shapes[0]["fprop"][2])
+    vocab_size = int(shapes[4]["fprop"][3])
+    ledger = build_issue2024_event_ledger_from_trace(
+        trace_path, hidden=hidden, vocab_size=vocab_size,
+    )
+    result = dict(validated)
+    result.pop("self_sha256", None)
+    result["kernel_trace"] = {
+        **dict(kernel),
+        "full_precision_unmapped_event_ledger": ledger,
+        "offline_trace_derivation": {
+            "method": "STREAMING_OFFLINE_CHROME_TRACE_PARSER_V1",
+            "trace_raw_sha256": trace_sha256,
+            "parser_source_sha256": _sha256_path(Path(__file__)),
+            "parent_measurement_raw_sha256": parent_raw_sha256,
+            "parent_measurement_self_sha256": validated["self_sha256"],
+        },
+    }
+    result["claim_boundary"] = (
+        "OFFLINE_TRACE_DERIVED_UNION_COMPLETENESS_PROOF_ONLY_NO_FULL_ARM_OR_CLOSE_CREDIT"
+    )
+    result["self_sha256"] = hashlib.sha256(_canonical(result)).hexdigest()
+    return result
+
+
 def _issue2024_union_structural_rows(receipt: Mapping[str, object]) -> tuple[list[str], list[str]]:
     kernel_trace = receipt.get("kernel_trace")
     ledger = kernel_trace.get("full_precision_unmapped_event_ledger") if isinstance(kernel_trace, Mapping) else None
@@ -482,10 +764,18 @@ def build_issue2024_union_comparison_receipt(
             raise ValueError("ISSUE2024_UNION_PREFLIGHT_MISMATCH")
     left_rows, left_times = _issue2024_union_structural_rows(left)
     right_rows, right_times = _issue2024_union_structural_rows(right)
-    left_multiset = dict(sorted(Counter(left_rows).items()))
-    right_multiset = dict(sorted(Counter(right_rows).items()))
+    left_counter = Counter(left_rows)
+    right_counter = Counter(right_rows)
+    one_shot_only_structural_count = sum((left_counter - right_counter).values())
+    sharded_only_structural_count = sum((right_counter - left_counter).values())
+    left_multiset = dict(sorted(left_counter.items()))
+    right_multiset = dict(sorted(right_counter.items()))
     if left_multiset != right_multiset:
-        raise ValueError("ISSUE2024_UNION_STRUCTURAL_MULTISET_MISMATCH")
+        raise ValueError(
+            "ISSUE2024_UNION_STRUCTURAL_MULTISET_MISMATCH:"
+            f"one_shot_only={one_shot_only_structural_count}:"
+            f"sharded_only={sharded_only_structural_count}"
+        )
     identity = left["identity"]
     receipt = {
         "schema_version": "ember-issue2024-union-completeness-proof-v1",
@@ -501,6 +791,8 @@ def build_issue2024_union_comparison_receipt(
         "structural_key_fields": list(_ISSUE2024_UNION_KEY_FIELDS),
         "structural_multiset_rows": len(left_multiset),
         "structural_event_count": len(left_rows),
+        "one_shot_only_structural_count": one_shot_only_structural_count,
+        "sharded_only_structural_count": sharded_only_structural_count,
         "structural_multiset_sha256": hashlib.sha256(_canonical(left_multiset)).hexdigest(),
         "physical_times": {"one_shot": left_times, "sharded": right_times},
     }
@@ -1715,6 +2007,10 @@ def run_issue1946_profile(
     if mode not in allowed_modes:
         raise ValueError("unknown #1946 profile mode")
     issue2024 = mode.startswith("issue2024-")
+    issue2024_offline_shard = mode == "issue2024-union-sharded"
+    shard_target = getattr(args, "profile_update_index", None)
+    if issue2024_offline_shard and shard_target not in {0, 1}:
+        raise ValueError("ISSUE2024_SHARDED_REQUIRES_PROFILE_UPDATE_INDEX")
     successor_mode = issue2024_profile_mode(mode) if issue2024 else None
     policy_mode = successor_mode["policy_mode"] if successor_mode is not None else mode
     if args.live is not True:
@@ -1729,10 +2025,20 @@ def run_issue1946_profile(
         "issue1946-arm-a": "issue1946-arm-a-recompute-on.json",
         "issue1946-arm-b": "issue1946-arm-b-recompute-off.json",
     }[policy_mode]
+    if issue2024_offline_shard:
+        output_name = f"issue2024-union-sharded-update-{shard_target}.json"
     output_path = artifact_root / output_name
     trace_path = output_path.with_suffix(".profiler-trace.json")
-    if output_path.exists() or trace_path.exists():
+    stage_path = output_path.with_suffix(".callback-stages.jsonl")
+    if output_path.exists() or trace_path.exists() or stage_path.exists():
         raise FileExistsError("#1946 profile output custody is no-overwrite")
+    faulthandler.enable(all_threads=True)
+
+    def write_stage(stage: str) -> None:
+        with stage_path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps({"stage": stage}, sort_keys=True, separators=(",", ":")) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
     b_floor = require_b_execution_floor()
     config_path = repo_root / "configs" / "ember-restart-3b.json"
     config_sha256 = _sha256_path(config_path)
@@ -1891,7 +2197,10 @@ def run_issue1946_profile(
         observed_kernel_rows: list[dict[str, object]] = []
         forward_owner_device_time_us = {owner: 0.0 for owner in _ISSUE1946_FORWARD_OWNERS}
         forward_unmapped_device_time_us = 0.0
-        profiler_indexes = list(profile_schedule["update_indexes"])
+        profiler_indexes = (
+            [int(shard_target)] if issue2024_offline_shard
+            else list(profile_schedule["update_indexes"])
+        )
         issue2024_streaming = issue2024 and issue2024_uses_streaming_schedule(mode)
         issue2024_event_ledger: dict[str, object] | None = None
         issue2024_event_ledger_shards: list[tuple[int, dict[str, object]]] = []
@@ -1899,6 +2208,19 @@ def run_issue1946_profile(
 
         def trace_ready(profiler: Any) -> None:
             nonlocal forward_unmapped_device_time_us, issue2024_event_ledger
+            if issue2024_offline_shard:
+                try:
+                    write_stage(f"callback-{shard_target}-entered")
+                    write_stage(f"callback-{shard_target}-export-begin")
+                    profiler.export_chrome_trace(str(trace_path))
+                    write_stage(f"callback-{shard_target}-export-complete")
+                    issue2024_trace_shards.append((int(shard_target), trace_path))
+                    return
+                except BaseException as error:
+                    write_stage(
+                        f"callback-{shard_target}-error-{type(error).__module__}.{type(error).__qualname__}"
+                    )
+                    raise
             unmapped_events: list[Any] = []
             callback_unmapped_device_time_us = 0.0
             for event in profiler.events():
@@ -2081,7 +2403,17 @@ def run_issue1946_profile(
             }
         if segment is None:
             raise RuntimeError("#1946 segment returned no result")
-        if issue2024_streaming:
+        if issue2024_offline_shard:
+            if issue2024_trace_shards != [(int(shard_target), trace_path)]:
+                raise RuntimeError("ISSUE2024_OFFLINE_SHARD_TRACE_INCOMPLETE")
+            write_stage(f"offline-parse-{shard_target}-begin")
+            issue2024_event_ledger = build_issue2024_event_ledger_from_trace(
+                trace_path,
+                hidden=int(config.hidden_size),
+                vocab_size=int(config.vocab_size),
+            )
+            write_stage(f"offline-parse-{shard_target}-complete")
+        elif issue2024_streaming:
             if [index for index, _ledger in issue2024_event_ledger_shards] != profiler_indexes:
                 raise RuntimeError("ISSUE2024_PROFILE_UPDATE_SET_INCOMPLETE")
             issue2024_event_ledger = merge_issue2024_event_ledger_shards(
@@ -2106,9 +2438,12 @@ def run_issue1946_profile(
             _write_json_no_replace(trace_path, trace_manifest)
         if not trace_path.exists():
             raise RuntimeError("#1946 profiler did not flush its immutable trace")
-        if not observed_kernel_rows:
+        if not issue2024_offline_shard and not observed_kernel_rows:
             raise RuntimeError("#1946 profiler trace contains no actual material linear kernel event")
-        if sum(forward_owner_device_time_us.values()) + forward_unmapped_device_time_us <= 0:
+        if (
+            not issue2024_offline_shard
+            and sum(forward_owner_device_time_us.values()) + forward_unmapped_device_time_us <= 0
+        ):
             raise RuntimeError("#1946 profiler trace contains no forward-marker device-time evidence")
         if issue2024 and (
             issue2024_event_ledger is None
@@ -2209,23 +2544,46 @@ def run_issue1946_profile(
                 "complete_update_timing_boundary": segment["complete_update_timing_boundary"],
                 **(preflight_binding or {}),
             }
-            receipt = build_issue2024_union_measurement_receipt(
-                mode=mode,
-                identity=identity,
-                update_seconds=segment["step_timings_seconds"],
-                phase_seconds=segment["complete_update_phase_timings_seconds"],
-                profiler_update_indexes=profiler_indexes,
-                allocator_rows=allocator_rows,
-                power_rows=power_rows,
-                kernel_trace=kernel_trace,
-                checkpoint_cadence={
-                    "in_measured_window": "NONE",
-                    "checkpoint_every_updates": packs + 1,
-                    "callback_identity": "NO_OP",
-                    "final_callback_timed": False,
-                },
-                runtime_custody=union_runtime_custody,
-            )
+            checkpoint_cadence = {
+                "in_measured_window": "NONE",
+                "checkpoint_every_updates": packs + 1,
+                "callback_identity": "NO_OP",
+                "final_callback_timed": False,
+            }
+            if issue2024_offline_shard:
+                union_runtime_custody["callback_stage_log"] = {
+                    "path": stage_path.name,
+                    "raw_sha256": _sha256_path(stage_path),
+                }
+                union_runtime_custody["ledger_derivation"] = {
+                    "method": "STREAMING_OFFLINE_CHROME_TRACE_PARSER_V1",
+                    "trace_raw_sha256": trace_sha256,
+                    "parser_source_sha256": _sha256_path(Path(__file__)),
+                }
+                receipt = build_issue2024_union_shard_receipt(
+                    profile_update_index=int(shard_target),
+                    identity=identity,
+                    update_seconds=segment["step_timings_seconds"],
+                    phase_seconds=segment["complete_update_phase_timings_seconds"],
+                    allocator_rows=allocator_rows,
+                    power_rows=power_rows,
+                    kernel_trace=kernel_trace,
+                    checkpoint_cadence=checkpoint_cadence,
+                    runtime_custody=union_runtime_custody,
+                )
+            else:
+                receipt = build_issue2024_union_measurement_receipt(
+                    mode=mode,
+                    identity=identity,
+                    update_seconds=segment["step_timings_seconds"],
+                    phase_seconds=segment["complete_update_phase_timings_seconds"],
+                    profiler_update_indexes=profiler_indexes,
+                    allocator_rows=allocator_rows,
+                    power_rows=power_rows,
+                    kernel_trace=kernel_trace,
+                    checkpoint_cadence=checkpoint_cadence,
+                    runtime_custody=union_runtime_custody,
+                )
         else:
             receipt = build_issue1946_arm_receipt(
                 policy="WHOLE_LAYER_RECOMPUTE" if policy_mode == "issue1946-arm-a" else "DISABLED_EVERY_LAYER",
@@ -2420,6 +2778,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
             child.add_argument("--arm-a-receipt", type=Path, required=True)
         else:
             child.set_defaults(arm_a_receipt=None)
+        if name == "issue2024-union-sharded":
+            child.add_argument("--profile-update-index", type=int, choices=(0, 1), required=True)
+        else:
+            child.set_defaults(profile_update_index=None)
     compare = subparsers.add_parser("compare")
     compare.add_argument("--baseline", type=Path, required=True)
     compare.add_argument("--accelerated", type=Path, required=True)
@@ -2432,6 +2794,14 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     issue2024_union_compare.add_argument("--one-shot", type=Path, required=True)
     issue2024_union_compare.add_argument("--sharded", type=Path, required=True)
     issue2024_union_compare.add_argument("--output", type=Path, required=True)
+    issue2024_derive = subparsers.add_parser("issue2024-offline-derive")
+    issue2024_derive.add_argument("--parent", type=Path, required=True)
+    issue2024_derive.add_argument("--trace", type=Path, required=True)
+    issue2024_derive.add_argument("--output", type=Path, required=True)
+    issue2024_merge = subparsers.add_parser("issue2024-union-shard-merge")
+    issue2024_merge.add_argument("--shard-0", type=Path, required=True)
+    issue2024_merge.add_argument("--shard-1", type=Path, required=True)
+    issue2024_merge.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -2487,6 +2857,25 @@ def main() -> int:
             one_shot_raw_sha256=hashlib.sha256(one_shot_raw).hexdigest(),
             sharded_raw_sha256=hashlib.sha256(sharded_raw).hexdigest(),
         )
+        _write_json_no_replace(args.output, result)
+    elif args.command == "issue2024-offline-derive":
+        if args.output.exists():
+            parser.error("issue2024 offline-derived output is no-overwrite")
+        parent_raw = args.parent.read_bytes()
+        result = derive_issue2024_offline_measurement_receipt(
+            json.loads(parent_raw),
+            parent_raw_sha256=hashlib.sha256(parent_raw).hexdigest(),
+            trace_path=args.trace.resolve(strict=True),
+        )
+        _write_json_no_replace(args.output, result)
+    elif args.command == "issue2024-union-shard-merge":
+        if args.output.exists():
+            parser.error("issue2024 shard merge output is no-overwrite")
+        shard_raw = [args.shard_0.read_bytes(), args.shard_1.read_bytes()]
+        result = merge_issue2024_union_shard_receipts([
+            (json.loads(shard_raw[0]), hashlib.sha256(shard_raw[0]).hexdigest()),
+            (json.loads(shard_raw[1]), hashlib.sha256(shard_raw[1]).hexdigest()),
+        ])
         _write_json_no_replace(args.output, result)
     else:
         result = compare_packed_paths(args.baseline, args.accelerated, args.output)
