@@ -31,6 +31,12 @@
     {"id": "configs", "include": ["configs/**"], "exclude": [], "owner": "Model", "disposition": "MOVE", "touch_set_id": "model-configs", "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET"},
     {"id": "data-deferred", "include": ["data/**", "src/ember/data/**"], "exclude": [], "owner": "Data", "disposition": "DEFERRED_DEPENDENCY", "touch_set_id": "data-current", "deferral_id": "data-1581", "rollback_unit_strategy": "NOT_A_SWITCH"},
     {"id": "data-consumers-deferred", "include": ["docs/corpus/hf-domain-letter-repos.md", "docs/custody/hf-sync.md", "tests/test_hf_custody_sync.py", "tests/test_remint_hashes.py"], "exclude": [], "owner": "Data", "disposition": "DEFERRED_DEPENDENCY", "touch_set_id": "data-current", "deferral_id": "data-1581", "rollback_unit_strategy": "NOT_A_SWITCH"},
+    {"id": "canonical-governance-notes", "include": ["domains/governance/notes/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-notes", "rollback_unit_strategy": "NOT_A_SWITCH"},
+    {"id": "canonical-governance-schemas", "include": ["domains/governance/schemas/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-schemas", "rollback_unit_strategy": "NOT_A_SWITCH"},
+    {"id": "canonical-model-tokenizer", "include": ["domains/model/tokenizer/**"], "exclude": [], "owner": "Model", "disposition": "RETAIN_STABLE", "touch_set_id": "model-tokenizer", "rollback_unit_strategy": "NOT_A_SWITCH"},
+    {"id": "canonical-evaluation-script-deferred", "include": ["src/ember/governance/scripts/r1_frozen_eval_runner.py"], "exclude": [], "owner": "Evaluation", "disposition": "DEFERRED_DEPENDENCY", "touch_set_id": "evaluation-current", "deferral_id": "evaluation-api", "rollback_unit_strategy": "NOT_A_SWITCH"},
+    {"id": "canonical-governance-scripts", "include": ["src/ember/governance/scripts/**"], "exclude": ["src/ember/governance/scripts/r1_frozen_eval_runner.py"], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-script-census", "rollback_unit_strategy": "NOT_A_SWITCH"},
+    {"id": "canonical-infrastructure-tools", "include": ["src/ember/infrastructure/tools/**"], "exclude": [], "owner": "Infrastructure", "disposition": "RETAIN_STABLE", "touch_set_id": "infrastructure-tools", "rollback_unit_strategy": "NOT_A_SWITCH"},
     {"id": "docs", "include": ["docs/**"], "exclude": ["docs/corpus/hf-domain-letter-repos.md", "docs/custody/hf-sync.md"], "owner": "Governance", "disposition": "MOVE", "touch_set_id": "governance-docs", "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET"},
     {"id": "manifests-stable", "include": ["manifests/**"], "exclude": [], "owner": "Governance", "disposition": "RETAIN_STABLE", "touch_set_id": "governance-stable-manifests", "rollback_unit_strategy": "NOT_A_SWITCH"},
     {"id": "notes-archive", "include": ["notes/**"], "exclude": [], "owner": "Governance", "disposition": "ARCHIVE", "touch_set_id": "governance-notes", "rollback_unit_strategy": "PER_AUTHORITATIVE_SWITCH_TARGET"},
@@ -71,7 +77,7 @@
     {"id": "python-package", "path": "pyproject.toml", "ecosystem": "python", "role": "package", "expected_blob_oid": "5dff8625f8ccafd6f3ec863208852c6efb724d2e"},
     {"id": "rust-package", "path": "runtime/ember-lab/Cargo.toml", "ecosystem": "rust", "role": "package", "expected_blob_oid": "ce10026394de0f3fe6e0ff011b4540f8dd4321e2"},
     {"id": "rust-lock", "path": "runtime/ember-lab/Cargo.lock", "ecosystem": "rust", "role": "lock", "expected_blob_oid": "40831a42fbb62a148d60e846b7d81b1c560595ef"},
-    {"id": "bun-package", "path": "tools/ember-cli/src/package.json", "ecosystem": "bun", "role": "package", "expected_blob_oid": "b8f43d6d5cb7be7aee4974e70fcf2661112802a0"},
+    {"id": "bun-package", "path": "tools/ember-cli/src/package.json", "ecosystem": "bun", "role": "package", "expected_blob_oid": "914332c3dcdb91893a4c4b7e6a3b48adbc4c3e8f"},
     {"id": "bun-lock", "path": "tools/ember-cli/src/bun.lock", "ecosystem": "bun", "role": "lock", "expected_blob_oid": "d4a7830867e6205deb1a002a90ace656563db97c"}
   ],
   "backend_authority": {
