@@ -1468,9 +1468,12 @@ class CertifiedTrainLaunchTests(unittest.TestCase):
             self.assertEqual(receipt["exit_code"], 17)
 
     def _install_run_attempt_registry(self, repo: pathlib.Path) -> pathlib.Path:
-        producer = repo / "scripts" / "run_attempt_registry.py"
+        producer = repo / "src" / "ember" / "governance" / "scripts" / "run_attempt_registry.py"
         producer.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / "scripts" / "run_attempt_registry.py", producer)
+        shutil.copy2(
+            ROOT / "src" / "ember" / "governance" / "scripts" / "run_attempt_registry.py",
+            producer,
+        )
         return repo / "receipts" / "run-attempts.jsonl"
 
     def _validated_registry_launch(self, module, paths: dict[str, pathlib.Path]):
@@ -2047,9 +2050,11 @@ class ProducerSchemaBindingTest(unittest.TestCase):
 def install_closure(repo: pathlib.Path) -> str:
     """Give a fixture repo a real closure module, manifest, and closure files."""
 
-    (repo / "scripts").mkdir(parents=True, exist_ok=True)
+    script_root = repo / "src" / "ember" / "governance" / "scripts"
+    script_root.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(
-        ROOT / "scripts" / "training_closure.py", repo / "scripts" / "training_closure.py"
+        ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py",
+        script_root / "training_closure.py",
     )
     (repo / "tools").mkdir(parents=True, exist_ok=True)
     (repo / "tools" / "entrypoint.py").write_text("import json\n", encoding="utf-8")
@@ -2063,7 +2068,7 @@ def install_closure(repo: pathlib.Path) -> str:
                 "schema_version": "ember-training-dependency-closure-v1",
                 "entrypoints": ["tools/entrypoint.py"],
                 "dynamic_entrypoints": [],
-                "code": ["scripts/training_closure.py"],
+                "code": ["src/ember/governance/scripts/training_closure.py"],
                 "data": ["configs/training.json"],
                 "dynamic_call_sites": {},
             },
@@ -6083,6 +6088,16 @@ class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
 
 class DispatchAuthorityTests(unittest.TestCase):
     @staticmethod
+    def _dispatch_environment() -> dict[str, str]:
+        return {
+            "EMBER_LAB_PIPE": r"\\.\pipe\ember-lab-test",
+            "EMBER_LAB_DISPATCH_JOB_ID": "test-job",
+            "EMBER_LAB_DISPATCH_TOKEN": "a" * 64,
+            "EMBER_LAB_DISPATCH_DAEMON_PID": "1234",
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES": "1073741824",
+        }
+
+    @staticmethod
     def _argv() -> list[str]:
         return [
             "--root", str(ROOT),
@@ -6138,6 +6153,40 @@ class DispatchAuthorityTests(unittest.TestCase):
         self.assertEqual(exit_code, 2)
         self.assertIn("EMBER_LAB_DISPATCH_REFUSED", stderr)
         validate.assert_not_called()
+
+    def test_dispatch_consumer_loads_the_canonical_governance_module(self) -> None:
+        module = load_module()
+        loaded_module = SimpleNamespace(
+            consume_dispatch=lambda repo_root: 1073741824,
+        )
+        loader = mock.Mock()
+        specification = SimpleNamespace(loader=loader)
+        with (
+            mock.patch.dict(os.environ, self._dispatch_environment(), clear=True),
+            mock.patch.object(
+                module.importlib.util,
+                "spec_from_file_location",
+                return_value=specification,
+            ) as spec_from_file_location,
+            mock.patch.object(
+                module.importlib.util,
+                "module_from_spec",
+                return_value=loaded_module,
+            ),
+        ):
+            result = module.consume_ember_lab_dispatch(ROOT)
+
+        self.assertEqual(result, 1073741824)
+        spec_from_file_location.assert_called_once_with(
+            "ember_dispatch_token",
+            ROOT
+            / "src"
+            / "ember"
+            / "governance"
+            / "scripts"
+            / "ember_dispatch_token.py",
+        )
+        loader.exec_module.assert_called_once_with(loaded_module)
 
     def test_authenticated_daemon_dispatch_consumes_before_certificate_validation(self) -> None:
         module = load_module()

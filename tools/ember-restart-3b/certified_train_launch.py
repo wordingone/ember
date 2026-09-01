@@ -29,7 +29,7 @@ from repository_layout import resolve_repository_authority  # noqa: E402
 
 
 # A certificate that carries closure_sha256 binds the TRAINING DEPENDENCY
-# CLOSURE (scripts/training_closure.py) instead of the whole repository tip, so
+# CLOSURE (src/ember/governance/scripts/training_closure.py) instead of the whole repository tip, so
 # a merge outside the closure no longer invalidates a pending launch.
 # public_master_sha stays the VERIFIED-AT commit either way. Certificates minted
 # before this field existed keep whole-tip equality.
@@ -37,7 +37,7 @@ from repository_layout import resolve_repository_authority  # noqa: E402
 # CERTIFICATE_KEYS and OPTIONAL_CERTIFICATE_KEYS are the key template the
 # out-of-repo mint producer reads (it already exec-loads this module), so
 # producer and consumer cannot skew.
-CLOSURE_MODULE_RELATIVE_PATH = "scripts/training_closure.py"
+CLOSURE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/training_closure.py"
 # Issue #1706: same load-out-of-the-tree-being-launched discipline as
 # CLOSURE_MODULE_RELATIVE_PATH, for the shared git-subprocess-env hardening.
 GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
@@ -45,7 +45,7 @@ GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
 # RELATIVE_PATH -- the custody gate is infrastructure with no dependency on
 # which tree is being launched, so it is loaded from THIS file's own tree even
 # though the repo_root it is asked to verify custody against varies per call.
-ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "scripts/artifact_custody_gate.py"
+ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/artifact_custody_gate.py"
 # Guard-floor keys (issue #1410): the remote guard's receipt_check requires
 # ticket/ts/sha_convention on any receipt carrying sha256 fields, and authority
 # leg 4 requires goal_id/next_executed_outcome on committed artifacts. They are
@@ -2905,7 +2905,11 @@ def _validate_run_scoped_custody_packet(
             "launch-authority custody packet directory is unreadable"
         ) from error
     if actual_packet_names != expected_packet_names:
-        raise ValueError("launch-authority custody packet file set mismatch")
+        raise ValueError(
+            "launch-authority custody packet file set mismatch: "
+            f"actual={sorted(actual_packet_names)!r}:"
+            f"expected={sorted(expected_packet_names)!r}"
+        )
     paths = {
         certificate_path.name: certificate_path,
         declaration_ledger_path.name: declaration_ledger_path,
@@ -3308,6 +3312,8 @@ def validate_certified_request(
         certificate_path,
         declaration_ledger_path,
         run_spec_path,
+        certificate_path.parent / "sha-binding-map.json",
+        certificate_path.parent / "launch-authority-custody.json",
         completion_path,
         training_verify_path,
         None if resume is None else resume.checkpoint,
@@ -4009,7 +4015,7 @@ def _record_run_attempt(
                 for row in disclosure_rows
             ):
                 raise ValueError("aborted-attempt disclosure does not bind the live attempt")
-        producer = repo_root / "scripts" / "run_attempt_registry.py"
+        producer = repo_root / "src" / "ember" / "governance" / "scripts" / "run_attempt_registry.py"
         command = [
             sys.executable,
             "-B",
@@ -4821,7 +4827,14 @@ def consume_ember_lab_dispatch(repo_root: pathlib.Path) -> int:
     missing = [name for name in required_environment if not os.environ.get(name, "").strip()]
     if missing:
         raise ValueError(f"EMBER_LAB_DISPATCH_REQUIRED: missing {missing[0]}")
-    module_path = repo_root / "scripts" / "ember_dispatch_token.py"
+    module_path = (
+        repo_root
+        / "src"
+        / "ember"
+        / "governance"
+        / "scripts"
+        / "ember_dispatch_token.py"
+    )
     try:
         spec = importlib.util.spec_from_file_location("ember_dispatch_token", module_path)
         if spec is None or spec.loader is None:

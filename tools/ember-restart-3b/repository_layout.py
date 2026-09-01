@@ -47,7 +47,7 @@ _AUTHORITIES = {
     "frontier_receipt": LayoutPair(
         name="frontier_receipt",
         canonical_relative="src/ember/governance/scripts/frontier_receipt.py",
-        canonical_sha256="cec1ec317a0d813edb94db70720bf6aedf8add2d191de748e97b3d1d2c111097",
+        canonical_sha256="f6c1a3790722a107ead8be1ba138eb8a36c8228697c84179a86fa940209052cd",
         legacy_relative="scripts/frontier_receipt.py",
         legacy_sha256="eb7782aeb758ac6c01c28bf19cdd6fd1eaa88d8b47e844394cb06f2a11519cea",
     ),

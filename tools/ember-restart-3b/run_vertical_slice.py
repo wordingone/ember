@@ -68,7 +68,9 @@ _E4_ASSUMED_PEAK_FLOPS = 165.2e12
 
 _STAGE2_AB_SOURCE_COMMIT = "e2283dfd04aa7e61436764d6821d3afe6c64f13b"
 _STAGE2_CENSUS_SOURCE_COMMIT = "728421bcca5092a89df483f7df804c7177c337a7"
-_STAGE2_CENSUS_RELATIVE_PATH = Path("docs/spec/llmq/ember-training-signature-census-v1.json")
+_STAGE2_CENSUS_RELATIVE_PATH = Path(
+    "docs/domains/governance/spec/llmq/ember-training-signature-census-v1.json"
+)
 _STAGE2_CENSUS_RAW_SHA256 = "86e37ad5868da1ef77419d643c3ff31ee0a38b7e9f603b9c0807376958ef5d0c"
 _STAGE2_MATCHED_LOSS_RELATIVE_TOLERANCE = 0.01
 _STAGE2_PREPARATION_REGIONS_PER_SIGNATURE = 4
@@ -546,7 +548,10 @@ def mint_genesis_candidate(
 def governed_resource_preflight() -> dict[str, object]:
     """Run the repository-owned GPU governor before any CUDA allocation."""
 
-    governor_path = Path(__file__).resolve().parents[2] / "scripts" / "governor.py"
+    governor_path = (
+        Path(__file__).resolve().parents[2]
+        / "src" / "ember" / "governance" / "scripts" / "governor.py"
+    )
     if not governor_path.is_file():
         raise RuntimeError("repository resource governor is unavailable")
     spec = importlib.util.spec_from_file_location("ember_governor_bound", governor_path)
@@ -3702,7 +3707,14 @@ def run(
         }
         if not isinstance(canonical_runner_authority, Mapping) or dict(canonical_runner_authority) != expected_canonical_authority:
             raise RuntimeError("vertical canonical runner authority does not match the live startup assertion")
-    integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
+    integration_contract_path = (
+        root
+        / "docs"
+        / "domains"
+        / "governance"
+        / "ember-restart"
+        / "integration-contract-v1.md"
+    )
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     load_training_acceleration_policy()
@@ -4378,7 +4390,14 @@ def run_semantic(
             raise ValueError("runtime admitted row-set hash does not match certified pin")
     artifact_root = production_artifact_root(artifact_root)
     config_path = root / "configs" / "ember-restart-3b.json"
-    integration_contract_path = root / "docs" / "ember-restart" / "integration-contract-v1.md"
+    integration_contract_path = (
+        root
+        / "docs"
+        / "domains"
+        / "governance"
+        / "ember-restart"
+        / "integration-contract-v1.md"
+    )
     if not integration_contract_path.is_file():
         raise RuntimeError("the merged Ember integration contract is required for production launch")
     load_training_acceleration_policy()
