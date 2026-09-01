@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 fn policy_value() -> Value {
     json!({
@@ -530,6 +530,117 @@ fn filesystem_census_is_total_and_unknown_files_refuse_planning() {
         ),
         Err(PlanError::RefusalRows(_))
     ));
+}
+
+#[test]
+fn duplicate_witness_identity_encoding_refuses_before_full_census() {
+    let fixture = Fixture::new("duplicate-witness-encoding-preflight");
+    let retained = fixture.root.join("models/retained.bin");
+    fs::write(&retained, b"same immutable payload").unwrap();
+    fs::write(
+        fixture.root.join("models/duplicate.bin"),
+        b"same immutable payload",
+    )
+    .unwrap();
+    // This unrelated payload proves the malformed declaration is rejected by
+    // the declaration preflight, before a recursive census can hash the tree.
+    fs::write(
+        fixture.root.join("state/unrelated.bin"),
+        vec![7_u8; 8 * 1024 * 1024],
+    )
+    .unwrap();
+    let observed = observe_file(&retained).unwrap();
+    let malformed = "windows:506082675:1688849860269113".to_string();
+    let declarations = vec![
+        CensusDeclaration {
+            class: CustodyClass::Models,
+            relative_path: "retained.bin".into(),
+            disposition: Disposition::Protected,
+            pin_reasons: vec!["sole-verified-copy".into()],
+            checkpoint: None,
+            duplicate_witness: None,
+            terminal_kernel_witness: None,
+        },
+        CensusDeclaration {
+            class: CustodyClass::Models,
+            relative_path: "duplicate.bin".into(),
+            disposition: Disposition::DuplicateReclaimable,
+            pin_reasons: Vec::new(),
+            checkpoint: None,
+            duplicate_witness: Some(DuplicateWitness {
+                retained_relative_path: "retained.bin".into(),
+                retained_raw_sha256: observed.raw_sha256,
+                retained_physical_identity: malformed,
+                authority_identity: "readonly-census:test".into(),
+                independently_reopened: true,
+            }),
+            terminal_kernel_witness: None,
+        },
+    ];
+    let started = Instant::now();
+    let error = census_filesystem(&fixture.roots(), declarations).unwrap_err();
+    assert!(started.elapsed().as_secs() < 5);
+    assert!(error
+        .to_string()
+        .contains("windows physical identity must match windows:8-lower-hex:16-lower-hex"));
+}
+
+#[test]
+fn duplicate_witness_preflight_binds_canonical_retained_identity_and_refuses_drift() {
+    let fixture = Fixture::new("duplicate-witness-retained-preflight");
+    let retained = fixture.root.join("models/retained.bin");
+    fs::write(&retained, b"same immutable payload").unwrap();
+    fs::write(
+        fixture.root.join("models/duplicate.bin"),
+        b"same immutable payload",
+    )
+    .unwrap();
+    let observed = observe_file(&retained).unwrap();
+    let declarations = |physical_identity: String| {
+        vec![
+            CensusDeclaration {
+                class: CustodyClass::Models,
+                relative_path: "retained.bin".into(),
+                disposition: Disposition::Protected,
+                pin_reasons: vec!["sole-verified-copy".into()],
+                checkpoint: None,
+                duplicate_witness: None,
+                terminal_kernel_witness: None,
+            },
+            CensusDeclaration {
+                class: CustodyClass::Models,
+                relative_path: "duplicate.bin".into(),
+                disposition: Disposition::DuplicateReclaimable,
+                pin_reasons: Vec::new(),
+                checkpoint: None,
+                duplicate_witness: Some(DuplicateWitness {
+                    retained_relative_path: "retained.bin".into(),
+                    retained_raw_sha256: observed.raw_sha256.clone(),
+                    retained_physical_identity: physical_identity,
+                    authority_identity: "readonly-census:test".into(),
+                    independently_reopened: true,
+                }),
+                terminal_kernel_witness: None,
+            },
+        ]
+    };
+    let census = census_filesystem(
+        &fixture.roots(),
+        declarations(observed.physical_identity.clone()),
+    )
+    .unwrap();
+    assert_eq!(census.rows.len(), 2);
+
+    let mut drifted = observed.physical_identity;
+    let replacement = if drifted.ends_with('0') { '1' } else { '0' };
+    drifted.pop();
+    drifted.push(replacement);
+    let started = Instant::now();
+    let error = census_filesystem(&fixture.roots(), declarations(drifted)).unwrap_err();
+    assert!(started.elapsed().as_secs() < 5);
+    assert!(error
+        .to_string()
+        .contains("duplicate witness retained observation mismatch"));
 }
 
 #[test]

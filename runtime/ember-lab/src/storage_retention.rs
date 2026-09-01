@@ -567,6 +567,7 @@ pub fn census_filesystem(
             ));
         }
     }
+    validate_declarations_before_census(&declared)?;
     let canonical_models = fs::canonicalize(
         roots
             .get(&CustodyClass::Models)
@@ -585,19 +586,22 @@ pub fn census_filesystem(
     {
         return Err(PlanError::InvalidIdentity("census roots overlap".into()));
     }
+    let canonical_roots = BTreeMap::from([
+        (CustodyClass::Models, canonical_models),
+        (CustodyClass::State, canonical_state),
+    ]);
+    observe_duplicate_witnesses(&canonical_roots, &declared)?;
     let mut rows = Vec::new();
     for class in [CustodyClass::Models, CustodyClass::State] {
-        let root = roots
+        let root = canonical_roots
             .get(&class)
             .ok_or_else(|| PlanError::InvalidIdentity(format!("missing {class} root")))?;
-        let canonical = fs::canonicalize(root)
-            .map_err(|error| PlanError::InvalidIdentity(error.to_string()))?;
-        if !canonical.is_dir() {
+        if !root.is_dir() {
             return Err(PlanError::InvalidIdentity(format!(
                 "{class} root is not a directory"
             )));
         }
-        census_directory(class, &canonical, &canonical, &mut declared, &mut rows)?;
+        census_directory(class, root, root, &mut declared, &mut rows)?;
     }
     if let Some((_, missing)) = declared.into_iter().next() {
         return Err(PlanError::InvalidIdentity(format!(
@@ -606,6 +610,119 @@ pub fn census_filesystem(
         )));
     }
     Census::new(rows)
+}
+
+fn validate_declarations_before_census(
+    declarations: &BTreeMap<(CustodyClass, String), CensusDeclaration>,
+) -> Result<(), PlanError> {
+    for declaration in declarations.values() {
+        match (declaration.disposition, &declaration.duplicate_witness) {
+            (Disposition::DuplicateReclaimable, Some(witness)) => {
+                validate_relative_path(&witness.retained_relative_path)?;
+                validate_physical_identity_encoding(&witness.retained_physical_identity)?;
+                if !witness.independently_reopened
+                    || !is_lower_hex(&witness.retained_raw_sha256, 64)
+                    || witness.authority_identity.trim().is_empty()
+                {
+                    return Err(PlanError::InvalidIdentity(format!(
+                        "{}:{} lacks an independently reopened duplicate witness",
+                        declaration.class, declaration.relative_path
+                    )));
+                }
+                let retained_key = (
+                    declaration.class,
+                    witness.retained_relative_path.to_lowercase(),
+                );
+                let retained = declarations.get(&retained_key).ok_or_else(|| {
+                    PlanError::InvalidIdentity(format!(
+                        "{}:{} duplicate witness retained declaration is missing",
+                        declaration.class, declaration.relative_path
+                    ))
+                })?;
+                if retained.disposition != Disposition::Protected {
+                    return Err(PlanError::InvalidIdentity(format!(
+                        "{}:{} duplicate witness retained declaration is not protected",
+                        declaration.class, declaration.relative_path
+                    )));
+                }
+            }
+            (Disposition::DuplicateReclaimable, None) => {
+                return Err(PlanError::InvalidIdentity(format!(
+                    "{}:{} lacks an independently reopened duplicate witness",
+                    declaration.class, declaration.relative_path
+                )));
+            }
+            (_, Some(_)) => {
+                return Err(PlanError::InvalidIdentity(format!(
+                    "{}:{} carries a duplicate witness for a non-duplicate disposition",
+                    declaration.class, declaration.relative_path
+                )));
+            }
+            (_, None) => {}
+        }
+    }
+    Ok(())
+}
+
+fn validate_physical_identity_encoding(identity: &str) -> Result<(), PlanError> {
+    let parts: Vec<&str> = identity.split(':').collect();
+    let valid = match parts.as_slice() {
+        ["windows", volume, file] => is_lower_hex(volume, 8) && is_lower_hex(file, 16),
+        ["unix", device, inode] => {
+            !device.is_empty()
+                && !inode.is_empty()
+                && device.bytes().all(|byte| byte.is_ascii_digit())
+                && inode.bytes().all(|byte| byte.is_ascii_digit())
+        }
+        _ => false,
+    };
+    if valid {
+        return Ok(());
+    }
+    let detail = if identity.starts_with("windows:") {
+        "windows physical identity must match windows:8-lower-hex:16-lower-hex"
+    } else {
+        "physical identity must use the canonical windows or unix encoding"
+    };
+    Err(PlanError::InvalidIdentity(detail.into()))
+}
+
+fn observe_duplicate_witnesses(
+    roots: &BTreeMap<CustodyClass, PathBuf>,
+    declarations: &BTreeMap<(CustodyClass, String), CensusDeclaration>,
+) -> Result<(), PlanError> {
+    let mut observed = BTreeSet::new();
+    for declaration in declarations.values() {
+        let Some(witness) = &declaration.duplicate_witness else {
+            continue;
+        };
+        let key = (
+            declaration.class,
+            witness.retained_relative_path.to_lowercase(),
+        );
+        if !observed.insert(key) {
+            continue;
+        }
+        let root = roots.get(&declaration.class).ok_or_else(|| {
+            PlanError::InvalidIdentity(format!("missing {} root", declaration.class))
+        })?;
+        let path = root.join(&witness.retained_relative_path);
+        let observation = observe_file(&path).map_err(|error| {
+            PlanError::InvalidIdentity(format!(
+                "{}:{} duplicate witness retained observation failed: {error}",
+                declaration.class, declaration.relative_path
+            ))
+        })?;
+        if observation.raw_sha256 != witness.retained_raw_sha256
+            || observation.physical_identity != witness.retained_physical_identity
+        {
+            return Err(PlanError::InvalidIdentity(format!(
+                "{}:{} duplicate witness retained observation mismatch",
+                declaration.class, declaration.relative_path
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn census_directory(
