@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def load_module():
-    path = ROOT / "scripts" / "forecast_recalibration.py"
+    path = ROOT / "src" / "ember" / "governance" / "scripts" / "forecast_recalibration.py"
     spec = importlib.util.spec_from_file_location("forecast_recalibration", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -134,7 +134,7 @@ def test_e6_hash_domain_excludes_oversized_governed_rows_on_both_sides(tmp_path:
     receipt = module.build_receipt(forecast, run_root)
     assert oversized not in module.telemetry_paths(run_root)
 
-    battery_path = ROOT / "scripts" / "r1_exit_battery.py"
+    battery_path = ROOT / "src" / "ember" / "governance" / "scripts" / "r1_exit_battery.py"
     spec = importlib.util.spec_from_file_location("r1_exit_battery", battery_path)
     assert spec is not None and spec.loader is not None
     battery = importlib.util.module_from_spec(spec)
@@ -163,7 +163,7 @@ def test_e6_consumer_rejects_receipt_without_telemetry_binding(tmp_path: Path) -
     receipt.pop("telemetry_sha256")
     candidate = run_root / "forecast-recalibration.json"
     candidate.write_text(json.dumps(receipt), encoding="utf-8")
-    battery_path = ROOT / "scripts" / "r1_exit_battery.py"
+    battery_path = ROOT / "src" / "ember" / "governance" / "scripts" / "r1_exit_battery.py"
     spec = importlib.util.spec_from_file_location("r1_exit_battery", battery_path)
     assert spec is not None and spec.loader is not None
     battery = importlib.util.module_from_spec(spec)
@@ -181,7 +181,7 @@ def test_e6_consumer_hash_domain_rejects_tracked_unreadable_drift(tmp_path: Path
     receipt = module.build_receipt(forecast, run_root)
     candidate = run_root / "forecast-recalibration.json"
     candidate.write_text(json.dumps(receipt), encoding="utf-8")
-    battery_path = ROOT / "scripts" / "r1_exit_battery.py"
+    battery_path = ROOT / "src" / "ember" / "governance" / "scripts" / "r1_exit_battery.py"
     spec = importlib.util.spec_from_file_location("r1_exit_battery", battery_path)
     assert spec is not None and spec.loader is not None
     battery = importlib.util.module_from_spec(spec)
@@ -413,13 +413,14 @@ def test_cli_emits_selected_rung_and_canonical_path(tmp_path: Path) -> None:
     r2_forecast.parent.mkdir(parents=True, exist_ok=True)
     r2_forecast.write_bytes(fixture_forecast.read_bytes())
     out = run_root / "r2-forecast-recalibration.json"
-    env = dict(__import__("os").environ, PYTHONPATH=str(ROOT / "scripts"))
+    script_root = ROOT / "src" / "ember" / "governance" / "scripts"
+    env = dict(__import__("os").environ, PYTHONPATH=str(script_root))
     try:
         result = subprocess.run(
             [
                 sys.executable,
                 "-B",
-                str(ROOT / "scripts" / "forecast_recalibration.py"),
+                str(script_root / "forecast_recalibration.py"),
                 "--forecast",
                 str(r2_forecast),
                 "--rung",
@@ -448,7 +449,7 @@ def test_cli_emits_selected_rung_and_canonical_path(tmp_path: Path) -> None:
 
 
 def load_battery():
-    path = ROOT / "scripts" / "r1_exit_battery.py"
+    path = ROOT / "src" / "ember" / "governance" / "scripts" / "r1_exit_battery.py"
     spec = importlib.util.spec_from_file_location("r1_exit_battery_issue1613", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

@@ -1606,10 +1606,11 @@ def test_inspect_checkout_detached_head_symbolic_ref_not_retried(
 def _sandbox_closure_repo(root: Path, *, entrypoint: str = "import json\n") -> Path:
     """A miniature repo carrying a real closure module and a declared closure."""
     repo = root / "repo"
-    (repo / "scripts").mkdir(parents=True)
+    closure_path = repo / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
+    closure_path.parent.mkdir(parents=True)
     shutil.copyfile(
-        REPO_ROOT / "scripts" / "training_closure.py",
-        repo / "scripts" / "training_closure.py",
+        REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py",
+        closure_path,
     )
     (repo / "tools").mkdir(parents=True)
     (repo / "tools" / "entrypoint.py").write_text(entrypoint, encoding="utf-8")

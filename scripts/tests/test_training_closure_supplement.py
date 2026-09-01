@@ -20,7 +20,9 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-CLOSURE_MODULE_PATH = ROOT / "scripts" / "training_closure.py"
+CLOSURE_MODULE_PATH = (
+    ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
+)
 MANIFEST_RELATIVE_PATH = "manifests/training-dependency-closure.json"
 SUPPLEMENT_RELATIVE_PATH = (
     "tools/ember-restart-3b/training-dependency-closure-supplement.json"
@@ -46,8 +48,9 @@ def write_text(path: pathlib.Path, text: str) -> None:
 
 def build_sandbox_repo(root: pathlib.Path) -> pathlib.Path:
     repo = root / "repo"
-    (repo / "scripts").mkdir(parents=True)
-    shutil.copyfile(CLOSURE_MODULE_PATH, repo / "scripts" / "training_closure.py")
+    closure_path = repo / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
+    closure_path.parent.mkdir(parents=True)
+    shutil.copyfile(CLOSURE_MODULE_PATH, closure_path)
     write_text(repo / "tools" / "entrypoint.py", "import json\n")
     write_text(repo / "configs" / "training.json", '{"steps": 1}\n')
     write_text(
