@@ -1893,7 +1893,7 @@ def compile_receipt(
     verify_coloring_certificate(graph, coloring, max_states)
     carriers = build_carrier_specs(touch_sets, coloring, graph["capacities"])
     policy_path = repo / "manifests" / "architecture" / "domain-authority-v1.json"
-    schema_path = repo / "schemas" / "architecture" / "domain-authority-v1.schema.json"
+    schema_path = repo / "domains" / "governance" / "schemas" / "architecture" / "domain-authority-v1.schema.json"
     compiler_path = repo / "scripts" / "architecture_map.py"
     red_rows = [dict(row) for row in red_matrix]
     for row in red_rows:

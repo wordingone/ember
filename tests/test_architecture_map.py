@@ -145,6 +145,39 @@ class PolicyFailureTests(unittest.TestCase):
 
 
 class ClassificationTests(unittest.TestCase):
+    def test_post_issue2015_canonical_paths_remain_covered_by_original_authority(self) -> None:
+        compiler = load_compiler()
+        policy = policy_fixture()
+        rows = {
+            row["path"]: row
+            for row in compiler.classify_paths(
+                [
+                    "domains/governance/notes/1371-slice2-fingerprint-cache.md",
+                    "domains/governance/schemas/architecture/domain-authority-v1.schema.json",
+                    "domains/model/tokenizer/tokenizer.json",
+                    "src/ember/governance/scripts/owned_process.py",
+                    "src/ember/governance/scripts/r1_frozen_eval_runner.py",
+                    "src/ember/infrastructure/tools/check_no_temp.py",
+                ],
+                policy,
+            )
+        }
+        expected = {
+            "domains/governance/notes/1371-slice2-fingerprint-cache.md": ("Governance", "RETAIN_STABLE", "governance-notes"),
+            "domains/governance/schemas/architecture/domain-authority-v1.schema.json": ("Governance", "RETAIN_STABLE", "governance-schemas"),
+            "domains/model/tokenizer/tokenizer.json": ("Model", "RETAIN_STABLE", "model-tokenizer"),
+            "src/ember/governance/scripts/owned_process.py": ("Governance", "RETAIN_STABLE", "governance-script-census"),
+            "src/ember/governance/scripts/r1_frozen_eval_runner.py": ("Evaluation", "DEFERRED_DEPENDENCY", "evaluation-current"),
+            "src/ember/infrastructure/tools/check_no_temp.py": ("Infrastructure", "RETAIN_STABLE", "infrastructure-tools"),
+        }
+        self.assertEqual(
+            {
+                path: (row["owner"], row["disposition"], row["touch_set_id"])
+                for path, row in rows.items()
+            },
+            expected,
+        )
+
     def test_each_path_has_one_owner_and_disposition(self) -> None:
         compiler = load_compiler()
 
