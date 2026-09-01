@@ -437,7 +437,7 @@ def resolve_central_owned_admission(
     command = [
         sys.executable,
         "-I",
-        str(ROOT / "scripts" / "ember_restart" / "cli_seat.py"),
+        str(ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "cli_seat.py"),
         str(snapshot_manifest if snapshot_manifest is not None else run_manifest),
         "--trusted-verifier-registry",
         str(trusted_verifier_registry),
@@ -484,7 +484,7 @@ def resolve_development_identity(
     command = [
         sys.executable,
         "-I",
-        str(ROOT / "scripts" / "ember_restart" / "development_cli_seat.py"),
+        str(ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "development_cli_seat.py"),
         str(development_manifest),
         "--expected-manifest-sha256",
         expected_manifest_sha256,

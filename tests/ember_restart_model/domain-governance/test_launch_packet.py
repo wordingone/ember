@@ -17,21 +17,21 @@ from pathlib import Path
 
 import pytest
 
-_MODULE_PATH = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "launch_packet.py"
+_MODULE_PATH = Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b" / "launch_packet.py"
 _spec = importlib.util.spec_from_file_location("launch_packet", _MODULE_PATH)
 lp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(lp)
 
-_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "ember-restart-3b.json"
+_CONFIG_PATH = Path(__file__).resolve().parents[3] / "configs" / "ember-restart-3b.json"
 
 # The architecture's own expert declaration, read from the model module rather than
 # copied here, so a change to the roster moves the expectation with it.
-_TOOLS_DIRECTORY = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b"
+_TOOLS_DIRECTORY = Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b"
 if str(_TOOLS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIRECTORY))
 from repository_layout import resolve_repository_authority  # noqa: E402
 
-_MODEL_PATH = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "model.py"
+_MODEL_PATH = Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b" / "model.py"
 _model_spec = importlib.util.spec_from_file_location("ember_restart_model_decl", _MODEL_PATH)
 _model_mod = importlib.util.module_from_spec(_model_spec)
 # Register before exec: model.py defines dataclasses, and dataclasses resolves a
@@ -561,7 +561,7 @@ def test_named_command_is_truthful_no_placeholder(cfg, root):
 def _identity_manifest():
     import json as _json
     from pathlib import Path as _Path
-    root = _Path(__file__).resolve().parents[2]
+    root = _Path(__file__).resolve().parents[3]
     return _json.loads(
         (root / "data/ember-restart-3b/cond3-identity-manifest.json").read_text(encoding="utf-8")
     )
@@ -570,7 +570,7 @@ def _identity_manifest():
 def test_unresolved_pair_is_not_a_subject_checkpoint_mismatch():
     import copy as _copy, sys as _sys
     from pathlib import Path as _Path
-    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / "scripts"))
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[3] / "scripts"))
     from ember_01_identity.validate_identity import validate_manifest
 
     payload = _identity_manifest()
@@ -584,7 +584,7 @@ def test_unresolved_pair_is_not_a_subject_checkpoint_mismatch():
 def test_resolved_mismatch_is_still_caught():
     import copy as _copy, pytest as _pytest, sys as _sys
     from pathlib import Path as _Path
-    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / "scripts"))
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[3] / "scripts"))
     from ember_01_identity.validate_identity import validate_manifest, IdentityValidationError
 
     payload = _copy.deepcopy(_identity_manifest())
@@ -603,7 +603,7 @@ def test_resolved_mismatch_is_still_caught():
 def test_require_resolved_rejects_every_unresolved_identity_path():
     import copy as _copy, pytest as _pytest, sys as _sys
     from pathlib import Path as _Path
-    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2] / "scripts"))
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[3] / "scripts"))
     from ember_01_identity.validate_identity import validate_manifest, IdentityValidationError
 
     with _pytest.raises(IdentityValidationError) as excinfo:
