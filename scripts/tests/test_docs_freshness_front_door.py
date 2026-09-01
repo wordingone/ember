@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CHECKER = REPO_ROOT / "scripts" / "check_docs_freshness.py"
+CHECKER = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "check_docs_freshness.py"
 FIXTURE = Path(__file__).parent / "fixtures" / "docs_freshness_front_door.md"
 
 

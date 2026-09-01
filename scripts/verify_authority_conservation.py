@@ -160,7 +160,7 @@ AUTHORITY_DOMAIN_DIRECTORY = PurePosixPath("docs/domains/governance/authority")
 
 
 def authority_canonical_relative_path(name: str) -> PurePosixPath:
-    if name in {"GOAL.md", "STATE.md", "INVARIANT.md"}:
+    if name in {"GOAL.md", "STATE.md"}:
         return AUTHORITY_DOMAIN_DIRECTORY / name
     return AUTHORITY_DIRECTORY / name
 
@@ -168,7 +168,7 @@ def authority_canonical_relative_path(name: str) -> PurePosixPath:
 def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
     old_rel = PurePosixPath(name)
     canonical_rel = authority_canonical_relative_path(name)
-    if name in {"STATE.md", "INVARIANT.md"}:
+    if name == "STATE.md":
         return (old_rel, AUTHORITY_DIRECTORY / name, canonical_rel)
     return (old_rel, canonical_rel)
 

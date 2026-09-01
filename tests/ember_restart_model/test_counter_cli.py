@@ -24,6 +24,7 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governance"))
 from repository_layout import resolve_repository_authority  # noqa: E402
 
 _STREAM_MANIFEST_AUTHORITY = resolve_repository_authority(ROOT, "specialist_stream_manifest")
@@ -36,7 +37,7 @@ from checkpoint_artifacts import (
 import parameter_counter
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION, canonical_record_bytes, open_specialist_stream
 from model import RestartDecoderConfig, UnifiedDecoder
-from .checkpoint_fixture import write_checkpoint_artifacts
+from checkpoint_fixture import write_checkpoint_artifacts
 
 
 

@@ -64,9 +64,12 @@ def test_probe_dir_matches_filename_id():
     file dropped into scripts/ember_totality/ fails in CI/tests instead of
     silently aborting the next live board run."""
 
-    probe_dir = os.path.dirname(os.path.abspath(ember_totality_spec.__file__))
-    all_test_files = {n for n in os.listdir(probe_dir)
-                      if n.startswith("test_") and n.endswith(".py")}
+    all_test_files = {
+        name
+        for probe_dir in ember_totality_spec.PROBE_DIRS
+        for name in os.listdir(probe_dir)
+        if name.startswith("test_") and name.endswith(".py")
+    }
     non_probe_tests = ember_totality_spec.NON_PROBE_TEST_FILES
     discovered = all_test_files - non_probe_tests
     filename_id = ember_totality_spec.FILENAME_ID

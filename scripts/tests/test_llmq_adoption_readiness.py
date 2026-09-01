@@ -1392,7 +1392,7 @@ def test_governed_source_and_build_expose_only_the_external_benchmark_remainder(
         live_assessment,
     ) == []
     trusted_build = assess(tmp_path, payload)
-    assert trusted_build["verdict"] == "READY_FOR_EXTERNAL_EXECUTION"
+    assert trusted_build["verdict"] == "READY_FOR_EXTERNAL_EXECUTION", trusted_build
     assert "ember_lab_build_receipt.daemon_authority" not in trusted_build["missing"]
     assert "ember_lab_benchmark_receipt" in trusted_build["missing"]
 

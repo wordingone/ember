@@ -54,8 +54,10 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from scripts.ember_totality import quarantine_sweep
 from scripts.ember_totality import tree_provenance
-from branch_inventory import InventoryError as BranchInventoryError
-from branch_inventory import check_inventory
+from src.ember.governance.scripts.branch_inventory import (
+    InventoryError as BranchInventoryError,
+    check_inventory,
+)
 
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")

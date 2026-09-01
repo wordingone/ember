@@ -1764,7 +1764,7 @@ if __name__ == "__main__":
 
     _self_integrity = self_integrity_report(Path(__file__))
     print(
-        f"{render_gate_provenance(__file__)} dirty="
+        f"{render_gate_provenance(__file__, repo_root=Path(__file__).resolve().parents[4])} dirty="
         f"{'true' if _self_integrity['dirty'] else 'false'}",
         file=sys.stderr,
         flush=True,

@@ -420,7 +420,7 @@ def mint_genesis_candidate(
             "launch_seed": inventory["launch_seed"],
             "data_cursor": {"shard": "GENESIS", "record_index": 0, "global_step": 0, "tokens_seen": 0},
             "model_config_sha256": _sha256(config_target),
-            "contract_sha256": _sha256(Path(__file__).resolve().parents[2] / "scripts" / "ember_restart" / "contract.py"),
+            "contract_sha256": _sha256(Path(__file__).resolve().parents[2] / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "contract.py"),
             "active_expert_ids": ["shared"],
             "expert_genesis_sha256": expert_genesis,
             "expert_checkpoint_sha256": {

@@ -3,7 +3,7 @@
   "issue": 1498,
   "supersedes": {
     "path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
-    "sha256": "e95de0f81900ef76d8d7a2b81e6147e631234016262d04073913b371dbeccd56"
+    "sha256": "7e0e11b515987100ea9fc7bed9ad26094c2ea49dd27199cfdfc43ba21852ec9d"
   },
   "decision": {
     "id": "D-04",
@@ -40,15 +40,15 @@
       },
       "r1_runner": {
         "path": "src/ember/governance/scripts/r1_frozen_eval_runner.py",
-        "sha256": "9c5f5c3dfd0e354e1a8f729090a00c4ca247c7df6e229ffce817df5fc7f3a880"
+        "sha256": "9c2d394a07b5582e4fc33c3c4002f995cc499d37a193256830cb9c05217dd15b"
       },
       "r2_consumer": {
         "path": "src/ember/governance/scripts/r2_cheap_probe_battery.py",
-        "sha256": "f9a1338699e984e70f6a133e1b604b2dcf7ab7a04cb2c17e4ca4aed64c72de26"
+        "sha256": "b5e8f3301b61a97f048c32ed9e4ab7aa4fe31a93dbb8460a3860ce7dd15399b4"
       },
       "owned_server": {
         "path": "tools/ember-restart-3b/serve_owned_openai.py",
-        "sha256": "955074d18eac991e50ea88506f69228c69ed24d619c66e62a512f623c56683d7"
+        "sha256": "dfede35990e2416e57ae5a3da2e15beba87d098ad8178a93f719a95c38d143bb"
       }
     },
     "r2_adapter": {

@@ -182,7 +182,7 @@ def test_genesis_producer_mints_physical_manifest_last_candidate(
     assert manifest["genesis_claim_boundary"]["optimizer_steps"] == 0
     assert not any(target.parent.glob(".genesis.staging-*"))
 
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     custody_db = _register_custody(target)
     validated = contract.validate_manifest(

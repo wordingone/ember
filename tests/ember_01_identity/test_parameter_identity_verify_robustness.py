@@ -38,7 +38,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 for _extra in (
     ROOT / "tools" / "ember-restart-3b",
-    ROOT / "tests" / "ember_restart_model",
+    ROOT / "tests" / "ember_restart_model" / "domain-governance",
     ROOT / "scripts" / "ember_01_identity",
 ):
     if str(_extra) not in sys.path:

@@ -23,7 +23,7 @@ pytest.importorskip(
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 

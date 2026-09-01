@@ -78,7 +78,7 @@ def test_native_engine_board_review_is_closed_and_carries_t2_t3_every_run():
     }
 
     board_source = (
-        REPO_ROOT / "scripts" / "ember_totality" / "ember_totality_spec.py"
+        REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_totality" / "ember_totality_spec.py"
     ).read_text(encoding="utf-8")
     ast.parse(board_source)
     assert '"native_engine_trigger_review"' in board_source

@@ -29,12 +29,13 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governance"))
 
 import run_vertical_slice
 from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
 from pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
-from .checkpoint_fixture import fixture_counter_receipt
+from checkpoint_fixture import fixture_counter_receipt
 from model import RestartDecoderConfig, UnifiedDecoder
 
 # Larger than any real host's commit headroom: forces the REAL preflight

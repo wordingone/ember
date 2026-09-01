@@ -68,7 +68,7 @@ def run_cli(*args: object) -> subprocess.CompletedProcess[str]:
 
 def test_central_contract_remains_package_importable() -> None:
     result = subprocess.run(
-        [sys.executable, "-c", "from scripts.ember_restart import contract"],
+        [sys.executable, "-c", "from src.ember.governance.scripts.ember_restart import contract"],
         cwd=ROOT,
         text=True,
         capture_output=True,

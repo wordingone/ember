@@ -108,8 +108,10 @@ import time
 from pathlib import Path
 
 # Add repo root to path for invariant imports (needed for scripts.lib)
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(MODULE_DIR, "..", "..", "..", "..", ".."))
+HERE = os.path.join(REPO_ROOT, "scripts", "ember_totality")
+PROBE_DIRS = (HERE, MODULE_DIR)
 sys.path.insert(0, REPO_ROOT)
 # issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
 import importlib.util as _ember_2560a87c017c05b0_importlib
@@ -213,7 +215,9 @@ except (AttributeError, ValueError):
     pass
 
 RECEIPTS_DIR = os.path.join(HERE, "receipts-totality")
-CONDITIONS_SPEC_PATH = os.path.join(REPO_ROOT, "docs", "spec", "conditions-v1.md")
+CONDITIONS_SPEC_PATH = os.path.join(
+    REPO_ROOT, "docs", "domains", "governance", "spec", "conditions-v1.md"
+)
 
 PROBE_TIMEOUT_SECONDS = 180
 
@@ -860,8 +864,12 @@ def registry_sync_check():
     # absent from ORDER and the registry). Half-counting is the worst of both
     # worlds -- a truth instrument fails CLOSED, so any file/ORDER mismatch
     # aborts exactly like REGISTRY_DRIFT.
-    all_test_files = {n for n in os.listdir(HERE)
-                      if n.startswith("test_") and n.endswith(".py")}
+    all_test_files = {
+        name
+        for directory in PROBE_DIRS
+        for name in os.listdir(directory)
+        if name.startswith("test_") and name.endswith(".py")
+    }
     discovered = all_test_files - NON_PROBE_TEST_FILES
     unregistered_files = sorted(discovered - set(FILENAME_ID))
     missing_files = sorted(set(FILENAME_ID) - discovered)
@@ -889,11 +897,13 @@ def registry_sync_check():
 
 def discover_tests():
     """Return sorted absolute paths of every registered board probe."""
-    out = []
-    for name in sorted(os.listdir(HERE)):
-        if name in FILENAME_ID:
-            out.append(os.path.join(HERE, name))
-    return out
+    found = {
+        name: os.path.join(directory, name)
+        for directory in PROBE_DIRS
+        for name in os.listdir(directory)
+        if name in FILENAME_ID
+    }
+    return [found[name] for name in sorted(found)]
 
 
 # Recognized status tokens, longest-first so "AUDIT-INCIDENT" is not

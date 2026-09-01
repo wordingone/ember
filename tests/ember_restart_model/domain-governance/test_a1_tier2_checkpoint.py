@@ -12,7 +12,7 @@ import sys
 import pytest
 import torch
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA-only Tier-2 checkpoint")
 

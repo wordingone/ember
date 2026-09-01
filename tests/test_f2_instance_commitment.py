@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "scripts" / "c8_prelaunch"))
+sys.path.insert(0, str(_REPO / "src" / "ember" / "governance" / "scripts" / "c8_prelaunch"))
 sys.path.insert(0, str(_REPO / "scripts"))
 
 import f2_schedule_generator as f2  # noqa: E402
