@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-exact-path-migration-record/v1",
   "goal_id": "EMBER-02",
-  "workstream_id": "EMBER-02B",
+  "workstream_id": "EMBER-02A",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "original_map_raw_sha256": "a8225a623d0a08bb961266d762cbe65815623f6602c151ac2c6cb4b0da423d81",
   "original_row_count": 500,
