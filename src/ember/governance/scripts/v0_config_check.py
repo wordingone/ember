@@ -10,9 +10,10 @@ internally consistent) plus the launch-blocking nulls.
 """
 import json
 import os
+import pathlib
 import sys
 
-NC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+NC = str(pathlib.Path(__file__).resolve().parents[4])
 CONFIG = f"{NC}/configs/v0-pretrain-config.json"
 ASSEMBLY_SHA = ("a29d2e567f1853966cc72a4890eadc963164265e"
                 "4f24a89cadea24d9ff5b80c2")
