@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 def _utc_ts():

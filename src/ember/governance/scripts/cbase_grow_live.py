@@ -130,7 +130,7 @@ from cbase_grow_dryrun import (                                    # noqa: E402
 )
 from receipt_write import checked_write                            # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[4]
 SEED_CKPT_DEFAULT = REPO / "models" / "cbase-smoke-run" / "checkpoints" / "step-00000610"
 K_LIVE_DEFAULT = 60
 K_SMOKE = 3          # spec: "--smoke mode (CPU, K=3)"

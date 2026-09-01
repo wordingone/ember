@@ -41,7 +41,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 # The constitutional invariant hash every post-genesis receipt must carry
 # (src/ember/governance/scripts/receipt_check.py's post-genesis rule, enforced by repo-guard's

@@ -222,7 +222,7 @@ vram_preflight = getattr(_ember_af5148f80571f78d_module, 'vram_preflight')
 # issue2015 exact-local-import-end:scripts/cpu_offload_adamw.py  # noqa: E402 (DEV-002 cure)
 
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[4]
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 # Constitutional invariant hash (receipt_check.py's post-genesis rule) -- cross-verified
 # against src/ember/governance/scripts/receipt_check.py's own INVARIANT_SHA256 constant, not hand-typed.

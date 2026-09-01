@@ -63,7 +63,7 @@ load_registry = getattr(_ember_abd330e63c6c95de_module, 'load_registry')
 normalize_config_path = getattr(_ember_abd330e63c6c95de_module, 'normalize_config_path')
 # issue2015 exact-local-import-end:scripts/registry_gate.py  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[4]
 TODAY = dt.date(2026, 6, 12)
 DRIVE_LETTER_RE = re.compile(r"[A-Za-z]:[\\/]")
 LEGACY_ERASURE_STATUSES = {

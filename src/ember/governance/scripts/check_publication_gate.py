@@ -129,7 +129,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
 RECEIPTS_DIR = REPO_ROOT / "scripts" / "ember_totality" / "receipts-publication"
 CLAIMS_MAP_PATH = REPO_ROOT / "paper" / "claims-evidence-map.md"
 OUTLINE_PATH = REPO_ROOT / "paper" / "outline.md"
