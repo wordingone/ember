@@ -28,7 +28,7 @@ from . import test_certified_train_launch as launch_fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / "tools" / "ember-restart-3b"
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
 THRESHOLDS_PATH = ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
 T06 = Decimal("0.95")
 RUN_ID = "a3-fixture-run-0001"
