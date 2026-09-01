@@ -753,6 +753,20 @@ def build_issue2024_union_comparison_receipt(
             or receipt.get("profiler_update_indexes") != [0, 1]
         ):
             raise ValueError("ISSUE2024_UNION_RECEIPT_INVALID")
+    parser_source_hashes: list[str] = []
+    for receipt in (left, right):
+        kernel = receipt.get("kernel_trace")
+        derivation = kernel.get("offline_trace_derivation") if isinstance(kernel, Mapping) else None
+        parser_source_sha256 = (
+            derivation.get("parser_source_sha256") if isinstance(derivation, Mapping) else None
+        )
+        try:
+            _require_sha(parser_source_sha256, "issue2024 offline parser source")
+        except ValueError as exc:
+            raise ValueError("ISSUE2024_UNION_OFFLINE_PARSER_MISMATCH") from exc
+        parser_source_hashes.append(parser_source_sha256)
+    if parser_source_hashes[0] != parser_source_hashes[1]:
+        raise ValueError("ISSUE2024_UNION_OFFLINE_PARSER_MISMATCH")
     if left.get("identity") != right.get("identity"):
         raise ValueError("ISSUE2024_UNION_IDENTITY_MISMATCH")
     left_custody, right_custody = left.get("runtime_custody"), right.get("runtime_custody")
@@ -786,6 +800,7 @@ def build_issue2024_union_comparison_receipt(
         "one_shot_self_sha256": left["self_sha256"],
         "sharded_raw_sha256": sharded_raw_sha256,
         "sharded_self_sha256": right["self_sha256"],
+        "parser_source_sha256": parser_source_hashes[0],
         "preflight_raw_sha256": left_custody["preflight_raw_sha256"],
         "preflight_self_sha256": left_custody["preflight_self_sha256"],
         "structural_key_fields": list(_ISSUE2024_UNION_KEY_FIELDS),

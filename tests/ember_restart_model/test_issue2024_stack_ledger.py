@@ -397,7 +397,8 @@ def _union_receipt(mode: str, events: list[dict[str, object]]) -> dict[str, obje
             "full_precision_unmapped_event_ledger": {
                 "schema_version": "ember-issue2024-full-precision-event-ledger-v1",
                 "events": events,
-            }
+            },
+            "offline_trace_derivation": {"parser_source_sha256": "f" * 64},
         },
         "runtime_custody": {
             "preflight_raw_sha256": "d" * 64,
@@ -421,6 +422,83 @@ def _union_event(*, time: str = "10.0", stack: str = "model.py:41") -> dict[str,
         "self_device_time_us": time,
         "source_stack": [stack],
     }
+
+
+def _offline_trace_and_parent(tmp_path: Path) -> tuple[Path, dict[str, object]]:
+    trace = tmp_path / "trace.json"
+    trace.write_text(json.dumps({"traceEvents": [
+        {
+            "ph": "X", "cat": "user_annotation",
+            "name": subject.COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+            "pid": 4, "tid": 8, "ts": 10, "dur": 100,
+            "args": {"External id": 1},
+        },
+        {
+            "ph": "X", "cat": "cpu_op", "name": "aten::gather",
+            "pid": 4, "tid": 8, "ts": 20, "dur": 20,
+            "args": {
+                "External id": 7,
+                "Input Dims": [[32000, 2048], [], [960, 2048]],
+                "Call stack": "model.py(1): forward;packed_specialist_run.py(2): main;",
+            },
+        },
+        {
+            "ph": "X", "cat": "kernel", "name": "gather_kernel",
+            "pid": 0, "tid": 7, "ts": 25, "dur": 4.544,
+            "args": {"External id": 7},
+        },
+    ]}), encoding="utf-8")
+    parent = _union_receipt("issue2024-union-one-shot", [_union_event()])
+    parent["kernel_trace"] = {
+        "sha256": hashlib.sha256(trace.read_bytes()).hexdigest(),
+        "material_linear_shapes": [
+            {"fprop": [64, 15, 2048, 6144]},
+            {"fprop": [64, 15, 2048, 6144]},
+            {"fprop": [64, 15, 2048, 6144]},
+            {"fprop": [64, 15, 2048, 6144]},
+            {"fprop": [64, 15, 2048, 32000]},
+        ],
+    }
+    parent["self_sha256"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in parent.items() if key != "self_sha256"},
+            sort_keys=True, separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return trace, parent
+
+
+def test_issue2024_offline_derive_uses_real_material_linear_shape_ordering(
+    tmp_path: Path,
+) -> None:
+    trace, parent = _offline_trace_and_parent(tmp_path)
+    receipt = subject.derive_issue2024_offline_measurement_receipt(
+        parent, parent_raw_sha256="a" * 64, trace_path=trace,
+    )
+
+    derivation = receipt["kernel_trace"]["offline_trace_derivation"]
+    assert derivation["parser_source_sha256"] == hashlib.sha256(
+        Path(subject.__file__).read_bytes()
+    ).hexdigest()
+    assert receipt["kernel_trace"]["full_precision_unmapped_event_ledger"]["events"][0][
+        "input_shapes"
+    ] == [[32000, 2048], [], [960, 2048]]
+
+
+def test_issue2024_offline_derive_refuses_trace_sha_binding_mismatch(tmp_path: Path) -> None:
+    trace, parent = _offline_trace_and_parent(tmp_path)
+    parent["kernel_trace"]["sha256"] = "0" * 64
+    parent["self_sha256"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in parent.items() if key != "self_sha256"},
+            sort_keys=True, separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+    with pytest.raises(ValueError, match="ISSUE2024_OFFLINE_TRACE_BINDING_MISMATCH"):
+        subject.derive_issue2024_offline_measurement_receipt(
+            parent, parent_raw_sha256="a" * 64, trace_path=trace,
+        )
 
 
 def _shard_receipt(index: int) -> dict[str, object]:
@@ -574,6 +652,26 @@ def test_issue2024_union_comparison_refuses_identity_or_preflight_drift() -> Non
             sharded,
             one_shot_raw_sha256="1" * 64,
             sharded_raw_sha256="2" * 64,
+        )
+
+
+def test_issue2024_union_comparison_refuses_offline_parser_identity_drift() -> None:
+    one_shot = _union_receipt("issue2024-union-one-shot", [_union_event()])
+    sharded = _union_receipt("issue2024-union-sharded", [_union_event()])
+    sharded["kernel_trace"]["offline_trace_derivation"]["parser_source_sha256"] = "0" * 64
+    sharded["self_sha256"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in sharded.items() if key != "self_sha256"},
+            sort_keys=True, separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+    with pytest.raises(ValueError, match="ISSUE2024_UNION_OFFLINE_PARSER_MISMATCH"):
+        subject.build_issue2024_union_comparison_receipt(
+            one_shot,
+            sharded,
+            one_shot_raw_sha256="a" * 64,
+            sharded_raw_sha256="b" * 64,
         )
 
 
