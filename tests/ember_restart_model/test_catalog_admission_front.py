@@ -370,6 +370,7 @@ def test_bulk_connector_projects_exact_supported_media_types_and_refuses_unknown
         domain="mathematics",
         files=[
             (".gitattributes", b"*.parquet filter=lfs"),
+            ("data/train-00000-of-00020.json.gz", b"compressed json fixture"),
             ("lean_workbook.json", b"{}"),
             ("shard_00000000_processed.jsonl.zst", b"compressed ndjson fixture"),
             ("README.md", b"# Lean Workbook"),
@@ -388,6 +389,7 @@ def test_bulk_connector_projects_exact_supported_media_types_and_refuses_unknown
     assert {row["path"]: row["media_type"] for row in projected["files"]} == {
         ".gitattributes": "text/plain; charset=utf-8",
         "README.md": "text/markdown; charset=utf-8",
+        "data/train-00000-of-00020.json.gz": "application/json+gzip",
         "lean_workbook.json": "application/json",
         "shard_00000000_processed.jsonl.zst": "application/x-ndjson+zstd",
         "wkbk_1009.parquet": "application/vnd.apache.parquet",
@@ -406,6 +408,24 @@ def test_bulk_connector_projects_exact_supported_media_types_and_refuses_unknown
             expected_receipt_sha256=unknown_sha,
             source_id="candidate-mathematics-heldout-2",
             expected_source_selector="fixture/unknown",
+            expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+            domain="mathematics",
+            split="heldout",
+        )
+
+    deceptive_root = tmp_path / "deceptive"
+    deceptive_path, deceptive_sha = write_connector(
+        deceptive_root,
+        source="fixture/deceptive",
+        domain="mathematics",
+        files=[("payload.json.gz.exe", b"not gzip")],
+    )
+    with pytest.raises(ValueError, match="unsupported media type"):
+        load_bulk_domain_connector_receipt(
+            receipt_path=deceptive_path,
+            expected_receipt_sha256=deceptive_sha,
+            source_id="candidate-mathematics-heldout-2",
+            expected_source_selector="fixture/deceptive",
             expected_license_text_sha256=sha256(b"CC-BY-4.0"),
             domain="mathematics",
             split="heldout",
