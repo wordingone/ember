@@ -27,7 +27,7 @@ Then the verdict, carrying the 2B verdict STRING (the #336 wiring guidance —
 `.get("verdict")`, never the dict):
 
 ```
-python scripts/fp24_verdict.py --checkpoint 4B \
+python src/ember/governance/scripts/fp24_verdict.py --checkpoint 4B \
   --receipt receipts/fp24-4b-retry-probe-<UTCts>Z.json \
   --prior-2b-verdict RETRY-AT-4B
 ```

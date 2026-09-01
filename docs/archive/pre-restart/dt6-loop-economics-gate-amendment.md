@@ -38,7 +38,7 @@ readiness."
    training" is valid only if the readiness probe reports verified-signal-per-GPU-hour above
    the equal-wall-clock band, **never** "the smoke ran clean."
 
-## Selftest / AC (checker spec — eng successor builds `scripts/loop_econ_gate.py`)
+## Selftest / AC (checker spec — eng successor builds `src/ember/governance/scripts/loop_econ_gate.py`)
 
 - **AC1:** a verdict JSON with `"verdict":"PASS"` but MISSING `signal_per_gpu_hour` →
   checker returns REJECT (exit nonzero).

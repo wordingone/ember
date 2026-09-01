@@ -24,11 +24,11 @@ invariant slots (sp5 §5):
 
 | Invariant | File | Label |
 |---|---|---|
-| Three-test gain gate | `docs/archive/pre-restart/formalization-v0.md` | `three-test-gain-gate` |
+| Three-test gain gate | `docs/domains/governance/archive/pre-restart/formalization-v0.md` | `three-test-gain-gate` |
 | Resource governor + headroom config | `configs/v0-pretrain-config.json` | `governor-headroom-config` |
 | GOAL.md + only-the-user-retires-it | `GOAL.md` | `goal-md` |
 | Receipts-only truth | `GOAL.md` (contains verbatim) | `receipts-only-truth-statement` |
-| This enforcement layer itself | `scripts/nck/invariants.py` | `invariants-py` |
+| This enforcement layer itself | `src/ember/governance/scripts/nck/invariants.py` | `invariants-py` |
 
 The manifest also lists itself (`configs/nck-invariants.json`) with
 `sha256: "SELF"` — a sentinel that skips the content-hash check, relying
@@ -127,13 +127,13 @@ The following paths are protected by hash (in the manifest) but not by the
 write-surface block (they are inside the write surface, reachable by a branch
 promotion):
 
-- `docs/archive/pre-restart/formalization-v0.md`, `configs/v0-pretrain-config.json`, `GOAL.md`,
-  `scripts/nck/invariants.py`
+- `docs/domains/governance/archive/pre-restart/formalization-v0.md`, `configs/v0-pretrain-config.json`, `GOAL.md`,
+  `src/ember/governance/scripts/nck/invariants.py`
 
 These are protected against ACCIDENTAL mutation, not against a deliberate
 branch-and-promote.  The full invariant (sp5 §5) requires that promotion
 through the gate regenerates the manifest + baseline (via
-`scripts/nck/invariants.py --update-manifest`) and re-runs the selftest.
+`src/ember/governance/scripts/nck/invariants.py --update-manifest`) and re-runs the selftest.
 That step is enforced by the promote-script gate (future issue), not by this
 layer.
 
@@ -163,13 +163,13 @@ and in-repo Python.
 | File read | Role |
 |---|---|
 | `docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md` | Primary contract: §5 un-removable invariants list |
-| `scripts/nck/event_loop.py` | Module to surgically edit; boot-check wiring point |
-| `docs/archive/pre-restart/nck-event-loop-v0.md` | Architecture doc for #260 (provenance + ambiguity resolutions) |
-| `scripts/nck/selftest_event_loop.py` | Existing selftest: extended with `_skip_invariant_check` |
-| `docs/archive/pre-restart/nck-spec-v0.md` | Five invariants with enforcement mechanisms |
-| `docs/charter/nck-invariant-contract-v0.md` | 15 behavioral invariants; uniform tool interface (inv 5) |
+| `src/ember/governance/scripts/nck/event_loop.py` | Module to surgically edit; boot-check wiring point |
+| `docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md` | Architecture doc for #260 (provenance + ambiguity resolutions) |
+| `src/ember/governance/scripts/nck/selftest_event_loop.py` | Existing selftest: extended with `_skip_invariant_check` |
+| `docs/domains/governance/archive/pre-restart/nck-spec-v0.md` | Five invariants with enforcement mechanisms |
+| `docs/domains/governance/charter/nck-invariant-contract-v0.md` | 15 behavioral invariants; uniform tool interface (inv 5) |
 | `GOAL.md` | Source of receipts-only-truth statement (invariant 4); hash target |
-| `docs/archive/pre-restart/formalization-v0.md` | Three-test gain gate (§4); hash target |
+| `docs/domains/governance/archive/pre-restart/formalization-v0.md` | Three-test gain gate (§4); hash target |
 | `configs/v0-pretrain-config.json` | Governor + headroom config; hash target |
 
 No file outside this repository was read.  No predecessor-CLI source was accessed.

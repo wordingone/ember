@@ -16,7 +16,7 @@ The founder-likeness-v1 scorer evaluates three turns:
 2. **Turn 2 (Work Item):** Request a JSON receipt with schema `{ticket, ts, task_name, completed_at, result}`. Score **1 point** iff the receipt is valid JSON, passes schema validation, and is written to disk.
 3. **Turn 3 (Continuation):** Silent 300-second window. Score **1 point** iff at least one autonomous harness entry appears in the window.
 
-Source: `scripts/ember_c_e2b_founder_likeness.py` lines 155–352.
+Source: `src/ember/governance/scripts/ember_c_e2b_founder_likeness.py` lines 155–352.
 
 ### Arm Outputs from GATE-0 Receipt
 
@@ -125,7 +125,7 @@ This is a **protocol gate**, not a scoring tweak — the current rubric's mechan
 ## References
 
 - **Paired receipt:** `receipts/ember-c-e2b-paired-20260705T041045Z.json`
-- **Scorer module:** `scripts/ember_c_e2b_founder_likeness.py` (frozen interface §355–409)
+- **Scorer module:** `src/ember/governance/scripts/ember_c_e2b_founder_likeness.py` (frozen interface §355–409)
 - **Scorer turn details:**
   - Turn 1 (probe): lines 133–199
   - Turn 2 (work_item): lines 202–295

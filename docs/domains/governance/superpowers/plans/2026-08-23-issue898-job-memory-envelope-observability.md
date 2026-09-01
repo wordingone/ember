@@ -27,7 +27,7 @@ windows-sys 0.59, Windows Job Objects and IO completion ports.
 
 **Files:**
 
-- Modify: `tests/ember_restart_model/domain-governance/test_host_setup_contract.py`
+- Modify: `tests/ember_restart_model/test_host_setup_contract.py`
 - Modify: `tools/ember-restart-3b/host_setup_contract.py`
 
 ### Step 1: Write failing formula and refusal tests

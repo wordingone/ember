@@ -19,7 +19,7 @@ R2-RETHINK on plain-SFT, D3 overlay UP — MTP advances), t5
 caveat), `r2-power-prereg-20260610T223032Z` (k=24 binding, MDE 3.48pp,
 feed=harm-only), `bits-account-20260610T223429Z` (B = 196.73
 [195.9,197.45] corrected), `calibration-decomp-20260610T223737Z`
-(resolution 0.0; skill criterion), `docs/research/world-choice-r2.md` (W-code
+(resolution 0.0; skill criterion), `docs/domains/governance/research/world-choice-r2.md` (W-code
 stays the r2 training world). Note: #24 (GRPO integration) completes
 ROUND-1's arm B whenever it lands; GRPO joins round-2 only through the
 arm-4 precondition below.

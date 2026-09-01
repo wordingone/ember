@@ -34,7 +34,7 @@ the go — the clean bench is the measured lever receipt that backs it.
 
 ## The decision — one fill-in from the clean §3 receipt
 
-`python scripts/c04_optimizer_pick.py` reads the clean no-sync bench
+`python src/ember/governance/scripts/c04_optimizer_pick.py` reads the clean no-sync bench
 (measure=False, harness b73b85b) and emits the committed optimizer. Two outcomes:
 
 - **PROFILE A — clean bench `tok_s_paced` ≥ 25462.963** (and ns5_equiv ≤ 2e-7):

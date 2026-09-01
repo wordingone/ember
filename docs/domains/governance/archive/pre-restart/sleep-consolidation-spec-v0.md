@@ -63,7 +63,7 @@ r2-prereg.md) instantiate it.
 
 ## Ownership + enforcement hooks
 
-T2/T3 gate chains are invariant-1 territory in docs/archive/pre-restart/nck-spec-v0.md: the
+T2/T3 gate chains are invariant-1 territory in docs/domains/governance/archive/pre-restart/nck-spec-v0.md: the
 promote path requires the gate receipts schema-validated; no transition
 without a receipt (invariant 4). Round preregs cite this spec; deviations
 go through the audit-§6 deviation registry.

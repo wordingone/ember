@@ -71,7 +71,7 @@ Precedence order for goal-mode execution:
 1. `Authority And Precedence` and `Current Blocker Packet` in this file.
 2. `Goal Injection Contract` and `Goal Clear Condition` in this file.
 3. `Do Not Infer` and the active `Next` section in this file.
-4. `docs/ledgers/ember-debt-ledger.md`, only when it agrees with the packet.
+4. `docs/domains/governance/ledgers/ember-debt-ledger.md`, only when it agrees with the packet.
 5. Historical evidence, original `GOAL.md` text, readiness receipts, D3/Kaggle
    receipt chronicles, old issue trackers, and founder-side context.
 
@@ -205,7 +205,7 @@ generated docs, or the clean-room reimplementation is
 `PARITY_WITH_MODEL_NOT_TOOL` and cannot open the `the predecessor CLI` resident-harness
 gate. If a future lookup claims `launch.ps1` is missing, it must reconcile that
 against the real compiled `the predecessor CLI executable` and the Ember-side `tools/reference-launch`
-and `tools/reference-goal-mode` launchers instead of treating the working app as
+and `src/ember/infrastructure/tools/reference-goal-mode` launchers instead of treating the working app as
 absent.
 
 - **Receipt cursor as of 2026-06-21:** resident-training gate PASS is recorded
@@ -413,7 +413,7 @@ discovery cycle:
    behavior, not merely exposed through a wrapper command. The
    existing `the predecessor CLI` launch surface is the real compiled
    `<local-path>`, plus Ember-side launchers such as
-   the former reference launcher and `tools/reference-goal-mode/goal-mode.ps1`; a missing
+   the former reference launcher and `src/ember/infrastructure/tools/reference-goal-mode/goal-mode.ps1`; a missing
    `<local-path>` lookup is not evidence that the app is absent.
    These launch surfaces are behavior/provenance sources to inventory, not
    codebases Ember may copy or train on before clean-room clearance. Only after this harness exists may
@@ -543,13 +543,13 @@ or newly written harness is never enough if the hardest core blocker and the
 known deferred-work ledger are not resolved by executed receipts.
 
 The canonical technical and cognitive debt index is
-`docs/ledgers/ember-debt-ledger.md`. It consolidates the maintainer's 2026-06-19 captured debt
+`docs/domains/governance/ledgers/ember-debt-ledger.md`. It consolidates the maintainer's 2026-06-19 captured debt
 list with this goal, the completeness manifest, the active receipt index, and
 the architecture audit. Goal-clear review must scan that ledger. Any row marked
 `ACTIVE-BLOCKER`, `ACTIVE-NEXT`, `OPEN`, or triggerless `DEFERRED` blocks
 completion unless a newer receipt updates the row to `DONE`, `KILLED`,
 `EXCLUDED`, or a valid `GATED:<trigger>` state.
-If `docs/ledgers/ember-debt-ledger.md` is missing, stale, or contradictory,
+If `docs/domains/governance/ledgers/ember-debt-ledger.md` is missing, stale, or contradictory,
 goal mode may repair only the rows needed to preserve this Current Blocker
 Packet and must then return to the packet. Ledger repair is not progress toward
 Ember unless it directly changes the resident-training gate receipt. Unknown

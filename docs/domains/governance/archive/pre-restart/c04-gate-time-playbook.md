@@ -11,7 +11,7 @@ REAL `fp44_horizon_equiv_gate.score_receipt()` → `c04_optimizer_pick.pick()`.
 
 When both the fp44 receipt AND the batched-NS5 bench receipt are on disk:
 
-    python scripts/c04_optimizer_pick.py
+    python src/ember/governance/scripts/c04_optimizer_pick.py
 
 `analyze()` loads both receipts, runs the fp44 gate internally (P2), and emits
 the frozen 3-way verdict. Nothing else to wire.

@@ -11,7 +11,7 @@ pre-written so the moment readiness hits 3/3 the launch is execution, not
 improvisation. **Authoring this is pre-staging, not launching** — no run starts
 from this doc.
 
-Companion: `docs/ember-restart/ember-multimodal-v0-config-spec.md` (the architecture — the 4
+Companion: `docs/domains/governance/ember-restart/ember-multimodal-v0-config-spec.md` (the architecture — the 4
 locks, carry envelope, embedder, the §IV core-size decision). This brief is the
 *authorization* layer on top of it.
 
@@ -30,7 +30,7 @@ pilot, not the v0 size (config-spec §IV).
 | # | Precondition | Gate (receipt-class, never self-report) | Status 2026-06-14 |
 |---|---|---|---|
 | 1 | **Multimodal-target trained on real data** (never text-only, never synthetic-only) | **END-TO-END real-data smoke** of the launch harness on the §IV config + a valid real-data tok/s on the 368M/L20 config = the N-basis. Wiring + launch-config lever are BOTH the gate. | **GREEN (2026-06-16, source-verified PR #441 / ER-2d).** The §IV 368M/L20 harness trains on REAL matched image-text data, packed to 4096 tok/step; FINAL tok_s_paced=8,627.0 -> N=745M/gov-day; healthy 35.5/65.45 mix; binding_preserved + Lock-4 multi-image RoPE fixed. Full resolution + the 6-catch history below. |
-| 2 | **DT-6 signal-economics** | A diagnostic/pilot PASS must read as **verified-signal-per-GPU-hour** (equal-wall-clock band), not "it ran" — `scripts/loop_econ_gate.py` emits the metric and gates on it | **GREEN (2026-06-16, source-verified)** — #430/PR #432 `loop_econ_gate.py` exists + committed; selftest 3/3 (AC1 REJECT missing-signal, AC2 ACCEPT valid, AC3 REJECT within-floor; failures:[]). The economic-PASS gate (verified-signal-per-GPU-hour > equal-wall-clock band) is mechanized. |
+| 2 | **DT-6 signal-economics** | A diagnostic/pilot PASS must read as **verified-signal-per-GPU-hour** (equal-wall-clock band), not "it ran" — `src/ember/governance/scripts/loop_econ_gate.py` emits the metric and gates on it | **GREEN (2026-06-16, source-verified)** — #430/PR #432 `loop_econ_gate.py` exists + committed; selftest 3/3 (AC1 REJECT missing-signal, AC2 ACCEPT valid, AC3 REJECT within-floor; failures:[]). The economic-PASS gate (verified-signal-per-GPU-hour > equal-wall-clock band) is mechanized. |
 | 3 | **Crash-survival** | Founder roster + workspace recover automatically after a real PC restart | **GREEN** — the 2026-06-14 restart recovered full roster + workspace (the maintainer-confirmed); the ultimate drill, not a synthetic one |
 
 Readiness: **3/3 GREEN** (2026-06-16, source-verified). **Precondition-1 = GREEN (ER-2d).**
