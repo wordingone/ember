@@ -35,7 +35,7 @@ The C-SCALE checker (test_c_scale.py, not exported to public repo) defines the f
 | **W2.free_cognitive_mode_transition_receipt** | Path to receipt proving mode transition cost << one training step | **SATISFIED** | `receipts/ember-c-scale/w2-transition-20260704T???-train_engage.json` (NOT LIVE; fixture ts 20990101) | **AMBER** — field structure defined, fixture exists, live receipt absent |
 | **W2.no_borrowed_base** | Boolean: resident base model ID matches owned grow-path lineage (no frozen base borrowed) | **SATISFIED** | Same receipt; field verifies lineage match | **AMBER** — field structure defined, fixture exists, live receipt absent |
 
-**W2 Summary:** 4/4 fields *structurally defined* but **all are FIXTURE-ts (20990101), not live receipts**. The W2 preregistration (docs/spec/w2-scale-preregistration-v1.md) is written and frozen (2026-07-04) but the run is pre-launch-gated (held-out decontamination §4 must complete first). **No W2 receipts have fired yet.**
+**W2 Summary:** 4/4 fields *structurally defined* but **all are FIXTURE-ts (20990101), not live receipts**. The W2 preregistration (docs/domains/governance/spec/w2-scale-preregistration-v1.md) is written and frozen (2026-07-04) but the run is pre-launch-gated (held-out decontamination §4 must complete first). **No W2 receipts have fired yet.**
 
 ---
 
@@ -65,21 +65,21 @@ The C-SCALE checker (test_c_scale.py, not exported to public repo) defines the f
 
 - **Blocks:** W1.{measured,projected}_tokens_to_base; W1.token_bill_collapse_ratio
 - **Status:** RED (L3 refutation). Owned receipt `receipts/ember-c-scale/w1-collapse-control-20260704T144548Z.json` shows control arm (from-scratch) reached capability parity at ≤ grow arm's tokens. Pre-registered threshold L3 ≥ 1.0 means W1 collapse does not generalize; **W1 fields cannot be satisfied**.
-- **Citation:** `docs/spec/w2-scale-preregistration-v1.md` §1–3; totality receipt.
+- **Citation:** `docs/domains/governance/spec/w2-scale-preregistration-v1.md` §1–3; totality receipt.
 - **Consequence:** W1.{measured,projected,ratio} fields are *uncomputable*, not merely unmeasured. Assembly refuses per issue #73.
 
 ### R3 Feasibility Staging (27B @ regime, blocking W2 coexistence)
 
 - **Blocks:** W2.per_update_cost_at_scale; active_working_set_bytes_vs_device_floor
 - **Status:** FIXTURE (no live run). Pre-planned but queued behind C-E2B endgame (issue #29, one-model queue). Fixture receipt `receipts/r3-feasibility/r3-feasibility-phaseb-fixture-20990101T000000Z.json` exists with schema. **GPU-gated, not live.**
-- **Citation:** `docs/design/scale-architecture-frontier-20260703.md` §2; `docs/spec/w2-scale-preregistration-v1.md` §4 (decontam precondition); scale-architecture §5 action 2.
+- **Citation:** `docs/design/scale-architecture-frontier-20260703.md` §2; `docs/domains/governance/spec/w2-scale-preregistration-v1.md` §4 (decontam precondition); scale-architecture §5 action 2.
 - **Consequence:** W2 cannot assemble until R3 feasibility receipt is live (regime-M move + observed co-residence).
 
 ### W2 Decontamination Gate (C-E2B-adjacent, blocking W2 launch)
 
 - **Blocks:** W2.native_finetune_mechanism_id and all W2 fields
 - **Status:** BLOCKED. Held-out eval batch decontamination (window-level dedup against full corpus) must complete before W2 arms launch. Receipt `receipts/ember-c-scale/w2-decontam-20260704T???-import-edition.json` does not exist (fixture-only). **Pre-registration frozen 2026-07-04, run not yet dispatched.**
-- **Citation:** `docs/spec/w2-scale-preregistration-v1.md` §4; manifest leg 4 (not yet executing).
+- **Citation:** `docs/domains/governance/spec/w2-scale-preregistration-v1.md` §4; manifest leg 4 (not yet executing).
 - **Consequence:** W2 fields remain FIXTURE until decontam completes and both G/S arms launch under matched recipe.
 
 ### S3 Measurement Window (deletion + FLOP accounting, blocking compute fields)

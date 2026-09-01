@@ -55,7 +55,7 @@ Files:
 
 - Create tools/ember-restart-3b/ember-restart-3b-a1-tier2.json
 - Create tools/ember-restart-3b/a1_tier2_contract.py
-- Create tests/ember_restart_model/domain-governance/test_a1_tier2_contract.py
+- Create tests/ember_restart_model/test_a1_tier2_contract.py
 
 Steps:
 
@@ -73,7 +73,7 @@ Steps:
 Files:
 
 - Create tools/ember-restart-3b/a1_tier2_checkpoint.py
-- Create tests/ember_restart_model/domain-governance/test_a1_tier2_checkpoint.py
+- Create tests/ember_restart_model/test_a1_tier2_checkpoint.py
 
 Steps:
 

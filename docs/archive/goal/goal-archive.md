@@ -497,14 +497,14 @@ cutting away inherited execution clutter.
 
 ### Lost Ideas, Stubs, And Deferred Work To Reattach Deliberately
 
-- **Completeness manifest/tally.** `docs/contracts/ember-completeness.md` and
+- **Completeness manifest/tally.** `docs/domains/governance/contracts/ember-completeness.md` and
   `src/ember/governance/scripts/ember_tally.py` remain the larger completion authority. MVP should
   add a tally row after the first loop proof, not wait for the whole tally
   system before executing the loop.
 - **Floor-contract rows.** `docs/contracts/ember-floor-contract.md` preserves launch
   vehicle deferrals such as diffusion/dLLM and external research intake. These
   are watch rows, not first MVP blockers.
-- **Multimodal placeholders.** `docs/ember-restart/ember-multimodal-v0-config-spec.md`
+- **Multimodal placeholders.** `docs/domains/governance/ember-restart/ember-multimodal-v0-config-spec.md`
   reserves multimodal token plumbing, but Stage-1 remains FAIL until
   bidirectional heldout PASS; do not treat reserved ids as multimodal training
   evidence.
@@ -694,7 +694,7 @@ The goal requirement is satisfied inside this single document as follows:
 | Identify drift and misunderstandings | `Drift and Misunderstandings To Prevent`, `Do Not Infer`, Kaggle lane separation, readiness-vs-loop language, and branch/stale-prose warnings name the drift modes that would misdirect execution. | Satisfied for the current source set. |
 | Preserve lost ideas, techniques, stubs, and planned/deferred work | `Lost Ideas, Stubs, And Deferred Work To Reattach Deliberately`, `Inheritance Map`, closed issue classes, STATE pending/cancelled layers, prereg invariants, and receipt families assign each inherited thread to MVP-critical, prerequisite, post-MVP, dormant trigger-gated, or excluded status. | Satisfied for the current source set. |
 | Define what `MAXIMALLY` means | `What Maximally Means` defines maximally as the smallest artifact that inherits every load-bearing thread by executing, prerequiring, deferring with trigger/proof boundary, or excluding with reason; it rejects readiness and size as substitutes for the first externally scored self-improving loop. | Satisfied. |
-| Keep final specs non-fragmented | This file is the active Codex goal source for the active/resumable goal. Repo `GOAL.md` must be byte-synced to this text before goal-mode execution; if it is not, the first valid action is source reconciliation with `invalid_goal_source_split`, not Ember-cycle work. Sidecars such as `docs/ledgers/ember-debt-ledger.md` support the packet but cannot override it. | Satisfied locally only when sync and git preservation receipts exist. |
+| Keep final specs non-fragmented | This file is the active Codex goal source for the active/resumable goal. Repo `GOAL.md` must be byte-synced to this text before goal-mode execution; if it is not, the first valid action is source reconciliation with `invalid_goal_source_split`, not Ember-cycle work. Sidecars such as `docs/domains/governance/ledgers/ember-debt-ledger.md` support the packet but cannot override it. | Satisfied locally only when sync and git preservation receipts exist. |
 
 The completion boundary is not "all possible future rereads of every old
 artifact." It is current-state inheritance of decision-changing historical
@@ -1549,7 +1549,7 @@ READING NOTES (binding):
   challenge + receipts): ARC-1/ARC-2 are permanent HELD-OUT TRANSFER
   surfaces; training worlds are admitted by the world-choice criterion
   (verification-dense + floor-accessible at residency scale + portfolio-
-  coupled Ã¢â‚¬â€ formalization Ã‚Â§7, docs/research/world-choice.md). STATE.md is the
+  coupled Ã¢â‚¬â€ formalization Ã‚Â§7, docs/domains/governance/research/world-choice.md). STATE.md is the
   single position ledger.
 
 AUTHORITY: the lead executes solo, spawning subagents/agent teams as needed (user
@@ -1582,7 +1582,7 @@ Receipts only; fp-33 freezes the paired protocol before any verdict.
 **LOOP (binding on the lead):** receiving this goal means looping until the
 surpass receipt exists Ã¢â‚¬â€ gate the latest receipts, solve the current binding
 constraint (GPU-kernel or mathematical-architecture, burned into
-docs/ledgers/technique-registry.md), launch the next governed job, re-derive GPU
+docs/domains/governance/ledgers/technique-registry.md), launch the next governed job, re-derive GPU
 allocation at each segment boundary. Idle with this milestone open is a
 named failure. Core size grows only when receipts show size Ã¢â‚¬â€ not technique Ã¢â‚¬â€
 is the binding constraint.
@@ -1650,7 +1650,7 @@ DIRECTLY contribute to the main goal on completion Ã¢â‚¬â€ no subgoal
   token-detrimental and unuseful to ember. S7 tally rows are
   GATED:retrieval-substrate until that receipt exists.
 
-**COMPLETENESS MANIFEST:** `docs/contracts/ember-completeness.md` enumerates every
+**COMPLETENESS MANIFEST:** `docs/domains/governance/contracts/ember-completeness.md` enumerates every
 planned/known piece (id, subgoal, AC, test, receipt pointer, status). A
 planned piece absent from the manifest is itself a gate violation Ã¢â‚¬â€ planning
 and manifest-entry are the same act from now on.

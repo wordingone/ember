@@ -13,9 +13,9 @@
 ### Task 1: Write activation RED tests
 
 **Files:**
-- Modify: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
-- Modify: `tests/ember_restart_model/domain-governance/test_pretrain.py`
-- Modify: `tests/ember_restart_model/domain-governance/test_runner_preflight.py`
+- Modify: `tests/ember_restart_model/test_training_acceleration.py`
+- Modify: `tests/ember_restart_model/test_pretrain.py`
+- Modify: `tests/ember_restart_model/test_runner_preflight.py`
 
 Cover default-disabled behavior, missing/mismatched census hash, unapproved signatures, non-SM89 refusal, exact down-projection sites, stale FP8 weights, graph identity drift, zero-fallback enforcement, and receipt closure.
 

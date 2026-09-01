@@ -7,9 +7,9 @@ survives compaction. It makes the calls inside the goal (the maintainer override
 **does NOT authorize a build or a dispatch** — acting-in-worlds is a post-pretrain
 phase; nothing here changes v0.
 
-Distinct from ember-issue-#33 (`docs/research/world-choice-r2.md`), which is world
+Distinct from ember-issue-#33 (`docs/domains/governance/research/world-choice-r2.md`), which is world
 *admission* (which world to add next, by the §7 criteria of
-`docs/research/world-choice.md`: floor accessibility, verification density, portfolio
+`docs/domains/governance/research/world-choice.md`: floor accessibility, verification density, portfolio
 coupling). That is the layer ABOVE this one. This record is about world
 *integration* — how a world relates to the substrate once admitted.
 
