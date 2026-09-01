@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 VERIFIER = REPO_ROOT / "scripts" / "verify_authority_conservation.py"
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
 
@@ -594,6 +594,15 @@ def test_duplicate_governing_surface_migration_is_rejected(tmp_path: Path) -> No
     old_matrix.write_bytes(new_matrix.read_bytes())
 
     assert_rejected(tmp_path, "surface.path_duplicate")
+
+
+def test_governing_surface_migrations_never_self_map() -> None:
+    verifier = load_verifier_module()
+
+    assert all(
+        canonical != legacy
+        for canonical, legacy in verifier.GOVERNING_SURFACE_MIGRATIONS.items()
+    )
 
 
 def migrate_authority_fixture(root: Path) -> None:
@@ -1800,6 +1809,7 @@ def stage_cross_workstream_path_migration(
     )
     git_fixture(root, "add", ".")
     git_fixture(root, "commit", "-m", "fixture")
+    git_fixture(root, "update-ref", "refs/remotes/origin/master", "HEAD")
 
     destination = root / "src" / "module.py"
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1863,6 +1873,127 @@ def test_tracked_exact_rename_map_authorizes_cross_workstream_path_only_delta(
     stage_cross_workstream_path_migration(tmp_path)
 
     assert check_staged_for_pr_workstream(tmp_path, "EMBER-02A") == []
+
+
+def test_staged_kernel_accepts_map_row_already_declared_and_realized_in_head(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(tmp_path)
+    git_fixture(tmp_path, "commit", "-m", "land migration carrier")
+    migration = (
+        tmp_path
+        / "manifests"
+        / "authority"
+        / "path-migrations"
+        / "fixture-migration-v1.json"
+    )
+    payload = json.loads(migration.read_text(encoding="utf-8"))
+    migration.write_text(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", str(migration.relative_to(tmp_path)))
+
+    assert check_staged_for_pr_workstream(tmp_path, "EMBER-02A") == []
+
+
+def test_staged_kernel_does_not_charge_a_cross_workstream_file_restored_to_carrier_base(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    foreign = tmp_path / "tools" / "foreign_control.py"
+    foreign.parent.mkdir(parents=True, exist_ok=True)
+    base_bytes = (
+        "# goal_id: EMBER-02\n"
+        "# workstream_id: EMBER-02B\n"
+        "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
+        "VALUE = 1\n"
+    )
+    foreign.write_text(base_bytes, encoding="utf-8")
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "carrier base")
+    git_fixture(tmp_path, "update-ref", "refs/remotes/origin/master", "HEAD")
+
+    foreign.write_text(base_bytes.replace("VALUE = 1", "VALUE = 2"), encoding="utf-8")
+    git_fixture(tmp_path, "add", "tools/foreign_control.py")
+    git_fixture(tmp_path, "commit", "-m", "intermediate foreign delta")
+    foreign.write_text(base_bytes, encoding="utf-8")
+    git_fixture(tmp_path, "add", "tools/foreign_control.py")
+
+    assert check_staged_for_pr_workstream(tmp_path, "EMBER-02A") == []
+
+
+def test_staged_kernel_derives_workstream_and_validates_changed_migration_map(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(tmp_path)
+    migration = (
+        tmp_path
+        / "manifests"
+        / "authority"
+        / "path-migrations"
+        / "fixture-migration-v1.json"
+    )
+    payload = json.loads(migration.read_text(encoding="utf-8"))
+    payload["renames"][0]["target_path"] = "src/not-the-moved-file.py"
+    migration.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    git_fixture(tmp_path, "add", str(migration.relative_to(tmp_path)))
+
+    verifier = load_verifier_module()
+    errors: list[dict[str, object]] = []
+    verifier.check_changed_artifact_bindings(
+        tmp_path,
+        copy.deepcopy(VALID_POLICY),
+        errors,
+        staged=True,
+    )
+    assert "artifact.path_migration_rename_missing" in {
+        item["code"] for item in errors
+    }, errors
+
+
+def test_changed_migration_map_refuses_supplied_wrong_workstream(
+    tmp_path: Path,
+) -> None:
+    stage_cross_workstream_path_migration(tmp_path)
+
+    errors = check_staged_for_pr_workstream(tmp_path, "EMBER-02B")
+    assert "artifact.path_migration_map_invalid" in {
+        item["code"] for item in errors
+    }, errors
+
+
+def test_git_rename_heuristic_cannot_authorize_unmapped_cross_workstream_move(
+    tmp_path: Path,
+) -> None:
+    write_valid_fixture(tmp_path)
+    git_fixture(tmp_path, "init")
+    git_fixture(tmp_path, "config", "user.email", "fixture@example.invalid")
+    git_fixture(tmp_path, "config", "user.name", "fixture")
+    source = tmp_path / "legacy" / "foreign.py"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "# goal_id: EMBER-02\n"
+        "# workstream_id: EMBER-02B\n"
+        "# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember\n"
+        "VALUE = 1\n",
+        encoding="utf-8",
+    )
+    git_fixture(tmp_path, "add", ".")
+    git_fixture(tmp_path, "commit", "-m", "fixture")
+    destination = tmp_path / "src" / "foreign.py"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    git_fixture(tmp_path, "mv", "legacy/foreign.py", "src/foreign.py")
+
+    errors = check_staged_for_pr_workstream(tmp_path, "EMBER-02A")
+    assert "artifact.pr_workstream_mismatch" in {
+        item["code"] for item in errors
+    }, errors
 
 
 def test_tracked_exact_rename_map_rejects_path_rewrite_plus_one_extra_byte(

@@ -208,7 +208,7 @@ def test_genesis_producer_mints_physical_manifest_last_candidate(
         manifest_path,
         source_commit="5" * 40,
         source_root=ROOT,
-        prereg_path=ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md",
+        prereg_path=ROOT / "docs/spec/ember02-preregistration-v1.md",
         config_path=ROOT / "configs/ember-restart-3b.json",
         fixed_prior_path=ROOT / "manifests/ember-restart-3b/fixed-prior-manifest-v1.json",
         trusted_verifier_registry=target / "trusted-verifiers.json",

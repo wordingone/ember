@@ -110,9 +110,13 @@ def _extract_shell_var(script_text: str, name: str) -> str:
     hand-copying the pattern would duplicate it (and, for PATHFRAG
     specifically, embed the very substring it detects -- see module
     docstring)."""
-    m = re.search(rf"^{re.escape(name)}='(.*)'$", script_text, re.MULTILINE)
+    m = re.search(
+        rf"^{re.escape(name)}=(?P<quote>['\"])(?P<value>.*)(?P=quote)$",
+        script_text,
+        re.MULTILINE,
+    )
     assert m, f"could not find {name}=... in tools/repo-guard.sh"
-    return m.group(1)
+    return m.group("value")
 
 
 _REPO_GUARD_SH_TEXT = open(
@@ -126,9 +130,11 @@ REPO_GUARD_PATHFRAG = re.compile(_extract_shell_var(_REPO_GUARD_SH_TEXT, "PATHFR
 
 
 def _assert_no_repo_guard_path_hits(text: str) -> None:
-    assert not REPO_GUARD_PATHPAT.search(text), (
-        f"absolute local path pattern found in receipt text: "
-        f"{REPO_GUARD_PATHPAT.search(text).group(0)!r}")
+    path_match = REPO_GUARD_PATHPAT.search(text)
+    assert not path_match, (
+        f"absolute local path pattern found in receipt text: {path_match.group(0)!r}; "
+        f"context={text[max(0, path_match.start() - 80):path_match.end() + 160]!r}"
+    )
     assert not REPO_GUARD_PATHFRAG.search(text), (
         f"local path fragment found in receipt text: "
         f"{REPO_GUARD_PATHFRAG.search(text).group(0)!r}")

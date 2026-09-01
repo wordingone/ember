@@ -67,7 +67,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = str(Path(__file__).resolve().parents[4])
 sys.path.insert(0, HERE)
 
 import numpy as np
@@ -481,7 +481,7 @@ def derive_real_arch_config(pricing_receipt: dict, rung_receipt: dict) -> dict:
         "hidden": hidden,
         "n_mtp": n_mtp,
         "n_mtp_source": (
-            f"{PRETRAIN_CONTRACT_PATH} objective.mtp_aux_heads.n_heads="
+            f"{repo_relative_path(PRETRAIN_CONTRACT_PATH)} objective.mtp_aux_heads.n_heads="
             f"{n_mtp} -- the SAME contract path production's _V0Real reads "
             "(timeshare_pretrain.CONTRACT_PATH), read fresh, never hardcoded"),
         "hidden_derivation": (
@@ -497,8 +497,10 @@ def derive_real_arch_config(pricing_receipt: dict, rung_receipt: dict) -> dict:
             "receipt chain; flagged, not silently assumed"),
         "layers_assumed": 20,
         "heads_assumed": 16,
-        "terminal_checkpoint_ref": rung_receipt["stabilization_segment"]["checkpoint"],
-        "terminal_checkpoint_receipt": DEFAULT_RUNG_RECEIPT,
+        "terminal_checkpoint_ref": repo_relative_path(
+            rung_receipt["stabilization_segment"]["checkpoint"]
+        ),
+        "terminal_checkpoint_receipt": repo_relative_path(DEFAULT_RUNG_RECEIPT),
     }
 
 
@@ -1208,10 +1210,23 @@ def repo_relative_path(path: str) -> str:
     same #357 class of leak, just triggered by a drive boundary instead of
     an external corpus mount."""
     try:
-        rel = os.path.relpath(os.path.abspath(path), REPO)
+        rel = Path(path).resolve().relative_to(Path(REPO).resolve())
     except ValueError:
         return f"external:{os.path.basename(os.path.normpath(path))}"
-    return rel.replace(os.sep, "/")
+    return rel.as_posix()
+
+
+def sanitize_receipt_local_paths(value):
+    """Recursively replace exact absolute path values before publication."""
+    if isinstance(value, dict):
+        return {key: sanitize_receipt_local_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [sanitize_receipt_local_paths(item) for item in value]
+    if isinstance(value, tuple):
+        return [sanitize_receipt_local_paths(item) for item in value]
+    if isinstance(value, str) and os.path.isabs(value):
+        return repo_relative_path(value)
+    return value
 
 
 def corpus_identity_for_receipt(shard_dir: str, manifest: dict) -> dict:
@@ -3192,6 +3207,7 @@ def main_live(args: argparse.Namespace, ts: str, pricing_receipt: dict,
     receipts_dir = os.path.join(REPO, "receipts", "ember-c-scale")
     os.makedirs(receipts_dir, exist_ok=True)
     out_path = os.path.join(receipts_dir, f"w1-collapse-control-{ts}.json")
+    receipt = sanitize_receipt_local_paths(receipt)
     checked_write(out_path, receipt)
 
     with open(out_path, "rb") as f:
@@ -3419,6 +3435,7 @@ def main(argv: list[str] | None = None) -> int:
                      else os.path.join(REPO, "scratch", "w1-control", "receipts"))
     os.makedirs(receipts_dir, exist_ok=True)
     out_path = os.path.join(receipts_dir, f"w1-collapse-control-{ts}.json")
+    receipt = sanitize_receipt_local_paths(receipt)
     checked_write(out_path, receipt)
 
     # BOM-free plain-utf8 round-trip verification (hard requirement).
