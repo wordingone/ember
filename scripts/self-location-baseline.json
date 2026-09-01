@@ -1240,7 +1240,7 @@
     },
     {
       "error": null,
-      "evaluated_path": "C:\\Users\\Admin\\.codex\\worktrees\\185f\\avir\\kai\\state\\tmp",
+      "evaluated_path": "<root>/..",
       "expectation": "repo_root",
       "expression": "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))",
       "expression_sha256": "d452906cb679b7be32ff5fe9d195775040a8dacb7a23c2ed5211ec788cae2223",
@@ -3132,5 +3132,5 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "afa4a52d1cf60b9c3b51d1e815b0d736f66487d9ca68d5d0b24ef010bb4f8d69"
+  "self_sha256": "7eb69704550f92d1e41ab88ee29faa1e38a31ab716b9131cbbe43729c4e63ed9"
 }

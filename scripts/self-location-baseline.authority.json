@@ -1,0 +1,10 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "scripts/self-location-baseline.json",
+  "artifact_sha256": "d5114dd9ea1eea17ae2d639c87deed14cafa5c3b133afc846bd12809a400b7e8",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+  }
+}

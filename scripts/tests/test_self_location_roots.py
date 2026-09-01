@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from __future__ import annotations
 
 import datetime as dt
@@ -44,6 +47,17 @@ def test_byte_identical_move_flips_root_match_to_mismatch(tmp_path: Path) -> Non
     assert subject.scan_files(tmp_path, [original])[0]["status"] == "MATCH"
     moved = write(tmp_path / "src" / "nested" / "probe.py", text)
     assert subject.scan_files(tmp_path, [moved])[0]["status"] == "MISMATCH"
+
+
+def test_path_escaping_root_is_portable_and_never_serializes_checkout(tmp_path: Path) -> None:
+    source = write(
+        tmp_path / "scripts" / "probe.py",
+        "import os\nROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\n",
+    )
+    row = subject.scan_files(tmp_path, [source])[0]
+    assert row["status"] == "MISMATCH"
+    assert row["evaluated_path"] == "<root>/.."
+    assert str(tmp_path.resolve()) not in str(row["evaluated_path"])
 
 
 def test_dynamic_root_and_inline_sys_path_are_never_silent(tmp_path: Path) -> None:

@@ -109,6 +109,12 @@ def _root_like(name: str) -> bool:
     return "ROOT" in upper or upper == "HERE" or upper.endswith("_DIR") or upper.endswith("DIR")
 
 
+def _portable_evaluated_path(root: Path, resolved: Path) -> str:
+    """Render a resolved path without serializing the host checkout location."""
+    relative = os.path.relpath(resolved, root).replace("\\", "/")
+    return "<root>" if relative == "." else f"<root>/{relative}"
+
+
 def _row(
     *, root: Path, path: Path, target: str, node: ast.AST, derived: DerivedPath | None,
     error: str | None,
@@ -125,10 +131,7 @@ def _row(
         status, evaluated = "UNEVALUABLE", None
     else:
         resolved = derived.path.resolve()
-        try:
-            evaluated = "<root>/" + resolved.relative_to(root).as_posix()
-        except ValueError:
-            evaluated = str(resolved)
+        evaluated = _portable_evaluated_path(root, resolved)
         expected = root if expectation == "repo_root" else derived.path
         status = "MATCH" if os.path.normcase(str(resolved)) == os.path.normcase(str(expected.resolve())) else "MISMATCH"
     return {
