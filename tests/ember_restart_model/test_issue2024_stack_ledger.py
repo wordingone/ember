@@ -501,9 +501,20 @@ def test_issue2024_offline_derive_refuses_trace_sha_binding_mismatch(tmp_path: P
         )
 
 
-def _shard_receipt(index: int) -> dict[str, object]:
+def _shard_receipt(
+    index: int,
+    *,
+    parser_source_sha256: str = "f" * 64,
+    stack: tuple[str, ...] = ("tools/ember-restart-3b/model.py:41",),
+    key: str = "aten::mm",
+    input_shapes: list[list[int]] | None = None,
+) -> dict[str, object]:
+    event = _event(event_id=7 + index, device_time_us="1.0", stack=stack)
+    event.key = key
+    if input_shapes is not None:
+        event.input_shapes = input_shapes
     ledger = subject.build_issue2024_event_ledger(
-        [_event(event_id=7 + index, device_time_us="1.0")],
+        [event],
         declared_self_device_time_total_us="1.0",
     )
     return subject.build_issue2024_union_shard_receipt(
@@ -529,6 +540,10 @@ def _shard_receipt(index: int) -> dict[str, object]:
         runtime_custody={
             "preflight_raw_sha256": "d" * 64,
             "preflight_self_sha256": "e" * 64,
+            "ledger_derivation": {
+                "method": "STREAMING_OFFLINE_CHROME_TRACE_PARSER_V1",
+                "parser_source_sha256": parser_source_sha256,
+            },
         },
     )
 
@@ -546,6 +561,105 @@ def test_issue2024_two_fresh_process_shards_merge_to_terminal_union_receipt() ->
     assert merged["update_seconds"] == [1.0, 2.0]
     assert [row["profile_update_index"] for row in merged["kernel_trace"]["full_precision_unmapped_event_ledger"]["events"]] == [0, 1]
     assert [row["receipt_raw_sha256"] for row in merged["runtime_custody"]["offline_trace_shards"]] == ["8" * 64, "9" * 64]
+    assert merged["kernel_trace"]["offline_trace_derivation"] == {
+        "method": "MERGED_TWO_SHARD_STREAMING_OFFLINE_CHROME_TRACE_PARSER_V1",
+        "parser_source_sha256": "f" * 64,
+        "shard_trace_raw_sha256": ["1" * 64, "2" * 64],
+    }
+
+
+def test_issue2024_shard_merge_refuses_offline_parser_identity_drift() -> None:
+    with pytest.raises(ValueError, match="ISSUE2024_SHARD_PARSER_MISMATCH"):
+        subject.merge_issue2024_union_shard_receipts([
+            (_shard_receipt(0, parser_source_sha256="f" * 64), "8" * 64),
+            (_shard_receipt(1, parser_source_sha256="0" * 64), "9" * 64),
+        ])
+
+
+def test_issue2024_real_merge_output_compares_with_offline_derived_one_shot(
+    tmp_path: Path,
+) -> None:
+    parser_source_sha256 = hashlib.sha256(Path(subject.__file__).read_bytes()).hexdigest()
+    sharded = subject.merge_issue2024_union_shard_receipts([
+        (
+            _shard_receipt(
+                0,
+                parser_source_sha256=parser_source_sha256,
+                stack=("model.py(1): forward",),
+                key="aten::gather",
+                input_shapes=[[32000, 2048], [], [960, 2048]],
+            ),
+            "8" * 64,
+        ),
+        (
+            _shard_receipt(
+                1,
+                parser_source_sha256=parser_source_sha256,
+                stack=("model.py(1): forward",),
+                key="aten::gather",
+                input_shapes=[[32000, 2048], [], [960, 2048]],
+            ),
+            "9" * 64,
+        ),
+    ])
+    trace = tmp_path / "one-shot-two-events.json"
+    trace.write_text(json.dumps({"traceEvents": [
+        {
+            "ph": "X", "cat": "user_annotation",
+            "name": subject.COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
+            "pid": 4, "tid": 8, "ts": 10, "dur": 100,
+            "args": {"External id": 1},
+        },
+        *[
+            event
+            for external_id in (7, 8)
+            for event in (
+                {
+                    "ph": "X", "cat": "cpu_op", "name": "aten::gather",
+                    "pid": 4, "tid": 8, "ts": 20 + external_id, "dur": 20,
+                    "args": {
+                        "External id": external_id,
+                        "Input Dims": [[32000, 2048], [], [960, 2048]],
+                        "Call stack": "model.py(1): forward;",
+                    },
+                },
+                {
+                    "ph": "X", "cat": "kernel", "name": "mm_kernel",
+                    "pid": 0, "tid": 7, "ts": 25 + external_id, "dur": 1.0,
+                    "args": {"External id": external_id},
+                },
+            )
+        ],
+    ]}), encoding="utf-8")
+    parent = _union_receipt("issue2024-union-one-shot", [_union_event()])
+    parent["identity"] = {"execution_source_commit": "a" * 40}
+    parent["kernel_trace"] = {
+        "sha256": hashlib.sha256(trace.read_bytes()).hexdigest(),
+        "material_linear_shapes": [{"fprop": [64, 15, 2048, 6144]}] * 5,
+    }
+    parent["self_sha256"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in parent.items() if key != "self_sha256"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    one_shot = subject.derive_issue2024_offline_measurement_receipt(
+        parent,
+        parent_raw_sha256="a" * 64,
+        trace_path=trace,
+    )
+
+    comparison = subject.build_issue2024_union_comparison_receipt(
+        one_shot,
+        sharded,
+        one_shot_raw_sha256="b" * 64,
+        sharded_raw_sha256="c" * 64,
+    )
+    assert comparison["result"] == "PASS"
+    assert sharded["kernel_trace"]["offline_trace_derivation"][
+        "parser_source_sha256"
+    ] == parser_source_sha256
 
 
 def test_issue2024_union_comparison_matches_structural_multiset_not_physical_time() -> None:

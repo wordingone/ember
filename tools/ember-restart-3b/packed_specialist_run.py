@@ -617,7 +617,31 @@ def merge_issue2024_union_shard_receipts(
         row["kernel_trace"]["full_precision_unmapped_event_ledger"]
         for row in (left, right)
     ]
+    parser_source_hashes: list[str] = []
+    for row in (left, right):
+        runtime_custody = row.get("runtime_custody")
+        ledger_derivation = (
+            runtime_custody.get("ledger_derivation")
+            if isinstance(runtime_custody, Mapping)
+            else None
+        )
+        parser_source_sha256 = (
+            ledger_derivation.get("parser_source_sha256")
+            if isinstance(ledger_derivation, Mapping)
+            else None
+        )
+        try:
+            _require_sha(parser_source_sha256, "issue2024 shard parser source")
+        except ValueError as exc:
+            raise ValueError("ISSUE2024_SHARD_PARSER_MISMATCH") from exc
+        parser_source_hashes.append(parser_source_sha256)
+    if parser_source_hashes[0] != parser_source_hashes[1]:
+        raise ValueError("ISSUE2024_SHARD_PARSER_MISMATCH")
     merged_ledger = merge_issue2024_event_ledger_shards([(0, ledgers[0]), (1, ledgers[1])])
+    shard_trace_raw_sha256 = [
+        _require_sha(row["kernel_trace"].get("sha256"), "issue2024 shard trace raw")
+        for row in (left, right)
+    ]
     kernel_trace = {
         "sha256": hashlib.sha256(_canonical({
             "shard_trace_sha256": [row["kernel_trace"]["sha256"] for row in (left, right)]
@@ -637,6 +661,11 @@ def merge_issue2024_union_shard_receipts(
             "update_indexes": [0, 1],
             "marker": COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
             "deduplication_metric": "kernel_duration_by_external_id",
+        },
+        "offline_trace_derivation": {
+            "method": "MERGED_TWO_SHARD_STREAMING_OFFLINE_CHROME_TRACE_PARSER_V1",
+            "parser_source_sha256": parser_source_hashes[0],
+            "shard_trace_raw_sha256": shard_trace_raw_sha256,
         },
         "full_precision_unmapped_event_ledger": merged_ledger,
     }
