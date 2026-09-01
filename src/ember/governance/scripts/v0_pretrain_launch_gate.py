@@ -25,10 +25,11 @@ import glob
 import hashlib
 import json
 import os
+import pathlib
 import sys
 
-NC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(NC, "scripts"))
+NC = str(pathlib.Path(__file__).resolve().parents[4])
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from receipt_check import validate_receipt          # noqa: E402
 import v0_config_check                              # noqa: E402
 import fp26_prereg                                  # noqa: E402
