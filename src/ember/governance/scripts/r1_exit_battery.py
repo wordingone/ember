@@ -136,6 +136,10 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, Mapping
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
 import r1_frozen_eval_runner as frozen_eval
 from r1_e8_validator import validate_e8
 
@@ -151,7 +155,7 @@ SHA_CONVENTION = (
     "normalization) for checkpoint/manifest/telemetry/threshold files"
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
 FIXED_PRIOR_MANIFEST_REL = "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"
 DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / FIXED_PRIOR_MANIFEST_REL

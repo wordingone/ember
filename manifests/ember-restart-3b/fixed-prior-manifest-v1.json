@@ -3565,7 +3565,7 @@
       "kind": "file",
       "provenance": "The pre-registration this run is hash-pinned to (`--prereg <sha256>`).",
       "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
-      "sha256": "a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51",
+      "sha256": "46756ce762962527e418bc5cf7ecbc0bc3ef0dd090f783fa90c767f7d437f6ef",
       "size_bytes": 41218
     },
     {

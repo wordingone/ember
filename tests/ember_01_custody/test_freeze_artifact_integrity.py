@@ -150,8 +150,8 @@ def test_invalid_provenance_transition_does_not_suppress_mismatch(
 
 def test_superseded_transition_is_not_current_authority(tmp_path: Path) -> None:
     module = load_module()
-    artifact = tmp_path / "tokenizer" / "tokenizer.json"
-    artifact.parent.mkdir()
+    artifact = tmp_path / "domains" / "model" / "tokenizer" / "tokenizer.json"
+    artifact.parent.mkdir(parents=True)
     artifact.write_text('{"version":"1.0","truncation":null}', encoding="utf-8")
     receipt = tmp_path / "receipts" / "r.json"
     write_json(
@@ -187,8 +187,8 @@ def test_tokenizer_format_failure_is_a_violation_even_when_hash_matches(
     tmp_path: Path,
 ) -> None:
     module = load_module()
-    artifact = tmp_path / "tokenizer" / "tokenizer.json"
-    artifact.parent.mkdir()
+    artifact = tmp_path / "domains" / "model" / "tokenizer" / "tokenizer.json"
+    artifact.parent.mkdir(parents=True)
     artifact.write_text('{"not":"a-tokenizer"}', encoding="utf-8")
     receipt = tmp_path / "receipts" / "r.json"
     write_json(
