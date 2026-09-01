@@ -24,12 +24,12 @@ execution = registered deviation per audit-§6, never silent edit. Receipt:
 
 ## Event leg (residency under load)
 
-- Injector: replay rig (`scripts/nck/replay_rig.py`) drives scripted events
+- Injector: replay rig (`src/ember/governance/scripts/nck/replay_rig.py`) drives scripted events
   through the SAME plumbing as live events — mailbox rows from injector
   identity, receipt drops, schedule ticks, file directives.
 - Battery: 12 episodes drawn 2-per-class from the six frozen sp6b verb
   classes (MAIL_REPLY, MAIL_ROUTE, GATE_VERDICT, FILE_WRITE, SCHEDULE_ACK,
-  NO_ACTION — docs/archive/pre-restart/sp6b-duty-battery-spec-v1.md matcher semantics verbatim,
+  NO_ACTION — docs/domains/governance/archive/pre-restart/sp6b-duty-battery-spec-v1.md matcher semantics verbatim,
   including both decoy guards).
 - Bar: >=10/12 episodes PASS (verb AND target), AND both NO_ACTION decoys
   PASS (acting on a decoy = run FAIL regardless of total).

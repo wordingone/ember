@@ -130,12 +130,12 @@ Pass the core to `run_battery(core=my_core)` or `replay_episode(ep, my_core, ...
 
 | Path | Role |
 |------|------|
-| `scripts/nck/replay_rig.py` | Rig implementation |
-| `scripts/nck/selftest_replay_rig.py` | Fail-closed selftest (rig mechanics only) |
-| `docs/archive/pre-restart/sp6-duty-battery.jsonl` | Frozen battery content half |
+| `src/ember/governance/scripts/nck/replay_rig.py` | Rig implementation |
+| `src/ember/governance/scripts/nck/selftest_replay_rig.py` | Fail-closed selftest (rig mechanics only) |
+| `docs/domains/governance/archive/pre-restart/sp6-duty-battery.jsonl` | Frozen battery content half |
 | `docs/archive/pre-restart/sp6-duty-battery-encodings.jsonl` | Frozen battery encoding half |
-| `docs/archive/pre-restart/sp6-duty-battery-v0.md` | Battery contract |
-| `docs/archive/pre-restart/fp33-surpass-prereg-v1.md` | B3 scoring context (McNemar) |
+| `docs/domains/governance/archive/pre-restart/sp6-duty-battery-v0.md` | Battery contract |
+| `docs/domains/governance/archive/pre-restart/fp33-surpass-prereg-v1.md` | B3 scoring context (McNemar) |
 
 ## What the rig does NOT do
 

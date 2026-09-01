@@ -112,7 +112,7 @@ production, `checkpoint_artifacts.available_host_commit_bytes`) and either:
 
 The probe is dependency-injected so the contract module stays free of
 platform-specific code and is fully unit-testable without a real Windows
-host (see `tests/ember_restart_model/domain-governance/test_host_setup_contract.py`).
+host (see `tests/ember_restart_model/test_host_setup_contract.py`).
 
 ## Boundary honesty
 

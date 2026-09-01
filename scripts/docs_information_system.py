@@ -692,6 +692,97 @@ def validate_current_reference_reconciliation(
     return rows
 
 
+def build_current_reference_reconciliation(
+    root: Path, frozen_dispositions: dict[str, Any], prior: dict[str, Any]
+) -> dict[str, Any]:
+    prior_source = prior.get("source")
+    expected_fixed_source = {
+        "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+        "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
+        "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
+        "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",
+    }
+    if not isinstance(prior_source, dict) or {
+        key: prior_source.get(key) for key in expected_fixed_source
+    } != expected_fixed_source:
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_SOURCE_INVALID")
+    frozen_rows = frozen_dispositions.get("rows")
+    if not isinstance(frozen_rows, list):
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_FROZEN_ROWS_INVALID")
+    by_key = {
+        (row.get("document"), row.get("line"), row.get("target")): row
+        for row in frozen_rows if isinstance(row, dict)
+    }
+    by_target: dict[str, list[dict[str, Any]]] = {}
+    for row in frozen_rows:
+        if isinstance(row, dict) and isinstance(row.get("target"), str):
+            by_target.setdefault(row["target"], []).append(row)
+    filing_rows = current_unresolved_reference_rows(root, FILING_REFERENCE_RE)
+    corrected_keys = {
+        (row["document"], row["line"], row["target"])
+        for row in current_unresolved_reference_rows(root, CORRECTED_REFERENCE_RE)
+    }
+    rows: list[dict[str, Any]] = []
+    for current in filing_rows:
+        key = (current["document"], current["line"], current["target"])
+        if key not in corrected_keys and current["containing_token_resolves"]:
+            resolution = {
+                "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN",
+                "canonical_token": current["containing_token"],
+            }
+        else:
+            candidates = [by_key[key]] if key in by_key else by_target.get(str(current["target"]), [])
+            if not candidates:
+                raise DocsInfoError(f"UNRECONCILED_CURRENT_REFERENCE:{key}")
+            if len({candidate.get("disposition") for candidate in candidates}) != 1:
+                raise DocsInfoError(f"AMBIGUOUS_CURRENT_DISPOSITION:{key}")
+            preferred = "historical" if "/archive/" in str(current["document"]) else "reference"
+            selected = next(
+                (candidate for candidate in candidates
+                 if candidate.get("visible_classification") == preferred),
+                sorted(candidates, key=lambda candidate: (
+                    str(candidate.get("document")), int(candidate.get("line", 0)),
+                    str(candidate.get("target")),
+                ))[0],
+            )
+            resolution = {
+                "kind": "EXPLICIT_FILING_DISPOSITION",
+                "source_document": selected["document"],
+                "source_line": selected["line"],
+                "source_target": selected["target"],
+                "disposition": selected["disposition"],
+                "visible_classification": selected["visible_classification"],
+            }
+        rows.append({
+            "document": current["document"], "line": current["line"],
+            "target": current["target"], "resolution": resolution,
+        })
+    rows.sort(key=lambda row: (row["document"], row["line"], row["target"]))
+    kinds = [row["resolution"]["kind"] for row in rows]
+    return {
+        "schema_version": "ember-current-reference-reconciliation-v1",
+        "source": {
+            **prior_source,
+            "frozen_dispositions_raw_sha256": sha256_file(root / REFERENCE_DISPOSITIONS_PATH),
+        },
+        "classifiers": {
+            "filing_regex": FILING_REFERENCE_RE.pattern,
+            "filing_regex_sha256": sha256_bytes(FILING_REFERENCE_RE.pattern.encode("utf-8")),
+            "corrected_regex": CORRECTED_REFERENCE_RE.pattern,
+            "corrected_regex_sha256": sha256_bytes(CORRECTED_REFERENCE_RE.pattern.encode("utf-8")),
+        },
+        "counts": {
+            "documents": 1 + len(list((root / "docs").rglob("*.md"))),
+            "filing_classifier_current_unresolved": len(rows),
+            "corrected_classifier_current_unresolved": len(corrected_keys),
+            "explicit_filing_dispositions": kinds.count("EXPLICIT_FILING_DISPOSITION"),
+            "contained_resolved_canonical_tokens": kinds.count("CONTAINED_RESOLVED_CANONICAL_TOKEN"),
+        },
+        "rows": rows,
+        "rows_sha256": sha256_bytes(canonical_compact(rows)),
+    }
+
+
 def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[dict[str, Any]]:
     if value.get("schema_version") != "ember-reference-dispositions-v1":
         raise DocsInfoError("REFERENCE_DISPOSITION_SCHEMA_INVALID")
@@ -737,6 +828,8 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
             "visible_classification"
         ] not in {"reference", "historical", "superseded"}:
             raise DocsInfoError(f"REFERENCE_CLASSIFICATION_INVALID:{key}")
+        if not (root / str(row["document"])).is_file():
+            raise DocsInfoError(f"REFERENCE_DISPOSITION_DOCUMENT_MISSING:{key}")
     expected_sha = sha256_bytes(canonical_json(rows))
     if value.get("row_set_sha256") != expected_sha:
         raise DocsInfoError("REFERENCE_DISPOSITION_ROW_SET_STALE")
@@ -1031,7 +1124,10 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
 
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
-    value.add_argument("command", choices=["generate", "check", "score-study"])
+    value.add_argument(
+        "command",
+        choices=["generate", "check", "score-study", "reconcile-references"],
+    )
     value.add_argument("--root", type=Path, default=Path("."))
     value.add_argument("--run-commands", action="store_true")
     value.add_argument("--study", type=Path)
@@ -1060,6 +1156,20 @@ def main(argv: list[str] | None = None) -> int:
             receipt = check_repository(root, run_commands=arguments.run_commands)
             if arguments.output is not None:
                 receipt = write_final_receipt(arguments.output, receipt)
+        elif arguments.command == "reconcile-references":
+            if arguments.output is None:
+                raise DocsInfoError("OUTPUT_REQUIRED")
+            receipt = build_current_reference_reconciliation(
+                root,
+                load_json(root / REFERENCE_DISPOSITIONS_PATH),
+                load_json(root / CURRENT_REFERENCE_RECONCILIATION_PATH),
+            )
+            write_new(
+                arguments.output,
+                json.dumps(
+                    receipt, indent=2, sort_keys=True, ensure_ascii=False
+                ).encode("utf-8") + b"\n",
+            )
         else:
             if arguments.study is None or arguments.output is None:
                 raise DocsInfoError("STUDY_AND_OUTPUT_REQUIRED")

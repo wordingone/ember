@@ -12,7 +12,7 @@ B-run; after the first B-run, edits void that run).**
 
 ## Episode set
 
-`docs/archive/pre-restart/sp6-duty-battery.jsonl` — 20 episodes, 4 families x 5:
+`docs/domains/governance/archive/pre-restart/sp6-duty-battery.jsonl` — 20 episodes, 4 families x 5:
 mail-triage (M1-M5), receipt-gating (R1-R5), schedule (S1-S5),
 file-hygiene (F1-F5). Each row: {id, family, event, expected_verb,
 target_pattern, notes}.
@@ -50,7 +50,7 @@ scored separately per the prereg.
 content_json|content_text, mtime_offset_s?}], notes}`. Selftest-enforced
 contract (scripts/sp6_battery_selftest.py):
 
-- **Events match the #260 shapes exactly** (scripts/nck/event_loop.py):
+- **Events match the #260 shapes exactly** (src/ember/governance/scripts/nck/event_loop.py):
   `file_watch→file_new|file_changed {path,size}`, `schedule→tick_due
   {id,interval_s}`, `job_receipt→receipt_arrived {path,data}`. Family↔source
   is 1:1 (mail-triage→mail, receipt-gating→job_receipt, schedule→schedule,

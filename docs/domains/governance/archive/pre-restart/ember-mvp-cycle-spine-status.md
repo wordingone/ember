@@ -10,7 +10,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
 ## Implemented
 
 - `scripts/ember_mvp_cycle.py` defines the v0 cycle objects from
-  `docs/archive/pre-restart/ember-mvp-v0.md`: observation, latent branch, state commit, component
+  `docs/domains/governance/archive/pre-restart/ember-mvp-v0.md`: observation, latent branch, state commit, component
   receipts, and top-level cycle receipt.
 - `scripts/ember_mvp_cycle_selftest.py` tests the local spine contract:
   cycle-id linkage, required receipt presence, hypothesis/evidence separation,
