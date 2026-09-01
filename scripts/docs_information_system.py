@@ -26,6 +26,9 @@ CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
 COMMANDS_PATH = Path("manifests/documentation/public-commands-v1.json")
 QUESTION_DESTINATIONS_PATH = Path("manifests/documentation/reader-question-destinations-v2.json")
 REFERENCE_DISPOSITIONS_PATH = Path("manifests/documentation/reference-dispositions-v1.json")
+CURRENT_REFERENCE_RECONCILIATION_PATH = Path(
+    "manifests/documentation/current-reference-reconciliation-v1.json"
+)
 READER_INSTRUMENT_PATH = Path("manifests/documentation/reader-study-instrument-v2.json")
 READER_INSTRUMENT_V1_PATH = Path("manifests/documentation/reader-study-instrument-v1.json")
 READER_INSTRUMENT_SHA256 = "ccca620e2b8d5759f8aa89c7862baa0a25d7cac89f725ea45639c67ece3ab91e"
@@ -59,6 +62,38 @@ REFERENCE_DISPOSITIONS = {
     "RETIRED_WITH_CANONICAL_DISPOSITION",
     "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
 }
+FILING_REFERENCE_RE = re.compile(
+    r"(?<![A-Za-z0-9_.-])"
+    r"((?:scripts|tools|src|runtime|configs|manifests|receipts|schemas|docs|tests|"
+    r"state|scratch|artifacts|baseline|data|tokenizer)/[A-Za-z0-9_./-]+)"
+)
+CORRECTED_REFERENCE_RE = re.compile(
+    r"(?<![A-Za-z0-9_./-])"
+    r"((?:scripts|tools|src|runtime|configs|manifests|receipts|schemas|docs|tests|"
+    r"state|scratch|artifacts|baseline|data|tokenizer)/[A-Za-z0-9_./-]+)"
+)
+REFERENCE_TOKEN_RE = re.compile(r"[A-Za-z0-9_./-]+")
+REFERENCE_ROOT_PREFIXES = tuple(
+    f"{root}/"
+    for root in (
+        "scripts",
+        "tools",
+        "src",
+        "runtime",
+        "configs",
+        "manifests",
+        "receipts",
+        "schemas",
+        "docs",
+        "tests",
+        "state",
+        "scratch",
+        "artifacts",
+        "baseline",
+        "data",
+        "tokenizer",
+    )
+)
 REQUIRED_METADATA_FIELDS = {
     "path",
     "title",
@@ -472,6 +507,191 @@ def validate_reader_instrument(root: Path, instrument: dict[str, Any]) -> None:
         raise DocsInfoError("READER_INSTRUMENT_V2_PREDECESSOR_BINDING_INVALID")
 
 
+def reference_target_resolves(root: Path, document: Path, target: str) -> bool:
+    if "://" in target:
+        return False
+    try:
+        root_candidate = root / target
+        if root_candidate.exists():
+            return True
+        return (document.parent / target).exists()
+    except OSError:
+        return False
+
+
+def current_unresolved_reference_rows(
+    root: Path, pattern: re.Pattern[str],
+) -> list[dict[str, Any]]:
+    documents = [root / "README.md", *sorted((root / "docs").rglob("*.md"))]
+    rows: dict[tuple[str, int, str], dict[str, Any]] = {}
+    for document in documents:
+        relative = document.relative_to(root).as_posix()
+        for line_number, line in enumerate(
+            document.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            for match in pattern.finditer(line):
+                target = match.group(1).rstrip(".,:;)]}")
+                if reference_target_resolves(root, document, target):
+                    continue
+                containing_token = next(
+                    (
+                        token.group(0).rstrip(".,:;)]}")
+                        for token in REFERENCE_TOKEN_RE.finditer(line)
+                        if token.start() <= match.start(1) and token.end() >= match.end(1)
+                    ),
+                    target,
+                )
+                key = (relative, line_number, target)
+                rows[key] = {
+                    "document": relative,
+                    "line": line_number,
+                    "target": target,
+                    "containing_token": containing_token,
+                    "containing_token_resolves": reference_target_resolves(
+                        root, document, containing_token
+                    ),
+                }
+    return [rows[key] for key in sorted(rows)]
+
+
+def validate_current_reference_reconciliation(
+    root: Path,
+    value: dict[str, Any],
+    frozen_dispositions: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if (
+        not isinstance(value, dict)
+        or set(value)
+        != {"schema_version", "source", "classifiers", "counts", "rows", "rows_sha256"}
+        or value.get("schema_version") != "ember-current-reference-reconciliation-v1"
+    ):
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_SCHEMA_INVALID")
+    source = value.get("source")
+    if not isinstance(source, dict) or source != {
+        "commit": "f78e05de04b375e87a2f385316fbbda385930272",
+        "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8",
+        "frozen_dispositions_raw_sha256": sha256_file(root / REFERENCE_DISPOSITIONS_PATH),
+        "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
+        "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",
+    }:
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_SOURCE_INVALID")
+    classifiers = value.get("classifiers")
+    expected_classifiers = {
+        "filing_regex": FILING_REFERENCE_RE.pattern,
+        "filing_regex_sha256": sha256_bytes(FILING_REFERENCE_RE.pattern.encode("utf-8")),
+        "corrected_regex": CORRECTED_REFERENCE_RE.pattern,
+        "corrected_regex_sha256": sha256_bytes(
+            CORRECTED_REFERENCE_RE.pattern.encode("utf-8")
+        ),
+    }
+    if classifiers != expected_classifiers:
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_CLASSIFIER_INVALID")
+    filing_rows = current_unresolved_reference_rows(root, FILING_REFERENCE_RE)
+    corrected_rows = current_unresolved_reference_rows(root, CORRECTED_REFERENCE_RE)
+    filing_by_key = {
+        (row["document"], row["line"], row["target"]): row for row in filing_rows
+    }
+    corrected_keys = {
+        (row["document"], row["line"], row["target"]) for row in corrected_rows
+    }
+    frozen_rows = frozen_dispositions.get("rows")
+    if not isinstance(frozen_rows, list):
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_FROZEN_ROWS_INVALID")
+    frozen_by_key = {
+        (row.get("document"), row.get("line"), row.get("target")): row
+        for row in frozen_rows
+        if isinstance(row, dict)
+    }
+    rows = value.get("rows")
+    if not isinstance(rows, list):
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_ROWS_INVALID")
+    observed_keys: set[tuple[str, int, str]] = set()
+    container_count = 0
+    explicit_count = 0
+    for row in rows:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"document", "line", "target", "resolution"}
+        ):
+            raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_ROW_INVALID")
+        key = (row.get("document"), row.get("line"), row.get("target"))
+        if key in observed_keys or key not in filing_by_key:
+            raise DocsInfoError(f"CURRENT_REFERENCE_RECONCILIATION_ROW_STALE:{key}")
+        observed_keys.add(key)
+        resolution = row.get("resolution")
+        if not isinstance(resolution, dict):
+            raise DocsInfoError(
+                f"CURRENT_REFERENCE_RECONCILIATION_RESOLUTION_INVALID:{key}"
+            )
+        if resolution.get("kind") == "CONTAINED_RESOLVED_CANONICAL_TOKEN":
+            if set(resolution) != {"kind", "canonical_token"}:
+                raise DocsInfoError(
+                    f"CURRENT_REFERENCE_RECONCILIATION_CONTAINER_INVALID:{key}"
+                )
+            canonical_token = resolution.get("canonical_token")
+            current = filing_by_key[key]
+            document = root / str(row["document"])
+            if (
+                key in corrected_keys
+                or not isinstance(canonical_token, str)
+                or str(row["target"]) not in canonical_token
+                or canonical_token != current["containing_token"]
+                or not reference_target_resolves(root, document, canonical_token)
+            ):
+                raise DocsInfoError(
+                    f"CURRENT_REFERENCE_RECONCILIATION_CONTAINER_INVALID:{key}"
+                )
+            container_count += 1
+        elif resolution.get("kind") == "EXPLICIT_FILING_DISPOSITION":
+            if set(resolution) != {
+                "kind",
+                "source_document",
+                "source_line",
+                "source_target",
+                "disposition",
+                "visible_classification",
+            }:
+                raise DocsInfoError(
+                    f"CURRENT_REFERENCE_RECONCILIATION_DISPOSITION_INVALID:{key}"
+                )
+            source_key = (
+                resolution.get("source_document"),
+                resolution.get("source_line"),
+                resolution.get("source_target"),
+            )
+            frozen = frozen_by_key.get(source_key)
+            if (
+                frozen is None
+                or resolution.get("source_target") != row.get("target")
+                or resolution.get("disposition") != frozen.get("disposition")
+                or resolution.get("visible_classification")
+                != frozen.get("visible_classification")
+            ):
+                raise DocsInfoError(
+                    f"CURRENT_REFERENCE_RECONCILIATION_DISPOSITION_INVALID:{key}"
+                )
+            explicit_count += 1
+        else:
+            raise DocsInfoError(
+                f"CURRENT_REFERENCE_RECONCILIATION_RESOLUTION_INVALID:{key}"
+            )
+    if observed_keys != set(filing_by_key):
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_CURRENT_ROWS_STALE")
+    counts = value.get("counts")
+    expected_counts = {
+        "documents": 1 + len(list((root / "docs").rglob("*.md"))),
+        "filing_classifier_current_unresolved": len(filing_rows),
+        "corrected_classifier_current_unresolved": len(corrected_rows),
+        "explicit_filing_dispositions": explicit_count,
+        "contained_resolved_canonical_tokens": container_count,
+    }
+    if counts != expected_counts or value.get("rows_sha256") != sha256_bytes(
+        canonical_compact(rows)
+    ):
+        raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_COUNTS_OR_HASH_STALE")
+    return rows
+
+
 def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[dict[str, Any]]:
     if value.get("schema_version") != "ember-reference-dispositions-v1":
         raise DocsInfoError("REFERENCE_DISPOSITION_SCHEMA_INVALID")
@@ -756,6 +976,9 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
     commands_value = load_json(root / COMMANDS_PATH)
     question_destinations = load_json(root / QUESTION_DESTINATIONS_PATH)
     reference_dispositions = load_json(root / REFERENCE_DISPOSITIONS_PATH)
+    current_reference_reconciliation = load_json(
+        root / CURRENT_REFERENCE_RECONCILIATION_PATH
+    )
     reader_instrument = load_json(root / READER_INSTRUMENT_PATH)
     authority = load_json(root / DOMAIN_AUTHORITY_PATH)
     rows = validate_metadata(root, metadata)
@@ -771,6 +994,9 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
     validate_reader_instrument(root, reader_instrument)
     destinations = validate_question_destinations(root, question_destinations, rows, reader_instrument)
     dispositions = validate_reference_dispositions(root, reference_dispositions)
+    current_reconciliation = validate_current_reference_reconciliation(
+        root, current_reference_reconciliation, reference_dispositions
+    )
     expected_index = render_index(metadata)
     index_path = root / INDEX_PATH
     if not index_path.is_file() or index_path.read_text(encoding="utf-8") != expected_index:
@@ -785,6 +1011,7 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
         "public_command_count": len(commands),
         "question_destination_count": len(destinations),
         "reference_disposition_count": len(dispositions),
+        "current_reference_reconciliation_count": len(current_reconciliation),
         "commands_executed": len(command_results),
         "command_results": command_results,
         **readme_counts,
@@ -794,6 +1021,9 @@ def check_repository(root: Path, *, run_commands: bool) -> dict[str, Any]:
         "command_manifest_raw_sha256": sha256_file(root / COMMANDS_PATH),
         "question_destinations_raw_sha256": sha256_file(root / QUESTION_DESTINATIONS_PATH),
         "reference_dispositions_raw_sha256": sha256_file(root / REFERENCE_DISPOSITIONS_PATH),
+        "current_reference_reconciliation_raw_sha256": sha256_file(
+            root / CURRENT_REFERENCE_RECONCILIATION_PATH
+        ),
         "reader_instrument_raw_sha256": sha256_file(root / READER_INSTRUMENT_PATH),
         "generated_index_sha256": sha256_file(index_path),
     }

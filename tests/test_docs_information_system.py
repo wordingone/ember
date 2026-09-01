@@ -718,5 +718,46 @@ def test_checked_in_information_system_is_terminal_green() -> None:
     module = load_module()
     receipt = module.check_repository(REPO_ROOT, run_commands=False)
     assert receipt["result"] == "PASS"
+    assert receipt["current_reference_reconciliation_count"] == 451
     assert receipt["metadata_document_count"] >= 12
     assert receipt["claim_count"] >= 8
+
+
+def test_current_reference_reconciliation_replays_live_rows_and_refuses_drift(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    reconciliation = json.loads(
+        (REPO_ROOT / module.CURRENT_REFERENCE_RECONCILIATION_PATH).read_text(
+            encoding="utf-8"
+        )
+    )
+    frozen = json.loads(
+        (REPO_ROOT / module.REFERENCE_DISPOSITIONS_PATH).read_text(encoding="utf-8")
+    )
+    assert len(
+        module.validate_current_reference_reconciliation(
+            REPO_ROOT, reconciliation, frozen
+        )
+    ) == 451
+
+    drifted = json.loads(json.dumps(reconciliation))
+    drifted["rows"].pop()
+    with pytest.raises(
+        module.DocsInfoError,
+        match="CURRENT_REFERENCE_RECONCILIATION_CURRENT_ROWS_STALE",
+    ):
+        module.validate_current_reference_reconciliation(REPO_ROOT, drifted, frozen)
+
+    write(tmp_path / "domains/data/README.md", "# canonical\n")
+    write(tmp_path / "README.md", "# root\n")
+    document = tmp_path / "docs/example.md"
+    write(document, "See domains/data/README.md.\n")
+    filing = module.current_unresolved_reference_rows(
+        tmp_path, module.FILING_REFERENCE_RE
+    )
+    corrected = module.current_unresolved_reference_rows(
+        tmp_path, module.CORRECTED_REFERENCE_RE
+    )
+    assert [row["target"] for row in filing] == ["data/README.md"]
+    assert corrected == []
