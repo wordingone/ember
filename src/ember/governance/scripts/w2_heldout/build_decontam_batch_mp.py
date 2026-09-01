@@ -48,7 +48,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_ROOT = os.path.dirname(HERE)
-REPO_ROOT = os.path.dirname(SCRIPTS_ROOT)
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 sys.path.insert(0, SCRIPTS_ROOT)
 
 from w1_collapse_control_run import (

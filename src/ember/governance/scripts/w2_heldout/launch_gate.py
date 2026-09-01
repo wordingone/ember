@@ -40,7 +40,7 @@ from dataclasses import dataclass
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 
 DEFAULT_RECEIPT_DIR = os.path.join(REPO_ROOT, "receipts", "ember-c-scale")
 DEFAULT_RECEIPT_GLOB = "w2-heldout-decontam-*.json"

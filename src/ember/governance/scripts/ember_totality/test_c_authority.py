@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 ROOT = Path(os.environ.get("EMBER_TOTALITY_ROOT", REPO_ROOT)).resolve()
 VERIFIER = ROOT / "scripts" / "verify_authority_conservation.py"
 

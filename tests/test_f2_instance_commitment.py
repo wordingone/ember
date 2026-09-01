@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """RED regression + cure coverage for the issue #629 F2 instance-commitment cure.
 
 Binding spec: ember issue #629 ("F2 schedule precommit binds code only --
@@ -39,7 +42,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "scripts" / "c8_prelaunch"))
+sys.path.insert(0, str(_REPO / "src" / "ember" / "governance" / "scripts" / "c8_prelaunch"))
 sys.path.insert(0, str(_REPO / "scripts"))
 
 import f2_schedule_generator as f2  # noqa: E402

@@ -19,15 +19,36 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+
+def _load_sibling_module(name: str) -> Any:
+    """Load one governed sibling without trusting ambient import paths."""
+    module_name = f"_ember_restart_{name}"
+    path = Path(__file__).resolve().with_name(f"{name}.py")
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        if Path(existing.__file__).resolve() != path:
+            raise ImportError(f"governed sibling identity collision: {name}")
+        return existing
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"governed sibling import unavailable: {name}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 try:
     from .prediction_contract import ContractError, load_predictions
-except ImportError:  # Direct execution: python src/ember/governance/scripts/ember_restart/contract.py
-    from prediction_contract import ContractError, load_predictions
+except ImportError:  # Direct/snapshotted execution beside the governed module.
+    _prediction_contract = _load_sibling_module("prediction_contract")
+    ContractError = _prediction_contract.ContractError
+    load_predictions = _prediction_contract.load_predictions
 
 try:
     from . import source_authority
-except ImportError:  # Direct execution: python src/ember/governance/scripts/ember_restart/contract.py
-    import source_authority
+except ImportError:  # Direct/snapshotted execution beside the governed module.
+    source_authority = _load_sibling_module("source_authority")
 
 
 SCHEMA_VERSION = "ember-owned-rung-v1"

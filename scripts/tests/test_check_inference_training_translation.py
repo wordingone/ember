@@ -61,14 +61,17 @@ def _valid_table() -> str:
 
 
 def _write_fixture(root: Path, table: str | None = None) -> None:
-    (root / "docs" / "design").mkdir(parents=True)
-    (root / "docs" / "design" / "inference-to-training-translation-v1.md").write_text(
+    canonical_design = root / "docs" / "domains" / "governance" / "design"
+    canonical_design.mkdir(parents=True)
+    (canonical_design / "inference-to-training-translation-v1.md").write_text(
         table or _valid_table(), encoding="utf-8"
     )
+    integration_design = root / "docs" / "design"
+    integration_design.mkdir(parents=True)
     link = "docs/domains/governance/design/inference-to-training-translation-v1.md"
-    (root / "docs" / "design" / "sota-stack-floor-spec.md").write_text(link, encoding="utf-8")
-    (root / "docs" / "design" / "sota-stack-floor.md").write_text(link, encoding="utf-8")
-    (root / "docs" / "design" / "scale-architecture-frontier-20260703.md").write_text(
+    (integration_design / "sota-stack-floor-spec.md").write_text(link, encoding="utf-8")
+    (integration_design / "sota-stack-floor.md").write_text(link, encoding="utf-8")
+    (integration_design / "scale-architecture-frontier-20260703.md").write_text(
         f"## 6. Training translation\n\n{link}\n\nC-SCALE(ii)\n",
         encoding="utf-8",
     )

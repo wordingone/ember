@@ -10,11 +10,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.ember_restart import contract
+from src.ember.governance.scripts.ember_restart import contract
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VALIDATOR = REPO_ROOT / "scripts" / "ember_restart" / "contract.py"
+VALIDATOR = (
+    REPO_ROOT
+    / "src"
+    / "ember"
+    / "governance"
+    / "scripts"
+    / "ember_restart"
+    / "contract.py"
+)
 
 
 def _current_source_commit() -> str:
@@ -39,22 +47,29 @@ def hermetic_governed_remote(tmp_path: Path) -> tuple[str, str]:
     which commit is actually checked out. Test outcome was still a function
     of checkout shape, not of the code under test.
 
-    Cloning a fresh bare remote from this checkout and forcing
-    ``refs/heads/master`` to this checkout's real HEAD sha resolves to
+    Initializing a fresh bare remote, copying this checkout's exact HEAD commit
+    object into it, and forcing ``refs/heads/master`` to that sha resolves to
     exactly one row on every checkout shape (attached branch, detached HEAD,
     orphan detach reachable only via the branch this checkout's HEAD sits
-    on) and drops the self-referential dependency on this checkout's own
-    branch state entirely.
+    on).  Copying the one content-addressed object avoids both a dependency on
+    this checkout's branch state and Git-for-Windows' shell-backed local-clone
+    path, which is unavailable on some lifecycle-managed hosts.
     """
     remote_dir = tmp_path / "governed-remote.git"
+    head_sha = _current_source_commit()
     subprocess.run(
-        # --no-hardlinks: pytest's tmp_path and this checkout can sit on
-        # different Windows volumes/drives, where a hardlinking --local
-        # clone fails outright ("Improper link") rather than falling back.
-        ["git", "clone", "--local", "--no-hardlinks", "--bare", str(REPO_ROOT), str(remote_dir)],
+        ["git", "init", "--bare", str(remote_dir)],
         check=True, capture_output=True, text=True,
     )
-    head_sha = _current_source_commit()
+    commit_bytes = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "cat-file", "commit", head_sha],
+        check=True, capture_output=True,
+    ).stdout
+    copied_sha = subprocess.run(
+        ["git", "--git-dir", str(remote_dir), "hash-object", "-t", "commit", "-w", "--stdin"],
+        input=commit_bytes, check=True, capture_output=True, text=False,
+    ).stdout.decode("ascii").strip()
+    assert copied_sha == head_sha
     subprocess.run(
         ["git", "-C", str(remote_dir), "update-ref", "refs/heads/master", head_sha],
         check=True, capture_output=True, text=True,
@@ -614,7 +629,7 @@ def _register_checkpoint_custody(tmp_path: Path) -> Path:
     the same skip-not-refuse convention contract.py's own gate uses for a
     host that structurally cannot run the Windows-only ember-lab CLI.
     """
-    from scripts import artifact_custody_gate as gate
+    from src.ember.governance.scripts import artifact_custody_gate as gate
 
     binary = gate.canonical_ember_lab_binary(REPO_ROOT)
     if binary is None:
@@ -680,7 +695,7 @@ def test_checkpoint_candidate_binds_owned_multimodal_reasoning_tool_path(tmp_pat
 
 
 def test_genesis_candidate_is_zero_step_entry_only_and_uses_real_checkpoint_bytes(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -694,7 +709,7 @@ def test_genesis_candidate_is_zero_step_entry_only_and_uses_real_checkpoint_byte
 
 
 def test_checkpoint_shard_resolution_is_version_gated(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     trained_root = tmp_path / "trained"
     trained_root.mkdir()
@@ -740,7 +755,7 @@ def test_checkpoint_shard_resolution_is_version_gated(tmp_path: Path):
 
 
 def test_genesis_expert_artifact_sha_is_distinct_from_tensor_genesis_sha(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -767,7 +782,7 @@ def test_genesis_expert_artifact_sha_is_distinct_from_tensor_genesis_sha(tmp_pat
 
 @pytest.mark.parametrize("field", ["global_step", "tokens_seen", "optimizer_steps"])
 def test_genesis_candidate_refuses_any_post_init_counter(tmp_path: Path, field: str):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -798,7 +813,7 @@ def test_genesis_candidate_refuses_any_post_init_counter(tmp_path: Path, field: 
     ],
 )
 def test_genesis_candidate_refuses_widened_claim_boundary(tmp_path: Path, field: str):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -817,7 +832,7 @@ def test_genesis_candidate_refuses_widened_claim_boundary(tmp_path: Path, field:
 
 @pytest.mark.parametrize("field", ["training", "training_data", "admission", "evaluations", "serving"])
 def test_genesis_candidate_refuses_every_post_training_surface(tmp_path: Path, field: str):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -835,7 +850,7 @@ def test_genesis_candidate_refuses_every_post_training_surface(tmp_path: Path, f
 
 
 def test_trained_schema_cannot_claim_genesis_stage(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _candidate_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -853,7 +868,7 @@ def test_trained_schema_cannot_claim_genesis_stage(tmp_path: Path):
 
 
 def test_genesis_schema_cannot_claim_trained_stage(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -871,7 +886,7 @@ def test_genesis_schema_cannot_claim_trained_stage(tmp_path: Path):
 
 
 def test_genesis_checkpoint_cursor_and_boundary_must_match_outer_claim(tmp_path: Path):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -901,7 +916,7 @@ def test_genesis_checkpoint_cursor_and_boundary_must_match_outer_claim(tmp_path:
 def test_r1_entry_mints_from_actual_on_disk_genesis_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     manifest_path = _genesis_manifest(tmp_path)
     custody_db = _register_checkpoint_custody(tmp_path)
@@ -946,7 +961,7 @@ def test_r1_entry_mints_from_actual_on_disk_genesis_candidate(
 
 
 def test_git_authority_probe_hides_windows_console(monkeypatch: pytest.MonkeyPatch):
-    from scripts.ember_restart import contract
+    from src.ember.governance.scripts.ember_restart import contract
 
     observed: dict[str, object] = {}
 
@@ -1266,7 +1281,7 @@ def test_r1_warm100_entry_cli_emits_path_free_receipt(
     parsing, no override flags, same build_r1_warm100_entry call), with zero
     new CLI surface.
     """
-    from scripts.ember_restart import contract as contract_module
+    from src.ember.governance.scripts.ember_restart import contract as contract_module
 
     governed_remote, governed_ref = hermetic_governed_remote
     monkeypatch.setattr(contract_module, "GOVERNED_REMOTE", governed_remote)

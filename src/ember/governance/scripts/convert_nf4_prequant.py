@@ -63,7 +63,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import governor  # noqa: E402  (env_limits/preflight -- never reimplemented)

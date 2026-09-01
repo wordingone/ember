@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """RED regression pair + amendments for the issue #585 MDE paired-covariance cure.
 
 Binding spec: the coordinator disposition on issue #585 (comment 4931087645),
@@ -34,7 +37,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_REPO / "scripts" / "c8_prelaunch"))
+sys.path.insert(0, str(_REPO / "src" / "ember" / "governance" / "scripts" / "c8_prelaunch"))
 sys.path.insert(0, str(_REPO / "scripts"))
 
 import compute_mde  # noqa: E402

@@ -62,6 +62,7 @@ REQUIRED_ROLES = {
     "tensor_hashes",
     "tensor_manifest",
     "restart_trusted_verifier_registry",
+    "restart_trusted_verifier_registry_approval",
 }
 
 

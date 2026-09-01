@@ -14,7 +14,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from scripts.ember_totality import ember_totality_spec, receipt_surface_integrity
+from src.ember.governance.scripts.ember_totality import ember_totality_spec
+from scripts.ember_totality import receipt_surface_integrity
 
 
 def _git(root: Path, *args: str) -> str:
