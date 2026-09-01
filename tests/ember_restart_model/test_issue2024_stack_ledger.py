@@ -753,6 +753,62 @@ def test_issue2024_union_comparison_refuses_structural_drift(
         )
 
 
+def test_issue2024_union_comparison_normalizes_only_process_local_stack_addresses() -> None:
+    left_event = _union_event()
+    right_event = _union_event()
+    left_event["source_stack"] = [
+        "<built-in method eq of Tensor object at 0x00000229C3B457B0>",
+        "pretrain.py(1430): run_packed_selection_pretraining_segment",
+        "packed_specialist_run.py(2358): run_issue1946_profile",
+    ]
+    right_event["source_stack"] = [
+        "<built-in method eq of Tensor object at 0x0000022144C37BA0>",
+        "pretrain.py(1730): run_packed_selection_pretraining_segment",
+        "packed_specialist_run.py(2363): run_issue1946_profile",
+    ]
+    receipt = subject.build_issue2024_union_comparison_receipt(
+        _union_receipt("issue2024-union-one-shot", [left_event]),
+        _union_receipt("issue2024-union-sharded", [right_event]),
+        one_shot_raw_sha256="1" * 64,
+        sharded_raw_sha256="2" * 64,
+    )
+    assert receipt["result"] == "PASS"
+    assert receipt["source_stack_normalization"] == {
+        "process_address_pattern": "(?<= at )0x[0-9A-Fa-f]+(?=>)",
+        "process_address_replacement": "0x<PROCESS_LOCAL_ADDRESS>",
+        "mode_entry_frame_equivalence_groups": [
+            {
+                "canonical": "pretrain.py(<UNION_MODE_ENTRY>): run_packed_selection_pretraining_segment",
+                "members": [
+                    "pretrain.py(1430): run_packed_selection_pretraining_segment",
+                    "pretrain.py(1730): run_packed_selection_pretraining_segment",
+                ],
+            },
+            {
+                "canonical": "packed_specialist_run.py(<UNION_MODE_ENTRY>): run_issue1946_profile",
+                "members": [
+                    "packed_specialist_run.py(2358): run_issue1946_profile",
+                    "packed_specialist_run.py(2363): run_issue1946_profile",
+                ],
+            },
+        ],
+    }
+
+
+def test_issue2024_union_comparison_refuses_unlisted_same_function_line_drift() -> None:
+    left_event = _union_event()
+    right_event = _union_event()
+    left_event["source_stack"] = ["model.py(442): _inject_modality"]
+    right_event["source_stack"] = ["model.py(777): _inject_modality"]
+    with pytest.raises(ValueError, match="STRUCTURAL_MULTISET_MISMATCH"):
+        subject.build_issue2024_union_comparison_receipt(
+            _union_receipt("issue2024-union-one-shot", [left_event]),
+            _union_receipt("issue2024-union-sharded", [right_event]),
+            one_shot_raw_sha256="1" * 64,
+            sharded_raw_sha256="2" * 64,
+        )
+
+
 def test_issue2024_union_comparison_refuses_identity_or_preflight_drift() -> None:
     one_shot = _union_receipt("issue2024-union-one-shot", [_union_event()])
     sharded = _union_receipt("issue2024-union-sharded", [_union_event()])

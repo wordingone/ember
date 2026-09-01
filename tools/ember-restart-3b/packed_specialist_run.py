@@ -479,6 +479,54 @@ def merge_issue2024_event_ledger_shards(
 _ISSUE2024_UNION_KEY_FIELDS = (
     "key", "input_shapes", "source_stack", "ancestry_depth",
 )
+_ISSUE2024_PROCESS_LOCAL_ADDRESS_PATTERN = r"(?<= at )0x[0-9A-Fa-f]+(?=>)"
+_ISSUE2024_PROCESS_LOCAL_ADDRESS_RE = re.compile(
+    _ISSUE2024_PROCESS_LOCAL_ADDRESS_PATTERN
+)
+_ISSUE2024_PROCESS_LOCAL_ADDRESS_REPLACEMENT = "0x<PROCESS_LOCAL_ADDRESS>"
+_ISSUE2024_MODE_ENTRY_FRAME_EQUIVALENCE_GROUPS = (
+    {
+        "canonical": (
+            "pretrain.py(<UNION_MODE_ENTRY>): "
+            "run_packed_selection_pretraining_segment"
+        ),
+        "members": (
+            "pretrain.py(1430): run_packed_selection_pretraining_segment",
+            "pretrain.py(1730): run_packed_selection_pretraining_segment",
+        ),
+    },
+    {
+        "canonical": (
+            "packed_specialist_run.py(<UNION_MODE_ENTRY>): "
+            "run_issue1946_profile"
+        ),
+        "members": (
+            "packed_specialist_run.py(2358): run_issue1946_profile",
+            "packed_specialist_run.py(2363): run_issue1946_profile",
+        ),
+    },
+)
+_ISSUE2024_MODE_ENTRY_FRAME_EQUIVALENCE = {
+    member: group["canonical"]
+    for group in _ISSUE2024_MODE_ENTRY_FRAME_EQUIVALENCE_GROUPS
+    for member in group["members"]
+}
+
+
+def _issue2024_normalized_source_stack(value: object) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(frame, str) for frame in value):
+        raise ValueError("ISSUE2024_UNION_STRUCTURAL_KEY_INCOMPLETE")
+    normalized = []
+    for frame in value:
+        address_normalized = _ISSUE2024_PROCESS_LOCAL_ADDRESS_RE.sub(
+            _ISSUE2024_PROCESS_LOCAL_ADDRESS_REPLACEMENT, frame
+        )
+        normalized.append(
+            _ISSUE2024_MODE_ENTRY_FRAME_EQUIVALENCE.get(
+                address_normalized, address_normalized
+            )
+        )
+    return normalized
 
 
 def build_issue2024_union_measurement_receipt(
@@ -750,7 +798,14 @@ def _issue2024_union_structural_rows(receipt: Mapping[str, object]) -> tuple[lis
             raise ValueError("ISSUE2024_UNION_STRUCTURAL_KEY_INCOMPLETE")
         structural.append(
             json.dumps(
-                {field: event[field] for field in _ISSUE2024_UNION_KEY_FIELDS},
+                {
+                    field: (
+                        _issue2024_normalized_source_stack(event[field])
+                        if field == "source_stack"
+                        else event[field]
+                    )
+                    for field in _ISSUE2024_UNION_KEY_FIELDS
+                },
                 sort_keys=True,
                 separators=(",", ":"),
                 ensure_ascii=True,
@@ -833,6 +888,17 @@ def build_issue2024_union_comparison_receipt(
         "preflight_raw_sha256": left_custody["preflight_raw_sha256"],
         "preflight_self_sha256": left_custody["preflight_self_sha256"],
         "structural_key_fields": list(_ISSUE2024_UNION_KEY_FIELDS),
+        "source_stack_normalization": {
+            "process_address_pattern": _ISSUE2024_PROCESS_LOCAL_ADDRESS_PATTERN,
+            "process_address_replacement": _ISSUE2024_PROCESS_LOCAL_ADDRESS_REPLACEMENT,
+            "mode_entry_frame_equivalence_groups": [
+                {
+                    "canonical": group["canonical"],
+                    "members": list(group["members"]),
+                }
+                for group in _ISSUE2024_MODE_ENTRY_FRAME_EQUIVALENCE_GROUPS
+            ],
+        },
         "structural_multiset_rows": len(left_multiset),
         "structural_event_count": len(left_rows),
         "one_shot_only_structural_count": one_shot_only_structural_count,
