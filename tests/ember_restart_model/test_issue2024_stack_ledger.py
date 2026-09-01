@@ -138,6 +138,17 @@ def test_issue2024_live_modes_bind_predecessor_policy_and_unique_outputs() -> No
         subject.issue2024_profile_mode("issue2024-preflight")
 
 
+def test_every_profile_mode_is_reachable_from_the_argument_parser() -> None:
+    parser = subject._build_argument_parser()
+    subparsers = next(
+        action
+        for action in parser._actions
+        if isinstance(action, subject.argparse._SubParsersAction)
+    )
+    assert set(subject.ISSUE_PROFILE_MODES) <= set(subparsers.choices)
+    assert "issue2024-smoke" in subparsers.choices
+
+
 def test_issue2024_profile_configuration_is_selected_only_for_successor_modes() -> None:
     assert subject.profiler_configuration_for_mode("issue2024-smoke")["with_stack"] is True
     assert subject.profiler_configuration_for_mode("issue2024-arm-a")["with_stack"] is True

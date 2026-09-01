@@ -71,6 +71,15 @@ from training_acceleration import (
     load_stage2_activation_authority,
 )
 
+ISSUE_PROFILE_MODES = (
+    "issue1946-preflight",
+    "issue1946-arm-a",
+    "issue1946-arm-b",
+    "issue2024-smoke",
+    "issue2024-arm-a",
+    "issue2024-arm-b",
+)
+
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _CLAIM_BOUNDARY = "THROUGHPUT_ONLY_NO_CAPABILITY_CLAIM"
@@ -1419,10 +1428,7 @@ def run_issue1946_profile(
 ) -> dict[str, object]:
     """Run the fixed preflight/arms or the stack-ledger measurement successor."""
 
-    allowed_modes = {
-        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-smoke", "issue2024-arm-a", "issue2024-arm-b",
-    }
+    allowed_modes = set(ISSUE_PROFILE_MODES)
     if mode not in allowed_modes:
         raise ValueError("unknown #1946 profile mode")
     issue2024 = mode.startswith("issue2024-")
@@ -2014,14 +2020,13 @@ def _add_runtime_arguments(parser: argparse.ArgumentParser, *, packs: bool) -> N
     parser.add_argument("--live", action="store_true")
 
 
-def main() -> int:
+def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     for name in (
         "durable-preflight", "formal-preflight", "durable-bf16",
         "bf16", "stage2", "diagnostic-graph-bf16",
-        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-arm-a", "issue2024-arm-b",
+        *ISSUE_PROFILE_MODES,
     ):
         child = subparsers.add_parser(name)
         _add_runtime_arguments(
@@ -2048,6 +2053,11 @@ def main() -> int:
     issue1946_compare.add_argument("--arm-a", type=Path, required=True)
     issue1946_compare.add_argument("--arm-b", type=Path, required=True)
     issue1946_compare.add_argument("--output", type=Path, required=True)
+    return parser
+
+
+def main() -> int:
+    parser = _build_argument_parser()
     args = parser.parse_args()
     if args.command in {"durable-preflight", "formal-preflight"}:
         if args.artifact_root is not None or args.live:
@@ -2067,7 +2077,7 @@ def main() -> int:
         )
     elif args.command in {
         "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-arm-a", "issue2024-arm-b",
+        "issue2024-smoke", "issue2024-arm-a", "issue2024-arm-b",
     }:
         if args.artifact_root is None:
             parser.error(f"{args.command} requires --artifact-root")
