@@ -14,7 +14,7 @@ import time
 import ctypes
 from pathlib import Path
 
-GOVERNANCE_SCRIPTS = Path(__file__).resolve().parents[1] / "src" / "ember" / "governance" / "scripts"
+GOVERNANCE_SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(GOVERNANCE_SCRIPTS))
 
 import ember_gate_process_supervision as gate
