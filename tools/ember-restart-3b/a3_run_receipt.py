@@ -103,7 +103,7 @@ class A3ReceiptRefused(ValueError):
 def _canonical(value: object) -> bytes:
     # Self-digest input bytes: compact JSON, NO trailing newline, matching
     # a1_execution.py's own A1-arm receipt minting and
-    # src/ember/governance/scripts/r1_e8_validator.py's `_self_digest`/`_reopen_ref` -- the check
+    # scripts/r1_e8_validator.py's `_self_digest`/`_reopen_ref` -- the check
     # the real `validate_e8` pipeline runs on every reopened A3 run receipt.
     # certified_train_launch.py's matched-A3 gate was amended (fix(training):
     # align matched-A3 self-digest convention, #1464) to a dedicated
@@ -454,7 +454,7 @@ def mint_a3_run_receipt(
     run["receipt_sha256"] = _sha_bytes(_canonical(run))
 
     # Self-check against the REAL consumer validator before persisting anything,
-    # so this producer and src/ember/governance/scripts/r1_e8_validator.py can never silently drift.
+    # so this producer and scripts/r1_e8_validator.py can never silently drift.
     validator = _load_e8_validator()
     try:
         validator._validate_run(run, arm="A3", tier=None, t06=t06)

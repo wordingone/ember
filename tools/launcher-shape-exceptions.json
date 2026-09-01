@@ -7,7 +7,7 @@
   "exceptions": [
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "be5a651844c2e57f2078df3d69189cced11c526417c33d8d4aeee534bfe188be",
+      "sha256": "37ca8853fa3f8df24646c40f991a3a801fac95b7bac977de11659c064a4de0c9",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
@@ -52,11 +52,11 @@
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
-      "sha256": "b6adcbafc96247d0f3b49bd96993c9218164dd66a97a4c82861f2a3c54cfbc10",
+      "sha256": "4289d6fc2a69659d2921b1b2baa27844d341e69b12d8d58b3444960e47df314c",
       "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
     },
     {
-      "path": "tests/ember_restart_model/domain-governance/test_runner_preflight.py",
+      "path": "tests/ember_restart_model/test_runner_preflight.py",
       "sha256": "fc7ad118e0b55741e0c0073a3defa641a62bcffd39922a31ba1fa15c4e399af5",
       "reason": "runner preflight unit suite that deliberately avoids allocating the production model. Any process surface is a patched or temporary probe used to test refusal ordering and preflight evidence, not a runnable training entry."
     },

@@ -237,7 +237,6 @@ GOVERNING_SURFACE_MIGRATIONS = {
     "docs/contracts/goal-mode-mechanism.md": "docs/goal-mode-mechanism.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md": "docs/registry-dispatch-gate-spec-v0.md",
     AUTHORITY_MATRIX: "docs/ember-authority-matrix.md",
-    "docs/domains/governance/spec/conditions-v1.md": "docs/spec/conditions-v1.md",
 }
 HISTORICAL_EXECUTABLES = [
     "scripts/conv_c03_muon_ns3_live.py",
@@ -2493,6 +2492,7 @@ def check_changed_artifact_bindings(
     }
     range_base: str | None = None
     range_endpoint: str | None = None
+    staged_carrier_base: str | None = None
     if changed_range:
         left, separator, right = changed_range.partition("..")
         if separator != ".." or not left or not right or right.startswith("."):
@@ -2518,6 +2518,19 @@ def check_changed_artifact_bindings(
                 return
             resolved.append(commit.stdout.strip())
         range_base, range_endpoint = resolved
+    elif staged:
+        carrier_base = subprocess.run(
+            ["git", "merge-base", "HEAD", "refs/remotes/origin/master"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        candidate = carrier_base.stdout.strip()
+        if carrier_base.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", candidate):
+            staged_carrier_base = candidate
     verified_derived_paths = verified_derived_receipt_index_paths(
         root, changed_paths, errors
     )
@@ -2561,6 +2574,20 @@ def check_changed_artifact_bindings(
         )
         return probe.returncode == 0
 
+    def staged_candidate_equals_carrier_base(normalized: str) -> bool:
+        if staged_carrier_base is None:
+            return False
+        comparison = subprocess.run(
+            ["git", "diff", "--cached", "--quiet", staged_carrier_base, "--", normalized],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        return comparison.returncode == 0
+
     declared_migration_pairs: tuple[tuple[str, str], ...] = ()
     migration_map_prefix = "manifests/authority/path-migrations/"
     migration_map_paths = sorted(
@@ -2568,6 +2595,33 @@ def check_changed_artifact_bindings(
         for path in changed_paths
         if path.startswith(migration_map_prefix) and path.endswith(".json")
     )
+    if expected_workstream is None and migration_map_paths:
+        derived_workstreams: set[str] = set()
+        try:
+            for map_path in migration_map_paths:
+                map_text = read_candidate_text(map_path)
+                if map_text is None:
+                    raise ValueError(f"{map_path}: candidate bytes are absent")
+                payload = json.loads(map_text)
+                workstream = payload.get("workstream_id") if isinstance(payload, dict) else None
+                if not isinstance(workstream, str) or not workstream:
+                    raise ValueError(f"{map_path}: workstream_id is absent")
+                derived_workstreams.add(workstream)
+        except Exception as exc:
+            errors.append(
+                finding(4, "artifact.migration_map_workstream_invalid", str(exc))
+            )
+            return
+        if len(derived_workstreams) != 1:
+            errors.append(
+                finding(
+                    4,
+                    "artifact.migration_map_workstream_ambiguous",
+                    f"changed maps declare {sorted(derived_workstreams)}",
+                )
+            )
+            return
+        expected_workstream = next(iter(derived_workstreams))
     if expected_workstream is not None and migration_map_paths:
         parsed_pairs: list[tuple[str, str]] = []
         seen_sources: set[str] = set()
@@ -2641,6 +2695,32 @@ def check_changed_artifact_bindings(
             prior_revision = "HEAD" if staged else range_base
             endpoint_revision = None if staged else range_endpoint
             assert prior_revision is not None
+            head_declared_pairs: set[tuple[str, str]] = set()
+            if staged:
+                for map_path in migration_map_paths:
+                    prior_map = subprocess.run(
+                        ["git", "show", f"HEAD:{map_path}"],
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                        check=False,
+                    )
+                    if prior_map.returncode != 0:
+                        continue
+                    try:
+                        prior_payload = json.loads(prior_map.stdout)
+                        for prior_row in prior_payload.get("renames", []):
+                            if isinstance(prior_row, dict):
+                                prior_source = prior_row.get("source_path")
+                                prior_target = prior_row.get("target_path")
+                                if isinstance(prior_source, str) and isinstance(prior_target, str):
+                                    head_declared_pairs.add((prior_source, prior_target))
+                    except (AttributeError, json.JSONDecodeError):
+                        # A malformed HEAD map cannot authorize residency. The staged
+                        # candidate still has to prove the move in its own diff.
+                        continue
             for source, target in parsed_pairs:
                 source_before = git_object_exists(f"{prior_revision}:{source}")
                 target_before = git_object_exists(f"{prior_revision}:{target}")
@@ -2650,13 +2730,24 @@ def check_changed_artifact_bindings(
                 target_after = git_object_exists(f":{target}") if staged else bool(
                     endpoint_revision and git_object_exists(f"{endpoint_revision}:{target}")
                 )
-                if not source_before or target_before or source_after or not target_after:
+                moved_in_checked_diff = (
+                    source_before and not target_before and not source_after and target_after
+                )
+                already_declared_and_resident = (
+                    staged
+                    and (source, target) in head_declared_pairs
+                    and not source_before
+                    and target_before
+                    and not source_after
+                    and target_after
+                )
+                if not (moved_in_checked_diff or already_declared_and_resident):
                     maps_valid = False
                     errors.append(
                         finding(
                             4,
                             "artifact.path_migration_rename_missing",
-                            f"{source} -> {target}: requires source deleted and newly-created target in this diff",
+                            f"{source} -> {target}: requires a move in this diff or the same row already declared and realized in HEAD",
                         )
                     )
             if maps_valid:
@@ -2705,7 +2796,7 @@ def check_changed_artifact_bindings(
         while cursor < len(fields) and fields[cursor]:
             status = fields[cursor]
             cursor += 1
-            if status.startswith(("R", "C")) and cursor + 1 < len(fields):
+            if status.startswith("R") and cursor + 1 < len(fields):
                 source, destination = fields[cursor], fields[cursor + 1]
                 cursor += 2
                 prior_path_by_destination[destination] = source
@@ -2723,8 +2814,11 @@ def check_changed_artifact_bindings(
             prior_revision = range_base
         else:
             return False
+        prior_path = prior_path_by_destination.get(normalized, normalized)
+        if prior_path != normalized and (prior_path, normalized) not in pairs:
+            return False
         prior = subprocess.run(
-            ["git", "show", f"{prior_revision}:{prior_path_by_destination.get(normalized, normalized)}"],
+            ["git", "show", f"{prior_revision}:{prior_path}"],
             cwd=root,
             capture_output=True,
             text=True,
@@ -2735,7 +2829,7 @@ def check_changed_artifact_bindings(
         if prior.returncode != 0:
             return False
         if prior.stdout == staged_text:
-            return normalized in prior_path_by_destination
+            return (prior_path, normalized) in pairs
         transformed = prior.stdout
         sentinels: dict[str, str] = {}
         for index, (_, destination) in enumerate(pairs):
@@ -2921,6 +3015,8 @@ def check_changed_artifact_bindings(
             continue
         workstream = next(iter(workstreams))
         if expected_workstream is not None and workstream != expected_workstream:
+            if staged_candidate_equals_carrier_base(normalized):
+                continue
             if declared_migration_pairs and exact_path_migration_only(
                 normalized, artifact_text, declared_migration_pairs
             ):

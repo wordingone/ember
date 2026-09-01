@@ -41,8 +41,7 @@ import unittest
 import weakref
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = Path(__file__).resolve().parent
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -54,12 +53,22 @@ if str(SCRIPTS) not in sys.path:
 # be imported just to load this one already-dead-in-production function for
 # testing.
 _STUB = types.ModuleType("timeshare_pretrain")
+_STUB.__file__ = str(
+    Path(__file__).resolve().parents[4] / "scripts" / "timeshare_pretrain.py"
+)
 sys.modules.setdefault("timeshare_pretrain", _STUB)
 
 SPEC = importlib.util.spec_from_file_location("cbase_grow_live", SCRIPTS / "cbase_grow_live.py")
 assert SPEC is not None and SPEC.loader is not None
 live_mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(live_mod)
+for _alias in (
+    "timeshare_pretrain",
+    "scripts.timeshare_pretrain",
+    "_ember_issue2015_d9c5c82c124e1dc8",
+):
+    if sys.modules.get(_alias) is _STUB:
+        del sys.modules[_alias]
 
 import torch  # noqa: E402
 from cbase_grow_dryrun import widen_state_dict  # noqa: E402

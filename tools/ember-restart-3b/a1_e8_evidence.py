@@ -4,7 +4,7 @@
 """R1-E8 A1-vs-A3 liveness evidence producer.
 
 Mints the closed `ember02-r1-e8-liveness-v1` packet
-(`docs/spec/ember02-r1-e8-receipts-v1.md`) that `src/ember/governance/scripts/r1_e8_validator.py`
+(`docs/spec/ember02-r1-e8-receipts-v1.md`) that `scripts/r1_e8_validator.py`
 consumes as its first real downstream call. This module never trains, never
 projects a charged budget, and never invents the R2 token forecast: DEV-008
 assigns that projection to a separately frozen `ember02-r2-charged-budget-
