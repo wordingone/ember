@@ -41,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import pathlib
 import subprocess
 import sys
 from typing import Any
@@ -53,15 +54,16 @@ from typing import Any
 # The manifest lives here (inside the write surface — the resident can read it,
 # not written to it through a registered verb, but it IS writable by branch
 # promotion).  The boot checker validates it against the baseline copy.
+REPO_ROOT = str(pathlib.Path(__file__).resolve().parents[5])
 MANIFEST_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    REPO_ROOT,
     "configs", "nck-invariants.json",
 )
 
 # The baseline copy lives OUTSIDE the write surface.  The resident's registered
 # file-writing verbs are refused if they target this directory.
 BASELINE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    REPO_ROOT,
     "configs", "nck-baseline",
 )
 BASELINE_MANIFEST_PATH = os.path.join(BASELINE_DIR, "nck-invariants.json")
@@ -71,7 +73,7 @@ BASELINE_MANIFEST_PATH = os.path.join(BASELINE_DIR, "nck-invariants.json")
 # explicitly in the exception set) is refused.
 # configs/nck-baseline is excluded from the write surface.
 WRITE_SURFACE_ROOT = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    REPO_ROOT,
 )
 
 
@@ -433,7 +435,7 @@ if __name__ == "__main__":
 
     if args.update_manifest:
         # Resolve repo root as two levels up from this file
-        _repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _repo_root = REPO_ROOT
         # Load existing manifest to discover which paths to protect
         if not os.path.isfile(MANIFEST_PATH):
             print(
