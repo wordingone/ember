@@ -147,6 +147,46 @@ def test_every_profile_mode_is_reachable_from_the_argument_parser() -> None:
     )
     assert set(subject.ISSUE_PROFILE_MODES) <= set(subparsers.choices)
     assert "issue2024-smoke" in subparsers.choices
+    for mode in subject.ISSUE_PROFILE_MODES:
+        policy_mode = (
+            subject.issue2024_profile_mode(mode)["policy_mode"]
+            if mode.startswith("issue2024-")
+            else mode
+        )
+        options = {
+            option
+            for action in subparsers.choices[mode]._actions
+            for option in action.option_strings
+        }
+        assert ("--preflight-receipt" in options) is (
+            policy_mode == "issue1946-arm-a"
+        )
+        assert ("--arm-a-receipt" in options) is (
+            policy_mode == "issue1946-arm-b"
+        )
+
+
+def test_main_dispatches_every_mode_from_the_profile_mode_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    synthetic_mode = "issue2099-smoke"
+    monkeypatch.setattr(
+        subject,
+        "ISSUE_PROFILE_MODES",
+        (*subject.ISSUE_PROFILE_MODES, synthetic_mode),
+    )
+    args = SimpleNamespace(command=synthetic_mode, artifact_root=Path("unused"))
+    parser = SimpleNamespace(parse_args=lambda: args)
+    calls: list[tuple[SimpleNamespace, str]] = []
+    monkeypatch.setattr(subject, "_build_argument_parser", lambda: parser)
+    monkeypatch.setattr(
+        subject,
+        "run_issue1946_profile",
+        lambda parsed, *, mode: calls.append((parsed, mode)) or {"result": "PASS"},
+    )
+
+    assert subject.main() == 0
+    assert calls == [(args, synthetic_mode)]
 
 
 def test_issue2024_profile_configuration_is_selected_only_for_successor_modes() -> None:

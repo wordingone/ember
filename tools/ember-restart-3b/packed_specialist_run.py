@@ -2037,11 +2037,16 @@ def _build_argument_parser() -> argparse.ArgumentParser:
             child.add_argument("--execution-source-commit", required=True)
         else:
             child.set_defaults(execution_source_commit=None)
-        if name in {"issue1946-arm-a", "issue2024-arm-a"}:
+        policy_mode = (
+            issue2024_profile_mode(name)["policy_mode"]
+            if name.startswith("issue2024-")
+            else name
+        )
+        if policy_mode == "issue1946-arm-a":
             child.add_argument("--preflight-receipt", type=Path, required=True)
         else:
             child.set_defaults(preflight_receipt=None)
-        if name in {"issue1946-arm-b", "issue2024-arm-b"}:
+        if policy_mode == "issue1946-arm-b":
             child.add_argument("--arm-a-receipt", type=Path, required=True)
         else:
             child.set_defaults(arm_a_receipt=None)
@@ -2075,10 +2080,7 @@ def main() -> int:
             accelerated=args.command == "stage2",
             diagnostic_graph_bf16=args.command == "diagnostic-graph-bf16",
         )
-    elif args.command in {
-        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-smoke", "issue2024-arm-a", "issue2024-arm-b",
-    }:
+    elif args.command in ISSUE_PROFILE_MODES:
         if args.artifact_root is None:
             parser.error(f"{args.command} requires --artifact-root")
         result = run_issue1946_profile(args, mode=args.command)
