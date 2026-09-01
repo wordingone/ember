@@ -6,6 +6,11 @@
   "policy": "A launcher-shaped script is one outside runtime/ember-lab and tools/ember-cli that is directly runnable and creates a child process for a run. Issue 898 removes that class from the tree: the daemon is the only way a run starts. Every path below is enumerated with the exact bytes adjudicated; editing one changes its digest and re-opens it for review.",
   "exceptions": [
     {
+      "path": "scripts/headless-python.ps1",
+      "sha256": "f4570528882408c6c0bdc5bcd4fb945b60a6e2770287875e8750824bf1f5d230",
+      "reason": "public-command interpreter adapter. It launches only the exact receipt-bound Python interpreter selected by docs_information_system.py, with hidden/no-window process creation and redirected standard streams; it does not select or dispatch a training run."
+    },
+    {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
       "sha256": "37ca8853fa3f8df24646c40f991a3a801fac95b7bac977de11659c064a4de0c9",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."

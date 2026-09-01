@@ -13,10 +13,13 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+PUBLIC_INTERPRETER_RECEIPT_PATH = Path("state/receipts/python-environment-install-v1.json")
+PUBLIC_PYTHON_LAUNCHER_PATH = Path("scripts/headless-python.ps1")
+PUBLIC_PYTHON_LAUNCHER_SHA256 = "f4570528882408c6c0bdc5bcd4fb945b60a6e2770287875e8750824bf1f5d230"
 
 METADATA_PATH = Path("manifests/documentation/current-documents-v1.json")
 CLAIM_MAP_PATH = Path("manifests/documentation/claim-source-map-v1.json")
@@ -542,13 +545,16 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
     return rows
 
 
-def public_command_host_argv(argv: list[str]) -> list[str]:
+def public_command_host_argv(
+    root: Path, argv: list[str], *, binding: dict[str, str] | None = None,
+) -> list[str]:
     if not argv:
         raise DocsInfoError("PUBLIC_COMMAND_ARGV_INVALID")
     if argv[0].lower() not in {"python", "python.exe", "py", "py.exe"}:
         return argv
     if sys.platform != "win32":
-        return [sys.executable, *argv[1:]]
+        interpreter = binding["resolved_path"] if binding is not None else sys.executable
+        return [interpreter, *argv[1:]]
     raw = os.environ.get("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON")
     if not raw:
         raise DocsInfoError("PUBLIC_COMMAND_DIRECT_PYTHON_REFUSED")
@@ -557,6 +563,11 @@ def public_command_host_argv(argv: list[str]) -> list[str]:
     except json.JSONDecodeError as error:
         raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID") from error
     file_index = launcher.index("-File") if isinstance(launcher, list) and "-File" in launcher else -1
+    repo_launcher = (root.resolve() / PUBLIC_PYTHON_LAUNCHER_PATH).resolve()
+    try:
+        repo_launcher.relative_to(root.resolve())
+    except ValueError as error:
+        raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID") from error
     if (
         not isinstance(launcher, list)
         or not launcher
@@ -566,12 +577,79 @@ def public_command_host_argv(argv: list[str]) -> list[str]:
         or "-NonInteractive" not in launcher
         or file_index < 0
         or file_index + 1 >= len(launcher)
-        or Path(launcher[file_index + 1]).name.lower() != "headless-python.ps1"
-        or not Path(launcher[file_index + 1]).is_file()
+        or Path(launcher[file_index + 1]).resolve() != repo_launcher
+        or not repo_launcher.is_file()
+        or sha256_file(repo_launcher) != PUBLIC_PYTHON_LAUNCHER_SHA256
         or launcher[-1] != "--"
     ):
         raise DocsInfoError("PUBLIC_COMMAND_HEADLESS_LAUNCHER_INVALID")
     return [*launcher, *argv[1:]]
+
+
+def portable_interpreter_relative_path(relative: str) -> Path:
+    """Resolve a receipt path without inheriting the producer host's separators."""
+    windows_path = PureWindowsPath(relative)
+    posix_path = PurePosixPath(relative.replace("\\", "/"))
+    if (
+        windows_path.is_absolute()
+        or bool(windows_path.drive)
+        or posix_path.is_absolute()
+        or ".." in posix_path.parts
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED")
+    parts = tuple(part for part in posix_path.parts if part not in {"", "."})
+    if not parts:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
+    return Path(*parts)
+
+
+def load_public_interpreter_binding(root: Path) -> dict[str, str]:
+    """Resolve only the self-hashed interpreter bound by bootstrap custody."""
+    receipt_path = root.resolve() / PUBLIC_INTERPRETER_RECEIPT_PATH
+    if not receipt_path.is_file():
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_MISSING")
+    receipt = load_json(receipt_path)
+    claimed = receipt.pop("self_sha256", None)
+    if not isinstance(claimed, str) or not re.fullmatch(r"[0-9a-f]{64}", claimed):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_SELF_HASH_INVALID")
+    if sha256_bytes(canonical_compact(receipt)) != claimed:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_SELF_HASH_INVALID")
+    if (
+        receipt.get("schema_version") != "ember-python-environment-install-receipt-v1"
+        or receipt.get("result") != "PASS"
+        or not isinstance(receipt.get("identity"), dict)
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_RECEIPT_NOT_PASS")
+    binding = receipt["identity"].get("isolated_interpreter")
+    if not isinstance(binding, dict) or set(binding) != {
+        "path", "python_version", "package_set_sha256",
+    }:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
+    relative = binding.get("path")
+    if (
+        not isinstance(relative, str)
+        or not relative
+        or not isinstance(binding.get("python_version"), str)
+        or not binding["python_version"]
+        or not isinstance(binding.get("package_set_sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", binding["package_set_sha256"])
+    ):
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_BINDING_INVALID")
+    relative_path = portable_interpreter_relative_path(relative)
+    checkout_root = root.resolve()
+    interpreter = checkout_root / relative_path
+    try:
+        interpreter.relative_to(checkout_root)
+    except ValueError as error:
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED") from error
+    if not interpreter.is_file():
+        raise DocsInfoError("PUBLIC_COMMAND_INTERPRETER_MISSING")
+    return {
+        "path": relative,
+        "python_version": binding["python_version"],
+        "package_set_sha256": binding["package_set_sha256"],
+        "resolved_path": str(interpreter),
+    }
 
 
 def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, Any]]:
@@ -581,8 +659,19 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
     results = []
     for row in rows:
         manifest_argv = [str(value) for value in row.get("argv", [])]
-        host_argv = public_command_host_argv(manifest_argv)
         cwd = (root / str(row.get("cwd", "."))).resolve()
+        command_id = str(row.get("id", ""))
+        binding = None
+        environment = None
+        if manifest_argv and manifest_argv[0].lower() in {"python", "python.exe", "py", "py.exe"} and command_id != "bootstrap-python":
+            binding = load_public_interpreter_binding(root)
+            if sys.platform == "win32":
+                environment = os.environ.copy()
+                environment["CODEX_PYTHON"] = binding["resolved_path"]
+        host_argv = public_command_host_argv(root, manifest_argv, binding=binding)
+        run_kwargs = {}
+        if environment is not None:
+            run_kwargs["env"] = environment
         completed = subprocess.run(
             host_argv,
             cwd=cwd,
@@ -592,7 +681,10 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
             timeout=300,
             check=False,
             creationflags=NO_WINDOW,
+            **run_kwargs,
         )
+        if command_id == "bootstrap-python" and completed.returncode == 0:
+            binding = load_public_interpreter_binding(root)
         result = {
             "id": row.get("id"),
             "manifest_argv": manifest_argv,
@@ -602,6 +694,10 @@ def run_public_commands(root: Path, commands: dict[str, Any]) -> list[dict[str, 
             "returncode": completed.returncode,
             "stdout_sha256": sha256_bytes(completed.stdout.encode("utf-8")),
             "stderr_sha256": sha256_bytes(completed.stderr.encode("utf-8")),
+            "interpreter_binding": (
+                {key: binding[key] for key in ("path", "python_version", "package_set_sha256")}
+                if binding is not None else None
+            ),
         }
         results.append(result)
         if completed.returncode != 0:
