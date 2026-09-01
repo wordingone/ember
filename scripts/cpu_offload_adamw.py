@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cpu_offload_adamw.py — CPU-offloaded optimizer-state wrapper (DEV-002 cure
 candidate 3/4: "CPU-offloaded optimizer states (8N in host RAM, step on CPU
 or paged)").
@@ -23,7 +26,7 @@ module also prices the SMALLER footprint the offloaded strategy leaves in
 VRAM (weights + grad + activations only) and the host-RAM cost it now
 carries, using the same ground-truth-over-estimate discipline (nvidia-smi
 over torch.cuda.mem_get_info on this WDDM host, per the dry-run receipt's
-measured discrepancy) as scripts/cbase_grow_rung2_dryrun.py's own preflight.
+measured discrepancy) as src/ember/governance/scripts/cbase_grow_rung2_dryrun.py's own preflight.
 
 No git commits from this module. No founder/user names. api_spend_usd
 implications: none (CPU-only module; no paid API surface).

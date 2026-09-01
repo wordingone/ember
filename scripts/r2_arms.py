@@ -143,7 +143,50 @@ def brier(predicted_by_task, outcomes_by_task):
     _scripts = os.path.dirname(os.path.abspath(__file__))
     if _scripts not in sys.path:
         sys.path.insert(0, _scripts)
-    from calibrate import calibration_block  # single source
+    # issue2015 exact-local-import:src/ember/governance/scripts/calibrate.py
+    import importlib.util as _ember_20ff095fccbc3bd0_importlib
+    import sys as _ember_20ff095fccbc3bd0_sys
+    from pathlib import Path as _ember_20ff095fccbc3bd0_Path
+    _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
+    if not _ember_20ff095fccbc3bd0_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/calibrate.py')
+    _ember_20ff095fccbc3bd0_aliases = ('_ember_issue2015_20ff095fccbc3bd0', 'calibrate', 'scripts.calibrate')
+    _ember_20ff095fccbc3bd0_existing = []
+    for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+        _ember_20ff095fccbc3bd0_candidate = _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias)
+        if _ember_20ff095fccbc3bd0_candidate is not None and all(_ember_20ff095fccbc3bd0_candidate is not item for item in _ember_20ff095fccbc3bd0_existing):
+            _ember_20ff095fccbc3bd0_existing.append(_ember_20ff095fccbc3bd0_candidate)
+    if len(_ember_20ff095fccbc3bd0_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/calibrate.py')
+    if _ember_20ff095fccbc3bd0_existing:
+        _ember_20ff095fccbc3bd0_module = _ember_20ff095fccbc3bd0_existing[0]
+        _ember_20ff095fccbc3bd0_observed = getattr(_ember_20ff095fccbc3bd0_module, '__file__', None)
+        if _ember_20ff095fccbc3bd0_observed is None or _ember_20ff095fccbc3bd0_Path(_ember_20ff095fccbc3bd0_observed).resolve() != _ember_20ff095fccbc3bd0_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/calibrate.py')
+    else:
+        _ember_20ff095fccbc3bd0_spec = _ember_20ff095fccbc3bd0_importlib.spec_from_file_location('_ember_issue2015_20ff095fccbc3bd0', _ember_20ff095fccbc3bd0_path)
+        if _ember_20ff095fccbc3bd0_spec is None or _ember_20ff095fccbc3bd0_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/calibrate.py')
+        _ember_20ff095fccbc3bd0_module = _ember_20ff095fccbc3bd0_importlib.module_from_spec(_ember_20ff095fccbc3bd0_spec)
+        for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+            _ember_20ff095fccbc3bd0_prior = _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias)
+            if _ember_20ff095fccbc3bd0_prior is not None and _ember_20ff095fccbc3bd0_prior is not _ember_20ff095fccbc3bd0_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/calibrate.py')
+            _ember_20ff095fccbc3bd0_sys.modules[_ember_20ff095fccbc3bd0_alias] = _ember_20ff095fccbc3bd0_module
+        try:
+            _ember_20ff095fccbc3bd0_spec.loader.exec_module(_ember_20ff095fccbc3bd0_module)
+        except BaseException:
+            for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+                if _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias) is _ember_20ff095fccbc3bd0_module:
+                    _ember_20ff095fccbc3bd0_sys.modules.pop(_ember_20ff095fccbc3bd0_alias, None)
+            raise
+    for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+        _ember_20ff095fccbc3bd0_prior = _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias)
+        if _ember_20ff095fccbc3bd0_prior is not None and _ember_20ff095fccbc3bd0_prior is not _ember_20ff095fccbc3bd0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/calibrate.py')
+        _ember_20ff095fccbc3bd0_sys.modules[_ember_20ff095fccbc3bd0_alias] = _ember_20ff095fccbc3bd0_module
+    calibration_block = getattr(_ember_20ff095fccbc3bd0_module, 'calibration_block')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/calibrate.py  # single source
     return calibration_block(predicted_by_task, outcomes_by_task)
 
 
@@ -323,7 +366,51 @@ def _selftest():
     _here = os.path.dirname(os.path.abspath(__file__))
     if _here not in sys.path:
         sys.path.insert(0, _here)
-    from calibrate import brier as _brier, calibration_block
+    # issue2015 exact-local-import:src/ember/governance/scripts/calibrate.py
+    import importlib.util as _ember_20ff095fccbc3bd0_importlib
+    import sys as _ember_20ff095fccbc3bd0_sys
+    from pathlib import Path as _ember_20ff095fccbc3bd0_Path
+    _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
+    if not _ember_20ff095fccbc3bd0_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/calibrate.py')
+    _ember_20ff095fccbc3bd0_aliases = ('_ember_issue2015_20ff095fccbc3bd0', 'calibrate', 'scripts.calibrate')
+    _ember_20ff095fccbc3bd0_existing = []
+    for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+        _ember_20ff095fccbc3bd0_candidate = _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias)
+        if _ember_20ff095fccbc3bd0_candidate is not None and all(_ember_20ff095fccbc3bd0_candidate is not item for item in _ember_20ff095fccbc3bd0_existing):
+            _ember_20ff095fccbc3bd0_existing.append(_ember_20ff095fccbc3bd0_candidate)
+    if len(_ember_20ff095fccbc3bd0_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/calibrate.py')
+    if _ember_20ff095fccbc3bd0_existing:
+        _ember_20ff095fccbc3bd0_module = _ember_20ff095fccbc3bd0_existing[0]
+        _ember_20ff095fccbc3bd0_observed = getattr(_ember_20ff095fccbc3bd0_module, '__file__', None)
+        if _ember_20ff095fccbc3bd0_observed is None or _ember_20ff095fccbc3bd0_Path(_ember_20ff095fccbc3bd0_observed).resolve() != _ember_20ff095fccbc3bd0_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/calibrate.py')
+    else:
+        _ember_20ff095fccbc3bd0_spec = _ember_20ff095fccbc3bd0_importlib.spec_from_file_location('_ember_issue2015_20ff095fccbc3bd0', _ember_20ff095fccbc3bd0_path)
+        if _ember_20ff095fccbc3bd0_spec is None or _ember_20ff095fccbc3bd0_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/calibrate.py')
+        _ember_20ff095fccbc3bd0_module = _ember_20ff095fccbc3bd0_importlib.module_from_spec(_ember_20ff095fccbc3bd0_spec)
+        for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+            _ember_20ff095fccbc3bd0_prior = _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias)
+            if _ember_20ff095fccbc3bd0_prior is not None and _ember_20ff095fccbc3bd0_prior is not _ember_20ff095fccbc3bd0_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/calibrate.py')
+            _ember_20ff095fccbc3bd0_sys.modules[_ember_20ff095fccbc3bd0_alias] = _ember_20ff095fccbc3bd0_module
+        try:
+            _ember_20ff095fccbc3bd0_spec.loader.exec_module(_ember_20ff095fccbc3bd0_module)
+        except BaseException:
+            for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+                if _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias) is _ember_20ff095fccbc3bd0_module:
+                    _ember_20ff095fccbc3bd0_sys.modules.pop(_ember_20ff095fccbc3bd0_alias, None)
+            raise
+    for _ember_20ff095fccbc3bd0_alias in _ember_20ff095fccbc3bd0_aliases:
+        _ember_20ff095fccbc3bd0_prior = _ember_20ff095fccbc3bd0_sys.modules.get(_ember_20ff095fccbc3bd0_alias)
+        if _ember_20ff095fccbc3bd0_prior is not None and _ember_20ff095fccbc3bd0_prior is not _ember_20ff095fccbc3bd0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/calibrate.py')
+        _ember_20ff095fccbc3bd0_sys.modules[_ember_20ff095fccbc3bd0_alias] = _ember_20ff095fccbc3bd0_module
+    _brier = getattr(_ember_20ff095fccbc3bd0_module, 'brier')
+    calibration_block = getattr(_ember_20ff095fccbc3bd0_module, 'calibration_block')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/calibrate.py
 
     # Perfect predictions -> brier 0
     assert _brier([(1.0, 1), (0.0, 0)]) == 0.0

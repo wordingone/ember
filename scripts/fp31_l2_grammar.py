@@ -50,7 +50,50 @@ sys.path.insert(0, HERE)
 GOVERNANCE_SCRIPTS = os.path.join(NC, "src", "ember", "governance", "scripts")
 sys.path.insert(0, GOVERNANCE_SCRIPTS)
 import fp23_probe_prereg as fp23                       # noqa: E402
-from fp28_v0_coverage import _ref                      # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/fp28_v0_coverage.py
+import importlib.util as _ember_0fe497804b6560b7_importlib
+import sys as _ember_0fe497804b6560b7_sys
+from pathlib import Path as _ember_0fe497804b6560b7_Path
+_ember_0fe497804b6560b7_path = _ember_0fe497804b6560b7_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fp28_v0_coverage.py')
+if not _ember_0fe497804b6560b7_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp28_v0_coverage.py')
+_ember_0fe497804b6560b7_aliases = ('_ember_issue2015_0fe497804b6560b7', 'fp28_v0_coverage', 'scripts.fp28_v0_coverage')
+_ember_0fe497804b6560b7_existing = []
+for _ember_0fe497804b6560b7_alias in _ember_0fe497804b6560b7_aliases:
+    _ember_0fe497804b6560b7_candidate = _ember_0fe497804b6560b7_sys.modules.get(_ember_0fe497804b6560b7_alias)
+    if _ember_0fe497804b6560b7_candidate is not None and all(_ember_0fe497804b6560b7_candidate is not item for item in _ember_0fe497804b6560b7_existing):
+        _ember_0fe497804b6560b7_existing.append(_ember_0fe497804b6560b7_candidate)
+if len(_ember_0fe497804b6560b7_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/fp28_v0_coverage.py')
+if _ember_0fe497804b6560b7_existing:
+    _ember_0fe497804b6560b7_module = _ember_0fe497804b6560b7_existing[0]
+    _ember_0fe497804b6560b7_observed = getattr(_ember_0fe497804b6560b7_module, '__file__', None)
+    if _ember_0fe497804b6560b7_observed is None or _ember_0fe497804b6560b7_Path(_ember_0fe497804b6560b7_observed).resolve() != _ember_0fe497804b6560b7_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/fp28_v0_coverage.py')
+else:
+    _ember_0fe497804b6560b7_spec = _ember_0fe497804b6560b7_importlib.spec_from_file_location('_ember_issue2015_0fe497804b6560b7', _ember_0fe497804b6560b7_path)
+    if _ember_0fe497804b6560b7_spec is None or _ember_0fe497804b6560b7_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/fp28_v0_coverage.py')
+    _ember_0fe497804b6560b7_module = _ember_0fe497804b6560b7_importlib.module_from_spec(_ember_0fe497804b6560b7_spec)
+    for _ember_0fe497804b6560b7_alias in _ember_0fe497804b6560b7_aliases:
+        _ember_0fe497804b6560b7_prior = _ember_0fe497804b6560b7_sys.modules.get(_ember_0fe497804b6560b7_alias)
+        if _ember_0fe497804b6560b7_prior is not None and _ember_0fe497804b6560b7_prior is not _ember_0fe497804b6560b7_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fp28_v0_coverage.py')
+        _ember_0fe497804b6560b7_sys.modules[_ember_0fe497804b6560b7_alias] = _ember_0fe497804b6560b7_module
+    try:
+        _ember_0fe497804b6560b7_spec.loader.exec_module(_ember_0fe497804b6560b7_module)
+    except BaseException:
+        for _ember_0fe497804b6560b7_alias in _ember_0fe497804b6560b7_aliases:
+            if _ember_0fe497804b6560b7_sys.modules.get(_ember_0fe497804b6560b7_alias) is _ember_0fe497804b6560b7_module:
+                _ember_0fe497804b6560b7_sys.modules.pop(_ember_0fe497804b6560b7_alias, None)
+        raise
+for _ember_0fe497804b6560b7_alias in _ember_0fe497804b6560b7_aliases:
+    _ember_0fe497804b6560b7_prior = _ember_0fe497804b6560b7_sys.modules.get(_ember_0fe497804b6560b7_alias)
+    if _ember_0fe497804b6560b7_prior is not None and _ember_0fe497804b6560b7_prior is not _ember_0fe497804b6560b7_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fp28_v0_coverage.py')
+    _ember_0fe497804b6560b7_sys.modules[_ember_0fe497804b6560b7_alias] = _ember_0fe497804b6560b7_module
+_ref = getattr(_ember_0fe497804b6560b7_module, '_ref')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/fp28_v0_coverage.py                      # noqa: E402
 
 # ---- frozen type partition -------------------------------------------
 TRANSFORMS = ("reverse", "sort_asc", "sort_desc", "filter_even",

@@ -29,5 +29,5 @@ ROOT="$(git rev-parse --show-toplevel)"
 # self-integrity refusal still fully applies to every OTHER invocation path (direct
 # create/retire/audit calls, and this same hook on every commit that does not touch
 # this file).
-bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/scripts/worktree_lifecycle.py" --allow-modified-self audit --strict --quiet || exit $?
+bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/src/ember/governance/scripts/worktree_lifecycle.py" --allow-modified-self audit --strict --quiet || exit $?
 exec env REPO_GUARD_SCOPE=staged bash "$ROOT/tools/repo-guard.sh"

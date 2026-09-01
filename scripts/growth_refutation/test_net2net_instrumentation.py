@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Unit tests for the two-gate net2net instrumentation.
 
@@ -22,7 +25,50 @@ import math
 import sys
 import torch
 import torch.nn as nn
-from capacity import _compute_bf16_metrics
+# issue2015 exact-local-import:src/ember/governance/scripts/growth_refutation/capacity.py
+import importlib.util as _ember_3b1bc4dfed504b7e_importlib
+import sys as _ember_3b1bc4dfed504b7e_sys
+from pathlib import Path as _ember_3b1bc4dfed504b7e_Path
+_ember_3b1bc4dfed504b7e_path = _ember_3b1bc4dfed504b7e_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'growth_refutation', 'capacity.py')
+if not _ember_3b1bc4dfed504b7e_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/growth_refutation/capacity.py')
+_ember_3b1bc4dfed504b7e_aliases = ('_ember_issue2015_3b1bc4dfed504b7e', 'capacity', 'scripts.growth_refutation.capacity')
+_ember_3b1bc4dfed504b7e_existing = []
+for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+    _ember_3b1bc4dfed504b7e_candidate = _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias)
+    if _ember_3b1bc4dfed504b7e_candidate is not None and all(_ember_3b1bc4dfed504b7e_candidate is not item for item in _ember_3b1bc4dfed504b7e_existing):
+        _ember_3b1bc4dfed504b7e_existing.append(_ember_3b1bc4dfed504b7e_candidate)
+if len(_ember_3b1bc4dfed504b7e_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/growth_refutation/capacity.py')
+if _ember_3b1bc4dfed504b7e_existing:
+    _ember_3b1bc4dfed504b7e_module = _ember_3b1bc4dfed504b7e_existing[0]
+    _ember_3b1bc4dfed504b7e_observed = getattr(_ember_3b1bc4dfed504b7e_module, '__file__', None)
+    if _ember_3b1bc4dfed504b7e_observed is None or _ember_3b1bc4dfed504b7e_Path(_ember_3b1bc4dfed504b7e_observed).resolve() != _ember_3b1bc4dfed504b7e_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/growth_refutation/capacity.py')
+else:
+    _ember_3b1bc4dfed504b7e_spec = _ember_3b1bc4dfed504b7e_importlib.spec_from_file_location('_ember_issue2015_3b1bc4dfed504b7e', _ember_3b1bc4dfed504b7e_path)
+    if _ember_3b1bc4dfed504b7e_spec is None or _ember_3b1bc4dfed504b7e_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/growth_refutation/capacity.py')
+    _ember_3b1bc4dfed504b7e_module = _ember_3b1bc4dfed504b7e_importlib.module_from_spec(_ember_3b1bc4dfed504b7e_spec)
+    for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+        _ember_3b1bc4dfed504b7e_prior = _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias)
+        if _ember_3b1bc4dfed504b7e_prior is not None and _ember_3b1bc4dfed504b7e_prior is not _ember_3b1bc4dfed504b7e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/growth_refutation/capacity.py')
+        _ember_3b1bc4dfed504b7e_sys.modules[_ember_3b1bc4dfed504b7e_alias] = _ember_3b1bc4dfed504b7e_module
+    try:
+        _ember_3b1bc4dfed504b7e_spec.loader.exec_module(_ember_3b1bc4dfed504b7e_module)
+    except BaseException:
+        for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+            if _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias) is _ember_3b1bc4dfed504b7e_module:
+                _ember_3b1bc4dfed504b7e_sys.modules.pop(_ember_3b1bc4dfed504b7e_alias, None)
+        raise
+for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+    _ember_3b1bc4dfed504b7e_prior = _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias)
+    if _ember_3b1bc4dfed504b7e_prior is not None and _ember_3b1bc4dfed504b7e_prior is not _ember_3b1bc4dfed504b7e_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/growth_refutation/capacity.py')
+    _ember_3b1bc4dfed504b7e_sys.modules[_ember_3b1bc4dfed504b7e_alias] = _ember_3b1bc4dfed504b7e_module
+_compute_bf16_metrics = getattr(_ember_3b1bc4dfed504b7e_module, '_compute_bf16_metrics')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/growth_refutation/capacity.py
 
 
 def test_bf16_metrics_identical_distributions():
@@ -163,7 +209,51 @@ def test_net2net_on_real_model_gpu():
     import sys
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-    from capacity import net2net_grow, NET2NET_ASSERT_TOL
+    # issue2015 exact-local-import:src/ember/governance/scripts/growth_refutation/capacity.py
+    import importlib.util as _ember_3b1bc4dfed504b7e_importlib
+    import sys as _ember_3b1bc4dfed504b7e_sys
+    from pathlib import Path as _ember_3b1bc4dfed504b7e_Path
+    _ember_3b1bc4dfed504b7e_path = _ember_3b1bc4dfed504b7e_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'growth_refutation', 'capacity.py')
+    if not _ember_3b1bc4dfed504b7e_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/growth_refutation/capacity.py')
+    _ember_3b1bc4dfed504b7e_aliases = ('_ember_issue2015_3b1bc4dfed504b7e', 'capacity', 'scripts.growth_refutation.capacity')
+    _ember_3b1bc4dfed504b7e_existing = []
+    for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+        _ember_3b1bc4dfed504b7e_candidate = _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias)
+        if _ember_3b1bc4dfed504b7e_candidate is not None and all(_ember_3b1bc4dfed504b7e_candidate is not item for item in _ember_3b1bc4dfed504b7e_existing):
+            _ember_3b1bc4dfed504b7e_existing.append(_ember_3b1bc4dfed504b7e_candidate)
+    if len(_ember_3b1bc4dfed504b7e_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/growth_refutation/capacity.py')
+    if _ember_3b1bc4dfed504b7e_existing:
+        _ember_3b1bc4dfed504b7e_module = _ember_3b1bc4dfed504b7e_existing[0]
+        _ember_3b1bc4dfed504b7e_observed = getattr(_ember_3b1bc4dfed504b7e_module, '__file__', None)
+        if _ember_3b1bc4dfed504b7e_observed is None or _ember_3b1bc4dfed504b7e_Path(_ember_3b1bc4dfed504b7e_observed).resolve() != _ember_3b1bc4dfed504b7e_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/growth_refutation/capacity.py')
+    else:
+        _ember_3b1bc4dfed504b7e_spec = _ember_3b1bc4dfed504b7e_importlib.spec_from_file_location('_ember_issue2015_3b1bc4dfed504b7e', _ember_3b1bc4dfed504b7e_path)
+        if _ember_3b1bc4dfed504b7e_spec is None or _ember_3b1bc4dfed504b7e_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/growth_refutation/capacity.py')
+        _ember_3b1bc4dfed504b7e_module = _ember_3b1bc4dfed504b7e_importlib.module_from_spec(_ember_3b1bc4dfed504b7e_spec)
+        for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+            _ember_3b1bc4dfed504b7e_prior = _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias)
+            if _ember_3b1bc4dfed504b7e_prior is not None and _ember_3b1bc4dfed504b7e_prior is not _ember_3b1bc4dfed504b7e_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/growth_refutation/capacity.py')
+            _ember_3b1bc4dfed504b7e_sys.modules[_ember_3b1bc4dfed504b7e_alias] = _ember_3b1bc4dfed504b7e_module
+        try:
+            _ember_3b1bc4dfed504b7e_spec.loader.exec_module(_ember_3b1bc4dfed504b7e_module)
+        except BaseException:
+            for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+                if _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias) is _ember_3b1bc4dfed504b7e_module:
+                    _ember_3b1bc4dfed504b7e_sys.modules.pop(_ember_3b1bc4dfed504b7e_alias, None)
+            raise
+    for _ember_3b1bc4dfed504b7e_alias in _ember_3b1bc4dfed504b7e_aliases:
+        _ember_3b1bc4dfed504b7e_prior = _ember_3b1bc4dfed504b7e_sys.modules.get(_ember_3b1bc4dfed504b7e_alias)
+        if _ember_3b1bc4dfed504b7e_prior is not None and _ember_3b1bc4dfed504b7e_prior is not _ember_3b1bc4dfed504b7e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/growth_refutation/capacity.py')
+        _ember_3b1bc4dfed504b7e_sys.modules[_ember_3b1bc4dfed504b7e_alias] = _ember_3b1bc4dfed504b7e_module
+    net2net_grow = getattr(_ember_3b1bc4dfed504b7e_module, 'net2net_grow')
+    NET2NET_ASSERT_TOL = getattr(_ember_3b1bc4dfed504b7e_module, 'NET2NET_ASSERT_TOL')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/growth_refutation/capacity.py
 
     model_id = "Qwen/Qwen2.5-0.5B-Instruct"
     print(f"  Loading {model_id} in bf16 on cuda...")

@@ -40,7 +40,7 @@ after removing that field. Derived decimals use 12 places and round-half-even.
 
 ## Battery composition
 
-`scripts/r1_exit_battery.py::check_r1_e8` is the first real consumer. It may
+`src/ember/governance/scripts/r1_exit_battery.py::check_r1_e8` is the first real consumer. It may
 return `MET` only for either (a) a valid Tier-1 liveness receipt with no parity
 receipt, or (b) a valid below-floor liveness receipt plus a valid parity PASS.
 Missing authority remains `EVIDENCE_MISSING`; malformed, stale, swapped,

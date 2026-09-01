@@ -29,7 +29,7 @@ export function buildWorktreeRefusal(path: string, branch: string): string {
     "Creating one has to be a deliberate, owned, expiring act, so it goes through the",
     "lifecycle manager:",
     "",
-    `  python scripts/worktree_lifecycle.py create --path "${path}" \\`,
+    `  python src/ember/governance/scripts/worktree_lifecycle.py create --path "${path}" \\`,
     `      --branch "${branch}" --owner <you> --purpose <why> --expires <YYYY-MM-DD>`,
     "",
     "That --path is the sanctioned location: under the external cockpit state root, so it",

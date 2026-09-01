@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w1_owned_sampler.py — owned-core round-1 sampler economics (eng-57 / #230).
 
 The borrowed-core round-1 loop (w1_humaneval.generate_chat) does WHOLE-BATCH
@@ -23,7 +26,7 @@ off the #195 critical path. The live decode that turns lengths into tokens is th
 round-1 seam (live_decode_contract below); the >=2x verified-episodes/gen-min
 confirmation fires there.
 
-fp-27 pins are CONTRACT, not mechanism (scripts/fp27_round1_prereg.py SAMPLING:
+fp-27 pins are CONTRACT, not mechanism (src/ember/governance/scripts/fp27_round1_prereg.py SAMPLING:
 seed 31, k=8, 200 L1 + 56 L2, temp 0.8 / top_p 0.95 / max_new 512). This sampler
 CITES them and never writes that file. The contract holds across the scheduling
 change because the live seam gives each stream its OWN torch.Generator seeded
@@ -51,14 +54,57 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 NC = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-from receipt_write import checked_write  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
 RECEIPTS = os.path.join(NC, "receipts")
 SHA_CONVENTION = ("file shas = sha256 over the exact on-disk raw bytes, no "
                   "normalization")
 
 # fp-27 frozen sampling pins — CONTRACT, mirrored for citation, never mutated.
-# Source of truth is scripts/fp27_round1_prereg.py::SAMPLING; this module only
+# Source of truth is src/ember/governance/scripts/fp27_round1_prereg.py::SAMPLING; this module only
 # reads these and refuses to own them.
 FP27_PINS = {
     "seed": 31,
@@ -68,7 +114,7 @@ FP27_PINS = {
     "temperature": 0.8,
     "top_p": 0.95,
     "max_new_tokens": 512,
-    "source": "scripts/fp27_round1_prereg.py::SAMPLING",
+    "source": "src/ember/governance/scripts/fp27_round1_prereg.py::SAMPLING",
     "mutated_by_this_module": False,
 }
 

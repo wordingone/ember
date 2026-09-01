@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """selective_recompute_ab.py — selective activation checkpointing A/B (Closes #296).
 
 Measures the recompute tax in backward (E4 56.5% region) by comparing three
@@ -544,7 +547,50 @@ def _selftest():
         _scripts_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
         if _scripts_dir not in _sys.path:
             _sys.path.insert(0, _scripts_dir)
-        from nck.invariants import verify_at_boot
+        # issue2015 exact-local-import:src/ember/governance/scripts/nck/invariants.py
+        import importlib.util as _ember_4c138e1eb4cb7ec8_importlib
+        import sys as _ember_4c138e1eb4cb7ec8_sys
+        from pathlib import Path as _ember_4c138e1eb4cb7ec8_Path
+        _ember_4c138e1eb4cb7ec8_path = _ember_4c138e1eb4cb7ec8_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'invariants.py')
+        if not _ember_4c138e1eb4cb7ec8_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/nck/invariants.py')
+        _ember_4c138e1eb4cb7ec8_aliases = ('_ember_issue2015_4c138e1eb4cb7ec8', 'invariants', 'nck.invariants', 'scripts.nck.invariants')
+        _ember_4c138e1eb4cb7ec8_existing = []
+        for _ember_4c138e1eb4cb7ec8_alias in _ember_4c138e1eb4cb7ec8_aliases:
+            _ember_4c138e1eb4cb7ec8_candidate = _ember_4c138e1eb4cb7ec8_sys.modules.get(_ember_4c138e1eb4cb7ec8_alias)
+            if _ember_4c138e1eb4cb7ec8_candidate is not None and all(_ember_4c138e1eb4cb7ec8_candidate is not item for item in _ember_4c138e1eb4cb7ec8_existing):
+                _ember_4c138e1eb4cb7ec8_existing.append(_ember_4c138e1eb4cb7ec8_candidate)
+        if len(_ember_4c138e1eb4cb7ec8_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/nck/invariants.py')
+        if _ember_4c138e1eb4cb7ec8_existing:
+            _ember_4c138e1eb4cb7ec8_module = _ember_4c138e1eb4cb7ec8_existing[0]
+            _ember_4c138e1eb4cb7ec8_observed = getattr(_ember_4c138e1eb4cb7ec8_module, '__file__', None)
+            if _ember_4c138e1eb4cb7ec8_observed is None or _ember_4c138e1eb4cb7ec8_Path(_ember_4c138e1eb4cb7ec8_observed).resolve() != _ember_4c138e1eb4cb7ec8_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/nck/invariants.py')
+        else:
+            _ember_4c138e1eb4cb7ec8_spec = _ember_4c138e1eb4cb7ec8_importlib.spec_from_file_location('_ember_issue2015_4c138e1eb4cb7ec8', _ember_4c138e1eb4cb7ec8_path)
+            if _ember_4c138e1eb4cb7ec8_spec is None or _ember_4c138e1eb4cb7ec8_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/nck/invariants.py')
+            _ember_4c138e1eb4cb7ec8_module = _ember_4c138e1eb4cb7ec8_importlib.module_from_spec(_ember_4c138e1eb4cb7ec8_spec)
+            for _ember_4c138e1eb4cb7ec8_alias in _ember_4c138e1eb4cb7ec8_aliases:
+                _ember_4c138e1eb4cb7ec8_prior = _ember_4c138e1eb4cb7ec8_sys.modules.get(_ember_4c138e1eb4cb7ec8_alias)
+                if _ember_4c138e1eb4cb7ec8_prior is not None and _ember_4c138e1eb4cb7ec8_prior is not _ember_4c138e1eb4cb7ec8_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/nck/invariants.py')
+                _ember_4c138e1eb4cb7ec8_sys.modules[_ember_4c138e1eb4cb7ec8_alias] = _ember_4c138e1eb4cb7ec8_module
+            try:
+                _ember_4c138e1eb4cb7ec8_spec.loader.exec_module(_ember_4c138e1eb4cb7ec8_module)
+            except BaseException:
+                for _ember_4c138e1eb4cb7ec8_alias in _ember_4c138e1eb4cb7ec8_aliases:
+                    if _ember_4c138e1eb4cb7ec8_sys.modules.get(_ember_4c138e1eb4cb7ec8_alias) is _ember_4c138e1eb4cb7ec8_module:
+                        _ember_4c138e1eb4cb7ec8_sys.modules.pop(_ember_4c138e1eb4cb7ec8_alias, None)
+                raise
+        for _ember_4c138e1eb4cb7ec8_alias in _ember_4c138e1eb4cb7ec8_aliases:
+            _ember_4c138e1eb4cb7ec8_prior = _ember_4c138e1eb4cb7ec8_sys.modules.get(_ember_4c138e1eb4cb7ec8_alias)
+            if _ember_4c138e1eb4cb7ec8_prior is not None and _ember_4c138e1eb4cb7ec8_prior is not _ember_4c138e1eb4cb7ec8_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/nck/invariants.py')
+            _ember_4c138e1eb4cb7ec8_sys.modules[_ember_4c138e1eb4cb7ec8_alias] = _ember_4c138e1eb4cb7ec8_module
+        verify_at_boot = getattr(_ember_4c138e1eb4cb7ec8_module, 'verify_at_boot')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/nck/invariants.py
         verify_at_boot(manifest_path=_manifest_path, baseline_path=_baseline_path)
 
         # Tamper the working-tree file WITHOUT touching git objects.

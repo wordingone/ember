@@ -1,7 +1,7 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use ember_lab::data_catalog::ArtifactLocationInput;
 use ember_lab::rehearsal::{self, Phase, PhaseOutcome, RehearsalManifest, RehearsalRunner};
@@ -3192,7 +3192,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 receipt.display()
             );
             if !ok {
-                // Mirrors scripts/training_closure.py's own CLI convention: a completed-but-
+                // Mirrors src/ember/governance/scripts/training_closure.py's own CLI convention: a completed-but-
                 // red run is exit 1, distinct from the process::exit(1) `main()` already
                 // takes on an infra-level Err from run_verify_training above (a malformed
                 // manifest, unreadable file, etc.) -- both currently read as exit 1 to the

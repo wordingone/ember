@@ -19,7 +19,7 @@ from pathlib import Path
 BATTERY = Path(__file__).resolve().parent.parent / "docs" / "archive" / "pre-restart" / "sp6-duty-battery.jsonl"
 ENCODINGS = Path(__file__).resolve().parent.parent / "docs" / "archive" / "pre-restart" / "sp6-duty-battery-encodings.jsonl"
 
-# #260 event-loop shape contract (scripts/nck/event_loop.py):
+# #260 event-loop shape contract (src/ember/governance/scripts/nck/event_loop.py):
 # Event(source, kind, payload, ts). MailSource is stub pending #259 — the
 # mail_arrived shape below is the FROZEN interface #259 must emit.
 SOURCE_KINDS = {

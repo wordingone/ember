@@ -3,7 +3,7 @@
   "status": "FROZEN",
   "issue": 1116,
   "supersedes": {
-    "path": "docs/spec/ember02-preregistration-v1.md",
+    "path": "docs/domains/governance/spec/ember02-preregistration-v1.md",
     "sha256": "a671f81b02755178e67d0bcca5b0ec9c4d41650b6a1fd868f5e597b1aa3b3c51",
     "preregistration_pin": "3d48d3870919bd04cec735f68d0fad45fcfae0b2",
     "scope": "section-4-A1-both-tiers-fail-only"

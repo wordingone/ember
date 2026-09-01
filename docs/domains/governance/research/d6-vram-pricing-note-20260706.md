@@ -1,6 +1,6 @@
 # D6 VRAM pricing note — three conventions, sourced constants (2026-07-06)
 
-Companion note to `docs/spec/c-scale-s1-growth-chain-DRAFT.md` §9 D6 and §10 correction #4.
+Companion note to `docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md` §9 D6 and §10 correction #4.
 Written while reconciling the S1 growth-chain artifacts onto master; not a spec, not a ruling —
 a pricing recomputation with every constant traced to a receipt or file, so a reviewer can
 re-derive every cell without trusting prose.
@@ -97,9 +97,9 @@ arithmetic pass over the existing receipt.
 
 - `receipts/d6-bf16-momentum-ab-20260703T160041Z.json` — landed this PR; sha256 verified
   byte-identical to the copy committed at `wip-anchor-20260704` (commit 0803454).
-- `scripts/ember_d6_bf16_momentum_ab.py` — landed this PR from `wip-anchor-20260704`
+- `src/ember/governance/scripts/ember_d6_bf16_momentum_ab.py` — landed this PR from `wip-anchor-20260704`
   (blob b82e0318913b058a6154b134e8f1124415a6933d, cross-verified against `git ls-tree`).
-- `docs/spec/c-scale-s1-growth-chain-DRAFT.md` §3.1/§3.2/§3.3/§9/§10 — landed this PR from
+- `docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md` §3.1/§3.2/§3.3/§9/§10 — landed this PR from
   `goalforge/definitive-goal-20260701` (blob b56e42cec4e26796b6e33dc2a5b116fd50d20aac).
 - All arithmetic above independently recomputed in Python against these sourced constants, not
   copied from any prose figure (the OLD and UNIFORM-6B tables were used as a cross-check that

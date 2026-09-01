@@ -80,8 +80,8 @@ def test_both_workflows_wire_both_scoped_gates_by_exact_name() -> None:
     for relative in (".github/workflows/ci-pr.yml", ".github/workflows/ci-main.yml"):
         workflow = (REPO_ROOT / relative).read_text(encoding="utf-8")
         assert workflow.count("name: Verify evergreen front-door references") == 1
-        assert workflow.count("python -B scripts/check_docs_freshness.py --front-door") == 1
+        assert workflow.count("python -B src/ember/governance/scripts/check_docs_freshness.py --front-door") == 1
         assert workflow.count("name: Verify generated continuity status") == 1
         assert workflow.count(
-            "python -B scripts/gen_readme_status.py --check --generated-status"
+            "python -B src/ember/governance/scripts/gen_readme_status.py --check --generated-status"
         ) == 1

@@ -17,7 +17,7 @@ disposed at all, since Class is set once at row creation and is exactly the
 kind of token (ACTIVE-BLOCKER etc.) the scan matches on.
 
 This drives the real script as a subprocess against a synthetic
-docs/ledgers/ember-debt-ledger.md, matching test_c_invariant.py's EMBER_TOTALITY_ROOT
+docs/domains/governance/ledgers/ember-debt-ledger.md, matching test_c_invariant.py's EMBER_TOTALITY_ROOT
 override convention, so the fix is proven against the actual executable, not
 a reimplementation.
 """

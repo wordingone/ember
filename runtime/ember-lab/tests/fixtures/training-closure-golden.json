@@ -1,5 +1,5 @@
 {
-  "_comment": "Golden fixture pinning byte-parity between scripts/training_closure.py::compute_closure_hash and runtime/ember-lab's Rust port (issue #1400). Deliberately a SYNTHETIC fixture tree (tests/fixtures/training-closure-golden/), not the live repo manifest -- a fixed, small tree so this hash never drifts with production data/content edits, only with a genuine algorithm change in either implementation. Regenerate after an INTENTIONAL algorithm change with: python -B ../../scripts/training_closure.py --root tests/fixtures/training-closure-golden --print-hash (run from runtime/ember-lab/, against the sandbox/repo copy of scripts/training_closure.py). A red golden-fixture test with no accompanying training_closure.py change is a real drift, not noise to silence by regenerating.",
+  "_comment": "Golden fixture pinning byte-parity between src/ember/governance/scripts/training_closure.py::compute_closure_hash and runtime/ember-lab's Rust port (issue #1400). Deliberately a SYNTHETIC fixture tree (tests/fixtures/training-closure-golden/), not the live repo manifest -- a fixed, small tree so this hash never drifts with production data/content edits, only with a genuine algorithm change in either implementation. Regenerate after an INTENTIONAL algorithm change with: python -B ../../src/ember/governance/scripts/training_closure.py --root tests/fixtures/training-closure-golden --print-hash (run from runtime/ember-lab/, against the sandbox/repo copy of src/ember/governance/scripts/training_closure.py). A red golden-fixture test with no accompanying training_closure.py change is a real drift, not noise to silence by regenerating.",
   "fixture_root": "tests/fixtures/training-closure-golden",
   "declared_files": [
     "config.json",
@@ -9,5 +9,5 @@
     "lib_b.py",
     "manifests/training-dependency-closure.json"
   ],
-  "expected_closure_sha256": "abb15291bdd321e2bb413d9b3939775cb2c412578fe031eb837309db07c06484"
+  "expected_closure_sha256": "f38442f14afb26f51342c97500ffbe75eb9422e2c7c10f3193bd2c33ceaff4f3"
 }

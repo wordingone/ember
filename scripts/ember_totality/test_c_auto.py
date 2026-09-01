@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_auto.py -- STATUS PROBE for Ember autonomy-ladder-state faithfulness.
 
-Registry text: docs/spec/conditions-v1.md sec 4.2 C-AUTO (gh issue #104).
+Registry text: docs/domains/governance/spec/conditions-v1.md sec 4.2 C-AUTO (gh issue #104).
 R: The autonomy-relinquishment ladder contract (issue #92) mandates that every
 claimed rung's K>=5 consecutive windows exist, resolve, and postdate each other;
 every window binds a real Git commit and carries a closed, hash-linked Ember

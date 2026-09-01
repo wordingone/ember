@@ -57,7 +57,7 @@ def build_sandbox_repo(root: pathlib.Path) -> pathlib.Path:
                 "schema_version": "ember-training-dependency-closure-v1",
                 "entrypoints": ["tools/entrypoint.py"],
                 "dynamic_entrypoints": [],
-                "code": ["scripts/training_closure.py"],
+                "code": ["src/ember/governance/scripts/training_closure.py"],
                 "data": ["configs/training.json"],
                 "dynamic_call_sites": {},
                 "dynamic_call_site_notes": {},
@@ -190,7 +190,7 @@ class TrainingClosureSupplementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo = build_sandbox_repo(pathlib.Path(directory))
             write_supplement(
-                repo, minimal_supplement(code=["scripts/training_closure.py"])
+                repo, minimal_supplement(code=["src/ember/governance/scripts/training_closure.py"])
             )
             with self.assertRaisesRegex(ValueError, "re-declares a"):
                 closure.load_manifest(repo)
@@ -321,17 +321,17 @@ class TrainingClosureSupplementTests(unittest.TestCase):
             repo = build_sandbox_repo(pathlib.Path(directory))
             manifest_path = repo / MANIFEST_RELATIVE_PATH
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest["dynamic_call_sites"] = {"scripts/training_closure.py": []}
+            manifest["dynamic_call_sites"] = {"src/ember/governance/scripts/training_closure.py": []}
             manifest["dynamic_call_site_notes"] = {
-                "scripts/training_closure.py": "fixture declaration"
+                "src/ember/governance/scripts/training_closure.py": "fixture declaration"
             }
             write_text(manifest_path, json.dumps(manifest, indent=2) + "\n")
             write_supplement(
                 repo,
                 minimal_supplement(
-                    dynamic_call_sites={"scripts/training_closure.py": []},
+                    dynamic_call_sites={"src/ember/governance/scripts/training_closure.py": []},
                     dynamic_call_site_notes={
-                        "scripts/training_closure.py": "duplicate declaration"
+                        "src/ember/governance/scripts/training_closure.py": "duplicate declaration"
                     },
                 ),
             )

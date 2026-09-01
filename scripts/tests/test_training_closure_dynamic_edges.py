@@ -42,7 +42,7 @@ def build_repo(
 ) -> pathlib.Path:
     repo = root / "repo"
     write_text(repo / "tools" / "entrypoint.py", source)
-    code = ["scripts/training_closure.py"]
+    code = ["src/ember/governance/scripts/training_closure.py"]
     if declared_target is not None:
         write_text(repo / declared_target, "# fixture executable\n")
         code.append(declared_target)

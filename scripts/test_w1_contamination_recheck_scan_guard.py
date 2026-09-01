@@ -1,6 +1,9 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_w1_contamination_recheck_scan_guard.py -- TDD for issue #445: fold
 w2_heldout/build_decontam_batch_mp.py's adaptive chunk-halving MemoryError/
-ArrayMemoryError guard directly into scripts/w1_collapse_control_run.py's
+ArrayMemoryError guard directly into src/ember/governance/scripts/w1_collapse_control_run.py's
 serial contamination_recheck(), so it is the ONLY entry point and every
 caller (p1_envelope_sweep.py, w1_recheck_cache.py, w2_heldout/
 build_decontam_batch.py, this module's own main()) inherits the guard with
@@ -26,8 +29,94 @@ import pytest
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import w1_collapse_control_run  # noqa: E402
-from w1_collapse_control_run import contamination_recheck  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/w1_collapse_control_run.py
+import importlib.util as _ember_85e76a5cb35a8ea2_importlib
+import sys as _ember_85e76a5cb35a8ea2_sys
+from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+if not _ember_85e76a5cb35a8ea2_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')
+_ember_85e76a5cb35a8ea2_existing = []
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_candidate = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_candidate is not None and all(_ember_85e76a5cb35a8ea2_candidate is not item for item in _ember_85e76a5cb35a8ea2_existing):
+        _ember_85e76a5cb35a8ea2_existing.append(_ember_85e76a5cb35a8ea2_candidate)
+if len(_ember_85e76a5cb35a8ea2_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+if _ember_85e76a5cb35a8ea2_existing:
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_existing[0]
+    _ember_85e76a5cb35a8ea2_observed = getattr(_ember_85e76a5cb35a8ea2_module, '__file__', None)
+    if _ember_85e76a5cb35a8ea2_observed is None or _ember_85e76a5cb35a8ea2_Path(_ember_85e76a5cb35a8ea2_observed).resolve() != _ember_85e76a5cb35a8ea2_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_collapse_control_run.py')
+else:
+    _ember_85e76a5cb35a8ea2_spec = _ember_85e76a5cb35a8ea2_importlib.spec_from_file_location('_ember_issue2015_85e76a5cb35a8ea2', _ember_85e76a5cb35a8ea2_path)
+    if _ember_85e76a5cb35a8ea2_spec is None or _ember_85e76a5cb35a8ea2_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_importlib.module_from_spec(_ember_85e76a5cb35a8ea2_spec)
+    for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+        _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+        if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+        _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+    try:
+        _ember_85e76a5cb35a8ea2_spec.loader.exec_module(_ember_85e76a5cb35a8ea2_module)
+    except BaseException:
+        for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+            if _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias) is _ember_85e76a5cb35a8ea2_module:
+                _ember_85e76a5cb35a8ea2_sys.modules.pop(_ember_85e76a5cb35a8ea2_alias, None)
+        raise
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+w1_collapse_control_run = _ember_85e76a5cb35a8ea2_module
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w1_collapse_control_run.py  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/w1_collapse_control_run.py
+import importlib.util as _ember_85e76a5cb35a8ea2_importlib
+import sys as _ember_85e76a5cb35a8ea2_sys
+from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+if not _ember_85e76a5cb35a8ea2_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')
+_ember_85e76a5cb35a8ea2_existing = []
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_candidate = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_candidate is not None and all(_ember_85e76a5cb35a8ea2_candidate is not item for item in _ember_85e76a5cb35a8ea2_existing):
+        _ember_85e76a5cb35a8ea2_existing.append(_ember_85e76a5cb35a8ea2_candidate)
+if len(_ember_85e76a5cb35a8ea2_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+if _ember_85e76a5cb35a8ea2_existing:
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_existing[0]
+    _ember_85e76a5cb35a8ea2_observed = getattr(_ember_85e76a5cb35a8ea2_module, '__file__', None)
+    if _ember_85e76a5cb35a8ea2_observed is None or _ember_85e76a5cb35a8ea2_Path(_ember_85e76a5cb35a8ea2_observed).resolve() != _ember_85e76a5cb35a8ea2_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_collapse_control_run.py')
+else:
+    _ember_85e76a5cb35a8ea2_spec = _ember_85e76a5cb35a8ea2_importlib.spec_from_file_location('_ember_issue2015_85e76a5cb35a8ea2', _ember_85e76a5cb35a8ea2_path)
+    if _ember_85e76a5cb35a8ea2_spec is None or _ember_85e76a5cb35a8ea2_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_importlib.module_from_spec(_ember_85e76a5cb35a8ea2_spec)
+    for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+        _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+        if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+        _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+    try:
+        _ember_85e76a5cb35a8ea2_spec.loader.exec_module(_ember_85e76a5cb35a8ea2_module)
+    except BaseException:
+        for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+            if _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias) is _ember_85e76a5cb35a8ea2_module:
+                _ember_85e76a5cb35a8ea2_sys.modules.pop(_ember_85e76a5cb35a8ea2_alias, None)
+        raise
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+contamination_recheck = getattr(_ember_85e76a5cb35a8ea2_module, 'contamination_recheck')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w1_collapse_control_run.py  # noqa: E402
 
 WINDOW = 4  # small window for a fast, toy-scale fixture (production default is 13)
 ROLL_BASE = w1_collapse_control_run.CONTAMINATION_ROLL_BASE

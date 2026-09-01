@@ -81,22 +81,22 @@ jobs:
         run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
       - name: Verify training closure and Python environment authority
         run: |
-          python -B scripts/training_closure.py --root .
+          python -B src/ember/governance/scripts/training_closure.py --root .
           python -B tools/ember-restart-3b/python_environment.py --root . verify
       - name: Run text-lab identity freshness regressions
         run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
       - name: Run HF custody canary regressions
         run: python -B -m pytest -q tests/test_hf_custody_sync.py tests/test_remint_hashes.py
       - name: Verify evergreen front-door references
-        run: python -B scripts/check_docs_freshness.py --front-door
+        run: python -B src/ember/governance/scripts/check_docs_freshness.py --front-door
       - name: Verify generated continuity status
-        run: python -B scripts/gen_readme_status.py --check --generated-status
+        run: python -B src/ember/governance/scripts/gen_readme_status.py --check --generated-status
       - name: Verify canonical documentation information system
         run: |
           python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py
           python -B scripts/docs_information_system.py check --root .
       - name: Verify POSIX owned process-tree cleanup
-        run: python -B scripts/ember_gate_process_supervision_selftest.py
+        run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   owned-process-posix:
     strategy:
       fail-fast: false
@@ -310,9 +310,9 @@ jobs:
       - name: Run root launcher suite
         run: python -B -m unittest discover -s tests -p "test_ember_root_launcher.py" -v
       - name: Verify versioned desktop deployment and shortcuts
-        run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/ember-desktop-deployment-selftest.ps1
+        run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1
       - name: Verify Windows Job Object process-tree cleanup
-        run: python -B scripts/ember_gate_process_supervision_selftest.py
+        run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
   ci-pr:
     if: always()
     needs: [python, owned-process-posix, rust, rust-linux-test, eval-canary-image, cli, launcher, production-rung-replay]

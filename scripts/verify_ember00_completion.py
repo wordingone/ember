@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# goal_id: EMBER-00
-# next_executed_outcome: EMBER-01 clean 3B custody and identity spine
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Emit the EMBER-00 completion receipt from a clean detached checkout.
 
 The receipt is authority-only. It does not claim that training, a model,
@@ -178,8 +179,8 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
                 "-q",
                 "-p",
                 "no:cacheprovider",
-                "scripts/tests/test_authority_conservation.py",
-                "scripts/tests/test_authority_completion.py",
+                "src/ember/governance/scripts/tests/test_authority_conservation.py",
+                "src/ember/governance/scripts/tests/test_authority_completion.py",
                 "scripts/tests/test_registry_authority_gate.py",
                 "scripts/tests/test_pr_authority_binding.py",
             ],
@@ -187,8 +188,8 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
         ),
         (
             "registry_gate_selftest",
-            [py, "-B", "scripts/registry_gate_selftest.py"],
-            ["python", "-B", "scripts/registry_gate_selftest.py"],
+            [py, "-B", "src/ember/governance/scripts/registry_gate_selftest.py"],
+            ["python", "-B", "src/ember/governance/scripts/registry_gate_selftest.py"],
         ),
         (
             "repo_guard_selftest",
@@ -197,13 +198,13 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
         ),
         (
             "condition_registry_sync",
-            [py, "-B", "scripts/ember_totality/check_registry_sync.py"],
-            ["python", "-B", "scripts/ember_totality/check_registry_sync.py"],
+            [py, "-B", "src/ember/governance/scripts/ember_totality/check_registry_sync.py"],
+            ["python", "-B", "src/ember/governance/scripts/ember_totality/check_registry_sync.py"],
         ),
         (
             "c_authority_condition",
-            [py, "-B", "scripts/ember_totality/test_c_authority.py"],
-            ["python", "-B", "scripts/ember_totality/test_c_authority.py"],
+            [py, "-B", "src/ember/governance/scripts/ember_totality/test_c_authority.py"],
+            ["python", "-B", "src/ember/governance/scripts/ember_totality/test_c_authority.py"],
         ),
         (
             "pr_authority_binding",

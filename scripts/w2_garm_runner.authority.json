@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/w2_garm_runner.py",
-  "artifact_sha256": "2d3423de3be788144eea5c6479a98727424ba7eda5ff7256566d24eb374ff15d",
+  "artifact_path": "src/ember/governance/scripts/w2_garm_runner.py",
+  "artifact_sha256": "fca2b175e4936d228fa0640b2dc529a66142c5ff7200fa184d9aca912305a771",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

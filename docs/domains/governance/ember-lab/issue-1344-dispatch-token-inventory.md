@@ -15,7 +15,7 @@ what closing the loop still requires.
 | Entry point | Starts | Gated today | Mechanism |
 | --- | --- | --- | --- |
 | `runtime/ember-lab/src/main.rs` (`ember-lab.exe`, all subcommands) | itself IS the daemon/CLI authority | N/A -- this is the authority, not a consumer | -- |
-| `tools/ember-restart-3b/certified_train_launch.py` | the certified 3B training run (`execute_validated_launch`) | **YES** (#1686 + this issue) | `consume_ember_lab_dispatch()` calls `scripts/ember_dispatch_token.py::consume_dispatch()` before touching any certificate/receipt. Fail-closed: refuses on missing env (`EMBER_LAB_DISPATCH_REQUIRED`), malformed token/pipe (`EMBER_LAB_DISPATCH_TOKEN_INVALID`), unauthenticated daemon (`EMBER_LAB_DISPATCH_DAEMON_IDENTITY_REFUSED`), or any RPC/consumption failure (`EMBER_LAB_DISPATCH_REFUSED`). |
+| `tools/ember-restart-3b/certified_train_launch.py` | the certified 3B training run (`execute_validated_launch`) | **YES** (#1686 + this issue) | `consume_ember_lab_dispatch()` calls `src/ember/governance/scripts/ember_dispatch_token.py::consume_dispatch()` before touching any certificate/receipt. Fail-closed: refuses on missing env (`EMBER_LAB_DISPATCH_REQUIRED`), malformed token/pipe (`EMBER_LAB_DISPATCH_TOKEN_INVALID`), unauthenticated daemon (`EMBER_LAB_DISPATCH_DAEMON_IDENTITY_REFUSED`), or any RPC/consumption failure (`EMBER_LAB_DISPATCH_REFUSED`). |
 | `runtime/ember-lab` `verify-training` subcommand | a synchronous training-closure check (no spawn, but the daemon treats it as a dispatch-gated capability) | YES (pre-existing, #1400/#1401) | `consume_verifier_dispatch_token()` in `main.rs`, same four env vars, same named-pipe RPC. This is the Rust half `ember_dispatch_token.py` mirrors. |
 | `runtime/ember-lab` governed-vertical dispatch (`tools/ember-cli/src/services/governed-dispatch.ts` -> `dispatch_manifest` RPC) | an external llmq build, spawned **by the daemon itself** | YES (by construction) | The daemon is the spawner: it creates the job row, mints the token, and stamps the child's env before `Command::spawn`. No separate consumer needed because the daemon never releases control of the process to an ungated path. |
 
@@ -36,14 +36,14 @@ legitimate caller, for zero security benefit, until the issuer side lands.
 | `scripts/ember_01_custody/census.py` | "Deterministic, read-only custody and benchmark census primitives" (its own docstring) | census-facing commands, spawned directly |
 | `scripts/ember_01_identity/validate_identity.py` | "Validate Ember model/experiment identity manifests **without loading a model**" (its own docstring) | identity-validation callers, spawned directly |
 | `tools/ember-restart-3b/launch_packet.py` | "EMBER-01 cond7 launch-packet readiness runner (**CPU-only, no GPU allocation**)" (its own docstring) | `commands/train.ts` preflight (`runLaunchPacket`), spawned directly, **before** any certified-launch offer exists |
-| `scripts/training_closure.py` | audits/hashes the training dependency closure declaration; `--print-hash` or pass/fail report, never spawns | imported by `certified_train_launch.py`; CLI-invoked standalone for audits |
+| `src/ember/governance/scripts/training_closure.py` | audits/hashes the training dependency closure declaration; `--print-hash` or pass/fail report, never spawns | imported by `certified_train_launch.py`; CLI-invoked standalone for audits |
 
 ## What remains (not done in this PR -- see PR body)
 
 The half that exists after this PR: any process the daemon spawns *itself*
 (governed-vertical dispatch, `verify-training`) is already gated end to end,
 and the certified-launch consumer (#1686) now actually works (previously
-`scripts/ember_dispatch_token.py` did not exist, so `certified_train_launch.py`
+`src/ember/governance/scripts/ember_dispatch_token.py` did not exist, so `certified_train_launch.py`
 refused *every* invocation, including correctly-dispatched ones).
 
 The half that does not exist yet: **ember-cli never asks the daemon for a

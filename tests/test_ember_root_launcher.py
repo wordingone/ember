@@ -27,7 +27,7 @@ PUBLIC_LAUNCHER = REPOSITORY / "tools" / "launchers" / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "prepare-ember-cockpit.ps1"
 LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
 WINDOW_PLACEMENT = REPOSITORY / "scripts" / "ember-window-placement.ps1"
-START_HERE = REPOSITORY / "docs" / "guides" / "START-HERE.md"
+START_HERE = REPOSITORY / "docs" / "domains" / "governance" / "guides" / "START-HERE.md"
 
 
 class EmberRootLauncherTests(unittest.TestCase):

@@ -12,7 +12,7 @@ that document is explicitly "the durable summary + cure ledger," not the full it
 "full machine-readable findings" it refers to is an **operator-held audit transcript that was
 never committed to either tree**. Searched both the historical execution tree and its goal-forge worktree for a
 per-mandate watched/unwatched registry (a hoped-for cross-reference against
-`docs/spec/conditions-v1.md` §4.3): none exists — §4.3 is a numeric-closure count authority (33
+`docs/domains/governance/spec/conditions-v1.md` §4.3): none exists — §4.3 is a numeric-closure count authority (33
 conditions), not a mandate-level ledger. `docs/spec/goalforge-debate-ledger.md` and the
 `docs/audit/` directory were also checked; no fuller list surfaced.
 

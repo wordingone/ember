@@ -367,7 +367,7 @@ def validate_commands_manifest(commands: dict[str, Any]) -> list[dict[str, Any]]
             "--root",
             ".",
         ],
-        "receipt-selftest": ["python", "scripts/receipt_check.py", "--selftest"],
+        "receipt-selftest": ["python", "src/ember/governance/scripts/receipt_check.py", "--selftest"],
         "verify-documentation": [
             "python",
             "scripts/docs_information_system.py",
@@ -394,7 +394,7 @@ def validate_public_command_docs(root: Path, rows: list[dict[str, Any]]) -> None
         if command not in verify_text:
             raise DocsInfoError(f"PUBLIC_COMMAND_DOC_DRIFT:docs/guides/VERIFY.md:{command_id}")
     bootstrap = rendered["bootstrap-python"]
-    for relative in ("README.md", "docs/guides/START-HERE.md"):
+    for relative in ("README.md", "docs/domains/governance/guides/START-HERE.md"):
         if bootstrap not in (root / relative).read_text(encoding="utf-8"):
             raise DocsInfoError(f"PUBLIC_COMMAND_DOC_DRIFT:{relative}:bootstrap-python")
 
@@ -744,9 +744,9 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
     if not isinstance(markdown, list) or len(markdown) != 2:
         raise DocsInfoError("MARKDOWN_LINK_DISPOSITION_COUNT_INVALID")
     expected_links = {
-        ("docs/roadmap/README.md", 8, "../../INVARIANT.md", "docs/authority/INVARIANT.md"),
+        ("docs/domains/governance/roadmap/README.md", 8, "../../INVARIANT.md", "docs/authority/INVARIANT.md"),
         (
-            "docs/roadmap/README.md",
+            "docs/domains/governance/roadmap/README.md",
             9,
             "../../GOAL.md",
             "docs/domains/governance/authority/GOAL.md",

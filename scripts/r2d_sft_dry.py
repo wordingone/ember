@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import runpy
 import sys
 
@@ -7,4 +10,4 @@ NC = "<local-path>"
 sys.argv = ["t2_r2w.py", "--the lead-gate-token", "r2-prereg-20260611-the lead",
             "--arm", "sft", "--dry-run"]
 sys.path.insert(0, f"{NC}/scripts")
-runpy.run_path(f"{NC}/scripts/t2_r2w.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/t2_r2w.py", run_name="__main__")

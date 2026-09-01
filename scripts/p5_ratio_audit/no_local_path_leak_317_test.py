@@ -70,7 +70,50 @@ def _load_run_p5_audit_with_stub():
         sys.modules["timeshare_pretrain"] = stub
     if HERE not in sys.path:
         sys.path.insert(0, HERE)
-    import run_p5_audit  # noqa: E402
+    # issue2015 exact-local-import:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py
+    import importlib.util as _ember_ba82af0721d80c9f_importlib
+    import sys as _ember_ba82af0721d80c9f_sys
+    from pathlib import Path as _ember_ba82af0721d80c9f_Path
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    if not _ember_ba82af0721d80c9f_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
+    _ember_ba82af0721d80c9f_existing = []
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_candidate = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_candidate is not None and all(_ember_ba82af0721d80c9f_candidate is not item for item in _ember_ba82af0721d80c9f_existing):
+            _ember_ba82af0721d80c9f_existing.append(_ember_ba82af0721d80c9f_candidate)
+    if len(_ember_ba82af0721d80c9f_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    if _ember_ba82af0721d80c9f_existing:
+        _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_existing[0]
+        _ember_ba82af0721d80c9f_observed = getattr(_ember_ba82af0721d80c9f_module, '__file__', None)
+        if _ember_ba82af0721d80c9f_observed is None or _ember_ba82af0721d80c9f_Path(_ember_ba82af0721d80c9f_observed).resolve() != _ember_ba82af0721d80c9f_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+    else:
+        _ember_ba82af0721d80c9f_spec = _ember_ba82af0721d80c9f_importlib.spec_from_file_location('_ember_issue2015_ba82af0721d80c9f', _ember_ba82af0721d80c9f_path)
+        if _ember_ba82af0721d80c9f_spec is None or _ember_ba82af0721d80c9f_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_module = _ember_ba82af0721d80c9f_importlib.module_from_spec(_ember_ba82af0721d80c9f_spec)
+        for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+            _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+            if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+            _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+        try:
+            _ember_ba82af0721d80c9f_spec.loader.exec_module(_ember_ba82af0721d80c9f_module)
+        except BaseException:
+            for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+                if _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias) is _ember_ba82af0721d80c9f_module:
+                    _ember_ba82af0721d80c9f_sys.modules.pop(_ember_ba82af0721d80c9f_alias, None)
+            raise
+    for _ember_ba82af0721d80c9f_alias in _ember_ba82af0721d80c9f_aliases:
+        _ember_ba82af0721d80c9f_prior = _ember_ba82af0721d80c9f_sys.modules.get(_ember_ba82af0721d80c9f_alias)
+        if _ember_ba82af0721d80c9f_prior is not None and _ember_ba82af0721d80c9f_prior is not _ember_ba82af0721d80c9f_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
+        _ember_ba82af0721d80c9f_sys.modules[_ember_ba82af0721d80c9f_alias] = _ember_ba82af0721d80c9f_module
+    run_p5_audit = _ember_ba82af0721d80c9f_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py  # noqa: E402
     return run_p5_audit
 
 

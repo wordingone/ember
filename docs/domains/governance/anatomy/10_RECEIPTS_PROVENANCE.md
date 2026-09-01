@@ -1,8 +1,8 @@
 # 10 — Receipts and Provenance
 
-## The schema floor: scripts/receipt_check.py
+## The schema floor: src/ember/governance/scripts/receipt_check.py
 
-`scripts/receipt_check.py` validates every `receipts/*.json` file against a
+`src/ember/governance/scripts/receipt_check.py` validates every `receipts/*.json` file against a
 minimum schema floor (eng #103):
 
 - **R1 required fields**: `ticket`, `ts` must be present.
@@ -24,7 +24,7 @@ pre-R1 receipts are silently skipped via a `LEGACY_EXEMPT` frozenset, each
 entry commented with its exemption reason), `--file X` (fail-closed on one
 receipt, non-zero exit on any finding), `--selftest`.
 
-## Atomic, quarantine-never-delete writes: scripts/receipt_write.py
+## Atomic, quarantine-never-delete writes: src/ember/governance/scripts/receipt_write.py
 
 `checked_write(path, obj)` stages JSON bytes (UTF-8, LF, indent=2) in the
 destination directory, flushes and `fsync`s them, validates via

@@ -2,7 +2,7 @@
 """
 Totality test for Ember goal condition C-TALLY (status probe / TDD).
 
-Authoritative condition text (docs/spec/conditions-v1.md sec 4.3):
+Authoritative condition text (docs/domains/governance/spec/conditions-v1.md sec 4.3):
 
   C-TALLY. `src/ember/governance/scripts/ember_tally.py` walks the manifest, verifies each row's
   receipt exists AND passes its named check, emits

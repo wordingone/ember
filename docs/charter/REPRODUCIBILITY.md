@@ -18,13 +18,13 @@ out-of-tree data:
 
 ```bash
 # Self-test (pure-logic; no files on disk needed)
-python scripts/receipt_check.py --selftest
+python src/ember/governance/scripts/receipt_check.py --selftest
 
 # Report over every receipt in receipts/
-python scripts/receipt_check.py --all
+python src/ember/governance/scripts/receipt_check.py --all
 
 # Fail-closed validation of a single receipt file
-python scripts/receipt_check.py --file receipts/<receipt>.json
+python src/ember/governance/scripts/receipt_check.py --file receipts/<receipt>.json
 ```
 
 Expected output on success: `RECEIPT_CHECK_SELFTEST_PASS` (selftest mode) or
@@ -54,7 +54,7 @@ python scripts/ember_gate_state_persistence_selftest.py
 python scripts/ember_gate_hook_runner_selftest.py
 python scripts/ember_gate_launch_packaging_selftest.py
 python scripts/ember_gate_rollback_rewind_selftest.py
-python scripts/ember_gate_process_supervision_selftest.py
+python src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
 python scripts/ember_gate_tool_dispatch_permissions_selftest.py
 python scripts/ember_gate_function_slash_commands_selftest.py
 python scripts/ember_gate_communication_mailbox_computer_use_selftest.py
@@ -103,7 +103,7 @@ receipts under `receipts/`.
 ## Receipts as the authoritative record
 
 Every executed job writes a JSON receipt to `receipts/`. The receipt is the
-only admissible evidence for any claim. `scripts/receipt_check.py` is the
+only admissible evidence for any claim. `src/ember/governance/scripts/receipt_check.py` is the
 floor validator; its selftest is the minimum reproducibility bar this
 repository commits to.
 

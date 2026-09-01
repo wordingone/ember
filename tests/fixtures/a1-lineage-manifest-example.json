@@ -1,5 +1,5 @@
 {
-  "_note": "ember #631 deliverable 5 example lineage manifest. A governed C8 launch supplies its OWN manifest declaring the exact checkpoint lineage and EVERY training input that lineage consumed, each with an A1 scan receipt. The consumer (scripts/a1_freeze_consumer.py) REFUSES if the manifest is missing or any input is unscanned. This example declares a shards-v0-only pretraining lineage plus the defensively-scanned b-multi-1.",
+  "_note": "ember #631 deliverable 5 example lineage manifest. A governed C8 launch supplies its OWN manifest declaring the exact checkpoint lineage and EVERY training input that lineage consumed, each with an A1 scan receipt. The consumer (src/ember/governance/scripts/a1_freeze_consumer.py) REFUSES if the manifest is missing or any input is unscanned. This example declares a shards-v0-only pretraining lineage plus the defensively-scanned b-multi-1.",
   "checkpoint_lineage": "ember-c8-example/pretrain-shards-v0",
   "training_inputs": [
     {

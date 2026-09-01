@@ -154,8 +154,8 @@ def test_restart_consumer_executes_snapshotted_import_closure(
         {
             "identity": ("scripts/ember_01_identity/validate_identity.py",),
             "restart": (
-                "scripts/ember_restart/cli_seat.py",
-                "scripts/ember_restart/contract.py",
+                "src/ember/governance/scripts/ember_restart/cli_seat.py",
+                "src/ember/governance/scripts/ember_restart/contract.py",
             ),
         },
     )

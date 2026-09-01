@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ember.internal/domains/governance/schemas/loop-graph/authority-graph-v2.schema.json",
+  "title": "Ember authority graph v2 (loop/graph substrate, issue #1309)",
+  "description": "Extends the existing execution-graph.json top-level shape (schema_version/program/semantics/nodes/credit_rule) with kind/parent so sub-milestone stages nest under a milestone without inventing a second file format. Matches the approved loop/graph substrate schema sketch, section 1 (workstream B, issue #1309).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "nodes", "credit_rule"],
+  "properties": {
+    "schema_version": {
+      "const": "ember-authority-graph-v2"
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "id": {"type": "string"},
+        "state": {"type": "string"},
+        "target_milestone": {"type": "string"},
+        "active_certificate_gate": {"type": "string"}
+      }
+    },
+    "semantics": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "nodes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/authorityNode"}
+    },
+    "credit_rule": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "authorityNode": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "state", "depends_on"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {
+          "type": "string",
+          "enum": ["milestone", "workstream", "stage"]
+        },
+        "parent": {"type": "string"},
+        "contract": {"type": "string"},
+        "state": {
+          "type": "string",
+          "enum": [
+            "AUTHORITY_IN_FORCE",
+            "ACTIVE_CERTIFICATION_GATE",
+            "TARGET_PRESTAGING",
+            "WAITING_ON_PREREQUISITE",
+            "CLOSED_PASS",
+            "CLOSED_REJECTED"
+          ]
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "execution_node_ids": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "The only pointer from authority into execution. One-directional by design -- authority stays cheap to scan without pulling in execution noise."
+        },
+        "workstreams": {
+          "type": "array",
+          "items": {"type": "object"}
+        }
+      }
+    }
+  }
+}

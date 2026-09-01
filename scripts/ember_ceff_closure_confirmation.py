@@ -213,7 +213,50 @@ GOALFORGE_ROOT = os.environ.get(
 TEST_C_EFF_PATH = os.path.join(GOALFORGE_ROOT, "scripts", "ember_totality", "test_c_eff.py")
 
 sys.path.insert(0, HERE)
-from receipt_write import checked_write    # noqa: E402  (light; no torch)
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py    # noqa: E402  (light; no torch)
 
 # ── Probe bars (test_c_eff.py:62-76, quoted/mirrored — never re-derived) ───
 SHATTER_COMPOUND_MIN   = 3.3
@@ -384,7 +427,50 @@ def band_check(measured_tok_s, projected_tok_s, frac: float = CONFIRMATION_BAND_
 # ---------------------------------------------------------------------------
 
 def run_shatter_compute_fit_selfcheck(candidate: dict) -> tuple[bool, str]:
-    import v0_pretrain_launch_gate as gate_mod
+    # issue2015 exact-local-import:src/ember/governance/scripts/v0_pretrain_launch_gate.py
+    import importlib.util as _ember_fbb2699a8f4bfd8b_importlib
+    import sys as _ember_fbb2699a8f4bfd8b_sys
+    from pathlib import Path as _ember_fbb2699a8f4bfd8b_Path
+    _ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
+    if not _ember_fbb2699a8f4bfd8b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    _ember_fbb2699a8f4bfd8b_aliases = ('_ember_issue2015_fbb2699a8f4bfd8b', 'scripts.v0_pretrain_launch_gate', 'v0_pretrain_launch_gate')
+    _ember_fbb2699a8f4bfd8b_existing = []
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_candidate = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_candidate is not None and all(_ember_fbb2699a8f4bfd8b_candidate is not item for item in _ember_fbb2699a8f4bfd8b_existing):
+            _ember_fbb2699a8f4bfd8b_existing.append(_ember_fbb2699a8f4bfd8b_candidate)
+    if len(_ember_fbb2699a8f4bfd8b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    if _ember_fbb2699a8f4bfd8b_existing:
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_existing[0]
+        _ember_fbb2699a8f4bfd8b_observed = getattr(_ember_fbb2699a8f4bfd8b_module, '__file__', None)
+        if _ember_fbb2699a8f4bfd8b_observed is None or _ember_fbb2699a8f4bfd8b_Path(_ember_fbb2699a8f4bfd8b_observed).resolve() != _ember_fbb2699a8f4bfd8b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    else:
+        _ember_fbb2699a8f4bfd8b_spec = _ember_fbb2699a8f4bfd8b_importlib.spec_from_file_location('_ember_issue2015_fbb2699a8f4bfd8b', _ember_fbb2699a8f4bfd8b_path)
+        if _ember_fbb2699a8f4bfd8b_spec is None or _ember_fbb2699a8f4bfd8b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_importlib.module_from_spec(_ember_fbb2699a8f4bfd8b_spec)
+        for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+            _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+            if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+            _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+        try:
+            _ember_fbb2699a8f4bfd8b_spec.loader.exec_module(_ember_fbb2699a8f4bfd8b_module)
+        except BaseException:
+            for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+                if _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias) is _ember_fbb2699a8f4bfd8b_module:
+                    _ember_fbb2699a8f4bfd8b_sys.modules.pop(_ember_fbb2699a8f4bfd8b_alias, None)
+            raise
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+    gate_mod = _ember_fbb2699a8f4bfd8b_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/v0_pretrain_launch_gate.py
     with tempfile.TemporaryDirectory() as td:
         os.makedirs(os.path.join(td, "receipts"), exist_ok=True)
         p = os.path.join(td, "receipts", "shatter-verdict-selfcheck.json")
@@ -469,7 +555,50 @@ def confirmation_quality_ok(losses) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 def assemble_candidate(factors: dict, confirmation: dict, *, dry_run: bool) -> dict:
-    import v0_pretrain_launch_gate as gate_mod
+    # issue2015 exact-local-import:src/ember/governance/scripts/v0_pretrain_launch_gate.py
+    import importlib.util as _ember_fbb2699a8f4bfd8b_importlib
+    import sys as _ember_fbb2699a8f4bfd8b_sys
+    from pathlib import Path as _ember_fbb2699a8f4bfd8b_Path
+    _ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
+    if not _ember_fbb2699a8f4bfd8b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    _ember_fbb2699a8f4bfd8b_aliases = ('_ember_issue2015_fbb2699a8f4bfd8b', 'scripts.v0_pretrain_launch_gate', 'v0_pretrain_launch_gate')
+    _ember_fbb2699a8f4bfd8b_existing = []
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_candidate = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_candidate is not None and all(_ember_fbb2699a8f4bfd8b_candidate is not item for item in _ember_fbb2699a8f4bfd8b_existing):
+            _ember_fbb2699a8f4bfd8b_existing.append(_ember_fbb2699a8f4bfd8b_candidate)
+    if len(_ember_fbb2699a8f4bfd8b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    if _ember_fbb2699a8f4bfd8b_existing:
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_existing[0]
+        _ember_fbb2699a8f4bfd8b_observed = getattr(_ember_fbb2699a8f4bfd8b_module, '__file__', None)
+        if _ember_fbb2699a8f4bfd8b_observed is None or _ember_fbb2699a8f4bfd8b_Path(_ember_fbb2699a8f4bfd8b_observed).resolve() != _ember_fbb2699a8f4bfd8b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    else:
+        _ember_fbb2699a8f4bfd8b_spec = _ember_fbb2699a8f4bfd8b_importlib.spec_from_file_location('_ember_issue2015_fbb2699a8f4bfd8b', _ember_fbb2699a8f4bfd8b_path)
+        if _ember_fbb2699a8f4bfd8b_spec is None or _ember_fbb2699a8f4bfd8b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_importlib.module_from_spec(_ember_fbb2699a8f4bfd8b_spec)
+        for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+            _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+            if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+            _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+        try:
+            _ember_fbb2699a8f4bfd8b_spec.loader.exec_module(_ember_fbb2699a8f4bfd8b_module)
+        except BaseException:
+            for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+                if _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias) is _ember_fbb2699a8f4bfd8b_module:
+                    _ember_fbb2699a8f4bfd8b_sys.modules.pop(_ember_fbb2699a8f4bfd8b_alias, None)
+            raise
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+    gate_mod = _ember_fbb2699a8f4bfd8b_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/v0_pretrain_launch_gate.py
     useful_base_tokens = gate_mod.SHATTER_BUDGET_B   # 2.2e9 — the SAME ceiling
                                                        # _shatter_compute_fit() requires
                                                        # method.budget_b to equal exactly.
@@ -609,8 +738,96 @@ def run_confirmation_live(projected_tok_s: float) -> dict:
     the first torch.cuda.* touch in this whole file lives here, reached
     only when the script is invoked with no flag on a free GPU."""
     import timeshare_pretrain as ts_mod
-    import v0_pretrain_launch_gate as gate_mod
-    from ember_ceff_composition_ab import _ns5_bf16, _make_fused, measure_arm
+    # issue2015 exact-local-import:src/ember/governance/scripts/v0_pretrain_launch_gate.py
+    import importlib.util as _ember_fbb2699a8f4bfd8b_importlib
+    import sys as _ember_fbb2699a8f4bfd8b_sys
+    from pathlib import Path as _ember_fbb2699a8f4bfd8b_Path
+    _ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
+    if not _ember_fbb2699a8f4bfd8b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    _ember_fbb2699a8f4bfd8b_aliases = ('_ember_issue2015_fbb2699a8f4bfd8b', 'scripts.v0_pretrain_launch_gate', 'v0_pretrain_launch_gate')
+    _ember_fbb2699a8f4bfd8b_existing = []
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_candidate = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_candidate is not None and all(_ember_fbb2699a8f4bfd8b_candidate is not item for item in _ember_fbb2699a8f4bfd8b_existing):
+            _ember_fbb2699a8f4bfd8b_existing.append(_ember_fbb2699a8f4bfd8b_candidate)
+    if len(_ember_fbb2699a8f4bfd8b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    if _ember_fbb2699a8f4bfd8b_existing:
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_existing[0]
+        _ember_fbb2699a8f4bfd8b_observed = getattr(_ember_fbb2699a8f4bfd8b_module, '__file__', None)
+        if _ember_fbb2699a8f4bfd8b_observed is None or _ember_fbb2699a8f4bfd8b_Path(_ember_fbb2699a8f4bfd8b_observed).resolve() != _ember_fbb2699a8f4bfd8b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    else:
+        _ember_fbb2699a8f4bfd8b_spec = _ember_fbb2699a8f4bfd8b_importlib.spec_from_file_location('_ember_issue2015_fbb2699a8f4bfd8b', _ember_fbb2699a8f4bfd8b_path)
+        if _ember_fbb2699a8f4bfd8b_spec is None or _ember_fbb2699a8f4bfd8b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_importlib.module_from_spec(_ember_fbb2699a8f4bfd8b_spec)
+        for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+            _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+            if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+            _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+        try:
+            _ember_fbb2699a8f4bfd8b_spec.loader.exec_module(_ember_fbb2699a8f4bfd8b_module)
+        except BaseException:
+            for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+                if _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias) is _ember_fbb2699a8f4bfd8b_module:
+                    _ember_fbb2699a8f4bfd8b_sys.modules.pop(_ember_fbb2699a8f4bfd8b_alias, None)
+            raise
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+    gate_mod = _ember_fbb2699a8f4bfd8b_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/v0_pretrain_launch_gate.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_ceff_composition_ab.py
+    import importlib.util as _ember_c4992712338462fb_importlib
+    import sys as _ember_c4992712338462fb_sys
+    from pathlib import Path as _ember_c4992712338462fb_Path
+    _ember_c4992712338462fb_path = _ember_c4992712338462fb_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_ceff_composition_ab.py')
+    if not _ember_c4992712338462fb_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+    _ember_c4992712338462fb_aliases = ('_ember_issue2015_c4992712338462fb', 'ember_ceff_composition_ab', 'scripts.ember_ceff_composition_ab')
+    _ember_c4992712338462fb_existing = []
+    for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+        _ember_c4992712338462fb_candidate = _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias)
+        if _ember_c4992712338462fb_candidate is not None and all(_ember_c4992712338462fb_candidate is not item for item in _ember_c4992712338462fb_existing):
+            _ember_c4992712338462fb_existing.append(_ember_c4992712338462fb_candidate)
+    if len(_ember_c4992712338462fb_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+    if _ember_c4992712338462fb_existing:
+        _ember_c4992712338462fb_module = _ember_c4992712338462fb_existing[0]
+        _ember_c4992712338462fb_observed = getattr(_ember_c4992712338462fb_module, '__file__', None)
+        if _ember_c4992712338462fb_observed is None or _ember_c4992712338462fb_Path(_ember_c4992712338462fb_observed).resolve() != _ember_c4992712338462fb_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+    else:
+        _ember_c4992712338462fb_spec = _ember_c4992712338462fb_importlib.spec_from_file_location('_ember_issue2015_c4992712338462fb', _ember_c4992712338462fb_path)
+        if _ember_c4992712338462fb_spec is None or _ember_c4992712338462fb_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+        _ember_c4992712338462fb_module = _ember_c4992712338462fb_importlib.module_from_spec(_ember_c4992712338462fb_spec)
+        for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+            _ember_c4992712338462fb_prior = _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias)
+            if _ember_c4992712338462fb_prior is not None and _ember_c4992712338462fb_prior is not _ember_c4992712338462fb_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+            _ember_c4992712338462fb_sys.modules[_ember_c4992712338462fb_alias] = _ember_c4992712338462fb_module
+        try:
+            _ember_c4992712338462fb_spec.loader.exec_module(_ember_c4992712338462fb_module)
+        except BaseException:
+            for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+                if _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias) is _ember_c4992712338462fb_module:
+                    _ember_c4992712338462fb_sys.modules.pop(_ember_c4992712338462fb_alias, None)
+            raise
+    for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+        _ember_c4992712338462fb_prior = _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias)
+        if _ember_c4992712338462fb_prior is not None and _ember_c4992712338462fb_prior is not _ember_c4992712338462fb_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+        _ember_c4992712338462fb_sys.modules[_ember_c4992712338462fb_alias] = _ember_c4992712338462fb_module
+    _ns5_bf16 = getattr(_ember_c4992712338462fb_module, '_ns5_bf16')
+    _make_fused = getattr(_ember_c4992712338462fb_module, '_make_fused')
+    measure_arm = getattr(_ember_c4992712338462fb_module, 'measure_arm')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_ceff_composition_ab.py
 
     cfg = ts_mod.load_contract()
     seq = cfg["model"]["seq"]
@@ -668,7 +885,50 @@ def run_confirmation_dry(projected_tok_s: float) -> dict:
     inside the ±10% band, proving the assembler/self-check/probe pipeline
     end-to-end without GPU. Never evidence for the real probe (written only
     to scratch/, self-declares dry_run/synthetic)."""
-    import v0_pretrain_launch_gate as gate_mod
+    # issue2015 exact-local-import:src/ember/governance/scripts/v0_pretrain_launch_gate.py
+    import importlib.util as _ember_fbb2699a8f4bfd8b_importlib
+    import sys as _ember_fbb2699a8f4bfd8b_sys
+    from pathlib import Path as _ember_fbb2699a8f4bfd8b_Path
+    _ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
+    if not _ember_fbb2699a8f4bfd8b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    _ember_fbb2699a8f4bfd8b_aliases = ('_ember_issue2015_fbb2699a8f4bfd8b', 'scripts.v0_pretrain_launch_gate', 'v0_pretrain_launch_gate')
+    _ember_fbb2699a8f4bfd8b_existing = []
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_candidate = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_candidate is not None and all(_ember_fbb2699a8f4bfd8b_candidate is not item for item in _ember_fbb2699a8f4bfd8b_existing):
+            _ember_fbb2699a8f4bfd8b_existing.append(_ember_fbb2699a8f4bfd8b_candidate)
+    if len(_ember_fbb2699a8f4bfd8b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    if _ember_fbb2699a8f4bfd8b_existing:
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_existing[0]
+        _ember_fbb2699a8f4bfd8b_observed = getattr(_ember_fbb2699a8f4bfd8b_module, '__file__', None)
+        if _ember_fbb2699a8f4bfd8b_observed is None or _ember_fbb2699a8f4bfd8b_Path(_ember_fbb2699a8f4bfd8b_observed).resolve() != _ember_fbb2699a8f4bfd8b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    else:
+        _ember_fbb2699a8f4bfd8b_spec = _ember_fbb2699a8f4bfd8b_importlib.spec_from_file_location('_ember_issue2015_fbb2699a8f4bfd8b', _ember_fbb2699a8f4bfd8b_path)
+        if _ember_fbb2699a8f4bfd8b_spec is None or _ember_fbb2699a8f4bfd8b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_importlib.module_from_spec(_ember_fbb2699a8f4bfd8b_spec)
+        for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+            _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+            if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+            _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+        try:
+            _ember_fbb2699a8f4bfd8b_spec.loader.exec_module(_ember_fbb2699a8f4bfd8b_module)
+        except BaseException:
+            for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+                if _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias) is _ember_fbb2699a8f4bfd8b_module:
+                    _ember_fbb2699a8f4bfd8b_sys.modules.pop(_ember_fbb2699a8f4bfd8b_alias, None)
+            raise
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+    gate_mod = _ember_fbb2699a8f4bfd8b_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/v0_pretrain_launch_gate.py
     synthetic_tok_s = round(projected_tok_s * 0.97, 2)   # ~3% under projection, inside band
     return {
         "status": "OK",
@@ -800,7 +1060,50 @@ def selftest() -> None:
 
     # 4. _shatter_compute_fit() self-check wiring.
     #    4a. A candidate that HONESTLY clears the 1.0-governed-day floor.
-    import v0_pretrain_launch_gate as gate_mod
+    # issue2015 exact-local-import:src/ember/governance/scripts/v0_pretrain_launch_gate.py
+    import importlib.util as _ember_fbb2699a8f4bfd8b_importlib
+    import sys as _ember_fbb2699a8f4bfd8b_sys
+    from pathlib import Path as _ember_fbb2699a8f4bfd8b_Path
+    _ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
+    if not _ember_fbb2699a8f4bfd8b_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    _ember_fbb2699a8f4bfd8b_aliases = ('_ember_issue2015_fbb2699a8f4bfd8b', 'scripts.v0_pretrain_launch_gate', 'v0_pretrain_launch_gate')
+    _ember_fbb2699a8f4bfd8b_existing = []
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_candidate = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_candidate is not None and all(_ember_fbb2699a8f4bfd8b_candidate is not item for item in _ember_fbb2699a8f4bfd8b_existing):
+            _ember_fbb2699a8f4bfd8b_existing.append(_ember_fbb2699a8f4bfd8b_candidate)
+    if len(_ember_fbb2699a8f4bfd8b_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    if _ember_fbb2699a8f4bfd8b_existing:
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_existing[0]
+        _ember_fbb2699a8f4bfd8b_observed = getattr(_ember_fbb2699a8f4bfd8b_module, '__file__', None)
+        if _ember_fbb2699a8f4bfd8b_observed is None or _ember_fbb2699a8f4bfd8b_Path(_ember_fbb2699a8f4bfd8b_observed).resolve() != _ember_fbb2699a8f4bfd8b_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+    else:
+        _ember_fbb2699a8f4bfd8b_spec = _ember_fbb2699a8f4bfd8b_importlib.spec_from_file_location('_ember_issue2015_fbb2699a8f4bfd8b', _ember_fbb2699a8f4bfd8b_path)
+        if _ember_fbb2699a8f4bfd8b_spec is None or _ember_fbb2699a8f4bfd8b_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_module = _ember_fbb2699a8f4bfd8b_importlib.module_from_spec(_ember_fbb2699a8f4bfd8b_spec)
+        for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+            _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+            if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+            _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+        try:
+            _ember_fbb2699a8f4bfd8b_spec.loader.exec_module(_ember_fbb2699a8f4bfd8b_module)
+        except BaseException:
+            for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+                if _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias) is _ember_fbb2699a8f4bfd8b_module:
+                    _ember_fbb2699a8f4bfd8b_sys.modules.pop(_ember_fbb2699a8f4bfd8b_alias, None)
+            raise
+    for _ember_fbb2699a8f4bfd8b_alias in _ember_fbb2699a8f4bfd8b_aliases:
+        _ember_fbb2699a8f4bfd8b_prior = _ember_fbb2699a8f4bfd8b_sys.modules.get(_ember_fbb2699a8f4bfd8b_alias)
+        if _ember_fbb2699a8f4bfd8b_prior is not None and _ember_fbb2699a8f4bfd8b_prior is not _ember_fbb2699a8f4bfd8b_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
+        _ember_fbb2699a8f4bfd8b_sys.modules[_ember_fbb2699a8f4bfd8b_alias] = _ember_fbb2699a8f4bfd8b_module
+    gate_mod = _ember_fbb2699a8f4bfd8b_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/v0_pretrain_launch_gate.py
     good_budget = gate_mod.SHATTER_BUDGET_B
     good_tok_s = good_budget / (0.9 * 86400.0)   # -> honest effective_days = 0.9
     good_candidate = _shatter_candidate(0.9, True, good_tok_s, good_budget)

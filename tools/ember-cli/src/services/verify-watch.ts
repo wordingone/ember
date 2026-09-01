@@ -17,7 +17,7 @@
 // change file bytes mid-hash, so operators learned to hold writes until a run finished.
 // That informal hold is the freeze this issue kills. The fix: every repository-scoped leg
 // now runs against a DEDICATED, MANAGED worktree pinned to the exact commit at dispatch
-// (`scripts/worktree_lifecycle.py create --detach`), created before the pipeline's first
+// (`src/ember/governance/scripts/worktree_lifecycle.py create --detach`), created before the pipeline's first
 // leg and released after the last one, success or failure. DETACHED is load-bearing:
 // verify_ember01_completion.py runs its executable legs, and computes ok, only on a
 // clean+detached checkout, so a branch-attached worktree would produce a pipeline that
@@ -25,7 +25,7 @@
 // (including the live repoRoot checkout the cockpit itself runs from) is never touched by
 // this pipeline and never needs to wait for it.
 //
-// Residual scope (disclosed, not fixed here -- see notes/1371-slice2-fingerprint-cache.md
+// Residual scope (disclosed, not fixed here -- see domains/governance/notes/1371-slice2-fingerprint-cache.md
 // in this issue's staging note): the custody census's OPERATOR-MACHINE roots (bound via
 // `/custody set`, e.g. `registered-worktree-registry` / `registered-worktree-material-
 // registry`) still read live machine paths outside the pinned worktree, because those
@@ -396,7 +396,7 @@ function tail(text: string, maxBytes = 4096): string {
 // Managed worktree helpers (#1371)
 // ---------------------------------------------------------------------------
 
-const WORKTREE_LIFECYCLE_SCRIPT = "scripts/worktree_lifecycle.py";
+const WORKTREE_LIFECYCLE_SCRIPT = "src/ember/governance/scripts/worktree_lifecycle.py";
 
 /** Owner recorded on every worktree this pipeline creates. It is also the key that
  *  authorizes the forced retire below: `worktree_lifecycle.py retire --force-owner` only

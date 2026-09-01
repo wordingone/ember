@@ -8,7 +8,7 @@
 
 **Tech Stack:** JSON, Python `unittest`, SHA-256, pytest.
 
-**Spec:** `docs/spec/ember02-preregistration-v1.md` §4-A1 and §9.
+**Spec:** `docs/domains/governance/spec/ember02-preregistration-v1.md` §4-A1 and §9.
 
 ## Global Constraints
 

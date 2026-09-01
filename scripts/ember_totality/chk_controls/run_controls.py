@@ -775,7 +775,7 @@ def build_c_manifest():
 # (lane-14/PR955 round-2 repair, reviewer defect P1: the regression must be
 # executed by the canonical driver itself, not left as a standalone script).
 # Deliberately reuses issue715's own seeding/removal helpers against the
-# REAL docs/spec/conditions-v1.md + docs/contracts/ember-completeness.md bytes --
+# REAL docs/domains/governance/spec/conditions-v1.md + docs/domains/governance/contracts/ember-completeness.md bytes --
 # never a re-typed synthetic shape like build_c_manifest() above, because
 # issue #715's own audit finding was specifically about the production
 # file's literal separator characters.
@@ -1011,7 +1011,7 @@ def build_c_ind():
 # --- (10) C-SCALE: ratio re-derivation + full CHK -----------------------------
 
 _C_SCALE_README = """
-LANE-14 CHK CONTROL FIXTURE (docs/spec/conditions-v1.md S4.2 C-SCALE;
+LANE-14 CHK CONTROL FIXTURE (docs/domains/governance/spec/conditions-v1.md S4.2 C-SCALE;
 docs/goalforge-debate-ledger.md row R8) -- synthetic, far-future-dated
 control fixture, NOT a real receipt.
 
@@ -1097,7 +1097,7 @@ def build_c_scale():
 # --- (11) C-E2B: paired-both-legs + frozen-before-verdict ---------------------
 
 _C_E2B_README = """
-LANE-14 CHK CONTROL FIXTURE (docs/spec/conditions-v1.md S4.2 C-E2B;
+LANE-14 CHK CONTROL FIXTURE (docs/domains/governance/spec/conditions-v1.md S4.2 C-E2B;
 docs/goalforge-debate-ledger.md row R8) -- synthetic, far-future-dated
 control fixture, NOT a real receipt.
 
@@ -1667,7 +1667,7 @@ _C_ORGANISM_DECOY = {
     "rows": [
         {"path": "docs/audit/seed-graph-notes.md", "category": "documentation_receipt_spec",
          "added_lines": 12, "deleted_lines": 0},
-        {"path": "scripts/governor.py", "category": "code", "added_lines": 5, "deleted_lines": 0},
+        {"path": "src/ember/governance/scripts/governor.py", "category": "code", "added_lines": 5, "deleted_lines": 0},
         {"path": "docs/growth-notes.md", "category": "documentation_receipt_spec",
          "added_lines": 3, "deleted_lines": 0,
          "note": "discusses ingestion pipelines and deletion of stale rows"},
@@ -1845,7 +1845,7 @@ _C_LADM_ISOLATION_NOTE = (
 )
 
 # The exact dependency chain test_c_ladm.py's R5 dual-source check shells out
-# to (scripts/ledger_dedup.py --backfill) -- copied verbatim from the live
+# to (src/ember/governance/scripts/ledger_dedup.py --backfill) -- copied verbatim from the live
 # tree (never hand-duplicated) so each fixture root's own subprocess
 # invocation resolves precisely as it does live. v_compare.py is copied for
 # the R2 verifier-instrument-presence check.

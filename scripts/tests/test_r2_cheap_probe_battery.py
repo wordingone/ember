@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Tests for scripts/r2_cheap_probe_battery.py (issue #1435).
+"""Tests for src/ember/governance/scripts/r2_cheap_probe_battery.py (issue #1435).
 
 Production-shaped, small fixtures, NO GPU, NO training steps, and no real
 3B checkpoint is ever loaded here -- checkpoint-binding integration tests
@@ -154,7 +154,7 @@ def test_d04_authority_supersedes_d03_with_one_hash_pinned_text_manifest():
     assert record["schema"] == battery.R2_AUTHORITY_SCHEMA
     assert record["issue"] == 1498
     assert record["supersedes"] == {
-        "path": "docs/spec/ember02-r2-cheap-probe-amendment-v1.json",
+        "path": "docs/domains/governance/spec/ember02-r2-cheap-probe-amendment-v1.json",
         "sha256": "e95de0f81900ef76d8d7a2b81e6147e631234016262d04073913b371dbeccd56",
     }
 
@@ -862,7 +862,7 @@ def test_cli_no_mode_prints_help_and_returns_1():
 def test_cli_via_subprocess_selftest():
     """One real subprocess invocation, mirroring how a human/CI would
     actually run this -- proves the module also works as `python
-    scripts/r2_cheap_probe_battery.py --selftest`, not just as an import."""
+    src/ember/governance/scripts/r2_cheap_probe_battery.py --selftest`, not just as an import."""
     completed = subprocess.run(
         [sys.executable, str(REPO_ROOT / "scripts" / "r2_cheap_probe_battery.py"), "--selftest"],
         capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=120,

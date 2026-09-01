@@ -5,7 +5,7 @@
 // NO-TEMP policy (per operator direction): none of ember's stack, current, past, or future,
 // may live in system temp. This helper is the ONE canonical ember-owned scratch root for
 // TypeScript call sites. It replaces every `os.tmpdir()` / `mkdtempSync(join(tmpdir(), ...))`
-// use in ember-cli. See: tools/no_temp_allowlist and tools/check_no_temp.py for the
+// use in ember-cli. See: src/ember/infrastructure/tools/no_temp_allowlist and src/ember/infrastructure/tools/check_no_temp.py for the
 // enforcement gate covering the rest of the stack.
 
 import { mkdirSync, realpathSync } from "fs";

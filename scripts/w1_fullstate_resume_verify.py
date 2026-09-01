@@ -7,7 +7,7 @@
 
 REPLAY, NEVER REIMPLEMENTATION: model/optimizer/checkpoint construction is
 imported from w1_collapse_control_run.py and timeshare_pretrain.py -- the
-SAME historical modules scripts/w1_baseline_replay_closure.py (#738) and
+SAME historical modules src/ember/governance/scripts/w1_baseline_replay_closure.py (#738) and
 the original live run used. Tiny-fixture sizing (_tiny_real_arch,
 PHASE2_SEED_HISTORICAL) and path defaults are imported from
 w1_baseline_replay_closure itself (its sibling, same issue #735 toolchain)
@@ -88,26 +88,164 @@ if HERE not in sys.path:
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from w1_collapse_control_run import (  # noqa: E402 -- reused, never edited
-    load_json, sha256_file, build_real_model, verify_checkpoint_key_shape_parity,
-    eval_loss_fn, optimizer_state_shape_parity, derive_real_arch_config,
-    derive_rung_receipt_from_manifest, apply_cosine_warmup,
-    train_step_matched_recipe, resolve_ce_impl, DEFAULT_PRICING_RECEIPT,
-    config_sha, real_config_dict,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/w1_collapse_control_run.py
+import importlib.util as _ember_85e76a5cb35a8ea2_importlib
+import sys as _ember_85e76a5cb35a8ea2_sys
+from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+if not _ember_85e76a5cb35a8ea2_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')
+_ember_85e76a5cb35a8ea2_existing = []
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_candidate = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_candidate is not None and all(_ember_85e76a5cb35a8ea2_candidate is not item for item in _ember_85e76a5cb35a8ea2_existing):
+        _ember_85e76a5cb35a8ea2_existing.append(_ember_85e76a5cb35a8ea2_candidate)
+if len(_ember_85e76a5cb35a8ea2_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+if _ember_85e76a5cb35a8ea2_existing:
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_existing[0]
+    _ember_85e76a5cb35a8ea2_observed = getattr(_ember_85e76a5cb35a8ea2_module, '__file__', None)
+    if _ember_85e76a5cb35a8ea2_observed is None or _ember_85e76a5cb35a8ea2_Path(_ember_85e76a5cb35a8ea2_observed).resolve() != _ember_85e76a5cb35a8ea2_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_collapse_control_run.py')
+else:
+    _ember_85e76a5cb35a8ea2_spec = _ember_85e76a5cb35a8ea2_importlib.spec_from_file_location('_ember_issue2015_85e76a5cb35a8ea2', _ember_85e76a5cb35a8ea2_path)
+    if _ember_85e76a5cb35a8ea2_spec is None or _ember_85e76a5cb35a8ea2_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_module = _ember_85e76a5cb35a8ea2_importlib.module_from_spec(_ember_85e76a5cb35a8ea2_spec)
+    for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+        _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+        if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+        _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+    try:
+        _ember_85e76a5cb35a8ea2_spec.loader.exec_module(_ember_85e76a5cb35a8ea2_module)
+    except BaseException:
+        for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+            if _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias) is _ember_85e76a5cb35a8ea2_module:
+                _ember_85e76a5cb35a8ea2_sys.modules.pop(_ember_85e76a5cb35a8ea2_alias, None)
+        raise
+for _ember_85e76a5cb35a8ea2_alias in _ember_85e76a5cb35a8ea2_aliases:
+    _ember_85e76a5cb35a8ea2_prior = _ember_85e76a5cb35a8ea2_sys.modules.get(_ember_85e76a5cb35a8ea2_alias)
+    if _ember_85e76a5cb35a8ea2_prior is not None and _ember_85e76a5cb35a8ea2_prior is not _ember_85e76a5cb35a8ea2_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_collapse_control_run.py')
+    _ember_85e76a5cb35a8ea2_sys.modules[_ember_85e76a5cb35a8ea2_alias] = _ember_85e76a5cb35a8ea2_module
+load_json = getattr(_ember_85e76a5cb35a8ea2_module, 'load_json')
+sha256_file = getattr(_ember_85e76a5cb35a8ea2_module, 'sha256_file')
+build_real_model = getattr(_ember_85e76a5cb35a8ea2_module, 'build_real_model')
+verify_checkpoint_key_shape_parity = getattr(_ember_85e76a5cb35a8ea2_module, 'verify_checkpoint_key_shape_parity')
+eval_loss_fn = getattr(_ember_85e76a5cb35a8ea2_module, 'eval_loss_fn')
+optimizer_state_shape_parity = getattr(_ember_85e76a5cb35a8ea2_module, 'optimizer_state_shape_parity')
+derive_real_arch_config = getattr(_ember_85e76a5cb35a8ea2_module, 'derive_real_arch_config')
+derive_rung_receipt_from_manifest = getattr(_ember_85e76a5cb35a8ea2_module, 'derive_rung_receipt_from_manifest')
+apply_cosine_warmup = getattr(_ember_85e76a5cb35a8ea2_module, 'apply_cosine_warmup')
+train_step_matched_recipe = getattr(_ember_85e76a5cb35a8ea2_module, 'train_step_matched_recipe')
+resolve_ce_impl = getattr(_ember_85e76a5cb35a8ea2_module, 'resolve_ce_impl')
+DEFAULT_PRICING_RECEIPT = getattr(_ember_85e76a5cb35a8ea2_module, 'DEFAULT_PRICING_RECEIPT')
+config_sha = getattr(_ember_85e76a5cb35a8ea2_module, 'config_sha')
+real_config_dict = getattr(_ember_85e76a5cb35a8ea2_module, 'real_config_dict')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w1_collapse_control_run.py
 from timeshare_pretrain import (  # noqa: E402 -- reused, never edited
     load_checkpoint, save_checkpoint, capture_rng, restore_rng,
     PackedShardLoader, build_split_optimizer, save_optimizers_state,
     load_optimizers_state, CONTRACT_PATH as PRETRAIN_CONTRACT_PATH,
 )
-from receipt_write import checked_write  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
 # Sibling import (same #735 toolchain, never duplicated): tiny-fixture
 # sizing + path/seed defaults the closure script already established.
-from w1_baseline_replay_closure import (  # noqa: E402
-    _tiny_real_arch, _build_tiny_shard_dir, resolve as closure_resolve,
-    PHASE2_SEED_HISTORICAL, DEFAULT_RUNG_MANIFEST, EXPECTED_CONFIG_SHA256,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/w1_baseline_replay_closure.py
+import importlib.util as _ember_f47a2689ff219dfc_importlib
+import sys as _ember_f47a2689ff219dfc_sys
+from pathlib import Path as _ember_f47a2689ff219dfc_Path
+_ember_f47a2689ff219dfc_path = _ember_f47a2689ff219dfc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_baseline_replay_closure.py')
+if not _ember_f47a2689ff219dfc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_baseline_replay_closure.py')
+_ember_f47a2689ff219dfc_aliases = ('_ember_issue2015_f47a2689ff219dfc', 'scripts.w1_baseline_replay_closure', 'w1_baseline_replay_closure')
+_ember_f47a2689ff219dfc_existing = []
+for _ember_f47a2689ff219dfc_alias in _ember_f47a2689ff219dfc_aliases:
+    _ember_f47a2689ff219dfc_candidate = _ember_f47a2689ff219dfc_sys.modules.get(_ember_f47a2689ff219dfc_alias)
+    if _ember_f47a2689ff219dfc_candidate is not None and all(_ember_f47a2689ff219dfc_candidate is not item for item in _ember_f47a2689ff219dfc_existing):
+        _ember_f47a2689ff219dfc_existing.append(_ember_f47a2689ff219dfc_candidate)
+if len(_ember_f47a2689ff219dfc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_baseline_replay_closure.py')
+if _ember_f47a2689ff219dfc_existing:
+    _ember_f47a2689ff219dfc_module = _ember_f47a2689ff219dfc_existing[0]
+    _ember_f47a2689ff219dfc_observed = getattr(_ember_f47a2689ff219dfc_module, '__file__', None)
+    if _ember_f47a2689ff219dfc_observed is None or _ember_f47a2689ff219dfc_Path(_ember_f47a2689ff219dfc_observed).resolve() != _ember_f47a2689ff219dfc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_baseline_replay_closure.py')
+else:
+    _ember_f47a2689ff219dfc_spec = _ember_f47a2689ff219dfc_importlib.spec_from_file_location('_ember_issue2015_f47a2689ff219dfc', _ember_f47a2689ff219dfc_path)
+    if _ember_f47a2689ff219dfc_spec is None or _ember_f47a2689ff219dfc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_baseline_replay_closure.py')
+    _ember_f47a2689ff219dfc_module = _ember_f47a2689ff219dfc_importlib.module_from_spec(_ember_f47a2689ff219dfc_spec)
+    for _ember_f47a2689ff219dfc_alias in _ember_f47a2689ff219dfc_aliases:
+        _ember_f47a2689ff219dfc_prior = _ember_f47a2689ff219dfc_sys.modules.get(_ember_f47a2689ff219dfc_alias)
+        if _ember_f47a2689ff219dfc_prior is not None and _ember_f47a2689ff219dfc_prior is not _ember_f47a2689ff219dfc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_baseline_replay_closure.py')
+        _ember_f47a2689ff219dfc_sys.modules[_ember_f47a2689ff219dfc_alias] = _ember_f47a2689ff219dfc_module
+    try:
+        _ember_f47a2689ff219dfc_spec.loader.exec_module(_ember_f47a2689ff219dfc_module)
+    except BaseException:
+        for _ember_f47a2689ff219dfc_alias in _ember_f47a2689ff219dfc_aliases:
+            if _ember_f47a2689ff219dfc_sys.modules.get(_ember_f47a2689ff219dfc_alias) is _ember_f47a2689ff219dfc_module:
+                _ember_f47a2689ff219dfc_sys.modules.pop(_ember_f47a2689ff219dfc_alias, None)
+        raise
+for _ember_f47a2689ff219dfc_alias in _ember_f47a2689ff219dfc_aliases:
+    _ember_f47a2689ff219dfc_prior = _ember_f47a2689ff219dfc_sys.modules.get(_ember_f47a2689ff219dfc_alias)
+    if _ember_f47a2689ff219dfc_prior is not None and _ember_f47a2689ff219dfc_prior is not _ember_f47a2689ff219dfc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_baseline_replay_closure.py')
+    _ember_f47a2689ff219dfc_sys.modules[_ember_f47a2689ff219dfc_alias] = _ember_f47a2689ff219dfc_module
+_tiny_real_arch = getattr(_ember_f47a2689ff219dfc_module, '_tiny_real_arch')
+_build_tiny_shard_dir = getattr(_ember_f47a2689ff219dfc_module, '_build_tiny_shard_dir')
+closure_resolve = getattr(_ember_f47a2689ff219dfc_module, 'resolve')
+PHASE2_SEED_HISTORICAL = getattr(_ember_f47a2689ff219dfc_module, 'PHASE2_SEED_HISTORICAL')
+DEFAULT_RUNG_MANIFEST = getattr(_ember_f47a2689ff219dfc_module, 'DEFAULT_RUNG_MANIFEST')
+EXPECTED_CONFIG_SHA256 = getattr(_ember_f47a2689ff219dfc_module, 'EXPECTED_CONFIG_SHA256')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w1_baseline_replay_closure.py
 
 ISSUE_REF = "#735"
 SHA_CONVENTION = (
@@ -279,7 +417,7 @@ def bind_real_arch_config_sha(real_arch: dict, expected_config_sha256: str) -> d
         "measured_config_sha256": measured,
         "expected_config_sha256": expected_config_sha256,
         "source": (
-            "scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 "
+            "src/ember/governance/scripts/w1_baseline_replay_closure.py EXPECTED_CONFIG_SHA256 "
             "-- frozen at the #735/#738 closure landing, independently "
             "derived there via the SAME config_sha(real_config_dict("
             "real_arch)) call over that receipt's own real_arch"),

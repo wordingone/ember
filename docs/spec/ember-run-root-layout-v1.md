@@ -51,5 +51,5 @@ inside retained attempts so failed-attempt rows remain part of the selected
 run's measured history. Quarantine is always non-selectable for both classes.
 
 This document is descriptive authority only; the certified launcher and
-`scripts/r1_exit_battery.py` are the executable consumers. No second launcher,
+`src/ember/governance/scripts/r1_exit_battery.py` are the executable consumers. No second launcher,
 receipt family, or cleanup authority is introduced.

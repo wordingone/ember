@@ -224,7 +224,7 @@ makes each verified episode carry more surprise, and it generates faster.
 37.1 bits). Caveats flagged on the receipt: uncapped/undeduped; ext-FPR
 inflation ~22% at 3B, UNMEASURED at 1.5B.
 
-**Why this does not flip round-2 (frozen, docs/archive/pre-restart/r2-prereg.md):** bits only
+**Why this does not flip round-2 (frozen, docs/domains/governance/archive/pre-restart/r2-prereg.md):** bits only
 matter if they train — round-1 proved objective dominates count (plain
 SFT flat on 252 naive bits; MTP positive on the same data). The
 sampling-side win is necessary, not sufficient.
@@ -252,7 +252,7 @@ fail MBPP+ extended, frontier 27.1% — receipt v-extended-20260610T215421Z).
 What raises soundness WITHOUT a model judge, and where does tightening stop
 paying?
 
-**Survey verdict (draft docs/research/drafts/fp2-v-ceiling-draft.md, gated):**
+**Survey verdict (draft docs/domains/governance/research/drafts/fp2-v-ceiling-draft.md, gated):**
 the draft's five-layer stack is directionally right but its cumulative-FPR
 table (22% → 3–6%) is UNVERIFIED estimation — no local receipt exists for
 any layer's reduction; adopted as hypothesis, never as a number. Two
@@ -564,7 +564,7 @@ obligation at minimum; the non-commercial umbrella arguably covers the
 act of generating training data for a model with commercial intent);
 **1.5B/7B episodes = clean.**
 
-**(b) Provenance census (`scripts/fp6_provenance.py`, selftest PASS,
+**(b) Provenance census (`src/ember/governance/scripts/fp6_provenance.py`, selftest PASS,
 receipt `fp6-provenance-20260610T235623Z.json`):** episodes.jsonl =
 **1,909 arc-dsl-mit** (Hodel arc-dsl solvers + re-arc verifier variants —
 HUMAN expert code, not model output; origins seed-dsl-orig 399 /
@@ -621,7 +621,7 @@ regression on the measured floor, the dual of the 22.1% ext-FPR. Who
 checks the checker?
 
 **Answer — the existing verified ledger does, and the gate now exists as
-an artifact (`scripts/fp8_vgate.py`, selftest PASS, receipt
+an artifact (`src/ember/governance/scripts/fp8_vgate.py`, selftest PASS, receipt
 `fp8-vgate-20260611T001730Z.json`).** Every verified W-code episode's
 asserts re-executed in the production sandbox under (a) raw `==` and (b)
 a reference strict comparator (exact-type-tagged leaves, kind-tagged
@@ -940,7 +940,7 @@ Closing PR mints fp-17.
 were independent evidence. What is the ledger's effective composition,
 and which standing claims change when episodes count as evidence?
 
-**Method (`scripts/fp16_census.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp16_census.py`, selftest PASS, receipt
 `fp16-census-20260611T013228Z.json`, CPU-from-ledger, mapping =
 fp6_provenance.classify single-source):** per (file, class): rows /
 exact-unique srcs / near-dup clusters (cos≥0.95 + fp-13 chaining
@@ -1122,7 +1122,7 @@ under the governor" qualifier.
 config fits the remaining continuous-GPU days, receipts-grade?
 
 **Method:** measured (never paper-claimed) training-step throughput,
-`scripts/fp19_bench.py` (selftest PASS) via daemon eval b839e851,
+`src/ember/governance/scripts/fp19_bench.py` (selftest PASS) via daemon eval b839e851,
 governed (fraction 0.80, margin assert, paced duty; budget = paced
 rate); plus the gpu-math-attack workflow's refuter-adjusted multiplier
 table (24 subagents; saved `.agent/workflows/gpu-math-attack.js`;
@@ -1140,7 +1140,7 @@ split from sub-1B PRETRAIN claims (regime mismatch).
 
 **Verdict:** envelope NON-EMPTY → no hardware escalation. v0 =
 0.37B/QAT/Muon-with-AdamW-switch-rule/7.4B tokens, checkpoints at
-1B/2B/4B; full table + config in `docs/research/fp19-envelope.md`.
+1B/2B/4B; full table + config in `docs/domains/governance/research/fp19-envelope.md`.
 
 **Successors:** fp-22 = v0 corpus + verify-floor world (license-clean
 mix per §8.15d; the world a 0.3B core can clear). eng-33 = timeshare
@@ -1220,7 +1220,7 @@ the r2 arms, same as r1).
 its own theta filter never reaches training; control would mirror the
 wrong set. My #112 gate verified interlock + receipt shape
 (config-only PR) but not the data path against the registered arm.
-Fix-forward: `scripts/t2_r2w.py` (deviation recorded in-receipt +
+Fix-forward: `src/ember/governance/scripts/t2_r2w.py` (deviation recorded in-receipt +
 prereg appendix) implements the registered semantics (W view +
 ext-clean + theta(0,0.5] + matched control); dry-run receipted before
 live; mtp/grpo correct as built (verified in source). Lesson: a
@@ -1234,7 +1234,7 @@ receipt fields.
 owned 0.37B core train ON, and in WHAT world must it clear a verify
 floor — decided before the GPU window opens.
 
-**Decisions (docs/research/fp22-corpus-world.md):** license-clean ~7.4B-token
+**Decisions (docs/domains/governance/research/fp22-corpus-world.md):** license-clean ~7.4B-token
 mix (stack-v2-permissive code majority + FineWeb-Edu + Wikipedia +
 Gutenberg + own MIT-clean ledger slice; qwen-research class EXCLUDED;
 fail-closed license stamps at ingest; doc-dedup receipts close the
@@ -1263,7 +1263,7 @@ minted + mailed).
 ## 8.31 sp-1 (#117): the-search → ember component map — method layer ports strongest
 
 User-pointed (via an agent 14482). Verdict of the mapping
-(docs/research/sp1-thesearch-ember-map.md): the-search's REGIME (no labels,
+(docs/domains/governance/research/sp1-thesearch-ember-map.md): the-search's REGIME (no labels,
 no gradients) is ember's opposite, so component-level ports are
 selective while the METHOD layer ports whole: family/kill discipline,
 extraction protocol (= our matched-control single-variable arms),

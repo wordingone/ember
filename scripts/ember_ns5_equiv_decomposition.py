@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_ns5_equiv_decomposition.py — decompose the bf16-fused-vs-baseline
 NS5 numerics delta into its dtype and compile components.
 
@@ -10,7 +13,7 @@ WHY THIS EXISTS
   CODE-LEVEL CORRECTION to the brief that commissioned this script: the
   brief describes that cell as comparing "COMPILED-bf16 NS5 output against
   the FP32-EAGER baseline", i.e. conflating dtype-swap and compile deltas in
-  one number. Reading scripts/ember_ceff_composition_ab.py::_run_bench_live
+  one number. Reading src/ember/governance/scripts/ember_ceff_composition_ab.py::_run_bench_live
   line-by-line shows this is NOT what the code does:
 
       equiv_bf16 = _ns5_equiv_cell(_ns5_bf16, ns5_bf16_fused, ...)
@@ -59,7 +62,7 @@ FOUR CELLS PER SHAPE (same seeded G, reused across all four within a shape)
                              trusting cells (1)-(3).
 
 FUNCTIONS REUSED VERBATIM (imported, not reimplemented, from
-scripts/ember_ceff_composition_ab.py — see ab_harness_sha256 in the receipt
+src/ember/governance/scripts/ember_ceff_composition_ab.py — see ab_harness_sha256 in the receipt
 for the exact byte-version mirrored)
   orig_ns5        = timeshare_pretrain._zeropower_via_newtonschulz5 (fp32 eager)
   ns5_bf16        = ember_ceff_composition_ab._ns5_bf16              (bf16 eager)
@@ -123,7 +126,50 @@ NC = os.path.dirname(HERE)
 RECEIPTS = os.path.join(NC, "receipts")
 sys.path.insert(0, HERE)
 
-from receipt_write import checked_write  # noqa: E402  (light; no torch)
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402  (light; no torch)
 
 NS5_EQUIV_TOL = 1e-3  # ember_ceff_composition_ab.py's own tolerance — quoted, not re-derived
 
@@ -230,7 +276,50 @@ def _measure_cell(cell: dict, fns: dict, device: str) -> dict:
 def _run_live() -> dict:
     import torch
     import timeshare_pretrain as ts_mod
-    import ember_ceff_composition_ab as ab_mod
+    # issue2015 exact-local-import:src/ember/governance/scripts/ember_ceff_composition_ab.py
+    import importlib.util as _ember_c4992712338462fb_importlib
+    import sys as _ember_c4992712338462fb_sys
+    from pathlib import Path as _ember_c4992712338462fb_Path
+    _ember_c4992712338462fb_path = _ember_c4992712338462fb_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_ceff_composition_ab.py')
+    if not _ember_c4992712338462fb_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+    _ember_c4992712338462fb_aliases = ('_ember_issue2015_c4992712338462fb', 'ember_ceff_composition_ab', 'scripts.ember_ceff_composition_ab')
+    _ember_c4992712338462fb_existing = []
+    for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+        _ember_c4992712338462fb_candidate = _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias)
+        if _ember_c4992712338462fb_candidate is not None and all(_ember_c4992712338462fb_candidate is not item for item in _ember_c4992712338462fb_existing):
+            _ember_c4992712338462fb_existing.append(_ember_c4992712338462fb_candidate)
+    if len(_ember_c4992712338462fb_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+    if _ember_c4992712338462fb_existing:
+        _ember_c4992712338462fb_module = _ember_c4992712338462fb_existing[0]
+        _ember_c4992712338462fb_observed = getattr(_ember_c4992712338462fb_module, '__file__', None)
+        if _ember_c4992712338462fb_observed is None or _ember_c4992712338462fb_Path(_ember_c4992712338462fb_observed).resolve() != _ember_c4992712338462fb_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+    else:
+        _ember_c4992712338462fb_spec = _ember_c4992712338462fb_importlib.spec_from_file_location('_ember_issue2015_c4992712338462fb', _ember_c4992712338462fb_path)
+        if _ember_c4992712338462fb_spec is None or _ember_c4992712338462fb_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+        _ember_c4992712338462fb_module = _ember_c4992712338462fb_importlib.module_from_spec(_ember_c4992712338462fb_spec)
+        for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+            _ember_c4992712338462fb_prior = _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias)
+            if _ember_c4992712338462fb_prior is not None and _ember_c4992712338462fb_prior is not _ember_c4992712338462fb_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+            _ember_c4992712338462fb_sys.modules[_ember_c4992712338462fb_alias] = _ember_c4992712338462fb_module
+        try:
+            _ember_c4992712338462fb_spec.loader.exec_module(_ember_c4992712338462fb_module)
+        except BaseException:
+            for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+                if _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias) is _ember_c4992712338462fb_module:
+                    _ember_c4992712338462fb_sys.modules.pop(_ember_c4992712338462fb_alias, None)
+            raise
+    for _ember_c4992712338462fb_alias in _ember_c4992712338462fb_aliases:
+        _ember_c4992712338462fb_prior = _ember_c4992712338462fb_sys.modules.get(_ember_c4992712338462fb_alias)
+        if _ember_c4992712338462fb_prior is not None and _ember_c4992712338462fb_prior is not _ember_c4992712338462fb_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_ceff_composition_ab.py')
+        _ember_c4992712338462fb_sys.modules[_ember_c4992712338462fb_alias] = _ember_c4992712338462fb_module
+    ab_mod = _ember_c4992712338462fb_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_ceff_composition_ab.py
 
     # ── Governor (never loosened) — no model build here, pure NS5-function
     #    tensor math, but the rail is unconditional per standing discipline ──

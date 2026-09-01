@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """cbase_grow_rung2_completion_audit.py — issue #626 read-only audit.
 
-Enumerates every growth receipt scripts/ember_totality/test_c_grow.py itself
+Enumerates every growth receipt src/ember/governance/scripts/ember_totality/test_c_grow.py itself
 scans (via that module's own candidate_files()) and tables, per receipt,
 which of the probe's four R-text requirements its raw text already
 satisfies:
@@ -17,7 +17,7 @@ satisfies:
 plus the probe's own measured/invalid/smoke/near-miss classification, so
 this table matches test_c_grow.py's real verdict exactly (same regex
 objects, imported directly -- zero duplication, zero probe edits; this
-script only READS scripts/ember_totality/test_c_grow.py as a module).
+script only READS src/ember/governance/scripts/ember_totality/test_c_grow.py as a module).
 
 Default invocation is read-only and never touches the probe file. The two explicit
 --write-*-receipt modes exclusively publish a stamped successor under
@@ -39,7 +39,50 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts" / "ember_totality"))
 import test_c_grow as probe  # noqa: E402  (read-only import of the frozen probe)
-from scripts.lib.invariant import stamp  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
+import importlib.util as _ember_2560a87c017c05b0_importlib
+import sys as _ember_2560a87c017c05b0_sys
+from pathlib import Path as _ember_2560a87c017c05b0_Path
+_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+if not _ember_2560a87c017c05b0_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
+_ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')
+_ember_2560a87c017c05b0_existing = []
+for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+    _ember_2560a87c017c05b0_candidate = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+    if _ember_2560a87c017c05b0_candidate is not None and all(_ember_2560a87c017c05b0_candidate is not item for item in _ember_2560a87c017c05b0_existing):
+        _ember_2560a87c017c05b0_existing.append(_ember_2560a87c017c05b0_candidate)
+if len(_ember_2560a87c017c05b0_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+if _ember_2560a87c017c05b0_existing:
+    _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_existing[0]
+    _ember_2560a87c017c05b0_observed = getattr(_ember_2560a87c017c05b0_module, '__file__', None)
+    if _ember_2560a87c017c05b0_observed is None or _ember_2560a87c017c05b0_Path(_ember_2560a87c017c05b0_observed).resolve() != _ember_2560a87c017c05b0_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/lib/invariant.py')
+else:
+    _ember_2560a87c017c05b0_spec = _ember_2560a87c017c05b0_importlib.spec_from_file_location('_ember_issue2015_2560a87c017c05b0', _ember_2560a87c017c05b0_path)
+    if _ember_2560a87c017c05b0_spec is None or _ember_2560a87c017c05b0_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_module = _ember_2560a87c017c05b0_importlib.module_from_spec(_ember_2560a87c017c05b0_spec)
+    for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+        _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+        if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+        _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+    try:
+        _ember_2560a87c017c05b0_spec.loader.exec_module(_ember_2560a87c017c05b0_module)
+    except BaseException:
+        for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+            if _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias) is _ember_2560a87c017c05b0_module:
+                _ember_2560a87c017c05b0_sys.modules.pop(_ember_2560a87c017c05b0_alias, None)
+        raise
+for _ember_2560a87c017c05b0_alias in _ember_2560a87c017c05b0_aliases:
+    _ember_2560a87c017c05b0_prior = _ember_2560a87c017c05b0_sys.modules.get(_ember_2560a87c017c05b0_alias)
+    if _ember_2560a87c017c05b0_prior is not None and _ember_2560a87c017c05b0_prior is not _ember_2560a87c017c05b0_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lib/invariant.py')
+    _ember_2560a87c017c05b0_sys.modules[_ember_2560a87c017c05b0_alias] = _ember_2560a87c017c05b0_module
+stamp = getattr(_ember_2560a87c017c05b0_module, 'stamp')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/lib/invariant.py  # noqa: E402
 
 
 GOAL_ID = "EMBER-02"
@@ -195,7 +238,7 @@ def build_completion_receipt(
         ),
         "probe": {
             "verdict": "GREEN",
-            "command": "python -B scripts/ember_totality/test_c_grow.py",
+            "command": "python -B src/ember/governance/scripts/ember_totality/test_c_grow.py",
             "stdout": probe_stdout,
             "stderr": completed.stderr.strip(),
             "exit_code": completed.returncode,
@@ -324,7 +367,7 @@ def main() -> int:
         "issue": 626,
         "script": "scripts/cbase_grow_rung2_completion_audit.py",
         "scope": (
-            "Read-only enumeration of every file scripts/ember_totality/test_c_grow.py's own "
+            "Read-only enumeration of every file src/ember/governance/scripts/ember_totality/test_c_grow.py's own "
             "candidate_files() scans, tabled per the probe's four R-text requirements (grow_method, "
             "param_counts_before_after, loss_continuity, flop_saving_vs_fromscratch) plus its "
             "measured/exclusion classification -- zero probe edits, direct import + reuse of the "

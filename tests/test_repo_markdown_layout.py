@@ -18,16 +18,16 @@ AUTHORITY_NAMES = {
 
 APPROVED_DOC_PATHS = {
     "docs/authority/ember-authority-matrix.md",
-    "docs/contracts/ember-completeness.md",
+    "docs/domains/governance/contracts/ember-completeness.md",
     "docs/contracts/ember-floor-contract.md",
     "docs/contracts/goal-clear-protocol.md",
     "docs/guides/goal-live-session.md",
     "docs/contracts/goal-mode-mechanism.md",
     "docs/contracts/nc2-own-technique-contract.md",
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
-    "docs/custody/custody-disposition-20260708.md",
+    "docs/domains/governance/custody/custody-disposition-20260708.md",
     "docs/custody/r1-exit-evidence-inventory-20260805.md",
-    "docs/guides/START-HERE.md",
+    "docs/domains/governance/guides/START-HERE.md",
     "docs/roadmap/PROBLEMS.md",
 }
 

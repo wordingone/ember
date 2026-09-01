@@ -23,8 +23,8 @@ verifier is `scripts/verify_authority_supersession_crosswalk.py`.
   per-mandate identities were never stored.
 - Seven reported documentation-divergence slots. Four are recoverable from the
   issue body; three remain explicit custody gaps.
-- M1 through M55 from `docs/contracts/ember-completeness.md`.
-- Every legacy condition parsed from `docs/spec/conditions-v1.md`, including
+- M1 through M55 from `docs/domains/governance/contracts/ember-completeness.md`.
+- Every legacy condition parsed from `docs/domains/governance/spec/conditions-v1.md`, including
   C-MANIFEST and C-MILE.
 
 `CUSTODY_GAP` means “known to have existed, source identity or wording not
@@ -38,7 +38,7 @@ one current D-row or EMBER milestone, but still grants no completion credit.
 The following public documents were restored from their original Git
 objects because issue #35 still cited them while current master omitted them:
 
-- `docs/spec/publishability-adjudication-v1.md` from `f2027c00`;
+- `docs/domains/governance/spec/publishability-adjudication-v1.md` from `f2027c00`;
 - `docs/audit/class2-unwatched-mandates-recon-20260704.md` from
   `852457d3`.
 

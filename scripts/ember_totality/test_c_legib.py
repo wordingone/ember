@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_c_legib.py — STATUS PROBE for Ember goal condition C-LEGIB.
 
-Registry text: docs/spec/conditions-v1.md §4.2 C-LEGIB (gh issue #13,
+Registry text: docs/domains/governance/spec/conditions-v1.md §4.2 C-LEGIB (gh issue #13,
 mandate-coverage sweep 2026-07-02: "the repo-legibility surface [single-file
 entry map; cold-read re-probe green; no internal contradiction] has no
 condition, no probe, no ticket"). R: the repo is LEGIBLE to a fresh reader
@@ -30,7 +30,7 @@ reported reason, same short-circuit discipline as test_c_proc.py):
       A receipt carrying `_synthetic_control_fixture: true` is never
       evidence = RED (same rule as every other probe in this package).
 
-  (c) `scripts/check_goal_citations.py` is run as a subprocess (timeout
+  (c) `src/ember/governance/scripts/check_goal_citations.py` is run as a subprocess (timeout
       120s) and exits 0. Nonzero exit = RED, quoting the checker's last
       output line. The script being absent, the interpreter failing to
       launch it, or it not completing inside the timeout = UNEVALUABLE
@@ -246,7 +246,7 @@ def check_citation_gate(root):
         lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
         last_line = lines[-1] if lines else (proc.stderr or "").strip()[:300]
         return "RED", (
-            f"C-LEGIB: scripts/check_goal_citations.py exited {proc.returncode} "
+            f"C-LEGIB: src/ember/governance/scripts/check_goal_citations.py exited {proc.returncode} "
             f"(invalid_legib_citation_check_failed): {last_line}"
         )
     return None, None
@@ -270,7 +270,7 @@ def main():
 
     emit("GREEN", "C-LEGIB CHK satisfied: entry map covers every top-level directory with a "
                   "one-line purpose, a non-synthetic cold-read-reprobe receipt exists, and "
-                  "scripts/check_goal_citations.py exits 0 (docs/domains/governance/authority/GOAL.md: the repo is legible to a "
+                  "src/ember/governance/scripts/check_goal_citations.py exits 0 (docs/domains/governance/authority/GOAL.md: the repo is legible to a "
                   "fresh reader with no prior session context)")
 
 

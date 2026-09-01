@@ -2,7 +2,7 @@
   "schema_version": "ember-training-dependency-closure-v1",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
-  "purpose": "Minimal synthetic fixture pinning byte-parity between scripts/training_closure.py::compute_closure_hash and runtime/ember-lab's Rust port (#1400). Deliberately NOT the real repo manifest: a fixed, small, stable tree so the golden hash never drifts with production data/content changes, only with a genuine algorithm change in either implementation.",
+  "purpose": "Minimal synthetic fixture pinning byte-parity between src/ember/governance/scripts/training_closure.py::compute_closure_hash and runtime/ember-lab's Rust port (#1400). Deliberately NOT the real repo manifest: a fixed, small, stable tree so the golden hash never drifts with production data/content changes, only with a genuine algorithm change in either implementation.",
   "entrypoints": ["entry.py"],
   "dynamic_entrypoints": ["dynamic_entry.py"],
   "code": ["lib_a.py", "lib_b.py"],

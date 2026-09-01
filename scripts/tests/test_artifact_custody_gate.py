@@ -6,7 +6,7 @@ the durable main-tree root, not whichever worktree happens to be executing them.
 
 #1741 Known Limitation B: both functions took ``repo_root`` as a caller-supplied
 path and every real call site computed it as ``Path(__file__).resolve().parents[2]``
-(``scripts/ember_restart/contract.py``) -- the tree the *executing script* lives
+(``src/ember/governance/scripts/ember_restart/contract.py``) -- the tree the *executing script* lives
 in. From a worktree (the normal working pattern here), that resolves to the
 worktree's own (nonexistent) ``state/`` directory instead of the durable
 ``<main-tree>/state/ember-lab-catalog.sqlite3`` every custody gate must share,
@@ -14,8 +14,8 @@ and to the worktree's own (unbuilt) ``runtime/ember-lab/target/...`` instead of
 the one repository-governed binary. Both fail closed today (no bypass), but
 every real checkpoint validation run from a worktree refuses by construction.
 
-Fix precedent: ``scripts/worktree_lifecycle.py::common_dir`` and
-``scripts/ember_restart/source_authority.py::_common_dir`` both resolve the
+Fix precedent: ``src/ember/governance/scripts/worktree_lifecycle.py::common_dir`` and
+``src/ember/governance/scripts/ember_restart/source_authority.py::_common_dir`` both resolve the
 main tree from any worktree via
 ``git rev-parse --path-format=absolute --git-common-dir`` -- the main
 checkout's ``.git`` is a real directory that IS the common dir; a worktree's

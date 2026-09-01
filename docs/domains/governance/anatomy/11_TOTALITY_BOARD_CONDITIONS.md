@@ -2,7 +2,7 @@
 
 ## What a "condition" is
 
-`docs/spec/conditions-v1.md` is "the canonical registry of machine-checkable
+`docs/domains/governance/spec/conditions-v1.md` is "the canonical registry of machine-checkable
 goal conditions" — 41 total entries: 39 primary conditions (`C(-1)`, `C0`
 through `C15`, and the named conditions `C-EFF`, `C-BASE`, `C-PORT`,
 `C-FED`, `C-GROW`, `C-ORGANISM`, `C-OBS`, `C-ANAT`, `C-SCALE`, `C-E2B`,
@@ -22,7 +22,7 @@ beginning with a recognized status token and ALWAYS exits 0 (so the board
 can aggregate even a failing condition), and determines its verdict by
 really inspecting state under its resolved root — never hardcoded.
 
-## The runner: scripts/ember_totality/ember_totality_spec.py
+## The runner: src/ember/governance/scripts/ember_totality/ember_totality_spec.py
 
 Executes every `test_*.py` probe in its own directory as a subprocess,
 parses each probe's status line, aggregates all rows into one board, prints

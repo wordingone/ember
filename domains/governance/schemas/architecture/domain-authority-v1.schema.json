@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wordingone/ember/domains/governance/schemas/architecture/domain-authority-v1.schema.json",
+  "title": "Ember domain authority policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "goal_id",
+    "workstream_id",
+    "next_executed_outcome",
+    "owners",
+    "dispositions",
+    "path_rules",
+    "typed_roots",
+    "public_interfaces",
+    "package_authorities",
+    "backend_authority",
+    "allowed_dependencies",
+    "deferrals",
+    "reviewability"
+  ],
+  "properties": {
+    "schema_version": {"const": "ember-domain-authority-policy-v1"},
+    "goal_id": {"const": "EMBER-02"},
+    "workstream_id": {"const": "EMBER-02A"},
+    "next_executed_outcome": {"const": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"},
+    "owners": {
+      "const": ["Model", "Data", "Training", "Evaluation", "Runtime", "Lab", "Infrastructure", "Governance"]
+    },
+    "dispositions": {
+      "const": ["MOVE", "RETAIN_STABLE", "MERGE", "ARCHIVE", "EXTERNALIZE", "DELETE_REDUNDANT", "DEFERRED_DEPENDENCY"]
+    },
+    "path_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/path_rule"}
+    },
+    "typed_roots": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/typed_root"},
+      "minItems": 7,
+      "maxItems": 7
+    },
+    "public_interfaces": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["owner", "target_namespace", "status"],
+        "properties": {
+          "owner": {"$ref": "#/$defs/owner"},
+          "target_namespace": {"type": "string", "minLength": 1},
+          "status": {"enum": ["CURRENT", "TARGET_DECLARED", "DEFERRED_DEPENDENCY"]},
+          "deferral_id": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "package_authorities": {
+      "type": "array",
+      "minItems": 5,
+      "items": {"$ref": "#/$defs/package_authority"}
+    },
+    "backend_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "artifact", "sha256", "substitution_failures"],
+      "properties": {
+        "name": {"const": "setuptools"},
+        "version": {"const": "84.0.0"},
+        "artifact": {"const": "setuptools-84.0.0-py3-none-any.whl"},
+        "sha256": {"const": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670"},
+        "substitution_failures": {"const": ["HASH_MISMATCH_REFUSED", "ONLY_BINARY_REFUSED"]}
+      }
+    },
+    "allowed_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [{"$ref": "#/$defs/owner"}, {"$ref": "#/$defs/owner"}],
+        "items": false,
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "deferrals": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/deferral"}
+    },
+    "reviewability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "max_exact_search_states", "max_paths_per_carrier", "max_consumers_per_carrier", "tie_break"],
+      "properties": {
+        "algorithm": {"const": "stable-exact-branch-and-bound-v1"},
+        "max_exact_search_states": {"type": "integer", "minimum": 1},
+        "max_paths_per_carrier": {"type": "integer", "minimum": 1},
+        "max_consumers_per_carrier": {"type": "integer", "minimum": 1},
+        "tie_break": {"const": "lexicographic-stable-carrier-id"}
+      }
+    }
+  },
+  "$defs": {
+    "owner": {
+      "enum": ["Model", "Data", "Training", "Evaluation", "Runtime", "Lab", "Infrastructure", "Governance"]
+    },
+    "disposition": {
+      "enum": ["MOVE", "RETAIN_STABLE", "MERGE", "ARCHIVE", "EXTERNALIZE", "DELETE_REDUNDANT", "DEFERRED_DEPENDENCY"]
+    },
+    "path_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "include", "exclude", "owner", "disposition", "touch_set_id", "rollback_unit_strategy"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "include": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "exclude": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "owner": {"$ref": "#/$defs/owner"},
+        "disposition": {"$ref": "#/$defs/disposition"},
+        "touch_set_id": {"type": "string", "minLength": 1},
+        "rollback_unit_strategy": {"enum": ["PER_AUTHORITATIVE_SWITCH_TARGET", "EXPLICIT_KEY", "NOT_A_SWITCH"]},
+        "rollback_unit_key": {"type": "string", "minLength": 1},
+        "deferral_id": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"rollback_unit_strategy": {"const": "EXPLICIT_KEY"}}},
+          "then": {"required": ["rollback_unit_key"]}
+        }
+      ]
+    },
+    "typed_root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "resolution", "external_input_only"],
+      "properties": {
+        "id": {"enum": ["source", "application_state", "data", "model_checkpoint", "cache", "evidence", "worktree"]},
+        "type": {"const": "absolute-directory"},
+        "resolution": {"enum": ["explicit-argument", "explicit-profile"]},
+        "external_input_only": {"type": "boolean"}
+      }
+    },
+    "package_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "ecosystem", "role", "expected_blob_oid"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "ecosystem": {"enum": ["python", "rust", "bun"]},
+        "role": {"enum": ["package", "workspace", "lock"]},
+        "expected_blob_oid": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "deferral": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner", "issue", "predicate", "evidence_selector", "failure_state"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "owner": {"$ref": "#/$defs/owner"},
+        "issue": {"type": "integer", "minimum": 1},
+        "predicate": {"type": "string", "minLength": 1},
+        "evidence_selector": {"type": "string", "minLength": 1},
+        "failure_state": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

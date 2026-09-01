@@ -33,7 +33,7 @@ Five probe-side cures, each fixture-verified:
      compound-reference suffix swallowed into the greedy extraction regex is
      stripped before the existence check (_clean_citation); a citation-check
      receipt's own wrap_joined record ({"doc","ref","joined","line"} --
-     scripts/check_goal_citations.py) is consumed by its RECONSTRUCTED
+     src/ember/governance/scripts/check_goal_citations.py) is consumed by its RECONSTRUCTED
      `joined` value instead of re-truncating the raw `ref` fragment; a bare,
      no-extension citation that resolves as a real, git-tracked-populated
      DIRECTORY (isdir() + >=1 tracked file inside) is a directory reference,
@@ -85,7 +85,7 @@ SAME directory, not a move to a different directory -- a basename-
 uniqueness index can never catch it. A cited path with no such twin still
 counts `cited_missing` unchanged (negative control,
 c_custody_twin_resolution_test.py). The `documented_absent` convention
-(docs/custody/custody-disposition-20260708.md) remains a prose disposition record
+(docs/domains/governance/custody/custody-disposition-20260708.md) remains a prose disposition record
 this probe does NOT consume programmatically -- its rows stay honestly
 `cited_missing` unless resolved by a twin, a relocation, or an annex
 attestation; see that doc's dated addendum for the current tree's
@@ -174,7 +174,7 @@ def _clean_citation(raw):
 
 
 def _is_wrap_joined_record(obj):
-    """True iff obj is exactly the record shape scripts/check_goal_citations.py
+    """True iff obj is exactly the record shape src/ember/governance/scripts/check_goal_citations.py
     appends to its `wrap_joined` list: {"doc":str, "ref":str, "joined":str,
     "line":int}. When a citation-check receipt (receipts/citation-check-*.json)
     carrying one of these is scanned by THIS probe's generic recursive

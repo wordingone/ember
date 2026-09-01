@@ -26,7 +26,50 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.ember_dispatch_token import consume_dispatch  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_dispatch_token.py
+import importlib.util as _ember_95137563367d86b9_importlib
+import sys as _ember_95137563367d86b9_sys
+from pathlib import Path as _ember_95137563367d86b9_Path
+_ember_95137563367d86b9_path = _ember_95137563367d86b9_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_dispatch_token.py')
+if not _ember_95137563367d86b9_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_dispatch_token.py')
+_ember_95137563367d86b9_aliases = ('_ember_issue2015_95137563367d86b9', 'ember_dispatch_token', 'scripts.ember_dispatch_token')
+_ember_95137563367d86b9_existing = []
+for _ember_95137563367d86b9_alias in _ember_95137563367d86b9_aliases:
+    _ember_95137563367d86b9_candidate = _ember_95137563367d86b9_sys.modules.get(_ember_95137563367d86b9_alias)
+    if _ember_95137563367d86b9_candidate is not None and all(_ember_95137563367d86b9_candidate is not item for item in _ember_95137563367d86b9_existing):
+        _ember_95137563367d86b9_existing.append(_ember_95137563367d86b9_candidate)
+if len(_ember_95137563367d86b9_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_dispatch_token.py')
+if _ember_95137563367d86b9_existing:
+    _ember_95137563367d86b9_module = _ember_95137563367d86b9_existing[0]
+    _ember_95137563367d86b9_observed = getattr(_ember_95137563367d86b9_module, '__file__', None)
+    if _ember_95137563367d86b9_observed is None or _ember_95137563367d86b9_Path(_ember_95137563367d86b9_observed).resolve() != _ember_95137563367d86b9_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_dispatch_token.py')
+else:
+    _ember_95137563367d86b9_spec = _ember_95137563367d86b9_importlib.spec_from_file_location('_ember_issue2015_95137563367d86b9', _ember_95137563367d86b9_path)
+    if _ember_95137563367d86b9_spec is None or _ember_95137563367d86b9_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_dispatch_token.py')
+    _ember_95137563367d86b9_module = _ember_95137563367d86b9_importlib.module_from_spec(_ember_95137563367d86b9_spec)
+    for _ember_95137563367d86b9_alias in _ember_95137563367d86b9_aliases:
+        _ember_95137563367d86b9_prior = _ember_95137563367d86b9_sys.modules.get(_ember_95137563367d86b9_alias)
+        if _ember_95137563367d86b9_prior is not None and _ember_95137563367d86b9_prior is not _ember_95137563367d86b9_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_dispatch_token.py')
+        _ember_95137563367d86b9_sys.modules[_ember_95137563367d86b9_alias] = _ember_95137563367d86b9_module
+    try:
+        _ember_95137563367d86b9_spec.loader.exec_module(_ember_95137563367d86b9_module)
+    except BaseException:
+        for _ember_95137563367d86b9_alias in _ember_95137563367d86b9_aliases:
+            if _ember_95137563367d86b9_sys.modules.get(_ember_95137563367d86b9_alias) is _ember_95137563367d86b9_module:
+                _ember_95137563367d86b9_sys.modules.pop(_ember_95137563367d86b9_alias, None)
+        raise
+for _ember_95137563367d86b9_alias in _ember_95137563367d86b9_aliases:
+    _ember_95137563367d86b9_prior = _ember_95137563367d86b9_sys.modules.get(_ember_95137563367d86b9_alias)
+    if _ember_95137563367d86b9_prior is not None and _ember_95137563367d86b9_prior is not _ember_95137563367d86b9_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_dispatch_token.py')
+    _ember_95137563367d86b9_sys.modules[_ember_95137563367d86b9_alias] = _ember_95137563367d86b9_module
+consume_dispatch = getattr(_ember_95137563367d86b9_module, 'consume_dispatch')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_dispatch_token.py  # noqa: E402
 
 
 def _canonical_positive(raw: str, name: str) -> int:

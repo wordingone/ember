@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """build_fixed_prior_manifest.py -- build and verify the sec5.2 fixed-prior manifest.
 
-docs/spec/ember02-preregistration-v1.md sec5.2 requires ONE versioned manifest,
+docs/domains/governance/spec/ember02-preregistration-v1.md sec5.2 requires ONE versioned manifest,
 committed before R1 and referenced by hash from every rung receipt, enumerating
 every non-learned prior -- training loop, kernels, ember-cli, deterministic tools,
 corpora + acquisition provenance, benchmark payloads, solver/compiler versions,
@@ -51,7 +51,50 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-import receipt_write  # noqa: E402
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+receipt_write = _ember_66ee9e91637922dc_module
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 import energy_proxy_logger as epl  # noqa: E402
 
 MANIFEST_REL = Path("manifests/ember-restart-3b/fixed-prior-manifest-v1.json")
@@ -142,28 +185,28 @@ INVENTORY: tuple[dict, ...] = (
 
     # --- deterministic tools ----------------------------------------------
     dict(category="deterministic_tools", kind="file",
-         path="scripts/receipt_write.py",
+         path="src/ember/governance/scripts/receipt_write.py",
          provenance="Fail-closed receipt writer; quarantines invalid bytes rather "
                     "than deleting completed runs' results."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/receipt_check.py",
+         path="src/ember/governance/scripts/receipt_check.py",
          provenance="Frozen receipt validator behind the writer."),
     dict(category="deterministic_tools", kind="file",
          path="scripts/manifest_sha.py",
          provenance="Corpus combined-sha tool; supplies the tree-digest convention "
                     "reused by this manifest."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/joules.py",
+         path="src/ember/governance/scripts/joules.py",
          provenance="GPU power sampler and trapezoidal integrator (energy-law sec4.2)."),
     dict(category="deterministic_tools", kind="file",
          path="scripts/energy_proxy_logger.py",
          provenance="The sec5.3 DEGRADED_PROXY energy logger; smoke-tested as an "
                     "R1 entry-gate item. Criterion receipted before first use."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/check_energy_law_theory.py",
+         path="src/ember/governance/scripts/check_energy_law_theory.py",
          provenance="Energy-law receipt-shape checker (P1 receipt-shape check, R2-E2)."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/ember_restart/contract.py",
+         path="src/ember/governance/scripts/ember_restart/contract.py",
          provenance="ember-owned-rung-v1 admission contract; the fail-closed "
                     "prerequisite of sec1."),
     dict(category="deterministic_tools", kind="file",
@@ -251,7 +294,7 @@ INVENTORY: tuple[dict, ...] = (
          provenance="The ember-owned-rung admission contract config validated at "
                     "dispatch."),
     dict(category="configuration", kind="file",
-         path="docs/spec/ember02-preregistration-v1.md",
+         path="docs/domains/governance/spec/ember02-preregistration-v1.md",
          provenance="The pre-registration this run is hash-pinned to "
                     "(`--prereg <sha256>`)."),
     dict(category="configuration", kind="file",
@@ -422,7 +465,7 @@ def build_manifest() -> dict:
         "workstream_id": "EMBER-02A",
         "next_executed_outcome": ("EMBER-02 first sufficiently pretrained "
                                   "clean-genesis 3B Ember"),
-        "prereg_section": "docs/spec/ember02-preregistration-v1.md sec5.2",
+        "prereg_section": "docs/domains/governance/spec/ember02-preregistration-v1.md sec5.2",
         "purpose": ("Fixed-prior manifest: every non-learned prior with sha256 and "
                     "provenance, referenced by hash from every rung receipt."),
         "sha_convention": SHA_CONVENTION,

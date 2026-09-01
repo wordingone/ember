@@ -5,8 +5,8 @@
 // NO-TEMP policy (per operator direction): none of ember's stack, current, past, or
 // future, may live in system temp. This module is the Rust-side twin of
 // tools/ember-cli/src/utils/ember-scratch.ts (emberScratchDir) -- the one canonical
-// ember-owned scratch root for ember-lab call sites. See tools/no_temp_allowlist and
-// tools/check_no_temp.py for the enforcement gate covering the rest of the stack.
+// ember-owned scratch root for ember-lab call sites. See src/ember/infrastructure/tools/no_temp_allowlist and
+// src/ember/infrastructure/tools/check_no_temp.py for the enforcement gate covering the rest of the stack.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -655,7 +655,7 @@ mod ember_scratch_dir_tests {
     // proving nothing -- `ember_scratch_dir` reads `EMBER_HOME`, never
     // `TEMP`/`TMP`, so the bogus override could not have leaked even in
     // principle. Source-level enforcement of the NO-TEMP policy is
-    // `tools/check_no_temp.py`; the path contract is checked here against an
+    // `src/ember/infrastructure/tools/check_no_temp.py`; the path contract is checked here against an
     // explicit root instead.
     #[test]
     fn scratch_dir_lands_under_its_root() {

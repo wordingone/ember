@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/ember-world-state.ts — real GOAL/ledger/receipts -> EmberWorldState adapter (gh issue #10,
 // condition C-OBS, clause (a)).
 //
@@ -15,9 +18,6 @@
 // executes from. Read-only; never writes into that tree. The contract tree's location is
 // deployment-specific and is never hardcoded here -- see the EMBER_GOALFORGE_ROOT contract below.
 
-// goal_id: EMBER-02
-// workstream_id: EMBER-02A
-// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { readFile, readdir } from "fs/promises";
 import { createHash } from "crypto";
 import path from "path";
@@ -35,7 +35,7 @@ import path from "path";
 export const GOALFORGE_ROOT = process.env.EMBER_GOALFORGE_ROOT || "";
 
 const GOAL_PATH = "docs/domains/governance/authority/GOAL.md";
-const LEDGER_PATH = "docs/ledgers/ember-debt-ledger.md";
+const LEDGER_PATH = "docs/domains/governance/ledgers/ember-debt-ledger.md";
 const BOARD_DIR = "scripts/ember_totality/receipts-totality";
 
 // ---------------------------------------------------------------------------
@@ -404,7 +404,7 @@ async function readWithSha(
 }
 
 /**
- * Builds a fresh EmberWorldState by binding the real goalforge docs/domains/governance/authority/GOAL.md, docs/ledgers/ember-debt-ledger.md,
+ * Builds a fresh EmberWorldState by binding the real goalforge docs/domains/governance/authority/GOAL.md, docs/domains/governance/ledgers/ember-debt-ledger.md,
  * and the newest scripts/ember_totality/receipts-totality board receipt. No caching, no mirror --
  * every call re-reads the three source files as they exist on disk right now.
  */

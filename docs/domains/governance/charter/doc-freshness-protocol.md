@@ -3,13 +3,13 @@
 **Purpose:** Enforce that public-facing documentation in the ember repository remains accurate, reachable, and up-to-date.
 
 **Enforcement:** Every pull request and every push to master runs two deterministic named gates:
-`scripts/check_docs_freshness.py --front-door` and
-`scripts/gen_readme_status.py --check --generated-status`. The unscoped commands remain local
+`src/ember/governance/scripts/check_docs_freshness.py --front-door` and
+`src/ember/governance/scripts/gen_readme_status.py --check --generated-status`. The unscoped commands remain local
 full-audit tools and retain their branch-inventory, claims-index, and wall-age checks.
 
 ## What the checker verifies
 
-The `scripts/check_docs_freshness.py` script enforces four categories of correctness:
+The `src/ember/governance/scripts/check_docs_freshness.py` script enforces four categories of correctness:
 
 ### 1. Front-door path references resolve
 Every path candidate in `README.md` and `docs/authority/CONTINUITY.md`, whether backticked or
@@ -17,21 +17,21 @@ plain prose, must match the exact case of a path returned by `git ls-files`. An 
 file cannot mask a defect. Example:
 
 ```markdown
-Run `scripts/receipt_check.py --all` to validate receipts.
+Run `src/ember/governance/scripts/receipt_check.py --all` to validate receipts.
 ```
 
-The checker verifies that `scripts/receipt_check.py` is tracked with exact case. Its frozen prose
+The checker verifies that `src/ember/governance/scripts/receipt_check.py` is tracked with exact case. Its frozen prose
 grammar covers `.py`, `.md`, `.json`, `.txt`, `.sh`, `.yml`, `.yaml`, `.toml`, and `.ps1`.
 
 **Defect class:** `broken_path_reference`
 
 ### 2. scripts/ inventory is complete
-The `scripts/README.md` file contains a taxonomy of the 400+ scripts under `scripts/`. Every Python file at `scripts/*.py` must appear in the inventory table.
+The `src/ember/governance/scripts/README.md` file contains a taxonomy of the 400+ scripts under `scripts/`. Every Python file at `scripts/*.py` must appear in the inventory table.
 
 **Defect class:** `incomplete_inventory`
 
 **When to fix:** If you add a new `scripts/SOMETHING.py`:
-- Add it to the appropriate prefix-family section in `scripts/README.md`
+- Add it to the appropriate prefix-family section in `src/ember/governance/scripts/README.md`
 - If it's a new prefix family, add a new row to the census table with count and description
 
 ### 3. Claims index is regenerable
@@ -60,13 +60,13 @@ deterministic merge gate checks placement and uniqueness without consulting wall
 
 ```bash
 # Quick check (exit 0 if clean, 1 if defects)
-python scripts/check_docs_freshness.py
+python src/ember/governance/scripts/check_docs_freshness.py
 
 # See defects as markdown report
-python scripts/check_docs_freshness.py --fix-report
+python src/ember/governance/scripts/check_docs_freshness.py --fix-report
 
 # Run selftests (verify checker logic)
-python scripts/check_docs_freshness.py --selftest
+python src/ember/governance/scripts/check_docs_freshness.py --selftest
 ```
 
 ## Merge-gate integration
@@ -74,8 +74,8 @@ python scripts/check_docs_freshness.py --selftest
 Both scoped checks run before merge and again on master:
 
 ```bash
-python scripts/check_docs_freshness.py --front-door
-python scripts/gen_readme_status.py --check --generated-status
+python src/ember/governance/scripts/check_docs_freshness.py --front-door
+python src/ember/governance/scripts/gen_readme_status.py --check --generated-status
 # Exits 0 if clean, 1 if defects found
 ```
 
@@ -95,7 +95,7 @@ If a PR encounters debt outside the deterministic front-door scope, the author m
 Adds 3 new scripts for the C14 experiment suite.
 
 ## Docs debt
-- #999: Update scripts/README.md inventory to include all C14 scripts (deferred, see issue)
+- #999: Update src/ember/governance/scripts/README.md inventory to include all C14 scripts (deferred, see issue)
 ```
 
 **Note:** New defects introduced by a PR (e.g., adding a script but not documenting it) must be fixed in the same PR.
@@ -122,7 +122,7 @@ If the checker detects a defect that requires architectural change (e.g., the do
 
 ## See also
 
-- `scripts/check_docs_freshness.py` — the implementation
+- `src/ember/governance/scripts/check_docs_freshness.py` — the implementation
 - `src/ember/governance/scripts/build_claims_index.py` — regenerates receipts index
-- `scripts/README.md` — scripts taxonomy
+- `src/ember/governance/scripts/README.md` — scripts taxonomy
 - `README.md` — repository structure and reproduction guide

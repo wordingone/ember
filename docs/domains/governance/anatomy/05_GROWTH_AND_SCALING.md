@@ -2,11 +2,11 @@
 
 ## C-GROW: function-preserving capacity growth
 
-Condition `C-GROW` (`docs/spec/conditions-v1.md` §4.2; check function
-`chk_cgrow` in `scripts/ember_tally_checks.py`) requires a MEASURED
+Condition `C-GROW` (`docs/domains/governance/spec/conditions-v1.md` §4.2; check function
+`chk_cgrow` in `src/ember/governance/scripts/ember_tally_checks.py`) requires a MEASURED
 function-preserving grow step with fewer FLOPs than training the grown
 target from scratch. Two mechanisms are recognized
-(`scripts/ember_tally_checks.py`, `CGROW_VALID_MECHANISMS`):
+(`src/ember/governance/scripts/ember_tally_checks.py`, `CGROW_VALID_MECHANISMS`):
 
 - **v2 `ff_widening_net2net`** — widen the FFN (net2net-style), preserving
   function via logit/loss-delta tolerances (`CGROW_LOSS_DELTA_TOL_CEIL =
@@ -32,7 +32,7 @@ lucky run, before the harness accepts it.
 
 ## C-SCALE: the non-toy operating point
 
-`docs/spec/conditions-v1.md` describes `C-SCALE` as "the APEX; the green
+`docs/domains/governance/spec/conditions-v1.md` describes `C-SCALE` as "the APEX; the green
 board is the WARM-UP, this is the WIN" — it requires the self-modification
 gain (C7 operator load-bearing + C14 neural resident + C8
 contribution-deletion) demonstrated at a non-toy operating point reached by

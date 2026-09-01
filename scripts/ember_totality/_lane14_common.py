@@ -1,8 +1,11 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Shared helpers for the lane-14 CHK-adequacy hardening (R8 probe-faithfulness
 audit, docs/goalforge-debate-ledger.md row R8; six hardenings queued there).
 
 Not a probe itself -- filename deliberately does NOT start with "test_" so
-scripts/ember_totality/ember_totality_spec.py's discover_tests() (which only
+src/ember/governance/scripts/ember_totality/ember_totality_spec.py's discover_tests() (which only
 globs test_*.py in this directory, non-recursive) never tries to execute it
 as a status probe. It IS still swept into the invariant_checksum's
 enforcement_layer bucket (that walk is recursive over every *.py under this
@@ -23,9 +26,6 @@ Two independent concerns live here:
                           convention used throughout this receipt corpus.
 """
 
-# goal_id: EMBER-02
-# workstream_id: EMBER-02A
-# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import datetime
 import hashlib
