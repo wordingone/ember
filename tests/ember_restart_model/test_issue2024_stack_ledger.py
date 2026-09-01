@@ -22,24 +22,41 @@ def _event(
     device_time_us: str = "10.000001",
     stack: tuple[str, ...] = ("tools/ember-restart-3b/model.py:41",),
     parent_stack: tuple[str, ...] = (),
+    has_parent: bool = True,
+    has_shapes: bool = True,
 ) -> SimpleNamespace:
     parent = SimpleNamespace(id=parent_id, stack=list(parent_stack), cpu_parent=None)
     return SimpleNamespace(
         id=event_id,
         key="aten::mm",
-        cpu_parent=parent,
-        input_shapes=[[2, 3], [3, 4]],
+        cpu_parent=parent if has_parent else None,
+        input_shapes=[[2, 3], [3, 4]] if has_shapes else None,
         self_device_time_total=float(device_time_us),
         stack=list(stack),
     )
 
 
 def test_issue2024_profiler_configuration_enables_source_stacks() -> None:
-    assert subject.issue2024_profiler_configuration() == {
-        "profile_memory": True,
-        "record_shapes": True,
-        "with_stack": True,
-    }
+    configuration = subject.issue2024_profiler_configuration()
+    assert configuration["profile_memory"] is True
+    assert configuration["record_shapes"] is True
+    assert configuration["with_stack"] is True
+    assert isinstance(
+        configuration["experimental_config"],
+        subject.torch._C._profiler._ExperimentalConfig,
+    )
+
+
+def test_issue2024_profiler_configuration_emits_runtime_source_stacks() -> None:
+    torch = subject.torch
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU],
+        **subject.issue2024_profiler_configuration(),
+    ) as profiler:
+        value = torch.ones((2, 2))
+        value @ value
+
+    assert any(event.stack for event in profiler.events())
 
 
 def test_issue2024_live_schedule_emits_exactly_one_trace_callback() -> None:
@@ -75,6 +92,8 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
         "schema_version": "ember-issue2024-full-precision-event-ledger-v1",
         "declared_self_device_time_total_us": "12.000003",
         "ledger_self_device_time_total_us": "12.000003",
+        "excluded_self_device_time_total_us": "0",
+        "excluded_zero_device_time_events": [],
         "reconciliation_gap_ns": 0,
         "events": [
             {
@@ -102,6 +121,52 @@ def test_issue2024_ledger_refuses_event_without_source_stack() -> None:
         subject.build_issue2024_event_ledger(
             [_event(stack=())], declared_self_device_time_total_us="10.000001"
         )
+
+
+def test_issue2024_ledger_accounts_for_zero_device_time_events_without_metadata() -> None:
+    ledger = subject.build_issue2024_event_ledger(
+        [
+            _event(
+                event_id=6,
+                device_time_us="0",
+                stack=(),
+                has_parent=False,
+                has_shapes=False,
+            ),
+            _event(),
+        ],
+        declared_self_device_time_total_us="10.000001",
+    )
+    assert ledger["excluded_zero_device_time_events"] == [
+        {
+            "event_id": 6,
+            "key": "aten::mm",
+            "reason": "ZERO_SELF_DEVICE_TIME",
+            "self_device_time_us": "0.0",
+        }
+    ]
+    assert ledger["excluded_self_device_time_total_us"] == "0"
+
+
+def test_issue2024_ledger_reports_every_positive_time_metadata_violation_together() -> None:
+    with pytest.raises(ValueError) as caught:
+        subject.build_issue2024_event_ledger(
+            [
+                _event(event_id=11, stack=()),
+                _event(event_id=12, has_parent=False),
+                _event(event_id=13, has_shapes=False),
+            ],
+            declared_self_device_time_total_us="30.000003",
+        )
+    message = str(caught.value)
+    assert message.startswith("ISSUE2024_EVENT_METADATA_REFUSED:")
+    assert '"event_id":11' in message
+    assert '"failure_class":"ISSUE2024_EVENT_SOURCE_STACK_REQUIRED"' in message
+    assert '"ancestry_depth":2' in message
+    assert '"event_id":12' in message
+    assert '"failure_class":"ISSUE2024_EVENT_CPU_PARENT_REQUIRED"' in message
+    assert '"event_id":13' in message
+    assert '"failure_class":"ISSUE2024_EVENT_INPUT_SHAPES_REQUIRED"' in message
 
 
 def test_issue2024_ledger_inherits_source_stack_from_cpu_parent_for_device_event() -> None:
