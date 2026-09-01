@@ -236,18 +236,18 @@ def build_issue2024_event_ledger(
     rows: list[dict[str, object]] = []
     excluded_zero_device_time_events: list[dict[str, object]] = []
     metadata_failures: list[dict[str, object]] = []
-    event_ids: set[int] = set()
     ledger_total = Decimal("0")
-    for event in events:
+    # Kineto exposes ``event.id`` as a correlation id, so distinct events may
+    # legitimately share it. The ledger ordinal supplies per-ledger identity
+    # without discarding or coalescing either occurrence.
+    for event_ordinal, event in enumerate(events):
         event_id = int(event.id)
-        if event_id in event_ids:
-            raise ValueError(f"ISSUE2024_EVENT_ID_DUPLICATE:{event_id}")
-        event_ids.add(event_id)
         device_time = Decimal(str(event.self_device_time_total))
         ledger_total += device_time
         if device_time == 0:
             excluded_zero_device_time_events.append({
                 "event_id": event_id,
+                "event_ordinal": event_ordinal,
                 "key": str(event.key),
                 "reason": "ZERO_SELF_DEVICE_TIME",
                 "self_device_time_us": _issue2024_decimal_text(device_time),
@@ -260,6 +260,7 @@ def build_issue2024_event_ledger(
             "ancestry_depth": ancestry_depth,
             "device_type": str(getattr(event, "device_type", "UNKNOWN")),
             "event_id": event_id,
+            "event_ordinal": event_ordinal,
             "key": str(event.key),
             "self_device_time_us": _issue2024_decimal_text(device_time),
         }
@@ -284,6 +285,7 @@ def build_issue2024_event_ledger(
             "ancestry_depth": ancestry_depth,
             "cpu_parent_id": int(parent.id),
             "event_id": event_id,
+            "event_ordinal": event_ordinal,
             "input_shapes": shapes,
             "key": str(event.key),
             "self_device_time_us": _issue2024_decimal_text(device_time),

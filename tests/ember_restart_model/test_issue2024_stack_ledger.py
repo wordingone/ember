@@ -143,6 +143,7 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
                 "ancestry_depth": 1,
                 "cpu_parent_id": 3,
                 "event_id": 7,
+                "event_ordinal": 0,
                 "input_shapes": [[2, 3], [3, 4]],
                 "key": "aten::mm",
                 "self_device_time_us": "10.000001",
@@ -152,6 +153,7 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
                 "ancestry_depth": 1,
                 "cpu_parent_id": 7,
                 "event_id": 8,
+                "event_ordinal": 1,
                 "input_shapes": [[2, 3], [3, 4]],
                 "key": "aten::mm",
                 "self_device_time_us": "2.000002",
@@ -185,6 +187,7 @@ def test_issue2024_ledger_accounts_for_zero_device_time_events_without_metadata(
     assert ledger["excluded_zero_device_time_events"] == [
         {
             "event_id": 6,
+            "event_ordinal": 0,
             "key": "aten::mm",
             "reason": "ZERO_SELF_DEVICE_TIME",
             "self_device_time_us": "0.0",
@@ -321,11 +324,14 @@ def test_issue2024_smoke_reaches_trace_callback_on_the_first_update() -> None:
     }
 
 
-def test_issue2024_ledger_refuses_duplicate_event_identity() -> None:
-    with pytest.raises(ValueError, match="ISSUE2024_EVENT_ID_DUPLICATE"):
-        subject.build_issue2024_event_ledger(
-            [_event(), _event()], declared_self_device_time_total_us="20.000002"
-        )
+def test_issue2024_ledger_preserves_duplicate_profiler_correlation_ids_by_ordinal() -> None:
+    ledger = subject.build_issue2024_event_ledger(
+        [_event(), _event()], declared_self_device_time_total_us="20.000002"
+    )
+    assert [(row["event_id"], row["event_ordinal"]) for row in ledger["events"]] == [
+        (7, 0),
+        (7, 1),
+    ]
 
 
 def _union_receipt(mode: str, events: list[dict[str, object]]) -> dict[str, object]:
