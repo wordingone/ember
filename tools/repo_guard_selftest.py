@@ -43,6 +43,7 @@ GUARD_SUPPORT_FILES = [
     "tools/check_executable_redaction_placeholders.py",
     "tools/check_names_hashed.py",
     "tools/check_governed_entry_exceptions.py",
+    "tools/ember-restart-3b/check_manifest_path_bindings.py",
     "tools/governed-entry-exceptions.json",
     "tools/launcher-shape-exceptions.json",
     _LEGACY_CHECKER_REL,
@@ -276,6 +277,7 @@ def make_split_kernel(test_word: str) -> Path:
         "tools/check_executable_redaction_placeholders.py",
         "tools/check_names_hashed.py",
         "scripts/verify_authority_conservation.py",
+        "tools/ember-restart-3b/check_manifest_path_bindings.py",
     ):
         source = REPO_ROOT / relative
         target = kernel / relative

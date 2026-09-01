@@ -42,6 +42,15 @@ def write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def install_governed_launcher(root: Path, module) -> Path:
+    source = REPO_ROOT / module.PUBLIC_PYTHON_LAUNCHER_PATH
+    target = root / module.PUBLIC_PYTHON_LAUNCHER_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(source.read_bytes())
+    assert module.sha256_file(target) == module.PUBLIC_PYTHON_LAUNCHER_SHA256
+    return target
+
+
 def metadata_fixture() -> dict:
     return {
         "schema_version": "ember-doc-metadata-v1",
@@ -192,7 +201,7 @@ def test_windows_python_command_refuses_without_headless_launcher(
     module = load_module()
     monkeypatch.setattr(module.sys, "platform", "win32")
     monkeypatch.delenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", raising=False)
-    commands = {"commands": [{"id": "python", "argv": ["python", "tool.py"], "cwd": "."}]}
+    commands = {"commands": [{"id": "bootstrap-python", "argv": ["python", "tool.py"], "cwd": "."}]}
 
     with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_DIRECT_PYTHON_REFUSED"):
         module.run_public_commands(tmp_path, commands)
@@ -203,8 +212,7 @@ def test_headless_command_replay_custodies_actual_argv_and_no_window(
 ) -> None:
     module = load_module()
     monkeypatch.setattr(module.sys, "platform", "win32")
-    launcher_path = tmp_path / "headless-python.ps1"
-    write(launcher_path, "# test launcher\n")
+    launcher_path = install_governed_launcher(tmp_path, module)
     launcher = [
         "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
         str(launcher_path), "--",
@@ -215,10 +223,14 @@ def test_headless_command_replay_custodies_actual_argv_and_no_window(
     def fake_run(argv, **kwargs):
         observed["argv"] = argv
         observed["kwargs"] = kwargs
+        _write_bound_interpreter_receipt(
+            tmp_path, module,
+            relative="state/python-environments/python-environment-install-v1/Scripts/python.exe",
+        )
         return module.subprocess.CompletedProcess(argv, 0, "ok\n", "")
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
-    commands = {"commands": [{"id": "python", "argv": ["python", "tool.py"], "cwd": "."}]}
+    commands = {"commands": [{"id": "bootstrap-python", "argv": ["python", "tool.py"], "cwd": "."}]}
 
     results = module.run_public_commands(tmp_path, commands)
 
@@ -231,6 +243,247 @@ def test_headless_command_replay_custodies_actual_argv_and_no_window(
         module.canonical_json(launcher + ["tool.py"])
     )
     assert results[0]["stdout_sha256"] == module.sha256_bytes(b"ok\n")
+
+
+def _write_bound_interpreter_receipt(
+    root: Path, module, *, relative: str, materialize: bool = True,
+) -> Path:
+    interpreter = root / relative
+    if materialize:
+        interpreter.parent.mkdir(parents=True, exist_ok=True)
+        interpreter.write_bytes(b"isolated-interpreter")
+    else:
+        assert interpreter.is_file()
+    receipt = {
+        "schema_version": "ember-python-environment-install-receipt-v1",
+        "result": "PASS",
+        "identity": {
+            "legacy_manifest_sha256": "1" * 64,
+            "build_manifest_sha256": "2" * 64,
+            "pyproject_sha256": "3" * 64,
+            "isolated_interpreter": {
+                "path": relative.replace("/", "\\"),
+                "python_version": "3.10.11",
+                "package_set_sha256": "4" * 64,
+            },
+        },
+        "stages": [],
+    }
+    receipt["self_sha256"] = module.sha256_bytes(module.canonical_compact(receipt))
+    path = root / "state/receipts/python-environment-install-v1.json"
+    write(path, json.dumps(receipt))
+    return interpreter
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (
+            r"state\python-environments\python-environment-install-v1\Scripts\python.exe",
+            Path("state/python-environments/python-environment-install-v1/Scripts/python.exe"),
+        ),
+        (
+            "state/python-environments/python-environment-install-v1/bin/python",
+            Path("state/python-environments/python-environment-install-v1/bin/python"),
+        ),
+    ],
+)
+def test_portable_interpreter_path_accepts_windows_and_posix_venv_layouts(
+    stored: str, expected: Path
+) -> None:
+    module = load_module()
+
+    assert module.portable_interpreter_relative_path(stored) == expected
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [r"C:\outside\python.exe", r"\\server\share\python.exe", "/outside/python"],
+)
+def test_portable_interpreter_path_refuses_absolute_paths_on_every_host(stored: str) -> None:
+    module = load_module()
+
+    with pytest.raises(
+        module.DocsInfoError,
+        match="PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED",
+    ):
+        module.portable_interpreter_relative_path(stored)
+
+
+def test_nonbootstrap_python_refuses_missing_bound_interpreter_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    launcher_path = install_governed_launcher(tmp_path, module)
+    monkeypatch.setenv(
+        "EMBER_PUBLIC_PYTHON_LAUNCHER_JSON",
+        json.dumps(["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(launcher_path), "--"]),
+    )
+    commands = {"commands": [{"id": "verify-authority", "argv": ["python", "tool.py"], "cwd": "."}]}
+
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_INTERPRETER_RECEIPT_MISSING"):
+        module.run_public_commands(tmp_path, commands)
+
+
+def test_nonbootstrap_python_refuses_receipt_interpreter_outside_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    outside = tmp_path.parent / "outside-python.exe"
+    outside.write_bytes(b"outside")
+    receipt = {
+        "schema_version": "ember-python-environment-install-receipt-v1",
+        "result": "PASS",
+        "identity": {
+            "legacy_manifest_sha256": "1" * 64,
+            "build_manifest_sha256": "2" * 64,
+            "pyproject_sha256": "3" * 64,
+            "isolated_interpreter": {
+                "path": str(outside),
+                "python_version": "3.10.11",
+                "package_set_sha256": "4" * 64,
+            },
+        },
+        "stages": [],
+    }
+    receipt["self_sha256"] = module.sha256_bytes(module.canonical_compact(receipt))
+    write(tmp_path / "state/receipts/python-environment-install-v1.json", json.dumps(receipt))
+
+    with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_INTERPRETER_OUTSIDE_CHECKOUT_REFUSED"):
+        module.load_public_interpreter_binding(tmp_path)
+
+
+def test_replay_uses_receipt_bound_interpreter_after_bootstrap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_module()
+    monkeypatch.setattr(module.sys, "platform", "win32")
+    launcher_path = install_governed_launcher(tmp_path, module)
+    launcher = ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(launcher_path), "--"]
+    monkeypatch.setenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", json.dumps(launcher))
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((list(argv), kwargs))
+        if len(calls) == 1:
+            _write_bound_interpreter_receipt(
+                tmp_path, module,
+                relative="state/python-environments/python-environment-install-v1/Scripts/python.exe",
+            )
+        return module.subprocess.CompletedProcess(argv, 0, "ok\n", "")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    commands = {"commands": [
+        {"id": "bootstrap-python", "argv": ["python", "bootstrap.py"], "cwd": "."},
+        {"id": "verify-authority", "argv": ["python", "verify.py"], "cwd": "."},
+    ]}
+    results = module.run_public_commands(tmp_path, commands)
+
+    assert "CODEX_PYTHON" not in calls[0][1].get("env", {})
+    bound = calls[1][1]["env"]["CODEX_PYTHON"]
+    assert Path(bound).resolve() == (
+        tmp_path / "state/python-environments/python-environment-install-v1/Scripts/python.exe"
+    ).resolve()
+    assert results[1]["interpreter_binding"]["package_set_sha256"] == "4" * 64
+
+
+def test_nonwindows_replay_executes_receipt_bound_interpreter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_module()
+    venv = tmp_path / "bound-interpreter"
+    created = module.subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", str(venv)],
+        stdin=module.subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=module.NO_WINDOW,
+    )
+    assert created.returncode == 0, created.stderr
+    relative = (
+        "bound-interpreter/Scripts/python.exe"
+        if sys.platform == "win32"
+        else "bound-interpreter/bin/python"
+    )
+    bound = _write_bound_interpreter_receipt(
+        tmp_path, module, relative=relative, materialize=False,
+    )
+    observed = tmp_path / "child-executable.txt"
+    monkeypatch.setattr(module.sys, "platform", "linux")
+    commands = {"commands": [{
+        "id": "verify-authority",
+        "argv": [
+            "python", "-c",
+            f"import pathlib,sys;pathlib.Path({str(observed)!r}).write_text(sys.executable)",
+        ],
+        "cwd": ".",
+    }]}
+    results = module.run_public_commands(tmp_path, commands)
+
+    reported_raw = Path(observed.read_text(encoding="utf-8"))
+    assert reported_raw.resolve() == bound.resolve()
+    assert reported_raw != Path(sys.executable)
+    assert Path(results[0]["host_argv"][0]).resolve() == bound.resolve()
+    assert module.portable_interpreter_relative_path(
+        results[0]["interpreter_binding"]["path"]
+    ) == Path(relative)
+
+
+def _run_repo_launcher_identity(module, monkeypatch, bound_interpreter: Path) -> Path:
+    launcher_path = REPO_ROOT / "scripts" / "headless-python.ps1"
+    launcher = [
+        "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+        "-File", str(launcher_path), "--",
+    ]
+    monkeypatch.setenv("EMBER_PUBLIC_PYTHON_LAUNCHER_JSON", json.dumps(launcher))
+    monkeypatch.setenv("CODEX_PYTHON", str(bound_interpreter))
+    host_argv = module.public_command_host_argv(
+        REPO_ROOT,
+        ["python", "-c", "import json,sys;print(json.dumps({'executable':sys.executable}))"],
+    )
+    completed = module.subprocess.run(
+        host_argv,
+        stdin=module.subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=module.NO_WINDOW,
+        env=module.os.environ.copy(),
+    )
+    assert completed.returncode == 0, completed.stderr
+    return Path(json.loads(completed.stdout.strip())["executable"]).resolve()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows headless launcher contract")
+def test_repo_launcher_executes_exact_bound_interpreter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_module()
+    reported = _run_repo_launcher_identity(module, monkeypatch, Path(sys.executable))
+    assert reported == Path(sys.executable).resolve()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows headless launcher contract")
+def test_repo_launcher_identity_probe_detects_different_interpreter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_module()
+    venv = tmp_path / "planted-other-interpreter"
+    created = module.subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", str(venv)],
+        stdin=module.subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=module.NO_WINDOW,
+    )
+    assert created.returncode == 0, created.stderr
+    planted = venv / "Scripts" / "python.exe"
+    reported = _run_repo_launcher_identity(module, monkeypatch, planted)
+    assert reported == planted.resolve()
+    assert reported != Path(sys.executable).resolve()
 
 
 def test_repository_receipt_retains_per_command_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
