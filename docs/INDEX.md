@@ -22,7 +22,7 @@ This index is generated from `manifests/documentation/current-documents-v1.json`
 - [`ember.entry.root`](../README.md) — Evergreen project front door and public routes (normative; new-user, user, contributor, operator, auditor)
 - [`ember.guide.contributing`](contributing.md) — Canonical public contribution and evidence route (current; contributor)
 - [`ember.guide.verify`](guides/VERIFY.md) — Exact four-command public verification route (current; contributor, auditor, operator)
-- [`ember.roadmap.public`](roadmap/README.md) — Milestone contracts and public completion certificates (normative; user, contributor, auditor)
+- [`ember.roadmap.public`](domains/governance/roadmap/README.md) — Milestone contracts and public completion certificates (normative; user, contributor, auditor)
 
 ## Infrastructure
 
@@ -31,7 +31,7 @@ This index is generated from `manifests/documentation/current-documents-v1.json`
 ## Lab
 
 - [`ember.domain.lab`](domains/lab/README.md) — Cross-domain experiments and integration (normative; user, contributor, operator)
-- [`ember.guide.start`](guides/START-HERE.md) — First-reader inspection and installation route (current; new-user, user, operator)
+- [`ember.guide.start`](domains/governance/guides/START-HERE.md) — First-reader inspection and installation route (current; new-user, user, operator)
 - [`ember.operator.map`](operator/README.md) — Canonical operator route (current; operator)
 
 ## Model

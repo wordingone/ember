@@ -100,7 +100,7 @@ evolving HIS OWN foundation models — sovereign, no cloud/subscription AI in th
 ## 6. Inference-to-training translation and C-SCALE(ii)
 
 The maintained translation system is
-[`docs/domains/governance/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md);
+[`docs/domains/governance/design/inference-to-training-translation-v1.md`](../domains/governance/design/inference-to-training-translation-v1.md);
 the per-layer frontier and gap table is
 [`docs/design/sota-stack-floor.md`](sota-stack-floor.md). These replace the former
 implicit assumption that an inference optimization automatically supplies a

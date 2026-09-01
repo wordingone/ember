@@ -26,7 +26,7 @@ It has two load-bearing jobs:
 3. **Receipts-only literature:** every maturity or frontier claim has a primary
    citation. Every Ember status has an exact config, implementation, or receipt.
 4. **Training translation:** every inference technique is mapped through
-   [`docs/domains/governance/design/inference-to-training-translation-v1.md`](inference-to-training-translation-v1.md).
+   [`docs/domains/governance/design/inference-to-training-translation-v1.md`](../domains/governance/design/inference-to-training-translation-v1.md).
    Missing training twins are recorded as research gaps rather than silently
    treated as irrelevant.
 
