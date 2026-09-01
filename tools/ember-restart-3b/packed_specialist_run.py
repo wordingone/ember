@@ -119,11 +119,15 @@ _ISSUE1946_FORWARD_OWNERS = (
 
 
 
-def issue2024_profiler_configuration() -> dict[str, bool]:
+def issue2024_profiler_configuration() -> dict[str, object]:
     return {
         "profile_memory": True,
         "record_shapes": True,
         "with_stack": True,
+        # Kineto's default Windows activity configuration accepts with_stack
+        # but leaves every event.stack empty.  Verbose mode is what asks the
+        # runtime to materialize the Python call-site frames in profiler.events().
+        "experimental_config": torch.profiler._ExperimentalConfig(verbose=True),
     }
 
 
@@ -164,8 +168,8 @@ def _issue2024_decimal_text(value: object) -> str:
     return format(Decimal(str(value)), "f")
 
 
-def _issue2024_source_stack(event: Any) -> list[str]:
-    """Return the first recorded source stack on the event's CPU ancestry."""
+def _issue2024_source_stack_with_depth(event: Any) -> tuple[list[str], int]:
+    """Return the first recorded source stack and inspected ancestry depth."""
 
     current: Any | None = event
     visited: set[int] = set()
@@ -176,9 +180,18 @@ def _issue2024_source_stack(event: Any) -> list[str]:
         visited.add(identity)
         stack = [str(frame) for frame in (getattr(current, "stack", None) or [])]
         if stack:
-            return stack
+            return stack, len(visited)
         current = getattr(current, "cpu_parent", None)
-    raise ValueError("ISSUE2024_EVENT_SOURCE_STACK_REQUIRED")
+    return [], len(visited)
+
+
+def _issue2024_source_stack(event: Any) -> list[str]:
+    """Return the first recorded source stack on the event's CPU ancestry."""
+
+    stack, _depth = _issue2024_source_stack_with_depth(event)
+    if not stack:
+        raise ValueError("ISSUE2024_EVENT_SOURCE_STACK_REQUIRED")
+    return stack
 
 
 def build_issue2024_event_ledger(
@@ -187,6 +200,8 @@ def build_issue2024_event_ledger(
     declared_self_device_time_total_us: str,
 ) -> dict[str, object]:
     rows: list[dict[str, object]] = []
+    excluded_zero_device_time_events: list[dict[str, object]] = []
+    metadata_failures: list[dict[str, object]] = []
     event_ids: set[int] = set()
     ledger_total = Decimal("0")
     for event in events:
@@ -194,15 +209,43 @@ def build_issue2024_event_ledger(
         if event_id in event_ids:
             raise ValueError(f"ISSUE2024_EVENT_ID_DUPLICATE:{event_id}")
         event_ids.add(event_id)
-        stack = _issue2024_source_stack(event)
-        parent = event.cpu_parent
-        if parent is None or getattr(parent, "id", None) is None:
-            raise ValueError("ISSUE2024_EVENT_CPU_PARENT_REQUIRED")
-        shapes = event.input_shapes
-        if shapes is None:
-            raise ValueError("ISSUE2024_EVENT_INPUT_SHAPES_REQUIRED")
         device_time = Decimal(str(event.self_device_time_total))
         ledger_total += device_time
+        if device_time == 0:
+            excluded_zero_device_time_events.append({
+                "event_id": event_id,
+                "key": str(event.key),
+                "reason": "ZERO_SELF_DEVICE_TIME",
+                "self_device_time_us": _issue2024_decimal_text(device_time),
+            })
+            continue
+        stack, ancestry_depth = _issue2024_source_stack_with_depth(event)
+        parent = event.cpu_parent
+        shapes = event.input_shapes
+        common = {
+            "ancestry_depth": ancestry_depth,
+            "device_type": str(getattr(event, "device_type", "UNKNOWN")),
+            "event_id": event_id,
+            "key": str(event.key),
+            "self_device_time_us": _issue2024_decimal_text(device_time),
+        }
+        if not stack:
+            metadata_failures.append({
+                **common,
+                "failure_class": "ISSUE2024_EVENT_SOURCE_STACK_REQUIRED",
+            })
+        if parent is None or getattr(parent, "id", None) is None:
+            metadata_failures.append({
+                **common,
+                "failure_class": "ISSUE2024_EVENT_CPU_PARENT_REQUIRED",
+            })
+        if shapes is None:
+            metadata_failures.append({
+                **common,
+                "failure_class": "ISSUE2024_EVENT_INPUT_SHAPES_REQUIRED",
+            })
+        if not stack or parent is None or getattr(parent, "id", None) is None or shapes is None:
+            continue
         rows.append({
             "cpu_parent_id": int(parent.id),
             "event_id": event_id,
@@ -212,6 +255,12 @@ def build_issue2024_event_ledger(
             "source_stack": stack,
         })
 
+    if metadata_failures:
+        raise ValueError(
+            "ISSUE2024_EVENT_METADATA_REFUSED:"
+            + json.dumps(metadata_failures, sort_keys=True, separators=(",", ":"))
+        )
+
     declared_total = Decimal(declared_self_device_time_total_us)
     gap_ns = abs(declared_total - ledger_total) * Decimal("1000")
     if gap_ns > Decimal("1"):
@@ -220,6 +269,8 @@ def build_issue2024_event_ledger(
         "schema_version": "ember-issue2024-full-precision-event-ledger-v1",
         "declared_self_device_time_total_us": _issue2024_decimal_text(declared_total),
         "ledger_self_device_time_total_us": _issue2024_decimal_text(ledger_total),
+        "excluded_self_device_time_total_us": "0",
+        "excluded_zero_device_time_events": excluded_zero_device_time_events,
         "reconciliation_gap_ns": int(gap_ns),
         "events": rows,
     }
