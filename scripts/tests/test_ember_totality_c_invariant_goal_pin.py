@@ -14,6 +14,7 @@ class GoalInvariantPinTests(unittest.TestCase):
     def check_text(self, text: str) -> tuple[bool, str]:
         with tempfile.TemporaryDirectory() as tmp:
             goal = Path(tmp) / "docs/domains/governance/authority/GOAL.md"
+            goal.parent.mkdir(parents=True, exist_ok=True)
             goal.write_text(text, encoding="utf-8")
             with patch.object(target, "GOAL_FILE", goal):
                 return target.check_goal_pin()
