@@ -24,8 +24,14 @@ from io import BytesIO
 
 import pytest
 
-# Add scripts to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add the canonical governance scripts directory for migrated imports.
+CANONICAL_SCRIPTS = (
+    Path(__file__).resolve().parents[2] / "src" / "ember" / "governance" / "scripts"
+)
+sys.path.insert(
+    0,
+    str(CANONICAL_SCRIPTS),
+)
 
 import endpoint_identity
 import serving_registry
@@ -273,7 +279,7 @@ class TestEndpointIdentity:
     )
     def test_board_conditions_delegate_to_the_shared_identity_probe(self, relative_path):
         """Removing the shared call would restore the defective bare-health receipt path."""
-        source_path = Path(__file__).parent.parent / relative_path
+        source_path = CANONICAL_SCRIPTS / relative_path
         tree = ast.parse(source_path.read_text(encoding="utf-8"))
         probe_functions = [
             node for node in tree.body
@@ -289,7 +295,7 @@ class TestEndpointIdentity:
 
     def test_board_condition_consumer_census_is_closed(self):
         """The per-consumer proof must fail when a new health-based receipt appears."""
-        scripts_dir = Path(__file__).parent.parent
+        scripts_dir = CANONICAL_SCRIPTS
         consumers = {
             path.relative_to(scripts_dir).as_posix()
             for path in scripts_dir.rglob("*.py")
@@ -306,7 +312,7 @@ class TestEndpointIdentity:
 class TestServeCbaseRegistryLifecycle:
     def test_startup_registers_and_shutdown_deregisters_the_exact_process(self):
         """A running legacy shim must register after load and remove its real PID on exit."""
-        source_path = Path(__file__).parent.parent / "serve_cbase_openai.py"
+        source_path = CANONICAL_SCRIPTS / "serve_cbase_openai.py"
         tree = ast.parse(source_path.read_text(encoding="utf-8"))
         functions = {
             node.name: node

@@ -121,6 +121,7 @@ def test_restart_consumer_executes_snapshotted_validator_bytes(
         {
             "restart_run_manifest": manifest,
             "restart_trusted_verifier_registry": registry,
+            "restart_trusted_verifier_registry_approval": registry,
         },
         snapshots["restart"],
     )
@@ -135,8 +136,8 @@ def test_restart_consumer_executes_snapshotted_import_closure(
 ) -> None:
     repo = tmp_path / "repo"
     identity = repo / "scripts" / "ember_01_identity" / "validate_identity.py"
-    restart = repo / "scripts" / "ember_restart" / "cli_seat.py"
-    contract = repo / "scripts" / "ember_restart" / "contract.py"
+    restart = repo / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "cli_seat.py"
+    contract = repo / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "contract.py"
     identity.parent.mkdir(parents=True)
     restart.parent.mkdir(parents=True)
     identity.write_text("print('identity')\n", encoding="utf-8")
@@ -175,6 +176,7 @@ def test_restart_consumer_executes_snapshotted_import_closure(
         {
             "restart_run_manifest": manifest,
             "restart_trusted_verifier_registry": registry,
+            "restart_trusted_verifier_registry_approval": registry,
         },
         snapshots["restart"],
     )

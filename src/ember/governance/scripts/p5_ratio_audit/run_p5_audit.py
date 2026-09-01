@@ -331,7 +331,7 @@ from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))           # scripts/p5_ratio_audit
 SCRIPTS_DIR = os.path.dirname(HERE)                          # scripts/
-REPO_ROOT = os.path.dirname(SCRIPTS_DIR)                     # repo root
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..")) # repo root
 RECEIPTS = os.path.join(REPO_ROOT, "receipts")
 sys.path.insert(0, SCRIPTS_DIR)
 

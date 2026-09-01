@@ -23,6 +23,7 @@ REQUIRED_ROLES = (
     "restart_model_config",
     "restart_run_manifest",
     "restart_trusted_verifier_registry",
+    "restart_trusted_verifier_registry_approval",
     "tensor_hashes",
     "tensor_manifest",
 )

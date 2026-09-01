@@ -36,9 +36,17 @@ from unittest import mock
 import torch
 
 ROOT = Path(__file__).resolve().parents[2]
+_FIXTURE_DIR = ROOT / "tests" / "ember_restart_model" / "domain-governance"
+if not (_FIXTURE_DIR / "checkpoint_fixture.py").is_file():
+    _fixture_candidates = sorted(
+        (ROOT / "tests" / "ember_restart_model").glob("**/checkpoint_fixture.py")
+    )
+    if len(_fixture_candidates) != 1:
+        raise RuntimeError("checkpoint_fixture.py must have exactly one migration location")
+    _FIXTURE_DIR = _fixture_candidates[0].parent
 for _extra in (
     ROOT / "tools" / "ember-restart-3b",
-    ROOT / "tests" / "ember_restart_model",
+    _FIXTURE_DIR,
     ROOT / "scripts" / "ember_01_identity",
 ):
     if str(_extra) not in sys.path:

@@ -17,7 +17,7 @@
     },
     {
       "path": "scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "6bfb20f5f94059611404b189f2133fa35ca0eb2251e690cd0f3fbe46b3f58718",
+      "sha256": "2b960eaaeacba74843ff68fd5e0bdb75742a3b0aa218c3a7aef83bcc1152b124",
       "reason": "emits the packet manifest, including the single daemon launch command a contributor runs; derives no child process itself"
     },
     {
@@ -32,7 +32,7 @@
     },
     {
       "path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "cb09ef120555ea104626ad8179ccd59545b2cafd9b7e48fe6e0ff0ff2cee8760",
+      "sha256": "8d54d44ad8aac100d406df48ba8c74fbfac5eee4182deffdebded428a10fd756",
       "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
     },
     {

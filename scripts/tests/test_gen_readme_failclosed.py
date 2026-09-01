@@ -17,7 +17,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GENERATOR = REPO_ROOT / "scripts" / "gen_readme_status.py"
+GENERATOR = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "gen_readme_status.py"
 
 
 def load_generator():

@@ -50,7 +50,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ADMISSION_ROOT = REPO_ROOT / "scripts" / "ember_admission"
-RESTART_ROOT = REPO_ROOT / "scripts" / "ember_restart"
+RESTART_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart"
 sys.path.insert(0, str(ADMISSION_ROOT))
 sys.path.insert(0, str(RESTART_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "tests" / "ember_restart"))

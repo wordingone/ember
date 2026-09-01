@@ -91,7 +91,7 @@ for _p in (_SCRIPT_DIR, _PHASE3_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-REPO = _SCRIPT_DIR.parent
+REPO = Path(__file__).resolve().parents[4]
 
 # issue2015 exact-local-import:scripts/ember_c14_contract_rig.py
 import importlib.util as _ember_a15ae7b5497c49d1_importlib

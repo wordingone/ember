@@ -173,7 +173,7 @@ _PHASE3_DIR = _SCRIPT_DIR / "ember_phase3_c14"
 if str(_PHASE3_DIR) not in sys.path:
     sys.path.insert(0, str(_PHASE3_DIR))
 
-REPO = _SCRIPT_DIR.parent
+REPO = Path(__file__).resolve().parents[4]
 GOALFORGE_ROOT = os.environ.get(
     "EMBER_GOALFORGE_ROOT", os.path.join(os.path.dirname(str(REPO)), "ember-goalforge")
 )

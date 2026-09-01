@@ -40,7 +40,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from receipt_write import checked_write  # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parents[4]
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 PASS_TOL = 1e-4          # same tolerance the recorded prereq receipt used
 SEED_CKPT_DEFAULT = REPO / "models" / "cbase-smoke-run" / "checkpoints" / "step-00000610"

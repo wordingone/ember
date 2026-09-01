@@ -19,7 +19,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 IDENTITY_VALIDATOR = (
     REPO_ROOT / "scripts" / "ember_01_identity" / "validate_identity.py"
 )
-RESTART_SEAT_CONSUMER = REPO_ROOT / "scripts" / "ember_restart" / "cli_seat.py"
+RESTART_SEAT_CONSUMER = (
+    REPO_ROOT
+    / "src"
+    / "ember"
+    / "governance"
+    / "scripts"
+    / "ember_restart"
+    / "cli_seat.py"
+)
 
 _IDENTITY_STATIC_EVIDENCE = (
     "manifests/ember-01-identity/schema-v1.json",
@@ -37,9 +45,11 @@ CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
         "src/ember/governance/scripts/ember_restart/contract.py",
         "src/ember/governance/scripts/ember_restart/prediction_contract.py",
         "src/ember/governance/scripts/ember_restart/seat_identity_bridge.py",
+        "src/ember/governance/scripts/ember_restart/source_authority.py",
         "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
         "scripts/ember_01_identity/validate_identity.py",
         "tools/ember-restart-3b/parameter_counter.py",
+        "tools/ember-restart-3b/repository_layout.py",
         *_IDENTITY_STATIC_EVIDENCE,
     ),
 }
@@ -73,6 +83,8 @@ CONSUMER_COMMAND_CONTRACTS = {
         "role:restart_run_manifest",
         "--trusted-verifier-registry",
         "role:restart_trusted_verifier_registry",
+        "--trusted-verifier-registry-approval",
+        "role:restart_trusted_verifier_registry_approval",
     ),
 }
 
@@ -309,5 +321,7 @@ def run_restart_consumer(
         str(paths["restart_run_manifest"]),
         "--trusted-verifier-registry",
         str(paths["restart_trusted_verifier_registry"]),
+        "--trusted-verifier-registry-approval",
+        str(paths["restart_trusted_verifier_registry_approval"]),
     ]
     return _run_snapshotted_validator(frozen, arguments)

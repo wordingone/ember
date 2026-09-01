@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
 sys.path.insert(0, HERE)
 
 import receipt_write  # noqa: E402

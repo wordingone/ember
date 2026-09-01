@@ -26,7 +26,7 @@ from typing import Any
 from contract import validate_manifest
 from seat_identity_bridge import derive_seat_identity, require_admitted_seat
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 def _registry_approval(approval_path: Path) -> tuple[str, str]:

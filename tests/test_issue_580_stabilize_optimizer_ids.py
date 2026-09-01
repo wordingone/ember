@@ -48,7 +48,7 @@ timeshare = _load_functions(
     {},
 )
 shared_audit = _load_functions(
-    ROOT / "scripts" / "p5_ratio_audit" / "run_p5_audit.py",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "p5_ratio_audit" / "run_p5_audit.py",
     {"enumerate_missing_optimizer_state_ids"},
     {"ts": timeshare},
 )
@@ -59,10 +59,10 @@ class StagedCheckpointVerificationFailure(RuntimeError):
 
 
 stabilize_source = (
-    ROOT / "scripts" / "cbase_grow_rung2_stabilize.py"
+    ROOT / "src" / "ember" / "governance" / "scripts" / "cbase_grow_rung2_stabilize.py"
 ).read_text(encoding="utf-8")
 stabilize = _load_functions(
-    ROOT / "scripts" / "cbase_grow_rung2_stabilize.py",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "cbase_grow_rung2_stabilize.py",
     {
         "_enumerate_missing_optimizer_state_ids",
         "_write_transplanted_muon_buffers",

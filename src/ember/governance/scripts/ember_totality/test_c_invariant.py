@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 # Compute repo root
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[5]
 _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
 ROOT = next(
     (p for p in (Path(_env_root) if _env_root else None, REPO_ROOT)

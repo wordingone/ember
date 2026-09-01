@@ -85,7 +85,7 @@ for _ember_43fbe346bdd606d4_alias in _ember_43fbe346bdd606d4_aliases:
 resolve_in_tree = getattr(_ember_43fbe346bdd606d4_module, 'resolve_in_tree')
 # issue2015 exact-local-import-end:scripts/ember_totality/_lane14_common.py  # noqa: E402
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", ".."))
 CANDIDATE_ROOTS = [
     p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT)
     if p

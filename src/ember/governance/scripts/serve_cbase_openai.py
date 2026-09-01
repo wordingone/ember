@@ -58,7 +58,7 @@ from serving_registry import deregister, register
 # Configuration & Constants
 # ============================================================================
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
 CHECKPOINT_PATH_DEFAULT = (
     REPO_ROOT / "models" / "cbase-grow-rung" / "rung2-event-grow-rung2-20260708-real" / "b1-snapshot" / "model.pt"
 )

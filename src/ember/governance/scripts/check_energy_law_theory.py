@@ -59,7 +59,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
 RECEIPTS_DIR = REPO_ROOT / "receipts"
 SPEC_PATH = REPO_ROOT / "docs" / "spec" / "energy-law-theory-v1.md"
 

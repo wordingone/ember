@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 from pathlib import Path
 
@@ -20,13 +21,26 @@ from consumers import run_restart_consumer  # noqa: E402
 def test_real_restart_consumer_refuses_invalid_published_bytes(tmp_path: Path) -> None:
     manifest = tmp_path / "restart-run-manifest.json"
     registry = tmp_path / "restart-trusted-verifiers.json"
+    approval = tmp_path / "restart-trusted-verifiers-approval.json"
     manifest.write_text(json.dumps({}), encoding="utf-8")
     registry.write_text(json.dumps({}), encoding="utf-8")
+    approval.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-trusted-verifier-registry-approval-v1",
+                "trusted_verifier_registry_sha256": hashlib.sha256(
+                    registry.read_bytes()
+                ).hexdigest(),
+            }
+        ),
+        encoding="utf-8",
+    )
 
     result = run_restart_consumer(
         {
             "restart_run_manifest": manifest,
             "restart_trusted_verifier_registry": registry,
+            "restart_trusted_verifier_registry_approval": approval,
         }
     )
 

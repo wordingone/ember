@@ -56,7 +56,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-EXEC_ROOT = str(Path(__file__).resolve().parent.parent)
+EXEC_ROOT = str(Path(__file__).resolve().parents[4])
 GOALFORGE_ROOT = os.environ.get(
     "EMBER_GOALFORGE_ROOT", os.path.join(os.path.dirname(EXEC_ROOT), "ember-goalforge")
 )

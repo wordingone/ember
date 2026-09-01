@@ -112,7 +112,7 @@ for _p in (_SCRIPT_DIR, _PHASE3_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-REPO = _SCRIPT_DIR.parent
+REPO = Path(__file__).resolve().parents[4]
 
 TICKET = "C-E2B-PAIRED-RUN"
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"

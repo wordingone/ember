@@ -31,6 +31,7 @@ import pytest
 pytest.importorskip("torch", reason="checkpoint fixture requires optional PyTorch")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "src" / "ember" / "governance" / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "tests"))
 
@@ -864,7 +865,7 @@ def test_cli_via_subprocess_selftest():
     actually run this -- proves the module also works as `python
     src/ember/governance/scripts/r2_cheap_probe_battery.py --selftest`, not just as an import."""
     completed = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "r2_cheap_probe_battery.py"), "--selftest"],
+        [sys.executable, str(REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "r2_cheap_probe_battery.py"), "--selftest"],
         capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=120,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
