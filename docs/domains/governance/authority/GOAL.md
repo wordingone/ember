@@ -265,7 +265,7 @@ they cannot reduce, defer, replace, or reinterpret it.
 ## Public roadmap hierarchy
 
 The complete milestone decomposition is published at
-[`docs/domains/governance/roadmap/README.md`](../../../roadmap/README.md). It has exactly four
+[`docs/domains/governance/roadmap/README.md`](../roadmap/README.md). It has exactly four
 surfaces: this constitutional goal, twelve version-controlled milestone
 contracts, one non-authoritative execution graph, and concrete GitHub
 issues/pull requests. The decomposition and tracking surfaces cannot reduce,

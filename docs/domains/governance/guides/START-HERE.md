@@ -2,7 +2,7 @@
 
 This route is for a technically capable reader with no project history. Ember is a complete local
 foundation-intelligence project, not only a model, trainer, service, or command-line interface. Read
-the [system overview](../architecture/system-overview.md) before interpreting a subsystem as the
+the [system overview](../../../architecture/system-overview.md) before interpreting a subsystem as the
 whole project.
 
 Its operating constraint is one consumer GPU.
@@ -27,17 +27,17 @@ Its operating constraint is one consumer GPU.
   `python scripts/verify_authority_conservation.py --root .`. Success reports authority
   conservation; it requires no credentials, weights, or GPU and grants no model capability.
 - Exact mutable current truth lives only in
-  [`docs/authority/CONTINUITY.md`](../authority/CONTINUITY.md); entry documentation links rather
+  [`docs/authority/CONTINUITY.md`](../../../authority/CONTINUITY.md); entry documentation links rather
   than copying it. Public roadmap certificates, not prose or progress bars, carry completion.
 - Contribution and independent reproduction start at
-  [`docs/contributing.md`](../contributing.md) and the public
-  [reproducibility charter](../charter/REPRODUCIBILITY.md): bind an exact public source, replay
+  [`docs/contributing.md`](../../../contributing.md) and the public
+  [reproducibility charter](../../../charter/REPRODUCIBILITY.md): bind an exact public source, replay
   documented commands, and verify source identities and receipts without hidden or local evidence.
 
 ## Inspect the repository
 
-Begin at the root README, then use the [documentation map](../DOCS-README.md). The canonical mutable
-execution position is [continuity](../authority/CONTINUITY.md); the README deliberately does not
+Begin at the root README, then use the [documentation map](../../../DOCS-README.md). The canonical mutable
+execution position is [continuity](../../../authority/CONTINUITY.md); the README deliberately does not
 copy its changing identities. The [roadmap](../roadmap/README.md) distinguishes target contracts
 from certified completion.
 
@@ -47,9 +47,9 @@ To inspect Ember, start at the repository-root `README.md` and continue through 
 `docs/domains/governance/guides/START-HERE.md` page. On Windows, `tools/launchers/Ember.cmd` is the operator entry.
 
 Installation authorities are distinct: Python uses
-[`manifests/python-environment-v1.json`](../../manifests/python-environment-v1.json), Rust uses
-[`runtime/ember-lab/Cargo.toml`](../../runtime/ember-lab/Cargo.toml), and `ember-cli` uses
-[`tools/ember-cli/src/package.json`](../../tools/ember-cli/src/package.json).
+[`manifests/python-environment-v1.json`](../../../../manifests/python-environment-v1.json), Rust uses
+[`runtime/ember-lab/Cargo.toml`](../../../../runtime/ember-lab/Cargo.toml), and `ember-cli` uses
+[`tools/ember-cli/src/package.json`](../../../../tools/ember-cli/src/package.json).
 
 From the repository root:
 
@@ -58,7 +58,7 @@ python tools/ember-restart-3b/python_environment.py install --receipt state\rece
 ```
 
 The measured environment contract is
-[`manifests/python-environment-v1.json`](../../manifests/python-environment-v1.json). Installation
+[`manifests/python-environment-v1.json`](../../../../manifests/python-environment-v1.json). Installation
 uses CPU and network access, requires no model weights or GPU, and does not establish model capability.
 Launching the operator body is different from training, evaluation, or proof of an admitted model.
 
@@ -70,14 +70,14 @@ Run the CPU-only authority verifier from the repository root:
 python scripts/verify_authority_conservation.py --root .
 ```
 
-Then read the [verification guide](VERIFY.md) for expected output, receipt selftest, documentation
+Then read the [verification guide](../../../guides/VERIFY.md) for expected output, receipt selftest, documentation
 validation, exact requirements, and claim boundaries.
 
 ## Choose the next route
 
-- Understand the eight domains and Lab: [system overview](../architecture/system-overview.md)
-- Reproduce public evidence: [verification guide](VERIFY.md)
-- Contribute: [contribution guide](../contributing.md)
-- Operate current surfaces: [operator route](../operator/README.md)
-- Audit authority and mutable state: [continuity](../authority/CONTINUITY.md)
-- Define project vocabulary: [glossary](../GLOSSARY.md)
+- Understand the eight domains and Lab: [system overview](../../../architecture/system-overview.md)
+- Reproduce public evidence: [verification guide](../../../guides/VERIFY.md)
+- Contribute: [contribution guide](../../../contributing.md)
+- Operate current surfaces: [operator route](../../../operator/README.md)
+- Audit authority and mutable state: [continuity](../../../authority/CONTINUITY.md)
+- Define project vocabulary: [glossary](../../../GLOSSARY.md)
