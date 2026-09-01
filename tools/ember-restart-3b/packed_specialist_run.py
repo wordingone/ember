@@ -71,6 +71,15 @@ from training_acceleration import (
     load_stage2_activation_authority,
 )
 
+ISSUE_PROFILE_MODES = (
+    "issue1946-preflight",
+    "issue1946-arm-a",
+    "issue1946-arm-b",
+    "issue2024-smoke",
+    "issue2024-arm-a",
+    "issue2024-arm-b",
+)
+
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _CLAIM_BOUNDARY = "THROUGHPUT_ONLY_NO_CAPABILITY_CLAIM"
@@ -120,6 +129,10 @@ def issue2024_profiler_configuration() -> dict[str, bool]:
 
 def issue2024_profile_mode(mode: str) -> dict[str, str]:
     rows = {
+        "issue2024-smoke": {
+            "policy_mode": "issue1946-arm-a",
+            "output_name": "issue2024-smoke-stack-ledger.json",
+        },
         "issue2024-arm-a": {
             "policy_mode": "issue1946-arm-a",
             "output_name": "issue2024-arm-a-stack-ledger.json",
@@ -136,13 +149,36 @@ def issue2024_profile_mode(mode: str) -> dict[str, str]:
 
 
 def profiler_configuration_for_mode(mode: str) -> dict[str, bool]:
-    if mode in {"issue2024-arm-a", "issue2024-arm-b"}:
+    if mode in {"issue2024-smoke", "issue2024-arm-a", "issue2024-arm-b"}:
         return issue2024_profiler_configuration()
     return {"profile_memory": True, "record_shapes": True, "with_stack": False}
 
 
+def issue2024_profile_schedule(mode: str, policy_mode: str) -> dict[str, object]:
+    if mode == "issue2024-smoke" or policy_mode == "issue1946-preflight":
+        return {"packs": 1, "wait": 0, "active": 1, "update_indexes": [0]}
+    return {"packs": 64, "wait": 16, "active": 8, "update_indexes": list(range(16, 24))}
+
+
 def _issue2024_decimal_text(value: object) -> str:
     return format(Decimal(str(value)), "f")
+
+
+def _issue2024_source_stack(event: Any) -> list[str]:
+    """Return the first recorded source stack on the event's CPU ancestry."""
+
+    current: Any | None = event
+    visited: set[int] = set()
+    while current is not None:
+        identity = id(current)
+        if identity in visited:
+            raise ValueError("ISSUE2024_EVENT_CPU_PARENT_CYCLE")
+        visited.add(identity)
+        stack = [str(frame) for frame in (getattr(current, "stack", None) or [])]
+        if stack:
+            return stack
+        current = getattr(current, "cpu_parent", None)
+    raise ValueError("ISSUE2024_EVENT_SOURCE_STACK_REQUIRED")
 
 
 def build_issue2024_event_ledger(
@@ -158,9 +194,7 @@ def build_issue2024_event_ledger(
         if event_id in event_ids:
             raise ValueError(f"ISSUE2024_EVENT_ID_DUPLICATE:{event_id}")
         event_ids.add(event_id)
-        stack = [str(frame) for frame in event.stack]
-        if not stack:
-            raise ValueError("ISSUE2024_EVENT_SOURCE_STACK_REQUIRED")
+        stack = _issue2024_source_stack(event)
         parent = event.cpu_parent
         if parent is None or getattr(parent, "id", None) is None:
             raise ValueError("ISSUE2024_EVENT_CPU_PARENT_REQUIRED")
@@ -1394,10 +1428,7 @@ def run_issue1946_profile(
 ) -> dict[str, object]:
     """Run the fixed preflight/arms or the stack-ledger measurement successor."""
 
-    allowed_modes = {
-        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-arm-a", "issue2024-arm-b",
-    }
+    allowed_modes = set(ISSUE_PROFILE_MODES)
     if mode not in allowed_modes:
         raise ValueError("unknown #1946 profile mode")
     issue2024 = mode.startswith("issue2024-")
@@ -1457,7 +1488,8 @@ def run_issue1946_profile(
     selected_count = getattr(selection, "receipt", {}).get("selected_record_count")
     if selected_count != 4096:
         raise ValueError("#1946 requires the exact 4096-record bound selection")
-    packs = 1 if policy_mode == "issue1946-preflight" else 64
+    profile_schedule = issue2024_profile_schedule(mode, policy_mode)
+    packs = int(profile_schedule["packs"])
     execution = prepare_packed_execution_slice(
         selection=selection,
         config=RestartDecoderConfig.from_contract(config_path),
@@ -1576,7 +1608,7 @@ def run_issue1946_profile(
         observed_kernel_rows: list[dict[str, object]] = []
         forward_owner_device_time_us = {owner: 0.0 for owner in _ISSUE1946_FORWARD_OWNERS}
         forward_unmapped_device_time_us = 0.0
-        profiler_indexes = [0] if policy_mode == "issue1946-preflight" else list(range(16, 24))
+        profiler_indexes = list(profile_schedule["update_indexes"])
         issue2024_event_ledger: dict[str, object] | None = None
 
         def trace_ready(profiler: Any) -> None:
@@ -1618,8 +1650,8 @@ def run_issue1946_profile(
             # The canonical in-memory ledger is complete before this secondary export.
             profiler.export_chrome_trace(str(trace_path))
 
-        wait_updates = 0 if policy_mode == "issue1946-preflight" else 16
-        active_updates = 1 if policy_mode == "issue1946-preflight" else 8
+        wait_updates = int(profile_schedule["wait"])
+        active_updates = int(profile_schedule["active"])
         profiler = torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=wait_updates, warmup=0, active=active_updates, repeat=1),
@@ -1988,14 +2020,13 @@ def _add_runtime_arguments(parser: argparse.ArgumentParser, *, packs: bool) -> N
     parser.add_argument("--live", action="store_true")
 
 
-def main() -> int:
+def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     for name in (
         "durable-preflight", "formal-preflight", "durable-bf16",
         "bf16", "stage2", "diagnostic-graph-bf16",
-        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-arm-a", "issue2024-arm-b",
+        *ISSUE_PROFILE_MODES,
     ):
         child = subparsers.add_parser(name)
         _add_runtime_arguments(
@@ -2006,11 +2037,16 @@ def main() -> int:
             child.add_argument("--execution-source-commit", required=True)
         else:
             child.set_defaults(execution_source_commit=None)
-        if name in {"issue1946-arm-a", "issue2024-arm-a"}:
+        policy_mode = (
+            issue2024_profile_mode(name)["policy_mode"]
+            if name.startswith("issue2024-")
+            else name
+        )
+        if policy_mode == "issue1946-arm-a":
             child.add_argument("--preflight-receipt", type=Path, required=True)
         else:
             child.set_defaults(preflight_receipt=None)
-        if name in {"issue1946-arm-b", "issue2024-arm-b"}:
+        if policy_mode == "issue1946-arm-b":
             child.add_argument("--arm-a-receipt", type=Path, required=True)
         else:
             child.set_defaults(arm_a_receipt=None)
@@ -2022,6 +2058,11 @@ def main() -> int:
     issue1946_compare.add_argument("--arm-a", type=Path, required=True)
     issue1946_compare.add_argument("--arm-b", type=Path, required=True)
     issue1946_compare.add_argument("--output", type=Path, required=True)
+    return parser
+
+
+def main() -> int:
+    parser = _build_argument_parser()
     args = parser.parse_args()
     if args.command in {"durable-preflight", "formal-preflight"}:
         if args.artifact_root is not None or args.live:
@@ -2039,10 +2080,7 @@ def main() -> int:
             accelerated=args.command == "stage2",
             diagnostic_graph_bf16=args.command == "diagnostic-graph-bf16",
         )
-    elif args.command in {
-        "issue1946-preflight", "issue1946-arm-a", "issue1946-arm-b",
-        "issue2024-arm-a", "issue2024-arm-b",
-    }:
+    elif args.command in ISSUE_PROFILE_MODES:
         if args.artifact_root is None:
             parser.error(f"{args.command} requires --artifact-root")
         result = run_issue1946_profile(args, mode=args.command)
