@@ -334,6 +334,14 @@ def test_issue2024_ledger_preserves_duplicate_profiler_correlation_ids_by_ordina
     ]
 
 
+def test_issue2024_ledger_refuses_doubly_enumerated_events_by_reconciliation() -> None:
+    events = [_event(), _event(event_id=8, device_time_us="2.000002")]
+    with pytest.raises(ValueError, match="ISSUE2024_EVENT_RECONCILIATION_MISS"):
+        subject.build_issue2024_event_ledger(
+            [*events, *events], declared_self_device_time_total_us="12.000003"
+        )
+
+
 def _union_receipt(mode: str, events: list[dict[str, object]]) -> dict[str, object]:
     receipt: dict[str, object] = {
         "schema_version": "ember-issue2024-union-measurement-v1",
