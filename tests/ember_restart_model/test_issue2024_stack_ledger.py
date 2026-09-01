@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 import hashlib
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -426,6 +427,27 @@ def test_issue2024_union_comparison_refuses_identity_or_preflight_drift() -> Non
             one_shot_raw_sha256="1" * 64,
             sharded_raw_sha256="2" * 64,
         )
+
+
+def test_issue2024_union_comparison_refuses_same_set_with_different_multiplicity() -> None:
+    event = _union_event()
+    with pytest.raises(ValueError, match="STRUCTURAL_MULTISET_MISMATCH"):
+        subject.build_issue2024_union_comparison_receipt(
+            _union_receipt("issue2024-union-one-shot", [event, dict(event)]),
+            _union_receipt("issue2024-union-sharded", [event]),
+            one_shot_raw_sha256="1" * 64,
+            sharded_raw_sha256="2" * 64,
+        )
+
+
+def test_issue2024_union_modes_reach_two_update_builder_not_64_update_arm_builder() -> None:
+    source = inspect.getsource(subject.run_issue1946_profile)
+    branch = source.index(
+        'elif mode in {"issue2024-union-one-shot", "issue2024-union-sharded"}:'
+    )
+    union_builder = source.index("receipt = build_issue2024_union_measurement_receipt(", branch)
+    arm_builder = source.index("receipt = build_issue1946_arm_receipt(", branch)
+    assert branch < union_builder < arm_builder
 
 
 def test_issue2024_union_comparison_cli_is_no_overwrite() -> None:
