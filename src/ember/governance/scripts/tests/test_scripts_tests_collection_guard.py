@@ -58,7 +58,7 @@ def test_run_collection_uses_repo_scripts_tests_and_reports_count(monkeypatch: p
 
 
 def test_ci_pr_runs_complete_scripts_tests_collection_guard() -> None:
-    root = Path(__file__).resolve().parents[2]
+    root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     workflow = yaml.safe_load(
         (root / ".github/workflows/ci-pr.yml").read_text(encoding="utf-8")
     )

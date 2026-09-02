@@ -72,7 +72,7 @@ def test_manifest_registered_worktrees_are_path_free_and_typed() -> None:
 
 
 def test_manifest_verifier_selects_no_uncertain_delete_rows() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import verified_delete_rows, verify_manifest
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import verified_delete_rows, verify_manifest
 
     payload = _load()
     verify_manifest(payload)
@@ -80,7 +80,7 @@ def test_manifest_verifier_selects_no_uncertain_delete_rows() -> None:
 
 
 def test_manifest_verifier_rejects_uncertain_row_marked_for_deletion() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
 
     payload = _load()
     tampered = copy.deepcopy(payload)
@@ -95,7 +95,7 @@ def test_manifest_verifier_rejects_uncertain_row_marked_for_deletion() -> None:
 
 
 def test_manifest_verifier_rejects_delete_row_under_not_granted_authority() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
 
     tampered = copy.deepcopy(_load())
     tampered["candidates"][0] = _valid_delete_row(tampered)
@@ -105,7 +105,7 @@ def test_manifest_verifier_rejects_delete_row_under_not_granted_authority() -> N
 
 
 def test_manifest_verifier_rejects_granted_authority_in_structural_verifier() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import ManifestError, verified_delete_rows
 
     tampered = copy.deepcopy(_load())
     tampered["deletion_authority"] = "GRANTED_EXACT_ROWS"
@@ -115,7 +115,7 @@ def test_manifest_verifier_rejects_granted_authority_in_structural_verifier() ->
 
 
 def test_manifest_verifier_rejects_duplicate_candidate_refs() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
 
     for duplicate in ("KEEP_KEEP", "KEEP_DELETE"):
         tampered = copy.deepcopy(_load())
@@ -130,7 +130,7 @@ def test_manifest_verifier_rejects_duplicate_candidate_refs() -> None:
 
 
 def test_manifest_verifier_rejects_more_than_25_candidates() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
 
     tampered = copy.deepcopy(_load())
     for index in range(11):
@@ -163,7 +163,7 @@ def test_execution_receipt_is_canonical_noop_and_binds_manifest() -> None:
 
 
 def test_manifest_verifier_rejects_path_traversal_ref() -> None:
-    from scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
+    from src.ember.governance.scripts.verify_lifecycle_drawdown_manifest import ManifestError, verify_manifest
 
     tampered = copy.deepcopy(_load())
     tampered["candidates"][0]["ref"] = "refs/heads/../unsafe"

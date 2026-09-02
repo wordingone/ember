@@ -205,7 +205,7 @@ def _load_custody_module(repo_root: Path):
 
 
 def test_custody_sidecar_writer_normalizes_paths_before_write(tmp_path: Path) -> None:
-    source_root = Path(__file__).resolve().parents[2]
+    source_root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     module = _load_custody_module(source_root)
     repo = tmp_path / "repo"
     repo.mkdir()

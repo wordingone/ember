@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = ROOT / "scripts" / "ember_cbase_mixture.py"
 REFUSAL = (
     "historical_only: the sub-3B cbase mixture assembler and every "

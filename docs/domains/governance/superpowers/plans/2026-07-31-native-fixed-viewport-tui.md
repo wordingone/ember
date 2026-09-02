@@ -69,7 +69,7 @@
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
 - Modify: `tools/ember-cli/src/screens/repl.ts`
-- Create: `tools/ember-cli/src/screens/repl-scroll-containment.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/screens/repl-scroll-containment.test.ts`
 
 **Interfaces:**
 - Conversation history and activity feed expose independent bounded offsets and `onWheel` handlers.

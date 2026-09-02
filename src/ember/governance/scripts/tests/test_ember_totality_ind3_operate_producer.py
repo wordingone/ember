@@ -13,7 +13,7 @@ from unittest import mock
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 
 
 def _load(name: str, relative: str):

@@ -17,7 +17,7 @@ Pins:
      refuses re-freeze; missing manifests/corpus/ refuses; sample sha +
      strata + tokenizer sha land in the receipt via checked_write.
 
-Run: python scripts/tokenizer_freeze_selftest.py
+Run: python src/ember/governance/scripts/tokenizer_freeze_selftest.py
 """
 import hashlib
 import json

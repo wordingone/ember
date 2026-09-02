@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-_REPO = Path(__file__).resolve().parent.parent
+_REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 
 # Frozen coordinates per amendment
 ISSUE_724 = "wordingone/ember#724"
