@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from loop_graph import gates, lifecycle, mutex, procid, receipts, replay, validate  # noqa: E402

@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 WORKFLOW = ROOT / ".github" / "workflows" / "issue-close-sweep.yml"
 
 

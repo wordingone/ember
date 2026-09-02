@@ -18,7 +18,7 @@ SPEC = importlib.util.spec_from_file_location("issue35_terminal", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
-REPO = Path(__file__).resolve().parents[1]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 PACKET = REPO / MODULE.PACKET_PATH
 RECEIPT = REPO / "receipts" / "issue35" / "issue-35-terminal-conservation-v1.json"
 
