@@ -34,6 +34,8 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
     bundle = load(bundle_path)
     verify_self(bundle, "bundle")
     forbid_protected_bytes(bundle)
+    if bundle.get("schema_version") != "ember-issue1947-redacted-release-bundle-v1":
+        raise ReleaseRecomputeRefusal("BUNDLE_SCHEMA_DRIFT")
     if bundle.get("result") != "COMPLETE" or bundle.get("protected_bytes_present") is not False:
         raise ReleaseRecomputeRefusal("BUNDLE_NOT_COMPLETE_OR_REDACTED")
     bindings = bundle.get("rows")
@@ -46,11 +48,17 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
     results = []
     for binding in bindings:
         row_id = binding["row_id"]
-        path = bundle_path.parent / binding.get("path", "")
+        relative_path = binding.get("path")
+        if relative_path != f"{row_id}.json":
+            raise ReleaseRecomputeRefusal(f"ROW_PATH_DRIFT:{row_id}")
+        path = bundle_path.parent / relative_path
         raw = path.read_bytes()
         if len(raw) != binding.get("bytes") or sha(raw) != binding.get("raw_sha256"):
             raise ReleaseRecomputeRefusal(f"RAW_ROW_BINDING_DRIFT:{row_id}")
-        row = load(path); verify_self(row, row_id); validate_row({key: value for key, value in row.items() if key != "self_sha256"}, row_id)
+        row = load(path); verify_self(row, row_id)
+        if binding.get("self_sha256") != row.get("self_sha256"):
+            raise ReleaseRecomputeRefusal(f"ROW_SELF_HASH_BINDING_DRIFT:{row_id}")
+        validate_row({key: value for key, value in row.items() if key != "self_sha256"}, row_id)
         scores = [float(item["score"]) for item in row["items"]]
         mean = sum(scores) / len(scores)
         if not math.isfinite(mean):
