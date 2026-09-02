@@ -235,35 +235,35 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     scripts_dir = str(_HERE)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    # issue2015 exact-local-import:scripts/w4_eval.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/w4_eval.py
     import importlib.util as _ember_35cf90ffec8cbce1_importlib
     import sys as _ember_35cf90ffec8cbce1_sys
     from pathlib import Path as _ember_35cf90ffec8cbce1_Path
     _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parents[4].joinpath('scripts', 'w4_eval.py')
     if not _ember_35cf90ffec8cbce1_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w4_eval.py')
-    _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'scripts.w4_eval', 'w4_eval')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w4_eval.py')
+    _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'src.ember.governance.scripts.w4_eval', 'w4_eval')
     _ember_35cf90ffec8cbce1_existing = []
     for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
         _ember_35cf90ffec8cbce1_candidate = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
         if _ember_35cf90ffec8cbce1_candidate is not None and all(_ember_35cf90ffec8cbce1_candidate is not item for item in _ember_35cf90ffec8cbce1_existing):
             _ember_35cf90ffec8cbce1_existing.append(_ember_35cf90ffec8cbce1_candidate)
     if len(_ember_35cf90ffec8cbce1_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w4_eval.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w4_eval.py')
     if _ember_35cf90ffec8cbce1_existing:
         _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_existing[0]
         _ember_35cf90ffec8cbce1_observed = getattr(_ember_35cf90ffec8cbce1_module, '__file__', None)
         if _ember_35cf90ffec8cbce1_observed is None or _ember_35cf90ffec8cbce1_Path(_ember_35cf90ffec8cbce1_observed).resolve() != _ember_35cf90ffec8cbce1_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w4_eval.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w4_eval.py')
     else:
         _ember_35cf90ffec8cbce1_spec = _ember_35cf90ffec8cbce1_importlib.spec_from_file_location('_ember_issue2015_35cf90ffec8cbce1', _ember_35cf90ffec8cbce1_path)
         if _ember_35cf90ffec8cbce1_spec is None or _ember_35cf90ffec8cbce1_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w4_eval.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w4_eval.py')
         _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_importlib.module_from_spec(_ember_35cf90ffec8cbce1_spec)
         for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
             _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
             if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w4_eval.py')
             _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
         try:
             _ember_35cf90ffec8cbce1_spec.loader.exec_module(_ember_35cf90ffec8cbce1_module)
@@ -275,10 +275,10 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
         _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
         if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w4_eval.py')
         _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
     w4_eval = _ember_35cf90ffec8cbce1_module
-    # issue2015 exact-local-import-end:scripts/w4_eval.py  # noqa: E402
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/w4_eval.py  # noqa: E402
 
     # Build minimal args object mirroring w4_eval.run_arm expectations
     class _A:
@@ -289,35 +289,35 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     a.max_new = 512
     a.temp = 0.8
     a.seed = seed
-    # issue2015 exact-local-import:scripts/w4_eval.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/w4_eval.py
     import importlib.util as _ember_35cf90ffec8cbce1_importlib
     import sys as _ember_35cf90ffec8cbce1_sys
     from pathlib import Path as _ember_35cf90ffec8cbce1_Path
     _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parents[4].joinpath('scripts', 'w4_eval.py')
     if not _ember_35cf90ffec8cbce1_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w4_eval.py')
-    _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'scripts.w4_eval', 'w4_eval')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w4_eval.py')
+    _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'src.ember.governance.scripts.w4_eval', 'w4_eval')
     _ember_35cf90ffec8cbce1_existing = []
     for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
         _ember_35cf90ffec8cbce1_candidate = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
         if _ember_35cf90ffec8cbce1_candidate is not None and all(_ember_35cf90ffec8cbce1_candidate is not item for item in _ember_35cf90ffec8cbce1_existing):
             _ember_35cf90ffec8cbce1_existing.append(_ember_35cf90ffec8cbce1_candidate)
     if len(_ember_35cf90ffec8cbce1_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w4_eval.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w4_eval.py')
     if _ember_35cf90ffec8cbce1_existing:
         _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_existing[0]
         _ember_35cf90ffec8cbce1_observed = getattr(_ember_35cf90ffec8cbce1_module, '__file__', None)
         if _ember_35cf90ffec8cbce1_observed is None or _ember_35cf90ffec8cbce1_Path(_ember_35cf90ffec8cbce1_observed).resolve() != _ember_35cf90ffec8cbce1_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w4_eval.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w4_eval.py')
     else:
         _ember_35cf90ffec8cbce1_spec = _ember_35cf90ffec8cbce1_importlib.spec_from_file_location('_ember_issue2015_35cf90ffec8cbce1', _ember_35cf90ffec8cbce1_path)
         if _ember_35cf90ffec8cbce1_spec is None or _ember_35cf90ffec8cbce1_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w4_eval.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w4_eval.py')
         _ember_35cf90ffec8cbce1_module = _ember_35cf90ffec8cbce1_importlib.module_from_spec(_ember_35cf90ffec8cbce1_spec)
         for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
             _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
             if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w4_eval.py')
             _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
         try:
             _ember_35cf90ffec8cbce1_spec.loader.exec_module(_ember_35cf90ffec8cbce1_module)
@@ -329,12 +329,12 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     for _ember_35cf90ffec8cbce1_alias in _ember_35cf90ffec8cbce1_aliases:
         _ember_35cf90ffec8cbce1_prior = _ember_35cf90ffec8cbce1_sys.modules.get(_ember_35cf90ffec8cbce1_alias)
         if _ember_35cf90ffec8cbce1_prior is not None and _ember_35cf90ffec8cbce1_prior is not _ember_35cf90ffec8cbce1_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w4_eval.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w4_eval.py')
         _ember_35cf90ffec8cbce1_sys.modules[_ember_35cf90ffec8cbce1_alias] = _ember_35cf90ffec8cbce1_module
     load_split = getattr(_ember_35cf90ffec8cbce1_module, 'load_split')
     task_pass_vector = getattr(_ember_35cf90ffec8cbce1_module, 'task_pass_vector')
     filter_problems_by_ids = getattr(_ember_35cf90ffec8cbce1_module, 'filter_problems_by_ids')
-    # issue2015 exact-local-import-end:scripts/w4_eval.py  # noqa: E402
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/w4_eval.py  # noqa: E402
 
     args_split = getattr(args, "split", "validation")
     task_ids_file = getattr(args, "task_ids_file", None)

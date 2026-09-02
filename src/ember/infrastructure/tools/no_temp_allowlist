@@ -58,7 +58,7 @@ src/ember/governance/scripts/ember_gate_cleanroom_legal_boundary.py
 src/ember/governance/scripts/ember_gate_cleanroom_legal_boundary_selftest.py
 src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use.py
 src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use_selftest.py
-scripts/ember_gate_full_parity_harness_selftest.py
+src/ember/governance/scripts/ember_gate_full_parity_harness_selftest.py
 scripts/ember_gate_function_slash_commands_selftest.py
 scripts/ember_gate_goal_mode_parity_adapter_selftest.py
 scripts/ember_gate_hook_runner_selftest.py
@@ -128,7 +128,7 @@ src/ember/governance/scripts/ember_totality/test_c_ladm.py
 scripts/ember_train_multimodal_resident_adapter.py
 src/ember/governance/scripts/ember_train_multimodal_resident_adapter_cli_selftest.py
 src/ember/governance/scripts/ember_wheel_harness.py
-scripts/ember_wheel_harness_selftest.py
+src/ember/governance/scripts/ember_wheel_harness_selftest.py
 src/ember/governance/scripts/ember_windows_sandbox.py
 scripts/ember_windows_sandbox_selftest.py
 src/ember/governance/scripts/eng45_backfill_sha_convention.py
@@ -138,12 +138,12 @@ src/ember/governance/scripts/fp21b_prereg.py
 src/ember/governance/scripts/fp21b_scope_132.py
 src/ember/governance/scripts/fp26_prereg.py
 src/ember/governance/scripts/fp30_total_consistency.py
-scripts/fp30b_register_deviations.py
+src/ember/governance/scripts/fp30b_register_deviations.py
 scripts/fp30d_shard_gate.py
 src/ember/governance/scripts/fp32_baseline_miner.py
 src/ember/governance/scripts/fp32_e1b_gate.py
-scripts/fp32_r10_failure_taxonomy.py
-scripts/fp33_a_legs_prestage.py
+src/ember/governance/scripts/fp32_r10_failure_taxonomy.py
+src/ember/governance/scripts/fp33_a_legs_prestage.py
 scripts/fp44_horizon_optimizer_equiv.py
 src/ember/governance/scripts/frontier.py
 src/ember/governance/scripts/governor.py

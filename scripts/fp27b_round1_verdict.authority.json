@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/fp27b_round1_verdict.py",
+  "artifact_path": "src/ember/governance/scripts/fp27b_round1_verdict.py",
   "artifact_sha256": "dd06bd2ae1d21c70fe1dd87fc68f3aabd286d557cab8774630e394e2a687db04",
   "authority": {
     "goal_id": "EMBER-02",

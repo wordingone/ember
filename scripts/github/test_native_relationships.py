@@ -4,7 +4,7 @@
 import copy
 import unittest
 
-from scripts.github.native_relationships import (
+from src.ember.governance.scripts.github.native_relationships import (
     RelationshipError,
     apply,
     build_plan,

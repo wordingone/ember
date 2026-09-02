@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.github.classify_open import classify
+from src.ember.governance.scripts.github.classify_open import classify
 
 
 class ClassificationTests(unittest.TestCase):

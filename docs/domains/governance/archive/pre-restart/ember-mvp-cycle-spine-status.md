@@ -75,7 +75,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   path that consumes one benchmark receipt per arm, refuses blocked or fixture
   benchmark evidence, and now requires each benchmark receipt to carry the
   matching A/B/C arm contract.
-- `scripts/ember_wheel_harness_selftest.py` verifies equal budget, C>B>A
+- `src/ember/governance/scripts/ember_wheel_harness_selftest.py` verifies equal budget, C>B>A
   normalized improvement ordering, non-leaderboard benchmark boundary, and
   growth-gate refusal for fixture and real wheel receipts.
 - `src/ember/governance/scripts/ember_mvp_readiness.py` is a fail-closed readiness gate over a
@@ -824,7 +824,7 @@ python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_governor_binding_selftest.py
 python src\ember\governance\scripts\ember_governor_binding.py --selftest
-python scripts\ember_wheel_harness_selftest.py
+python src\ember\governance\scripts\ember_wheel_harness_selftest.py
 python src\ember\governance\scripts\ember_wheel_harness.py --selftest
 python src\ember\governance\scripts\ember_mvp_wheel_runner_selftest.py
 python src\ember\governance\scripts\ember_mvp_wheel_runner.py --fixture-out <local-path> --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001

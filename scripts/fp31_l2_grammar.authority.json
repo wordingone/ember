@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/fp31_l2_grammar.py",
+  "artifact_path": "src/ember/governance/scripts/fp31_l2_grammar.py",
   "artifact_sha256": "13dba7e794486561bde08144638133bac13e71157360bb3ed722d4ca82de5707",
   "authority": {
     "goal_id": "EMBER-02",

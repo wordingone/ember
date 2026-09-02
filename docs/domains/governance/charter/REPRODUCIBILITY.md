@@ -48,7 +48,7 @@ print a `*_SELFTEST_PASS` sentinel on success and exit non-zero on failure.
 ```bash
 python src/ember/governance/scripts/ember_gate_cleanroom_inventory_selftest.py
 python src/ember/governance/scripts/ember_gate_cleanroom_legal_boundary_selftest.py
-python scripts/ember_gate_full_parity_harness_selftest.py
+python src/ember/governance/scripts/ember_gate_full_parity_harness_selftest.py
 python scripts/ember_gate_receipt_store_selftest.py
 python scripts/ember_gate_state_persistence_selftest.py
 python scripts/ember_gate_hook_runner_selftest.py

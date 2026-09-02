@@ -33,7 +33,7 @@ test("the CURRENT spec binds every added production consumer", () => {
   expect(spec).toContain("Status: CURRENT");
   for (const path of [
     "src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-governor.ts",
-    "tools/ember-cli/src/services/process-memory-census.ts",
+    "src/ember/infrastructure/tools/ember-cli/src/services/process-memory-census.ts",
     "src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-service.ts",
     "src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-live.ts",
     "src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-cockpit.ts",

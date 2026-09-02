@@ -12,7 +12,7 @@ Issue: #1282 C1 (carried from #1273; covers the #756 failure class without closi
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-governor.ts`
 
-Consumer: `tools/ember-cli/src/services/process-memory-census.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/process-memory-census.ts`
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-service.ts`
 

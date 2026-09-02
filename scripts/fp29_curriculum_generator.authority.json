@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/fp29_curriculum_generator.py",
+  "artifact_path": "src/ember/governance/scripts/fp29_curriculum_generator.py",
   "artifact_sha256": "d04688bda6ad00a52ebfc8ff206f2298b2d1b76cb109fe785683d3bf6715160c",
   "authority": {
     "goal_id": "EMBER-02",

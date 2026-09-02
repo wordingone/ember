@@ -17,7 +17,7 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.github.classify_open import build as build_candidates  # noqa: E402
+from src.ember.governance.scripts.github.classify_open import build as build_candidates  # noqa: E402
 from scripts.github.labels_engine import (  # noqa: E402
     authority_binding,
     canonical_bytes,
