@@ -12,7 +12,7 @@ Source: https://github.com/wordingone/ember/issues/1281
 ## Why a distinct carrier is required
 
 Merged PR #1554 and
-`docs/roadmap/issue-700-c-invariant-residual-conservation.md` already preserve
+`docs/domains/governance/roadmap/issue-700-c-invariant-residual-conservation.md` already preserve
 the exact nine rows and zero-uncovered law. #1281 additionally made the missing
 stable identity and future audit/process-visibility emitter discipline its
 explicit subject. A distinct additive carrier names that obligation rather

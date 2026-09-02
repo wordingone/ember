@@ -11,7 +11,7 @@ Accepted owner comments:
 - #898: https://github.com/wordingone/ember/issues/898#issuecomment-5225865911
 - #372 bridge: https://github.com/wordingone/ember/issues/372#issuecomment-5225867484
 
-Publication base: `961d7e12eba7f636c1665280afd3f525cc436877`. The public PR body and terminal receipt must bind the frozen exact head, sole path `docs/roadmap/issue-372-paired-eval-conservation.md`, Git blob, file SHA-256, byte count, independent review URL, fresh CI and policy/guard job URLs, clean non-draft merge state, and immutable merge SHA. Stale or cancelled checks do not count.
+Publication base: `961d7e12eba7f636c1665280afd3f525cc436877`. The public PR body and terminal receipt must bind the frozen exact head, sole path `docs/domains/governance/roadmap/issue-372-paired-eval-conservation.md`, Git blob, file SHA-256, byte count, independent review URL, fresh CI and policy/guard job URLs, clean non-draft merge state, and immutable merge SHA. Stale or cancelled checks do not count.
 
 ## Lossless surviving contract
 

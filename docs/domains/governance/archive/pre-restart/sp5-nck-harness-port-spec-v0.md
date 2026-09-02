@@ -94,7 +94,7 @@ Sequenced AFTER fp-33 legs; none take the GPU.
 
 ## Selftest
 
-`scripts/sp5_spec_selftest.py` asserts every goal-clause noun maps to a
+`src/ember/governance/scripts/sp5_spec_selftest.py` asserts every goal-clause noun maps to a
 section: clean-room/port (§1), resident (§2), mailbox (§4), computer use
 (§4), harness/interface (§3), invariants-protected (§5), milestone-eval (§6),
 successors (§7). Run receipt in the PR body.

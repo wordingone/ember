@@ -56,7 +56,7 @@ FAIL, deviation_action, sha_convention. receipt_check-clean, committed.
 
 ### Contract tightening 2026-06-11 (an agent 14639 — rule UNCHANGED, binding hardened)
 
-The fire-time gate is `scripts/fp32_e1b_gate.py`; the decision rule above
+The fire-time gate is `src/ember/governance/scripts/fp32_e1b_gate.py`; the decision rule above
 is untouched. The pair-receipt CONTRACT gains binding obligations:
 
 1. Bare gate invocation (no `--pair`) exits NONZERO — staged is never

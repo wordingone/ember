@@ -21,7 +21,7 @@ each head-specific query, and all merge commits were reachable from master.
 
 Seven-day floor: 604800 seconds; all three candidates pass. Exact path/patch
 set digests and the full #403 intermediate path/blob disposition are in the
-paired manifest `docs/custody/vera-c1m-branch-deletion-manifest-v1.md`.
+paired manifest `docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md`.
 
 Bounded consumer searches: code matches 0 for each branch/head/merge token;
 release matches 0; tag matches 0; deployment matches 0. Issue search returned

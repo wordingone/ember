@@ -4363,7 +4363,7 @@ def _apportion_a1_step_energy(
 ) -> None:
     """Post-pass join of the closed energy sidecar samples and the closed A1
     telemetry file (issue #1464's per-step energy residual) --
-    `tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
+    `src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
     documents why this must be a post-pass and not an in-loop attribution.
 
     Runs only when the training child exited 0 and the sidecar wrote a

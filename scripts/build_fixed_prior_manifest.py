@@ -298,7 +298,7 @@ INVENTORY: tuple[dict, ...] = (
          provenance="The pre-registration this run is hash-pinned to "
                     "(`--prereg <sha256>`)."),
     dict(category="configuration", kind="file",
-         path="docs/spec/ember02-preregistration-thresholds-v1.json",
+         path="docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
          provenance="Frozen machine-readable threshold table; tighten-only."),
     dict(category="configuration", kind="file",
          path="manifests/python-environment-v1.json",

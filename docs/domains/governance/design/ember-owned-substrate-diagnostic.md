@@ -52,7 +52,7 @@ load-bearing candidates for an LM substrate:
 
 ### Citation lineage — required on every Search→ember import (the maintainer 2026-06-13)
 
-Per the standing citation policy (`docs/charter/citation-policy-search-to-ember.md`):
+Per the standing citation policy (`docs/domains/governance/charter/citation-policy-search-to-ember.md`):
 code lifted from The Search into ember cites either its direct prior or its
 complete predecessors, and MARKS the most unique element. For the import set
 above:

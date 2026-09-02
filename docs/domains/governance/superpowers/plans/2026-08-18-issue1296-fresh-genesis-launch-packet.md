@@ -24,7 +24,7 @@
 
 **Files:**
 - Create: `tests/ember_restart/test_r1_launch_packet.py`
-- Create: `scripts/ember_restart/r1_launch_packet.py`
+- Create: `src/ember/governance/scripts/ember_restart/r1_launch_packet.py`
 
 **Interfaces:**
 - Consumes: validated R1 receipt, governed manifest, certified declaration packet inputs, text-lab authority, stream paths, and custody roots.
@@ -36,7 +36,7 @@
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-  Run `pytest -q tests/ember_restart/test_r1_launch_packet.py` through the repository hidden-Python wrapper. Expected: collection failure because `scripts.ember_restart.r1_launch_packet` does not exist.
+  Run `pytest -q tests/ember_restart/test_r1_launch_packet.py` through the repository hidden-Python wrapper. Expected: collection failure because `src.ember.governance.scripts.ember_restart.r1_launch_packet` does not exist.
 
 - [ ] **Step 3: Implement the minimal builder**
 
@@ -50,7 +50,7 @@
 
 **Files:**
 - Modify: `tests/ember_restart/test_r1_launch_packet.py`
-- Modify: `scripts/ember_restart/r1_launch_packet.py`
+- Modify: `src/ember/governance/scripts/ember_restart/r1_launch_packet.py`
 
 **Interfaces:**
 - Consumes: the Task 1 builder.

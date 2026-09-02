@@ -130,7 +130,7 @@ def main():
     receipt = {
         "ticket": "VERIFY-TIMING", "ts": ts,
         "flag_origin": "an agent checkpoint 14444 S2-A on "
-                       "docs/research/first-principles-audit-2026-06-10.md:279",
+                       "docs/domains/governance/research/first-principles-audit-2026-06-10.md:279",
         "samples_file": args.samples.split("/")[-1],
         "gen_receipt": args.gen_receipt.split("/")[-1],
         "n_jobs": len(jobs), "skipped": skipped,

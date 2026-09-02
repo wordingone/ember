@@ -6238,7 +6238,7 @@ class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
     """Issue #1464 residual: `_apportion_a1_step_energy` is the post-pass
     join point wired into `execute_validated_launch` between
     `_finish_energy_sidecar` and `_finalize_a1_packet_a` -- see
-    `tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
+    `src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
     for why a post-pass (not in-loop) is the architecturally honest choice.
     """
 

@@ -14,7 +14,7 @@ from unittest import mock
 
 import pytest
 
-from scripts.ember_restart.r1_launch_packet import (
+from src.ember.governance.scripts.ember_restart.r1_launch_packet import (
     _build_run_spec,
     build_ready_for_compute_packet,
 )

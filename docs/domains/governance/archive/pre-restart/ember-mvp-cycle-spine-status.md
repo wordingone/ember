@@ -12,7 +12,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
 - `src/ember/governance/scripts/ember_mvp_cycle.py` defines the v0 cycle objects from
   `docs/domains/governance/archive/pre-restart/ember-mvp-v0.md`: observation, latent branch, state commit, component
   receipts, and top-level cycle receipt.
-- `scripts/ember_mvp_cycle_selftest.py` tests the local spine contract:
+- `src/ember/governance/scripts/ember_mvp_cycle_selftest.py` tests the local spine contract:
   cycle-id linkage, required receipt presence, hypothesis/evidence separation,
   rejected-branch GC eligibility after replay and rollback, and rollback state
   restoration.
@@ -804,7 +804,7 @@ the official A/B/C wheel.
 ## Verified Commands
 
 ```powershell
-python scripts\ember_mvp_cycle_selftest.py
+python src\ember\governance\scripts\ember_mvp_cycle_selftest.py
 python src\ember\governance\scripts\ember_mvp_cycle.py --selftest
 python scripts\ember_windows_sandbox_selftest.py
 python src\ember\governance\scripts\ember_windows_sandbox.py --selftest

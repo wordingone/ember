@@ -98,7 +98,7 @@ def test_scan_separates_path_hits_from_name_only_hits(tmp_path: Path):
 def test_scan_excludes_self_referential_census_paths(tmp_path: Path):
     root = _repo(tmp_path)
     _track(root, "receipts/issue-1450/live-scratch-disposition-v1.json", '{"path": "gamma"}\n')
-    _track(root, "docs/hygiene/issue-1450-scratch-custody-v1.md", "gamma is a top-level entry.\n")
+    _track(root, "docs/domains/governance/hygiene/issue-1450-scratch-custody-v1.md", "gamma is a top-level entry.\n")
     _track(root, "manifests/real-consumer.json", '{"uses": "scratch/gamma/out.bin"}\n')
     _commit(root)
 

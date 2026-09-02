@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp-36 consistency guard (#326).
 
-Fail-closed assertions binding docs/archive/pre-restart/fp36-1b-info-interpretation-v0.md to the
+Fail-closed assertions binding docs/domains/governance/archive/pre-restart/fp36-1b-info-interpretation-v0.md to the
 on-disk receipts it quotes:
   1. The two pre-protocol probe receipts exist, are receipt_check-clean, and
      carry exactly the (tokens, verified, governed-min) the doc's table pins.

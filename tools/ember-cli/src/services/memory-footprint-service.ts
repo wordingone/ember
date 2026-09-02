@@ -10,7 +10,7 @@ import {
 } from "./memory-footprint-governor.ts";
 
 export interface MemoryFootprintServiceSpecBinding {
-  spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json";
+  spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json";
   spec_sha256: string;
   spec: MemoryFootprintSpec;
 }
@@ -40,7 +40,7 @@ export interface MemoryFootprintService {
 }
 
 function validateBinding(binding: MemoryFootprintServiceSpecBinding): void {
-  if (binding.spec_path !== "tools/ember-cli/specs/liveness-watchdog-memory-v1.json") {
+  if (binding.spec_path !== "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json") {
     throw new Error("MEMORY_FOOTPRINT_SPEC_PATH_INVALID");
   }
   if (!/^[0-9a-f]{64}$/.test(binding.spec_sha256)) {

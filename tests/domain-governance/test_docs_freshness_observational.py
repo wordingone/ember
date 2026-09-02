@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SPEC = importlib.util.spec_from_file_location(
     "check_docs_freshness",
     REPO / "src" / "ember" / "governance" / "scripts" / "check_docs_freshness.py",

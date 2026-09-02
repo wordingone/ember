@@ -8,7 +8,7 @@ numbers -- already real, via RESEARCH_WORKFLOW.md's recount gate) from
 "replay-by-re-run" (nothing found re-executes a node's recorded command
 against its recorded inputs to reproduce the artifact). This module does not
 attempt replay-by-re-run either -- actually invoking `command.argv` is an
-engine's job, not this substrate's (see docs/charter/loop-graph-engine-contract.md).
+engine's job, not this substrate's (see docs/domains/governance/charter/loop-graph-engine-contract.md).
 What it verifies is the *precondition* for either kind of replay: that the
 command's script, every declared input, and every declared output still
 match their recorded content_hash on disk, and that the receipt closing the

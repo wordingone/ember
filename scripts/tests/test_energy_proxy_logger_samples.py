@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Issue #1464 residual: `energy_proxy_logger.py` must persist the raw
 measured-window GPU samples it already collects in memory, so a downstream
-per-step energy derivation (`tools/ember-restart-3b/a1_energy_apportionment.py`)
+per-step energy derivation (`src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`)
 has real, timestamped draw readings to apportion across training steps
 instead of only the whole-run aggregate `energy` block.
 

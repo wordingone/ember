@@ -28,7 +28,7 @@ Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/poll-failure-st
 
 The native Ember CLI cockpit is the sole live poll-loop owner. It loads the
 existing canonical bytes at
-`tools/ember-cli/specs/liveness-watchdog-memory-v1.json`, binds their SHA-256
+`src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json`, binds their SHA-256
 into every trip receipt, and appends receipts below the external Ember state
 root. It never rewrites the frozen JSON spec and never writes runtime state into
 the checkout. Headless capture installs no poll loop.

@@ -34,7 +34,7 @@ export interface Issue1455Incident {
 export interface Issue1455SourceIdentity {
   source_commit: string;
   cockpit_binary_sha256: string;
-  memory_spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json";
+  memory_spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json";
   memory_spec_sha256: string;
 }
 
@@ -111,7 +111,7 @@ function validateCommon(input: Issue1455MemoryReceiptInput): void {
     !GIT_COMMIT.test(input.source.source_commit)
     || !SHA256.test(input.source.cockpit_binary_sha256)
     || !SHA256.test(input.source.memory_spec_sha256)
-    || input.source.memory_spec_path !== "tools/ember-cli/specs/liveness-watchdog-memory-v1.json"
+    || input.source.memory_spec_path !== "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json"
   ) {
     throw new Error("ISSUE1455_SOURCE_IDENTITY_INVALID");
   }

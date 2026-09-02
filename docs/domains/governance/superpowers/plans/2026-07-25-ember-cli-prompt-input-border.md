@@ -25,7 +25,7 @@
 ### Task 1: PromptInput closed container and width contract
 
 **Files:**
-- Modify: `tools/ember-cli/src/components/prompt-input.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts`
 
 **Interfaces:**
@@ -144,7 +144,7 @@ Expected: all tests pass with no skipped structural test.
 - [ ] **Step 5: Commit the component increment**
 
 ```powershell
-git add tools/ember-cli/src/components/prompt-input.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts
+git add src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts
 git commit -m "fix(cli): close the prompt input border"
 ```
 
@@ -294,7 +294,7 @@ Expected: all pass, with the 40-column positive-viewport assertion executed.
 - [ ] **Step 5: Commit the paint proof**
 
 ```powershell
-git add src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/components/prompt-input.ts
+git add src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.ts
 git commit -m "test(cli): prove prompt border resize paint"
 ```
 

@@ -15,7 +15,7 @@ They are not current Ember training, evaluation, paper, or receipt authority.
 Draft PR #1518 at historical head
 `4596764d381b3bae16b07c19e7e4deb4dce6543e` remains unmerged apparatus. It
 does not close #552, authorize a current run, or replace the accepted owner
-comments below. Current `scripts/paper/contamination_scan.py`,
+comments below. Current `src/ember/governance/scripts/paper/contamination_scan.py`,
 `scripts/paper/provenance_manifest.py`, and `src/ember/governance/scripts/paper/compute_ledger.py`
 are non-authoritative helpers until consumed by current gates.
 

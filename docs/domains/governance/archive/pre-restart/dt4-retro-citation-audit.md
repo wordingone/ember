@@ -2,7 +2,7 @@
 
 **Status:** DONE 2026-06-14 (the lead audit). Verdict: **zero remediation items** — no
 Search-origin local-update primitive is currently imported into nc-ladder code, so
-the citation-header requirement (`docs/charter/citation-policy-search-to-ember.md`, DT-2)
+the citation-header requirement (`docs/domains/governance/charter/citation-policy-search-to-ember.md`, DT-2)
 has nothing to retro-fit. Residual risk (renamed/paraphrased import) routed to an agent
 for an adversarial pass.
 

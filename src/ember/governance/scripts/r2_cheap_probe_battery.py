@@ -28,7 +28,7 @@ exists and is already frozen:
     R2, modality probes at R3 per D-01, full suite at R4 per D-02)"
 
 Nowhere in that document, in the companion
-docs/spec/ember02-preregistration-thresholds-v1.json (whose `entries[]`
+docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json (whose `entries[]`
 array enumerates every T-*/F-*/D-* freeze but contains zero probe rows),
 or anywhere else in this repository (exhaustive repo-wide grep for
 "cheap-probe", "cheap_probe", "R2-E3", "R2-E4", performed 2026-08-04) is a

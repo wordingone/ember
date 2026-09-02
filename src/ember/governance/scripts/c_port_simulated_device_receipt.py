@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c_port_simulated_device_receipt.py -- executes a genuine CPU forward pass
 under a SIMULATED non-4090 device profile and emits the C-PORT
-device-portability receipt that scripts/ember_totality/test_c_port.py (issue
+device-portability receipt that src/ember/governance/scripts/ember_totality/test_c_port.py (issue
 #21) requires: governor + forward pass, no crash, device-relative threshold,
 fp8-gated-with-bf16-fallback numerics ladder.
 

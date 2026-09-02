@@ -21,7 +21,7 @@ import {
 } from "./ember-lab-rpc.ts";
 
 export const MEMORY_FOOTPRINT_SPEC_PATH =
-  "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" as const;
+  "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json" as const;
 
 export interface LiveMemoryFootprintServiceOptions {
   repoRoot: string;

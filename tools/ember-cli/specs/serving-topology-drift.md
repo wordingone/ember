@@ -14,7 +14,7 @@ owner; this consumer only observes the live process set and the canonical
 
 Consumer: `tools/ember-cli/src/services/serving-topology-drift.ts`
 
-Consumer: `tools/ember-cli/src/services/serving-topology-census.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-census.ts`
 
 Consumer: `tools/ember-cli/src/services/serving-topology-live.ts`
 

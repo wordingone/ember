@@ -190,7 +190,7 @@ class Cond3ArtifactBConsumerReplay(unittest.TestCase):
     # tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts, out of this
     # Python-only rework's scope), these two bridge-level tests build a
     # local, self-contained real single-shard checkpoint (same pattern as
-    # scripts/ember_restart/test_seat_identity_bridge.py::
+    # src/ember/governance/scripts/ember_restart/test_seat_identity_bridge.py::
     # SeatIdentityBridgeNegatives.setUp) and override only the
     # checkpoint/evaluation fields of a COPY of the checked-in manifest --
     # every other field (identity/architecture/tokenizer/data/training/...)

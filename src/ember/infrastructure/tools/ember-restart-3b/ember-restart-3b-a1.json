@@ -38,7 +38,7 @@
     }
   },
   "thresholds": {
-    "path": "docs/spec/ember02-preregistration-thresholds-v1.json",
+    "path": "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
     "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
     "required_ids": ["T-08", "T-09", "T-20"]
   },

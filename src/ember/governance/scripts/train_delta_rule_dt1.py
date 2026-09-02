@@ -27,7 +27,7 @@ Implementation note on the local update (no backward()):
   No backward() call — error propagates via fixed random weights.
   This satisfies "no autograd" for the mechanism-layer diagnostic.
 
-Citation lineage (docs/charter/citation-policy-search-to-ember.md):
+Citation lineage (docs/domains/governance/charter/citation-policy-search-to-ember.md):
   Widrow-Hoff (1960), Lillicrap et al. (2016) feedback alignment.
   [UNIQUE] warm-init delta-rule × next-token LM; local-update × low-bit weights.
 

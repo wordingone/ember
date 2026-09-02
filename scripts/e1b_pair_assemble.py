@@ -275,7 +275,7 @@ def main():
         print(f"E1B_PAIR_ASSEMBLE_REFUSED: {exc}")
         return 1
     print(f"E1B_PAIR_ASSEMBLE_DONE {out} (gate verdict is the gate's job: "
-          f"python scripts/fp32_e1b_gate.py --pair {out})")
+          f"python src/ember/governance/scripts/fp32_e1b_gate.py --pair {out})")
     return 0
 
 

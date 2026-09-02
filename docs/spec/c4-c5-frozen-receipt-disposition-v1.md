@@ -40,7 +40,7 @@ available only for evidence written into a receipt at creation time.
 
 The canonical board explanations already match this disposition and therefore
 need no semantic rewrite: `docs/domains/governance/anatomy/06_EVALUATION_AND_BENCHMARKS.md` and
-`docs/anatomy/15_TECHNICAL_REPORT.md` both record C4/C5 as RED specifically on
+`docs/domains/governance/anatomy/15_TECHNICAL_REPORT.md` both record C4/C5 as RED specifically on
 artifact reachability. The contract test binds those exact current statements;
 if either document stops disclosing that RED, this disposition is no longer
 complete and issue #1267 must reopen.

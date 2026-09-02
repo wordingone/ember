@@ -35,7 +35,7 @@ initialized before the first step; partial or lazy coverage is refused.
 ## Threshold and claim boundary
 
 The carrier reopens and hashes
-`docs/spec/ember02-preregistration-thresholds-v1.json`, then derives T-08, T-09,
+`docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json`, then derives T-08, T-09,
 and T-20 from those bytes. A caller cannot supply or override those values.
 
 Packet B1 proves source behavior on a small CPU fixture and meta-materializes the

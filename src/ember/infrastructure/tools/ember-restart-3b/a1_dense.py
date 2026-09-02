@@ -109,7 +109,7 @@ _AUTHORITY_FIELDS = {
     "execution_authority",
     "claim_boundary",
 }
-_EXPECTED_THRESHOLD_PATH = "docs/spec/ember02-preregistration-thresholds-v1.json"
+_EXPECTED_THRESHOLD_PATH = "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json"
 _EXPECTED_THRESHOLD_IDS = ("T-08", "T-09", "T-20")
 A1_CONFIG_SHA256 = "563331b746619788f01900f4d951df29e4c6549c937a4662bac76234f5d71edc"
 _LINEAGE_FIELDS = {

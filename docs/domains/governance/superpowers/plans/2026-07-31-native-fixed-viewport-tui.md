@@ -27,7 +27,7 @@
 - Create: `tools/ember-cli/src/ink/terminal-session.test.ts`
 - Modify: `tools/ember-cli/src/ink/termio.ts`
 - Modify: `tools/ember-cli/src/core/frontend-shell.ts`
-- Modify: `tools/ember-cli/src/core/frontend-shell.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/core/frontend-shell.test.ts`
 
 **Interfaces:**
 - Produces: `TerminalSessionController` with idempotent `enter()` and `exit()`; `wrapTerminalSession(node)` mounted by every production render/root path.

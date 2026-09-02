@@ -414,7 +414,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out = root / "receipts" / "wheel-runner" / f"official-abc-wheel-runner-{ts}.json"
 #   proof-replay-consistency-*.json          scripts/proofs/replay_consistency_check.py:792
 #     out_path = receipts_out_dir / f"proof-replay-consistency-{stamp}.json"
-#   scienceagentbench-first-loop-*.json      scripts/ember_scienceagentbench_first_loop.py:260
+#   scienceagentbench-first-loop-*.json      src/ember/governance/scripts/ember_scienceagentbench_first_loop.py:260
 #     out = Path(args.out) if args.out else DEFAULT_OUT_DIR / f"scienceagentbench-first-loop-{ts}.json"
 #   eng123-timeshare-dryrun-*.json           scripts/timeshare_dryrun.py:275
 #     out_path = os.path.join(receipts_dir, f"eng123-timeshare-dryrun-{ts}.json")
@@ -540,7 +540,7 @@ CONVENTION_MAP = [
      "scripts/proofs/training_throughput_anchor_check.py"),
     (re.compile(r"^official-abc-wheel-runner-.*\.json$"), "src/ember/governance/scripts/ember_mvp_wheel_runner.py"),
     (re.compile(r"^proof-replay-consistency-.*\.json$"), "scripts/proofs/replay_consistency_check.py"),
-    (re.compile(r"^scienceagentbench-first-loop-.*\.json$"), "scripts/ember_scienceagentbench_first_loop.py"),
+    (re.compile(r"^scienceagentbench-first-loop-.*\.json$"), "src/ember/governance/scripts/ember_scienceagentbench_first_loop.py"),
     (re.compile(r"^eng123-timeshare-dryrun-.*\.json$"), "scripts/timeshare_dryrun.py"),
     (re.compile(r"^proof-frontier-protocol-.*\.json$"), "scripts/proofs/frontier_projection.py"),
     (re.compile(r"^proof-ocal-sweep-.*\.json$"), "scripts/proofs/ocal_calibration_sweep.py"),
