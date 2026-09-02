@@ -16,8 +16,8 @@
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
-      "path": "tools/ember-restart-3b/train.py",
-      "sha256": "8d2542915bbce777047b80c47ebd15a409843a0aae7bdf1cb30de1b60d42a4d0",
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
+      "sha256": "42918a871f4df36320efdfa52ff07fe9b0c8f00464f573e4049c6147758f084a",
       "reason": "run body, same standing as run_vertical_slice.py: dispatched by the daemon, spawns only its own workers inside the cage."
     },
     {

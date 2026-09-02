@@ -9,7 +9,7 @@
 // convention model.ts uses in production, not a mocked resolver. The Python
 // side of the same fixture (validate_identity.py --require-resolved, the
 // seat bridge derivation, and its OWNED_CANDIDATE admission refusal) is
-// covered in scripts/ember_restart/test_cond3_artifact_b.py.
+// covered in src/ember/governance/scripts/ember_restart/test_cond3_artifact_b.py.
 //
 // Fixture lives under tests/ (not tools/.../__fixtures__/model-identity/,
 // the sibling used by model.test.ts) because a raw binary checkpoint under a

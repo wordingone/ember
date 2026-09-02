@@ -84,7 +84,7 @@ seed-order disclosures. Runtime custody keeps those two outputs together.
 
 ### Parity producer
 
-A new focused module `tools/ember-restart-3b/a1_e8_parity.py` publishes exactly
+A new focused module `src/ember/infrastructure/tools/ember-restart-3b/a1_e8_parity.py` publishes exactly
 three files into a clean flat packet directory:
 
 - `tier2-parity-series.json`

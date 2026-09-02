@@ -47,7 +47,7 @@ from huggingface_hub import HfApi, snapshot_download
 
 # Direct execution appends the repository root so the package import resolves
 # without publishing connector-local bare names or shadowing earlier imports.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
