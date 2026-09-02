@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -52,9 +53,13 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
         row = load(path); verify_self(row, row_id); validate_row({key: value for key, value in row.items() if key != "self_sha256"}, row_id)
         scores = [float(item["score"]) for item in row["items"]]
         mean = sum(scores) / len(scores)
+        if not math.isfinite(mean):
+            raise ReleaseRecomputeRefusal(f"MEAN_SCORE_NONFINITE:{row_id}")
         threshold = thresholds[row_id]
         if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
             raise ReleaseRecomputeRefusal(f"THRESHOLD_DRIFT:{row_id}")
+        if not math.isfinite(float(threshold)):
+            raise ReleaseRecomputeRefusal(f"THRESHOLD_NONFINITE:{row_id}")
         results.append({"row_id": row_id, "item_count": len(scores), "mean_score": mean, "threshold": float(threshold), "passed": mean >= float(threshold)})
     cert_007 = all(row["passed"] for row in results)
     receipt = {
