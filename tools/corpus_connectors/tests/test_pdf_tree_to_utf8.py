@@ -13,7 +13,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.corpus_connectors.tests.test_pdf_to_utf8 import _minimal_pdf
+from src.ember.infrastructure.tools.corpus_connectors.tests.test_pdf_to_utf8 import _minimal_pdf
 
 
 def _sha256(raw: bytes) -> str:

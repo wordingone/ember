@@ -66,8 +66,8 @@
       "reason": "runner preflight unit suite that deliberately avoids allocating the production model. Any process surface is a patched or temporary probe used to test refusal ordering and preflight evidence, not a runnable training entry."
     },
     {
-      "path": "tests/ember_restart_model/test_runner_storage.py",
-      "sha256": "1f9f61f05e49e7bd9515f8b16d224228e3208aeb346023238908c4e273f67575",
+      "path": "tests/ember_restart_model/domain-governance/test_runner_storage.py",
+      "sha256": "9300520f93c762d4b8f7e093c3984d90a7802e3fb905c3c15405d67b6afd612f",
       "reason": "storage-preflight fixture operating on temporary checkpoint and custody paths. Its child-process cases exercise bounded runner storage diagnostics; they do not dispatch a model run or expose a production launcher."
     },
     {

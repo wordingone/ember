@@ -461,7 +461,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp33-e2-full-tune-ceiling-*.json         src/ember/governance/scripts/fp33_e2_full_tune_ceiling.py:234
 #   fp33-e5-fp8-bench-*.json                 src/ember/governance/scripts/fp33_e5_fp8_bench.py:255
 #   fp33-fp8-linear-ab-*.json                src/ember/governance/scripts/fp33_fp8_linear_ab.py:380
-#   fp33-p1-native-fp8-probe-*.json          scripts/fp33_p1_native_fp8_probe.py:164
+#   fp33-p1-native-fp8-probe-*.json          src/ember/governance/scripts/fp33_p1_native_fp8_probe.py:164
 #   fp35-fused-muon-kernel-ab-*.json         src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py:545 (distinct from
 #     fp35-fused-muon-ab-*.json, no "kernel" -- that one has NO confirmed writer, excluded below)
 #   fp35d-k4096-steady-state-*.json          scripts/fp35d_k4096_steady_state.py:216
@@ -565,7 +565,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp33-e2-full-tune-ceiling-.*\.json$"), "src/ember/governance/scripts/fp33_e2_full_tune_ceiling.py"),
     (re.compile(r"^fp33-e5-fp8-bench-.*\.json$"), "src/ember/governance/scripts/fp33_e5_fp8_bench.py"),
     (re.compile(r"^fp33-fp8-linear-ab-.*\.json$"), "src/ember/governance/scripts/fp33_fp8_linear_ab.py"),
-    (re.compile(r"^fp33-p1-native-fp8-probe-.*\.json$"), "scripts/fp33_p1_native_fp8_probe.py"),
+    (re.compile(r"^fp33-p1-native-fp8-probe-.*\.json$"), "src/ember/governance/scripts/fp33_p1_native_fp8_probe.py"),
     (re.compile(r"^fp35-fused-muon-kernel-ab-.*\.json$"), "src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py"),
     (re.compile(r"^fp35d-k4096-steady-state-.*\.json$"), "scripts/fp35d_k4096_steady_state.py"),
     (re.compile(r"^fp35g-width-cond-fp8-ab-.*\.json$"), "scripts/fp35g_width_cond_fp8_ab.py"),

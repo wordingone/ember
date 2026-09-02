@@ -69,7 +69,7 @@ src/ember/governance/scripts/ember_gate_receipt_store_selftest.py
 src/ember/governance/scripts/ember_gate_rollback_rewind.py
 src/ember/governance/scripts/ember_gate_rollback_rewind_selftest.py
 src/ember/governance/scripts/ember_gate_state_persistence.py
-scripts/ember_gate_state_persistence_selftest.py
+src/ember/governance/scripts/ember_gate_state_persistence_selftest.py
 scripts/ember_gate_tool_dispatch_permissions_selftest.py
 src/ember/governance/scripts/ember_gate_uiux_repl_components_selftest.py
 src/ember/governance/scripts/ember_governor_binding.py
