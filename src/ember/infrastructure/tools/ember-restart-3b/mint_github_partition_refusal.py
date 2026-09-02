@@ -87,7 +87,7 @@ def validate_refusal(path: Path) -> dict[str, Any]:
         or receipt.get("borrowed_labels") is not False
         or not isinstance(receipt.get("source_commit"), str)
         or HEX40.fullmatch(receipt["source_commit"]) is None
-        or receipt.get("producer_path") != "tools/ember-restart-3b/mint_github_partition_refusal.py"
+        or receipt.get("producer_path") != "src/ember/infrastructure/tools/ember-restart-3b/mint_github_partition_refusal.py"
         or not isinstance(receipt.get("producer_sha256"), str)
         or HEX64.fullmatch(receipt["producer_sha256"]) is None
         or receipt["producer_sha256"] != sha256_file(Path(__file__))
@@ -122,7 +122,7 @@ def mint_refusal(*, custody_roots: list[Path], output: Path, source_commit: str)
         "reason": REASON,
         "routes": routes,
         "route_root_sha256": sha256_bytes(canonical(routes)),
-        "producer_path": "tools/ember-restart-3b/mint_github_partition_refusal.py",
+        "producer_path": "src/ember/infrastructure/tools/ember-restart-3b/mint_github_partition_refusal.py",
         "producer_sha256": sha256_file(Path(__file__)),
         "source_commit": source_commit,
         "model_mediated": False,

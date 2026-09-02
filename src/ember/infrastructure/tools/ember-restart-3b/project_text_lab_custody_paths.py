@@ -20,12 +20,53 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from text_lab_corpus import (
-    _authority_split_root,
-    _receipt_custody_path,
-    local_license_provenance_v1,
-    validate_authority_index,
-)
+# issue2015 exact-local-import:tools/ember-restart-3b/text_lab_corpus.py
+import importlib.util as _ember_19a226af4399225d_importlib
+import sys as _ember_19a226af4399225d_sys
+from pathlib import Path as _ember_19a226af4399225d_Path
+_ember_19a226af4399225d_path = _ember_19a226af4399225d_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'text_lab_corpus.py')
+if not _ember_19a226af4399225d_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/text_lab_corpus.py')
+_ember_19a226af4399225d_aliases = ('_ember_issue2015_19a226af4399225d', 'text_lab_corpus', 'tools.ember-restart-3b.text_lab_corpus')
+_ember_19a226af4399225d_existing = []
+for _ember_19a226af4399225d_alias in _ember_19a226af4399225d_aliases:
+    _ember_19a226af4399225d_candidate = _ember_19a226af4399225d_sys.modules.get(_ember_19a226af4399225d_alias)
+    if _ember_19a226af4399225d_candidate is not None and all(_ember_19a226af4399225d_candidate is not item for item in _ember_19a226af4399225d_existing):
+        _ember_19a226af4399225d_existing.append(_ember_19a226af4399225d_candidate)
+if len(_ember_19a226af4399225d_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tools/ember-restart-3b/text_lab_corpus.py')
+if _ember_19a226af4399225d_existing:
+    _ember_19a226af4399225d_module = _ember_19a226af4399225d_existing[0]
+    _ember_19a226af4399225d_observed = getattr(_ember_19a226af4399225d_module, '__file__', None)
+    if _ember_19a226af4399225d_observed is None or _ember_19a226af4399225d_Path(_ember_19a226af4399225d_observed).resolve() != _ember_19a226af4399225d_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tools/ember-restart-3b/text_lab_corpus.py')
+else:
+    _ember_19a226af4399225d_spec = _ember_19a226af4399225d_importlib.spec_from_file_location('_ember_issue2015_19a226af4399225d', _ember_19a226af4399225d_path)
+    if _ember_19a226af4399225d_spec is None or _ember_19a226af4399225d_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tools/ember-restart-3b/text_lab_corpus.py')
+    _ember_19a226af4399225d_module = _ember_19a226af4399225d_importlib.module_from_spec(_ember_19a226af4399225d_spec)
+    for _ember_19a226af4399225d_alias in _ember_19a226af4399225d_aliases:
+        _ember_19a226af4399225d_prior = _ember_19a226af4399225d_sys.modules.get(_ember_19a226af4399225d_alias)
+        if _ember_19a226af4399225d_prior is not None and _ember_19a226af4399225d_prior is not _ember_19a226af4399225d_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/text_lab_corpus.py')
+        _ember_19a226af4399225d_sys.modules[_ember_19a226af4399225d_alias] = _ember_19a226af4399225d_module
+    try:
+        _ember_19a226af4399225d_spec.loader.exec_module(_ember_19a226af4399225d_module)
+    except BaseException:
+        for _ember_19a226af4399225d_alias in _ember_19a226af4399225d_aliases:
+            if _ember_19a226af4399225d_sys.modules.get(_ember_19a226af4399225d_alias) is _ember_19a226af4399225d_module:
+                _ember_19a226af4399225d_sys.modules.pop(_ember_19a226af4399225d_alias, None)
+        raise
+for _ember_19a226af4399225d_alias in _ember_19a226af4399225d_aliases:
+    _ember_19a226af4399225d_prior = _ember_19a226af4399225d_sys.modules.get(_ember_19a226af4399225d_alias)
+    if _ember_19a226af4399225d_prior is not None and _ember_19a226af4399225d_prior is not _ember_19a226af4399225d_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/text_lab_corpus.py')
+    _ember_19a226af4399225d_sys.modules[_ember_19a226af4399225d_alias] = _ember_19a226af4399225d_module
+_authority_split_root = getattr(_ember_19a226af4399225d_module, '_authority_split_root')
+_receipt_custody_path = getattr(_ember_19a226af4399225d_module, '_receipt_custody_path')
+local_license_provenance_v1 = getattr(_ember_19a226af4399225d_module, 'local_license_provenance_v1')
+validate_authority_index = getattr(_ember_19a226af4399225d_module, 'validate_authority_index')
+# issue2015 exact-local-import-end:tools/ember-restart-3b/text_lab_corpus.py
 
 
 PARTITION_SOURCE_IDS = frozenset(
@@ -323,7 +364,7 @@ def _projection_receipt(
         "validation_receipt": validation_receipt,
         "locator_rewrites": [locator_rewrite],
         "producer": {
-            "path": "tools/ember-restart-3b/project_text_lab_custody_paths.py",
+            "path": "src/ember/infrastructure/tools/ember-restart-3b/project_text_lab_custody_paths.py",
             "sha256": _sha((repo / "tools" / "ember-restart-3b" / "project_text_lab_custody_paths.py").read_bytes()),
         },
     }
@@ -574,7 +615,7 @@ def main() -> int:
     parser.add_argument("--output-custody", type=Path)
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
-    repo = Path(__file__).resolve().parents[2]
+    repo = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     source_base_commit = resolve_source_base_commit(
         repo=repo,
         write=args.write or args.output_custody is not None,

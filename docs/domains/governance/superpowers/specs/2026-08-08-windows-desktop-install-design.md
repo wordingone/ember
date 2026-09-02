@@ -47,7 +47,7 @@ The installer uses `WScript.Shell` to create temporary `.lnk` files, reads them 
 - the current user's Desktop `Ember.lnk`; and
 - the current user's Start Menu `Programs\Ember.lnk`.
 
-Both shortcuts target only stable installed files. The icon comes from the currently admitted Ember executable. The executable embeds the tracked `assets/ember.ico`; `build-cockpit.ts` binds that exact asset through Bun's Windows metadata arguments.
+Both shortcuts target only stable installed files. The icon comes from the currently admitted Ember executable. The executable embeds the tracked `domains/lab/assets/ember.ico`; `build-cockpit.ts` binds that exact asset through Bun's Windows metadata arguments.
 
 ## Lifecycle
 

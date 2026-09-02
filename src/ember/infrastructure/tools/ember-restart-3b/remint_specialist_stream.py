@@ -17,10 +17,51 @@ from typing import Any
 _REMINT_MODULE_DIRECTORY = Path(__file__).resolve().parent
 if str(_REMINT_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_REMINT_MODULE_DIRECTORY))
-from repository_layout import (  # noqa: E402
-    allowed_authority_pin_tuples,
-    resolve_repository_authority,
-)
+# issue2015 exact-local-import:tools/ember-restart-3b/repository_layout.py
+import importlib.util as _ember_93a28f5fd2fd0068_importlib
+import sys as _ember_93a28f5fd2fd0068_sys
+from pathlib import Path as _ember_93a28f5fd2fd0068_Path
+_ember_93a28f5fd2fd0068_path = _ember_93a28f5fd2fd0068_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'repository_layout.py')
+if not _ember_93a28f5fd2fd0068_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/repository_layout.py')
+_ember_93a28f5fd2fd0068_aliases = ('_ember_issue2015_93a28f5fd2fd0068', 'repository_layout', 'tools.ember-restart-3b.repository_layout')
+_ember_93a28f5fd2fd0068_existing = []
+for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+    _ember_93a28f5fd2fd0068_candidate = _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias)
+    if _ember_93a28f5fd2fd0068_candidate is not None and all(_ember_93a28f5fd2fd0068_candidate is not item for item in _ember_93a28f5fd2fd0068_existing):
+        _ember_93a28f5fd2fd0068_existing.append(_ember_93a28f5fd2fd0068_candidate)
+if len(_ember_93a28f5fd2fd0068_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tools/ember-restart-3b/repository_layout.py')
+if _ember_93a28f5fd2fd0068_existing:
+    _ember_93a28f5fd2fd0068_module = _ember_93a28f5fd2fd0068_existing[0]
+    _ember_93a28f5fd2fd0068_observed = getattr(_ember_93a28f5fd2fd0068_module, '__file__', None)
+    if _ember_93a28f5fd2fd0068_observed is None or _ember_93a28f5fd2fd0068_Path(_ember_93a28f5fd2fd0068_observed).resolve() != _ember_93a28f5fd2fd0068_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tools/ember-restart-3b/repository_layout.py')
+else:
+    _ember_93a28f5fd2fd0068_spec = _ember_93a28f5fd2fd0068_importlib.spec_from_file_location('_ember_issue2015_93a28f5fd2fd0068', _ember_93a28f5fd2fd0068_path)
+    if _ember_93a28f5fd2fd0068_spec is None or _ember_93a28f5fd2fd0068_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tools/ember-restart-3b/repository_layout.py')
+    _ember_93a28f5fd2fd0068_module = _ember_93a28f5fd2fd0068_importlib.module_from_spec(_ember_93a28f5fd2fd0068_spec)
+    for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+        _ember_93a28f5fd2fd0068_prior = _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias)
+        if _ember_93a28f5fd2fd0068_prior is not None and _ember_93a28f5fd2fd0068_prior is not _ember_93a28f5fd2fd0068_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/repository_layout.py')
+        _ember_93a28f5fd2fd0068_sys.modules[_ember_93a28f5fd2fd0068_alias] = _ember_93a28f5fd2fd0068_module
+    try:
+        _ember_93a28f5fd2fd0068_spec.loader.exec_module(_ember_93a28f5fd2fd0068_module)
+    except BaseException:
+        for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+            if _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias) is _ember_93a28f5fd2fd0068_module:
+                _ember_93a28f5fd2fd0068_sys.modules.pop(_ember_93a28f5fd2fd0068_alias, None)
+        raise
+for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+    _ember_93a28f5fd2fd0068_prior = _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias)
+    if _ember_93a28f5fd2fd0068_prior is not None and _ember_93a28f5fd2fd0068_prior is not _ember_93a28f5fd2fd0068_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/repository_layout.py')
+    _ember_93a28f5fd2fd0068_sys.modules[_ember_93a28f5fd2fd0068_alias] = _ember_93a28f5fd2fd0068_module
+allowed_authority_pin_tuples = getattr(_ember_93a28f5fd2fd0068_module, 'allowed_authority_pin_tuples')
+resolve_repository_authority = getattr(_ember_93a28f5fd2fd0068_module, 'resolve_repository_authority')
+# issue2015 exact-local-import-end:tools/ember-restart-3b/repository_layout.py
 from specialist_stream import canonical_record_bytes, emit_stream_manifest, write_stream_build_receipt
 
 

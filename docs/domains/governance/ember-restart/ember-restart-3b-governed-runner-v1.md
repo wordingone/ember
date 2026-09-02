@@ -19,7 +19,7 @@ custody directory:
 $custody = 'B:\ember-runs\owned-3b-canary'
 $artifacts = Join-Path $custody 'artifacts'
 New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
-python -I tools\ember-restart-3b\disk_budget_runner.py `
+python -I src\ember\infrastructure\tools\ember-restart-3b\disk_budget_runner.py `
   --max-c-write-gib 0 `
   --max-b-write-gib 16 `
   --receipt (Join-Path $custody 'runner-preflight-receipt.json') `
@@ -42,7 +42,7 @@ perform a training update.
 After the CPU preflight receipt passes and the single-GPU lease is available:
 
 ```powershell
-python -I tools\ember-restart-3b\disk_budget_runner.py `
+python -I src\ember\infrastructure\tools\ember-restart-3b\disk_budget_runner.py `
   --max-c-write-gib 0 `
   --max-b-write-gib 16 `
   --receipt (Join-Path $custody 'runner-canary-receipt.json') `
@@ -80,7 +80,7 @@ Resume only from a content-addressed published bundle and one matching
 counter, realization, or optimizer-transition authority:
 
 ```powershell
-python -I tools\ember-restart-3b\disk_budget_runner.py `
+python -I src\ember\infrastructure\tools\ember-restart-3b\disk_budget_runner.py `
   --max-c-write-gib 0 `
   --max-b-write-gib 16 `
   --receipt (Join-Path $custody 'runner-resume-receipt.json') `

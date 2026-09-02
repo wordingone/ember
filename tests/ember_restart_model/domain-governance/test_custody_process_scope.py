@@ -32,7 +32,7 @@ never has to diff the two by hand):
      machine-local ledger being present or writable -- that discipline is a
      session rail, not a repo contract.
   3. Worker processes are consolidated into one reusable module,
-     tools/ember-restart-3b/custody_process_scope_worker.py, with "race" and
+     src/ember/infrastructure/tools/ember-restart-3b/custody_process_scope_worker.py, with "race" and
      "unlink" subcommands standing in for zzz_worker.py /
      zzz_unlink_worker.py so the repo carries one helper instead of two.
   4. All scratch custody directories live under pytest's tmp_path, never a

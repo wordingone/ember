@@ -34,7 +34,7 @@ function cleanup(repoRoot: string) {
 
 function runRenderer(repoRoot: string): { stdout: string; stderr: string; exitCode: number } {
   try {
-    const stdout = execSync(`bun tools/gpu-lease-placeholder.ts "${repoRoot}"`, {
+    const stdout = execSync(`bun src/ember/infrastructure/tools/gpu-lease-placeholder.ts "${repoRoot}"`, {
       cwd: process.cwd(),
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
