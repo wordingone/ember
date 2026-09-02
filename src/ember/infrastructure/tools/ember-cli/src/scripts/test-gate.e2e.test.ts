@@ -12,7 +12,7 @@
 //      real teardown bug is cured and no longer reproduces live)
 //
 // Fixtures are generated into a fresh OS temp directory per run (never checked into the repo --
-// a permanently-failing/hanging *.test.ts file living under tools/ember-cli/src would corrupt
+// a permanently-failing/hanging *.test.ts file living under src/ember/infrastructure/tools/ember-cli/src would corrupt
 // every real `bun test` / `bun run test:gate` invocation against the actual suite). The gate is
 // pointed at that temp directory via the GATE_SRC_ROOT/GATE_QUARANTINE_JSON test-only overrides
 // documented at the top of test-gate.ts, but the SPAWNED COMMAND is exactly `bun run test:gate`

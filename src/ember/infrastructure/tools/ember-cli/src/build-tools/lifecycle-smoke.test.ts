@@ -9,7 +9,15 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..", "..", "..", "..");
-const RETAINED_CLI_ROOT = join(REPO_ROOT, "tools", "ember-cli", "src");
+const RETAINED_CLI_ROOT = join(
+  REPO_ROOT,
+  "src",
+  "ember",
+  "infrastructure",
+  "tools",
+  "ember-cli",
+  "src",
+);
 const RETAINED_LIFECYCLE_DRIVER = join(import.meta.dir, "lifecycle-smoke-driver.ts");
 const RETAINED_PROCESS_ENTRY = join(RETAINED_CLI_ROOT, "entrypoints", "process-entry.ts");
 import {

@@ -4,23 +4,23 @@
 
 // command-registry.ts — loads, caches, and queries the slash-command registry.
 
-import type { RegistryCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/types/command-types.ts';
-import { createObservatoryCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/observatory.ts';
-import { createWatchCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/watch.ts';
-import { createFinetuneCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/finetune.ts';
-import { createModelCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/model.ts';
+import type { RegistryCommand } from './types/command-types.ts';
+import { createObservatoryCommand } from './commands/observatory.ts';
+import { createWatchCommand } from './commands/watch.ts';
+import { createFinetuneCommand } from './commands/finetune.ts';
+import { createModelCommand } from './commands/model.ts';
 import { createTrainCommand } from './commands/train.ts';
-import { createVerifyCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/verify.ts';
-import { createVerifyTrainingCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/verify-training.ts';
-import { createAdmitCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/admit.ts';
-import { createDesignateCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/designate.ts';
-import { createGoalCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/goal.ts';
+import { createVerifyCommand } from './commands/verify.ts';
+import { createVerifyTrainingCommand } from './commands/verify-training.ts';
+import { createAdmitCommand } from './commands/admit.ts';
+import { createDesignateCommand } from './commands/designate.ts';
+import { createGoalCommand } from './commands/goal.ts';
 import { createWorldStateCommand } from './commands/world-state.ts';
-import { createCustodyCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/custody.ts';
-import { createBenchmarkCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/commands/benchmark.ts';
-import { createSpinePanelCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/components/spine-panel.ts';
-import { resumeCommand } from '../../../src/ember/infrastructure/tools/ember-cli/src/resume.ts';
-import { getModeHistory } from '../../../src/ember/infrastructure/tools/ember-cli/src/state/app-state.ts';
+import { createCustodyCommand } from './commands/custody.ts';
+import { createBenchmarkCommand } from './commands/benchmark.ts';
+import { createSpinePanelCommand } from './components/spine-panel.ts';
+import { resumeCommand } from './resume.ts';
+import { getModeHistory } from './state/app-state.ts';
 
 export type { RegistryCommand };
 

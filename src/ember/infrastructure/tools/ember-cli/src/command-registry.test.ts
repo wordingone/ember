@@ -29,7 +29,7 @@ import {
   REMOTE_SAFE_COMMANDS,
   BRIDGE_SAFE_COMMANDS,
   type RegistryCommand,
-} from "../../../../../../tools/ember-cli/src/command-registry.ts";
+} from "./command-registry.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers

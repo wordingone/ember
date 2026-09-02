@@ -50,7 +50,7 @@ def assert_direct_install_route(text: str) -> None:
     assert normalized.index("Rust uses") < command_index
     assert normalized.index("runtime/ember-lab/Cargo.toml") < command_index
     assert normalized.index("`ember-cli` uses") < command_index
-    assert normalized.index("tools/ember-cli/src/package.json") < command_index
+    assert normalized.index("src/ember/infrastructure/tools/ember-cli/src/package.json") < command_index
 
 
 def test_q5_readme_direct_route_precedes_install_command() -> None:

@@ -16,7 +16,7 @@ import {
   parseRenderedIntoFrame,
   diffFrames,
   StylePool,
-} from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+} from "../ink/rendering-pipeline.ts";
 import { renderFireballLines } from "../components/fireball.ts";
 
 describe("StylePool.intern -- root cause isolation", () => {

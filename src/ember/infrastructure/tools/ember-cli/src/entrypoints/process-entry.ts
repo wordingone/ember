@@ -18,30 +18,30 @@ import {
   isModelFreeFastPath,
   resolveModelSeat,
   selectedModelContract,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.ts";
-import type { ModelSeatDecision, SelectedModelContract, ModelSeatState } from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.ts";
+} from "./model-seat.ts";
+import type { ModelSeatDecision, SelectedModelContract, ModelSeatState } from "./model-seat.ts";
 import {
   loadOwnedDevelopmentIdentity,
   loadOwnedModelIdentity,
   OwnedSeatStaleBindingError,
   verifyOwnedEndpointIdentity,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-seat-loader.ts";
-import { ensureOwnedServer } from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-server-supervisor.ts";
-import { handshakeConfiguredEmberLab } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/ember-lab-rpc.ts";
-import { getEmberConfigHomeDir } from "../../../../src/ember/infrastructure/tools/ember-cli/src/utils/env-detection.ts";
-import { emberStateRoot } from "../../../../src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.ts";
-import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/runtime-bootstrap.ts";
-import { normalizeModelServerUrl } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/api-openai-adapter.ts";
-import { registerManagedModel } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/model-lifecycle.ts";
+} from "./owned-seat-loader.ts";
+import { ensureOwnedServer } from "./owned-server-supervisor.ts";
+import { handshakeConfiguredEmberLab } from "../services/ember-lab-rpc.ts";
+import { getEmberConfigHomeDir } from "../utils/env-detection.ts";
+import { emberStateRoot } from "../utils/ember-state-root.ts";
+import { waitForServerReady, LLAMA_SERVER_DEFAULT_PORT } from "../services/runtime-bootstrap.ts";
+import { normalizeModelServerUrl } from "../services/api-openai-adapter.ts";
+import { registerManagedModel } from "../services/model-lifecycle.ts";
 import type { ModelCapabilityDeclaration } from "../model-config.ts";
-import type { LoopDeps } from "../../../../src/ember/infrastructure/tools/ember-cli/src/query/query-loop-support.ts";
-import type { Tool } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/tool-interface.ts";
-import type { HeadlessReplOptions } from "../../../../src/ember/infrastructure/tools/ember-cli/src/cli/headless-repl.ts";
-import type { StructuredIO } from "../../../../src/ember/infrastructure/tools/ember-cli/src/cli/structured-io.ts";
+import type { LoopDeps } from "../query/query-loop-support.ts";
+import type { Tool } from "../core/tool-interface.ts";
+import type { HeadlessReplOptions } from "../cli/headless-repl.ts";
+import type { StructuredIO } from "../cli/structured-io.ts";
 import type { AppProps } from "../core/frontend-shell.ts";
-import { resolveEmberSourceRootOrCwd } from "../../../../src/ember/infrastructure/tools/ember-cli/src/utils/repo-root.ts";
-import { parseOutageMarker, computeEffectiveMarker } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.ts";
-import type { OutageMarker } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
+import { parseOutageMarker, computeEffectiveMarker } from "../services/activity-feed.ts";
+import type { OutageMarker } from "../services/activity-feed.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level env cleanup (runs at import time — mirrors bundle __esm init)
@@ -663,7 +663,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   }
 
   if (first === "--mcp") {
-    const { runMcpServer } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/mcp-server-entry.ts");
+    const { runMcpServer } = await import("./mcp-server-entry.ts");
     await runMcpServer({
       cwd:     process.cwd(),
       debug:   args.includes("--debug"),
@@ -678,7 +678,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   // removed the previous unwired composer -- see core/watch-loop.ts's header for the full history.
   if (first === "--watch") {
     const { parseWatchArgs, runAmbientWatch, realSleep, registerRealSigint } =
-      await import("../../../../src/ember/infrastructure/tools/ember-cli/src/core/watch-loop.ts");
+      await import("../core/watch-loop.ts");
     const parsed = parseWatchArgs(argv);
     if (parsed.error) {
       process.stderr.write(`ember --watch: ${parsed.error}\n`);
@@ -693,8 +693,8 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       process.exit(1);
       return true;
     }
-    const { renderMonitorPanel, colorEnabledFor } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.ts");
-    const { findNewestReceipts, renderReceiptsTail } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/core/watch-render.ts");
+    const { renderMonitorPanel, colorEnabledFor } = await import("../core/monitor-render.ts");
+    const { findNewestReceipts, renderReceiptsTail } = await import("../core/watch-render.ts");
     await runAmbientWatch({
       goalforgeRoot: GOALFORGE_ROOT,
       intervalMs: parsed.intervalMs,
@@ -745,7 +745,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   if (first === "gh") {
     const sub = args[1];
     if (sub === "doctor") {
-      const { runGhDoctorCommand } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/github-doctor.ts");
+      const { runGhDoctorCommand } = await import("../github-doctor.ts");
       await runGhDoctorCommand();
       return true;
     }
@@ -755,7 +755,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
   }
 
   if (first === "goal-session-smoke" || first === "goal-session-live") {
-    const { runGoalLiveOperatorSession } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/services/goal-live-session.ts");
+    const { runGoalLiveOperatorSession } = await import("../services/goal-live-session.ts");
     try {
       const executable_sha256 = createHash("sha256").update(await readFile(process.execPath)).digest("hex");
       const receipt = await runGoalLiveOperatorSession({ executable_sha256 });
@@ -791,7 +791,7 @@ export async function dispatchFastPath(argv: string[]): Promise<boolean> {
       : process.execPath;
     try {
       const { installWindowsRestartTask } =
-        await import("../../../../src/ember/infrastructure/tools/ember-cli/src/services/windows-restart-task.ts");
+        await import("../services/windows-restart-task.ts");
       const receipt = await installWindowsRestartTask({ executablePath });
       process.stdout.write(JSON.stringify(receipt) + "\n");
       process.exit(0);
@@ -1472,7 +1472,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
 
     // HeadlessIO is the headless IO surface from cli/structured-io.ts; it extends
     // StructuredIO, so the constructed instance is typed StructuredIO for the runner.
-    const sioMod    = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/cli/structured-io.ts") as unknown as
+    const sioMod    = await import("../cli/structured-io.ts") as unknown as
       { HeadlessIO: new (input: AsyncIterable<unknown>) => StructuredIO };
     const emptyInput: AsyncIterable<unknown> = (async function* () {})();
     const io        = new sioMod.HeadlessIO(emptyInput);
@@ -1489,13 +1489,13 @@ export async function main(opts: MainOptions = {}): Promise<void> {
     // Keep injected and default headless execution on the same structured-tool contract.
     const tools = opts.builtinToolsFn
       ? await opts.builtinToolsFn()
-      : (await import("../../../../src/ember/infrastructure/tools/ember-cli/src/tools/builtin-tools.ts") as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
+      : (await import("../tools/builtin-tools.ts") as unknown as { BUILTIN_TOOLS: Tool[] }).BUILTIN_TOOLS;
     let exitCode: number;
     if (opts.headlessRunner) {
       const result = await opts.headlessRunner(prompt, io, tools, headlessOpts, deps);
       exitCode     = result.exitCode;
     } else {
-      const { runHeadlessPrompt } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/cli/headless-repl.ts");
+      const { runHeadlessPrompt } = await import("../cli/headless-repl.ts");
       const result = await runHeadlessPrompt(prompt, io as Parameters<typeof runHeadlessPrompt>[1], tools, headlessOpts, deps);
       exitCode     = result.exitCode;
     }
@@ -1509,11 +1509,11 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   // headless owned-seat startup remains executable from a clean source checkout.
   const [{ default: React }, { App: InkApp }, frontendShell] = await Promise.all([
     import("react"),
-    import("../../../../src/ember/infrastructure/tools/ember-cli/src/ink/components.ts"),
+    import("../ink/components.ts"),
     import("../core/frontend-shell.ts"),
   ]);
-  const { sessionIdForAppRoot } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts");
-  const { emitReadySentinel } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/cli/ready-sentinel.ts");
+  const { sessionIdForAppRoot } = await import("../components/app-shell.ts");
+  const { emitReadySentinel } = await import("../cli/ready-sentinel.ts");
   const root = frontendShell.createRoot({
     onFirstFrameFlushed: () => emitReadySentinel(process.stdout),
   });
@@ -1521,7 +1521,7 @@ export async function main(opts: MainOptions = {}): Promise<void> {
   let resolveExit!: () => void;
   const exitPromise = new Promise<void>((r) => { resolveExit = r; });
 
-  const { startStdinBridge } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/ink/stdin-bridge.ts");
+  const { startStdinBridge } = await import("../ink/stdin-bridge.ts");
   const stopBridge            = startStdinBridge();
 
   const appProps: AppProps = {

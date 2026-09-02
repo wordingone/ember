@@ -66,7 +66,7 @@ fi
 
 echo "=== test 3: real clean/at-baseline run must still report GREEN ==="
 if [ ! -d "$CLI_ROOT/src/node_modules" ]; then
-  echo "SKIP: $CLI_ROOT/src/node_modules absent -- run 'bun install' in tools/ember-cli/src first to exercise the real-run path" >&2
+  echo "SKIP: $CLI_ROOT/src/node_modules absent -- run 'bun install' in src/ember/infrastructure/tools/ember-cli/src first to exercise the real-run path" >&2
 else
   out3="$(bash "$GATE" 2>&1)"
   status3=$?

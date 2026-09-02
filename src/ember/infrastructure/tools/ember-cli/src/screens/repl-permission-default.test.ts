@@ -8,7 +8,7 @@ import {
   REPL_PERMISSION_CYCLE,
   authorizeReplTool,
   cycleReplPermissionMode,
-} from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+} from "../screens/repl.ts";
 import { statusBarText } from "../components/status-bar.ts";
 
 const readTool = buildTool({

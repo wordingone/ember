@@ -16,7 +16,7 @@ import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Box, Text } from "../ink/components.ts";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { Homescreen } from "../components/logo-homescreen.ts";
 import type { AppState } from "../state/app-state.ts";
 

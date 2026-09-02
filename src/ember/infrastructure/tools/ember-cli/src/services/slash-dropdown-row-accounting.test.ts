@@ -29,7 +29,7 @@ import {
   DROPDOWN_COMPACT_CHROME_ROWS,
   DROPDOWN_BORDER_ROWS,
   SLASH_DROPDOWN_MAX_VISIBLE,
-} from "../../../../../../../tools/ember-cli/src/services/slash-dropdown.ts";
+} from "../services/slash-dropdown.ts";
 
 const cmd = (name: string): RegistryCommand =>
   ({ name, description: `desc of ${name}`, execute: async () => ({ message: "" }) }) as unknown as RegistryCommand;

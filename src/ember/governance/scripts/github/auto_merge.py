@@ -25,7 +25,7 @@ PROTECTED = (
     re.compile(r"^scripts/github/"),
     re.compile(r"^tools/[^/]+$"),
     re.compile(r"^scripts/[^/]+$"),
-    re.compile(r"^tools/ember-cli/src/build-tools/"),
+    re.compile(r"^src/ember/infrastructure/tools/ember-cli/src/build-tools/"),
     re.compile(r"^docs/authority/"),
     re.compile(r"^goals/"),
     re.compile(r"^constitution"),

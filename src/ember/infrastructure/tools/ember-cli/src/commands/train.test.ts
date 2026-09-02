@@ -16,7 +16,7 @@ import {
   createTrainCommand,
   type LaunchPacketRunResult,
   type CertifiedLaunchHandle,
-} from "../../../../../../../tools/ember-cli/src/commands/train.ts";
+} from "../commands/train.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
 import {
@@ -1695,14 +1695,18 @@ describe("/train source-byte authority", () => {
       fs.mkdirSync(path.join(mainRoot, ".git", "worktrees", "lane"), {
         recursive: true,
       });
-      fs.mkdirSync(path.join(mainRoot, "tools", "ember-cli"), { recursive: true });
+      fs.mkdirSync(
+        path.join(mainRoot, "src", "ember", "infrastructure", "tools", "ember-cli"),
+        { recursive: true },
+      );
       fs.mkdirSync(path.join(mainRoot, "docs", "domains", "governance", "authority"), {
         recursive: true,
       });
       fs.writeFileSync(path.join(mainRoot, "docs/domains/governance/authority/GOAL.md"), "# main\n");
-      fs.mkdirSync(path.join(worktreeRoot, "tools", "ember-cli"), {
-        recursive: true,
-      });
+      fs.mkdirSync(
+        path.join(worktreeRoot, "src", "ember", "infrastructure", "tools", "ember-cli"),
+        { recursive: true },
+      );
       fs.mkdirSync(path.join(worktreeRoot, "docs", "domains", "governance", "authority"), {
         recursive: true,
       });

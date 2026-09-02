@@ -578,7 +578,15 @@ function rebuildBinaryFromSource(
   repoRoot: string,
   sourceCommit: string,
 ): ReproducibleBuildEvidence {
-  const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
+  const sourceRoot = join(
+    repoRoot,
+    "src",
+    "ember",
+    "infrastructure",
+    "tools",
+    "ember-cli",
+    "src",
+  );
   const bunExecutable = resolveBunExecutable();
   const ownedTemp = mkdtempSync(join(tmpdir(), "ember-lifecycle-rebuild-"));
   const rebuiltBinary = join(ownedTemp, "ember.exe");

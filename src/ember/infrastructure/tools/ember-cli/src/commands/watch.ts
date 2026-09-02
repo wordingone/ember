@@ -10,7 +10,7 @@ import {
   getState,
   DEFAULT_CHANNEL_PATH,
   type TelemetryWatchHandle,
-} from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+} from "../services/telemetry-watch.ts";
 
 // ---------------------------------------------------------------------------
 // Deps interface (injectable for testing)

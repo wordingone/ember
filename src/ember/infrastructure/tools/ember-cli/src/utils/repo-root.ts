@@ -14,7 +14,7 @@
 //      (path.dirname(process.execPath)) — this is what makes the launch cwd irrelevant:
 //      the exe file itself doesn't move just because you `cd` elsewhere before running it.
 //
-// Marker = a directory containing tools/ember-cli and exactly one canonical authority GOAL path:
+// Marker = a directory containing the canonical CLI root and exactly one canonical authority GOAL path:
 // legacy GOAL.md or migrated docs/domains/governance/authority/GOAL.md. Chosen over a bare
 // `.git` check: it survives a git-less deployment of the repo (e.g. a plain copy/archive),
 // and it can't false-positive match some unrelated ancestor .git repo the exe happens to
@@ -34,7 +34,9 @@ function isRepoRoot(candidate: string): boolean {
     path.join(candidate, "GOAL.md"),
     path.join(candidate, "docs", "domains", "governance", "authority", "GOAL.md"),
   ].filter((marker) => fs.existsSync(marker));
-  return goalMarkers.length === 1 && fs.existsSync(path.join(candidate, "tools", "ember-cli"));
+  return goalMarkers.length === 1 && fs.existsSync(
+    path.join(candidate, "src", "ember", "infrastructure", "tools", "ember-cli"),
+  );
 }
 
 /** PR954 round 2: the typed error the strict canonical-root resolver throws for every
@@ -67,7 +69,7 @@ function parseSingleGitdirRecord(raw: string): string | null {
 }
 
 /** Issue #666 / PR954 round 2 — a git WORKTREE checkout carries the marker files too
- *  (docs/domains/governance/authority/GOAL.md + tools/ember-cli are regular checked-out files), so a marker walk started
+ *  (docs/domains/governance/authority/GOAL.md + the canonical CLI root are regular checked-out files), so a marker walk started
  *  inside a worktree validates the WORKTREE root — and state paths derived from it (the
  *  liveness heartbeat) silently diverge from a watchdog anchored at the main checkout.
  *  This canonicalizes any marker-validated root through the worktree's `.git` FILE
@@ -150,7 +152,7 @@ function canonicalizeThroughWorktree(root: string): string {
     throw new CanonicalRootError(
       `Resolved root ${root} is a git worktree of ${mainRoot}, but that main checkout ` +
         "does not validate as the ember repo root (requires exactly one of GOAL.md or " +
-        "docs/domains/governance/authority/GOAL.md, plus tools/ember-cli). " +
+        "docs/domains/governance/authority/GOAL.md, plus src/ember/infrastructure/tools/ember-cli). " +
         "Refusing to bind state paths to a worktree root the watchdog will never poll " +
         "(issue #666). Set EMBER_REPO_ROOT to the main checkout.",
     );
@@ -201,7 +203,7 @@ export function resolveEmberRepoRoot(options: ResolveEmberRepoRootOptions = {}):
 
   throw new Error(
     "Could not resolve the ember repo root (no directory containing exactly one of GOAL.md or " +
-      "docs/domains/governance/authority/GOAL.md, plus tools/ember-cli, found via cwd or the running binary's location). " +
+      "docs/domains/governance/authority/GOAL.md, plus src/ember/infrastructure/tools/ember-cli, found via cwd or the running binary's location). " +
       "Set EMBER_REPO_ROOT to the repo path.",
   );
 }
@@ -244,7 +246,7 @@ export function resolveEmberSourceRoot(
     throw new SourceRootError(
       `EMBER_SOURCE_ROOT is set to ${resolvedEnv}, but that directory does not contain ` +
         "the ember source markers (exactly one of GOAL.md or docs/domains/governance/authority/GOAL.md, plus " +
-        "tools/ember-cli). Unset it or point it at " +
+        "src/ember/infrastructure/tools/ember-cli). Unset it or point it at " +
         "the selected checkout.",
     );
   }
@@ -259,7 +261,7 @@ export function resolveEmberSourceRoot(
 
   throw new SourceRootError(
     `no ember source root at or above ${startDir} (no directory containing exactly one of GOAL.md ` +
-      `or docs/domains/governance/authority/GOAL.md, plus tools/ember-cli, via the cwd walk or the running binary's ` +
+      `or docs/domains/governance/authority/GOAL.md, plus src/ember/infrastructure/tools/ember-cli, via the cwd walk or the running binary's ` +
       `location ${execDir}). ` +
       "Set EMBER_SOURCE_ROOT to the selected checkout path, or launch from inside the " +
       "selected checkout.",

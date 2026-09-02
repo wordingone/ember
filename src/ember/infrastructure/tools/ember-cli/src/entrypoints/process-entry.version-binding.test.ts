@@ -7,7 +7,7 @@ import {
   EMBER_CLI_VERSION,
   buildCliVersionRecord,
   formatCliVersionOutput,
-} from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+} from "../entrypoints/process-entry.ts";
 
 type BuildGlobal = typeof globalThis & { __EMBER_BUILD_COMMIT__?: unknown };
 

@@ -11,7 +11,7 @@ import {
   callEmberLab as callResidentEmberLab,
   configuredEmberLabPipe,
   type EmberLabRequestOptions,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/ember-lab-rpc.ts";
+} from "./ember-lab-rpc.ts";
 
 const MANIFEST_FIELDS = [
   "args", "bindings", "custody_root", "cpu_pacing_class", "env", "expires_at_ms", "job_id",

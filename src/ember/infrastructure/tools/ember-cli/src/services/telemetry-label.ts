@@ -1,7 +1,7 @@
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import type { TelemetryState } from "../services/telemetry-watch.ts";
 
 export function telemetryMemoKey(state: TelemetryState): string | null {
   const { lastGovernor, activeRun, lastCheckpoint, runStatus } = state;

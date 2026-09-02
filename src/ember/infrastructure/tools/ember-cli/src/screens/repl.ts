@@ -15,30 +15,30 @@ import React, {
   useEffect,
   useContext,
 } from "react";
-import { Box, Text, TerminalSizeContext } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/components.ts";
-import { useInput, useInterval } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/hooks.ts";
+import { Box, Text, TerminalSizeContext } from "../ink/components.ts";
+import { useInput, useInterval } from "../ink/hooks.ts";
 import {
   VirtualMessageList,
   type SessionMessage,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts";
+} from "../components/app-shell.ts";
 import {
   StatusLine,
   type PermissionModeState,
   type TaskPanelState,
   type Task,
   type EffortCalloutState,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/status-bar.ts";
+} from "../components/status-bar.ts";
 import {
   PromptInput,
   usePromptInput,
   parseInputMode,
   type PromptInputState,
   type PermissionMode as PromptPermissionMode,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.ts";
-import { IdleReturnDialog, CostDialog } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/dialogs.ts";
-import { Homescreen, type BoardSummary, type HomescreenProps } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/logo-homescreen.ts";
-import { FIREBALL_IDLE_POSE_FRAME } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/fireball.ts";
-import { SlashDropdown }                from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/slash-dropdown.ts";
+} from "../components/prompt-input.ts";
+import { IdleReturnDialog, CostDialog } from "../components/dialogs.ts";
+import { Homescreen, type BoardSummary, type HomescreenProps } from "../components/logo-homescreen.ts";
+import { FIREBALL_IDLE_POSE_FRAME } from "../components/fireball.ts";
+import { SlashDropdown }                from "../components/slash-dropdown.ts";
 import {
   shouldShowSlashDropdown,
   slashQueryFrom,
@@ -50,7 +50,7 @@ import {
   slashDropdownCanRender,
 } from "../services/slash-dropdown.ts";
 import { findCommand, getCommands } from "../command-registry.ts";
-import type { RegistryCommand } from "../../../../src/ember/infrastructure/tools/ember-cli/src/types/command-types.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
 import {
   buildMessageLookups,
   UserTextMessage,
@@ -60,120 +60,120 @@ import {
   CompactionProgressMessage,
   UserCommandMessage,
   type MessageLookups,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/message-renderers.ts";
-import { UserToolResultMessage }        from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/tool-result-renderers.ts";
+} from "../components/message-renderers.ts";
+import { UserToolResultMessage }        from "../components/tool-result-renderers.ts";
 import {
   ActivityTranscriptBlock,
   DEFAULT_PATH_MAX_LEN,
   type ActivityFeedLine,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/activity-feed-pane.ts";
+} from "../components/activity-feed-pane.ts";
 import {
   SpinnerAnimationRow,
   ANIMATION_LOOP_MS,
-}                                        from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/spinner.ts";
-import { QueryEngine, type QueryEvent, type ResultEvent, type RetryAttemptInfo } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/query-engine.ts";
-import type { PermissionBehavior, Tool } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/tool-interface.ts";
+}                                        from "../components/spinner.ts";
+import { QueryEngine, type QueryEvent, type ResultEvent, type RetryAttemptInfo } from "../core/query-engine.ts";
+import type { PermissionBehavior, Tool } from "../core/tool-interface.ts";
 import {
   getDiagnostics,
   getState,
   startTelemetryWatch,
   type TelemetryState,
 }                                        from "../services/telemetry-watch.ts";
-import { telemetryMemoKey }              from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/telemetry-label.ts";
-import { driveOperatorControl, type OperatorControlAction } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/operator-controls.ts";
+import { telemetryMemoKey }              from "../services/telemetry-label.ts";
+import { driveOperatorControl, type OperatorControlAction } from "../services/operator-controls.ts";
 import {
   OPERATOR_CONTROL_ACTIONS,
   isOperatorControlEnabled,
   operatorControlDisabledReason,
   operatorControlStatus,
   nextOperatorFocusIndex,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts";
+} from "../components/operator-surface-pane.ts";
 import {
   getActivityFeedState,
   publishActivityFeedInfrastructureFailure,
   startActivityFeed,
-}                                        from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.ts";
+}                                        from "../services/activity-feed.ts";
 import {
   createPollFailureStatusTracker,
   type PollFailureStatusEntry,
   type PollFailureStatusTracker,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/poll-failure-status.ts";
-import { advanceActivityTranscript }      from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/activity-transcript-window.ts";
-import { useModelMetricsPoller }         from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/model-metrics-poller.ts";
-import { useCircuitBreakerBanner, useRoundtripAge } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/circuit-breaker-banner-poller.ts";
-import { useOutageBanner }               from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/outage-banner-poller.ts";
+} from "../services/poll-failure-status.ts";
+import { advanceActivityTranscript }      from "../services/activity-transcript-window.ts";
+import { useModelMetricsPoller }         from "../services/model-metrics-poller.ts";
+import { useCircuitBreakerBanner, useRoundtripAge } from "../services/circuit-breaker-banner-poller.ts";
+import { useOutageBanner }               from "../services/outage-banner-poller.ts";
 import {
   executePromptSuggestion,
   makeSuggestionExecutor,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/prompt-suggestion.ts";
-import type { AppState } from "../../../../src/ember/infrastructure/tools/ember-cli/src/state/app-state.ts";
-import type { EmberMessage } from "../../../../src/ember/infrastructure/tools/ember-cli/src/types/message-types.ts";
-import type { CallModelParams, ModelResponse } from "../../../../src/ember/infrastructure/tools/ember-cli/src/query/query-loop-support.ts";
+} from "../services/prompt-suggestion.ts";
+import type { AppState } from "../state/app-state.ts";
+import type { EmberMessage } from "../types/message-types.ts";
+import type { CallModelParams, ModelResponse } from "../query/query-loop-support.ts";
 import {
   tryDispatchSlashCommandSafely,
   parseSlashInput,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/slash-dispatch.ts";
-import { consumePostCompaction } from "../../../../src/ember/infrastructure/tools/ember-cli/src/session-state.ts";
-import { OperatorInjector } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/operator-input.ts";
-import { startOperatorPipe } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/operator-pipe.ts";
+} from "../services/slash-dispatch.ts";
+import { consumePostCompaction } from "../session-state.ts";
+import { OperatorInjector } from "../services/operator-input.ts";
+import { startOperatorPipe } from "../services/operator-pipe.ts";
 import {
   createOperatorReceiptWriter,
   type OperatorReceiptWriter,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/operator-receipts.ts";
+} from "../services/operator-receipts.ts";
 import {
   parseLaunchAuthorityParameters,
   type StartParameters,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/start-parameters.ts";
+} from "../components/start-parameters.ts";
 import {
   updateOperatorControlNotice,
   type OperatorControlNotice,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/operator-control-notice.ts";
+} from "../services/operator-control-notice.ts";
 import {
   createLivenessHeartbeatWriter,
   isHeadlessCapture,
   readHeartbeatRow,
   type LivenessHeartbeatWriter,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/liveness-heartbeat.ts";
-import { createCockpitMemoryFootprintSupervisor } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-cockpit.ts";
-import { createLiveServingTopologyService } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-live.ts";
-import { resolveEmberRepoRoot } from "../../../../src/ember/infrastructure/tools/ember-cli/src/utils/repo-root.ts";
-import { emberStatePath } from "../../../../src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.ts";
+} from "../services/liveness-heartbeat.ts";
+import { createCockpitMemoryFootprintSupervisor } from "../services/memory-footprint-cockpit.ts";
+import { createLiveServingTopologyService } from "../services/serving-topology-live.ts";
+import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
+import { emberStatePath } from "../utils/ember-state-root.ts";
 import {
   createGoalContinuationEngine,
   type ContinuationEligibilitySignals,
   type GoalContinuationEngine,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/goal-continuation.ts";
-import { getGoalStore, getGoalReceiptWriter } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/goal-runtime.ts";
+} from "../core/goal-continuation.ts";
+import { getGoalStore, getGoalReceiptWriter } from "../core/goal-runtime.ts";
 import {
   createGoalContinuationPoke,
   isGoalContinuationFeatureEnabled,
   startGoalContinuationRearm,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/goal-continuation-wiring.ts";
-import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../../../../src/ember/infrastructure/tools/ember-cli/src/commands/goal.ts";
+} from "../core/goal-continuation-wiring.ts";
+import { setGoalSteeringInjectorProvider, setGoalContinuationTrigger } from "../commands/goal.ts";
 import { buildEmberWorldState } from "../core/ember-world-state.ts";
-import { useBoardTsPoller } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/board-ts-poller.ts";
-import { formatCockpitRestartEvent } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.ts";
-import { useGpuStatePoller, formatGpuStateLine } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/gpu-state-poller.ts";
-import { useHostTelemetryPoller } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/host-telemetry-poller.ts";
+import { useBoardTsPoller } from "../services/board-ts-poller.ts";
+import { formatCockpitRestartEvent } from "../core/monitor-render.ts";
+import { useGpuStatePoller, formatGpuStateLine } from "../services/gpu-state-poller.ts";
+import { useHostTelemetryPoller } from "../services/host-telemetry-poller.ts";
 import {
   useActiveRunPoller,
   isActiveRunFresh,
   formatActiveRunLine,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/run-progress-scanner.ts";
-import { useReceiptLandingPoller, formatLastReceiptLine } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/receipt-landing-poller.ts";
+} from "../services/run-progress-scanner.ts";
+import { useReceiptLandingPoller, formatLastReceiptLine } from "../services/receipt-landing-poller.ts";
 import path from "node:path";
 import fs from "node:fs";
-import { OperatorSurfacePane } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts";
-import { commandBarMaxRows } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/command-bar-pane.ts";
-import type { CommandButtonActivation } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/command-buttons.ts";
+import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
+import { commandBarMaxRows } from "../components/command-bar-pane.ts";
+import type { CommandButtonActivation } from "../services/command-buttons.ts";
 import {
   buildProcessOptions,
   captureStartReview,
   outstandingProcessOffer,
   startActivation,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/process-select.ts";
-import { verifySourceBinding } from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/source-binding-verifier.ts";
-import type { ModelSeatState } from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.ts";
+} from "../services/process-select.ts";
+import { verifySourceBinding } from "../entrypoints/source-binding-verifier.ts";
+import type { ModelSeatState } from "../entrypoints/model-seat.ts";
 import { getModelSeatState } from "../entrypoints/session-init.ts";
 
 // ---------------------------------------------------------------------------
@@ -1699,7 +1699,7 @@ export function ReplScreen({
       try {
         const [siMod, btMod] = await Promise.all([
           import("../entrypoints/session-init.ts"),
-          import("../../../../src/ember/infrastructure/tools/ember-cli/src/tools/builtin-tools.ts"),
+          import("../tools/builtin-tools.ts"),
         ]);
 
         const deps      = siMod.getLoopDeps();

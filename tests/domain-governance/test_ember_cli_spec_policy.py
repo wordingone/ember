@@ -81,7 +81,7 @@ def test_shipped_spec_requires_existing_consumer(tmp_path: Path) -> None:
 
     _write_shipped_spec(
         root,
-        consumer="tools/ember-cli/src/services/missing.ts",
+        consumer="src/ember/infrastructure/tools/ember-cli/src/services/missing.ts",
     )
     with pytest.raises(SpecPolicyError, match="consumer-missing"):
         load_spec_nodes(root)
@@ -108,7 +108,7 @@ def test_valid_shipped_spec_returns_normalized_consumer(tmp_path: Path) -> None:
     consumer.write_text("export {};\n", encoding="utf-8")
     _write_shipped_spec(
         root,
-        consumer="tools/ember-cli/src/services/fixture.ts",
+        consumer="src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts",
     )
 
     nodes = load_spec_nodes(root)
@@ -116,7 +116,7 @@ def test_valid_shipped_spec_returns_normalized_consumer(tmp_path: Path) -> None:
     assert len(nodes) == 1
     assert nodes[0].status == "SHIPPED"
     assert nodes[0].consumers == (
-        "tools/ember-cli/src/services/fixture.ts",
+        "src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts",
     )
 
 
@@ -147,28 +147,28 @@ def test_added_component_requires_changed_spec_with_exact_consumer(
     component.write_text("export {};\n", encoding="utf-8")
     _write_shipped_spec(
         root,
-        consumer="tools/ember-cli/src/services/fixture.ts",
+        consumer="src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts",
     )
 
     errors = validate_added_component_coverage(
         root,
         [
             {
-                "filename": "tools/ember-cli/src/services/fixture.ts",
+                "filename": "src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts",
                 "status": "added",
             }
         ],
     )
     assert errors == [
         "spec-floor:added-component-unbound:"
-        "tools/ember-cli/src/services/fixture.ts"
+        "src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts"
     ]
 
     assert validate_added_component_coverage(
         root,
         [
             {
-                "filename": "tools/ember-cli/src/services/fixture.ts",
+                "filename": "src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts",
                 "status": "added",
             },
             {
@@ -184,7 +184,7 @@ def test_changed_file_rows_fail_closed_on_unknown_shape(tmp_path: Path) -> None:
 
     assert validate_added_component_coverage(
         root,
-        [{"filename": "tools/ember-cli/src/services/fixture.ts"}],
+        [{"filename": "src/ember/infrastructure/tools/ember-cli/src/services/fixture.ts"}],
     ) == ["spec-floor:changed-file-row-invalid"]
 
 
@@ -194,7 +194,7 @@ def test_test_files_do_not_masquerade_as_new_components(tmp_path: Path) -> None:
     assert validate_added_component_coverage(
         root,
         [{
-            "filename": "tools/ember-cli/src/services/fixture.test.ts",
+            "filename": "src/ember/infrastructure/tools/ember-cli/src/services/fixture.test.ts",
             "status": "added",
         }],
     ) == []
@@ -202,7 +202,7 @@ def test_test_files_do_not_masquerade_as_new_components(tmp_path: Path) -> None:
 
 def test_nested_production_component_requires_bound_spec(tmp_path: Path) -> None:
     root = _repo(tmp_path)
-    path = "tools/ember-cli/src/services/feature/worker.ts"
+    path = "src/ember/infrastructure/tools/ember-cli/src/services/feature/worker.ts"
     (root / "tools" / "ember-cli" / "specs" / "open.md").write_text(
         "# Open fixture\n\nStatus: OPEN\n",
         encoding="utf-8",

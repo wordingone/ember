@@ -32,9 +32,9 @@ import { afterAll, beforeAll, describe, it, expect } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
-import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { ReplScreen } from "../screens/repl.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { resetCommandRegistryForTests } from "../command-registry.ts";
 
 const COLS = 80;
 // Deliberately BELOW the 28-row floor documented in repl-slash-dropdown.test.ts (banner 16 +
