@@ -25,7 +25,7 @@
       "reason": "historical public-issue census; exact retired daemon spelling is source evidence and must remain byte-identical"
     },
     {
-      "path": "tools/ember-cli/src/scripts/gate-classifier.test.ts",
+      "path": "src/ember/infrastructure/tools/ember-cli/src/scripts/gate-classifier.test.ts",
       "sha256": "e840d3d9036279e473b2138c6f7dba2dc767c4a7bde643bcff08058f55b3ae2c",
       "reason": "historical failure-class test comment names the retired RPC fixture whose captured output it classifies"
     },

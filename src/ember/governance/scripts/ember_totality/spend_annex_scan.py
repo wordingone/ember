@@ -602,7 +602,7 @@ CONVENTION_PATH_MAP = {
     "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json":
         "tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
     "receipts/issue-457-current-acceptance-20260730.json":
-        "scripts/issue457_acceptance.py",
+        "src/ember/governance/scripts/issue457_acceptance.py",
 }
 
 # --- Generator-absent-historical table (gh issue #17 second pass, 2026-07-03).
