@@ -141,35 +141,35 @@ RigResult = getattr(_ember_a15ae7b5497c49d1_module, 'RigResult')
 Corpus = getattr(_ember_a15ae7b5497c49d1_module, 'Corpus')
 Task = getattr(_ember_a15ae7b5497c49d1_module, 'Task')
 # issue2015 exact-local-import-end:scripts/ember_c14_contract_rig.py
-# issue2015 exact-local-import:scripts/ember_resident_igrpo.py
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_resident_igrpo.py
 import importlib.util as _ember_d0a8f6627b10c41d_importlib
 import sys as _ember_d0a8f6627b10c41d_sys
 from pathlib import Path as _ember_d0a8f6627b10c41d_Path
 _ember_d0a8f6627b10c41d_path = _ember_d0a8f6627b10c41d_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_resident_igrpo.py')
 if not _ember_d0a8f6627b10c41d_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_resident_igrpo.py')
-_ember_d0a8f6627b10c41d_aliases = ('_ember_issue2015_d0a8f6627b10c41d', 'ember_resident_igrpo', 'scripts.ember_resident_igrpo')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_resident_igrpo.py')
+_ember_d0a8f6627b10c41d_aliases = ('_ember_issue2015_d0a8f6627b10c41d', 'ember_resident_igrpo', 'src.ember.governance.scripts.ember_resident_igrpo')
 _ember_d0a8f6627b10c41d_existing = []
 for _ember_d0a8f6627b10c41d_alias in _ember_d0a8f6627b10c41d_aliases:
     _ember_d0a8f6627b10c41d_candidate = _ember_d0a8f6627b10c41d_sys.modules.get(_ember_d0a8f6627b10c41d_alias)
     if _ember_d0a8f6627b10c41d_candidate is not None and all(_ember_d0a8f6627b10c41d_candidate is not item for item in _ember_d0a8f6627b10c41d_existing):
         _ember_d0a8f6627b10c41d_existing.append(_ember_d0a8f6627b10c41d_candidate)
 if len(_ember_d0a8f6627b10c41d_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_resident_igrpo.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_resident_igrpo.py')
 if _ember_d0a8f6627b10c41d_existing:
     _ember_d0a8f6627b10c41d_module = _ember_d0a8f6627b10c41d_existing[0]
     _ember_d0a8f6627b10c41d_observed = getattr(_ember_d0a8f6627b10c41d_module, '__file__', None)
     if _ember_d0a8f6627b10c41d_observed is None or _ember_d0a8f6627b10c41d_Path(_ember_d0a8f6627b10c41d_observed).resolve() != _ember_d0a8f6627b10c41d_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_resident_igrpo.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_resident_igrpo.py')
 else:
     _ember_d0a8f6627b10c41d_spec = _ember_d0a8f6627b10c41d_importlib.spec_from_file_location('_ember_issue2015_d0a8f6627b10c41d', _ember_d0a8f6627b10c41d_path)
     if _ember_d0a8f6627b10c41d_spec is None or _ember_d0a8f6627b10c41d_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_resident_igrpo.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_resident_igrpo.py')
     _ember_d0a8f6627b10c41d_module = _ember_d0a8f6627b10c41d_importlib.module_from_spec(_ember_d0a8f6627b10c41d_spec)
     for _ember_d0a8f6627b10c41d_alias in _ember_d0a8f6627b10c41d_aliases:
         _ember_d0a8f6627b10c41d_prior = _ember_d0a8f6627b10c41d_sys.modules.get(_ember_d0a8f6627b10c41d_alias)
         if _ember_d0a8f6627b10c41d_prior is not None and _ember_d0a8f6627b10c41d_prior is not _ember_d0a8f6627b10c41d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_resident_igrpo.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_resident_igrpo.py')
         _ember_d0a8f6627b10c41d_sys.modules[_ember_d0a8f6627b10c41d_alias] = _ember_d0a8f6627b10c41d_module
     try:
         _ember_d0a8f6627b10c41d_spec.loader.exec_module(_ember_d0a8f6627b10c41d_module)
@@ -181,7 +181,7 @@ else:
 for _ember_d0a8f6627b10c41d_alias in _ember_d0a8f6627b10c41d_aliases:
     _ember_d0a8f6627b10c41d_prior = _ember_d0a8f6627b10c41d_sys.modules.get(_ember_d0a8f6627b10c41d_alias)
     if _ember_d0a8f6627b10c41d_prior is not None and _ember_d0a8f6627b10c41d_prior is not _ember_d0a8f6627b10c41d_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_resident_igrpo.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_resident_igrpo.py')
     _ember_d0a8f6627b10c41d_sys.modules[_ember_d0a8f6627b10c41d_alias] = _ember_d0a8f6627b10c41d_module
 TinyPolicyTransformer = getattr(_ember_d0a8f6627b10c41d_module, 'TinyPolicyTransformer')
 igrpo_step = getattr(_ember_d0a8f6627b10c41d_module, 'igrpo_step')
@@ -189,7 +189,7 @@ rlm_generate = getattr(_ember_d0a8f6627b10c41d_module, 'rlm_generate')
 VOCAB_SIZE = getattr(_ember_d0a8f6627b10c41d_module, 'VOCAB_SIZE')
 parse_temp_schedule = getattr(_ember_d0a8f6627b10c41d_module, 'parse_temp_schedule')
 schedule_temperature = getattr(_ember_d0a8f6627b10c41d_module, 'schedule_temperature')
-# issue2015 exact-local-import-end:scripts/ember_resident_igrpo.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_resident_igrpo.py
 from receipt_write import checked_write  # noqa: E402
 
 SHA_CONVENTION = "sha256"

@@ -28,7 +28,7 @@ EXPECTED_EXCLUDED_FOURTEEN = {
     "runtime/ember-lab/tests/control_plane.rs",
     "scripts/cond4_behavior_surface.py",
     "scripts/ember_01_custody/census.py",
-    "scripts/ember_01_custody/issue_census.py",
+    "src/ember/governance/scripts/ember_01_custody/issue_census.py",
     "scripts/ember_01_identity/census_consumers.py",
     "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
     "scripts/ember_01_identity/parameter_identity_binding.py",

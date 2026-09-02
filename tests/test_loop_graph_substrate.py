@@ -84,7 +84,7 @@ def test_receipt_missing_node_id_fails_schema():
 
 
 def test_authority_graph_matches_existing_ember_file_shape():
-    # Regression guard: the real docs/roadmap/execution-graph.json (an
+    # Regression guard: the real docs/domains/governance/roadmap/execution-graph.json (an
     # authority-graph-v1-shaped document) must still validate cleanly
     # against nothing here since it predates schema_version tagging --
     # instead we check that a v2-tagged equivalent validates.

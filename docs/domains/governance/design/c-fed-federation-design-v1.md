@@ -56,7 +56,7 @@ and byte-scanned at launch (`TOKEN-SHARDS-V0`, `docs/domains/governance/contract
 launch-rail's "shards byte-scan + live interlock"). Federated work-sharding is the same
 primitive applied to *training work units* instead of *corpus bytes*: a shard is a bounded,
 named unit of work (a fixed token range, a fixed cycle count, a fixed budget —
-`docs/archive/pre-restart/barrier-program.md`'s "fixed shards-v0 corpus" and `ember_growth_harness.py`'s
+`docs/domains/governance/archive/pre-restart/barrier-program.md`'s "fixed shards-v0 corpus" and `ember_growth_harness.py`'s
 `MIN_REPEATED_POSITIVE_CYCLES`-bounded cycle notion are the existing precedent for "bounded,
 named, receipt-backed unit of work") dispatched to one avenue, executed there, and returned
 as a receipt plus an optional checkpoint delta. The shard boundary is the same boundary the

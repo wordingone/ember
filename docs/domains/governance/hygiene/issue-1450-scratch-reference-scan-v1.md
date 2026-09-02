@@ -5,7 +5,7 @@
 # Issue #1450 scratch reference/duplicate advisory scan v1
 
 This is a second, separate read-only tool layered on top of
-`tools/scratch_custody.py`'s census: `tools/scratch_reference_scan.py`. It
+`src/ember/infrastructure/tools/scratch_custody.py`'s census: `tools/scratch_reference_scan.py`. It
 answers two of the census's open questions with real evidence instead of
 `UNKNOWN`/`UNRESOLVED` placeholders, and it changes no authority: every
 disposition row it feeds into `scratch_custody.py disposition` is still
@@ -81,7 +81,7 @@ and this scan does not supply. Both remain open work.
 ## Reproduction
 
 ```text
-python -B tools/scratch_custody.py census --root <repo-root> --output <manifest> --label <label> --max-bytes <cap> --max-files <cap>
+python -B src/ember/infrastructure/tools/scratch_custody.py census --root <repo-root> --output <manifest> --label <label> --max-bytes <cap> --max-files <cap>
 python -B tools/scratch_reference_scan.py references --root <repo-root> --manifest <manifest> --output <references>
 python -B tools/scratch_reference_scan.py duplicate-check --root <repo-root> --a <name> --b <name> [--output <receipt>]
 ```

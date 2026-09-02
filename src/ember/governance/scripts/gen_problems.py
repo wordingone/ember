@@ -16,7 +16,7 @@ PROBLEMS.md is regenerated, never hand-edited.
 Difficulty order is COMPUTED (tier, then audit severity, then rank_hint), so a
 new problem only needs a tier+severity in the overlay — nothing is renumbered.
 
-Run:  python scripts/gen_problems.py     (no args; finds the latest board+audit)
+Run:  python src/ember/governance/scripts/gen_problems.py     (no args; finds the latest board+audit)
 Wire: called at the end of the 2-hourly board-integrity audit so it stays live.
 
 Provenance: landed from stage dryrun-20260704T211712Z (ember issue #210 Tier 2)
@@ -154,7 +154,7 @@ def main():
     ts = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     L = []
     L.append("# Ember — Problems ledger (GENERATED — do not edit)\n")
-    L.append("> Generated `%s` by `scripts/gen_problems.py`." % ts)
+    L.append("> Generated `%s` by `src/ember/governance/scripts/gen_problems.py`." % ts)
     L.append("> STATUS source (receipts-only): `%s` (sha %s)%s." % (
         os.path.basename(board_path), sha8(board_path),
         " + `%s` (sha %s)" % (os.path.basename(audit_path), sha8(audit_path)) if audit_path else ""))

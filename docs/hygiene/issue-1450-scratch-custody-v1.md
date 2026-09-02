@@ -6,7 +6,7 @@
 
 This is a read-only, CPU/file-only boundary for the repository `scratch/`
 surface.  It does not delete, move, rename, or rewrite any run output.  The
-producer is `tools/scratch_custody.py`; its output contains only logical
+producer is `src/ember/infrastructure/tools/scratch_custody.py`; its output contains only logical
 relative paths, byte counts, SHA-256 digests, Git source identity, and a closed
 policy projection.  Machine paths are execution inputs and are never written
 to the manifest.
@@ -17,10 +17,10 @@ From a clean checkout, choose a caller-owned output path outside `scratch/` and
 run:
 
 ```text
-python -B tools/scratch_custody.py census --root <repo-root> --output <manifest> --label issue-1450 --max-bytes <bounded-cap> --max-files <bounded-count>
-python -B tools/scratch_custody.py guard --root <repo-root> --manifest <manifest>
-python -B tools/scratch_custody.py disposition --manifest <manifest> --annotations <annotations> --output <disposition>
-python -B tools/scratch_custody.py disposition-guard --manifest <manifest> --disposition <disposition>
+python -B src/ember/infrastructure/tools/scratch_custody.py census --root <repo-root> --output <manifest> --label issue-1450 --max-bytes <bounded-cap> --max-files <bounded-count>
+python -B src/ember/infrastructure/tools/scratch_custody.py guard --root <repo-root> --manifest <manifest>
+python -B src/ember/infrastructure/tools/scratch_custody.py disposition --manifest <manifest> --annotations <annotations> --output <disposition>
+python -B src/ember/infrastructure/tools/scratch_custody.py disposition-guard --manifest <manifest> --disposition <disposition>
 ```
 
 `census` refuses symlinks/reparse points, path aliases, unreadable files,

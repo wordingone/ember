@@ -5,7 +5,7 @@
 """Read-only reference/duplicate advisory scan for ``scratch/`` top-level entries (issue #1450).
 
 This tool never moves, deletes, or authorizes moving/deleting a single byte, and it grants no
-disposition. ``tools/scratch_custody.py`` already enforces that: every disposition entry its
+disposition. ``src/ember/infrastructure/tools/scratch_custody.py`` already enforces that: every disposition entry its
 schema accepts is hard-locked to ``KEEP_UNRESOLVED`` (see its ``validate_disposition``), and its
 ``identical_copy`` enum has no ``PROVEN_IDENTICAL`` value at all -- "found a duplicate" and
 "authorized to delete one" are kept structurally unable to collide, and that authorization does
@@ -54,7 +54,7 @@ from typing import Any
 # scratch_reference_scan` (pytest, run from the repo root) puts the repo root on sys.path (only
 # the qualified form resolves).
 try:
-    from tools.scratch_custody import AUTHORITY, INVARIANT_SHA256, SHA_CONVENTION
+    from src.ember.infrastructure.tools.scratch_custody import AUTHORITY, INVARIANT_SHA256, SHA_CONVENTION
 except ImportError:
     from scratch_custody import AUTHORITY, INVARIANT_SHA256, SHA_CONVENTION  # type: ignore[no-redef]
 

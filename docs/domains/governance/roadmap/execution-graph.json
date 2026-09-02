@@ -27,7 +27,7 @@
     },
     {
       "id": "EMBER-02",
-      "contract": "docs/roadmap/milestones/EMBER-02.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-02.md",
       "state": "TARGET_PRESTAGING",
       "depends_on": ["EMBER-01"],
       "workstreams": [

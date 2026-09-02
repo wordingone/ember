@@ -8,7 +8,7 @@ softened to make a row read green.
   was invented, and no floor clause was dropped (see "Floor coverage" below).
 - **Audited tree:** `wordingone/ember` at `ebae9f3aef1f497302c956ca534dc38f10e7e852`
   (`origin/master`, "docs(spec): freeze C8 F3 instrument list (#1323) (#1334)").
-- **Evidence suite:** `tools/ember-cli/src/core/goal-organ-floor-conformance-642.test.ts` —
+- **Evidence suite:** `src/ember/infrastructure/tools/ember-cli/src/core/goal-organ-floor-conformance-642.test.ts` —
   one `describe` block per clause, each test written so it would FAIL if its clause were violated.
 - **Executed:** `cd tools/ember-cli/src && bun test core/goal-organ-floor-conformance-642.test.ts`
   → **23 pass, 1 skip, 0 fail, 90 expect() calls** (bun 1.3.12). The single skip is the

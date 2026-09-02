@@ -6,7 +6,7 @@
 
 # ember-cli `/model` <-> `validate_identity.py` subprocess contract (cond3 inc2a)
 
-`tools/ember-cli/src/commands/model.ts` binds the operator-facing `/model status` and
+`src/ember/infrastructure/tools/ember-cli/src/commands/model.ts` binds the operator-facing `/model status` and
 `/model load` surfaces to checkpoint identity by spawning
 `scripts/ember_01_identity/validate_identity.py` as a subprocess (`_resolveModelIdentity`).
 This document is the contract between the two sides.

@@ -39,7 +39,7 @@ by this ruling.
 ## Why the named vehicle is obsolete
 
 The experiment's named subject is the historical 2.2B/cbase rung. Current
-`GOAL.md` and `docs/roadmap/milestones/EMBER-02.md` require the first admissible
+`GOAL.md` and `docs/domains/governance/roadmap/milestones/EMBER-02.md` require the first admissible
 Ember research network to contain at least 3,000,000,000 unique parameters and
 make smaller artifacts read-only history. The old offload consumer, checkpoint,
 optimizer split, schedule, byte ledger, and 79--81 second price therefore cannot

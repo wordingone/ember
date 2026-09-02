@@ -560,7 +560,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
             launch_vehicle_impact=(
                 "Recursive self-call loop (arXiv:2512.24601) is the sampling "
                 "procedure in igrpo_stage1/stage2; rlm_generate() in "
-                "scripts/ember_resident_igrpo.py:243; ACTION_FINAL=8, ACTION_RECURSE=9"
+                "src/ember/governance/scripts/ember_resident_igrpo.py:243; ACTION_FINAL=8, ACTION_RECURSE=9"
             ),
             trigger="iGRPO training step on any task corpus",
             pilot=(
@@ -592,7 +592,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "Non-killable for C14; advantage std-guard (A_j=0 when std=0) "
                 "must remain; no surrogate simplification without receipt"
             ),
-            evidence_path="scripts/ember_resident_igrpo.py",
+            evidence_path="src/ember/governance/scripts/ember_resident_igrpo.py",
         ),
         _row(
             key="floor_contract.phase3.LoRA_fp16_C_arm",
@@ -814,7 +814,7 @@ def _make_nc2_rows(nc2_sha: str) -> List["FloorRow"]:
                 "Reduce max_depth not the mechanism if instability observed; "
                 "mechanism itself is non-killable for the C14 goal"
             ),
-            evidence_path="scripts/ember_resident_igrpo.py",
+            evidence_path="src/ember/governance/scripts/ember_resident_igrpo.py",
         ),
         _row(
             key="nc2_component_contract.iGRPO_group_relative_PG",

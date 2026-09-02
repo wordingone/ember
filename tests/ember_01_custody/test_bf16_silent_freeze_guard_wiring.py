@@ -4,7 +4,7 @@
 """C0 conjunct-3 wiring test for the BF16_SILENT_FREEZE failure class.
 
 The C0 ledger row for BF16_SILENT_FREEZE was reverted from CLOSED_GUARDED because
-its previously-cited guard (scripts/tests/test_screen792_bf16_momentum.py) is DEAD
+its previously-cited guard (src/ember/governance/scripts/tests/test_screen792_bf16_momentum.py) is DEAD
 ON IMPORT -- bytes exist but the file cannot even be pytest-collected, so it cannot
 regression-guard anything. The row's own reopening bar (verbatim from
 manifests/ember-01-custody/c0-failure-class-ledger.json) is: "a LIVE guard on the

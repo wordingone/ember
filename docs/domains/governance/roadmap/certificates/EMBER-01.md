@@ -63,7 +63,7 @@ The private canonical certificate JSON hashes to:
 |---|---|---|
 | Completion certificate (canonical JSON) | private operator custody | `954d8deef8d6590479a565e1a0c2b54f36e2618fd8e77b833f4f5dd74aa8efb9` |
 | `receipt9.json` — the nine-leg completion receipt the certificate cites as evidence | private operator custody, `<custody>/census-assembly-20260802/` | `7306d591c8a7a60f3629870747fe79832d20a528ef7576ede310fd21155390e2` |
-| `custody-sidecar8.json` — bounded custody-census sidecar (census receipt binding per `docs/custody/ember-01-custody-README.md`) | private operator custody, `<custody>/census-assembly-20260802/` | `8242f5db7d65ac092c684a8f1eaeeda7ef8af4d0d74979c518a3d74bae59d612` |
+| `custody-sidecar8.json` — bounded custody-census sidecar (census receipt binding per `docs/domains/governance/custody/ember-01-custody-README.md`) | private operator custody, `<custody>/census-assembly-20260802/` | `8242f5db7d65ac092c684a8f1eaeeda7ef8af4d0d74979c518a3d74bae59d612` |
 | `run9b.sh` — the exact script that executed the certifying verifier run | private operator custody, `<custody>/census-assembly-20260802/` | `a3fb95a691726e39eba93b0f32331cfb9b1604a64fc8b0e97f74c503e77313f2` |
 
 A claim names which custody classes were inspected and never infers one from

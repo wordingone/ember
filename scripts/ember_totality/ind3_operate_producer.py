@@ -275,7 +275,7 @@ def build_launch_receipt() -> tuple[dict, subprocess.Popen, int, Path, Path, Pat
         "heartbeat_ready": hb,
         "verified_alive_via": "Windows OpenProcess + GetExitCodeProcess (PROCESS_QUERY_LIMITED_INFORMATION)",
         "verified_alive": True,
-        "doc_pointer": "docs/operator/operate.md",
+        "doc_pointer": "docs/domains/governance/operator/operate.md",
         "ts": _now_ts(),
     }
     return receipt, proc, pid, channel, heartbeat, stopmarker
@@ -302,7 +302,7 @@ def build_teardown_receipt(proc: subprocess.Popen, pid: int, heartbeat: Path, st
             "orphaned_gpu_state": False,
             "note": "no GPU or model server is touched anywhere in this leg; orphaned_gpu_state is trivially false",
         },
-        "doc_pointer": "docs/operator/operate.md",
+        "doc_pointer": "docs/domains/governance/operator/operate.md",
         "ts": _now_ts(),
     }
     return receipt
@@ -368,7 +368,7 @@ def build_interrupted_resume_receipt() -> dict:
             "exit_code": cleanup["exit_code"],
             "post_stop_survivors": ([{"pid": pid_c, "state": "STILL_ACTIVE"}] if post_alive_c else []),
         },
-        "doc_pointer": "docs/operator/operate.md",
+        "doc_pointer": "docs/domains/governance/operator/operate.md",
         "ts": _now_ts(),
     }
 

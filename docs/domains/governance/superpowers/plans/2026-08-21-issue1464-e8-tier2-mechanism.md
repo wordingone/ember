@@ -32,7 +32,7 @@ terminal receipt, and fail-closed tests.
 Files:
 
 - Create tools/ember-restart-3b/a1_tier2_optimizer.py
-- Create tests/ember_restart_model/test_a1_tier2_optimizer.py
+- Create tests/ember_restart_model/domain-governance/test_a1_tier2_optimizer.py
 
 Steps:
 

@@ -85,7 +85,7 @@ EXPECTED_RECORDED_VERDICT = (
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 EXPECTED_SCRIPT_PATHS = {
-    "scripts/ember_avir_cli_launch_entry.py",
+    "src/ember/governance/scripts/ember_avir_cli_launch_entry.py",
     "src/ember/governance/scripts/ember_avir_harness.py",
     "src/ember/governance/scripts/ember_avir_observe.py",
     "src/ember/governance/scripts/ember_avir_tasks.py",
@@ -332,7 +332,7 @@ def validate_cpu_replay(root: Path) -> dict[str, Any]:
         compile(source, path, "exec")
     commands = [
         (
-            ["scripts/ember_avir_cli_launch_entry.py", "--help"],
+            ["src/ember/governance/scripts/ember_avir_cli_launch_entry.py", "--help"],
             ["usage: ember_avir_cli_launch_entry.py"],
         ),
         (

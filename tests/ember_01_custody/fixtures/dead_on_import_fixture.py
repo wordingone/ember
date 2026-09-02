@@ -8,7 +8,7 @@ negative test.
 This file exists ONLY to be permanently uncollectable by `pytest --collect-only`.
 It owns its own deadness by construction, rather than borrowing a PRODUCTION
 file's incidental dead-on-import behavior -- the predecessor fixture
-(scripts/tests/test_screen792_bf16_momentum.py) did the latter and broke the
+(src/ember/governance/scripts/tests/test_screen792_bf16_momentum.py) did the latter and broke the
 moment that production file was legitimately fixed for unrelated reasons
 (#1751): a negative fixture bound to production brokenness fails the instant
 someone fixes the production file, because it never actually owned its dead

@@ -390,7 +390,7 @@ class EmberRootLauncherTests(unittest.TestCase):
 
     def test_state_root_guard_refuses_roots_a_census_would_read(self) -> None:
         # Writer-side and fail-closed, mirroring assertStateRootIsWritable in
-        # tools/ember-cli/src/utils/ember-state-root.ts. A verifier-only refusal finds the
+        # src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.ts. A verifier-only refusal finds the
         # regression at the NEXT census, by which time the run is already red.
         parent = r"C:\fixture"
         cases = [

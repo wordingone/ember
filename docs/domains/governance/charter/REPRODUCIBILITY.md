@@ -83,7 +83,7 @@ These require additional resources not included in this repository:
 | check | what you need |
 |---|---|
 | `src/ember/governance/scripts/corpus_acquire.py` | several hundred GB local disk; internet access |
-| `scripts/corpus_mix.py` | hydrated corpus from `corpus_acquire.py` |
+| `src/ember/governance/scripts/corpus_mix.py` | hydrated corpus from `corpus_acquire.py` |
 | `scripts/train_multimodal_v0.py` | 24 GB VRAM GPU; hydrated corpus |
 | any eval script | model weights (produced by training) |
 | ScienceAgentBench tasks | local artifact from canonical source (see receipt) |

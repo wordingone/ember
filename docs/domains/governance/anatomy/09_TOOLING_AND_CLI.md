@@ -13,7 +13,7 @@ runtime: `ember-world-state.ts`, `encounter-membrane.ts`,
 `goal-continuation*.ts`, `monitor-render.ts`, `query-engine*.ts`,
 `frontend-shell.ts`. Every command has a co-located `.test.ts`.
 
-## scripts/ember_avir_cli_launch_entry.py
+## src/ember/governance/scripts/ember_avir_cli_launch_entry.py
 
 A deliberately small Python launch entrypoint, distinct from the TypeScript
 CLI's own entry — its own docstring: "Clean-room Ember/[operator]-agent

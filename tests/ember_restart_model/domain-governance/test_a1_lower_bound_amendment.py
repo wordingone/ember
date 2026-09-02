@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 AMENDMENT = ROOT / "docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json"
 PREREG = ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md"
 THRESHOLDS = ROOT / "docs/spec/ember02-preregistration-thresholds-v1.json"

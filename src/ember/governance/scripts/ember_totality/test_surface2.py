@@ -70,7 +70,7 @@ test_c_proc.py / test_c_legib.py):
       directory, names a steer/kill event via a schema-checked field —
       not a keyword grep. The real schema is `FinetuneControlCmd` (
       tools/ember-cli/src/services/finetune-control.ts, spec:
-      tools/ember-cli/specs/surface2-steerable-watch-control.md AC5-AC7):
+      src/ember/infrastructure/tools/ember-cli/specs/surface2-steerable-watch-control.md AC5-AC7):
       `{verb: "start"|"stop"|"pause"|"resume"|"adjust", runId?, lrScale?,
       ts}`, appended as one JSONL line per command to
       `state/ember-finetune-control.jsonl` (CONTROL_CHANNEL_PATH). Per

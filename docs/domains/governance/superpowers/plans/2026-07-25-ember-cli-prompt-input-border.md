@@ -302,7 +302,7 @@ git commit -m "test(cli): prove prompt border resize paint"
 
 **Files:**
 - Create: `tools/ember-cli/src/build-tools/capture-prompt-input-243.ts`
-- Create: `tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts`
 
 **Interfaces:**
 - Consumes: exact compiled binary path, output directory, node-pty, `@xterm/headless`, and current Git commit.
@@ -332,7 +332,7 @@ other than 80/40/80.
 - [ ] **Step 2: Run the capture-tool tests and witness RED**
 
 ```powershell
-bun test tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
 ```
 
 Expected: module/functions do not exist.
@@ -364,7 +364,7 @@ for the raw stream and independently reconstructed frame.
 - [ ] **Step 4: Run capture-tool tests**
 
 ```powershell
-bun test tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
 ```
 
 Expected: all discriminator tests pass.
@@ -372,7 +372,7 @@ Expected: all discriminator tests pass.
 - [ ] **Step 5: Commit the capture tool**
 
 ```powershell
-git add tools/ember-cli/src/build-tools/capture-prompt-input-243.ts tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
+git add tools/ember-cli/src/build-tools/capture-prompt-input-243.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
 git commit -m "test(cli): add compiled prompt border capture"
 ```
 
@@ -394,7 +394,7 @@ git commit -m "test(cli): add compiled prompt border capture"
 - [ ] **Step 1: Run the focused and adjacent regression suites**
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
+bun test tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
 ```
 
 Expected: all pass.

@@ -1,6 +1,6 @@
 """timeshare_handoff.py — handoff state machine for GPU timeshare (#123, eng-33).
 
-Implements the serialization rule from docs/research/june22-critical-path.md §3:
+Implements the serialization rule from docs/domains/governance/research/june22-critical-path.md §3:
   pretrain holds the GPU by default; round windows checkpoint it out, run,
   then resume — NEVER concurrent. One model at a time.
 

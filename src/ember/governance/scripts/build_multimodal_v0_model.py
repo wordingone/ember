@@ -18,35 +18,35 @@ SCRIPTS = os.path.dirname(__file__)
 if SCRIPTS not in sys.path:
     sys.path.insert(0, SCRIPTS)
 
-# issue2015 exact-local-import:scripts/ember_model_v0_multimodal.py
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_model_v0_multimodal.py
 import importlib.util as _ember_2cfe4d529b68f0f8_importlib
 import sys as _ember_2cfe4d529b68f0f8_sys
 from pathlib import Path as _ember_2cfe4d529b68f0f8_Path
 _ember_2cfe4d529b68f0f8_path = _ember_2cfe4d529b68f0f8_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_model_v0_multimodal.py')
 if not _ember_2cfe4d529b68f0f8_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_model_v0_multimodal.py')
-_ember_2cfe4d529b68f0f8_aliases = ('_ember_issue2015_2cfe4d529b68f0f8', 'ember_model_v0_multimodal', 'scripts.ember_model_v0_multimodal')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_model_v0_multimodal.py')
+_ember_2cfe4d529b68f0f8_aliases = ('_ember_issue2015_2cfe4d529b68f0f8', 'ember_model_v0_multimodal', 'src.ember.governance.scripts.ember_model_v0_multimodal')
 _ember_2cfe4d529b68f0f8_existing = []
 for _ember_2cfe4d529b68f0f8_alias in _ember_2cfe4d529b68f0f8_aliases:
     _ember_2cfe4d529b68f0f8_candidate = _ember_2cfe4d529b68f0f8_sys.modules.get(_ember_2cfe4d529b68f0f8_alias)
     if _ember_2cfe4d529b68f0f8_candidate is not None and all(_ember_2cfe4d529b68f0f8_candidate is not item for item in _ember_2cfe4d529b68f0f8_existing):
         _ember_2cfe4d529b68f0f8_existing.append(_ember_2cfe4d529b68f0f8_candidate)
 if len(_ember_2cfe4d529b68f0f8_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_model_v0_multimodal.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_model_v0_multimodal.py')
 if _ember_2cfe4d529b68f0f8_existing:
     _ember_2cfe4d529b68f0f8_module = _ember_2cfe4d529b68f0f8_existing[0]
     _ember_2cfe4d529b68f0f8_observed = getattr(_ember_2cfe4d529b68f0f8_module, '__file__', None)
     if _ember_2cfe4d529b68f0f8_observed is None or _ember_2cfe4d529b68f0f8_Path(_ember_2cfe4d529b68f0f8_observed).resolve() != _ember_2cfe4d529b68f0f8_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_model_v0_multimodal.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_model_v0_multimodal.py')
 else:
     _ember_2cfe4d529b68f0f8_spec = _ember_2cfe4d529b68f0f8_importlib.spec_from_file_location('_ember_issue2015_2cfe4d529b68f0f8', _ember_2cfe4d529b68f0f8_path)
     if _ember_2cfe4d529b68f0f8_spec is None or _ember_2cfe4d529b68f0f8_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_model_v0_multimodal.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_model_v0_multimodal.py')
     _ember_2cfe4d529b68f0f8_module = _ember_2cfe4d529b68f0f8_importlib.module_from_spec(_ember_2cfe4d529b68f0f8_spec)
     for _ember_2cfe4d529b68f0f8_alias in _ember_2cfe4d529b68f0f8_aliases:
         _ember_2cfe4d529b68f0f8_prior = _ember_2cfe4d529b68f0f8_sys.modules.get(_ember_2cfe4d529b68f0f8_alias)
         if _ember_2cfe4d529b68f0f8_prior is not None and _ember_2cfe4d529b68f0f8_prior is not _ember_2cfe4d529b68f0f8_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_model_v0_multimodal.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_model_v0_multimodal.py')
         _ember_2cfe4d529b68f0f8_sys.modules[_ember_2cfe4d529b68f0f8_alias] = _ember_2cfe4d529b68f0f8_module
     try:
         _ember_2cfe4d529b68f0f8_spec.loader.exec_module(_ember_2cfe4d529b68f0f8_module)
@@ -58,10 +58,10 @@ else:
 for _ember_2cfe4d529b68f0f8_alias in _ember_2cfe4d529b68f0f8_aliases:
     _ember_2cfe4d529b68f0f8_prior = _ember_2cfe4d529b68f0f8_sys.modules.get(_ember_2cfe4d529b68f0f8_alias)
     if _ember_2cfe4d529b68f0f8_prior is not None and _ember_2cfe4d529b68f0f8_prior is not _ember_2cfe4d529b68f0f8_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_model_v0_multimodal.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_model_v0_multimodal.py')
     _ember_2cfe4d529b68f0f8_sys.modules[_ember_2cfe4d529b68f0f8_alias] = _ember_2cfe4d529b68f0f8_module
 EmberModelV0Multimodal = getattr(_ember_2cfe4d529b68f0f8_module, 'EmberModelV0Multimodal')
-# issue2015 exact-local-import-end:scripts/ember_model_v0_multimodal.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_model_v0_multimodal.py
 
 
 def build_multimodal_v0_model(cfg: dict, live: bool = False):

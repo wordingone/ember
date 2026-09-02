@@ -26,7 +26,7 @@ $EmberCensusDiscoveryNamePatterns = @("ember*", "wt-stab480-bench594-scratch")
 # state path onto $repositoryRoot.
 
 function Get-EmberStateRootKey([string]$RepositoryRoot) {
-    # Mirrors repoStateKey in tools/ember-cli/src/utils/ember-state-root.ts. Both sides are
+    # Mirrors repoStateKey in src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.ts. Both sides are
     # pinned to the same fixture vectors so the two implementations cannot drift apart.
     # Lowercased because Windows paths are case-insensitive: two spellings of one checkout
     # must key to one state directory.
@@ -49,7 +49,7 @@ function Test-EmberDiscoveryNameMatch([string]$Name) {
 function Assert-EmberStateRootIsWritable([string]$StateRoot, [string]$RepositoryRoot) {
     # Writer-side and fail-closed. A verifier-only refusal finds the regression at the NEXT
     # census, by which time the run is already red; this refuses before anything is written.
-    # Mirrors assertStateRootIsWritable in tools/ember-cli/src/utils/ember-state-root.ts.
+    # Mirrors assertStateRootIsWritable in src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.ts.
     $resolved = [System.IO.Path]::GetFullPath($StateRoot)
     $repository = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd(
         [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)

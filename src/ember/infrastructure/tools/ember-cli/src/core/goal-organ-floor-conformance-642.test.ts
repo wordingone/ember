@@ -7,7 +7,7 @@
 // the audit's evidence, separate from (and in addition to) the pre-existing
 // goal-organ unit tests — each `describe` block below is tagged with its clause
 // number so the conformance table in
-// docs/archive/goal/goal-organ-floor-conformance-20260710.md can cite it directly.
+// docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md can cite it directly.
 //
 // FLOOR SOURCE: the six frozen clauses enumerated in issue #642's body, which
 // are the audit-scoped restatement of docs/contracts/goal-mode-mechanism.md ("Selection
@@ -234,7 +234,7 @@ describe("CLAUSE 3a — no polling: the engine never installs a timer of its own
 // rather than left to a passing test's silence.
 //
 // The deviation is recorded as DEVIATION-3c in
-// docs/archive/goal/goal-organ-floor-conformance-20260710.md row 3. These tests fix the
+// docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md row 3. These tests fix the
 // boundary that makes it subordinate rather than a second, competing loop:
 // the timer is injectable, it cannot bypass preemption, the kill switch
 // suppresses every tick, and no timer outlives its session.
@@ -397,7 +397,7 @@ describe("CLAUSE 3b — idle pokes continuation without any external caller poll
 // evidence field, no prior audit call, and no verification of any kind, and
 // the transition succeeds unconditionally as long as it is state-machine-legal.
 //
-// GAP CONFIRMED — see docs/archive/goal/goal-organ-floor-conformance-20260710.md row 4.
+// GAP CONFIRMED — see docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md row 4.
 // Tracked by sub-issue #663 (OPEN as of the 2026-08-03 re-run, which confirmed
 // the gap still reproduces unchanged against current master). Test kept here,
 // SKIPPED, so the gap is never silent and the suite stays green. Un-skip to

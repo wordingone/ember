@@ -55,7 +55,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/corpus_mix.py",
+      "path": "src/ember/governance/scripts/corpus_mix.py",
       "line": 135,
       "target": "OUT_ROOT_DEFAULT",
       "expression": "tf.OUT_ROOT_DEFAULT",
@@ -726,7 +726,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_enf.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_enf.py",
       "line": 44,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -737,7 +737,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_enf.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_enf.py",
       "line": 45,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -1012,7 +1012,7 @@
       "error": "node outside closed grammar: List"
     },
     {
-      "path": "scripts/fp33_e3_gemma_e2b_smoke.py",
+      "path": "src/ember/governance/scripts/fp33_e3_gemma_e2b_smoke.py",
       "line": 40,
       "target": "<sys.path.insert>",
       "expression": "NC_SCRIPTS",

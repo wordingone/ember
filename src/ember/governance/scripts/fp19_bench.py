@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp19_bench.py — owned-core pretrain throughput micro-benchmark (#111, fp-19).
 
-The June-22 critical path (docs/research/june22-critical-path.md §2) needs the
+The June-22 critical path (docs/domains/governance/research/june22-critical-path.md §2) needs the
 owned-core envelope MEASURED, not paper-claimed: what (params x bit-variant
 x token budget) fits the remaining continuous-GPU days on THIS 4090.
 

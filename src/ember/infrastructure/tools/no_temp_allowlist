@@ -73,7 +73,7 @@ scripts/ember_gate_state_persistence_selftest.py
 scripts/ember_gate_tool_dispatch_permissions_selftest.py
 scripts/ember_gate_uiux_repl_components_selftest.py
 src/ember/governance/scripts/ember_governor_binding.py
-scripts/ember_governor_binding_selftest.py
+src/ember/governance/scripts/ember_governor_binding_selftest.py
 src/ember/governance/scripts/ember_growth_harness_selftest.py
 src/ember/governance/scripts/ember_mle_micro_harness.py
 scripts/ember_mle_micro_harness_selftest.py
@@ -83,7 +83,7 @@ scripts/ember_mvp_readiness_selftest.py
 scripts/ember_mvp_wheel_runner_selftest.py
 scripts/ember_native_goal_organ_selftest.py
 scripts/ember_operator_harness_selftest.py
-scripts/ember_paperbench_admission_selftest.py
+src/ember/governance/scripts/ember_paperbench_admission_selftest.py
 scripts/ember_phase4_c15/bitnet_blocked_emitter.py
 scripts/ember_phase4_c15/c15_comparison_verifier.py
 scripts/ember_phase5_c7/c7_cycle_runner.py
@@ -98,7 +98,7 @@ scripts/ember_rebench_first_loop_selftest.py
 src/ember/governance/scripts/ember_research_benchmark_harness_selftest.py
 scripts/ember_research_loop_harness_selftest.py
 scripts/ember_resident_training_candidate.py
-scripts/ember_resident_training_gate.py
+src/ember/governance/scripts/ember_resident_training_gate.py
 scripts/ember_scale_harness_selftest.py
 scripts/ember_scienceagentbench_admission_selftest.py
 scripts/ember_scienceagentbench_artifact_intake_selftest.py
@@ -204,7 +204,7 @@ scripts/tests/test_cneg1_annex_bom_fallback.py
 src/ember/governance/scripts/tests/test_cockpit_watchdog.py
 scripts/tests/test_gpu_lease_placeholder.ts
 scripts/tests/test_prev_receipt_selection.py
-scripts/tests/test_screen792_bf16_momentum.py
+src/ember/governance/scripts/tests/test_screen792_bf16_momentum.py
 scripts/tests/test_serving_topology.py
 scripts/timeshare_pretrain.py
 src/ember/governance/scripts/token_shards_v0.py
