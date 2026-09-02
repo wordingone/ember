@@ -228,14 +228,35 @@ class RestartDecoderConfig:
         }
 
 
+def _rms_norm_for_device(
+    hidden_states: torch.Tensor,
+    weight: torch.Tensor,
+) -> torch.Tensor:
+    """Use PyTorch's native RMSNorm on the governed CPU/CUDA/meta surfaces."""
+    if hidden_states.device != weight.device:
+        raise ValueError("RMSNorm hidden states and weight must share a device")
+    device_type = hidden_states.device.type
+    if device_type not in {"cpu", "cuda", "meta"}:
+        raise ValueError(
+            f"RMSNorm native route does not support device type: {device_type}"
+        )
+    if weight.ndim != 1 or hidden_states.shape[-1] != weight.numel():
+        raise ValueError("RMSNorm weight must match the hidden width")
+    return F.rms_norm(
+        hidden_states,
+        (weight.numel(),),
+        weight,
+        eps=1e-6,
+    )
+
+
 class RMSNorm(nn.Module):
     def __init__(self, hidden_size: int, *, device: torch.device | str | None = None) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size, device=device))
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        scale = torch.rsqrt(hidden_states.pow(2).mean(dim=-1, keepdim=True) + 1e-6)
-        return hidden_states * scale * self.weight
+        return _rms_norm_for_device(hidden_states, self.weight)
 
 
 class RawPatchProjector(nn.Module):
