@@ -962,7 +962,7 @@ fn production_typescript_manifest_transport_reaches_the_real_named_pipe_daemon()
         .env("EMBER_LAB_REAL_DAEMON_MANIFEST", &manifest)
         .args([
             "test",
-            "tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts",
+            "src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts",
             "--test-name-pattern",
             "uses the production manifest_utf8 request type against the real Rust daemon",
         ])
