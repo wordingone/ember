@@ -763,13 +763,56 @@ def test_current_reference_reconciliation_replays_live_rows_and_refuses_drift(
     document = tmp_path / "docs/example.md"
     write(document, "See domains/data/README.md.\n")
     filing = module.current_unresolved_reference_rows(
-        tmp_path, module.FILING_REFERENCE_RE
+        tmp_path,
+        module.FILING_REFERENCE_RE,
+        tracked_paths={
+            "README.md",
+            "docs/example.md",
+            "domains/data/README.md",
+        },
     )
     corrected = module.current_unresolved_reference_rows(
-        tmp_path, module.CORRECTED_REFERENCE_RE
+        tmp_path,
+        module.CORRECTED_REFERENCE_RE,
+        tracked_paths={
+            "README.md",
+            "docs/example.md",
+            "domains/data/README.md",
+        },
     )
     assert [row["target"] for row in filing] == ["data/README.md"]
     assert corrected == []
+
+
+def test_reference_resolution_ignores_existing_untracked_build_artifact(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    document = tmp_path / "docs/example.md"
+    artifact = tmp_path / "runtime/ember-lab/target/release/ember-lab.exe"
+    write(document, "artifact\n")
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"ignored build output")
+
+    assert not module.reference_target_resolves(
+        tmp_path,
+        document,
+        "runtime/ember-lab/target/release/ember-lab.exe",
+        tracked_paths={"docs/example.md"},
+    )
+
+
+def test_reference_resolution_accepts_tracked_directory_prefix(tmp_path: Path) -> None:
+    module = load_module()
+    document = tmp_path / "docs/example.md"
+    write(document, "directory\n")
+
+    assert module.reference_target_resolves(
+        tmp_path,
+        document,
+        "data/schedule",
+        tracked_paths={"docs/example.md", "data/schedule/part-000.json"},
+    )
 
 
 def test_reference_dispositions_refuse_an_absent_document() -> None:
