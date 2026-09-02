@@ -49,6 +49,7 @@ tests/ember_restart/domain-governance/__fixtures__/cond3-artifact-b/checkpoint -
 tools/ember-cli/state/captures-286/*.png -text
 src/ember/infrastructure/tools/ember-cli/state/captures-286/*.png -text
 assets/*.ico -text
+domains/lab/assets/*.ico -text
 # EVAL-CANARY-IMAGE-V1 committed binary fixture members (#1948): byte-pinned
 # torch checkpoint + PPM rasters; git must never rewrite these bytes.
 tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/checkpoint.pt -text -diff
