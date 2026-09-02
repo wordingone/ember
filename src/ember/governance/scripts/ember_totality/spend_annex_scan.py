@@ -474,7 +474,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp40-l10-optimizer-ab-*.json             scripts/fp40_l10_optimizer_ab.py:596
 #   native-smoke-*.json                      scripts/t_native_smoke.py:99
 #     return receipts_dir / f"native-smoke-{ts}.json"
-#   probe-meminfo-*.json                     scripts/probe_meminfo.py:37
+#   probe-meminfo-*.json                     src/ember/governance/scripts/probe_meminfo.py:37
 #     path = f"{NC}/receipts/probe-meminfo-{ts}.json"
 #   resident-training-gate-*.json            src/ember/governance/scripts/ember_resident_training_gate.py:945,1165,1172
 #     checked_write(str(out_path), receipt) where out_path comes from the REQUIRED
@@ -576,7 +576,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp39-density-power-audit-.*\.json$"), "src/ember/governance/scripts/fp39_density_power_audit.py"),
     (re.compile(r"^fp40-l10-optimizer-ab-.*\.json$"), "scripts/fp40_l10_optimizer_ab.py"),
     (re.compile(r"^native-smoke-.*\.json$"), "scripts/t_native_smoke.py"),
-    (re.compile(r"^probe-meminfo-.*\.json$"), "scripts/probe_meminfo.py"),
+    (re.compile(r"^probe-meminfo-.*\.json$"), "src/ember/governance/scripts/probe_meminfo.py"),
     (re.compile(r"^resident-training-gate-.*\.json$"), "src/ember/governance/scripts/ember_resident_training_gate.py"),
     (re.compile(r"^resume-drill-.*\.json$"), "scripts/train_multimodal_v0.py"),
     (re.compile(r"^selective-recompute-ab-.*\.json$"), "scripts/selective_recompute_ab.py"),

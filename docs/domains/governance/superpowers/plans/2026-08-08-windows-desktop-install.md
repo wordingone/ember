@@ -22,7 +22,7 @@
 ### Task 1: Branded canonical executable
 
 **Files:**
-- Create: `assets/ember.ico`
+- Create: `domains/lab/assets/ember.ico`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/build-tools/build-cockpit.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/build-tools/build-cockpit.test.ts`
 

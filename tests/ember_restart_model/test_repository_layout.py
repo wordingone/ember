@@ -100,7 +100,7 @@ def test_closed_pair_refuses_bytes_outside_selected_pin(tmp_path: Path) -> None:
         "tools/ember-restart-3b/launch_packet.py",
         "tools/ember-restart-3b/parameter_counter.py",
         "tools/ember-restart-3b/production_rung.py",
-        "tools/ember-restart-3b/remint_specialist_stream.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/remint_specialist_stream.py",
         "tools/ember-restart-3b/serve_owned_openai.py",
     ],
 )

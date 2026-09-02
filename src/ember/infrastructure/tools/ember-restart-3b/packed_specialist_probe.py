@@ -18,7 +18,51 @@ import torch
 from batch import decode_owned_packed_batch
 from model import RestartDecoderConfig
 from specialist_stream import canonical_record_bytes, open_specialist_stream
-from training_acceleration import TrainingSignatureCensus, training_step_signature
+# issue2015 exact-local-import:tools/ember-restart-3b/training_acceleration.py
+import importlib.util as _ember_fdf17d80b319f347_importlib
+import sys as _ember_fdf17d80b319f347_sys
+from pathlib import Path as _ember_fdf17d80b319f347_Path
+_ember_fdf17d80b319f347_path = _ember_fdf17d80b319f347_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'training_acceleration.py')
+if not _ember_fdf17d80b319f347_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/training_acceleration.py')
+_ember_fdf17d80b319f347_aliases = ('_ember_issue2015_fdf17d80b319f347', 'tools.ember-restart-3b.training_acceleration', 'training_acceleration')
+_ember_fdf17d80b319f347_existing = []
+for _ember_fdf17d80b319f347_alias in _ember_fdf17d80b319f347_aliases:
+    _ember_fdf17d80b319f347_candidate = _ember_fdf17d80b319f347_sys.modules.get(_ember_fdf17d80b319f347_alias)
+    if _ember_fdf17d80b319f347_candidate is not None and all(_ember_fdf17d80b319f347_candidate is not item for item in _ember_fdf17d80b319f347_existing):
+        _ember_fdf17d80b319f347_existing.append(_ember_fdf17d80b319f347_candidate)
+if len(_ember_fdf17d80b319f347_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tools/ember-restart-3b/training_acceleration.py')
+if _ember_fdf17d80b319f347_existing:
+    _ember_fdf17d80b319f347_module = _ember_fdf17d80b319f347_existing[0]
+    _ember_fdf17d80b319f347_observed = getattr(_ember_fdf17d80b319f347_module, '__file__', None)
+    if _ember_fdf17d80b319f347_observed is None or _ember_fdf17d80b319f347_Path(_ember_fdf17d80b319f347_observed).resolve() != _ember_fdf17d80b319f347_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tools/ember-restart-3b/training_acceleration.py')
+else:
+    _ember_fdf17d80b319f347_spec = _ember_fdf17d80b319f347_importlib.spec_from_file_location('_ember_issue2015_fdf17d80b319f347', _ember_fdf17d80b319f347_path)
+    if _ember_fdf17d80b319f347_spec is None or _ember_fdf17d80b319f347_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tools/ember-restart-3b/training_acceleration.py')
+    _ember_fdf17d80b319f347_module = _ember_fdf17d80b319f347_importlib.module_from_spec(_ember_fdf17d80b319f347_spec)
+    for _ember_fdf17d80b319f347_alias in _ember_fdf17d80b319f347_aliases:
+        _ember_fdf17d80b319f347_prior = _ember_fdf17d80b319f347_sys.modules.get(_ember_fdf17d80b319f347_alias)
+        if _ember_fdf17d80b319f347_prior is not None and _ember_fdf17d80b319f347_prior is not _ember_fdf17d80b319f347_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/training_acceleration.py')
+        _ember_fdf17d80b319f347_sys.modules[_ember_fdf17d80b319f347_alias] = _ember_fdf17d80b319f347_module
+    try:
+        _ember_fdf17d80b319f347_spec.loader.exec_module(_ember_fdf17d80b319f347_module)
+    except BaseException:
+        for _ember_fdf17d80b319f347_alias in _ember_fdf17d80b319f347_aliases:
+            if _ember_fdf17d80b319f347_sys.modules.get(_ember_fdf17d80b319f347_alias) is _ember_fdf17d80b319f347_module:
+                _ember_fdf17d80b319f347_sys.modules.pop(_ember_fdf17d80b319f347_alias, None)
+        raise
+for _ember_fdf17d80b319f347_alias in _ember_fdf17d80b319f347_aliases:
+    _ember_fdf17d80b319f347_prior = _ember_fdf17d80b319f347_sys.modules.get(_ember_fdf17d80b319f347_alias)
+    if _ember_fdf17d80b319f347_prior is not None and _ember_fdf17d80b319f347_prior is not _ember_fdf17d80b319f347_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/training_acceleration.py')
+    _ember_fdf17d80b319f347_sys.modules[_ember_fdf17d80b319f347_alias] = _ember_fdf17d80b319f347_module
+TrainingSignatureCensus = getattr(_ember_fdf17d80b319f347_module, 'TrainingSignatureCensus')
+training_step_signature = getattr(_ember_fdf17d80b319f347_module, 'training_step_signature')
+# issue2015 exact-local-import-end:tools/ember-restart-3b/training_acceleration.py
 
 
 _SHA256 = re.compile(r"[0-9a-f]{64}")

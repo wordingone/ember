@@ -39,7 +39,50 @@ import sys
 import time
 from pathlib import Path
 
-import run_vertical_slice as m
+# issue2015 exact-local-import:tools/ember-restart-3b/run_vertical_slice.py
+import importlib.util as _ember_58a9db1b1610c537_importlib
+import sys as _ember_58a9db1b1610c537_sys
+from pathlib import Path as _ember_58a9db1b1610c537_Path
+_ember_58a9db1b1610c537_path = _ember_58a9db1b1610c537_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'run_vertical_slice.py')
+if not _ember_58a9db1b1610c537_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/run_vertical_slice.py')
+_ember_58a9db1b1610c537_aliases = ('_ember_issue2015_58a9db1b1610c537', 'run_vertical_slice', 'tools.ember-restart-3b.run_vertical_slice')
+_ember_58a9db1b1610c537_existing = []
+for _ember_58a9db1b1610c537_alias in _ember_58a9db1b1610c537_aliases:
+    _ember_58a9db1b1610c537_candidate = _ember_58a9db1b1610c537_sys.modules.get(_ember_58a9db1b1610c537_alias)
+    if _ember_58a9db1b1610c537_candidate is not None and all(_ember_58a9db1b1610c537_candidate is not item for item in _ember_58a9db1b1610c537_existing):
+        _ember_58a9db1b1610c537_existing.append(_ember_58a9db1b1610c537_candidate)
+if len(_ember_58a9db1b1610c537_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tools/ember-restart-3b/run_vertical_slice.py')
+if _ember_58a9db1b1610c537_existing:
+    _ember_58a9db1b1610c537_module = _ember_58a9db1b1610c537_existing[0]
+    _ember_58a9db1b1610c537_observed = getattr(_ember_58a9db1b1610c537_module, '__file__', None)
+    if _ember_58a9db1b1610c537_observed is None or _ember_58a9db1b1610c537_Path(_ember_58a9db1b1610c537_observed).resolve() != _ember_58a9db1b1610c537_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tools/ember-restart-3b/run_vertical_slice.py')
+else:
+    _ember_58a9db1b1610c537_spec = _ember_58a9db1b1610c537_importlib.spec_from_file_location('_ember_issue2015_58a9db1b1610c537', _ember_58a9db1b1610c537_path)
+    if _ember_58a9db1b1610c537_spec is None or _ember_58a9db1b1610c537_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tools/ember-restart-3b/run_vertical_slice.py')
+    _ember_58a9db1b1610c537_module = _ember_58a9db1b1610c537_importlib.module_from_spec(_ember_58a9db1b1610c537_spec)
+    for _ember_58a9db1b1610c537_alias in _ember_58a9db1b1610c537_aliases:
+        _ember_58a9db1b1610c537_prior = _ember_58a9db1b1610c537_sys.modules.get(_ember_58a9db1b1610c537_alias)
+        if _ember_58a9db1b1610c537_prior is not None and _ember_58a9db1b1610c537_prior is not _ember_58a9db1b1610c537_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/run_vertical_slice.py')
+        _ember_58a9db1b1610c537_sys.modules[_ember_58a9db1b1610c537_alias] = _ember_58a9db1b1610c537_module
+    try:
+        _ember_58a9db1b1610c537_spec.loader.exec_module(_ember_58a9db1b1610c537_module)
+    except BaseException:
+        for _ember_58a9db1b1610c537_alias in _ember_58a9db1b1610c537_aliases:
+            if _ember_58a9db1b1610c537_sys.modules.get(_ember_58a9db1b1610c537_alias) is _ember_58a9db1b1610c537_module:
+                _ember_58a9db1b1610c537_sys.modules.pop(_ember_58a9db1b1610c537_alias, None)
+        raise
+for _ember_58a9db1b1610c537_alias in _ember_58a9db1b1610c537_aliases:
+    _ember_58a9db1b1610c537_prior = _ember_58a9db1b1610c537_sys.modules.get(_ember_58a9db1b1610c537_alias)
+    if _ember_58a9db1b1610c537_prior is not None and _ember_58a9db1b1610c537_prior is not _ember_58a9db1b1610c537_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/run_vertical_slice.py')
+    _ember_58a9db1b1610c537_sys.modules[_ember_58a9db1b1610c537_alias] = _ember_58a9db1b1610c537_module
+m = _ember_58a9db1b1610c537_module
+# issue2015 exact-local-import-end:tools/ember-restart-3b/run_vertical_slice.py
 
 
 def _write_outcome(result_file: Path, outcome: dict[str, object]) -> None:

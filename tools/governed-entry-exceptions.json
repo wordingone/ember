@@ -74,6 +74,31 @@
       "path": "src/ember/infrastructure/tools/ember-restart-3b/a3_run_receipt.py",
       "sha256": "ee7d9103e56d047065250a7aa4eda26b047cb9235f65f8c5c1929c2df32d6c34",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/custody_process_scope_worker.py",
+      "sha256": "1b0223a1de5e10efee82666c69b968c707ff5324c865f2d5405781ba0f9d0c09",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/native_compute_screen.py",
+      "sha256": "1e5ef1c5c823d7e146436c4e69a144378ab0643466ea262e532aa55cef7dee89",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/packed_specialist_run.py",
+      "sha256": "6110cc7d12964e390b37f1afe6932fdcf7c4c30989b1b3202527cc8ec0cd7833",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/project_text_lab_custody_paths.py",
+      "sha256": "8e847f2862e68c576326c808d031cb18ff466d9ca59bc4ee45955fcc0dbcb6da",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/verify_cost_calibration.py",
+      "sha256": "9e7011a89a0fd48792c0efb9875d4965b07a3fcc2b60e7c1b066dff3c70b766d",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     }
   ]
 }
