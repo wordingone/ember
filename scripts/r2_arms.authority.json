@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/r2_arms.py",
+  "artifact_path": "src/ember/governance/scripts/r2_arms.py",
   "artifact_sha256": "58e02ff508f17bac5eb8c7cf50babc3678e7696b9051ffbd53967fc7e069a4df",
   "authority": {
     "goal_id": "EMBER-02",

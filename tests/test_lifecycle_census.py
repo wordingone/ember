@@ -13,8 +13,8 @@ import pytest
 
 
 from scripts import lifecycle_census
-from scripts.lifecycle_census import CensusError, build_receipt, build_stale_report, collect_population
-from scripts.lifecycle_census import GitHubApi, collect_live_populations
+from src.ember.governance.scripts.lifecycle_census import CensusError, build_receipt, build_stale_report, collect_population
+from src.ember.governance.scripts.lifecycle_census import GitHubApi, collect_live_populations
 
 
 def _items(start: int, count: int, *, pull_request: bool = False) -> list[dict[str, object]]:
@@ -126,7 +126,7 @@ def test_workflow_tracker_shell_and_count_validation_fail_closed() -> None:
 
 def test_workflow_makes_census_and_report_failures_terminal() -> None:
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "freshness-monitor.yml").read_text(encoding="utf-8")
-    assert "if ! python scripts/lifecycle_census.py" in workflow
+    assert "if ! python src/ember/governance/scripts/lifecycle_census.py" in workflow
     assert "if ! jq -e" in workflow
     assert "invalid stale report schema" in workflow
 

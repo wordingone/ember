@@ -480,7 +480,7 @@ jobs:
         live title, body, labels and milestone. Each must stay triggered on the
         activity that changes those inputs, and must not cancel unconditionally,
         or a body/label/milestone fix has no path back to green (#1375)."""
-        root = Path(__file__).resolve().parents[2]
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         readers_required = workflow_policy.LIVE_PR_INPUT_READERS["live_pr_policy"][1]
         for name in ("ci-pr.yml", "repo-policy-gate.yml"):
             path = root / ".github" / "workflows" / name
@@ -502,7 +502,7 @@ jobs:
         (pinned_base_covers_live_base / pinned_head_covers_live_head) is
         permanently dead code: main() only builds policy_roots when
         args.subject_root is not None (#46)."""
-        root = Path(__file__).resolve().parents[2]
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         path = root / ".github" / "workflows" / "ci-pr.yml"
         text = path.read_text(encoding="utf-8", errors="strict")
         workflow = yaml.safe_load(text)
@@ -523,7 +523,7 @@ jobs:
     def test_pr_policy_reads_no_live_state_and_stays_stripped(self) -> None:
         """pr-policy validates in-tree sources only, so it is the one required
         PR workflow that may drop every metadata trigger outright."""
-        root = Path(__file__).resolve().parents[2]
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         path = root / ".github" / "workflows" / "pr-policy.yml"
         self.assertEqual([], workflow_policy.validate_workflow(path))
         workflow = yaml.safe_load(path.read_text(encoding="utf-8", errors="strict"))
@@ -533,7 +533,7 @@ jobs:
         self.assertEqual({}, workflow_policy._metadata_only_pr_types(workflow["on"]))
 
     def test_labels_sync_confines_write_authority_to_trusted_master_apply(self) -> None:
-        root = Path(__file__).resolve().parents[2]
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         path = root / ".github" / "workflows" / "labels-sync.yml"
         errors = workflow_policy.validate_workflow(path)
         self.assertEqual([], errors)

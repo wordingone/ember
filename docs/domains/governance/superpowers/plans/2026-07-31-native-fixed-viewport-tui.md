@@ -23,7 +23,7 @@
 ### Task 1: Production terminal-session ownership
 
 **Files:**
-- Create: `tools/ember-cli/src/ink/terminal-session.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.ts`
 - Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.test.ts`
 - Modify: `tools/ember-cli/src/ink/termio.ts`
 - Modify: `tools/ember-cli/src/core/frontend-shell.ts`
