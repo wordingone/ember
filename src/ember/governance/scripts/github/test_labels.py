@@ -12,7 +12,7 @@ from pathlib import Path
 from scripts.github import labels
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 
 
 def snapshot() -> dict:

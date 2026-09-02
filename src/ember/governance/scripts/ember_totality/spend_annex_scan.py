@@ -454,7 +454,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   econ-pass-loopecon-adapter-*.json        scripts/econ_pass.py:242
 #     adapter_path = receipts_dir / f"econ-pass-loopecon-adapter-{ts}.json"
 #   fp10-idiom-*.json                        src/ember/governance/scripts/fp10_idiom.py:324
-#   fp11-denominator-*.json                  scripts/fp11_denominator.py:265
+#   fp11-denominator-*.json                  src/ember/governance/scripts/fp11_denominator.py:265
 #   fp12-band-*.json                         src/ember/governance/scripts/fp12_band.py:233
 #   fp13-concentration-*.json                src/ember/governance/scripts/fp13_concentration.py:270
 #   fp30d-shard-gate-*.json                  scripts/fp30d_shard_gate.py:189
@@ -558,7 +558,7 @@ CONVENTION_MAP = [
     (re.compile(r"^density-ab-verdict-.*\.json$"), "src/ember/governance/scripts/density_ab_verdict.py"),
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
     (re.compile(r"^fp10-idiom-.*\.json$"), "src/ember/governance/scripts/fp10_idiom.py"),
-    (re.compile(r"^fp11-denominator-.*\.json$"), "scripts/fp11_denominator.py"),
+    (re.compile(r"^fp11-denominator-.*\.json$"), "src/ember/governance/scripts/fp11_denominator.py"),
     (re.compile(r"^fp12-band-.*\.json$"), "src/ember/governance/scripts/fp12_band.py"),
     (re.compile(r"^fp13-concentration-.*\.json$"), "src/ember/governance/scripts/fp13_concentration.py"),
     (re.compile(r"^fp30d-shard-gate-.*\.json$"), "scripts/fp30d_shard_gate.py"),

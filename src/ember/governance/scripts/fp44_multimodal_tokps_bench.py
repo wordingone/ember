@@ -23,7 +23,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPTS = ROOT / "scripts"
 RECEIPTS = ROOT / "receipts"
 if str(SCRIPTS) not in sys.path:
