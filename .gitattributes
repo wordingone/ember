@@ -44,10 +44,11 @@ baseline/**/*.jsonl text eol=lf
 docs/authority/INVARIANT.md -text
 tests/fixtures/ember-cli/issue-243/live-resize-v1/** -text -diff
 # Binary fixtures/captures: explicit byte-pinned opt-out from strict text gates.
-tests/ember_restart/__fixtures__/cond3-artifact-b/checkpoint -text
+tests/ember_restart/domain-governance/__fixtures__/cond3-artifact-b/checkpoint -text
 tools/ember-cli/state/captures-286/*.png -text
 assets/*.ico -text
 # EVAL-CANARY-IMAGE-V1 committed binary fixture members (#1948): byte-pinned
 # torch checkpoint + PPM rasters; git must never rewrite these bytes.
-tests/ember_restart_model/fixtures/eval-canary-image-v1/checkpoint.pt -text -diff
+tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/checkpoint.pt -text -diff
 tests/ember_restart_model/fixtures/eval-canary-image-v1/*.ppm -text -diff
+tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/*.ppm -text -diff

@@ -91,7 +91,7 @@ class SeatIdentityBridgeNegatives(unittest.TestCase):
     too, out of this rework's scope), this suite overrides only the
     ``checkpoint``/``evaluation.subject_checkpoint_sha256`` fields with a
     genuinely-measured single real checkpoint shard -- the same pattern
-    ``tests/ember_restart/test_cli_seat.py::_matching_cert`` already uses for
+    ``tests/ember_restart/domain-governance/test_cli_seat.py::_matching_cert`` already uses for
     the production-path suite. Every other field (identity/tokenizer/
     architecture/data/...) is the real, unmodified checked-in fixture.
     """
@@ -423,7 +423,7 @@ class SeatIdentityBridgeShardedCheckpoint(unittest.TestCase):
     # (this file) -- it builds its expected checkpoint identity via
     # measure_checkpoint_identity, the trusted producer, never via the
     # bridge function under test. There is no equivalent GREEN reachable
-    # through tests/ember_restart/test_cli_seat.py's real end-to-end
+    # through tests/ember_restart/domain-governance/test_cli_seat.py's real end-to-end
     # cli_seat.py production path: contract.py's mandatory
     # architecture.expert_banks requirement (exactly vision/audio/
     # reasoning/tool) means every manifest that can pass Stage 1 admission
