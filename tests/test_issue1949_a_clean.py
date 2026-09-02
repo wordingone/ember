@@ -19,7 +19,19 @@ SPEC.loader.exec_module(MODULE)
 
 
 def valid_plan() -> dict[str, object]:
-    return {
+    legs = []
+    for name in MODULE.REQUIRED_LEG_IDS:
+        argv = ["C:/bound/tool.exe", "--verify", name]
+        legs.append({
+            "id": name,
+            "argv": argv,
+            "argv_sha256": MODULE.sha256_bytes(MODULE.canonical_json(argv)),
+            "executable_raw_sha256": MODULE.sha256_bytes(("exe:" + name).encode()),
+            "semantic_contract_id": name,
+            "semantic_contract_sha256": MODULE.sha256_bytes(("contract:" + name).encode()),
+            "expected_exit": 2 if name in MODULE.NEGATIVE_LEG_IDS else 0,
+        })
+    plan = {
         "schema_version": "ember-issue1949-a-clean-plan-v1",
         "declared_head": "a" * 40,
         "setuptools": {
@@ -28,11 +40,10 @@ def valid_plan() -> dict[str, object]:
             "refused_sdist": "setuptools-84.0.0.tar.gz",
             "refused_sdist_sha256": "f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73",
         },
-        "legs": [
-            {"id": name, "argv": ["C:/bound/tool.exe", "--verify"], "expected_exit": 0}
-            for name in MODULE.REQUIRED_LEG_IDS
-        ],
+        "legs": legs,
     }
+    plan["self_sha256"] = MODULE.derive_self(plan)
+    return plan
 
 
 class ACleanTests(unittest.TestCase):
@@ -43,6 +54,7 @@ class ACleanTests(unittest.TestCase):
         self.assertTrue(validated["setuptools"]["wheel_sha256"].startswith("51a52592"))
 
         plan["legs"] = plan["legs"][:-1]
+        plan["self_sha256"] = MODULE.derive_self(plan)
         with self.assertRaisesRegex(MODULE.ACleanRefusal, "PLAN_LEG_SET_REFUSED"):
             MODULE.validate_plan(plan)
 
@@ -50,11 +62,16 @@ class ACleanTests(unittest.TestCase):
         for executable in ("python", "bash", "cmd.exe", "powershell.exe"):
             plan = valid_plan()
             plan["legs"][0]["argv"][0] = executable
+            plan["legs"][0]["argv_sha256"] = MODULE.sha256_bytes(
+                MODULE.canonical_json(plan["legs"][0]["argv"])
+            )
+            plan["self_sha256"] = MODULE.derive_self(plan)
             with self.assertRaisesRegex(MODULE.ACleanRefusal, "LEG_EXECUTABLE_REFUSED"):
                 MODULE.validate_plan(plan)
 
         plan = valid_plan()
         plan["legs"][1]["id"] = plan["legs"][0]["id"]
+        plan["self_sha256"] = MODULE.derive_self(plan)
         with self.assertRaisesRegex(MODULE.ACleanRefusal, "PLAN_LEG_SET_REFUSED"):
             MODULE.validate_plan(plan)
 
@@ -92,15 +109,71 @@ class ACleanTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 MODULE.write_receipt_no_overwrite(output, {"result": "PASS"})
 
+    def test_external_bound_plan_is_accepted_only_with_a_fresh_clone(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "fresh clone é"
+            root.mkdir()
+            (root / ".git").mkdir()
+            outside = Path(directory) / "outside.json"
+            outside.write_text(json.dumps(valid_plan()), encoding="utf-8")
+            self.assertIsNone(MODULE.validate_fresh_clone(root))
+            self.assertEqual(MODULE.validate_plan(json.loads(outside.read_text()))["declared_head"], "a" * 40)
+            (root / ".git").rmdir()
+            (root / ".git").write_text("gitdir: linked-worktree", encoding="utf-8")
+            with self.assertRaisesRegex(MODULE.ACleanRefusal, "FRESH_CLONE_IDENTITY_REFUSED"):
+                MODULE.validate_fresh_clone(root)
+
+    def test_leg_executable_bytes_must_match_the_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "bound-tool.exe"
+            executable.write_bytes(b"tool-v1")
+            row = {
+                "id": "canonical_domain_imports",
+                "argv": [str(executable)],
+                "executable_raw_sha256": MODULE.sha256_file(executable),
+            }
+            MODULE.validate_executable_identity(row)
+            row["executable_raw_sha256"] = "0" * 64
+            with self.assertRaisesRegex(MODULE.ACleanRefusal, "LEG_EXECUTABLE_IDENTITY_REFUSED"):
+                MODULE.validate_executable_identity(row)
+
+    def test_refusal_receipt_preserves_named_class_plan_and_partial_streams(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "terminal.json"
+            plan = root / "plan.json"
+            plan.write_bytes(b"{}\n")
+            streams = root / "terminal.streams"
+            streams.mkdir()
+            (streams / "leg.stderr.log").write_bytes(b"named failure\n")
+            receipt = MODULE.write_refusal_receipt(
+                output=output,
+                repo_root=root / "fresh clone é",
+                plan_path=plan,
+                declared_platform="windows",
+                refusal=MODULE.ACleanRefusal("LEG_EXIT_REFUSED:canonical_domain_imports:1"),
+            )
+            self.assertEqual(receipt["result"], "REFUSED")
+            self.assertEqual(receipt["refusal_class"], "LEG_EXIT_REFUSED")
+            self.assertEqual(receipt["plan"]["raw_sha256"], MODULE.sha256_file(plan))
+            self.assertEqual(receipt["streams"][0]["raw_sha256"], MODULE.sha256_file(streams / "leg.stderr.log"))
+            unsigned = dict(receipt)
+            claimed = unsigned.pop("self_sha256")
+            self.assertEqual(claimed, MODULE.sha256_bytes(MODULE.canonical_json(unsigned)))
+
     def test_platform_wrappers_bind_exact_head_and_hidden_windows_python(self) -> None:
         workflow = (ROOT / ".github/workflows/issue1949-a-clean-linux.yml").read_text(encoding="utf-8")
         windows = (ROOT / "scripts/issue1949-a-clean-windows.ps1").read_text(encoding="utf-8")
         self.assertIn("ref: ${{ inputs.declared_head }}", workflow)
-        self.assertIn('test "$actual" = "${{ inputs.declared_head }}"', workflow)
+        self.assertIn('test "$actual" = "$DECLARED_HEAD"', workflow)
+        self.assertIn("PLAN_BASE64: ${{ inputs.plan_base64 }}", workflow)
+        self.assertIn("sha256sum --check --strict", workflow)
+        self.assertNotIn('${{ inputs.declared_head }}"', workflow.split("run: |", 1)[1])
         self.assertIn("fresh clone é", workflow)
         self.assertIn("working-directory: ${{ runner.temp }}", workflow)
         self.assertIn("scripts\\headless-python.ps1", windows)
         self.assertIn("-NoLogo -NoProfile -NonInteractive", windows)
+        self.assertIn("A_CLEAN_PLAN_RAW_HASH_REFUSED", windows)
         self.assertIn("--platform windows", windows)
 
 
