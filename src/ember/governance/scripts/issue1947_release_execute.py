@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -21,6 +23,7 @@ ROWS = (
 )
 FORBIDDEN_KEYS = {"gold", "answer", "reference", "gold_bytes", "protected_bytes", "reference_bytes"}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 class ReleaseExecutionRefusal(ValueError):
@@ -72,29 +75,64 @@ def validate_row(row: object, row_id: str) -> dict[str, Any]:
         digest = item["gold_item_sha256"]
         if not isinstance(item_id, str) or not item_id or item_id in seen:
             raise ReleaseExecutionRefusal(f"ITEM_ID_DRIFT:{row_id}")
-        if not isinstance(digest, str) or len(digest) != 64 or digest != digest.lower():
+        if not isinstance(digest, str) or SHA256_PATTERN.fullmatch(digest) is None:
             raise ReleaseExecutionRefusal(f"GOLD_ITEM_HASH_DRIFT:{row_id}:{item_id}")
         if not isinstance(item["score"], (int, float)) or isinstance(item["score"], bool):
             raise ReleaseExecutionRefusal(f"ITEM_SCORE_DRIFT:{row_id}:{item_id}")
+        if not math.isfinite(float(item["score"])):
+            raise ReleaseExecutionRefusal(f"ITEM_SCORE_NONFINITE:{row_id}:{item_id}")
         seen.add(item_id)
     return row
 
 
-def execute(spec: dict[str, Any], preflight: dict[str, Any], output: Path) -> dict[str, Any]:
+def execute(
+    spec: dict[str, Any],
+    preflight: dict[str, Any],
+    output: Path,
+    *,
+    spec_raw_sha256: str,
+) -> dict[str, Any]:
     if preflight.get("result") != "PASS" or preflight.get("schema_version") != "ember-issue1947-release-tier-preflight-v1":
         raise ReleaseExecutionRefusal("PREFLIGHT_NOT_PASS")
     verify_self(preflight, "preflight")
+    tiers = preflight.get("tiers")
+    release_tiers = (
+        [row for row in tiers if isinstance(row, dict) and row.get("tier") == "release"]
+        if isinstance(tiers, list)
+        else []
+    )
+    if len(release_tiers) != 1 or not isinstance(release_tiers[0].get("execution_spec"), dict):
+        raise ReleaseExecutionRefusal("EXECUTION_SPEC_AUTHORITY_MISSING")
+    binding = release_tiers[0]["execution_spec"]
+    if binding.get("raw_sha256") != spec_raw_sha256:
+        raise ReleaseExecutionRefusal("EXECUTION_SPEC_RAW_HASH_DRIFT")
+    if spec.get("schema_version") != "ember-issue1947-release-execution-spec-v1":
+        raise ReleaseExecutionRefusal("EXECUTION_SPEC_SCHEMA_DRIFT")
+    verify_self(spec, "execution_spec")
+    if binding.get("self_sha256") != spec.get("self_sha256"):
+        raise ReleaseExecutionRefusal("EXECUTION_SPEC_SELF_HASH_BINDING_DRIFT")
     rows = spec.get("rows")
     if not isinstance(rows, list) or tuple(row.get("row_id") for row in rows if isinstance(row, dict)) != ROWS:
         raise ReleaseExecutionRefusal("MISSING_DUPLICATE_EXTRA_OR_REORDERED_MATRIX_ROW")
+    for spec_row in rows:
+        row_id = spec_row["row_id"]
+        command = spec_row.get("command")
+        result_path = spec_row.get("result_path")
+        threshold = spec_row.get("threshold")
+        if not isinstance(command, list) or not command or not all(isinstance(value, str) and value for value in command):
+            raise ReleaseExecutionRefusal(f"RUNNER_COMMAND_DRIFT:{row_id}")
+        if not isinstance(result_path, str) or not result_path:
+            raise ReleaseExecutionRefusal(f"ROW_RESULT_PATH_DRIFT:{row_id}")
+        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
+            raise ReleaseExecutionRefusal(f"THRESHOLD_DRIFT:{row_id}")
+        if not math.isfinite(float(threshold)):
+            raise ReleaseExecutionRefusal(f"THRESHOLD_NONFINITE:{row_id}")
     output.mkdir(parents=True, exist_ok=False)
     row_bindings = []
     for spec_row in rows:
         row_id = spec_row["row_id"]
         command = spec_row.get("command")
         result_path = Path(spec_row.get("result_path", ""))
-        if not isinstance(command, list) or not command or not all(isinstance(value, str) and value for value in command):
-            raise ReleaseExecutionRefusal(f"RUNNER_COMMAND_DRIFT:{row_id}")
         if result_path.exists():
             raise ReleaseExecutionRefusal(f"ROW_RESULT_EXISTS_REFUSED:{row_id}")
         completed = subprocess.run(
@@ -110,8 +148,6 @@ def execute(spec: dict[str, Any], preflight: dict[str, Any], output: Path) -> di
         with destination.open("xb") as stream:
             stream.write(raw)
         threshold = spec_row.get("threshold")
-        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
-            raise ReleaseExecutionRefusal(f"THRESHOLD_DRIFT:{row_id}")
         row_bindings.append({"row_id": row_id, "path": destination.name, "bytes": len(raw), "raw_sha256": sha(raw), "self_sha256": row["self_sha256"], "threshold": float(threshold)})
     bundle = {
         "schema_version": "ember-issue1947-redacted-release-bundle-v1",
@@ -119,6 +155,8 @@ def execute(spec: dict[str, Any], preflight: dict[str, Any], output: Path) -> di
         "designation_manifest_raw_sha256": preflight["checkpoint_manifest"]["raw_sha256"],
         "matrix_self_sha256": preflight["matrix"]["self_sha256"],
         "analysis_self_sha256": preflight["analysis"]["self_sha256"],
+        "execution_spec_raw_sha256": spec_raw_sha256,
+        "execution_spec_self_sha256": spec["self_sha256"],
         "rows": row_bindings,
         "protected_bytes_present": False,
         "claim_boundary": "RAW_ROW_EXECUTION_BUNDLE_ONLY; NO CERT ISSUE_OR_GOAL_CREDIT",
@@ -135,7 +173,13 @@ def main() -> int:
     parser.add_argument("--preflight", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    bundle = execute(load(args.execution_spec), load(args.preflight), args.output)
+    spec_raw = args.execution_spec.read_bytes()
+    bundle = execute(
+        json.loads(spec_raw),
+        load(args.preflight),
+        args.output,
+        spec_raw_sha256=sha(spec_raw),
+    )
     print(json.dumps({"result": bundle["result"], "self_sha256": bundle["self_sha256"]}, sort_keys=True))
     return 0
 

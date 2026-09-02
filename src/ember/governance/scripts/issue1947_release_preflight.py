@@ -334,6 +334,31 @@ def build_release_preflight(
             raise ReleasePreflightRefusal("NON_HOSTED_RUNNER_LABEL:release.windows_loader_smoke")
         workflow = _verify_binding(f"{tier}.workflow", spec.get("workflow"))
         runner = _verify_binding(f"{tier}.runner", spec.get("runner"))
+        execution_spec = None
+        if tier == "release":
+            execution_spec, execution_payload = _verify_self_hashed_json(
+                "release.execution_spec",
+                spec.get("execution_spec"),
+                schema_version="ember-issue1947-release-execution-spec-v1",
+            )
+            assert isinstance(spec.get("execution_spec"), dict)
+            bound_self = _require_sha(
+                "release.execution_spec.binding_self_sha256",
+                spec["execution_spec"].get("self_sha256"),
+            )
+            if execution_spec["self_sha256"] != bound_self:
+                raise ReleasePreflightRefusal(
+                    "SELF_HASH_BINDING_DRIFT:release.execution_spec"
+                )
+            execution_rows = execution_payload.get("rows")
+            execution_row_ids = (
+                tuple(row.get("row_id") for row in execution_rows)
+                if isinstance(execution_rows, list)
+                and all(isinstance(row, dict) for row in execution_rows)
+                else ()
+            )
+            if execution_row_ids != PROTECTED_MATRIX_ROW_IDS:
+                raise ReleasePreflightRefusal("EXECUTION_SPEC_ROW_SET_DRIFT")
         protected = spec.get("protected_inputs")
         if not isinstance(protected, list) or not protected:
             raise ReleasePreflightRefusal(f"MISSING_PROTECTED_INPUT:{tier}")
@@ -341,8 +366,7 @@ def build_release_preflight(
             _verify_binding(f"{tier}.protected_inputs[{index}]", binding)
             for index, binding in enumerate(protected)
         ]
-        tier_rows.append(
-            {
+        tier_row = {
                 "tier": tier,
                 "role": role,
                 "workflow": workflow,
@@ -355,7 +379,9 @@ def build_release_preflight(
                 "triggers": list(policy["triggers"]),
                 "runner_label": runner_label,
             }
-        )
+        if execution_spec is not None:
+            tier_row["execution_spec"] = execution_spec
+        tier_rows.append(tier_row)
 
     receipt: dict[str, Any] = {
         "schema_version": "ember-issue1947-release-tier-preflight-v1",
