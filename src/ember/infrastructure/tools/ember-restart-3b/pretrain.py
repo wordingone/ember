@@ -74,7 +74,7 @@ from pathlib import Path as _ember_fdf17d80b319f347_Path
 _ember_fdf17d80b319f347_path = _ember_fdf17d80b319f347_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'training_acceleration.py')
 if not _ember_fdf17d80b319f347_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/training_acceleration.py')
-_ember_fdf17d80b319f347_aliases = ('_ember_issue2015_fdf17d80b319f347', 'tools.ember-restart-3b.training_acceleration', 'training_acceleration')
+_ember_fdf17d80b319f347_aliases = ('_ember_issue2015_fdf17d80b319f347', 'src.ember.infrastructure.tools.ember_restart_3b.training_acceleration', 'training_acceleration')
 _ember_fdf17d80b319f347_existing = []
 for _ember_fdf17d80b319f347_alias in _ember_fdf17d80b319f347_aliases:
     _ember_fdf17d80b319f347_candidate = _ember_fdf17d80b319f347_sys.modules.get(_ember_fdf17d80b319f347_alias)

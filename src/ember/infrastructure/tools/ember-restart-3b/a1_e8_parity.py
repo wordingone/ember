@@ -16,7 +16,7 @@ from typing import Any
 from durable_io import atomic_create_durable
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 import r1_e8_validator as validator  # noqa: E402

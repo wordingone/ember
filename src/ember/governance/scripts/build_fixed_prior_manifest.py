@@ -118,7 +118,7 @@ abort`) reads it from here."""
 INVENTORY: tuple[dict, ...] = (
     # --- training loop -----------------------------------------------------
     dict(category="training_loop", kind="file",
-         path="tools/ember-restart-3b/train.py",
+         path="src/ember/infrastructure/tools/ember-restart-3b/train.py",
          provenance="Owned training entry point; authored in-repo, no imported loop."),
     dict(category="training_loop", kind="file",
          path="src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",

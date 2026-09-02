@@ -1371,7 +1371,7 @@ def validate_authority_index(
     base_check = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", identity["source_base_commit"], "HEAD"], capture_output=True, check=False)
     if base_check.returncode != 0: raise ValueError("input identity source-base commit is not a live ancestor")
     code_files = identity.get("code_files")
-    expected_code = {"text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py", "train": "tools/ember-restart-3b/train.py", "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py"}
+    expected_code = {"text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py", "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py", "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py"}
     if not isinstance(code_files, dict) or set(code_files) != set(expected_code): raise ValueError("input identity code binding is invalid")
     for name, relative in expected_code.items():
         if code_files[name] != _sha_bytes(_path(root, relative).read_bytes()): raise ValueError("input identity code bytes changed")

@@ -165,12 +165,12 @@ def test_historical_predecessor_reopen_binds_reviewed_identity_cure_without_weak
     current_commit = "3" * 40
     resolved_blobs = {
         "tools/ember-restart-3b/text_lab_corpus.py": b"resolved text lab\n",
-        "tools/ember-restart-3b/train.py": b"resolved train\n",
+        "src/ember/infrastructure/tools/ember-restart-3b/train.py": b"resolved train\n",
         "tools/ember-restart-3b/run_vertical_slice.py": b"resolved vertical\n",
     }
     identity["code_files"] = {
         "text_lab_corpus": _sha(resolved_blobs["tools/ember-restart-3b/text_lab_corpus.py"]),
-        "train": _sha(resolved_blobs["tools/ember-restart-3b/train.py"]),
+        "train": _sha(resolved_blobs["src/ember/infrastructure/tools/ember-restart-3b/train.py"]),
         "run_vertical_slice": _sha(resolved_blobs["tools/ember-restart-3b/run_vertical_slice.py"]),
     }
     predecessor_receipt_sha256 = "4" * 64
@@ -228,7 +228,7 @@ def test_historical_predecessor_reopen_binds_reviewed_identity_cure_without_weak
     def validate_authority_index(repo_root: Path, **kwargs):
         code_paths = {
             "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
-            "train": "tools/ember-restart-3b/train.py",
+            "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
             "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
         }
         observed_code = {
@@ -301,12 +301,12 @@ def test_source_identity_cure_refuses_absent_forged_or_swapped_evidence(
     generated_files = {"authority.json": {"bytes": 17, "sha256": "5" * 64}}
     resolved_blobs = {
         "tools/ember-restart-3b/text_lab_corpus.py": b"resolved text lab\n",
-        "tools/ember-restart-3b/train.py": b"resolved train\n",
+        "src/ember/infrastructure/tools/ember-restart-3b/train.py": b"resolved train\n",
         "tools/ember-restart-3b/run_vertical_slice.py": b"resolved vertical\n",
     }
     code_files = {
         "text_lab_corpus": _sha(resolved_blobs["tools/ember-restart-3b/text_lab_corpus.py"]),
-        "train": _sha(resolved_blobs["tools/ember-restart-3b/train.py"]),
+        "train": _sha(resolved_blobs["src/ember/infrastructure/tools/ember-restart-3b/train.py"]),
         "run_vertical_slice": _sha(resolved_blobs["tools/ember-restart-3b/run_vertical_slice.py"]),
     }
     identity = {
@@ -353,7 +353,7 @@ def test_source_identity_cure_refuses_absent_forged_or_swapped_evidence(
         ),
     )
     if mutation == "swapped-blob":
-        resolved_blobs["tools/ember-restart-3b/train.py"] = b"swapped train\n"
+        resolved_blobs["src/ember/infrastructure/tools/ember-restart-3b/train.py"] = b"swapped train\n"
     monkeypatch.setattr(producer, "_git_blob", lambda repo, commit, path: resolved_blobs[path])
 
     with pytest.raises(ValueError, match=message):

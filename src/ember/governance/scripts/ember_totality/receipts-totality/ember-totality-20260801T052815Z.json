@@ -377,12 +377,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/autonomy_claim_evidence.py",
+            "path": "src/ember/governance/scripts/ember_totality/autonomy_claim_evidence.py",
             "sha256": "1b5fc180c89ec62b3ab59cf1e2348955de5c47bee0cf27a82a9d595527586cd0",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_base_verification_hardening.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_base_verification_hardening.py",
             "sha256": "f4d6ad80d6473a0d548311effd25f2fa3fefacd3621f4d0dd9eee3e17307e0b1",
             "present": true
           },
@@ -392,32 +392,32 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_canonical_growth_citation_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_canonical_growth_citation_test.py",
             "sha256": "a9ea9c4e788a9055efdd52913dbfe888143926b8e79bc37bc4e1f85f81dea463",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_dictkey_citations_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_dictkey_citations_test.py",
             "sha256": "178e41c60a9716e7eb994f71a5e27c8fdeae3c20bc85d88853db8e380827613d",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_documented_absent_registry_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_documented_absent_registry_test.py",
             "sha256": "2b9f0e4cf1b7d2d20670330d9227ce6df1c27fc290c75b4387b23dc8f543ce98",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_embedded_runtime_subject_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_embedded_runtime_subject_test.py",
             "sha256": "f27e6b62a7f15e336c153924c8c9d1fb7bb0a661ece67a2ba65f65b8527ba2e0",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_extraction_cures_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_extraction_cures_test.py",
             "sha256": "fd08d1d91e1a3994dc8cd25b3f19f6ce61970710d8f5cf426593539be105e215",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_pattern_citation_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_pattern_citation_test.py",
             "sha256": "455e77a288fe6feae2ae691e843675f9308541845a36ecf118aa19f6aacb7f9c",
             "present": true
           },
@@ -427,32 +427,32 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_twin_resolution_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_twin_resolution_test.py",
             "sha256": "7d90124ccd04f82e84c4f080c3295b494cb363ad27dc92ffd6f49ed3f1f65b04",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_wave031_dispositions_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_wave031_dispositions_test.py",
             "sha256": "a78e1d22117814cf0fd40a52252680226dc1aba65a69014304bd3c33e40ada2b",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_disconfirmation_custody_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_disconfirmation_custody_test.py",
             "sha256": "16e04a38d93cc9f69c11151b5f54b1baff694e84a439b54630d1769ee401b052",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_invariant_errata_structure_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_invariant_errata_structure_test.py",
             "sha256": "8c98e9c7854ad23e0b4fce341c88b2f4f360c9f3e592df5beede7f968db9ae9f",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_invariant_supersession_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_invariant_supersession_test.py",
             "sha256": "7ea6e0da3a62d4c0dbfbb8c7e25931d5264ee25f3a0fe37bc2078da257bf6043",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_neg1_394_cited_missing_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_neg1_394_cited_missing_test.py",
             "sha256": "7f91f4038b7681e96d81fe55e528d38e3660f4005e64d690100e6a101958785d",
             "present": true
           },
@@ -472,7 +472,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/regime_operator.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/regime_operator.py",
             "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
             "present": true
           },
@@ -482,7 +482,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/regime_operator.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/regime_operator.py",
             "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
             "present": true
           },
@@ -607,7 +607,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_errata_scan.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_errata_scan.py",
             "sha256": "b876ec978a3d167aed2057c5a5c65b013c7839ea720d476696dff08b533a7fbd",
             "present": true
           },

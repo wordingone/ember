@@ -10,7 +10,7 @@ import importlib.util
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 MISSING_REF = "receipts/ember-cli/issue-1043-text-wrap/ember.exe"
 SUBJECT_RECEIPT = "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json"
 SUBJECT_RECEIPT_SHA256 = "0c856572684b449427d493dd38a1d8c2faa0f959e47890c7be323fc06dd0ba43"

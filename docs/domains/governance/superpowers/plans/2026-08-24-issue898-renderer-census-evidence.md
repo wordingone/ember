@@ -351,7 +351,7 @@ input substitution.
 
 **Files:**
 - Create: `src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts`
-- Create after RED: `tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts`
+- Create after RED: `src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts`
 
 **Interfaces:**
 - Consumes: `sealIssue898RendererCensusEvidence` from Task 2.
@@ -434,7 +434,7 @@ never relabel baseline failures as GREEN.
 ```powershell
 git diff --check
 git status --short
-git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 ```
 
 Confirm no runtime producer, existing receipt schema, or arm custody path changed.

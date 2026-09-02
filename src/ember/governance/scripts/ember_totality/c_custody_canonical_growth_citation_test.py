@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 DOC = ROOT / "docs" / "spec" / "c-scale-s1-growth-chain-DRAFT.md"
 RECEIPT_REF = "receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json"
 RECEIPT_SHA256 = "43217cc5f31cce0320bf0627a603b11a7e4782ed1e03c48510c55346ac27c2d5"
