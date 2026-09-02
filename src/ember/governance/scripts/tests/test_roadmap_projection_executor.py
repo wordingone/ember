@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1] / "roadmap"
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "roadmap"
 
 
 def load(name: str):
@@ -70,7 +70,7 @@ def test_file_transport_omits_null_milestone_due_date(monkeypatch, tmp_path: Pat
     assert "input" not in observed["kwargs"]
 
 def test_published_receipt_chain_is_closed() -> None:
-    repository = Path(__file__).resolve().parents[2]
+    repository = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     receipt_root = repository / "receipts" / "roadmap"
     completion = json.loads(
         (receipt_root / "roadmap-publication-completion-v1.json").read_text(

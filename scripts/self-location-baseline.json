@@ -1243,7 +1243,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/tests/test_issue1267_frozen_receipt_disposition.py",
+      "path": "src/ember/governance/scripts/tests/test_issue1267_frozen_receipt_disposition.py",
       "line": 14,
       "target": "ROOT",
       "expression": "Path(os.environ.get('EMBER_ISSUE1267_ROOT', Path(__file__).parents[2]))",
@@ -1287,7 +1287,7 @@
       "error": "unknown alias SOURCE_ROOT"
     },
     {
-      "path": "scripts/tests/test_issue1451_timeshare_import_boundary.py",
+      "path": "src/ember/governance/scripts/tests/test_issue1451_timeshare_import_boundary.py",
       "line": 22,
       "target": "REPO_ROOT",
       "expression": "Path(os.environ.get('EMBER_ISSUE1451_REPO_ROOT', Path(__file__).resolve().parents[2]))",
@@ -1298,7 +1298,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/tests/test_roadmap_projection_executor.py",
+      "path": "src/ember/governance/scripts/tests/test_roadmap_projection_executor.py",
       "line": 14,
       "target": "ROOT",
       "expression": "Path(__file__).resolve().parents[1] / 'roadmap'",
@@ -1309,7 +1309,7 @@
       "error": null
     },
     {
-      "path": "scripts/verify_timing.py",
+      "path": "src/ember/governance/scripts/verify_timing.py",
       "line": 28,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",

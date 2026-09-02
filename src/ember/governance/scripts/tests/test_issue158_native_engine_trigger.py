@@ -17,7 +17,7 @@ import pytest
 from scripts.ember_phase3_c14 import floor_contract_manifest as floor
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 ROW_KEY = "floor_contract.ember-native-engine"
 
 

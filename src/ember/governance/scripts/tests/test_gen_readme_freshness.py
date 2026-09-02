@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 GENERATOR = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "gen_readme_status.py"
 
 

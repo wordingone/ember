@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = ROOT / "scripts" / "cbase_grow_rung.py"
 GOVERNOR = ROOT / "src" / "ember" / "governance" / "scripts" / "governor.py"
 REFUSAL = (

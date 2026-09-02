@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 MODULE_PATH = ROOT / "runtime" / "ember-lab" / "issue898_surface_probe.py"
 SPEC = importlib.util.spec_from_file_location("issue898_surface_probe", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None

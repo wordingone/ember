@@ -20,7 +20,7 @@ PATCHED_SCRIPTS = Path(
     )
 )
 REPO_ROOT = Path(
-    os.environ.get("EMBER_ISSUE1451_REPO_ROOT", Path(__file__).resolve().parents[2])
+    os.environ.get("EMBER_ISSUE1451_REPO_ROOT", next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()))
 )
 
 LIVE_DIRECT_IMPORTERS = (
