@@ -14,7 +14,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
-from tools.corpus_connectors.pdf_tree_to_utf8 import (
+from src.ember.infrastructure.tools.corpus_connectors.pdf_tree_to_utf8 import (
     PdfTreeExtractionRefusal,
     _write_exclusive,
     build_composite_connector_authority,

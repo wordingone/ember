@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 from transformers import LlamaConfig, LlamaForCausalLM
 
 # Add scripts dir to path to import serve_cbase_openai
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Lazy import to avoid torch/transformers issues at module level

@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 CHECKER = REPO_ROOT / "scripts" / "check_inference_training_translation.py"
 HEADER = (
     "| ID | Inference technique | Inference benefit | Training analog | "

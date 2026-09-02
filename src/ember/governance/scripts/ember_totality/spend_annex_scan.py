@@ -457,7 +457,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp11-denominator-*.json                  src/ember/governance/scripts/fp11_denominator.py:265
 #   fp12-band-*.json                         src/ember/governance/scripts/fp12_band.py:233
 #   fp13-concentration-*.json                src/ember/governance/scripts/fp13_concentration.py:270
-#   fp30d-shard-gate-*.json                  scripts/fp30d_shard_gate.py:189
+#   fp30d-shard-gate-*.json                  src/ember/governance/scripts/fp30d_shard_gate.py:189
 #   fp33-e2-full-tune-ceiling-*.json         scripts/fp33_e2_full_tune_ceiling.py:234
 #   fp33-e5-fp8-bench-*.json                 scripts/fp33_e5_fp8_bench.py:255
 #   fp33-fp8-linear-ab-*.json                scripts/fp33_fp8_linear_ab.py:380
@@ -561,7 +561,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp11-denominator-.*\.json$"), "src/ember/governance/scripts/fp11_denominator.py"),
     (re.compile(r"^fp12-band-.*\.json$"), "src/ember/governance/scripts/fp12_band.py"),
     (re.compile(r"^fp13-concentration-.*\.json$"), "src/ember/governance/scripts/fp13_concentration.py"),
-    (re.compile(r"^fp30d-shard-gate-.*\.json$"), "scripts/fp30d_shard_gate.py"),
+    (re.compile(r"^fp30d-shard-gate-.*\.json$"), "src/ember/governance/scripts/fp30d_shard_gate.py"),
     (re.compile(r"^fp33-e2-full-tune-ceiling-.*\.json$"), "scripts/fp33_e2_full_tune_ceiling.py"),
     (re.compile(r"^fp33-e5-fp8-bench-.*\.json$"), "scripts/fp33_e5_fp8_bench.py"),
     (re.compile(r"^fp33-fp8-linear-ab-.*\.json$"), "scripts/fp33_fp8_linear_ab.py"),

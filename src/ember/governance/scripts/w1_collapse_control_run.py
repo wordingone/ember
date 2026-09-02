@@ -132,35 +132,35 @@ resolve_ce_impl = getattr(_ember_d9c5c82c124e1dc8_module, 'resolve_ce_impl')
 mtp_total_loss = getattr(_ember_d9c5c82c124e1dc8_module, 'mtp_total_loss')
 # issue2015 exact-local-import-end:scripts/timeshare_pretrain.py
 from receipt_write import checked_write
-# issue2015 exact-local-import:scripts/w1_recheck_cache.py
+# issue2015 exact-local-import:src/ember/governance/scripts/w1_recheck_cache.py
 import importlib.util as _ember_fabaa435f8739f48_importlib
 import sys as _ember_fabaa435f8739f48_sys
 from pathlib import Path as _ember_fabaa435f8739f48_Path
 _ember_fabaa435f8739f48_path = _ember_fabaa435f8739f48_Path(__file__).resolve().parents[4].joinpath('scripts', 'w1_recheck_cache.py')
 if not _ember_fabaa435f8739f48_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w1_recheck_cache.py')
-_ember_fabaa435f8739f48_aliases = ('_ember_issue2015_fabaa435f8739f48', 'scripts.w1_recheck_cache', 'w1_recheck_cache')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_recheck_cache.py')
+_ember_fabaa435f8739f48_aliases = ('_ember_issue2015_fabaa435f8739f48', 'src.ember.governance.scripts.w1_recheck_cache', 'w1_recheck_cache')
 _ember_fabaa435f8739f48_existing = []
 for _ember_fabaa435f8739f48_alias in _ember_fabaa435f8739f48_aliases:
     _ember_fabaa435f8739f48_candidate = _ember_fabaa435f8739f48_sys.modules.get(_ember_fabaa435f8739f48_alias)
     if _ember_fabaa435f8739f48_candidate is not None and all(_ember_fabaa435f8739f48_candidate is not item for item in _ember_fabaa435f8739f48_existing):
         _ember_fabaa435f8739f48_existing.append(_ember_fabaa435f8739f48_candidate)
 if len(_ember_fabaa435f8739f48_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w1_recheck_cache.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_recheck_cache.py')
 if _ember_fabaa435f8739f48_existing:
     _ember_fabaa435f8739f48_module = _ember_fabaa435f8739f48_existing[0]
     _ember_fabaa435f8739f48_observed = getattr(_ember_fabaa435f8739f48_module, '__file__', None)
     if _ember_fabaa435f8739f48_observed is None or _ember_fabaa435f8739f48_Path(_ember_fabaa435f8739f48_observed).resolve() != _ember_fabaa435f8739f48_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w1_recheck_cache.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_recheck_cache.py')
 else:
     _ember_fabaa435f8739f48_spec = _ember_fabaa435f8739f48_importlib.spec_from_file_location('_ember_issue2015_fabaa435f8739f48', _ember_fabaa435f8739f48_path)
     if _ember_fabaa435f8739f48_spec is None or _ember_fabaa435f8739f48_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w1_recheck_cache.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_recheck_cache.py')
     _ember_fabaa435f8739f48_module = _ember_fabaa435f8739f48_importlib.module_from_spec(_ember_fabaa435f8739f48_spec)
     for _ember_fabaa435f8739f48_alias in _ember_fabaa435f8739f48_aliases:
         _ember_fabaa435f8739f48_prior = _ember_fabaa435f8739f48_sys.modules.get(_ember_fabaa435f8739f48_alias)
         if _ember_fabaa435f8739f48_prior is not None and _ember_fabaa435f8739f48_prior is not _ember_fabaa435f8739f48_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w1_recheck_cache.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_recheck_cache.py')
         _ember_fabaa435f8739f48_sys.modules[_ember_fabaa435f8739f48_alias] = _ember_fabaa435f8739f48_module
     try:
         _ember_fabaa435f8739f48_spec.loader.exec_module(_ember_fabaa435f8739f48_module)
@@ -172,12 +172,12 @@ else:
 for _ember_fabaa435f8739f48_alias in _ember_fabaa435f8739f48_aliases:
     _ember_fabaa435f8739f48_prior = _ember_fabaa435f8739f48_sys.modules.get(_ember_fabaa435f8739f48_alias)
     if _ember_fabaa435f8739f48_prior is not None and _ember_fabaa435f8739f48_prior is not _ember_fabaa435f8739f48_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w1_recheck_cache.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_recheck_cache.py')
     _ember_fabaa435f8739f48_sys.modules[_ember_fabaa435f8739f48_alias] = _ember_fabaa435f8739f48_module
 check_recheck_cache = getattr(_ember_fabaa435f8739f48_module, 'check_recheck_cache')
 write_recheck_cache = getattr(_ember_fabaa435f8739f48_module, 'write_recheck_cache')
 disclose_cache_hit = getattr(_ember_fabaa435f8739f48_module, 'disclose_cache_hit')
-# issue2015 exact-local-import-end:scripts/w1_recheck_cache.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/w1_recheck_cache.py
 
 # ---------------------------------------------------------------------------
 # Citations (paths + the exact figures pinned by the pricing/rung receipts).

@@ -10,7 +10,7 @@ import importlib.util
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 EXP711_PATH = ROOT / "scripts" / "exp711_intervals.py"
 HELPER_PATH = (
     ROOT / "tools" / "ember-restart-3b" / "frozen_tokenizer_decoder.py"

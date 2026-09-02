@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 CHECKER = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "check_docs_freshness.py"
 FIXTURE = Path(__file__).parent / "fixtures" / "docs_freshness_front_door.md"
 

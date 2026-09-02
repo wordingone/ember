@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 TARGET = ROOT / "scripts" / "ember_totality" / "test_c9.py"
 
 

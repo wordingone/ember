@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 CHECKER = REPO / "scripts" / "check_changed_receipts.py"
 INVARIANT = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 

@@ -44,7 +44,7 @@ import time
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 TARGET = REPO_ROOT / "scripts" / "ember_totality" / "test_c_base.py"
 
 

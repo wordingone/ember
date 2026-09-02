@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 CONTINUITY = REPO_ROOT / "docs/authority/CONTINUITY.md"
 
 EXPECTED_BACKEND = "reference_seat_explicit"
