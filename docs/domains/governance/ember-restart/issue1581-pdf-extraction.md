@@ -10,7 +10,7 @@ Extraction is deliberately pinned to CPython 3.10 and `pypdf==6.16.1`. Install
 the wheel into an isolated target using the repository lock file:
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -NonInteractive -File $env:USERPROFILE\.codex\headless-python.ps1 -- -B -m pip install --require-hashes --only-binary=:all: --no-deps --target <dependency-target> -r tools\corpus_connectors\requirements-pdf-to-utf8.cfg
+powershell.exe -NoLogo -NoProfile -NonInteractive -File $env:USERPROFILE\.codex\headless-python.ps1 -- -B -m pip install --require-hashes --only-binary=:all: --no-deps --target <dependency-target> -r src\ember\infrastructure\tools\corpus_connectors\requirements-pdf-to-utf8.cfg
 ```
 
 Set `PYTHONPATH` to that isolated target when invoking
