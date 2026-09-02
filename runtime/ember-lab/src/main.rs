@@ -3614,7 +3614,10 @@ mod tests {
         ));
         let repo = root.join("repo");
         let packet = root.join("custody").join("run-1").join("launch-authority");
-        std::fs::create_dir_all(repo.join("tools/ember-restart-3b")).unwrap();
+        std::fs::create_dir_all(
+            repo.join("src/ember/infrastructure/tools/ember-restart-3b"),
+        )
+        .unwrap();
         std::fs::create_dir_all(repo.join("runtime/ember-lab")).unwrap();
         std::fs::create_dir_all(repo.join("configs")).unwrap();
         std::fs::create_dir_all(&packet).unwrap();
@@ -3834,7 +3837,7 @@ mod tests {
         assert_eq!(manifest["args"][3], repo.to_string_lossy().as_ref());
         assert_eq!(
             manifest["args"][4],
-            repo.join("tools/ember-restart-3b")
+            repo.join("src/ember/infrastructure/tools/ember-restart-3b")
                 .to_string_lossy()
                 .as_ref()
         );

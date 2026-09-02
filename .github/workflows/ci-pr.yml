@@ -240,7 +240,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
           GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py \
-            --fixture-root tests/ember_restart_model/fixtures/eval-canary-image-v1 \
+            --fixture-root tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1 \
             --run-suite \
             --torch-wheel-filename "${TORCH_WHEEL_FILENAME}" \
             --torch-wheel-sha256 "${TORCH_WHEEL_SHA256}" \
