@@ -27,12 +27,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B scripts/github/snapshot.py
+          python -B src/ember/governance/scripts/github/snapshot.py
           --without-comments
           --output repository-snapshot.json
       - name: Build outcome-oriented advisory report
         run: >-
-          python -B scripts/github/repo_health.py
+          python -B src/ember/governance/scripts/github/repo_health.py
           --snapshot repository-snapshot.json
           --output repository-health.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

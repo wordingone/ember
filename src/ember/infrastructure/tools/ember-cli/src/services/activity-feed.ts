@@ -381,7 +381,7 @@ function truncateForActivityLine(value: string, maxLen = 60): string {
  *  - `continuation_skipped` -- fires on nearly every ordinary turn once a goal exists (any turn
  *    ending while the user has already typed something skips with `queued_user_input`); the
  *    autonomy-visible signal the current "Operator relationship" section of
- *    docs/contracts/goal-mode-mechanism.md cares about
+ *    docs/domains/governance/contracts/goal-mode-mechanism.md cares about
  *    "autonomy must be VISIBLE") is a continuation that FIRED, never the routine skip -- surfacing
  *    skips would flood the feed with exactly the noise issue #485/#576 fought to eliminate.
  *

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl-result-event.test.ts — issue #49: a transport-level generate failure must
 // surface as ONE styled error message in the transcript, never a dangling empty assistant
 // bubble and never a second "new" message alongside it.

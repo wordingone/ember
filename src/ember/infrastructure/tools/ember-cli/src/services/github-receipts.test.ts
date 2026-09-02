@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // github-receipts.test.ts — JSONL receipt writer tests for GitHub write
 // actions (ember issue #507). Mirrors goal-receipts.test.ts's conventions.
 

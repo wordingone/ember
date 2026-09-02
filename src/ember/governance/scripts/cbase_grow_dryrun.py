@@ -90,7 +90,7 @@ def widen_state_dict(sd: dict, n_layers: int, eps_sigma: float = 0.0, eps_seed: 
     net2net FF-widening surgery (see module docstring for the base math).
 
     eps_sigma / eps_seed: #280 K1 respec (docs/spec/ -- see
-    scripts/grow_respec_280.py for the full derivation and citation).
+    src/ember/governance/scripts/grow_respec_280.py for the full derivation and citation).
     default eps_sigma=0.0 preserves this function's ORIGINAL behaviour
     bit-for-bit (exact duplication: down_proj column pair -> (a/2, a/2)) --
     every existing caller that has not opted in is UNCHANGED. This is the
@@ -107,7 +107,7 @@ def widen_state_dict(sd: dict, n_layers: int, eps_sigma: float = 0.0, eps_seed: 
     (a/2-eta) = a) while gate_proj/up_proj rows stay untouched (still exact
     duplicates at construction), function preservation remains EXACT in
     real arithmetic at t=0 -- verified numerically in
-    scripts/test_grow_respec_280.py. What breaks is the twin-swap
+    src/ember/governance/scripts/test_grow_respec_280.py. What breaks is the twin-swap
     permutation symmetry Newton-Schulz/Muon otherwise preserves losslessly
     (down_proj columns k and k+n_new are no longer identical vectors), so
     twin in-proj gradients diverge from training step 1 onward. eps_seed

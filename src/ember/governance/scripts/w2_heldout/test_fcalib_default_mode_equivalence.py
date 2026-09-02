@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_fcalib_default_mode_equivalence.py -- Prove new fcalib is behavior-preserving.
 
 Synthetic fixture runs old and new fcalib.py on identical input WITHOUT the
@@ -118,7 +121,7 @@ def test_fcalib_default_mode_equivalence():
 
         # Extract OLD fcalib from 6675e2a (master pre-PR)
         old_fcalib_result = subprocess.run(
-            ["git", "show", "6675e2a:scripts/heldout_v21_fcalib.py"],
+            ["git", "show", "6675e2a:src/ember/governance/scripts/heldout_v21_fcalib.py"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True
@@ -167,7 +170,7 @@ def test_fcalib_default_mode_equivalence():
         out_new = os.path.join(tmpdir, "out-new.json")
 
         new_result = subprocess.run([
-            sys.executable, "scripts/heldout_v21_fcalib.py",
+            sys.executable, "src/ember/governance/scripts/heldout_v21_fcalib.py",
             f"--shard-dir={shard_dir}",
             f"--shard-receipt={receipt_path}",
             f"--out={out_new}",
@@ -257,7 +260,7 @@ def test_old_v0_cache_regenerated_not_misread():
         # Run new fcalib (should build v1 cache, not v0)
         out = os.path.join(tmpdir, "out.json")
         result = subprocess.run([
-            sys.executable, "scripts/heldout_v21_fcalib.py",
+            sys.executable, "src/ember/governance/scripts/heldout_v21_fcalib.py",
             f"--shard-dir={shard_dir}",
             f"--shard-receipt={receipt_path}",
             f"--out={out}",

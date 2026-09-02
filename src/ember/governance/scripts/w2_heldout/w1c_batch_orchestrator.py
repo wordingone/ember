@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w1c_batch_orchestrator.py -- K-certified batch production orchestrator
 (#558 rebuild of the #553 harvest's build_k_certified_batches.py skeleton).
 

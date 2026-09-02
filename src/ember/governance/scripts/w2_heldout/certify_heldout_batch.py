@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """certify_heldout_batch.py -- Certification predicate using boilerplate Bloom filter.
 
 RE-SCOPED #374: certification predicate is TWO-PART:

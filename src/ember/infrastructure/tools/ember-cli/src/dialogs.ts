@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // dialogs.ts — root-level dialog module.
 // Extends and re-exports components/dialogs.ts with additional exports needed
 // by the root-level test (ExitDialog, SearchDialog, HistoryDialog, etc.).

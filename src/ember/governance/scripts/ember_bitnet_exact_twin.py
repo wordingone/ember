@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_bitnet_exact_twin.py — frozen BitNet 102M matched-pilot exact GPU twin.
 
 Implementation preflight for ember issue #676, against the FROZEN identity

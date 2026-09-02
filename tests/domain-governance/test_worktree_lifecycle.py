@@ -686,7 +686,7 @@ def test_hooks_and_agents_require_lifecycle_guard() -> None:
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
     invocation = (
-        'bash "$ROOT/tools/run-python-hidden.sh" "$ROOT/src/ember/governance/scripts/worktree_lifecycle.py" '
+        'bash "$ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$ROOT/src/ember/governance/scripts/worktree_lifecycle.py" '
         "--allow-modified-self audit --strict --quiet"
     )
     assert invocation in pre_commit
@@ -1988,7 +1988,7 @@ def make_throwaway_tool_checkout(tmp_path: Path) -> Path:
     git(checkout, "init", "-b", "master")
     git(checkout, "config", "user.name", "Ember Test")
     git(checkout, "config", "user.email", "ember@example.invalid")
-    git(checkout, "add", "src/ember/governance/scripts/worktree_lifecycle.py", "scripts/gate_provenance.py")
+    git(checkout, "add", "src/ember/governance/scripts/worktree_lifecycle.py", "src/ember/governance/scripts/gate_provenance.py")
     git(checkout, "commit", "-m", "seed tool checkout")
     return checkout
 

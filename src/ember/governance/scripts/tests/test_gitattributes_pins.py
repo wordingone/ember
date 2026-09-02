@@ -80,7 +80,7 @@ def test_orphaned_pin_is_detected() -> None:
             "",
         ]
     )
-    tracked = {"docs/domains/governance/authority/GOAL.md", "configs/v0-pretrain-config.json"}
+    tracked = {"docs/domains/governance/authority/GOAL.md", "domains/model/configs/v0-pretrain-config.json"}
 
     pins = exact_path_pins(fixture)
     orphans = orphaned_pins(pins, lambda pin: pin in tracked)

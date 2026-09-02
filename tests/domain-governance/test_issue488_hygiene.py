@@ -72,7 +72,7 @@ class Issue488HygieneTests(unittest.TestCase):
         return root
 
     def test_governance_contains_closed_hygiene_law(self):
-        text = (REPO_ROOT / "docs/authority/GOVERNANCE.md").read_text(encoding="utf-8")
+        text = (REPO_ROOT / "docs/domains/governance/authority/GOVERNANCE.md").read_text(encoding="utf-8")
         for marker in (
             "## Repository hygiene (#488)",
             "HYGIENE_REFERENCE_SCAN",
@@ -108,7 +108,7 @@ class Issue488HygieneTests(unittest.TestCase):
             "policy", "inventory", "candidates", "selected_cleanup", "completed_cleanup", "manifest_sha256",
         })
         self.assertTrue(manifest["policy"]["first_bounded_cleanup_pass"])
-        self.assertEqual(manifest["policy"]["canonical_carrier"], "docs/authority/GOVERNANCE.md")
+        self.assertEqual(manifest["policy"]["canonical_carrier"], "docs/domains/governance/authority/GOVERNANCE.md")
         self.assertTrue(manifest["policy"]["remaining_cadence_transferred"])
         self.assertIn("5101881455", manifest["policy"]["transfer_basis"])
         encoded = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
@@ -154,7 +154,7 @@ class Issue488HygieneTests(unittest.TestCase):
             receipt["cleanup_scope"],
             {
                 "kind": "first_bounded_cleanup_pass",
-                "canonical_carrier": "docs/authority/GOVERNANCE.md",
+                "canonical_carrier": "docs/domains/governance/authority/GOVERNANCE.md",
                 "remaining_cadence_transferred": True,
                 "transfer_basis": "https://github.com/wordingone/ember/issues/488#issuecomment-5101881455",
             },
@@ -224,7 +224,7 @@ class Issue488HygieneTests(unittest.TestCase):
         self.assertFalse(target.exists())
         self.assertEqual(result["schema_version"], "ember-issue-488-cleanup-receipt-v1")
         self.assertEqual(result["cleanup_scope"]["kind"], "first_bounded_cleanup_pass")
-        self.assertEqual(result["cleanup_scope"]["canonical_carrier"], "docs/authority/GOVERNANCE.md")
+        self.assertEqual(result["cleanup_scope"]["canonical_carrier"], "docs/domains/governance/authority/GOVERNANCE.md")
         self.assertTrue(result["cleanup_scope"]["remaining_cadence_transferred"])
         self.assertIn("before", result)
         self.assertIn("after", result)

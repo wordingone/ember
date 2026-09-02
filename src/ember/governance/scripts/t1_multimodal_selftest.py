@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t1_multimodal_selftest.py — CPU selftest for ember-multimodal-v0 Locks 2+3+VisionEmbedder.
 
 AC for eng-36/#420 and eng-39/#423. Proves on CPU (<30s) that:

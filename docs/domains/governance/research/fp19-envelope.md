@@ -79,7 +79,7 @@ what was actually read when fp-19 froze on 2026-06-11. A same-day,
 `docs/domains/governance/research/gpu-math-multiplier-table-v2-2026-06-11.json`, revised
 the Muon estimate downward to 1.35× with tighter refutation and is now
 the VERSION-ACTIVE table — it is the "survivor stack" basis cited by
-`configs/v0-pretrain-config.json` and every `baseline/` reference. Muon
+`domains/model/configs/v0-pretrain-config.json` and every `baseline/` reference. Muon
 is upside here regardless (the envelope clears without it per the
 Verdict above), so this does not change fp-19's non-empty verdict; it
 only means a reader chasing the current Muon number should follow the

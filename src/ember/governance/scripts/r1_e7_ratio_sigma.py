@@ -21,7 +21,7 @@ from typing import Any
 import importlib.util as _ember_2afec9f76b7cd933_importlib
 import sys as _ember_2afec9f76b7cd933_sys
 from pathlib import Path as _ember_2afec9f76b7cd933_Path
-_ember_2afec9f76b7cd933_path = _ember_2afec9f76b7cd933_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'r1_exit_battery.py')
+_ember_2afec9f76b7cd933_path = _ember_2afec9f76b7cd933_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'r1_exit_battery.py')
 if not _ember_2afec9f76b7cd933_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/r1_exit_battery.py')
 _ember_2afec9f76b7cd933_aliases = ('_ember_issue2015_2afec9f76b7cd933', 'r1_exit_battery', 'scripts.r1_exit_battery')

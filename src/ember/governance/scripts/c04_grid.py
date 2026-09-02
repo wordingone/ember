@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c04_grid.py - fp-37 (#352): c04 candidate-grid arithmetic.
 
 Every constant is receipt-pinned (named in CONSTANTS). Closed-form only -

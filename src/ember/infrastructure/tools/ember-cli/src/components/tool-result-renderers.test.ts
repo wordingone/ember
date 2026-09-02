@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/tool-result-renderers.test.ts — AC tests for large-output truncation.
 //
 // AC10a: isLargeOutput — returns true only when line count > LARGE_OUTPUT_LINE_THRESHOLD

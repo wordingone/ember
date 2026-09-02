@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp35d_k4096_steady_state.py — K=4096 steady-state fp8 micro-bench (Closes #294).
 
 Settles the K=4096 output_proj instability from fp35c (seed16 2.18x / seeds17-18 0.84x).

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for session-state singleton (all ACs from spec).
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";

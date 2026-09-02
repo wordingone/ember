@@ -11,7 +11,7 @@
 //     L960-965  disposition!=OWNED_ADMITTED + selected/completion -> admission.disposition
 //     L967-971  REFERENCE_ONLY + selected/completion ->
 //               reference.selected_as_owned / reference.owned_completion_credit
-//   tests/ember_01_identity/test_validate_identity.py
+//   tests/ember_01_identity/domain-governance/test_validate_identity.py
 //     test_reference_only_cannot_be_owned_or_counted (L534)
 //     test_only_owned_admitted_can_be_selected_or_counted[REFERENCE_ONLY] (L733)
 //

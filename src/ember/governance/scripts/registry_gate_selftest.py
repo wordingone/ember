@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import importlib.util as _ember_abd330e63c6c95de_importlib
 import sys as _ember_abd330e63c6c95de_sys
 from pathlib import Path as _ember_abd330e63c6c95de_Path
-_ember_abd330e63c6c95de_path = _ember_abd330e63c6c95de_Path(__file__).resolve().parents[4].joinpath('scripts', 'registry_gate.py')
+_ember_abd330e63c6c95de_path = _ember_abd330e63c6c95de_Path(__file__).resolve().parent.joinpath('registry_gate.py')
 if not _ember_abd330e63c6c95de_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/registry_gate.py')
 _ember_abd330e63c6c95de_aliases = ('_ember_issue2015_abd330e63c6c95de', 'registry_gate', 'src.ember.governance.scripts.registry_gate')
@@ -169,8 +169,8 @@ def main() -> int:
         cfg_path = cfg_dir / "v0-pretrain-config.json"
         cfg_path.write_text("{}", encoding="utf-8")
         got = normalize_config_path(str(cfg_path), root=troot)
-        if got != "configs/v0-pretrain-config.json":
-            fails.append(f"case6 expected 'configs/v0-pretrain-config.json', got {got!r}")
+        if got != "domains/model/configs/v0-pretrain-config.json":
+            fails.append(f"case6 expected 'domains/model/configs/v0-pretrain-config.json', got {got!r}")
         if DRIVE_LETTER_RE.search(got):
             fails.append(f"case6 leaked a drive-letter path: {got!r}")
 

@@ -84,7 +84,7 @@ These require additional resources not included in this repository:
 |---|---|
 | `src/ember/governance/scripts/corpus_acquire.py` | several hundred GB local disk; internet access |
 | `src/ember/governance/scripts/corpus_mix.py` | hydrated corpus from `corpus_acquire.py` |
-| `scripts/train_multimodal_v0.py` | 24 GB VRAM GPU; hydrated corpus |
+| `src/ember/governance/scripts/train_multimodal_v0.py` | 24 GB VRAM GPU; hydrated corpus |
 | any eval script | model weights (produced by training) |
 | ScienceAgentBench tasks | local artifact from canonical source (see receipt) |
 | D3 benchmark tasks | local Docker environment; D3 task files |

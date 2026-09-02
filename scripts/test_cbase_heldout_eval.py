@@ -397,7 +397,51 @@ def test_rule_derived_verdict_is_closed_and_legacy_clean_is_unchanged(tmp_path):
         m.load_frozen_slice_manifest(p,sha(p))
 
 def test_rule_derived_receipt_rederives_exact_windows_and_refuses_later_choice(tmp_path,monkeypatch):
-    m=load_module(); import regenerate_cbase_heldout_slice as freezer
+    m=load_module()
+    # issue2015 exact-local-import:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py
+    import importlib.util as _ember_a2a797319a415ece_importlib
+    import sys as _ember_a2a797319a415ece_sys
+    from pathlib import Path as _ember_a2a797319a415ece_Path
+    _ember_a2a797319a415ece_path = _ember_a2a797319a415ece_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'regenerate_cbase_heldout_slice.py')
+    if not _ember_a2a797319a415ece_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
+    _ember_a2a797319a415ece_aliases = ('_ember_issue2015_a2a797319a415ece', 'regenerate_cbase_heldout_slice', 'scripts.regenerate_cbase_heldout_slice')
+    _ember_a2a797319a415ece_existing = []
+    for _ember_a2a797319a415ece_alias in _ember_a2a797319a415ece_aliases:
+        _ember_a2a797319a415ece_candidate = _ember_a2a797319a415ece_sys.modules.get(_ember_a2a797319a415ece_alias)
+        if _ember_a2a797319a415ece_candidate is not None and all(_ember_a2a797319a415ece_candidate is not item for item in _ember_a2a797319a415ece_existing):
+            _ember_a2a797319a415ece_existing.append(_ember_a2a797319a415ece_candidate)
+    if len(_ember_a2a797319a415ece_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
+    if _ember_a2a797319a415ece_existing:
+        _ember_a2a797319a415ece_module = _ember_a2a797319a415ece_existing[0]
+        _ember_a2a797319a415ece_observed = getattr(_ember_a2a797319a415ece_module, '__file__', None)
+        if _ember_a2a797319a415ece_observed is None or _ember_a2a797319a415ece_Path(_ember_a2a797319a415ece_observed).resolve() != _ember_a2a797319a415ece_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
+    else:
+        _ember_a2a797319a415ece_spec = _ember_a2a797319a415ece_importlib.spec_from_file_location('_ember_issue2015_a2a797319a415ece', _ember_a2a797319a415ece_path)
+        if _ember_a2a797319a415ece_spec is None or _ember_a2a797319a415ece_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
+        _ember_a2a797319a415ece_module = _ember_a2a797319a415ece_importlib.module_from_spec(_ember_a2a797319a415ece_spec)
+        for _ember_a2a797319a415ece_alias in _ember_a2a797319a415ece_aliases:
+            _ember_a2a797319a415ece_prior = _ember_a2a797319a415ece_sys.modules.get(_ember_a2a797319a415ece_alias)
+            if _ember_a2a797319a415ece_prior is not None and _ember_a2a797319a415ece_prior is not _ember_a2a797319a415ece_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
+            _ember_a2a797319a415ece_sys.modules[_ember_a2a797319a415ece_alias] = _ember_a2a797319a415ece_module
+        try:
+            _ember_a2a797319a415ece_spec.loader.exec_module(_ember_a2a797319a415ece_module)
+        except BaseException:
+            for _ember_a2a797319a415ece_alias in _ember_a2a797319a415ece_aliases:
+                if _ember_a2a797319a415ece_sys.modules.get(_ember_a2a797319a415ece_alias) is _ember_a2a797319a415ece_module:
+                    _ember_a2a797319a415ece_sys.modules.pop(_ember_a2a797319a415ece_alias, None)
+            raise
+    for _ember_a2a797319a415ece_alias in _ember_a2a797319a415ece_aliases:
+        _ember_a2a797319a415ece_prior = _ember_a2a797319a415ece_sys.modules.get(_ember_a2a797319a415ece_alias)
+        if _ember_a2a797319a415ece_prior is not None and _ember_a2a797319a415ece_prior is not _ember_a2a797319a415ece_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
+        _ember_a2a797319a415ece_sys.modules[_ember_a2a797319a415ece_alias] = _ember_a2a797319a415ece_module
+    freezer = _ember_a2a797319a415ece_module
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py
     (tmp_path/"receipts").mkdir(); write_json(tmp_path/"receipts"/"source.json",{"shards":[]})
     exclusion=tmp_path/"receipts"/"exclusion.json"; write_json(exclusion,{"fixture":True})
     doc=manifest("0"*64); doc["selection_evidence"]["verdict"]="RULE_DERIVED_EXCLUSION_CLEAN"

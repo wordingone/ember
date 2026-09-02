@@ -159,7 +159,7 @@ def main():
     import importlib.util as _ember_c32cf5e860218889_importlib
     import sys as _ember_c32cf5e860218889_sys
     from pathlib import Path as _ember_c32cf5e860218889_Path
-    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
+    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parent.joinpath('t1_probe.py')
     if not _ember_c32cf5e860218889_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t1_probe.py')
     _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'src.ember.governance.scripts.t1_probe', 't1_probe')
@@ -203,7 +203,7 @@ def main():
     import importlib.util as _ember_53a439835d3991b4_importlib
     import sys as _ember_53a439835d3991b4_sys
     from pathlib import Path as _ember_53a439835d3991b4_Path
-    _ember_53a439835d3991b4_path = _ember_53a439835d3991b4_Path(__file__).resolve().parents[4].joinpath('scripts', 'w1_mbpp.py')
+    _ember_53a439835d3991b4_path = _ember_53a439835d3991b4_Path(__file__).resolve().parent.joinpath('w1_mbpp.py')
     if not _ember_53a439835d3991b4_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_mbpp.py')
     _ember_53a439835d3991b4_aliases = ('_ember_issue2015_53a439835d3991b4', 'src.ember.governance.scripts.w1_mbpp', 'w1_mbpp')

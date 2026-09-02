@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // utils/config-persistence.ts
 // Provides a module-level config-directory cache and the test-helper reset function.
 // The cost-tracking functions live in utils/cost-telemetry.ts and import from here.

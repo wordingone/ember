@@ -55,7 +55,7 @@ def test_a_transplant_succeeds_on_real_nonzero_buffers():
     import importlib.util as _ember_b35e6dd9e3f4160c_importlib
     import sys as _ember_b35e6dd9e3f4160c_sys
     from pathlib import Path as _ember_b35e6dd9e3f4160c_Path
-    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
+    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
     if not _ember_b35e6dd9e3f4160c_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/rung_boundary_momentum_transplant.py')
     _ember_b35e6dd9e3f4160c_aliases = ('_ember_issue2015_b35e6dd9e3f4160c', 'rung_boundary_momentum_transplant', 'scripts.rung_boundary_momentum_transplant')
@@ -140,7 +140,7 @@ def test_b_missing_buffer_fails_closed():
     import importlib.util as _ember_b35e6dd9e3f4160c_importlib
     import sys as _ember_b35e6dd9e3f4160c_sys
     from pathlib import Path as _ember_b35e6dd9e3f4160c_Path
-    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
+    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
     if not _ember_b35e6dd9e3f4160c_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/rung_boundary_momentum_transplant.py')
     _ember_b35e6dd9e3f4160c_aliases = ('_ember_issue2015_b35e6dd9e3f4160c', 'rung_boundary_momentum_transplant', 'scripts.rung_boundary_momentum_transplant')
@@ -184,7 +184,7 @@ def test_b_missing_buffer_fails_closed():
     import importlib.util as _ember_ba82af0721d80c9f_importlib
     import sys as _ember_ba82af0721d80c9f_sys
     from pathlib import Path as _ember_ba82af0721d80c9f_Path
-    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
     if not _ember_ba82af0721d80c9f_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
     _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
@@ -250,7 +250,7 @@ def test_c_near_zero_buffer_fails_closed():
     import importlib.util as _ember_b35e6dd9e3f4160c_importlib
     import sys as _ember_b35e6dd9e3f4160c_sys
     from pathlib import Path as _ember_b35e6dd9e3f4160c_Path
-    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
+    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
     if not _ember_b35e6dd9e3f4160c_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/rung_boundary_momentum_transplant.py')
     _ember_b35e6dd9e3f4160c_aliases = ('_ember_issue2015_b35e6dd9e3f4160c', 'rung_boundary_momentum_transplant', 'scripts.rung_boundary_momentum_transplant')
@@ -294,7 +294,7 @@ def test_c_near_zero_buffer_fails_closed():
     import importlib.util as _ember_ba82af0721d80c9f_importlib
     import sys as _ember_ba82af0721d80c9f_sys
     from pathlib import Path as _ember_ba82af0721d80c9f_Path
-    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
     if not _ember_ba82af0721d80c9f_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
     _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
@@ -360,7 +360,7 @@ def test_d_resolved_lr_muon_never_a_constant():
     import importlib.util as _ember_b35e6dd9e3f4160c_importlib
     import sys as _ember_b35e6dd9e3f4160c_sys
     from pathlib import Path as _ember_b35e6dd9e3f4160c_Path
-    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
+    _ember_b35e6dd9e3f4160c_path = _ember_b35e6dd9e3f4160c_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'rung_boundary_momentum_transplant.py')
     if not _ember_b35e6dd9e3f4160c_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/rung_boundary_momentum_transplant.py')
     _ember_b35e6dd9e3f4160c_aliases = ('_ember_issue2015_b35e6dd9e3f4160c', 'rung_boundary_momentum_transplant', 'scripts.rung_boundary_momentum_transplant')

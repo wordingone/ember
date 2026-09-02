@@ -29,8 +29,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -B scripts/github/snapshot.py --without-comments --output repository-snapshot.json
-          python -B scripts/github/branch_inventory.py --snapshot repository-snapshot.json --output branch-recovery-inventory.json
+          python -B src/ember/governance/scripts/github/snapshot.py --without-comments --output repository-snapshot.json
+          python -B src/ember/governance/scripts/github/branch_inventory.py --snapshot repository-snapshot.json --output branch-recovery-inventory.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: branch-recovery-inventory-${{ github.run_id }}

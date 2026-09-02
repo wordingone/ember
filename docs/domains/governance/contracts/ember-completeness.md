@@ -6,7 +6,7 @@ This six-column M/C manifest remains byte-readable by the legacy tally and
 condition probes so none of its obligations or evidence is erased. It is
 historical diagnostic input under EMBER-00, not current completion authority.
 The current D-001-through-D-062 authority matrix is
-`docs/authority/ember-authority-matrix.md`.
+`docs/domains/governance/authority/ember-authority-matrix.md`.
 
 ## Preserved historical content
 

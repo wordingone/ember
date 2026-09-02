@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/monitor-render.ts — pure rendering helpers for the cockpit `monitor` surface.
 //
 // Originally extracted out of core/ember-world-state-repl.ts (a standalone proof-pack REPL that

@@ -82,7 +82,7 @@ under-count):
 | `ledger_mit` | Ember's own MIT-clean slice, licence class `arc-dsl-mit` | v0 + v1 |
 | `fineweb_edu` | FineWeb educational web-text subset | v0 only — dropped from v1 as TAINTED (`receipts/corpus-mix-20260611T075802Z.json`), retained here for disjointness purposes because v0 shards were consumed |
 
-Sources: `configs/v1-pretrain-config.json`, `receipts/corpus-census-20260710.json`,
+Sources: `domains/model/configs/v1-pretrain-config.json`, `receipts/corpus-census-20260710.json`,
 `manifests/corpus/*`. `shards-v0` (26 `.bin`, 6,973,632,300 content tokens) is the ember
 pretraining corpus per `receipts/eval-suite-freeze/a1-corpus-lineage-20260710T051001Z.json`;
 `manifests/corpus/b-multi-1` (image-caption, 500 rows) was consumed by **no** completed training

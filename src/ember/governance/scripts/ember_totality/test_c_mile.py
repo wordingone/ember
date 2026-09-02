@@ -150,7 +150,7 @@ def main():
         import importlib.util as _ember_4d009c91d4de1691_importlib
         import sys as _ember_4d009c91d4de1691_sys
         from pathlib import Path as _ember_4d009c91d4de1691_Path
-        _ember_4d009c91d4de1691_path = _ember_4d009c91d4de1691_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'milestone_leg.py')
+        _ember_4d009c91d4de1691_path = _ember_4d009c91d4de1691_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'milestone_leg.py')
         if not _ember_4d009c91d4de1691_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/milestone_leg.py')
         _ember_4d009c91d4de1691_aliases = ('_ember_issue2015_4d009c91d4de1691', 'milestone_leg', 'scripts.ember_totality.milestone_leg')

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for repl-mode.ts — covers AC1–AC6 from repl-mode.md spec.
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import {

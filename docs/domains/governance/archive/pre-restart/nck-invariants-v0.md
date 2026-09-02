@@ -17,7 +17,7 @@ resident fails loudly and immediately rather than accumulating silent drift.
 
 ## Architecture
 
-### 1. Invariant manifest  (`configs/nck-invariants.json`)
+### 1. Invariant manifest  (`domains/model/configs/nck-invariants.json`)
 
 A JSON file listing every protected path and its sha256 hash.  The five
 invariant slots (sp5 §5):
@@ -25,12 +25,12 @@ invariant slots (sp5 §5):
 | Invariant | File | Label |
 |---|---|---|
 | Three-test gain gate | `docs/domains/governance/archive/pre-restart/formalization-v0.md` | `three-test-gain-gate` |
-| Resource governor + headroom config | `configs/v0-pretrain-config.json` | `governor-headroom-config` |
+| Resource governor + headroom config | `domains/model/configs/v0-pretrain-config.json` | `governor-headroom-config` |
 | GOAL.md + only-the-user-retires-it | `GOAL.md` | `goal-md` |
 | Receipts-only truth | `GOAL.md` (contains verbatim) | `receipts-only-truth-statement` |
 | This enforcement layer itself | `src/ember/governance/scripts/nck/invariants.py` | `invariants-py` |
 
-The manifest also lists itself (`configs/nck-invariants.json`) with
+The manifest also lists itself (`domains/model/configs/nck-invariants.json`) with
 `sha256: "SELF"` — a sentinel that skips the content-hash check, relying
 instead on the baseline-comparison step (see §2).  This is correct: a file
 cannot hash itself without a fixed-point, and the baseline comparison is the
@@ -38,7 +38,7 @@ actual self-verification mechanism.
 
 ### 2. Outside-write-surface baseline  (`configs/nck-baseline/`)
 
-A second copy of the manifest lives at `configs/nck-baseline/nck-invariants.json`.
+A second copy of the manifest lives at `domains/model/configs/nck-baseline/nck-invariants.json`.
 The resident's tool registry CANNOT write to this directory:
 
 - The `check_write_path(path)` function in `invariants.py` raises
@@ -127,7 +127,7 @@ The following paths are protected by hash (in the manifest) but not by the
 write-surface block (they are inside the write surface, reachable by a branch
 promotion):
 
-- `docs/domains/governance/archive/pre-restart/formalization-v0.md`, `configs/v0-pretrain-config.json`, `GOAL.md`,
+- `docs/domains/governance/archive/pre-restart/formalization-v0.md`, `domains/model/configs/v0-pretrain-config.json`, `GOAL.md`,
   `src/ember/governance/scripts/nck/invariants.py`
 
 These are protected against ACCIDENTAL mutation, not against a deliberate
@@ -170,7 +170,7 @@ and in-repo Python.
 | `docs/domains/governance/charter/nck-invariant-contract-v0.md` | 15 behavioral invariants; uniform tool interface (inv 5) |
 | `GOAL.md` | Source of receipts-only-truth statement (invariant 4); hash target |
 | `docs/domains/governance/archive/pre-restart/formalization-v0.md` | Three-test gain gate (§4); hash target |
-| `configs/v0-pretrain-config.json` | Governor + headroom config; hash target |
+| `domains/model/configs/v0-pretrain-config.json` | Governor + headroom config; hash target |
 
 No file outside this repository was read.  No predecessor-CLI source was accessed.
 

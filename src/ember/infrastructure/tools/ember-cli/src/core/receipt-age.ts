@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/receipt-age.ts — utilities for formatting board receipt age and detecting staleness.
 // Converts ISO8601 timestamp to relative age ("2h14m ago") and determines if stale (>2h, see
 // isReceiptStale's own comment for why 2h and not the tighter value this started at).

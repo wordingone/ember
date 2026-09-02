@@ -17,18 +17,18 @@ AUTHORITY_NAMES = {
 }
 
 APPROVED_DOC_PATHS = {
-    "docs/authority/ember-authority-matrix.md",
+    "docs/domains/governance/authority/ember-authority-matrix.md",
     "docs/domains/governance/contracts/ember-completeness.md",
     "docs/contracts/ember-floor-contract.md",
-    "docs/contracts/goal-clear-protocol.md",
-    "docs/guides/goal-live-session.md",
-    "docs/contracts/goal-mode-mechanism.md",
+    "docs/domains/governance/contracts/goal-clear-protocol.md",
+    "docs/domains/governance/guides/goal-live-session.md",
+    "docs/domains/governance/contracts/goal-mode-mechanism.md",
     "docs/contracts/nc2-own-technique-contract.md",
-    "docs/contracts/registry-dispatch-gate-spec-v0.md",
+    "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/domains/governance/custody/custody-disposition-20260708.md",
-    "docs/custody/r1-exit-evidence-inventory-20260805.md",
+    "docs/domains/governance/custody/r1-exit-evidence-inventory-20260805.md",
     "docs/domains/governance/guides/START-HERE.md",
-    "docs/roadmap/PROBLEMS.md",
+    "docs/domains/governance/roadmap/PROBLEMS.md",
 }
 
 
@@ -70,7 +70,7 @@ def test_docs_map_links_every_top_level_directory() -> None:
 
 def test_moved_markdown_documents_have_no_dangling_relative_links() -> None:
     moved = {
-        "docs/DOCS-README.md",
+        "docs/domains/governance/DOCS-README.md",
         "docs/domains/governance/authority/GOAL.md",
         *(f"docs/authority/{name}" for name in AUTHORITY_NAMES if name != "GOAL.md"),
         *APPROVED_DOC_PATHS,

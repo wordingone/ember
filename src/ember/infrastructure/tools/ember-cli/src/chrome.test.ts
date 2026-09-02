@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for /chrome: surface gate (AC1), non-interactive (AC2), WSL error (AC3),
 // non-subscriber error (AC4), install action hidden (AC5), requires-extension
 // label (AC6), reconnect re-probes (AC7), toggle writes config (AC8),

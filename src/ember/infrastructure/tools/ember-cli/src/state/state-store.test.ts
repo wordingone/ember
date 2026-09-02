@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for state-store — covers AC1–AC5 plus behavioral contract.
 import { test, expect, describe, mock } from "bun:test";
 import { createStore, onChangeAppState } from "./state-store.ts";

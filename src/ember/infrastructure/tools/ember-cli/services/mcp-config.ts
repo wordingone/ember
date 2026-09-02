@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Re-export shim. Root-level src/*.test.ts files import '../services/mcp-config.ts',
 // which resolves here (above src/). The single source of truth is
 // src/mcp-config.ts — this file only forwards it so the root-level tests bind the

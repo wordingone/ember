@@ -69,7 +69,7 @@ fail-before-continue) apply identically to the multimodal run.
 
 ## Current repo state (grounding — read 2026-06-14)
 
-The only pretrain config in the committed repo is `configs/v0-pretrain-config.json`
+The only pretrain config in the committed repo is `domains/model/configs/v0-pretrain-config.json`
 = **ember-v0, text-only**: hidden 1024 / 20 layers / vocab 32000 / seq 1024 /
 next-token CE + 2 independent MTP auxiliary heads / 368,354,304 base parameters
 excluding MTP + 65,536,000 MTP parameters = 433,890,304 declared realized parameters.

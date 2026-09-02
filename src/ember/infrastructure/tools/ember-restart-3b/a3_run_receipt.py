@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Mint the R1-E8 A3-arm run receipt (schema `ember02-r1-e8-run-v1`, arm_id "A3").
 

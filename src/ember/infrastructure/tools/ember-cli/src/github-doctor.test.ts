@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // github-doctor.test.ts — tests for `ember gh doctor` (ember issue #507).
 // Every scenario drives the real ladder (resolveCredentials -> mintJwt ->
 // exchangeInstallationToken -> checkRateLimit) through github-app-auth's DI

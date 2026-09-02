@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // skill-tool.ts
 // The /skill slash-command tool: registry lookup, permission checks, content
 // expansion, fork delegation, and remote catalog integration.

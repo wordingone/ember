@@ -43,7 +43,7 @@ import test_c_grow as probe  # noqa: E402  (read-only import of the frozen probe
 import importlib.util as _ember_2560a87c017c05b0_importlib
 import sys as _ember_2560a87c017c05b0_sys
 from pathlib import Path as _ember_2560a87c017c05b0_Path
-_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
 if not _ember_2560a87c017c05b0_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
 _ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')

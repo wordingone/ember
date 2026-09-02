@@ -40,5 +40,5 @@ jobs:
           if [ -n "${EVENT_PR:-}" ]; then
             args+=(--pr "${EVENT_PR}")
           fi
-          python "${GITHUB_WORKSPACE}/trusted-kernel/scripts/github/auto_merge.py" \
+          python "${GITHUB_WORKSPACE}/trusted-kernel/src/ember/governance/scripts/github/auto_merge.py" \
             --repository "${GITHUB_REPOSITORY}" "${args[@]}"

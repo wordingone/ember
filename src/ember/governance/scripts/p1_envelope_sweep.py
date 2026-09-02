@@ -441,35 +441,35 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             "ff_grown": FF_NATIVE_C03, "layers_assumed": LAYERS, "heads_assumed": HEADS,
         }
 
-        # issue2015 exact-local-import:scripts/timeshare_pretrain.py
+        # issue2015 exact-local-import:src/ember/governance/scripts/timeshare_pretrain.py
         import importlib.util as _ember_d9c5c82c124e1dc8_importlib
         import sys as _ember_d9c5c82c124e1dc8_sys
         from pathlib import Path as _ember_d9c5c82c124e1dc8_Path
-        _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parents[4].joinpath('scripts', 'timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parent.joinpath('timeshare_pretrain.py')
         if not _ember_d9c5c82c124e1dc8_path.is_file():
-            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/timeshare_pretrain.py')
-        _ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'scripts.timeshare_pretrain', 'timeshare_pretrain')
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'src.ember.governance.scripts.timeshare_pretrain', 'timeshare_pretrain')
         _ember_d9c5c82c124e1dc8_existing = []
         for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
             _ember_d9c5c82c124e1dc8_candidate = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
             if _ember_d9c5c82c124e1dc8_candidate is not None and all(_ember_d9c5c82c124e1dc8_candidate is not item for item in _ember_d9c5c82c124e1dc8_existing):
                 _ember_d9c5c82c124e1dc8_existing.append(_ember_d9c5c82c124e1dc8_candidate)
         if len(_ember_d9c5c82c124e1dc8_existing) > 1:
-            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/timeshare_pretrain.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
         if _ember_d9c5c82c124e1dc8_existing:
             _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_existing[0]
             _ember_d9c5c82c124e1dc8_observed = getattr(_ember_d9c5c82c124e1dc8_module, '__file__', None)
             if _ember_d9c5c82c124e1dc8_observed is None or _ember_d9c5c82c124e1dc8_Path(_ember_d9c5c82c124e1dc8_observed).resolve() != _ember_d9c5c82c124e1dc8_path:
-                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/timeshare_pretrain.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/timeshare_pretrain.py')
         else:
             _ember_d9c5c82c124e1dc8_spec = _ember_d9c5c82c124e1dc8_importlib.spec_from_file_location('_ember_issue2015_d9c5c82c124e1dc8', _ember_d9c5c82c124e1dc8_path)
             if _ember_d9c5c82c124e1dc8_spec is None or _ember_d9c5c82c124e1dc8_spec.loader is None:
-                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/timeshare_pretrain.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/timeshare_pretrain.py')
             _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_importlib.module_from_spec(_ember_d9c5c82c124e1dc8_spec)
             for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
                 _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
                 if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
-                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
                 _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
             try:
                 _ember_d9c5c82c124e1dc8_spec.loader.exec_module(_ember_d9c5c82c124e1dc8_module)
@@ -481,11 +481,11 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
         for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
             _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
             if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
             _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
         PackedShardLoader = getattr(_ember_d9c5c82c124e1dc8_module, 'PackedShardLoader')
         verify_memmap_stream_equivalence = getattr(_ember_d9c5c82c124e1dc8_module, 'verify_memmap_stream_equivalence')
-        # issue2015 exact-local-import-end:scripts/timeshare_pretrain.py
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/timeshare_pretrain.py
         loader = PackedShardLoader(
             args.shard_dir, real_arch["seq"], n_mtp=n_mtp,
             mmap_cache_dir=CORPUS_CACHE_DIR,
@@ -513,7 +513,7 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
         import importlib.util as _ember_fabaa435f8739f48_importlib
         import sys as _ember_fabaa435f8739f48_sys
         from pathlib import Path as _ember_fabaa435f8739f48_Path
-        _ember_fabaa435f8739f48_path = _ember_fabaa435f8739f48_Path(__file__).resolve().parents[4].joinpath('scripts', 'w1_recheck_cache.py')
+        _ember_fabaa435f8739f48_path = _ember_fabaa435f8739f48_Path(__file__).resolve().parent.joinpath('w1_recheck_cache.py')
         if not _ember_fabaa435f8739f48_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_recheck_cache.py')
         _ember_fabaa435f8739f48_aliases = ('_ember_issue2015_fabaa435f8739f48', 'src.ember.governance.scripts.w1_recheck_cache', 'w1_recheck_cache')

@@ -715,7 +715,7 @@ def test_v3_reader_instrument_hashes_rederive_and_q7_is_atomic() -> None:
 
 
 def test_q7_destination_explains_public_certificate_completion_record() -> None:
-    continuity = (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
+    continuity = (REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md").read_text(encoding="utf-8")
     normalized = " ".join(continuity.split())
     assert (
         "A roadmap milestone is complete only when its public certificate record exists under "

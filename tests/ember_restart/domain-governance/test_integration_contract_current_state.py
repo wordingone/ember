@@ -97,12 +97,12 @@ def test_continuity_is_the_only_generated_current_subject_surface() -> None:
 
     assert "optimizer state (custody-only, public bytes absent)" in block
     assert block not in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert block in (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
+    assert block in (REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md").read_text(encoding="utf-8")
 
 
 def test_readme_has_no_mutable_current_subject_summary() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    continuity = (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8")
+    continuity = (REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md").read_text(encoding="utf-8")
 
     assert "approximately 2.195B owned checkpoint" not in readme
     assert "3.839B allocated, unique, trainable, and served" not in readme
@@ -114,10 +114,10 @@ def test_readme_has_no_mutable_current_subject_summary() -> None:
 def test_subject_surface_mismatches_fail_closed(tmp_path: Path) -> None:
     module = load_generator()
     payload = module.load_current_subject(CURRENT_SUBJECT)
-    continuity = tmp_path / "docs/authority/CONTINUITY.md"
+    continuity = tmp_path / "docs/domains/governance/authority/CONTINUITY.md"
     continuity.parent.mkdir(parents=True, exist_ok=True)
     continuity.write_text(
-        (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8"),
+        (REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 
@@ -130,7 +130,7 @@ def test_subject_surface_mismatches_fail_closed(tmp_path: Path) -> None:
     assert not module.subject_surfaces_current(payload, continuity)
 
     continuity.write_text(
-        (REPO_ROOT / "docs/authority/CONTINUITY.md").read_text(encoding="utf-8"),
+        (REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     payload["subject"]["token_cursor"]["tokens_seen"] = 1024

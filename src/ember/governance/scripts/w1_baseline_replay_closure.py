@@ -12,10 +12,10 @@ step50 checkpoint -- only the certified step25 resume checkpoint persists.
 
 THIS IS A REPLAY, NOT A REIMPLEMENTATION. Every model/data/optimizer/eval
 code path is IMPORTED from src/ember/governance/scripts/w1_collapse_control_run.py and
-scripts/timeshare_pretrain.py -- the exact modules the live run used (see
+src/ember/governance/scripts/timeshare_pretrain.py -- the exact modules the live run used (see
 receipts/ember-c-scale/w1-fp32-check-20260707T114517Z.json's own "All model/
 eval code imported ... never reimplemented" method line, and
-scripts/w1b_fp32_check.py, the prior landed instance of this exact reuse
+src/ember/governance/scripts/w1b_fp32_check.py, the prior landed instance of this exact reuse
 discipline for a sibling fp32-reeval script). This file never constructs a
 model class, a data generator, or an eval loop of its own -- it is a thin
 orchestrator around historical modules.
@@ -167,35 +167,35 @@ from w1_collapse_control_run import (  # noqa: E402 -- reused, never edited
     DEFAULT_PRICING_RECEIPT, REAL_HARD_CEILING_STEPS,
     CORPUS_MANIFEST_COMBINED_SHA256_EXPECTED, MATCHED_RECIPE_SCHEDULE_SOURCE,
 )
-# issue2015 exact-local-import:scripts/timeshare_pretrain.py
+# issue2015 exact-local-import:src/ember/governance/scripts/timeshare_pretrain.py
 import importlib.util as _ember_d9c5c82c124e1dc8_importlib
 import sys as _ember_d9c5c82c124e1dc8_sys
 from pathlib import Path as _ember_d9c5c82c124e1dc8_Path
-_ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parents[4].joinpath('scripts', 'timeshare_pretrain.py')
+_ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parent.joinpath('timeshare_pretrain.py')
 if not _ember_d9c5c82c124e1dc8_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/timeshare_pretrain.py')
-_ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'scripts.timeshare_pretrain', 'timeshare_pretrain')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/timeshare_pretrain.py')
+_ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'src.ember.governance.scripts.timeshare_pretrain', 'timeshare_pretrain')
 _ember_d9c5c82c124e1dc8_existing = []
 for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
     _ember_d9c5c82c124e1dc8_candidate = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
     if _ember_d9c5c82c124e1dc8_candidate is not None and all(_ember_d9c5c82c124e1dc8_candidate is not item for item in _ember_d9c5c82c124e1dc8_existing):
         _ember_d9c5c82c124e1dc8_existing.append(_ember_d9c5c82c124e1dc8_candidate)
 if len(_ember_d9c5c82c124e1dc8_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/timeshare_pretrain.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
 if _ember_d9c5c82c124e1dc8_existing:
     _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_existing[0]
     _ember_d9c5c82c124e1dc8_observed = getattr(_ember_d9c5c82c124e1dc8_module, '__file__', None)
     if _ember_d9c5c82c124e1dc8_observed is None or _ember_d9c5c82c124e1dc8_Path(_ember_d9c5c82c124e1dc8_observed).resolve() != _ember_d9c5c82c124e1dc8_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/timeshare_pretrain.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/timeshare_pretrain.py')
 else:
     _ember_d9c5c82c124e1dc8_spec = _ember_d9c5c82c124e1dc8_importlib.spec_from_file_location('_ember_issue2015_d9c5c82c124e1dc8', _ember_d9c5c82c124e1dc8_path)
     if _ember_d9c5c82c124e1dc8_spec is None or _ember_d9c5c82c124e1dc8_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/timeshare_pretrain.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/timeshare_pretrain.py')
     _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_importlib.module_from_spec(_ember_d9c5c82c124e1dc8_spec)
     for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
         _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
         if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
         _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
     try:
         _ember_d9c5c82c124e1dc8_spec.loader.exec_module(_ember_d9c5c82c124e1dc8_module)
@@ -207,7 +207,7 @@ else:
 for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
     _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
     if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
     _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
 load_checkpoint = getattr(_ember_d9c5c82c124e1dc8_module, 'load_checkpoint')
 save_checkpoint = getattr(_ember_d9c5c82c124e1dc8_module, 'save_checkpoint')
@@ -222,7 +222,7 @@ load_optimizers_state = getattr(_ember_d9c5c82c124e1dc8_module, 'load_optimizers
 resolve_ce_impl = getattr(_ember_d9c5c82c124e1dc8_module, 'resolve_ce_impl')
 _apply_governor = getattr(_ember_d9c5c82c124e1dc8_module, '_apply_governor')
 PRETRAIN_CONTRACT_PATH = getattr(_ember_d9c5c82c124e1dc8_module, 'CONTRACT_PATH')
-# issue2015 exact-local-import-end:scripts/timeshare_pretrain.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/timeshare_pretrain.py
 from receipt_write import checked_write  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -318,7 +318,7 @@ SHA_CONVENTION = (
 def resolve(repo_root: str, path: str) -> str:
     """Repo-relative paths resolve under repo_root; an already-absolute path
     (e.g. an external shard mount) passes through unchanged. Same helper as
-    scripts/w1b_fp32_check.py's own resolve()."""
+    src/ember/governance/scripts/w1b_fp32_check.py's own resolve()."""
     return path if os.path.isabs(path) else os.path.join(repo_root, path)
 
 

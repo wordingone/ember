@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // mcp-server-entry.ts — MCP stdio server entry point.
 //
 // Spec: specs/entrypoints/mcp-server-entry.md — AC1–AC7.

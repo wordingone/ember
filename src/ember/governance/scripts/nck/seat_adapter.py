@@ -49,7 +49,7 @@ except ImportError:  # direct-script import fallback, same style as the rig
     import importlib.util as _ember_a1f9d0d912b78a85_importlib
     import sys as _ember_a1f9d0d912b78a85_sys
     from pathlib import Path as _ember_a1f9d0d912b78a85_Path
-    _ember_a1f9d0d912b78a85_path = _ember_a1f9d0d912b78a85_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'event_loop.py')
+    _ember_a1f9d0d912b78a85_path = _ember_a1f9d0d912b78a85_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'event_loop.py')
     if not _ember_a1f9d0d912b78a85_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/nck/event_loop.py')
     _ember_a1f9d0d912b78a85_aliases = ('_ember_issue2015_a1f9d0d912b78a85', 'event_loop', 'scripts.nck.event_loop')
@@ -94,7 +94,7 @@ except ImportError:  # direct-script import fallback, same style as the rig
     import importlib.util as _ember_3f61c7f9cf27fed5_importlib
     import sys as _ember_3f61c7f9cf27fed5_sys
     from pathlib import Path as _ember_3f61c7f9cf27fed5_Path
-    _ember_3f61c7f9cf27fed5_path = _ember_3f61c7f9cf27fed5_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'replay_rig.py')
+    _ember_3f61c7f9cf27fed5_path = _ember_3f61c7f9cf27fed5_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'replay_rig.py')
     if not _ember_3f61c7f9cf27fed5_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/nck/replay_rig.py')
     _ember_3f61c7f9cf27fed5_aliases = ('_ember_issue2015_3f61c7f9cf27fed5', 'replay_rig', 'scripts.nck.replay_rig')

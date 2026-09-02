@@ -25,9 +25,9 @@ Architecture (`configs/ember-restart-3b.json` → `model` block):
 
 ## Retired / historical architecture (do not execute)
 
-`scripts/timeshare_pretrain.py` (the earlier "c03" dense decoder — 0.37B,
+`src/ember/governance/scripts/timeshare_pretrain.py` (the earlier "c03" dense decoder — 0.37B,
 hidden 1024, 20 layers, 16 heads, vocab 32k) and its config family
-(`configs/v0-pretrain-config.json`, `configs/v1-pretrain-config.json`) are
+(`domains/model/configs/v0-pretrain-config.json`, `domains/model/configs/v1-pretrain-config.json`) are
 marked `EMBER_ARTIFACT_CLASS=historical_only` / `goal_id: EMBER-00` and the
 script itself raises `SystemExit("historical_only: the sub-3B cbase trainer
 and every importer are execution-denied")` immediately after its docstring.

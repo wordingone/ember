@@ -25,7 +25,7 @@ from typing import Any
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -69,7 +69,7 @@ checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 import importlib.util as _ember_f7f7bf161a2ec86b_importlib
 import sys as _ember_f7f7bf161a2ec86b_sys
 from pathlib import Path as _ember_f7f7bf161a2ec86b_Path
-_ember_f7f7bf161a2ec86b_path = _ember_f7f7bf161a2ec86b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'loop_econ_gate.py')
+_ember_f7f7bf161a2ec86b_path = _ember_f7f7bf161a2ec86b_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'loop_econ_gate.py')
 if not _ember_f7f7bf161a2ec86b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/loop_econ_gate.py')
 _ember_f7f7bf161a2ec86b_aliases = ('_ember_issue2015_f7f7bf161a2ec86b', 'loop_econ_gate', 'scripts.loop_econ_gate')
@@ -813,13 +813,13 @@ def build_floor_contract_manifest(floor_sha: str | None, nc2_sha: str | None) ->
     return {
         "floor_contract.QAT": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="quantization-native launch floor preserved; tiny resident step does not clear it", trigger="launch vehicle QAT/int4 tail or deploy target requiring quantized form", pilot="QAT tail or governed low-bit pilot", kill_promote="only user-approved contract change or receipt-proved contradiction may demote", evidence_path=floor),
         "floor_contract.Muon": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="hidden-layer Muon floor preserved with AdamW fallback", trigger="owned-core training run using hidden 2D params", pilot="Muon hidden-layer optimizer run with AdamW fallback receipt", kill_promote="promote on same-scale efficiency; fallback only on receipt-backed null", evidence_path=floor),
-        "floor_contract.QK-norm": row(source_file=floor, source_hash=floor_sha, disposition="used_now", impact="unretrofittable attention normalization remains in launch vehicle", trigger="model construction and train_multimodal adapter", pilot="train_multimodal resident adapter", kill_promote="cannot be silently removed; deletion requires receipt-backed degradation/contradiction", evidence_path="scripts/train_multimodal_v0.py"),
+        "floor_contract.QK-norm": row(source_file=floor, source_hash=floor_sha, disposition="used_now", impact="unretrofittable attention normalization remains in launch vehicle", trigger="model construction and train_multimodal adapter", pilot="train_multimodal resident adapter", kill_promote="cannot be silently removed; deletion requires receipt-backed degradation/contradiction", evidence_path="src/ember/governance/scripts/train_multimodal_v0.py"),
         "floor_contract.governor": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="residency budget remains binding for non-tiny runs", trigger="GPU or long-running resident loop", pilot="governed resident loop receipt", kill_promote="tighten-only unless user changes residency contract", evidence_path=floor),
-        "floor_contract.multimodal_locks": row(source_file=floor, source_hash=floor_sha, disposition="used_now", impact="reserved IDs/soft-token/bidirectional span/2D RoPE remain launch constraints", trigger="multimodal adapter and future vision-text floor world", pilot="train_multimodal resident adapter plus multimodal floor probe", kill_promote="retrofit can fail, component remains floor until successor receipt", evidence_path="scripts/train_multimodal_v0.py"),
+        "floor_contract.multimodal_locks": row(source_file=floor, source_hash=floor_sha, disposition="used_now", impact="reserved IDs/soft-token/bidirectional span/2D RoPE remain launch constraints", trigger="multimodal adapter and future vision-text floor world", pilot="train_multimodal resident adapter plus multimodal floor probe", kill_promote="retrofit can fail, component remains floor until successor receipt", evidence_path="src/ember/governance/scripts/train_multimodal_v0.py"),
         "floor_contract.BitNet/1.58-bit": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="low-bit substrate remains immediate post-fp16 comparison", trigger="fp16 resident gate pass or CPU-residency/hardware escalation", pilot="tiny BitNet/1.58 comparison", kill_promote="not satisfied by fp16; promote/skip only by comparison receipt", evidence_path=floor),
         "floor_contract.SDEK/GDN": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="sleep consolidation/adaptation-control kernel remains required operating layer", trigger="sleep/consolidation threshold or GDN pilot window", pilot="340M GDN-hybrid or successor sleep receipt", kill_promote="kill only on null with named successor such as LoRA-sleep baseline", evidence_path=floor),
         "floor_contract.MLA/KV": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="inference memory/compression remains sampling-round lever", trigger="first owned-core sampling round or KV pressure", pilot="MLA retrofit probe", kill_promote="promote on verified-episodes/GPU-hour gain; skip only if sampler saturates GPU", evidence_path=floor),
-        "floor_contract.iGRPO/GRPO": row(source_file=floor, source_hash=floor_sha, disposition="used_now", impact="verifier-conditioned resident policy update is the active gate", trigger="resident-training pre-loop gate", pilot="RLM/iGRPO harness-native resident gate", kill_promote="non-killable for this goal; symbolic proxy is not pass", evidence_path="scripts/ember_train_multimodal_resident_adapter.py"),
+        "floor_contract.iGRPO/GRPO": row(source_file=floor, source_hash=floor_sha, disposition="used_now", impact="verifier-conditioned resident policy update is the active gate", trigger="resident-training pre-loop gate", pilot="RLM/iGRPO harness-native resident gate", kill_promote="non-killable for this goal; symbolic proxy is not pass", evidence_path="src/ember/governance/scripts/ember_train_multimodal_resident_adapter.py"),
         "floor_contract.FP8": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="consumer FP8 stack evidence remains release-scan item", trigger="consumer-4090 FP8 evidence or torchao sm89 rowwise support", pilot="release-scan receipt", kill_promote="re-enter only on external hardware/library evidence", evidence_path=floor),
         "floor_contract.MoE": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="sparsity path stays gated by scale/hardware", trigger="multi-GPU or >=3B rung/local small-MoE evidence", pilot="scale/hardware receipt", kill_promote="re-enter on hardware escalation or local small-MoE win", evidence_path=floor),
         "floor_contract.DiffusionGemma": row(source_file=floor, source_hash=floor_sha, disposition="preserved_trigger_gated", impact="sampler/teacher-generator throughput bet remains trigger-gated", trigger="idle GPU window and W-code admission", pilot="MBPP floor probe DiffusionGemma vs autoregressive baseline", kill_promote="promote iff nonzero verify floor and F gain; kill on zero-verify floor", evidence_path=floor),
@@ -852,7 +852,7 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     floor_path = repo / "docs/contracts/ember-floor-contract.md"
     nc2_path = repo / "docs/contracts/nc2-own-technique-contract.md"
-    train_path = repo / "scripts/train_multimodal_v0.py"
+    train_path = repo / "src/ember/governance/scripts/train_multimodal_v0.py"
 
     def read_required(path: Path, code: str) -> str:
         if not path.exists():
@@ -930,13 +930,13 @@ def inspect_floor_contracts(repo: Path) -> tuple[dict[str, Any], list[str]]:
         "floor_contract_sha256": _sha256(floor_path) if floor_path.exists() else None,
         "nc2_component_contract_path": "docs/contracts/nc2-own-technique-contract.md",
         "nc2_component_contract_sha256": _sha256(nc2_path) if nc2_path.exists() else None,
-        "train_multimodal_path": "scripts/train_multimodal_v0.py",
+        "train_multimodal_path": "src/ember/governance/scripts/train_multimodal_v0.py",
         "train_multimodal_sha256": _sha256(train_path) if train_path.exists() else None,
         "launch_vehicle_floor_preservation_map": floor_rows,
         "nc2_component_rows": nc2_rows,
         "train_multimodal_rows": train_rows,
         "action_log_seam_evidence": {
-            "source_path": "scripts/train_multimodal_v0.py",
+            "source_path": "src/ember/governance/scripts/train_multimodal_v0.py",
             "required_primitives": REQUIRED_ACTION_LOG_PRIMITIVES,
             "present_primitives": present_primitives,
             "missing_primitives": missing_primitives,
@@ -1128,7 +1128,7 @@ def _validate_candidate_manifest(path: Path | None, floor_contracts: dict[str, A
     else:
         if decision.get("status") not in {"ADAPTER_IMPLEMENTED", "ADAPT_DIRECTLY"}:
             errors.append("candidate.train_multimodal_adapter.not_integrated")
-        if decision.get("source_path") != "scripts/train_multimodal_v0.py":
+        if decision.get("source_path") != "src/ember/governance/scripts/train_multimodal_v0.py":
             errors.append("candidate.train_multimodal_adapter.source_path_mismatch")
         expected_train_sha = floor_contracts.get("train_multimodal_sha256")
         if expected_train_sha and decision.get("source_sha256") != expected_train_sha:
@@ -1382,7 +1382,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
         "docs/domains/governance/authority/GOAL.md": (
             "Authority And Precedence\nCurrent Blocker Packet\nresident_training_gate_status\n"
             "RLM, iGRPO, and the clean-room\nBinding floor-contract surfaces imported into this goal\n"
-            "Existing neural infrastructure is not missing: `scripts/train_multimodal_v0.py`\n"
+            "Existing neural infrastructure is not missing: `src/ember/governance/scripts/train_multimodal_v0.py`\n"
         ),
         "docs/domains/governance/ledgers/ember-debt-ledger.md": "ledger\n",
         "docs/contracts/ember-floor-contract.md": (
@@ -1435,7 +1435,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "No candidate below 3,000,000,000 total parameters. Every executable candidate\n"
             "declares total, trainable, and active parameters.\n"
         ),
-        "scripts/train_multimodal_v0.py": (
+        "src/ember/governance/scripts/train_multimodal_v0.py": (
             "section 6 primitive-typed action-log contract\n"
             "action_log.jsonl\nemit-token\nemit-scalar\nemit-pointer\ncommit\nstop\n"
             "AdamW optimizer\nselftest\nsmoke/live training paths\ncheckpoint/state_dict\n"
@@ -1587,21 +1587,21 @@ def build_valid_candidate_manifest(root: Path, repo: Path, dt6_fields: dict[str,
             "trainable_parameter_count": 128,
             "pre_neural_parameter_hash": "sha256:" + ("0" * 64),
             "post_neural_parameter_hash": "sha256:" + ("1" * 64),
-            "verifier_conditioned_training_command": "python scripts/train_multimodal_v0.py --selftest --resident-adapter-fixture",
+            "verifier_conditioned_training_command": "python src/ember/governance/scripts/train_multimodal_v0.py --selftest --resident-adapter-fixture",
             "transfer_rows": [{"task_id": "transfer_1", "split": "transfer", "c_score": 1.0, "b_score": 0.5, "deleted_score": 0.0}],
             "symbolic_substitution_check": {"status": "NEURAL_UPDATE_PRESENT", "symbolic_template_policy": False, "prompt_only": False, "routing_only": False},
             "prompt_only_routing_only_exclusion_result": {"status": "PASS", "prompt_only": False, "routing_only": False},
             "train_multimodal_integration_decision": {
                 "status": "ADAPTER_IMPLEMENTED",
-                "source_path": "scripts/train_multimodal_v0.py",
+                "source_path": "src/ember/governance/scripts/train_multimodal_v0.py",
                 "adapter_path": str(root / "adapter.py"),
-                "source_sha256": _sha256(repo / "scripts/train_multimodal_v0.py"),
+                "source_sha256": _sha256(repo / "src/ember/governance/scripts/train_multimodal_v0.py"),
             },
             "train_multimodal_adapter_path": str(root / "adapter.py"),
             "floor_contract_sha256": _sha256(repo / "docs/contracts/ember-floor-contract.md"),
             "nc2_component_contract_sha256": _sha256(repo / "docs/contracts/nc2-own-technique-contract.md"),
             "action_log_seam_evidence": {
-                "source_path": "scripts/train_multimodal_v0.py",
+                "source_path": "src/ember/governance/scripts/train_multimodal_v0.py",
                 "required_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
                 "present_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
             },

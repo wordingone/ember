@@ -68,7 +68,7 @@ def build_harness(src, plus_test, imports=()):
     import importlib.util as _ember_a8d35c9fcd11d83e_importlib
     import sys as _ember_a8d35c9fcd11d83e_sys
     from pathlib import Path as _ember_a8d35c9fcd11d83e_Path
-    _ember_a8d35c9fcd11d83e_path = _ember_a8d35c9fcd11d83e_Path(__file__).resolve().parents[4].joinpath('scripts', 'v_compare.py')
+    _ember_a8d35c9fcd11d83e_path = _ember_a8d35c9fcd11d83e_Path(__file__).resolve().parent.joinpath('v_compare.py')
     if not _ember_a8d35c9fcd11d83e_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v_compare.py')
     _ember_a8d35c9fcd11d83e_aliases = ('_ember_issue2015_a8d35c9fcd11d83e', 'src.ember.governance.scripts.v_compare', 'v_compare')
@@ -151,7 +151,7 @@ def main():
     import importlib.util as _ember_c32cf5e860218889_importlib
     import sys as _ember_c32cf5e860218889_sys
     from pathlib import Path as _ember_c32cf5e860218889_Path
-    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
+    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parent.joinpath('t1_probe.py')
     if not _ember_c32cf5e860218889_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t1_probe.py')
     _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'src.ember.governance.scripts.t1_probe', 't1_probe')

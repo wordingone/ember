@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_fp8_linear_ab.py — fp8 custom autograd.Function A/B bench (Closes #284).
 
 Implements Fp8Linear: custom autograd.Function wrapping nn.Linear fwd/bwd

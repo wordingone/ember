@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONTINUITY = REPO_ROOT / "docs/authority/CONTINUITY.md"
+CONTINUITY = REPO_ROOT / "docs/domains/governance/authority/CONTINUITY.md"
 
 EXPECTED = {
     "arc-warm100-step100-result": {

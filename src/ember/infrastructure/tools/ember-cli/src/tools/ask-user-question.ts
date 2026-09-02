@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // AskUserQuestion tool — behavioral spec implementation.
 //
 // Blocks agent execution to present 1–4 multiple-choice questions to the user,

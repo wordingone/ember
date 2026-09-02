@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // version.ts — version command and build-time output for the Ember CLI.
 
 import type { RegistryCommand, CommandContext, CommandResult } from './types/command-types.ts';

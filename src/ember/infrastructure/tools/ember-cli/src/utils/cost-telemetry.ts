@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // utils/cost-telemetry.ts
 // Per-session cost accumulation, OTel emission, and filesystem persistence.
 // Contract: src/utils/config-persistence.test.ts (AC1-AC9).

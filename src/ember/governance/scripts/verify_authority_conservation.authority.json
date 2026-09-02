@@ -1,0 +1,10 @@
+{
+  "artifact_path": "src/ember/governance/scripts/verify_authority_conservation.py",
+  "artifact_sha256": "f5dbf845a5e999e1bbe1755735c5a41f099e42116203172a83f5db18a1e1b229",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "workstream_id": "EMBER-02A"
+  },
+  "schema_version": "ember-content-addressed-authority-binding/v1"
+}

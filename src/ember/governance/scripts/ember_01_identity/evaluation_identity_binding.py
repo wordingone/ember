@@ -34,7 +34,7 @@ bytes so a borrowed-subject receipt cannot be laundered into owned credit. Its
 instant the manifest's evaluation identity diverges from the signed receipt or from the
 checkpoint bytes, mirroring (and re-deriving, not restating) the invariants
 validate_manifest enforces. The round-trip is proved end-to-end against the real
-validate_manifest in tests/ember_01_identity/test_evaluation_identity_roundtrip.py.
+validate_manifest in tests/ember_01_identity/domain-governance/test_evaluation_identity_roundtrip.py.
 """
 
 from __future__ import annotations

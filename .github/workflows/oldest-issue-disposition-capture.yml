@@ -108,7 +108,7 @@ jobs:
           test "${final_master}" = "${GITHUB_SHA}"
 
           bundle="${out}/ember-oldest-issue-disposition-015-raw-sources-v1.json"
-          python -B scripts/build_oldest_issue_raw_bundle.py \
+          python -B src/ember/governance/scripts/build_oldest_issue_raw_bundle.py \
             --raw-root "${raw}" --output "${bundle}"
           cursor_args=()
           if [[ "${AFTER_ISSUE_NUMBER}" != "0" ]]; then
@@ -117,7 +117,7 @@ jobs:
               --after-issue-number "${AFTER_ISSUE_NUMBER}"
             )
           fi
-          python -B scripts/oldest_issue_disposition.py capture \
+          python -B src/ember/governance/scripts/oldest_issue_disposition.py capture \
             --raw-root "${raw}" \
             --master-sha "${GITHUB_SHA}" \
             --captured-at "${captured_at}" \
@@ -145,18 +145,18 @@ jobs:
           raw="${RUNNER_TEMP}/oldest-issue-disposition-raw-artifact"
           out="${RUNNER_TEMP}/oldest-issue-disposition-verified-artifact"
           mkdir -p "${out}"
-          python -B scripts/build_oldest_issue_decisions.py \
+          python -B src/ember/governance/scripts/build_oldest_issue_decisions.py \
             --capture "${raw}/capture.json" \
             --classifications manifests/oldest-issue-disposition/classifications-v1.json \
             --output "${out}/decisions.json"
-          python -B scripts/oldest_issue_disposition.py build \
+          python -B src/ember/governance/scripts/oldest_issue_disposition.py build \
             --capture "${raw}/capture.json" \
             --decisions "${out}/decisions.json" \
             --output "${out}/packet.json"
-          python -B scripts/oldest_issue_disposition.py verify \
+          python -B src/ember/governance/scripts/oldest_issue_disposition.py verify \
             --packet "${out}/packet.json" \
             --expected-master-sha "${GITHUB_SHA}"
-          python -B scripts/verify_oldest_issue_disposition_packet.py \
+          python -B src/ember/governance/scripts/verify_oldest_issue_disposition_packet.py \
             --packet "${out}/packet.json" \
             --raw-bundle "${raw}/ember-oldest-issue-disposition-015-raw-sources-v1.json" \
             --classifications manifests/oldest-issue-disposition/classifications-v1.json \

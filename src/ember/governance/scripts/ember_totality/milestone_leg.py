@@ -59,7 +59,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ember_e1051383780249b3_importlib
 import sys as _ember_e1051383780249b3_sys
 from pathlib import Path as _ember_e1051383780249b3_Path
-_ember_e1051383780249b3_path = _ember_e1051383780249b3_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_totality', 'enforcement_leg.py')
+_ember_e1051383780249b3_path = _ember_e1051383780249b3_Path(__file__).resolve().parent.joinpath('enforcement_leg.py')
 if not _ember_e1051383780249b3_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
 _ember_e1051383780249b3_aliases = ('_ember_issue2015_e1051383780249b3', 'enforcement_leg', 'src.ember.governance.scripts.ember_totality.enforcement_leg')

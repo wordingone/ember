@@ -16,7 +16,7 @@ validator is the standing alarm + the registration checklist:
   live freeze   = newest receipts/tokenizer-freeze-*.json by timestamp
                   (must be receipt_check-clean; carries
                   real_token_counts.total)
-  tracked pins  = configs/v0-pretrain-config.json real_token_total
+  tracked pins  = domains/model/configs/v0-pretrain-config.json real_token_total
                   src/ember/governance/scripts/v0_pretrain_launch_gate.py TOKENIZER_RECEIPT
                   (must NAME the live freeze receipt)
                   the live fp27-prereg receipt's BASE_POLICY budget
@@ -49,7 +49,7 @@ sys.path.insert(0, HERE)
 import importlib.util as _ember_2ad73f5df12b45ee_importlib
 import sys as _ember_2ad73f5df12b45ee_sys
 from pathlib import Path as _ember_2ad73f5df12b45ee_Path
-_ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
+_ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
 if not _ember_2ad73f5df12b45ee_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_check.py')
 _ember_2ad73f5df12b45ee_aliases = ('_ember_issue2015_2ad73f5df12b45ee', 'receipt_check', 'scripts.receipt_check')
@@ -90,7 +90,7 @@ for _ember_2ad73f5df12b45ee_alias in _ember_2ad73f5df12b45ee_aliases:
 validate_receipt = getattr(_ember_2ad73f5df12b45ee_module, 'validate_receipt')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_check.py             # noqa: E402
 
-CONFIG = "configs/v0-pretrain-config.json"
+CONFIG = "domains/model/configs/v0-pretrain-config.json"
 GATE = "src/ember/governance/scripts/v0_pretrain_launch_gate.py"
 FP27_GLOB = "receipts/fp27-prereg-*.json"
 FREEZE_GLOB = "receipts/tokenizer-freeze-*.json"

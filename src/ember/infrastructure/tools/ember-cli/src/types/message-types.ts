@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // types/message-types.ts — canonical message and content-block type definitions.
 // Shared by the API adapter, state layer, and rendering layer.
 

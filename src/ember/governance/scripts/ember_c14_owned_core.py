@@ -96,7 +96,7 @@ from receipt_write import checked_write  # noqa: E402
 import importlib.util as _ember_a15ae7b5497c49d1_importlib
 import sys as _ember_a15ae7b5497c49d1_sys
 from pathlib import Path as _ember_a15ae7b5497c49d1_Path
-_ember_a15ae7b5497c49d1_path = _ember_a15ae7b5497c49d1_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_c14_contract_rig.py')
+_ember_a15ae7b5497c49d1_path = _ember_a15ae7b5497c49d1_Path(__file__).resolve().parent.joinpath('ember_c14_contract_rig.py')
 if not _ember_a15ae7b5497c49d1_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_contract_rig.py')
 _ember_a15ae7b5497c49d1_aliases = ('_ember_issue2015_a15ae7b5497c49d1', 'ember_c14_contract_rig', 'src.ember.governance.scripts.ember_c14_contract_rig')

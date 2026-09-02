@@ -21,7 +21,7 @@ text FFN, 1D RoPE for text/audio and 2D RoPE coordinates for image.
 
 ## Target scale (goal conservation contract)
 
-`scripts/verify_authority_conservation.py`'s `EXPECTED_CONSERVATION` block
+`src/ember/governance/scripts/verify_authority_conservation.py`'s `EXPECTED_CONSERVATION` block
 pins: `minimum_new_network_parameters = 3,000,000,000` (3B),
 `destination_total_parameters > 27,000,000,000` (27B, via measured growth —
 see 05_GROWTH_AND_SCALING.md), `required_native_capabilities = text, image,
@@ -42,7 +42,7 @@ claiming to add it — a disclosed field-contract regression, not yet cured.
 
 ## Training data
 
-`configs/v1-pretrain-config.json` (marked `historical_only`, `EMBER-00`,
+`domains/model/configs/v1-pretrain-config.json` (marked `historical_only`, `EMBER-00`,
 retained as the most recent real corpus-assembly receipt this repo has on
 disk) documents a corpus-cleaning pass that DROPPED the `fineweb_edu` source
 as "TAINTED — document inclusion via classifier trained on

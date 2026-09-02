@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/bash-tool.ts — Bash shell command execution tool.
 // De-transpiled from bundle (lines 304380–304645). Executes via cmd.exe on Windows.
 // bundle=Y

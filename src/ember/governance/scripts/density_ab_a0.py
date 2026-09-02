@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """density_ab_a0.py — arm=a seed=0 wrapper for train MCP dispatch."""
 import sys, os
 sys.argv = ["density_ab_bench.py", "--arm", "a", "--seed", "0"]

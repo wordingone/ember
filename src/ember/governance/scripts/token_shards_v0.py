@@ -38,7 +38,7 @@ NC = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from receipt_check import validate_receipt          # noqa: E402
 
-# ---- frozen v0 shard contract (mirrors configs/v0-pretrain-config.json + the
+# ---- frozen v0 shard contract (mirrors domains/model/configs/v0-pretrain-config.json + the
 #      tokenizer-freeze receipt; changing any of these is a contract change) --
 SEQ = 1024
 N_MTP = 2

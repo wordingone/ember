@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Fail-closed selftest for the sp-6c seat adapter (#307).
 
 Validates ADAPTER MECHANICS with scripted generate_fns — no model is loaded.

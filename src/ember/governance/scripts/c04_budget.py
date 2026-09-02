@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c04_budget.py - fp-38 (#355): c04-v0 required token budget vs the
 <=1-governed-day criterion - the budget half of the joint constraint.
 

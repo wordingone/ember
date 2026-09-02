@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/file-read.ts — Read tool: read files from the filesystem.
 // De-transpiled from bundle (lines 304672–304882). Handles text, images, PDF,
 // Jupyter notebooks, with line-number formatting and token-cap truncation.

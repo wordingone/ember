@@ -44,7 +44,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -88,7 +88,7 @@ checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 import importlib.util as _ember_ba82af0721d80c9f_importlib
 import sys as _ember_ba82af0721d80c9f_sys
 from pathlib import Path as _ember_ba82af0721d80c9f_Path
-_ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+_ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
 if not _ember_ba82af0721d80c9f_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
 _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
@@ -229,7 +229,7 @@ def main() -> int:
             "reference_match_within_3e-7": reference_match,
         },
         "resolved_lr_muon": {
-            "config_source": "configs/v0-pretrain-config.json:optimizer.lr_muon",
+            "config_source": "domains/model/configs/v0-pretrain-config.json:optimizer.lr_muon",
             "value": resolved_lr_muon,
             "pre_registered_expectation": EXPECTED_LR_MUON,
             "never_executed_script_constant": KILL_LR_MUON,

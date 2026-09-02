@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import argparse
 import ctypes
 import hashlib
@@ -12,9 +15,6 @@ import sys
 import time
 from typing import Mapping, Sequence
 
-# goal_id: EMBER-02
-# workstream_id: EMBER-02B
-# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 
 GIB = 1024 ** 3

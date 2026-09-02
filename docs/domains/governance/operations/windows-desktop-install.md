@@ -7,7 +7,7 @@ Ember supports a normal per-user Windows installation with stable Desktop and St
 From a clean Ember checkout, run:
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts\install-ember-desktop.ps1 -Action Install
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File src\ember\governance\scripts\install-ember-desktop.ps1 -Action Install
 ```
 
 The installer builds the exact checked-out commit through the canonical pinned Bun launcher, publishes the executable below `versions\<source-sha>`, records its SHA-256 in closed manifests, and creates `Ember.lnk` on the Desktop and in the current user's Start Menu. The shortcut always targets the stable installed launcher. That launcher reopens `current.json`, contains the executable path under the install root, and rehashes the binary before starting it.
@@ -16,13 +16,13 @@ Lifecycle commands:
 
 ```powershell
 # Revalidate the installed version and recreate both shortcuts.
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts\install-ember-desktop.ps1 -Action Repair
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File src\ember\governance\scripts\install-ember-desktop.ps1 -Action Repair
 
 # Switch to the previously installed version after reopening version.json and rehashing it.
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts\install-ember-desktop.ps1 -Action Rollback
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File src\ember\governance\scripts\install-ember-desktop.ps1 -Action Rollback
 
 # Remove only the owned shortcuts and the per-user installation root.
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts\install-ember-desktop.ps1 -Action Uninstall
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File src\ember\governance\scripts\install-ember-desktop.ps1 -Action Uninstall
 ```
 
 `install-receipt.json` records a path-free local verdict. Version directories are immutable: a different executable for the same source commit is refused. An interrupted publication cannot replace `current.json` before the version and shortcut metadata are ready.

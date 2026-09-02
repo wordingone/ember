@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // operator-input.ts — keyboard-priority queueing for operator-originated prompt lines.
 // Transport-agnostic (no net/IPC/focus APIs here — see operator-pipe.ts for the
 // Windows named-pipe transport this composes with). Pure logic so it is testable

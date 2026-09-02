@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/github-tools.ts — ember's native GitHub tool surface (issue #507),
 // scoped to the App installation's repo (default wordingone/ember,
 // overridable via EMBER_GH_OWNER / EMBER_GH_REPO for tests or another

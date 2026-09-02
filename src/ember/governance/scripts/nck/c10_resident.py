@@ -9,7 +9,7 @@ ScheduleSource) against the NCKEventLoop and runs forever.
 Usage:
     python src/ember/governance/scripts/nck/c10_resident.py [--config <path>]
 
-Default config: configs/nck-c10.json (relative to repo root).
+Default config: domains/model/configs/nck-c10.json (relative to repo root).
 """
 
 from __future__ import annotations

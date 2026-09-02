@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // welcome-v2-border-check.test.ts — B2 site-specific check: WelcomeV2 has a FIXED width
 // (WELCOME_THRESHOLD) when not compact, so a real 1-cell-per-side border reservation narrows its
 // content area by 2 cells versus the previous (no-op) border. Confirms the greeting still renders

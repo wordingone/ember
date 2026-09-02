@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/mcp-config.ts
 // MCP server configuration management: multi-scope registry, env-var expansion,
 // allow/deny policy enforcement, tool-name normalization, and file I/O.

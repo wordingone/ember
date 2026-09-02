@@ -45,7 +45,7 @@ CRITICAL -- bind the RUNTIME object the real consumers check, not an invented pl
   ``process_identity`` still fails closed.
 
 CRITICAL -- the WRONG object for this category, made concrete by the shared test suite's
-own fixture (``tests/ember_01_identity/test_validate_identity.py``
+own fixture (``tests/ember_01_identity/domain-governance/test_validate_identity.py``
 ``ARTIFACT_BYTES["backend.executable"] = b"owned backend executable"``): a hand-typed
 placeholder byte string. It is sound-in-shape (a real sha256 of real bytes) yet is the
 identity of nothing any client is ever served by -- ``development_cli_seat.py``'s own

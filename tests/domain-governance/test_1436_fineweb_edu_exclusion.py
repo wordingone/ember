@@ -8,7 +8,7 @@ NOT enforced. Reproduce-first + fix verification.
 FAIL half (pre-fix state, reproduced against the real repo receipts, read-only):
   src/ember/governance/scripts/token_shards_v0.py's TOKEN-SHARDS-V0 receipt for shards-v0 declares
   1,666,837,789 fineweb_edu content_tokens with no exclusion marker anywhere in
-  the schema, and scripts/timeshare_pretrain.py's PackedShardLoader (pre-#1436)
+  the schema, and src/ember/governance/scripts/timeshare_pretrain.py's PackedShardLoader (pre-#1436)
   had no parameter that could ever skip an offset range -- every window drawn
   from the stream could include fineweb_edu tokens. This file proves that gap
   is closed:
@@ -177,7 +177,7 @@ def test_exclude_everything_raises_if_wired_to_a_loader():
 def _load_trainer_module():
     """Import PackedShardLoader out of the execution-denied trainer.
 
-    scripts/timeshare_pretrain.py carries EMBER_ARTIFACT_CLASS=historical_only
+    src/ember/governance/scripts/timeshare_pretrain.py carries EMBER_ARTIFACT_CLASS=historical_only
     and raises SystemExit at module scope (repo-wide authority lock,
     2026-07-12), so the class cannot be imported normally. This shim compiles
     the module source with ONLY that one top-level guard statement removed --

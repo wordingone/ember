@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // generate-version.test.ts — B7 gate ask (2026-07-03): the welcome screen must show the real
 // build version, wired from package.json at build time, never an env-var-dependent fallback.
 import { describe, test, expect } from "bun:test";

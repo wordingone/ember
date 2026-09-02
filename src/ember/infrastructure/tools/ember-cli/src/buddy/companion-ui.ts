@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // buddy/companion-ui.ts — companion sprite rendering, bubble visibility,
 // buddy notification logic, and trigger-position parsing.
 

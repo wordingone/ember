@@ -363,7 +363,7 @@ def validate_commands_manifest(commands: dict[str, Any]) -> list[dict[str, Any]]
         ],
         "verify-authority": [
             "python",
-            "scripts/verify_authority_conservation.py",
+            "src/ember/governance/scripts/verify_authority_conservation.py",
             "--root",
             ".",
         ],

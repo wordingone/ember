@@ -9,10 +9,10 @@ on:
     paths:
       - .github/labels.yml
       - .github/label-migrations.yml
-      - scripts/github/labels.py
-      - scripts/github/labels_engine.py
+      - src/ember/governance/scripts/github/labels.py
+      - src/ember/governance/scripts/github/labels_engine.py
       - .github/workflows/labels-sync.yml
-      - scripts/github/workflow_policy.py
+      - src/ember/governance/scripts/github/workflow_policy.py
   workflow_dispatch:
     inputs:
       apply:
@@ -56,7 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B scripts/github/labels.py audit
+          python -B src/ember/governance/scripts/github/labels.py audit
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
           --output label-audit.json
@@ -64,7 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B scripts/github/labels.py plan
+          python -B src/ember/governance/scripts/github/labels.py plan
           --snapshot label-audit.json
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
@@ -111,7 +111,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B scripts/github/labels.py audit
+          python -B src/ember/governance/scripts/github/labels.py audit
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
           --output label-audit.json
@@ -119,7 +119,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B scripts/github/labels.py plan
+          python -B src/ember/governance/scripts/github/labels.py plan
           --snapshot label-audit.json
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
@@ -128,7 +128,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B scripts/github/labels.py apply
+          python -B src/ember/governance/scripts/github/labels.py apply
           --plan label-plan.json
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml

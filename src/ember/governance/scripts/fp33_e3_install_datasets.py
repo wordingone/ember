@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_e3_install_datasets.py — install datasets in csi-eval venv.
 
 datasets is not inherited via --system-site-packages (it lives in

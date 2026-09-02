@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/goal-runtime.test.ts — production singleton wiring tests. Verifies the
 // lazy-construct + shared-singleton contract and the test-override seam.
 //

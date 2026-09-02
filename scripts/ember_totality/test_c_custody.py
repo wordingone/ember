@@ -116,7 +116,50 @@ CANDIDATE_ROOTS = [
     if p
 ]
 sys.path.insert(0, REPO_ROOT)
-from src.ember.governance.scripts.redact_local_paths import normalize_json_paths
+# issue2015 exact-local-import:src/ember/governance/scripts/redact_local_paths.py
+import importlib.util as _ember_3786e838010243a7_importlib
+import sys as _ember_3786e838010243a7_sys
+from pathlib import Path as _ember_3786e838010243a7_Path
+_ember_3786e838010243a7_path = _ember_3786e838010243a7_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'redact_local_paths.py')
+if not _ember_3786e838010243a7_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/redact_local_paths.py')
+_ember_3786e838010243a7_aliases = ('_ember_issue2015_3786e838010243a7', 'redact_local_paths', 'scripts.redact_local_paths', 'src.ember.governance.scripts.redact_local_paths')
+_ember_3786e838010243a7_existing = []
+for _ember_3786e838010243a7_alias in _ember_3786e838010243a7_aliases:
+    _ember_3786e838010243a7_candidate = _ember_3786e838010243a7_sys.modules.get(_ember_3786e838010243a7_alias)
+    if _ember_3786e838010243a7_candidate is not None and all(_ember_3786e838010243a7_candidate is not item for item in _ember_3786e838010243a7_existing):
+        _ember_3786e838010243a7_existing.append(_ember_3786e838010243a7_candidate)
+if len(_ember_3786e838010243a7_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/redact_local_paths.py')
+if _ember_3786e838010243a7_existing:
+    _ember_3786e838010243a7_module = _ember_3786e838010243a7_existing[0]
+    _ember_3786e838010243a7_observed = getattr(_ember_3786e838010243a7_module, '__file__', None)
+    if _ember_3786e838010243a7_observed is None or _ember_3786e838010243a7_Path(_ember_3786e838010243a7_observed).resolve() != _ember_3786e838010243a7_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/redact_local_paths.py')
+else:
+    _ember_3786e838010243a7_spec = _ember_3786e838010243a7_importlib.spec_from_file_location('_ember_issue2015_3786e838010243a7', _ember_3786e838010243a7_path)
+    if _ember_3786e838010243a7_spec is None or _ember_3786e838010243a7_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/redact_local_paths.py')
+    _ember_3786e838010243a7_module = _ember_3786e838010243a7_importlib.module_from_spec(_ember_3786e838010243a7_spec)
+    for _ember_3786e838010243a7_alias in _ember_3786e838010243a7_aliases:
+        _ember_3786e838010243a7_prior = _ember_3786e838010243a7_sys.modules.get(_ember_3786e838010243a7_alias)
+        if _ember_3786e838010243a7_prior is not None and _ember_3786e838010243a7_prior is not _ember_3786e838010243a7_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/redact_local_paths.py')
+        _ember_3786e838010243a7_sys.modules[_ember_3786e838010243a7_alias] = _ember_3786e838010243a7_module
+    try:
+        _ember_3786e838010243a7_spec.loader.exec_module(_ember_3786e838010243a7_module)
+    except BaseException:
+        for _ember_3786e838010243a7_alias in _ember_3786e838010243a7_aliases:
+            if _ember_3786e838010243a7_sys.modules.get(_ember_3786e838010243a7_alias) is _ember_3786e838010243a7_module:
+                _ember_3786e838010243a7_sys.modules.pop(_ember_3786e838010243a7_alias, None)
+        raise
+for _ember_3786e838010243a7_alias in _ember_3786e838010243a7_aliases:
+    _ember_3786e838010243a7_prior = _ember_3786e838010243a7_sys.modules.get(_ember_3786e838010243a7_alias)
+    if _ember_3786e838010243a7_prior is not None and _ember_3786e838010243a7_prior is not _ember_3786e838010243a7_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/redact_local_paths.py')
+    _ember_3786e838010243a7_sys.modules[_ember_3786e838010243a7_alias] = _ember_3786e838010243a7_module
+normalize_json_paths = getattr(_ember_3786e838010243a7_module, 'normalize_json_paths')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/redact_local_paths.py
 
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 

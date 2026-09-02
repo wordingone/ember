@@ -22,7 +22,7 @@ from scripts.finalize_remote_branch_salvage import build_certification_receipt
 import importlib.util as _ember_ea37ccce90bbd51b_importlib
 import sys as _ember_ea37ccce90bbd51b_sys
 from pathlib import Path as _ember_ea37ccce90bbd51b_Path
-_ember_ea37ccce90bbd51b_path = _ember_ea37ccce90bbd51b_Path(__file__).resolve().parents[4].joinpath('scripts', 'remote_branch_salvage.py')
+_ember_ea37ccce90bbd51b_path = _ember_ea37ccce90bbd51b_Path(__file__).resolve().parent.joinpath('remote_branch_salvage.py')
 if not _ember_ea37ccce90bbd51b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/remote_branch_salvage.py')
 _ember_ea37ccce90bbd51b_aliases = ('_ember_issue2015_ea37ccce90bbd51b', 'remote_branch_salvage', 'src.ember.governance.scripts.remote_branch_salvage')

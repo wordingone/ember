@@ -41,7 +41,7 @@ Live chain (each step fail-closed on the previous step's receipt):
 4. **Launch gate** — `src/ember/governance/scripts/v0_pretrain_launch_gate.py`, 8 rows
    (corpus / tokenizer / shards / config / governor / world / budget /
    prereg), enforced inside the trainer interlock.
-5. **Governed dispatch** — `scripts/timeshare_pretrain.py --live` under the
+5. **Governed dispatch** — `src/ember/governance/scripts/timeshare_pretrain.py --live` under the
    resource governor (VRAM fraction cap + margin assert + decode pacer).
 6. **Checkpoint floor probes** — frozen protocol in
    `src/ember/governance/scripts/fp23_probe_prereg.py` (bar: ≥1.0 verified L1 episode per

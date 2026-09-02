@@ -1,7 +1,7 @@
 # Historical v0 MTP parameter accounting and mechanism identity
 
 Status: authoritative erratum for the historical, execution-denied
-`configs/v0-pretrain-config.json` surface.
+`domains/model/configs/v0-pretrain-config.json` surface.
 
 This record resolves issue #679's declaration and identity ambiguity. It does
 not provide live storage-deduplicated ownership proof, an actual-run pricing
@@ -19,7 +19,7 @@ The historical c03 base count excludes MTP:
 | realized declared total | 433,890,304 | base plus MTP auxiliary heads |
 
 The machine-readable source is
-`model.parameter_accounting` in `configs/v0-pretrain-config.json`.
+`model.parameter_accounting` in `domains/model/configs/v0-pretrain-config.json`.
 `src/ember/governance/scripts/v0_config_check.py` rejects a wrong base, a head count/dimension
 mismatch, an arithmetic mismatch, or a wrong mechanism identity.
 
@@ -43,7 +43,7 @@ credit from this implementation.
 
 The machine-readable identity is
 `objective.mtp_aux_heads.mechanism_identity` in the config. The production
-builder is `scripts/timeshare_pretrain.py::build_v0_model`.
+builder is `src/ember/governance/scripts/timeshare_pretrain.py::build_v0_model`.
 
 ## Claim and execution boundary
 

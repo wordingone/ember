@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // utils/file-operations.test.ts — issue #475: stripBom is the fix that makes the
 // planned-outage marker (and any other PS-written state file) tolerant of Windows
 // PowerShell 5.1's `-Encoding utf8` BOM. Pure/no-fs test; the rest of this module is

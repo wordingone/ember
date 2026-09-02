@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 #703 PPM apparatus, stage 1: bounded-lookahead token-event marginalization
 + the P2 blend-definition harness skeleton.

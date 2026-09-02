@@ -33,7 +33,7 @@
       "error": "node outside closed grammar: Constant"
     },
     {
-      "path": "scripts/conv_c03_muon_split_bf16ns5.py",
+      "path": "src/ember/governance/scripts/conv_c03_muon_split_bf16ns5.py",
       "line": 32,
       "target": "SHARD_DIR",
       "expression": "os.environ.get('EMBER_SHARD_DIR', '')",
@@ -44,7 +44,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/conv_c03_muon_split_fast.py",
+      "path": "src/ember/governance/scripts/conv_c03_muon_split_fast.py",
       "line": 25,
       "target": "SHARD_DIR",
       "expression": "os.environ.get('EMBER_SHARD_DIR', '')",
@@ -110,7 +110,7 @@
       "error": "call outside closed grammar: tuple"
     },
     {
-      "path": "scripts/ember_ceff_closure_confirmation.py",
+      "path": "src/ember/governance/scripts/ember_ceff_closure_confirmation.py",
       "line": 211,
       "target": "GOALFORGE_ROOT",
       "expression": "os.environ.get('EMBER_GOALFORGE_ROOT', os.path.join(os.path.dirname(NC), 'ember-goalforge'))",
@@ -209,7 +209,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_tiny_bitnet_comparison.py",
+      "path": "src/ember/governance/scripts/ember_tiny_bitnet_comparison.py",
       "line": 65,
       "target": "DEFAULT_OUT_ROOT",
       "expression": "Path(__file__).resolve().parent.parent / 'scratch' / 'tiny-bitnet-comparison'",
@@ -220,7 +220,7 @@
       "error": null
     },
     {
-      "path": "scripts/ember_tiny_bitnet_comparison.py",
+      "path": "src/ember/governance/scripts/ember_tiny_bitnet_comparison.py",
       "line": 66,
       "target": "DEFAULT_GATE_ROOT",
       "expression": "Path(__file__).resolve().parent.parent / 'scratch' / 'resident-training-gate'",
@@ -1045,7 +1045,7 @@
       "error": "node outside closed grammar: IfExp"
     },
     {
-      "path": "scripts/heldout_v21_fcalib.py",
+      "path": "src/ember/governance/scripts/heldout_v21_fcalib.py",
       "line": 260,
       "target": "DEFAULT_CACHE_DIR",
       "expression": "os.environ.get('EMBER_CORPUS_CACHE_DIR', os.path.join(REPO, 'scratch', 'corpus-cache'))",
@@ -1254,7 +1254,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/tests/test_issue1396_cond4_surface.py",
+      "path": "src/ember/governance/scripts/tests/test_issue1396_cond4_surface.py",
       "line": 17,
       "target": "REPO_ROOT",
       "expression": "Path(os.environ.get('EMBER_ISSUE1396_REPO_ROOT', Path(__file__).resolve().parents[2]))",
@@ -1265,7 +1265,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/tests/test_issue1396_cond4_surface.py",
+      "path": "src/ember/governance/scripts/tests/test_issue1396_cond4_surface.py",
       "line": 18,
       "target": "SOURCE_ROOT",
       "expression": "Path(os.environ.get('EMBER_ISSUE1396_SOURCE_ROOT', REPO_ROOT))",
@@ -1276,7 +1276,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/tests/test_issue1396_cond4_surface.py",
+      "path": "src/ember/governance/scripts/tests/test_issue1396_cond4_surface.py",
       "line": 19,
       "target": "<sys.path.insert>",
       "expression": "str(SOURCE_ROOT / 'scripts')",
@@ -1320,7 +1320,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/w1_fullstate_resume_verify.py",
+      "path": "src/ember/governance/scripts/w1_fullstate_resume_verify.py",
       "line": 243,
       "target": "_build_tiny_shard_dir",
       "expression": "getattr(_ember_f47a2689ff219dfc_module, '_build_tiny_shard_dir')",

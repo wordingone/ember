@@ -33,7 +33,7 @@ sys.path.insert(0, HERE)
 import importlib.util as _ember_85e76a5cb35a8ea2_importlib
 import sys as _ember_85e76a5cb35a8ea2_sys
 from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
-_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
 if not _ember_85e76a5cb35a8ea2_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
 _ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')
@@ -77,7 +77,7 @@ w1_collapse_control_run = _ember_85e76a5cb35a8ea2_module
 import importlib.util as _ember_85e76a5cb35a8ea2_importlib
 import sys as _ember_85e76a5cb35a8ea2_sys
 from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
-_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
 if not _ember_85e76a5cb35a8ea2_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
 _ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')

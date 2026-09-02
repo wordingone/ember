@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp25_surfaceb.py — fp-25 Surface B: held-out frontier selection + the
 binding generalization verdict (#154, the CONDITIONAL-PENDING-B discharge).
 

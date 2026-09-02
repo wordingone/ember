@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // github-doctor.ts — `ember gh doctor`: walks the GitHub App identity's live
 // auth ladder end-to-end (credentials -> JWT -> installation token -> rate
 // limit) and reports exactly how far it got. Diagnostic, never a gate --

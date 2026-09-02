@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """check_milestone_reconciliation.py — validates the M<->board reconciliation
 table (docs/spec/milestones-v1.md sections A/C/D) against its source-of-truth
-inputs: docs/domains/governance/contracts/ember-completeness.md, docs/roadmap/PROBLEMS.md, docs/contracts/ember-floor-contract.md.
+inputs: docs/domains/governance/contracts/ember-completeness.md, docs/domains/governance/roadmap/PROBLEMS.md, docs/contracts/ember-floor-contract.md.
 
 Spec: docs/spec/milestones-v1.md, "Validation hook" section (imports A/C/D).
 
@@ -14,7 +14,7 @@ Checks:
       collision with board conditions) — has a §A entry in milestones-v1.md
       carrying a non-empty target. FATAL if any is unmapped or the manifest
       id-set isn't exactly {1..55}.
-  (b) docs/roadmap/PROBLEMS.md's per-meta-problem `gates` lists (H0..H4) are diffed
+  (b) docs/domains/governance/roadmap/PROBLEMS.md's per-meta-problem `gates` lists (H0..H4) are diffed
       against §C's dependency-lattice ASCII diagram. Diffs are REPORTED,
       never fatal (spec: "do not fail on diff — report").
   (c) §D's 6 floor-contract rows in milestones-v1.md each carry non-empty
@@ -23,7 +23,7 @@ Checks:
       table (component not found there is reported as a gap too).
   (d) emits receipts/milestone-reconciliation-<UTCtimestamp>.json.
 
-Input resolution: docs/domains/governance/contracts/ember-completeness.md, docs/roadmap/PROBLEMS.md and
+Input resolution: docs/domains/governance/contracts/ember-completeness.md, docs/domains/governance/roadmap/PROBLEMS.md and
 docs/domains/governance/problems-meta.yaml are read from THIS worktree if present, else
 read-only from <reference-tree> (never written). docs/spec/milestones-v1.md and
 docs/contracts/ember-floor-contract.md are goalforge-native (worktree only). Every
@@ -397,7 +397,7 @@ def run():
             )
             return 0
         completeness_path = _resolve("docs/domains/governance/contracts/ember-completeness.md", inputs)
-        problems_path = _resolve("docs/roadmap/PROBLEMS.md", inputs)
+        problems_path = _resolve("docs/domains/governance/roadmap/PROBLEMS.md", inputs)
         _resolve("docs/domains/governance/problems-meta.yaml", inputs)  # provenance only, see module docstring
         milestones_path = _resolve("docs/spec/milestones-v1.md", inputs, allow_ember_fallback=False)
         floor_contract_path = _resolve("docs/contracts/ember-floor-contract.md", inputs, allow_ember_fallback=False)

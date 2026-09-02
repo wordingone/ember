@@ -52,7 +52,7 @@ import build_decontam_batch as serial_mod  # noqa: E402
 import importlib.util as _ember_9c92008c8512cb00_importlib
 import sys as _ember_9c92008c8512cb00_sys
 from pathlib import Path as _ember_9c92008c8512cb00_Path
-_ember_9c92008c8512cb00_path = _ember_9c92008c8512cb00_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'w2_heldout', 'build_decontam_batch_mp.py')
+_ember_9c92008c8512cb00_path = _ember_9c92008c8512cb00_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'w2_heldout', 'build_decontam_batch_mp.py')
 if not _ember_9c92008c8512cb00_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w2_heldout/build_decontam_batch_mp.py')
 _ember_9c92008c8512cb00_aliases = ('_ember_issue2015_9c92008c8512cb00', 'build_decontam_batch_mp', 'src.ember.governance.scripts.w2_heldout.build_decontam_batch_mp')

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // deep-link.ts — deep-link URI validation and terminal detection.
 
 // ---- ShellRunner interface ----

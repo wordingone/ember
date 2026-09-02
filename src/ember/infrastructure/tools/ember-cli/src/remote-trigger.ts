@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // remote-trigger.ts — DI version of the RemoteTrigger tool.
 // Exports test seams: _overrideRemoteTriggerFeatureFlags, _setOAuthState, _setBaseApiUrl, _setHttpRequest.
 

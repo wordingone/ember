@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // overflow-clip.test.ts — B4 W4 (SWAP-BLOCKING): a Box{overflow:"hidden", height:N} containing a
 // child TALLER than N must clip that child's render to N rows. The "overflow" prop has always
 // been declared on the layout engine (layout-engine.ts LayoutNode.overflow) and threaded into

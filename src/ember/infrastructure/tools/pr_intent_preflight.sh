@@ -17,7 +17,7 @@
 # gathers the mechanical facts (your login, the base tip, your head, the changed
 # files) and the repository's live label and milestone vocabulary, combines them
 # with the title, body, labels, and milestone you intend to use, and hands the
-# result to scripts/github/pr_intent_policy.py -- which delegates every policy
+# result to src/ember/governance/scripts/github/pr_intent_policy.py -- which delegates every policy
 # question to the same validate_live_pull_request() the CI gate calls. The rules
 # are never restated here; only the inputs are assembled earlier.
 #
@@ -148,7 +148,7 @@ fi
 
 echo
 echo "== live PR policy against the intended pull request =="
-if python -m scripts.github.pr_intent_policy \
+if python -m src.ember.governance.scripts.github.pr_intent_policy \
     --root . \
     --intent-json "$WORK/intent.json" \
     --labels-json "$WORK/labels.json" \

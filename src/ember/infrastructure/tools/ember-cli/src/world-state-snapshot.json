@@ -474,7 +474,7 @@
    {
     "id": "goal.blocker.1",
     "label": "[blocker:1] Current executable command",
-    "detail": "execute the resident-training gate attempt defined in `docs/authority/GOAL.md`. The attempt must read the stored RLM/iGRPO paper receipts, extract a mechanism-to-implementation map, inspect `scripts/train_multimodal_v0.py` as existing neural/multimodal training infrastructure, and create or run the adapter/gate runner. If the adapter is missing, implement the adapter and selftest as the first artifact; do not switch to benchmark/readiness work or write a parallel tiny neural runner before the train-multimodal decision receipt.",
+    "detail": "execute the resident-training gate attempt defined in `docs/authority/GOAL.md`. The attempt must read the stored RLM/iGRPO paper receipts, extract a mechanism-to-implementation map, inspect `src/ember/governance/scripts/train_multimodal_v0.py` as existing neural/multimodal training infrastructure, and create or run the adapter/gate runner. If the adapter is missing, implement the adapter and selftest as the first artifact; do not switch to benchmark/readiness work or write a parallel tiny neural runner before the train-multimodal decision receipt.",
     "evidence": {
      "path": "docs/ember-debt-ledger.md",
      "sha256": "b386b56123d8015e9dad0ff3a22a763e031b18e8fc6b873ff92d29c6761f5732"

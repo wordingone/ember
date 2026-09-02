@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/search-tools.ts — Glob and Grep tools backed by Bun.Glob and ripgrep.
 //
 // Glob: fast file-pattern matching sorted by mtime.

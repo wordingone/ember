@@ -27,7 +27,7 @@ docstring confirms this precondition: "No W2 runner file exists yet"):
 
   <dump-dir>/config.json
       Same nesting as the standing contract-file convention
-      (configs/v0-pretrain-config.json): model.{vocab,hidden,layers,heads,
+      (domains/model/configs/v0-pretrain-config.json): model.{vocab,hidden,layers,heads,
       ff,seq,tied_embeddings,norm_placement}, objective.mtp_aux_heads.n_heads.
       `model.ff` is the POST-GROW width (the net2net grow target).
 

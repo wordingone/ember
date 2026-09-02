@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """stats_exact.py — exact-method gate statistics (single source).
 
 Provides Wilson score CIs, Newcombe paired-difference CI, and minimum

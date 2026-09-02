@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for mcp-tools.ts
 // Covers: buildMCPTool (AC1-AC3), buildListMcpResourcesTool (AC1-AC4),
 // buildReadMcpResourceTool (AC1-AC5), buildMcpAuthTool (AC1-AC6).

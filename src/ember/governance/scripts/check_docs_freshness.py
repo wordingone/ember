@@ -28,7 +28,7 @@ try:
     import importlib.util as _ember_4907e63ef2f25e2e_importlib
     import sys as _ember_4907e63ef2f25e2e_sys
     from pathlib import Path as _ember_4907e63ef2f25e2e_Path
-    _ember_4907e63ef2f25e2e_path = _ember_4907e63ef2f25e2e_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_cli_spec_policy.py')
+    _ember_4907e63ef2f25e2e_path = _ember_4907e63ef2f25e2e_Path(__file__).resolve().parent.joinpath('ember_cli_spec_policy.py')
     if not _ember_4907e63ef2f25e2e_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_cli_spec_policy.py')
     _ember_4907e63ef2f25e2e_aliases = ('_ember_issue2015_4907e63ef2f25e2e', 'ember_cli_spec_policy', 'src.ember.governance.scripts.ember_cli_spec_policy')
@@ -76,7 +76,7 @@ except ModuleNotFoundError as exc:
     import importlib.util as _ember_4907e63ef2f25e2e_importlib
     import sys as _ember_4907e63ef2f25e2e_sys
     from pathlib import Path as _ember_4907e63ef2f25e2e_Path
-    _ember_4907e63ef2f25e2e_path = _ember_4907e63ef2f25e2e_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_cli_spec_policy.py')
+    _ember_4907e63ef2f25e2e_path = _ember_4907e63ef2f25e2e_Path(__file__).resolve().parent.joinpath('ember_cli_spec_policy.py')
     if not _ember_4907e63ef2f25e2e_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_cli_spec_policy.py')
     _ember_4907e63ef2f25e2e_aliases = ('_ember_issue2015_4907e63ef2f25e2e', 'ember_cli_spec_policy', 'src.ember.governance.scripts.ember_cli_spec_policy')
@@ -260,7 +260,7 @@ class DocsFreshnessChecker:
         self.check_references(["README.md"])
 
     def check_front_door_references(self):
-        self.check_references(["README.md", "docs/authority/CONTINUITY.md"])
+        self.check_references(["README.md", "docs/domains/governance/authority/CONTINUITY.md"])
 
     def check_front_door_marker_coherence(self):
         readme = (self.repo / "README.md").read_text(encoding="utf-8")
@@ -283,7 +283,7 @@ class DocsFreshnessChecker:
                 actual_continuity = continuity.count(marker)
             if (actual_readme, actual_continuity) != (readme_count, continuity_count):
                 self.defects.append({
-                    'file': 'README.md + docs/authority/CONTINUITY.md',
+                    'file': 'README.md + docs/domains/governance/authority/CONTINUITY.md',
                     'defect_class': 'mutable_marker_misplaced',
                     'description': (
                         f"{label} count is README={actual_readme}, "
@@ -392,7 +392,7 @@ class DocsFreshnessChecker:
         marker_match = re.search(r'state-as-of:\s*(\d{4}-\d{2}-\d{2})', continuity)
         if not marker_match:
             self.defects.append({
-                'file': 'docs/authority/CONTINUITY.md',
+                'file': 'docs/domains/governance/authority/CONTINUITY.md',
                 'defect_class': 'missing_state_marker',
                 'line': 'header',
                 'description': 'No state-as-of marker in CONTINUITY.md (<!-- state-as-of: YYYY-MM-DD -->)'
@@ -406,7 +406,7 @@ class DocsFreshnessChecker:
 
         if days_old > 1:
             self.defects.append({
-                'file': 'docs/authority/CONTINUITY.md',
+                'file': 'docs/domains/governance/authority/CONTINUITY.md',
                 'defect_class': 'stale_state_marker',
                 'marker_date': marker_date_str,
                 'days_old': days_old,
@@ -529,7 +529,7 @@ See `scripts/test.py` for the harness.
             [
                 "git", "-C", str(tmpdir), "add", "README.md", "scripts/test.py",
                 "scripts/test2.py", "src/ember/governance/scripts/README.md",
-                "docs/authority/CONTINUITY.md",
+                "docs/domains/governance/authority/CONTINUITY.md",
             ],
             check=True,
         )

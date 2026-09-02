@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // permission-framework-border-check.test.ts — B2 site-specific check: AskUserQuestionPermissionRequest
 // has minWidth=80 with padding:1; a real border now takes 2 more cells, narrowing content width
 // from 78 to 76. Confirms the question text still renders in full, not truncated.

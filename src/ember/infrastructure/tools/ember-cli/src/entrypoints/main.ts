@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // entrypoints/main.ts — compiled binary entry point.
 // Sets up global error handlers, then delegates to process-entry.ts::main().
 // This file is what `bun build --compile` compiles into the standalone binary.

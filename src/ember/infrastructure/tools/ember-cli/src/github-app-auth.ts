@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // github-app-auth.ts — GitHub App identity: JWT mint + installation token
 // exchange, cached with expiry and auto-refresh (ember issue #507).
 //

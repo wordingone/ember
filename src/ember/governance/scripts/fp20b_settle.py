@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp20b_settle.py — pacing settlement on an INSTRUMENTED w1 receipt (#131).
 
 fp-14 built the meter; fp-20 found the named surface un-instrumented

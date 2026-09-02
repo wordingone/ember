@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """r0_window_minter.py -- Window receipt minter for R0 autonomy-ladder claim.
 
 R0 invariant: every activity row rendered on the ember-cli surface traces to a real

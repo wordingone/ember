@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/query-engine.retry.test.ts — issue #197 Legs 3/4: the production
 // callModel made exactly one attempt per turn -- a deterministic 400 as much
 // as a transient connection drop terminated the turn immediately, and the

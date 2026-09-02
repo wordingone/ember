@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """frontier — solve-rate posterior + bits-weighted episode caps (eng #5).
 
 Formalization §3b made bits the objective; the focused top-up receipt

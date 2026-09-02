@@ -8,7 +8,7 @@ Ember gains a normal per-user Windows installation. A stable Desktop or Start Me
 
 ## Authority boundary
 
-`scripts/install-ember-desktop.ps1` is the sole Windows deployment mutation entrypoint. It owns `Install`, `Repair`, `Rollback`, and `Uninstall`. Installed shortcuts target the immutable, hash-recorded `ember-lab.exe cockpit` command directly; there is no installed launcher script.
+`src/ember/governance/scripts/install-ember-desktop.ps1` is the sole Windows deployment mutation entrypoint. It owns `Install`, `Repair`, `Rollback`, and `Uninstall`. Installed shortcuts target the immutable, hash-recorded `ember-lab.exe cockpit` command directly; there is no installed launcher script.
 
 The installed artifacts live below `%LOCALAPPDATA%\Programs\Ember` unless `-InstallRoot` is explicitly supplied. Tests always supply an isolated root.
 

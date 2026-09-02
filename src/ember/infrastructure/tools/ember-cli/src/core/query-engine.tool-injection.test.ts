@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/query-engine.tool-injection.test.ts — issue #159 cell 2: every registered tool forced
 // to throw must still yield a non-empty final assistant message. Extends #157's regression
 // guard (query-engine.final-message.test.ts, one hand-rolled stub tool) to the full production

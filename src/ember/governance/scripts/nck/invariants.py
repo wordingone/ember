@@ -10,7 +10,7 @@ start and names the mismatched path.
 
 Architecture
 ------------
-1.  INVARIANT MANIFEST  (configs/nck-invariants.json)
+1.  INVARIANT MANIFEST  (domains/model/configs/nck-invariants.json)
     Lists protected paths and their expected sha256 hashes.
     The manifest itself is ALSO listed (self-covering).
 
@@ -440,7 +440,7 @@ if __name__ == "__main__":
         if not os.path.isfile(MANIFEST_PATH):
             print(
                 f"ERROR: no existing manifest at {MANIFEST_PATH}. "
-                "Create configs/nck-invariants.json first.",
+                "Create domains/model/configs/nck-invariants.json first.",
                 file=sys.stderr,
             )
             sys.exit(1)

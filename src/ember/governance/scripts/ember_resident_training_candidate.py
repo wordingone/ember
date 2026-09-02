@@ -27,7 +27,7 @@ from typing import Any
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -363,7 +363,7 @@ def build_candidate(tasks_path: Path, out_dir: Path) -> dict[str, Any]:
         },
         "train_multimodal_integration_decision": {
             "status": "BLOCKED",
-            "source_path": "scripts/train_multimodal_v0.py",
+            "source_path": "src/ember/governance/scripts/train_multimodal_v0.py",
             "blocked_reason": "symbolic proxy baseline has not adapted train_multimodal_v0.py into a neural resident C arm",
             "next_command": "implement train_multimodal_v0.py resident adapter with neural state_dict delta",
         },
@@ -371,7 +371,7 @@ def build_candidate(tasks_path: Path, out_dir: Path) -> dict[str, Any]:
         "floor_contract_sha256": None,
         "nc2_component_contract_sha256": None,
         "action_log_seam_evidence": {
-            "source_path": "scripts/train_multimodal_v0.py",
+            "source_path": "src/ember/governance/scripts/train_multimodal_v0.py",
             "status": "NOT_ADAPTED",
             "required_primitives": ["emit-token", "emit-scalar", "emit-pointer", "commit", "stop"],
             "present_primitives": [],

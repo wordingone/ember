@@ -42,13 +42,13 @@ but it cannot silently change the deterministic rules.
 
 ## Deterministic enforcement
 
-`scripts/github/policy.py` validates repository-owned policy artifacts and
+`src/ember/governance/scripts/github/policy.py` validates repository-owned policy artifacts and
 GitHub work-item snapshots. It does not grade whether prose is true. It checks
 structure, exact markers, label cardinalities, mutual exclusions, required
 sections, closing-link acceptance mapping, claim boundaries, rollback
 sections, and review provenance.
 
-`scripts/github/labels.py` owns label audit, planning, application, and
+`src/ember/governance/scripts/github/labels.py` owns label audit, planning, application, and
 verification. Every operation accepts or emits content-addressed JSON. Apply
 mode is explicit, uses an exact before-state digest, preserves associations,
 refuses ambiguous mappings, and will not delete a label that remains in use.

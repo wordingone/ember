@@ -61,7 +61,7 @@ from src.ember.governance.scripts.branch_inventory import (
 
 DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
 README_PATH = os.path.join(ROOT, "README.md")
-CONTINUITY_PATH = os.path.join(ROOT, "docs/authority/CONTINUITY.md")
+CONTINUITY_PATH = os.path.join(ROOT, "docs/domains/governance/authority/CONTINUITY.md")
 CURRENT_SUBJECT_PATH = os.path.join(ROOT, "manifests", "ember-current-subject-v1.json")
 BRANCH_INVENTORY_PATH = os.path.join(
     ROOT, "receipts", "branch-inventory", "branch-inventory-current.json"
@@ -529,7 +529,7 @@ def subject_surfaces_current(payload, continuity_path):
                 SUBJECT_BEGIN_MARKER,
                 SUBJECT_END_MARKER,
                 block,
-                "docs/authority/CONTINUITY.md",
+                "docs/domains/governance/authority/CONTINUITY.md",
             )
             == continuity
         )
@@ -645,7 +645,7 @@ def main():
         BEGIN_MARKER,
         END_MARKER,
         block,
-        "docs/authority/CONTINUITY.md",
+        "docs/domains/governance/authority/CONTINUITY.md",
     )
     receipt_ts = Path(receipt_path).stem.removeprefix("ember-totality-")
     new_continuity = bind_state_as_of(new_continuity, receipt_ts)
@@ -654,24 +654,24 @@ def main():
         SUBJECT_BEGIN_MARKER,
         SUBJECT_END_MARKER,
         subject_block,
-        "docs/authority/CONTINUITY.md",
+        "docs/domains/governance/authority/CONTINUITY.md",
     )
 
     if new_continuity == continuity:
         print(
-            "docs/authority/CONTINUITY.md generated status is current "
+            "docs/domains/governance/authority/CONTINUITY.md generated status is current "
             f"({os.path.basename(receipt_path)})."
         )
         return 0
 
     if args.check:
-        print("docs/authority/CONTINUITY.md generated status is STALE.")
+        print("docs/domains/governance/authority/CONTINUITY.md generated status is STALE.")
         return 1
 
     with open(args.continuity, "w", encoding="utf-8", newline="\n") as stream:
         stream.write(new_continuity)
     print(
-        "docs/authority/CONTINUITY.md status regenerated from "
+        "docs/domains/governance/authority/CONTINUITY.md status regenerated from "
         f"{os.path.basename(receipt_path)} and {os.path.basename(args.subject_manifest)}."
     )
     return 0

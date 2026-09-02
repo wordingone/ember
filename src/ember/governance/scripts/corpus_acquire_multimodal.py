@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """corpus_acquire_multimodal.py — download CC0/permissive image-text pairs.
 
 Source: Conceptual Captions 3M (CC3M) TSV — public, permissive-licensed captions.

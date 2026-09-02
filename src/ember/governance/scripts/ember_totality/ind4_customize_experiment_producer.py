@@ -10,7 +10,7 @@ from EXECUTED runs of real, already-existing repo machinery -- no
 hand-crafted JSON:
 
   leg="customize" -- exercises src/ember/governance/scripts/v0_config_check.py's real check()
-    function against a SANDBOX COPY of the live configs/v0-pretrain-config.json
+    function against a SANDBOX COPY of the live domains/model/configs/v0-pretrain-config.json
     (the live file itself is never touched). "before" is the untouched
     sandbox copy (must be green, matching the live contract); "after" is the
     SAME copy with one real config-surface edit (governor.vram_fraction
@@ -51,7 +51,7 @@ sys.path.insert(0, str(REPO_ROOT))
 import importlib.util as _ember_2560a87c017c05b0_importlib
 import sys as _ember_2560a87c017c05b0_sys
 from pathlib import Path as _ember_2560a87c017c05b0_Path
-_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
 if not _ember_2560a87c017c05b0_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
 _ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """gpu_lock_selftest.py — 3-state concurrent selftest for gpu_lock_guard (#368).
 
 Tests the concurrent case that caused the arm-b-seed1 collision:

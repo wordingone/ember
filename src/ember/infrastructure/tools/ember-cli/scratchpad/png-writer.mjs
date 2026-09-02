@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // png-writer.mjs — minimal, dependency-free 8-bit RGB PNG encoder (no pngjs/canvas in this repo's
 // deps). Uses Node's built-in zlib for IDAT compression; implements CRC32 by hand (well-documented,
 // small, no external table needed at runtime cost). Good enough for design-mockup rasters; not a

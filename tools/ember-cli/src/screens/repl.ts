@@ -1530,7 +1530,7 @@ export function ReplScreen({
   // buffer (inputStateRef, this file, line ~651) and the operator queue
   // depth (OperatorInjector.queueLength, services/operator-input.ts:39-41).
   // Both count as queued user input per the current "Operator relationship"
-  // and "Continuation loop" sections of docs/contracts/goal-mode-mechanism.md
+  // and "Continuation loop" sections of docs/domains/governance/contracts/goal-mode-mechanism.md
   // ("Operator preemption via the operator pipe as well as the TUI").
   const goalContinuationEngineRef = useRef<GoalContinuationEngine | null>(null);
   if (!goalContinuationEngineRef.current) {

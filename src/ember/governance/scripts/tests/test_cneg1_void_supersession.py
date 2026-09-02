@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """TDD: gh issue #358 -- mirror the scanner's VOID-supersession exclusion in
 test_c_neg1.py's own _decisive_claim_files() corpus, via the shared helper
 module src/ember/governance/scripts/ember_totality/void_supersession.py (factored out of

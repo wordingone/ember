@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // border-glyphs — the terminal-primitive glyph sets for each Box borderStyle name.
 // Lives in ink/ (not components/design-system.ts) because border glyph SELECTION is a rendering
 // primitive, not an app design token -- mirrors how termio.ts/rendering-pipeline.ts already own

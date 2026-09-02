@@ -307,7 +307,7 @@ process-invariants), code-gated, honestly re-derived from artifacts every run.
 **Check it yourself:**
 - `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
   board receipt in this checkout: 7-GREEN / 28-RED / 2-UNEVALUABLE / 3-AUDIT-PENDING-EPOCH.
-  `docs/authority/CONTINUITY.md` generated status (`src/ember/governance/scripts/gen_readme_status.py`) always points
+  `docs/domains/governance/authority/CONTINUITY.md` generated status (`src/ember/governance/scripts/gen_readme_status.py`) always points
   at whichever receipt is newest in its selected receipt root.
 - `docs/domains/governance/spec/conditions-v1.md` — the full registry these rows are checked against.
 

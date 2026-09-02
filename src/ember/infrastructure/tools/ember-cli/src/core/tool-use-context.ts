@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/tool-use-context.ts
 // Execution context injected into every tool call: app state, abort signal, model
 // selection, registered tools, and budgeting.

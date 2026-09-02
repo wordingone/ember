@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp25_indist_prereg.py — round-2 OOD-null DECOMPOSITION, FROZEN BEFORE the
 in-distribution eval receipt exists (#154, successor to the round-2 G1 null
 #153).

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """TDD fixture for gh issue #394: cited-but-missing decisive receipts must RED C(-1).
 
 When a spend-annex row cites a receipt path that does not exist on disk,

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """DT1 daemon runner — invoked by train daemon (no CLI args supported).
 
 Sets EMBER_GATE_AUTHORIZED and runs the DT1 GPU benchmark with pre-registered params.

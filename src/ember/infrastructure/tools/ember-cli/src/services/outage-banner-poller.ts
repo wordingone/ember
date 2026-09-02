@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/outage-banner-poller.ts — issue #475: cockpit status banner for the frozen
 // planned-outage.json marker contract (issue #464 comment 4918207339). The liveness
 // watchdogs already honor a planned-outage window server-side (verified live: zero

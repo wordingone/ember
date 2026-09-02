@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/powershell-tool.ts — PowerShell command execution tool.
 // De-transpiled from bundle (lines 306188–306694). Supports PowerShell 5.1 and 7+.
 // bundle=Y

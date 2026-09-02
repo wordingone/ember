@@ -38,7 +38,7 @@ def lazy_import():
         import importlib.util as _ember_13a5bfc5e66693f8_importlib
         import sys as _ember_13a5bfc5e66693f8_sys
         from pathlib import Path as _ember_13a5bfc5e66693f8_Path
-        _ember_13a5bfc5e66693f8_path = _ember_13a5bfc5e66693f8_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'serve_cbase_openai.py')
+        _ember_13a5bfc5e66693f8_path = _ember_13a5bfc5e66693f8_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'serve_cbase_openai.py')
         if not _ember_13a5bfc5e66693f8_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/serve_cbase_openai.py')
         _ember_13a5bfc5e66693f8_aliases = ('_ember_issue2015_13a5bfc5e66693f8', 'scripts.serve_cbase_openai', 'serve_cbase_openai')

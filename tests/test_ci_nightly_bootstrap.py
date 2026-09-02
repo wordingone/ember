@@ -13,7 +13,7 @@ EDITABLE_INSTALL = "python -m pip install --editable ."
 def test_nightly_installs_checkout_once_before_collection_and_suites() -> None:
     nightly = (WORKFLOWS / "ci-nightly.yml").read_text(encoding="utf-8", errors="strict")
     dependency = 'python -m pip install "tokenizers==0.22.2" "huggingface_hub==1.22.0"'
-    collection = "python -B scripts/check_scripts_tests_collection.py --minimum 380"
+    collection = "python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380"
     suites = "python -B -m pytest -q scripts/tests"
 
     assert nightly.count(EDITABLE_INSTALL) == 1

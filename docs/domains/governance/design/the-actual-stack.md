@@ -6,7 +6,7 @@ accretion, birth floor — describes real things, but a reader has to already kn
 the concrete stack was not written down anywhere in one place.
 
 Every number here is derived from committed bytes and the arithmetic is reproduced rather than
-quoted. Sources: `configs/ember-restart-3b.json` (contract v3), `configs/v1-pretrain-config.json`
+quoted. Sources: `configs/ember-restart-3b.json` (contract v3), `domains/model/configs/v1-pretrain-config.json`
 (historical-only, see the corpus section), `data/ember-restart-3b/input-identity.json`, the tracked
 Python import census, and a measured throughput receipt. Where something does not exist, this says
 so.
@@ -161,7 +161,7 @@ execution against this input is claimed or inferable here.** The earlier wording
 input", which credited the artifact with a run it does not evidence.
 
 **The 17.9 GB assembly is historical/planned, and says so in its own bytes.**
-`configs/v1-pretrain-config.json` carries `authority.artifact_class = "historical_only"` and
+`domains/model/configs/v1-pretrain-config.json` carries `authority.artifact_class = "historical_only"` and
 `authority.execution_authority = "denied"`, under `goal_id: EMBER-00`. It describes four sources
 with committed manifests and sha256s — permissively-licensed GitHub code (13.0 GB), English
 Wikipedia (3.0 GB), Gutenberg (1.9 GB), and Ember's own MIT-clean ARC-DSL slice (0.5 MB), deduped by
@@ -214,7 +214,7 @@ done:
 
 ## How to check this document
 
-Every number above comes from `configs/ember-restart-3b.json`, `configs/v1-pretrain-config.json`,
+Every number above comes from `configs/ember-restart-3b.json`, `domains/model/configs/v1-pretrain-config.json`,
 `data/ember-restart-3b/input-identity.json`, or the import census, all at master.
 
 Two checks this document failed on earlier passes, worth running on anything that cites a repo

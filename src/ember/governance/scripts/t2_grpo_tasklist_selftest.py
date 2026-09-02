@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t2_grpo_tasklist_selftest.py — eng #142 task-list plumb wiring receipt.
 
 an agent's live r2 audit (mails 14512/14511): t2_r2_grpo computed and receipted

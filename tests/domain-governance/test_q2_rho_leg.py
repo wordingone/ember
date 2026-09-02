@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Unit tests for src/ember/governance/scripts/c8_prelaunch/q2_rho_leg.py (issue #662; frozen
 spec: issue #449 comment 4932624437 section 4).
 

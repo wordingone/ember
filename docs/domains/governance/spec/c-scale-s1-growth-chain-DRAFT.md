@@ -105,7 +105,7 @@ This touches **only the SwiGLU MLP's three matrices per layer** (`gate_proj`, `u
 `down_proj`) — it duplicates gate/up rows (doubling `intermediate_size`) and halves+duplicates
 down_proj columns to sum back to the exact seed output. **It does not touch attention (`q/k/v/o_proj`),
 hidden size, layer count, head count, or vocab** — every one of those stays fixed at the seed's
-values (`hidden=1024, layers=20, heads=16, vocab=32000`, per `configs/v0-pretrain-config.json`)
+values (`hidden=1024, layers=20, heads=16, vocab=32000`, per `domains/model/configs/v0-pretrain-config.json`)
 through every application of this operator. `ff_grown = ff_seed * 2` is **hardcoded** in the caller
 (`cbase_grow_live.py` line 252: `ff_grown = ff_seed * 2`) — the surgery is an exact doubling, not a
 parameterized factor; there is no code path for a non-2x widening ratio.
@@ -185,12 +185,12 @@ formula for every rung below.
 ### 3.2 A freshly-derived discrepancy in the residual itself (flagged, not resolved)
 
 Decomposing 215,000,064 against the actual architecture (hidden=1024, layers=20, vocab=32000,
-`tied_embeddings: true`, `mtp_aux_heads.n_heads: 2`, all per `configs/v0-pretrain-config.json`):
+`tied_embeddings: true`, `mtp_aux_heads.n_heads: 2`, all per `domains/model/configs/v0-pretrain-config.json`):
 attention (`4*hidden²*layers` = 83,886,080) + norms (`2*hidden*layers + hidden` = 41,984) leaves a
 residual of `215,000,064 − 83,886,080 − 41,984 = 131,072,000`, which is **exactly 4 × (vocab*hidden)**
 (`4 * 32,768,000 = 131,072,000`) — i.e. **four** separate `vocab×hidden`-sized matrices, not three.
 Three would be the tied-embedding-correct count (1 shared embed/head matrix + 2 untied MTP heads).
-Reading `scripts/timeshare_pretrain.py` lines 1138-1148 (the actual production model-builder,
+Reading `src/ember/governance/scripts/timeshare_pretrain.py` lines 1138-1148 (the actual production model-builder,
 execution tree): `LlamaConfig(..., tie_word_embeddings=False)` (HF-internal tying disabled) followed
 by a manual `if m["tied_embeddings"]: self.head.weight = self.backbone_model.embed_tokens.weight` —
 this **does** functionally tie `head.weight` to `embed_tokens.weight` (same Parameter object, one
@@ -492,8 +492,8 @@ docstring), confirmed directly against `receipts/citation-check-20260703T122221Z
 `docs/spec/c-scale-s2-token-bill-protocol.md` · `docs/spec/ceff-lever-ladder.md` ·
 `docs/domains/governance/design/fp44-multimodal-optimizer-decision.md` · `src/ember/governance/scripts/ember_totality/test_c_scale.py` ·
 `src/ember/governance/scripts/v0_pretrain_launch_gate.py` · `src/ember/governance/scripts/cbase_grow_dryrun.py` · `src/ember/governance/scripts/cbase_grow_live.py` ·
-`scripts/timeshare_pretrain.py` · `src/ember/governance/scripts/check_goal_citations.py` ·
-`configs/v0-pretrain-config.json` ·
+`src/ember/governance/scripts/timeshare_pretrain.py` · `src/ember/governance/scripts/check_goal_citations.py` ·
+`domains/model/configs/v0-pretrain-config.json` ·
 `receipts/v0-live-20260623T105829Z.json` ·
 `receipts/cbase-grow-dryrun-20260702T190532Z.json` ·
 `receipts/cbase-grow-live/cbase-grow-live-live-20260703T053225Z.json` ·

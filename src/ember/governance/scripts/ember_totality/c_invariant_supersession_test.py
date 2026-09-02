@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import importlib.util as _ember_a3cfd3f0311b99ed_importlib
 import sys as _ember_a3cfd3f0311b99ed_sys
 from pathlib import Path as _ember_a3cfd3f0311b99ed_Path
-_ember_a3cfd3f0311b99ed_path = _ember_a3cfd3f0311b99ed_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'test_c_invariant.py')
+_ember_a3cfd3f0311b99ed_path = _ember_a3cfd3f0311b99ed_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'test_c_invariant.py')
 if not _ember_a3cfd3f0311b99ed_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/test_c_invariant.py')
 _ember_a3cfd3f0311b99ed_aliases = ('_ember_issue2015_a3cfd3f0311b99ed', 'scripts.ember_totality.test_c_invariant', 'test_c_invariant')

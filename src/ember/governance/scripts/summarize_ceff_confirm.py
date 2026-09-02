@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Derive a faithful summary receipt for the C-EFF confirm run from its checkpoint
 manifests. The summary is the OUTPUT of this executed job over on-disk artifacts —
 never hand-copied from prose. It reports the loss trajectory + run config + integrity

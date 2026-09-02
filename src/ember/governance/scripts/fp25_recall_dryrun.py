@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp25_recall_dryrun.py — CPU-only dry-run to:
   (1) extract the 28 task ids from wcode-r2-sft.jsonl
   (2) test each candidate split to see which contains all 28

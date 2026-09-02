@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/token_shards_v0.py",
-  "artifact_sha256": "31c706783121e096591c84f1f23763566d7cc0fb45ce077ff956ee228c3c07bd",
+  "artifact_sha256": "c49b87260b2a45dfcf4bcad16a66e08e29f314edb919a67bd291dcdfa79346d9",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

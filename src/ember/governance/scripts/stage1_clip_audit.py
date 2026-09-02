@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """CLIP-assisted Stage-1 first-words curriculum audit.
 
 This is a curation/control instrument, not an Ember capability claim. It uses a

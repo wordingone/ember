@@ -39,7 +39,7 @@ jobs:
       - run: python -m pip install "torch==2.13.0" --index-url https://download.pytorch.org/whl/cpu
       - run: python -m pip install --editable .
       - name: Guard complete scripts/tests collection
-        run: python -B scripts/check_scripts_tests_collection.py --minimum 380
+        run: python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380
       - name: Test tracked Python self-location guard
         run: python -B -m pytest -q scripts/tests/test_self_location_roots.py
       - name: Guard tracked Python self-location roots
@@ -65,7 +65,7 @@ jobs:
             -F owner="${GITHUB_REPOSITORY%%/*}" -F repo="${GITHUB_REPOSITORY#*/}" -F number="${PR_NUMBER}" \
             --jq '[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]' \
             > "${RUNNER_TEMP}/pr-closing-issues.json"
-          python -m scripts.github.live_pr_policy \
+          python -m src.ember.governance.scripts.github.live_pr_policy \
             --root . \
             --subject-root . \
             --pr-json "${RUNNER_TEMP}/pr.json" \
@@ -82,8 +82,8 @@ jobs:
           EMBER_COND4_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           python -B -m pytest -q \
-            scripts/tests/test_issue1396_cond4_surface.py \
-            scripts/tests/test_verify_ember01_completion.py -k "cond4"
+            src/ember/governance/scripts/tests/test_issue1396_cond4_surface.py \
+            src/ember/governance/scripts/tests/test_verify_ember01_completion.py -k "cond4"
       - name: Verify text-lab input identity pins are fresh
         run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
       - name: Verify training closure and Python environment authority
@@ -121,7 +121,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install "pytest==8.4.1"
       - name: Prove controller-death cleanup on ${{ matrix.os }}
-        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 120 -- python -B -m pytest -q scripts/tests/test_owned_process.py
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 120 -- python -B -m pytest -q src/ember/governance/scripts/tests/test_owned_process.py
   rust:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -233,13 +233,13 @@ jobs:
           python -c "import tokenizers, torch; assert torch.__version__ == '2.10.0+cpu'; assert tokenizers.__version__ == '0.22.2'"
       - name: Run canary contract and CI-binding tests
         run: |
-          python -B tests/ember_restart_model/test_eval_canary_image.py -v
-          python -B tests/test_eval_canary_ci_job.py -v
+          python -B tests/ember_restart_model/domain-governance/test_eval_canary_image.py -v
+          python -B tests/domain-governance/test_eval_canary_ci_job.py -v
       - name: Measure exact positive plus full negative matrix and print terminal receipt
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B tools/ember-restart-3b/eval_canary_image.py \
+          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py \
             --fixture-root tests/ember_restart_model/fixtures/eval-canary-image-v1 \
             --run-suite \
             --torch-wheel-filename "${TORCH_WHEEL_FILENAME}" \
@@ -262,7 +262,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install "tokenizers==0.22.2"
       - name: Replay checked-in production rung from canonical owned sources
-        run: python -B tools/ember-restart-3b/production_rung.py --repo-root .
+        run: python -B src/ember/infrastructure/tools/ember-restart-3b/production_rung.py --repo-root .
   cli:
     runs-on: windows-latest
     timeout-minutes: 25
@@ -313,7 +313,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Verify repository guard selftests
-        run: python -B tools/repo_guard_selftest.py
+        run: python -B src/ember/infrastructure/tools/repo_guard_selftest.py
       - name: Run root launcher suite
         run: python -B -m unittest discover -s tests -p "test_ember_root_launcher.py" -v
       - name: Verify versioned desktop deployment and shortcuts

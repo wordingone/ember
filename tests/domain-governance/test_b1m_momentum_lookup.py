@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """TDD for issue #466: B1M momentum lookup must retrieve actual nonzero momentum from seed optimizer.
 
 This test verifies:

@@ -48,7 +48,7 @@ guard's `[launcher-shape]` check refuses their reintroduction.
 
 ## Retired pipeline (see 03_MODEL_ARCHITECTURE.md)
 
-`scripts/timeshare_pretrain.py` and its `t2_*` round/family scripts
+`src/ember/governance/scripts/timeshare_pretrain.py` and its `t2_*` round/family scripts
 implemented the c03 sub-3B pipeline (checkpointing with sha256-manifested
 files, bit-exact resume assertions, `fp19_bench`-pinned governor floor). That
 pipeline is `historical_only` / execution-denied under the current

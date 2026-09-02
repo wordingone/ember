@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/design-system.test.ts — Observatory identity tokens + glyph vocabulary (increment 6, step B).
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/).
 

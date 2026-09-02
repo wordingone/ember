@@ -95,14 +95,14 @@ EXPECTED_LANDED_PATHS = {
     "src/ember/governance/scripts/convert_nf4_prequant.py",
     "src/ember/governance/scripts/ember_cbase_avir_data.py",
     "src/ember/governance/scripts/ember_cbase_avir_data_v2.py",
-    "scripts/test_ember_cbase_avir_data.py",
+    "src/ember/governance/scripts/test_ember_cbase_avir_data.py",
     "src/ember/governance/scripts/test_ember_cbase_avir_data_v2.py",
 }
 IMPORT_CLOSURE_PATHS = (
     "src/ember/governance/scripts/ember_avir_tasks.py",
     "src/ember/governance/scripts/ember_avir_harness.py",
     "src/ember/governance/scripts/governor.py",
-    "scripts/timeshare_pretrain.py",
+    "src/ember/governance/scripts/timeshare_pretrain.py",
 )
 
 
@@ -326,7 +326,7 @@ def validate_execution_denial(source: bytes) -> dict[str, Any]:
     ):
         raise ValueError("historical trainer refusal contract mismatch")
     return {
-        "path": "scripts/timeshare_pretrain.py",
+        "path": "src/ember/governance/scripts/timeshare_pretrain.py",
         "sha256": sha256_bytes(source),
         "artifact_class": "historical_only",
         "denied": True,
@@ -397,7 +397,7 @@ def validate_public_lineage(
     )
 
     execution_policy = validate_execution_denial(
-        git_blob(root, subject_commit, "scripts/timeshare_pretrain.py")
+        git_blob(root, subject_commit, "src/ember/governance/scripts/timeshare_pretrain.py")
     )
     return {
         "historical_candidate_count": structure["candidate_count"],

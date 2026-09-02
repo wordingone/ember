@@ -2223,7 +2223,7 @@ def _run_tests(verbose: bool = True) -> tuple[bool, list[str]]:
         import importlib.util as _ember_bff9ce1e3d7dd466_importlib
         import sys as _ember_bff9ce1e3d7dd466_sys
         from pathlib import Path as _ember_bff9ce1e3d7dd466_Path
-        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
+        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
         if not _ember_bff9ce1e3d7dd466_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_owned_run.py')
         _ember_bff9ce1e3d7dd466_aliases = ('_ember_issue2015_bff9ce1e3d7dd466', 'ember_c14_owned_run', 'scripts.ember_c14_owned_run')
@@ -2295,7 +2295,7 @@ def _run_tests(verbose: bool = True) -> tuple[bool, list[str]]:
         import importlib.util as _ember_bff9ce1e3d7dd466_importlib
         import sys as _ember_bff9ce1e3d7dd466_sys
         from pathlib import Path as _ember_bff9ce1e3d7dd466_Path
-        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
+        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
         if not _ember_bff9ce1e3d7dd466_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_owned_run.py')
         _ember_bff9ce1e3d7dd466_aliases = ('_ember_issue2015_bff9ce1e3d7dd466', 'ember_c14_owned_run', 'scripts.ember_c14_owned_run')
@@ -2368,7 +2368,7 @@ def _run_tests(verbose: bool = True) -> tuple[bool, list[str]]:
         import importlib.util as _ember_bff9ce1e3d7dd466_importlib
         import sys as _ember_bff9ce1e3d7dd466_sys
         from pathlib import Path as _ember_bff9ce1e3d7dd466_Path
-        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
+        _ember_bff9ce1e3d7dd466_path = _ember_bff9ce1e3d7dd466_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_c14_owned_run.py')
         if not _ember_bff9ce1e3d7dd466_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_owned_run.py')
         _ember_bff9ce1e3d7dd466_aliases = ('_ember_issue2015_bff9ce1e3d7dd466', 'ember_c14_owned_run', 'scripts.ember_c14_owned_run')

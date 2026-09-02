@@ -76,7 +76,7 @@ function allGreenStdout(command: string = REAL_LAUNCH_COMMAND): string {
       implemented_all_pass: true,
       any_deferred: false,
       named_ember02_command: {
-        note: "scripts/timeshare_pretrain.py is EXECUTION-DENIED; the real governed entry is run_vertical_slice.py semantic.",
+        note: "src/ember/governance/scripts/timeshare_pretrain.py is EXECUTION-DENIED; the real governed entry is run_vertical_slice.py semantic.",
         command,
         library_entrypoint: "tools/ember-restart-3b/run_vertical_slice.py::run_semantic",
       },

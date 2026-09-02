@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // github-app-auth.test.ts — tests for the GitHub App JWT mint + installation
 // token exchange (ember issue #507).
 

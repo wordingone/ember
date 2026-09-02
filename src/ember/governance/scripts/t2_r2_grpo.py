@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t2_r2_grpo.py — Round-2 GRPO arm wrapper (eng #30, issue #106).
 
 GRPO-on-verifier-reward arm for round-2. Delegates to t2_grpo.py (eng #3)

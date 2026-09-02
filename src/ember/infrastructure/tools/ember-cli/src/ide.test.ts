@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for /ide: no-IDE error (AC1), VS Code open (AC2), JetBrains
 // manual instruction (AC3), connection timeout (AC4), disconnect (AC5),
 // worktree path (AC6).

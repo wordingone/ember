@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // pr-comments.ts — /pr-comments slash command.
 // For internal users: points to the marketplace plugin.
 // For external users: emits an inline prompt that uses gh CLI to fetch and

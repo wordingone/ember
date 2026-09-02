@@ -42,13 +42,13 @@ def test_workflow_captures_complete_pre_and_post_populations() -> None:
 
 def test_workflow_runs_the_real_capture_decision_and_packet_consumers() -> None:
     text = WORKFLOW.read_text(encoding="utf-8", errors="strict")
-    assert "scripts/build_oldest_issue_raw_bundle.py" in text
+    assert "src/ember/governance/scripts/build_oldest_issue_raw_bundle.py" in text
     assert '--raw-bundle "${raw}/ember-oldest-issue-disposition-015-raw-sources-v1.json"' in text
-    assert "scripts/oldest_issue_disposition.py capture" in text
-    assert "scripts/build_oldest_issue_decisions.py" in text
-    assert "scripts/oldest_issue_disposition.py build" in text
-    assert "scripts/oldest_issue_disposition.py verify" in text
-    assert "scripts/verify_oldest_issue_disposition_packet.py" in text
+    assert "src/ember/governance/scripts/oldest_issue_disposition.py capture" in text
+    assert "src/ember/governance/scripts/build_oldest_issue_decisions.py" in text
+    assert "src/ember/governance/scripts/oldest_issue_disposition.py build" in text
+    assert "src/ember/governance/scripts/oldest_issue_disposition.py verify" in text
+    assert "src/ember/governance/scripts/verify_oldest_issue_disposition_packet.py" in text
     assert '--expected-master-sha "${GITHUB_SHA}"' in text
     assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02" in text
     assert "SHA256SUMS" in text
@@ -57,7 +57,7 @@ def test_workflow_runs_the_real_capture_decision_and_packet_consumers() -> None:
 def test_raw_capture_is_uploaded_even_if_semantic_classification_fails() -> None:
     text = WORKFLOW.read_text(encoding="utf-8", errors="strict")
     raw_upload = text.index("name: Upload immutable raw capture")
-    decisions = text.index("scripts/build_oldest_issue_decisions.py")
+    decisions = text.index("src/ember/governance/scripts/build_oldest_issue_decisions.py")
     assert raw_upload < decisions
     assert "if: ${{ always() }}" in text[raw_upload:decisions]
     assert "oldest-issue-raw-${{ github.run_id }}-${{ github.sha }}" in text

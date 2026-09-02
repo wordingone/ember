@@ -21,7 +21,7 @@ terminal-receipt owner: Ember Lab/#898. Both transfers are required.
 
 ## Historical-only retirement
 
-Current `scripts/timeshare_pretrain.py` is blob
+Current `src/ember/governance/scripts/timeshare_pretrain.py` is blob
 `edc0441920e9eeb582ea7d188712978683670078`, declares
 `EMBER_ARTIFACT_CLASS=historical_only`, and exits before imports because every
 sub-3B cbase importer is execution-denied. Rerunning the old crash matrix would

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/message-renderers.test.ts — CompactionProgressMessage acceptance tests.
 // Spec: contract L22 (compaction in-progress placeholder → real component).
 //

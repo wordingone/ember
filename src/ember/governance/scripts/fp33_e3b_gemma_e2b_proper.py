@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_e3b_gemma_e2b_proper.py — E3 proper: Gemma 4 E2B eval on MBPP validation.
 
 Runs google/gemma-4-E2B-it (on-disk) via csi-eval venv (transformers 5.11.0+,

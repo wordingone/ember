@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // cli/headless-repl.ts — headless agent loop for non-interactive sessions.
 // Drives the query engine from an IO surface without a TUI. Used by the
 // -p / --print flag path in process-entry.ts.

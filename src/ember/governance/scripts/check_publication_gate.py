@@ -140,7 +140,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import importlib.util as _ember_69780e19bf0d970d_importlib
 import sys as _ember_69780e19bf0d970d_sys
 from pathlib import Path as _ember_69780e19bf0d970d_Path
-_ember_69780e19bf0d970d_path = _ember_69780e19bf0d970d_Path(__file__).resolve().parents[4].joinpath('scripts', 'receipt_fp.py')
+_ember_69780e19bf0d970d_path = _ember_69780e19bf0d970d_Path(__file__).resolve().parent.joinpath('receipt_fp.py')
 if not _ember_69780e19bf0d970d_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_fp.py')
 _ember_69780e19bf0d970d_aliases = ('_ember_issue2015_69780e19bf0d970d', 'receipt_fp', 'src.ember.governance.scripts.receipt_fp')

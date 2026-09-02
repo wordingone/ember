@@ -42,7 +42,7 @@ from v_compare import strict_harness  # noqa: E402 (eng #76)
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -208,7 +208,7 @@ def main():
         import importlib.util as _ember_20ff095fccbc3bd0_importlib
         import sys as _ember_20ff095fccbc3bd0_sys
         from pathlib import Path as _ember_20ff095fccbc3bd0_Path
-        _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
+        _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
         if not _ember_20ff095fccbc3bd0_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/calibrate.py')
         _ember_20ff095fccbc3bd0_aliases = ('_ember_issue2015_20ff095fccbc3bd0', 'calibrate', 'scripts.calibrate')
@@ -332,7 +332,7 @@ def main():
         import importlib.util as _ember_7c8629a058dcd719_importlib
         import sys as _ember_7c8629a058dcd719_sys
         from pathlib import Path as _ember_7c8629a058dcd719_Path
-        _ember_7c8629a058dcd719_path = _ember_7c8629a058dcd719_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v_extended.py')
+        _ember_7c8629a058dcd719_path = _ember_7c8629a058dcd719_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'v_extended.py')
         if not _ember_7c8629a058dcd719_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v_extended.py')
         _ember_7c8629a058dcd719_aliases = ('_ember_issue2015_7c8629a058dcd719', 'scripts.v_extended', 'v_extended')
@@ -425,7 +425,7 @@ def main():
         import importlib.util as _ember_20ff095fccbc3bd0_importlib
         import sys as _ember_20ff095fccbc3bd0_sys
         from pathlib import Path as _ember_20ff095fccbc3bd0_Path
-        _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
+        _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
         if not _ember_20ff095fccbc3bd0_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/calibrate.py')
         _ember_20ff095fccbc3bd0_aliases = ('_ember_issue2015_20ff095fccbc3bd0', 'calibrate', 'scripts.calibrate')

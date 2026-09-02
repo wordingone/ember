@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t2_mtp_viewpath_selftest.py — eng #140 view-path plumb wiring receipt.
 
 an agent's live r2 audit (mails 14509/14508): t2_r2_mtp installed its

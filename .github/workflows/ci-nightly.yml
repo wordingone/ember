@@ -39,7 +39,7 @@ jobs:
       # If another dependency round is required, stop hand-picking packages:
       # derive the nightly's non-CUDA install set from the manifest instead.
       - name: Guard complete scripts/tests collection
-        run: python -B scripts/check_scripts_tests_collection.py --minimum 380
+        run: python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380
       # No -x, and no `set -e` abort between the two suites: a nightly exists to report
       # everything that is broken in one pass. Fail-fast turned each night into a
       # single-failure telescope and hid the rest until the next run (#1390).
@@ -47,7 +47,7 @@ jobs:
         run: |
           status=0
           python -B -m pytest -q scripts/tests || status=1
-          python -B -m pytest -q tests --ignore=tests/ember_restart_model/test_checkpoint_artifacts.py || status=1
+          python -B -m pytest -q tests --ignore=tests/ember_restart_model/domain-governance/test_checkpoint_artifacts.py || status=1
           exit "${status}"
       - name: Explain scheduled boundary
         if: always()

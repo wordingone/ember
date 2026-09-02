@@ -41,7 +41,7 @@ Only the label and SHA-256 enter the receipt. Capture performs no Git mutation,
 force push, merge, branch deletion, or worktree retirement.
 
 `src/ember/governance/scripts/gen_readme_status.py` verifies the receipt, its generated
-`docs/authority/CONTINUITY.md` table, and the seven-day freshness bound before
+`docs/domains/governance/authority/CONTINUITY.md` table, and the seven-day freshness bound before
 any ordinary continuity refresh. The deterministic `--check --generated-status`
 merge gate verifies only generated status and deliberately bypasses this
 branch-distance leg. The ordinary check binds the receipt to the live master or its bounded three-commit

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp25_split_check.py — CPU-only pre-dispatch check for the fp-25 recall eval.
 
 Runs INSIDE the daemon's env (the same env the live eval will use): loads each

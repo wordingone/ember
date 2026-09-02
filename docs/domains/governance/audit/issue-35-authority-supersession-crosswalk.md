@@ -8,7 +8,7 @@ This document makes the historical denominators named by
 inventing the operator-held 2026-07-03 audit transcript that was never
 committed. The machine-readable authority is
 `manifests/authority/issue-35-authority-supersession-crosswalk-v1.json`; the
-verifier is `scripts/verify_authority_supersession_crosswalk.py`.
+verifier is `src/ember/governance/scripts/verify_authority_supersession_crosswalk.py`.
 
 ## Preserved denominators
 
@@ -55,7 +55,7 @@ model, capability, milestone, or current authority goal is complete.
 ## Current authority
 
 The only legal current targets are the exact D identifiers in
-`docs/authority/ember-authority-matrix.md`, the twelve version-controlled EMBER milestone
+`docs/domains/governance/authority/ember-authority-matrix.md`, the twelve version-controlled EMBER milestone
 contracts, and `HISTORICAL_ORPHANED`. The verifier checks those target sets
 against the live files, checks every evidence byte hash, requires exact
 closed-world schemas, rejects missing or duplicate source rows, and recomputes

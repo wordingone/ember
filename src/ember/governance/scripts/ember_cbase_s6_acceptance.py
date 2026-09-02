@@ -47,7 +47,7 @@ sys.path.insert(0, str(_HERE))
 import importlib.util as _ember_6c243c4c73ac7e2b_importlib
 import sys as _ember_6c243c4c73ac7e2b_sys
 from pathlib import Path as _ember_6c243c4c73ac7e2b_Path
-_ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
+_ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
 if not _ember_6c243c4c73ac7e2b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_avir_tasks.py')
 _ember_6c243c4c73ac7e2b_aliases = ('_ember_issue2015_6c243c4c73ac7e2b', 'ember_avir_tasks', 'scripts.ember_avir_tasks')
@@ -92,7 +92,7 @@ setup_sandbox = getattr(_ember_6c243c4c73ac7e2b_module, 'setup_sandbox')
 import importlib.util as _ember_6c243c4c73ac7e2b_importlib
 import sys as _ember_6c243c4c73ac7e2b_sys
 from pathlib import Path as _ember_6c243c4c73ac7e2b_Path
-_ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
+_ember_6c243c4c73ac7e2b_path = _ember_6c243c4c73ac7e2b_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_tasks.py')
 if not _ember_6c243c4c73ac7e2b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_avir_tasks.py')
 _ember_6c243c4c73ac7e2b_aliases = ('_ember_issue2015_6c243c4c73ac7e2b', 'ember_avir_tasks', 'scripts.ember_avir_tasks')
@@ -136,7 +136,7 @@ tasks_run_assertions = getattr(_ember_6c243c4c73ac7e2b_module, 'run_assertions')
 import importlib.util as _ember_a6fe7aa88e51dfeb_importlib
 import sys as _ember_a6fe7aa88e51dfeb_sys
 from pathlib import Path as _ember_a6fe7aa88e51dfeb_Path
-_ember_a6fe7aa88e51dfeb_path = _ember_a6fe7aa88e51dfeb_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_harness.py')
+_ember_a6fe7aa88e51dfeb_path = _ember_a6fe7aa88e51dfeb_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_avir_harness.py')
 if not _ember_a6fe7aa88e51dfeb_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_avir_harness.py')
 _ember_a6fe7aa88e51dfeb_aliases = ('_ember_issue2015_a6fe7aa88e51dfeb', 'ember_avir_harness', 'scripts.ember_avir_harness')
@@ -183,7 +183,7 @@ harness_run_assertions = getattr(_ember_a6fe7aa88e51dfeb_module, 'run_assertions
 import importlib.util as _ember_81579232cbfd41ec_importlib
 import sys as _ember_81579232cbfd41ec_sys
 from pathlib import Path as _ember_81579232cbfd41ec_Path
-_ember_81579232cbfd41ec_path = _ember_81579232cbfd41ec_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ember_cbase_avir_data_v2.py')
+_ember_81579232cbfd41ec_path = _ember_81579232cbfd41ec_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ember_cbase_avir_data_v2.py')
 if not _ember_81579232cbfd41ec_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_cbase_avir_data_v2.py')
 _ember_81579232cbfd41ec_aliases = ('_ember_issue2015_81579232cbfd41ec', 'ember_cbase_avir_data_v2', 'scripts.ember_cbase_avir_data_v2')

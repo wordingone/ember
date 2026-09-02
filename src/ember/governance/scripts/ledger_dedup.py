@@ -61,7 +61,7 @@ if _SCRIPTS not in sys.path:
 import importlib.util as _ember_2bafe3e3885447e6_importlib
 import sys as _ember_2bafe3e3885447e6_sys
 from pathlib import Path as _ember_2bafe3e3885447e6_Path
-_ember_2bafe3e3885447e6_path = _ember_2bafe3e3885447e6_Path(__file__).resolve().parents[4].joinpath('scripts', 'fp13_concentration.py')
+_ember_2bafe3e3885447e6_path = _ember_2bafe3e3885447e6_Path(__file__).resolve().parent.joinpath('fp13_concentration.py')
 if not _ember_2bafe3e3885447e6_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp13_concentration.py')
 _ember_2bafe3e3885447e6_aliases = ('_ember_issue2015_2bafe3e3885447e6', 'fp13_concentration', 'src.ember.governance.scripts.fp13_concentration')
@@ -108,7 +108,7 @@ NEAR_DUP_COS = getattr(_ember_2bafe3e3885447e6_module, 'NEAR_DUP_COS')
 import importlib.util as _ember_5026f78346847442_importlib
 import sys as _ember_5026f78346847442_sys
 from pathlib import Path as _ember_5026f78346847442_Path
-_ember_5026f78346847442_path = _ember_5026f78346847442_Path(__file__).resolve().parents[4].joinpath('scripts', 'fp10_idiom.py')
+_ember_5026f78346847442_path = _ember_5026f78346847442_Path(__file__).resolve().parent.joinpath('fp10_idiom.py')
 if not _ember_5026f78346847442_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp10_idiom.py')
 _ember_5026f78346847442_aliases = ('_ember_issue2015_5026f78346847442', 'fp10_idiom', 'src.ember.governance.scripts.fp10_idiom')

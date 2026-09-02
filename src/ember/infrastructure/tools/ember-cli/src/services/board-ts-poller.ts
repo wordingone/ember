@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/board-ts-poller.ts — issue #420: cockpit boardTs live refresh; issue #433: board
 // condition transitions (GREEN<->RED) surfaced as activity events on the same poll.
 //

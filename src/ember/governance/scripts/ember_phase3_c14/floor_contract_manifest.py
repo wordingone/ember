@@ -224,7 +224,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "Cannot be silently removed; deletion requires receipt-backed "
                 "degradation or contradiction receipt from an alternative"
             ),
-            evidence_path="scripts/train_multimodal_v0.py",
+            evidence_path="src/ember/governance/scripts/train_multimodal_v0.py",
         ),
         _row(
             key="floor_contract.governor",
@@ -261,7 +261,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "Retrofit can fail without killing the component; "
                 "component stays floor until receipt-backed successor is named"
             ),
-            evidence_path="scripts/train_multimodal_v0.py",
+            evidence_path="src/ember/governance/scripts/train_multimodal_v0.py",
         ),
 
         # ------------------------------------------------------------------
@@ -633,7 +633,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "readiness+floor-probe+governed+lever receipt, NOT by [REDACTED]; "
                 "operator informed, not gating (per the standing launch-not-operator-gated ruling)"
             ),
-            evidence_path="scripts/train_multimodal_v0.py",
+            evidence_path="src/ember/governance/scripts/train_multimodal_v0.py",
         ),
     ]
 

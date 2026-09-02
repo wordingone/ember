@@ -93,7 +93,7 @@ def freshness_check(ledger_path, control_pool_path, view_path,
     import importlib.util as _ember_341a7292e44a83b4_importlib
     import sys as _ember_341a7292e44a83b4_sys
     from pathlib import Path as _ember_341a7292e44a83b4_Path
-    _ember_341a7292e44a83b4_path = _ember_341a7292e44a83b4_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ledger_dedup.py')
+    _ember_341a7292e44a83b4_path = _ember_341a7292e44a83b4_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ledger_dedup.py')
     if not _ember_341a7292e44a83b4_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ledger_dedup.py')
     _ember_341a7292e44a83b4_aliases = ('_ember_issue2015_341a7292e44a83b4', 'ledger_dedup', 'scripts.ledger_dedup')

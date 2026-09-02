@@ -255,7 +255,7 @@ def main():
     # If import_provenance.source_commit_sha is present: it must resolve to a
     # real commit in this repo's git history, that commit's own diff must
     # touch the receipt path the provenance block claims, AND harness_sha
-    # must equal the real sha256 of scripts/ember_ceff_closure_confirmation.py
+    # must equal the real sha256 of src/ember/governance/scripts/ember_ceff_closure_confirmation.py
     # AT that commit -- never an inert cosmetic field copied around unchecked.
     import_prov = d.get("import_provenance") or {}
     import_prov = import_prov if isinstance(import_prov, dict) else {}
@@ -283,22 +283,22 @@ def main():
             if not harness_sha_field:
                 findings.append(
                     "harness_sha missing -- cannot execution-bind to "
-                    "scripts/ember_ceff_closure_confirmation.py at the "
+                    "src/ember/governance/scripts/ember_ceff_closure_confirmation.py at the "
                     "claimed commit")
             else:
                 real_hash = _git_blob_sha256_at_commit(
                     ROOT, source_sha,
-                    "scripts/ember_ceff_closure_confirmation.py")
+                    "src/ember/governance/scripts/ember_ceff_closure_confirmation.py")
                 if real_hash is None:
                     findings.append(
                         "could not read "
-                        "scripts/ember_ceff_closure_confirmation.py at "
+                        "src/ember/governance/scripts/ember_ceff_closure_confirmation.py at "
                         f"commit {source_sha} to verify harness_sha")
                 elif real_hash != harness_sha_field:
                     findings.append(
                         f"harness_sha {harness_sha_field!r} does not match "
                         f"the real sha256 {real_hash!r} of "
-                        "scripts/ember_ceff_closure_confirmation.py at "
+                        "src/ember/governance/scripts/ember_ceff_closure_confirmation.py at "
                         f"commit {source_sha} (inert/cosmetic field)")
     elif harness_sha_field:
         # A harness_sha with no commit to check it against can never be

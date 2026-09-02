@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // permission-framework — acceptance criteria tests.
 // Spec: specs/components/permission-framework.md
 // Tests pure routing, key handling, risk color, and rule logic.

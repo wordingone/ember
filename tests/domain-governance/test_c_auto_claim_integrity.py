@@ -52,7 +52,7 @@ class CAutonomyClaimIntegrityTests(unittest.TestCase):
 
             state = {
                 "schema": "autonomy-ladder-state-v1",
-                "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+                "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
                 "current_rung": "R0",
                 "rungs": {
                     "R0": {

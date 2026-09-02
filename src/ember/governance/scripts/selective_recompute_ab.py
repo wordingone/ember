@@ -551,7 +551,7 @@ def _selftest():
         import importlib.util as _ember_4c138e1eb4cb7ec8_importlib
         import sys as _ember_4c138e1eb4cb7ec8_sys
         from pathlib import Path as _ember_4c138e1eb4cb7ec8_Path
-        _ember_4c138e1eb4cb7ec8_path = _ember_4c138e1eb4cb7ec8_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'invariants.py')
+        _ember_4c138e1eb4cb7ec8_path = _ember_4c138e1eb4cb7ec8_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'nck', 'invariants.py')
         if not _ember_4c138e1eb4cb7ec8_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/nck/invariants.py')
         _ember_4c138e1eb4cb7ec8_aliases = ('_ember_issue2015_4c138e1eb4cb7ec8', 'invariants', 'nck.invariants', 'scripts.nck.invariants')

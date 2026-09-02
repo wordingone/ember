@@ -25,8 +25,8 @@
 - Create: `.github/PULL_REQUEST_TEMPLATE.md`
 - Modify: `.github/PULL_REQUEST_TEMPLATE/*.md`
 - Modify: `.github/ISSUE_TEMPLATE/01-defect.yml`
-- Modify: `scripts/github/template_policy.py`
-- Modify: `scripts/github/test_template_policy.py`
+- Modify: `src/ember/governance/scripts/github/template_policy.py`
+- Modify: `src/ember/governance/scripts/github/test_template_policy.py`
 - Modify: `scripts/tests/test_check_pr_authority_binding.py`
 
 **Interfaces:**
@@ -42,8 +42,8 @@
 ### Task 2: Trusted live pull-request policy
 
 **Files:**
-- Create: `scripts/github/live_pr_policy.py`
-- Create: `scripts/github/test_live_pr_policy.py`
+- Create: `src/ember/governance/scripts/github/live_pr_policy.py`
+- Create: `src/ember/governance/scripts/github/test_live_pr_policy.py`
 - Modify: `.github/workflows/repo-policy-gate.yml`
 - Modify: `.github/workflows/ci-pr.yml`
 - Modify: `.github/auto-merge-exclusion.test.sh`
@@ -78,8 +78,8 @@
 ### Task 4: Semantic metadata correction
 
 **Files:**
-- Modify: `scripts/github/work_items_engine.py`
-- Modify: `scripts/github/test_work_items.py`
+- Modify: `src/ember/governance/scripts/github/work_items_engine.py`
+- Modify: `src/ember/governance/scripts/github/test_work_items.py`
 - Modify: `.github/WORK_POLICY.md`
 - Create: `manifests/github-work-system-v1/priority-semantic-review-v2.json`
 - Modify: `manifests/github-work-system-v1/open-work-review-plan-v1.json`

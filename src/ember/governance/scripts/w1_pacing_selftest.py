@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w1_pacing_selftest.py — w1_mbpp pacing-block wiring receipt (#129, eng-37).
 
 fp-14 (#115) wired pacing_snapshot into t2_round only; w1_mbpp generates

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """TDD: C(-1)'s spend-annex reader must survive a BOM'd newest file, and a
 genuinely unparseable newest file must fall back to the next-newest
 PARSEABLE annex instead of blinding the probe to all annex coverage.

@@ -12,7 +12,7 @@ full-audit tools and retain their branch-inventory, claims-index, and wall-age c
 The `src/ember/governance/scripts/check_docs_freshness.py` script enforces four categories of correctness:
 
 ### 1. Front-door path references resolve
-Every path candidate in `README.md` and `docs/authority/CONTINUITY.md`, whether backticked or
+Every path candidate in `README.md` and `docs/domains/governance/authority/CONTINUITY.md`, whether backticked or
 plain prose, must match the exact case of a path returned by `git ls-files`. An untracked local
 file cannot mask a defect. Example:
 
@@ -45,7 +45,7 @@ python src/ember/governance/src/ember/governance/scripts/build_claims_index.py
 **Defect class:** `missing_claims_index`
 
 ### 4. CONTINUITY state marker is recent
-`docs/authority/CONTINUITY.md` contains the machine-readable marker
+`docs/domains/governance/authority/CONTINUITY.md` contains the machine-readable marker
 `<!-- state-as-of: YYYY-MM-DD -->`. The full audit requires it to be at most one day old. The
 deterministic merge gate checks placement and uniqueness without consulting wall-clock time.
 

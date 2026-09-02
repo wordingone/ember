@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // TDD tests for the Write tool — one test per AC from specs/tools/file-write.md
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "fs/promises";

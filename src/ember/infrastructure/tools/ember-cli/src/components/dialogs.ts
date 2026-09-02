@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // dialogs.ts — modal dialog components: idle-return and cost-threshold.
 // Bundle: components/dialogs.ts (line 321646)
 

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/gpu-state-poller.ts — issue #447: GPU state (VRAM used/total, compute processes)
 // sourced directly from `nvidia-smi`, never from a process's own self-reported telemetry.
 //
