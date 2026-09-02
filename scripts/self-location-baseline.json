@@ -1188,7 +1188,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t3_seed.py",
+      "path": "src/ember/governance/scripts/t3_seed.py",
       "line": 42,
       "target": "LEDGER_DIR",
       "expression": "f'{NC}/ledger'",
@@ -1199,7 +1199,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t3_seed.py",
+      "path": "src/ember/governance/scripts/t3_seed.py",
       "line": 47,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1210,7 +1210,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t4_chunked.py",
+      "path": "src/ember/governance/scripts/t4_chunked.py",
       "line": 44,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -2486,7 +2486,7 @@
       "error": "node outside closed grammar: Dict"
     },
     {
-      "path": "tools/corpus_connectors/pdf_tree_to_utf8.py",
+      "path": "src/ember/infrastructure/tools/corpus_connectors/pdf_tree_to_utf8.py",
       "line": 44,
       "target": "_SIDECAR_ROOTS",
       "expression": "set(connector_receipt.DEFAULT_EXCLUDE_DIRNAMES)",

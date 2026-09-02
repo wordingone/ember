@@ -9,7 +9,7 @@ directory. A **prefix is an experiment family**, not a subsystem: most
 filenames encode which numbered pipeline stage or ticket produced the script,
 not what the script does architecturally. When in doubt, `grep` the ticket
 prefix against `receipts/CLAIMS.md` / `receipts/INDEX.jsonl` (see
-`src/ember/governance/scripts/build_claims_index.py`) to find the receipt(s) a given script
+`src/ember/governance/src/ember/governance/scripts/build_claims_index.py`) to find the receipt(s) a given script
 produced.
 
 ## Census (measured 2026-07-06)

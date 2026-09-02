@@ -128,7 +128,7 @@ def test_every_direct_package_entrypoint_has_nonshadowing_root_preamble() -> Non
         "src/ember/infrastructure/tools/corpus_connectors/lean_fetch.py",
         "src/ember/infrastructure/tools/corpus_connectors/mint_connector_license_sidecar.py",
         "src/ember/infrastructure/tools/corpus_connectors/openreview_fetch.py",
-        "tools/corpus_connectors/pdf_tree_to_utf8.py",
+        "src/ember/infrastructure/tools/corpus_connectors/pdf_tree_to_utf8.py",
         "tools/corpus_connectors/regen_bloated_manifest.py",
     }
     preamble_paths = {
