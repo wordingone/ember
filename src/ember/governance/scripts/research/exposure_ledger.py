@@ -9,7 +9,7 @@ deterministic PackedShardLoader. Outputs:
 The loader is RNG-independent (index-based), so replay is bit-exact without
 re-training (see state/p2-g4-exposure-ledger-receipt.md for derivation).
 
-TDD selftest: python scripts/research/exposure_ledger.py --selftest
+TDD selftest: python src/ember/governance/scripts/research/exposure_ledger.py --selftest
   Runs with synthetic fixtures (fake shards, known step range).
   Marker: EXPOSURE_LEDGER_SELFTEST_PASS.
 """

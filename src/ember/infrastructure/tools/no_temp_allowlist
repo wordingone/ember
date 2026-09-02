@@ -60,7 +60,7 @@ src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use.py
 src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use_selftest.py
 src/ember/governance/scripts/ember_gate_full_parity_harness_selftest.py
 src/ember/governance/scripts/ember_gate_function_slash_commands_selftest.py
-scripts/ember_gate_goal_mode_parity_adapter_selftest.py
+src/ember/governance/scripts/ember_gate_goal_mode_parity_adapter_selftest.py
 scripts/ember_gate_hook_runner_selftest.py
 scripts/ember_gate_launch_packaging_selftest.py
 src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
@@ -130,7 +130,7 @@ src/ember/governance/scripts/ember_train_multimodal_resident_adapter_cli_selftes
 src/ember/governance/scripts/ember_wheel_harness.py
 src/ember/governance/scripts/ember_wheel_harness_selftest.py
 src/ember/governance/scripts/ember_windows_sandbox.py
-scripts/ember_windows_sandbox_selftest.py
+src/ember/governance/scripts/ember_windows_sandbox_selftest.py
 src/ember/governance/scripts/eng45_backfill_sha_convention.py
 scripts/exp711_permute.py
 scripts/exp711_sensitivity.py
@@ -175,12 +175,12 @@ scripts/screen792_bf16_momentum.py
 src/ember/governance/scripts/serving_registry.py
 src/ember/governance/scripts/sp3_terminal_audit.py
 src/ember/governance/scripts/stage1_first_words.py
-scripts/t2_cap.py
-scripts/t2_cap_selftest.py
-scripts/t2_grpo.py
-scripts/t2_grpo_tasklist_selftest.py
-scripts/t2_mtp_viewpath_selftest.py
-scripts/t2r2w_viewsha_selftest.py
+src/ember/governance/scripts/t2_cap.py
+src/ember/governance/scripts/t2_cap_selftest.py
+src/ember/governance/scripts/t2_grpo.py
+src/ember/governance/scripts/t2_grpo_tasklist_selftest.py
+src/ember/governance/scripts/t2_mtp_viewpath_selftest.py
+src/ember/governance/scripts/t2r2w_viewsha_selftest.py
 scripts/test_ember_cbase_avir_augment.py
 scripts/test_ember_cbase_avir_data.py
 src/ember/governance/scripts/test_ember_cbase_avir_data_v2.py
