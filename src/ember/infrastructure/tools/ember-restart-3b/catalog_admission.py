@@ -253,7 +253,17 @@ def build_dataset_catalog_manifest(
                         "to_kind": "immutable_object",
                         "to_id": f"sha256:{digest}",
                         "ordinal": source_ordinal,
-                        "payload": {},
+                        "payload": {
+                            "path_derived_media_type": item.get(
+                                "path_derived_media_type", item["media_type"]
+                            ),
+                            "content_sniffed_media_type": item.get(
+                                "content_sniffed_media_type", item["media_type"]
+                            ),
+                            "predecessor_binding_applied": item.get(
+                                "predecessor_binding_applied", False
+                            ),
+                        },
                     },
                     {
                         "kind": "object_receipt",
@@ -678,6 +688,9 @@ _TRAIN_PARTITION_PROJECTION_ROW_FIELDS = {
 }
 _SUPPORTING_RECEIPT_FIELDS = {"path", "sha256"}
 _PARTITION_MEDIA_TYPE_TABLE = Path(__file__).with_name("train_partition_media_types.json")
+_PREDECESSOR_MEDIA_TYPE_TABLE = Path(__file__).with_name(
+    "train_partition_predecessor_media_types.json"
+)
 
 
 def _partition_media_class(path: PurePosixPath) -> str:
@@ -704,9 +717,42 @@ def _load_partition_media_type_table() -> dict[str, Any]:
     return table
 
 
-def _partition_media_type(path: PurePosixPath, table: dict[str, Any]) -> str:
-    """Classify via the existing mapper or an explicit census-bound class row."""
+def _load_predecessor_media_type_table() -> dict[str, Any]:
+    raw = _read(_PREDECESSOR_MEDIA_TYPE_TABLE)
+    table = json.loads(raw)
+    self_sha = table.pop("self_sha256", None)
+    if self_sha != _sha256(_canonical(table)):
+        raise ValueError("PARTITION_PREDECESSOR_MEDIA_TABLE_SELF_HASH_REFUSED")
+    table["self_sha256"] = self_sha
+    bindings = table.get("media_types_by_object_id")
+    if (
+        table.get("schema_version")
+        != "ember-issue1581-train-partition-predecessor-media-types-v1"
+        or table.get("goal_id") != "EMBER-02"
+        or table.get("workstream_id") != "EMBER-02B"
+        or table.get("predecessor_catalog_db_sha256")
+        != "5c9ceccaa043dd0e568ff713572d6513fb33422f1a52fb7f4f98e8fbe6a9baa7"
+        or table.get("projected_manifest_raw_sha256")
+        != "552fa0ad9cf6d196947129b6412a09d15ad63f4753d5af5b295f9c3cac7b8fb7"
+        or not isinstance(bindings, dict)
+        or table.get("precedence")
+        != "CONTENT_SNIFF_FIRST; FROZEN_EXTENSION_TABLE_TIE_BREAK; EXISTING_PREDECESSOR_BINDING_GOVERNS_OVERLAPS"
+        or table.get("binding_count") != len(bindings)
+        or table.get("binding_count") != 609
+        or any(
+            not isinstance(object_id, str)
+            or not object_id.startswith("sha256:")
+            or len(object_id) != 71
+            or not isinstance(media_type, str)
+            or not media_type
+            for object_id, media_type in bindings.items()
+        )
+    ):
+        raise ValueError("PARTITION_PREDECESSOR_MEDIA_TABLE_SCHEMA_REFUSED")
+    return table
 
+
+def _path_media_type(path: PurePosixPath, table: dict[str, Any]) -> str:
     try:
         return _connector_media_type(path)
     except ValueError as error:
@@ -719,6 +765,57 @@ def _partition_media_type(path: PurePosixPath, table: dict[str, Any]) -> str:
                 f"PARTITION_PROJECTION_MEDIA_CLASS_UNMAPPED:{key}:{path.as_posix()}"
             ) from error
         return row["media_type"]
+
+
+def _content_media_type(
+    physical: Path, path: PurePosixPath, table: dict[str, Any], raw: bytes | None = None
+) -> str:
+    raw = _read(physical) if raw is None else raw
+    signatures = (
+        (b"\x89PNG\r\n\x1a\n", "image/png"),
+        (b"\xff\xd8\xff", "image/jpeg"),
+        (b"GIF87a", "image/gif"),
+        (b"GIF89a", "image/gif"),
+        (b"%PDF-", "application/pdf"),
+        (b"\x1f\x8b", "application/gzip"),
+        (b"\x28\xb5\x2f\xfd", "application/zstd"),
+        (b"PAR1", "application/vnd.apache.parquet"),
+        (b"\x00asm", "application/wasm"),
+        (b"wOFF", "font/woff"),
+        (b"wOF2", "font/woff2"),
+        (b"OTTO", "font/otf"),
+        (b"\x00\x01\x00\x00", "font/ttf"),
+    )
+    for prefix, media_type in signatures:
+        if raw.startswith(prefix):
+            return media_type
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _path_media_type(path, table)
+    if b"\x00" not in raw:
+        return "text/plain; charset=utf-8"
+    return _path_media_type(path, table)
+
+
+def _partition_media_type(
+    path: PurePosixPath,
+    object_sha256: str,
+    physical: Path,
+    table: dict[str, Any],
+    predecessor_table: dict[str, Any],
+    raw: bytes,
+) -> tuple[str, str, str, bool]:
+    """Apply content-first classification with first-binder predecessor precedence."""
+
+    path_derived = _path_media_type(path, table)
+    content_derived = _content_media_type(physical, path, table, raw)
+    predecessor = predecessor_table["media_types_by_object_id"].get(
+        f"sha256:{object_sha256}"
+    )
+    if predecessor is not None:
+        return predecessor, path_derived, content_derived, True
+    return content_derived, path_derived, content_derived, False
 
 
 def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
@@ -754,17 +851,45 @@ def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("PARTITION_PROJECTION_SOURCE_RECEIPT_SCHEMA_REFUSED")
     media_table = _load_partition_media_type_table()
+    predecessor_media_table = _load_predecessor_media_type_table()
     unsupported_counts: dict[str, int] = {}
-    files = [
-        {
-            "bytes": item["bytes"],
-            "sha256": item["sha256"],
-            "media_type": _partition_media_type(PurePosixPath(item["path"]), media_table),
-        }
-        for repository in receipt["repositories"]
-        for item in repository["files"]
-        if item["bytes"] > 0
-    ]
+    files = []
+    partition_root = receipt_path.parent.resolve()
+    resolved_by_digest: dict[str, tuple[str, str, bool]] = {}
+    for repository in receipt["repositories"]:
+        for item in repository["files"]:
+            if item["bytes"] <= 0:
+                continue
+            path = PurePosixPath(item["path"])
+            physical = (partition_root / Path(item["blob_path"])).resolve()
+            try:
+                physical.relative_to(partition_root)
+            except ValueError as error:
+                raise ValueError("PARTITION_PROJECTION_BLOB_PATH_ESCAPE_REFUSED") from error
+            raw = _read(physical)
+            if len(raw) != item["bytes"] or _sha256(raw) != item["sha256"]:
+                raise ValueError("PARTITION_PROJECTION_BLOB_IDENTITY_DRIFT_REFUSED")
+            media_type, path_derived, content_derived, predecessor_applied = _partition_media_type(
+                path, item["sha256"], physical, media_table, predecessor_media_table, raw
+            )
+            prior = resolved_by_digest.get(item["sha256"])
+            if prior is not None:
+                media_type = prior[0]
+                predecessor_applied = prior[2]
+            else:
+                resolved_by_digest[item["sha256"]] = (
+                    media_type, content_derived, predecessor_applied
+                )
+            files.append(
+                {
+                    "bytes": item["bytes"],
+                    "sha256": item["sha256"],
+                    "media_type": media_type,
+                    "path_derived_media_type": path_derived,
+                    "content_sniffed_media_type": content_derived,
+                    "predecessor_binding_applied": predecessor_applied,
+                }
+            )
     for repository in receipt["repositories"]:
         for item in repository["files"]:
             if item["bytes"] <= 0:
