@@ -830,35 +830,35 @@ def device_lease(requested_device: str):
         yield
         return
     try:
-        # issue2015 exact-local-import:scripts/gpu_lock_guard.py
+        # issue2015 exact-local-import:src/ember/governance/scripts/gpu_lock_guard.py
         import importlib.util as _ember_bde3ce9b68d78728_importlib
         import sys as _ember_bde3ce9b68d78728_sys
         from pathlib import Path as _ember_bde3ce9b68d78728_Path
         _ember_bde3ce9b68d78728_path = _ember_bde3ce9b68d78728_Path(__file__).resolve().parents[4].joinpath('scripts', 'gpu_lock_guard.py')
         if not _ember_bde3ce9b68d78728_path.is_file():
-            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/gpu_lock_guard.py')
-        _ember_bde3ce9b68d78728_aliases = ('_ember_issue2015_bde3ce9b68d78728', 'gpu_lock_guard', 'scripts.gpu_lock_guard')
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/gpu_lock_guard.py')
+        _ember_bde3ce9b68d78728_aliases = ('_ember_issue2015_bde3ce9b68d78728', 'gpu_lock_guard', 'src.ember.governance.scripts.gpu_lock_guard')
         _ember_bde3ce9b68d78728_existing = []
         for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
             _ember_bde3ce9b68d78728_candidate = _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias)
             if _ember_bde3ce9b68d78728_candidate is not None and all(_ember_bde3ce9b68d78728_candidate is not item for item in _ember_bde3ce9b68d78728_existing):
                 _ember_bde3ce9b68d78728_existing.append(_ember_bde3ce9b68d78728_candidate)
         if len(_ember_bde3ce9b68d78728_existing) > 1:
-            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/gpu_lock_guard.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/gpu_lock_guard.py')
         if _ember_bde3ce9b68d78728_existing:
             _ember_bde3ce9b68d78728_module = _ember_bde3ce9b68d78728_existing[0]
             _ember_bde3ce9b68d78728_observed = getattr(_ember_bde3ce9b68d78728_module, '__file__', None)
             if _ember_bde3ce9b68d78728_observed is None or _ember_bde3ce9b68d78728_Path(_ember_bde3ce9b68d78728_observed).resolve() != _ember_bde3ce9b68d78728_path:
-                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/gpu_lock_guard.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/gpu_lock_guard.py')
         else:
             _ember_bde3ce9b68d78728_spec = _ember_bde3ce9b68d78728_importlib.spec_from_file_location('_ember_issue2015_bde3ce9b68d78728', _ember_bde3ce9b68d78728_path)
             if _ember_bde3ce9b68d78728_spec is None or _ember_bde3ce9b68d78728_spec.loader is None:
-                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/gpu_lock_guard.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/gpu_lock_guard.py')
             _ember_bde3ce9b68d78728_module = _ember_bde3ce9b68d78728_importlib.module_from_spec(_ember_bde3ce9b68d78728_spec)
             for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
                 _ember_bde3ce9b68d78728_prior = _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias)
                 if _ember_bde3ce9b68d78728_prior is not None and _ember_bde3ce9b68d78728_prior is not _ember_bde3ce9b68d78728_module:
-                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/gpu_lock_guard.py')
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/gpu_lock_guard.py')
                 _ember_bde3ce9b68d78728_sys.modules[_ember_bde3ce9b68d78728_alias] = _ember_bde3ce9b68d78728_module
             try:
                 _ember_bde3ce9b68d78728_spec.loader.exec_module(_ember_bde3ce9b68d78728_module)
@@ -870,10 +870,10 @@ def device_lease(requested_device: str):
         for _ember_bde3ce9b68d78728_alias in _ember_bde3ce9b68d78728_aliases:
             _ember_bde3ce9b68d78728_prior = _ember_bde3ce9b68d78728_sys.modules.get(_ember_bde3ce9b68d78728_alias)
             if _ember_bde3ce9b68d78728_prior is not None and _ember_bde3ce9b68d78728_prior is not _ember_bde3ce9b68d78728_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/gpu_lock_guard.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/gpu_lock_guard.py')
             _ember_bde3ce9b68d78728_sys.modules[_ember_bde3ce9b68d78728_alias] = _ember_bde3ce9b68d78728_module
         gpu_lock_guard = _ember_bde3ce9b68d78728_module
-        # issue2015 exact-local-import-end:scripts/gpu_lock_guard.py
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/gpu_lock_guard.py
     except ImportError as e:
         raise LegBScorerRefusal(
             f"LEGB_SCORER_GPU_LOCK_GUARD_IMPORT_FAILED: {e}") from e

@@ -1056,7 +1056,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/nck/ember_shakedown.py",
+      "path": "src/ember/governance/scripts/nck/ember_shakedown.py",
       "line": 60,
       "target": "DEFAULT_CHECKPOINT_DIR",
       "expression": "REPO_ROOT.parent / 'runs' / 'v0-r1s1' / 'checkpoints' / 'step-00025000'",
@@ -1078,7 +1078,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/r2d_control.py",
+      "path": "src/ember/governance/scripts/r2d_control.py",
       "line": 12,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1089,7 +1089,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/r2d_grpo.py",
+      "path": "src/ember/governance/scripts/r2d_grpo.py",
       "line": 8,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1100,7 +1100,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/r2d_mtp.py",
+      "path": "src/ember/governance/scripts/r2d_mtp.py",
       "line": 8,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1111,7 +1111,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/r2d_sft.py",
+      "path": "src/ember/governance/scripts/r2d_sft.py",
       "line": 12,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",

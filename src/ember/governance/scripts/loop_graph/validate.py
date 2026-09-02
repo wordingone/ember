@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - exercised only where jsonschema is abs
     _HAVE_JSONSCHEMA = False
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCHEMA_DIR = REPO_ROOT / "schemas" / "loop-graph"
 
 DOC_TYPES: dict[str, str] = {

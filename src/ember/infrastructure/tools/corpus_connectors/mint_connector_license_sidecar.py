@@ -21,7 +21,7 @@ from typing import Any
 
 # Direct execution appends the repository root so package imports resolve
 # without publishing connector-local bare names or shadowing earlier imports.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
@@ -182,7 +182,7 @@ def _write_json(path: Path, value: object) -> bytes:
 
 
 def _canonical_license_identity(value: Any) -> str:
-    authority_path = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b" / "text_lab_corpus.py"
+    authority_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "tools" / "ember-restart-3b" / "text_lab_corpus.py"
     spec = importlib.util.spec_from_file_location("text_lab_corpus_sidecar_license_authority", authority_path)
     if spec is None or spec.loader is None:
         raise LicenseSidecarRefusal("canonical license authority is unavailable")
@@ -330,7 +330,7 @@ def mint_license_sidecar(
             "derived_file_count": len(derived_files),
             "derived_total_bytes": derived_receipt["total_bytes"],
             "derived_manifest_sha256": derived_receipt["sha256_manifest"],
-            "producer_path": "tools/corpus_connectors/mint_connector_license_sidecar.py",
+            "producer_path": "src/ember/infrastructure/tools/corpus_connectors/mint_connector_license_sidecar.py",
             "producer_sha256": sha256_file(Path(__file__).resolve(strict=True)),
             "claim_boundary": "DERIVED_CONNECTOR_CUSTODY_ONLY_NO_ACQUISITION_NO_ADMISSION_NO_TRAINING",
         }

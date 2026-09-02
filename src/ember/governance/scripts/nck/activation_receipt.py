@@ -73,7 +73,7 @@ _STAGED_MSG = (
 # Harness-SHA helpers (fail-closed: void if uncommitted)
 # ---------------------------------------------------------------------------
 
-_THIS_SCRIPT_REL = "scripts/nck/activation_receipt.py"
+_THIS_SCRIPT_REL = "src/ember/governance/scripts/nck/activation_receipt.py"
 
 
 def _get_harness_sha() -> str:

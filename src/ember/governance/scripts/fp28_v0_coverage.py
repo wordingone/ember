@@ -23,7 +23,7 @@ Two halves:
    in PROBE_BUCKETS; stop at PROBE_N. Expected outputs come from the
    reference implementations below (fp-23 verification semantics:
    reference executes, candidate must exact-match repr). The emitted
-   scripts/probes/l1-probe-set-seed23.json IS the single source — the eng eval
+   src/ember/governance/scripts/probes/l1-probe-set-seed23.json IS the single source — the eng eval
    harness consumes this file; it never re-materializes.
 
 2. COVERAGE EXECUTOR (`--emit`). Consumes a REAL checkpoint-probe eval
@@ -57,7 +57,7 @@ from receipt_write import checked_write               # noqa: E402
 from receipt_check import validate_receipt             # noqa: E402
 import fp23_probe_prereg as fp23                       # noqa: E402
 
-PROBE_SET_PATH = "scripts/probes/l1-probe-set-seed23.json"
+PROBE_SET_PATH = "src/ember/governance/scripts/probes/l1-probe-set-seed23.json"
 # fp-25b partition conventions (fp25b receipts: dead theta=0, easy >0.5)
 THETA_EASY = 0.5
 SHA_CONVENTION = ("file shas = sha256 over the exact on-disk raw bytes, no "
