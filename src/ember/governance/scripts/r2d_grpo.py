@@ -6,4 +6,4 @@ import sys
 NC = "<local-path>"
 sys.argv = ["t2_r2_grpo.py", "--the lead-gate-token", "r2-prereg-20260611-the lead"]
 sys.path.insert(0, f"{NC}/scripts")
-runpy.run_path(f"{NC}/scripts/t2_r2_grpo.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/t2_r2_grpo.py", run_name="__main__")
