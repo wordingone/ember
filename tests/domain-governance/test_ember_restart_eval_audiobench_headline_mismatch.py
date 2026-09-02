@@ -4,7 +4,7 @@
 import hashlib,json,subprocess,sys,tempfile
 from pathlib import Path
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCORER=ROOT/'scripts'/'ember_restart_eval_audiobench_bound.py'
 
 def _sha(path):

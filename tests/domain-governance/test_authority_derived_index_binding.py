@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SPEC = importlib.util.spec_from_file_location(
     "verify_authority_conservation",
     REPO / "scripts" / "verify_authority_conservation.py",

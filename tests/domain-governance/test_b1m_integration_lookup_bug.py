@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 
 # Assume we have access to the snapshot
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SNAPSHOT_DIR = REPO_ROOT / "models/cbase-grow-rung/rung2-event-grow-rung2-20260708-real/b1-snapshot"
 GATE_KEY = "backbone_model.layers.0.mlp.gate_proj.weight"
 

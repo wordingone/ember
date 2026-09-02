@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = REPO / "scripts" / "verify_authority_supersession_crosswalk.py"
 SPEC = importlib.util.spec_from_file_location("authority_crosswalk", SCRIPT)
 assert SPEC and SPEC.loader
