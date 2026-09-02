@@ -2497,7 +2497,7 @@
       "error": "call outside closed grammar: set"
     },
     {
-      "path": "tools/corpus_connectors/tests/test_receipt_import_boundaries.py",
+      "path": "src/ember/infrastructure/tools/corpus_connectors/tests/test_receipt_import_boundaries.py",
       "line": 30,
       "target": "FAMILY_ROOTS",
       "expression": "(ADMISSION, CONNECTORS)",
