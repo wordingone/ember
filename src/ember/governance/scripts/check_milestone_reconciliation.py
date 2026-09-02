@@ -24,7 +24,7 @@ Checks:
   (d) emits receipts/milestone-reconciliation-<UTCtimestamp>.json.
 
 Input resolution: docs/domains/governance/contracts/ember-completeness.md, docs/roadmap/PROBLEMS.md and
-docs/problems-meta.yaml are read from THIS worktree if present, else
+docs/domains/governance/problems-meta.yaml are read from THIS worktree if present, else
 read-only from <reference-tree> (never written). docs/spec/milestones-v1.md and
 docs/contracts/ember-floor-contract.md are goalforge-native (worktree only). Every
 resolved path is recorded in the receipt's `inputs` map as {relpath: tree}.
@@ -398,7 +398,7 @@ def run():
             return 0
         completeness_path = _resolve("docs/domains/governance/contracts/ember-completeness.md", inputs)
         problems_path = _resolve("docs/roadmap/PROBLEMS.md", inputs)
-        _resolve("docs/problems-meta.yaml", inputs)  # provenance only, see module docstring
+        _resolve("docs/domains/governance/problems-meta.yaml", inputs)  # provenance only, see module docstring
         milestones_path = _resolve("docs/spec/milestones-v1.md", inputs, allow_ember_fallback=False)
         floor_contract_path = _resolve("docs/contracts/ember-floor-contract.md", inputs, allow_ember_fallback=False)
 

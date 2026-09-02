@@ -11,7 +11,7 @@ is this fail-closed consumer: it REFUSES on time-order violation, missing lineag
 split-sha drift, and ADMITS the happy path with per-dataset effective_filtered_sha256
 that visibly differs from the unfiltered content for contaminated datasets.
 
-Run:  python tests/test_a1_freeze_consumer.py
+Run:  python tests/domain-governance/test_a1_freeze_consumer.py
 """
 from __future__ import annotations
 

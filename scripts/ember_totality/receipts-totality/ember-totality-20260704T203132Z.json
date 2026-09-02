@@ -329,7 +329,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/_lane14_common.py",
+            "path": "src/ember/governance/scripts/ember_totality/_lane14_common.py",
             "sha256": "89a202bb0f1e5bc2610fbfa077293e447e3101ad35497a1494977eba294f9e0e",
             "present": true
           },
@@ -384,7 +384,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/scripts/v_compare.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/src/ember/governance/scripts/v_compare.py",
             "sha256": "9bf0277f1f3d0f02372ac37768d4bd8a53b54643c35854ef4b6cd1feb9db73ae",
             "present": true
           },
@@ -419,7 +419,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/scripts/v_compare.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/src/ember/governance/scripts/v_compare.py",
             "sha256": "9bf0277f1f3d0f02372ac37768d4bd8a53b54643c35854ef4b6cd1feb9db73ae",
             "present": true
           },
@@ -454,7 +454,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/scripts/v_compare.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/src/ember/governance/scripts/v_compare.py",
             "sha256": "9bf0277f1f3d0f02372ac37768d4bd8a53b54643c35854ef4b6cd1feb9db73ae",
             "present": true
           },
@@ -489,7 +489,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/scripts/v_compare.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/src/ember/governance/scripts/v_compare.py",
             "sha256": "9bf0277f1f3d0f02372ac37768d4bd8a53b54643c35854ef4b6cd1feb9db73ae",
             "present": true
           },
@@ -529,7 +529,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg.py",
             "sha256": "795e3e9a785aff718c547eff60d14da1445d6e7c9aee6c276fbc792ac550ce05",
             "present": true
           },
@@ -539,7 +539,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
             "sha256": "c2f502fe7bca013540f21e426b53b9b310058577040769f692f6365e704590bc",
             "present": true
           },
@@ -749,7 +749,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_surface2.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
             "sha256": "95f28a9cb20fc87e874b3c78ccee4684a4101e9909f349bbdec3bf9bb9acbdf3",
             "present": true
           }

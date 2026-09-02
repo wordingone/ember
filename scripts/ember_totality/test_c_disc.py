@@ -13,7 +13,7 @@ this CHK, zero code referenced BOOTSTRAP_FAIL or the escalation-object path outs
 own text (docs/audit/class2-unwatched-mandates-recon-20260704.md #3, blast-radius rank #1).
 
 CHK enforced here: `disconfirmation_leg.run_disconfirmation_leg(ROOT)` subprocess-executes
-scripts/check_disconfirmation_triggers.py with dual-source verdict resolution (process exit
+src/ember/governance/scripts/check_disconfirmation_triggers.py with dual-source verdict resolution (process exit
 code cross-checked against the checker's own printed verdict line, reusing enforcement_leg.py's
 _run_one_checker UNMODIFIED -- the same C-ENF/C-MILE pattern, not a reimplementation):
 

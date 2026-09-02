@@ -8,7 +8,7 @@
 > (`invalid_substrate_downgrade`), so read "zero mentions" as an audit-date claim at
 > best. §6 is the maintained tail — for the live frontier read
 > `docs/domains/governance/design/inference-to-training-translation-v1.md` and
-> `docs/design/sota-stack-floor.md`.
+> `docs/domains/governance/design/sota-stack-floor.md`.
 
 Operator raised (2026-07-03 ~23:10, verbatim themes): (1) "you've been training ember on fp16 —
 what happened to quantization-native, 1.58-bit, subquadratic"; (2) "what is ember's total,
@@ -102,7 +102,7 @@ evolving HIS OWN foundation models — sovereign, no cloud/subscription AI in th
 The maintained translation system is
 [`docs/domains/governance/design/inference-to-training-translation-v1.md`](../domains/governance/design/inference-to-training-translation-v1.md);
 the per-layer frontier and gap table is
-[`docs/design/sota-stack-floor.md`](sota-stack-floor.md). These replace the former
+[`docs/domains/governance/design/sota-stack-floor.md`](sota-stack-floor.md). These replace the former
 implicit assumption that an inference optimization automatically supplies a
 training-memory or training-throughput benefit.
 

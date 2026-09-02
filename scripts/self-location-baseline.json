@@ -66,7 +66,7 @@
       "error": "node outside closed grammar: Attribute"
     },
     {
-      "path": "scripts/density_ab_prep.py",
+      "path": "src/ember/governance/scripts/density_ab_prep.py",
       "line": 77,
       "target": "CODE_SOURCE_DIR",
       "expression": "f'{CORPUS_V0}/code_github_clean'",
@@ -77,7 +77,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/density_ab_prep.py",
+      "path": "src/ember/governance/scripts/density_ab_prep.py",
       "line": 78,
       "target": "LEDGER_SOURCE_DIR",
       "expression": "f'{CORPUS_V0}/ledger_mit'",
@@ -88,7 +88,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/dgate_sft_recall.py",
+      "path": "src/ember/governance/scripts/dgate_sft_recall.py",
       "line": 23,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -286,7 +286,7 @@
       "error": "unknown alias sandbox_root_env"
     },
     {
-      "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+      "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
       "line": 117,
       "target": "_exec_root",
       "expression": "os.environ.get('EMBER_EXEC_ROOT')",
@@ -297,7 +297,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+      "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
       "line": 120,
       "target": "EXEC_ROOT_DEFAULT",
       "expression": "Path(_exec_root)",
@@ -913,7 +913,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_surface2.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
       "line": 139,
       "target": "DEFAULT_EXEC_ROOT",
       "expression": "os.environ.get('EMBER_EXEC_ROOT', REPO_ROOT)",
@@ -1221,7 +1221,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t4_eval.py",
+      "path": "src/ember/governance/scripts/t4_eval.py",
       "line": 37,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1342,7 +1342,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/w1_mbpp.py",
+      "path": "src/ember/governance/scripts/w1_mbpp.py",
       "line": 35,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -2464,7 +2464,7 @@
       "error": "unknown alias SOURCE_ROOT"
     },
     {
-      "path": "tests/test_a1_freeze_consumer.py",
+      "path": "tests/domain-governance/test_a1_freeze_consumer.py",
       "line": 75,
       "target": "SCAN_DIR",
       "expression": "resolve_eval_suite_dir()",

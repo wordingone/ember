@@ -1063,7 +1063,7 @@ the between-group sampled baseline (anchors out ARC-grid FORMAT
 texture — high cosine alone may be a property of the prompt format,
 not of duplication).
 
-**Method (`scripts/fp18_promptdiv.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp18_promptdiv.py`, selftest PASS, receipt
 `fp18-promptdiv-20260611T021320Z.json`, daemon eval d59caf48):** replay
 build A exactly as fp-17 (same build_dataset call); group by ASSISTANT
 completion; pairwise 3-gram-bag cosine over PROMPTS within each

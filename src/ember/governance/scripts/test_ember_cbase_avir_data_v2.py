@@ -26,7 +26,7 @@ Each test targets a specific does-not-count defect from the REJECT verdict:
   test_full_pipeline_round_trip:
     Full pipeline produces verified traces and round-trips the packed shard.
 
-Run: python scripts/test_ember_cbase_avir_data_v2.py
+Run: python src/ember/governance/scripts/test_ember_cbase_avir_data_v2.py
 """
 from __future__ import annotations
 

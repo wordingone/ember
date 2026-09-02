@@ -19,7 +19,7 @@ Extends the freeze doc's receipt schema (docs/domains/governance/spec/eval-suite
     per docs/domains/governance/ledgers/deviations.md DEV-004, battery-14 section).
 
 Usage:
-  python scripts/a1_freeze_declaration.py \\
+  python src/ember/governance/scripts/a1_freeze_declaration.py \\
       --heldout-receipt receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json \\
       --freeze-receipt receipts/eval-suite-freeze/eval-suite-freeze-v1.json \\
       --quarantine-receipt receipts/eval-suite-freeze/a1-prefreeze-quarantine-<ts>.json \\

@@ -32,7 +32,7 @@ FINDINGS (read before trusting the output blindly):
    parameters for unrelated purposes). Only rows inside the real validation/round-trip
    call path this increment lands (``scripts/ember_01_identity/validate_identity.py``'s
    ``parameters`` schema/contradiction checks, exercised end-to-end by
-   ``tests/ember_01_identity/test_parameter_identity_roundtrip.py`` against a manifest
+   ``tests/ember_01_identity/domain-governance/test_parameter_identity_roundtrip.py`` against a manifest
    bound to a REAL measured checkpoint receipt) are adjudicated as real consumers here.
    The new wiring this increment adds
    (``scripts/ember_01_identity/parameter_identity_binding.py``,

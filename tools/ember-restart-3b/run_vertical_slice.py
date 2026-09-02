@@ -1118,7 +1118,7 @@ def _record_e4_measurement_write_failure(
 
 def _frozen_envelope_fields(progress: Mapping[str, object]) -> dict[str, object]:
     """Derive the frozen `train_step` envelope's `tokens`/`wall_seconds` fields
-    (`docs/spec/ember02-r1-e8-receipts-v1.md`, `a1_execution._train_step_envelope`)
+    (`docs/domains/governance/spec/ember02-r1-e8-receipts-v1.md`, `a1_execution._train_step_envelope`)
     from the shared pretraining producer's own measured quantities (issue #1464).
 
     `run_pretraining_segment` (`pretrain.py`) already measures the exact same

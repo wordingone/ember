@@ -6,7 +6,7 @@
 // the certified tree (issue #1330).
 //
 // KEY_PARITY_VECTORS is the shared contract with Get-EmberStateRootKey in
-// scripts/prepare-ember-cockpit.ps1: tests/test_ember_root_launcher.py drives the SAME inputs
+// scripts/prepare-ember-cockpit.ps1: tests/domain-governance/test_ember_root_launcher.py drives the SAME inputs
 // through the PowerShell side and asserts the SAME outputs. If either implementation
 // drifts, one of the two suites goes red — the failure mode this pins is a launcher and a
 // cockpit that silently disagree about where state lives.
@@ -27,7 +27,7 @@ import {
 } from "./ember-state-root.ts";
 import { _resetConfigHomeMemo } from "./env-detection.ts";
 
-/** [repo root, expected key] — mirrored verbatim in tests/test_ember_root_launcher.py. */
+/** [repo root, expected key] — mirrored verbatim in tests/domain-governance/test_ember_root_launcher.py. */
 export const KEY_PARITY_VECTORS: ReadonlyArray<readonly [string, string]> = [
   ["C:\\fixture\\ember", "c-fixture-ember"],
   ["C:\\Fixture\\Ember\\", "c-fixture-ember"],

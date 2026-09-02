@@ -25,7 +25,7 @@ v3 receipts at distinct growth fractions `f` share one iso-FLOP budget and
 either distinct eval-batch hashes per arm or a documented shared-batch
 rationale — guarding against undocumented cross-arm evaluation leakage.
 
-`scripts/ember_growth_harness.py` ("Repeated-cycle growth gate for Ember MVP
+`src/ember/governance/scripts/ember_growth_harness.py` ("Repeated-cycle growth gate for Ember MVP
 receipts") separately enforces `MIN_REPEATED_POSITIVE_CYCLES = 3` — a growth
 claim must be backed by at least three repeated positive cycles, not a single
 lucky run, before the harness accepts it.

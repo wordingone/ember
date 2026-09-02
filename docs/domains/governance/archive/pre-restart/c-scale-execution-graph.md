@@ -149,7 +149,7 @@ These are the conditions a satisfying C-SCALE receipt **must NEVER match**. Quot
 **Predicate:** `contribution_deletion_collapses_excess is False`
 
 - **Rule:** Running the recipe WITHOUT growth (deletion arm: dense baseline) must NOT reach capability if growth arms do. If deletion collapses excess and *still reaches* the capability point, growth played no role — the capability gain is an artifact of other changes (data, recipe, heuristics). RED.
-- **Cited source:** `scratch/c-scale-assembler/fixtures/*/receipts/ember-c-scale/c-scale-s3-deletion-arm-*.json` contract; `docs/spec/c8-preregistration-v1.md` §4 (ablation F3, deletion check).
+- **Cited source:** `scratch/c-scale-assembler/fixtures/*/receipts/ember-c-scale/c-scale-s3-deletion-arm-*.json` contract; `docs/domains/governance/spec/c8-preregistration-v1.md` §4 (ablation F3, deletion check).
 
 ### Invalid Memory (regime-broken co-residence)
 

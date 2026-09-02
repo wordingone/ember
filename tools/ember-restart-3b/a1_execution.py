@@ -94,7 +94,7 @@ def _train_step_envelope(
     wall_seconds: float,
 ) -> dict[str, Any]:
     """The frozen `train_step` telemetry envelope
-    (`docs/spec/ember02-r1-e8-receipts-v1.md`): `{"ts":..., "kind":"train_step",
+    (`docs/domains/governance/spec/ember02-r1-e8-receipts-v1.md`): `{"ts":..., "kind":"train_step",
     "source":"ember-restart-3b", "payload": {...}}`, extended with `tokens` and
     `wall_seconds` for `a1_e8_evidence.derive_liveness_series`.
 

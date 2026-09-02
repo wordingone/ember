@@ -27,7 +27,7 @@ re-derive the number):
                         and is only valid for a from-step-1 run, so it REFUSES
                         when the manifest's lineage shows a resume.
   proxy_joules_per_token  total_proxy_joules from the run root's energy-proxy
-                        receipt (scripts/energy_proxy_logger.py vocabulary --
+                        receipt (src/ember/governance/scripts/energy_proxy_logger.py vocabulary --
                         bound here, not re-invented) over the same token count.
   peak_vram_gib         preferred: peak_memory_bytes from an R1-E4 capture;
                         fallback: telemetry max(total_gib - free_gib).
@@ -293,7 +293,7 @@ def measure_proxy_joules_per_token(run_root: Path, series: list[dict[str, Any]],
     if not candidates:
         raise RecalibrationRefusal(
             "UNMEASURABLE proxy_joules_per_token: no *energy-proxy*.json receipt under the run root "
-            "(scripts/energy_proxy_logger.py was not invoked for this run -- R1-E5 wiring)"
+            "(src/ember/governance/scripts/energy_proxy_logger.py was not invoked for this run -- R1-E5 wiring)"
         )
     if len(candidates) > 1:
         raise RecalibrationRefusal(
@@ -305,7 +305,7 @@ def measure_proxy_joules_per_token(run_root: Path, series: list[dict[str, Any]],
         receipt = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise RecalibrationRefusal(f"UNMEASURABLE proxy_joules_per_token: {path}: {error}") from error
-    # scripts/energy_proxy_logger.py (schema ember-energy-proxy-run-v1) nests
+    # src/ember/governance/scripts/energy_proxy_logger.py (schema ember-energy-proxy-run-v1) nests
     # total_proxy_joules/energy_boundary under an "energy" block -- the same
     # place src/ember/governance/scripts/r1_exit_battery.py's E5 leg reads them from. There is no
     # flat top-level shape in this receipt's history; a top-level read would
@@ -314,7 +314,7 @@ def measure_proxy_joules_per_token(run_root: Path, series: list[dict[str, Any]],
     if not isinstance(energy, dict):
         raise RecalibrationRefusal(
             f"UNMEASURABLE proxy_joules_per_token: {path} carries no nested \"energy\" object "
-            "(scripts/energy_proxy_logger.py writes total_proxy_joules/energy_boundary under "
+            "(src/ember/governance/scripts/energy_proxy_logger.py writes total_proxy_joules/energy_boundary under "
             "energy.*, matching the E5 battery leg)"
         )
     total = energy.get("total_proxy_joules")

@@ -8,7 +8,7 @@ The B3 instrument's seat-facing half: binds ANY text-generation backend into
 the replay rig's core interface so both seats (ember core, Gemma E2B) receive
 byte-identical prompts per episode and are scored by one deterministic parser.
 
-Contract (frozen; docs/archive/pre-restart/sp6c-seat-adapter-v0.md):
+Contract (frozen; docs/domains/governance/archive/pre-restart/sp6c-seat-adapter-v0.md):
 - build_prompt(event, sandbox_dir) -> str: deterministic, machine-invariant.
   Sandbox absolute paths are reverse-substituted to '{root}' so the prompt is
   identical across runs/machines (replay-identical rule, fp33 prereg B3).

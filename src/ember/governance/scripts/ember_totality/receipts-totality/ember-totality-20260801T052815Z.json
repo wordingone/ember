@@ -372,7 +372,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/_lane14_common.py",
+            "path": "src/ember/governance/scripts/ember_totality/_lane14_common.py",
             "sha256": "01839a59bbc12426867843a9e2d03c7e1d1179c8fdb5038a3fdf5345dcd70315",
             "present": true
           },
@@ -422,7 +422,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
             "sha256": "531fd33557b64d08ee39779bf234554b1944b7cf9d22ed54e9d3213cad5ffffc",
             "present": true
           },
@@ -517,7 +517,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py",
             "sha256": "33954d701b1bb306bf03d94130735f84521f4a410860cffdd2a7f1e5aa667bd3",
             "present": true
           },
@@ -547,7 +547,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg.py",
             "sha256": "795e3e9a785aff718c547eff60d14da1445d6e7c9aee6c276fbc792ac550ce05",
             "present": true
           },
@@ -572,7 +572,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
             "sha256": "dcc0850bcd8ba3ce1cee341143a597fa0d792b2fdac83ae40fd55ab564fb573c",
             "present": true
           },
@@ -842,7 +842,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_surface2.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
             "sha256": "6017c24301129ca4184e90cf83b30d52b7b3069d292bc3b9c2e43c3913d1e45f",
             "present": true
           },

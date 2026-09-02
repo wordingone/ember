@@ -116,7 +116,7 @@ SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization
 REQUIRED_PAPERS = {"RLM", "iGRPO"}
 SUPERSEDED_PARALLEL_SPECS = [
     Path("docs/domains/governance/archive/pre-restart/ember-mvp-v0.md"),
-    Path("docs/archive/pre-restart/20260617-maximally-viable-product.md"),
+    Path("docs/domains/governance/archive/pre-restart/20260617-maximally-viable-product.md"),
 ]
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -1416,7 +1416,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
             "can be deferred out of the foundation model.\n"
         ),
         "docs/domains/governance/archive/pre-restart/ember-mvp-v0.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
-        "docs/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
+        "docs/domains/governance/archive/pre-restart/20260617-maximally-viable-product.md": "# SUPERSEDED fixture\n\ndocs/domains/governance/authority/GOAL.md is the sole active goal file; no scope is reduced; resident_training_gate_status=PASS required.\n",
         "docs/domains/governance/archive/pre-restart/sp5-nck-harness-port-spec-v0.md": "clean-room spec\n",
         "docs/domains/governance/archive/pre-restart/nck-event-loop-v0.md": "event loop\n",
         "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md": "invariants\n",

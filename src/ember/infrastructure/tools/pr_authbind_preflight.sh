@@ -41,7 +41,7 @@
 #      body — never a silent pass-through.
 #
 # Usage:
-#   bash tools/pr_authbind_preflight.sh <PR_NUMBER> [<LOCAL_HEAD_REF>]
+#   bash src/ember/infrastructure/tools/pr_authbind_preflight.sh <PR_NUMBER> [<LOCAL_HEAD_REF>]
 # Exit 0 only if ALL of Step A (repo-guard structural kernel), Step B (PR-body +
 # changed-artifact authority binding), and Step C (the live PR policy: labels,
 # milestone, title grammar, template marker, required body sections, the

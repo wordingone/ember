@@ -15,7 +15,7 @@ from types import ModuleType
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 POLICY_PATH = ROOT / "manifests" / "architecture" / "domain-authority-v1.json"
 COMPILER_PATH = ROOT / "scripts" / "architecture_map.py"
 

@@ -213,7 +213,7 @@
       "condition": "C-DISC",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
+      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/src/ember/governance/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
     },
     {
       "condition": "C-LADM",
@@ -329,7 +329,7 @@
             "present": false
           },
           {
-            "path": "scripts/ember_totality/_lane14_common.py",
+            "path": "src/ember/governance/scripts/ember_totality/_lane14_common.py",
             "sha256": "89a202bb0f1e5bc2610fbfa077293e447e3101ad35497a1494977eba294f9e0e",
             "present": true
           },
@@ -349,7 +349,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg.py",
             "sha256": "795e3e9a785aff718c547eff60d14da1445d6e7c9aee6c276fbc792ac550ce05",
             "present": true
           },
@@ -359,7 +359,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
             "sha256": "6a24fefaf533e0a27ac3b3922ec2e4a71bcf995b394d6761729a0de2732be6a3",
             "present": true
           },
@@ -569,7 +569,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_surface2.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
             "sha256": "3e912287e358bb4e084b01c84698240526da5044dc8fe26132718343439fdef8",
             "present": true
           }

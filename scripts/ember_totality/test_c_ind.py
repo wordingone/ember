@@ -335,7 +335,7 @@ def _validate_ind4(entries, root: Path):
 # not the operator. The OLD [A] leg below (a dated operator-attestation
 # object) was a fact about a human mind, unfalsifiable by the system, and
 # parked a board RED on a person. GREEN now requires a `comprehend_v2`
-# receipt (scripts/ember_totality/ind5_comprehend_producer.py) whose four
+# receipt (src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py) whose four
 # legs -- entry_point_integrity, completeness, freshness, executability --
 # ALL pass. The OLD [A] field's script-authored-invalid trap
 # (invalid_comprehension_by_script) STAYS enforced, fail-closed, checked

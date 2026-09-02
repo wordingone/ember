@@ -3,7 +3,7 @@
 The live command registry (`tools/ember-cli/src/command-registry.ts`,
 `getCommands()`) currently exposes six commands. This list is generated
 from, and machine-checked against, that same registry (see
-`scripts/ember_totality/ind5_comprehend_producer.py`'s completeness and
+`src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py`'s completeness and
 freshness legs) — if the live registry changes, this file is stale until
 updated.
 
