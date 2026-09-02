@@ -38,4 +38,4 @@ jobs:
           python -B src/ember/governance/scripts/github/template_policy.py --root .
           python -B src/ember/governance/scripts/github/workflow_policy.py --root .
       - name: Run policy unit tests
-        run: python -B -m unittest discover -s scripts/github -p "test_*.py" -v
+        run: python -B -m unittest discover -s src/ember/governance/scripts/github -p "test_*.py" -v
