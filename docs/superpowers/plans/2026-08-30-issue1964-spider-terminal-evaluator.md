@@ -59,8 +59,8 @@
 **Files:**
 - Modify: `scripts/ember_restart_eval_spider.py`
 - Modify: `tests/test_ember_restart_eval_spider_terminal.py`
-- Modify: `tests/test_ember_restart_eval_spider.py`
-- Modify: `tests/test_ember_restart_eval_spider_json_predictions.py`
+- Modify: `tests/domain-governance/test_ember_restart_eval_spider.py`
+- Modify: `tests/domain-governance/test_ember_restart_eval_spider_json_predictions.py`
 
 **Interfaces:**
 - Consumes: ordered row results and all validated input hashes.
