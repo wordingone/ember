@@ -18,20 +18,53 @@ CROSSWALK_PATH = (
     / "authority"
     / "issue-35-authority-supersession-crosswalk-v1.json"
 )
-MATRIX_PATH = Path("docs") / "ember-authority-matrix.md"
-VERIFIER_PATH = Path("scripts") / "verify_authority_supersession_crosswalk.py"
+MATRIX_PATH = (
+    Path("docs")
+    / "domains"
+    / "governance"
+    / "authority"
+    / "ember-authority-matrix.md"
+)
+MATRIX_PATHS = (
+    Path("docs") / "ember-authority-matrix.md",
+    Path("docs") / "authority" / "ember-authority-matrix.md",
+    MATRIX_PATH,
+)
+VERIFIER_PATH = (
+    Path("src")
+    / "ember"
+    / "governance"
+    / "scripts"
+    / "verify_authority_supersession_crosswalk.py"
+)
+VERIFIER_PATHS = (
+    Path("scripts") / "verify_authority_supersession_crosswalk.py",
+    VERIFIER_PATH,
+)
 
 
 class AuthoritySupersessionGateError(ValueError):
     """The current-authority crosswalk is absent, malformed, or stale."""
 
 
-def _load_verifier(root: Path):
-    path = root / VERIFIER_PATH
-    if not path.is_file():
+def _select_unique_path(root: Path, label: str, candidates: tuple[Path, ...]) -> Path | None:
+    present = [candidate for candidate in candidates if (root / candidate).is_file()]
+    if len(present) > 1:
+        rendered = ", ".join(path.as_posix() for path in present)
         raise AuthoritySupersessionGateError(
-            f"authority supersession verifier is absent: {VERIFIER_PATH.as_posix()}"
+            f"duplicate {label} layouts; expected exactly one, found: {rendered}"
         )
+    return present[0] if present else None
+
+
+def _load_verifier(root: Path):
+    relative = _select_unique_path(root, "authority supersession verifier", VERIFIER_PATHS)
+    if relative is None:
+        raise AuthoritySupersessionGateError(
+            "authority supersession verifier is absent: "
+            + ", ".join(path.as_posix() for path in VERIFIER_PATHS)
+        )
+    path = root / relative
     spec = importlib.util.spec_from_file_location(
         "ember_authority_supersession_verifier", path
     )
@@ -55,11 +88,12 @@ def validate_current_authority_crosswalk(
     """
 
     root = root.resolve()
-    has_current_authority = (root / MATRIX_PATH).is_file()
-    if not has_current_authority:
+    matrix_path = _select_unique_path(root, "current authority matrix", MATRIX_PATHS)
+    if matrix_path is None:
         if require_current_authority:
             raise AuthoritySupersessionGateError(
-                f"current authority matrix is absent: {MATRIX_PATH.as_posix()}"
+                "current authority matrix is absent: "
+                + ", ".join(path.as_posix() for path in MATRIX_PATHS)
             )
         return None
     crosswalk = root / CROSSWALK_PATH

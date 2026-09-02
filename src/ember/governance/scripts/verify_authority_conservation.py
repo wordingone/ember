@@ -142,7 +142,7 @@ REQUIRED_SURFACES = [
     "docs/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/domains/governance/spec/conditions-v1.md",
-    "docs/authority/ember-authority-matrix.md",
+    "docs/domains/governance/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
     "CONTINUITY.md",
@@ -170,7 +170,9 @@ def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
     old_rel = PurePosixPath(name)
     canonical_rel = authority_canonical_relative_path(name)
     domain_rel = AUTHORITY_DOMAIN_DIRECTORY / name
-    return tuple(dict.fromkeys((old_rel, AUTHORITY_DIRECTORY / name, domain_rel)))
+    return tuple(
+        dict.fromkeys((old_rel, AUTHORITY_LEGACY_DIRECTORY / name, canonical_rel, domain_rel))
+    )
 
 
 FORBIDDEN_MODEL_SIGNALS = [

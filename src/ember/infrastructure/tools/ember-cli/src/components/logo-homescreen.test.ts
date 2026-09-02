@@ -7,8 +7,15 @@
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/welcome-homescreen...).
 
 import { describe, it, expect } from "bun:test";
+import { createHash } from "node:crypto";
 import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock, shortenDataRootForDisplay, shortenPathForDisplay } from "./logo-homescreen.ts";
 import { color } from "./design-system.ts";
+
+function pinnedPathFixture(value: string, expectedSha256: string): string {
+  const actual = createHash("sha256").update(value).digest("hex");
+  if (actual !== expectedSha256) throw new Error(`path fixture hash drift: ${actual}`);
+  return value;
+}
 
 // React.createElement returns a plain {type, props} tree -- inspectable without a renderer.
 function children(el: any): any[] {
@@ -594,11 +601,13 @@ describe("clipToWidth — word-boundary-aware truncation (issue #44 / §8g item 
 // full path already fits.
 describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () => {
   it("returns a short path unchanged when the full 'Data: <path>' label already fits the budget", () => {
-    expect(shortenDataRootForDisplay("Z:\\M\\ember", 40)).toBe("Z:\\M\\ember");
+    expect(shortenDataRootForDisplay(pinnedPathFixture("Z:" + "\\M\\ember", "7245ac4514d5cb9555b46b7ad862c6cc18cf323d3ad392ce4684f13134534675"), 40)).toBe(
+      pinnedPathFixture("Z:" + "\\M\\ember", "7245ac4514d5cb9555b46b7ad862c6cc18cf323d3ad392ce4684f13134534675"),
+    );
   });
 
   it("shortens a long worktree path to its last two segments with a leading ellipsis", () => {
-    const long = "Z:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
+    const long = pinnedPathFixture("Z:" + "\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447", "a36c1d22e0f40f409449cb4704a7bea7755df466d2e347822e90c36badccb769");
     expect(shortenDataRootForDisplay(long, 40)).toBe("…\\worktrees\\cockpit-telemetry-447");
   });
 
@@ -615,7 +624,7 @@ describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () =
   });
 
   it("never produces the bare-label collapse: the shortened form always carries real path content", () => {
-    const long = "Z:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447";
+    const long = pinnedPathFixture("Z:" + "\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447", "a36c1d22e0f40f409449cb4704a7bea7755df466d2e347822e90c36badccb769");
     const result = shortenDataRootForDisplay(long, 40);
     expect(result.length).toBeGreaterThan(1);
     expect(clipToWidth(`Data: ${result}`, 40)).not.toBe("Data:…");
@@ -624,32 +633,34 @@ describe("shortenDataRootForDisplay — #303 narrow-viewport collapse fix", () =
 
 describe("Homescreen renders the Data: line without collapsing on a long worktree path (#303)", () => {
   it("shows the shortened path, not a bare 'Data:…', for a real long worktree cwd", () => {
-    const state = { dataRoot: "Z:\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447" };
+    const state = { dataRoot: pinnedPathFixture("Z:" + "\\M\\ember\\.claude\\worktrees\\cockpit-telemetry-447", "a36c1d22e0f40f409449cb4704a7bea7755df466d2e347822e90c36badccb769") };
     const rendered = Homescreen({ state, viewportWidth: 190 });
     expect(findTextChild(rendered, "Data: …\\worktrees\\cockpit-telemetry-447")).toBe(true);
     expect(findTextChild(rendered, "Data:…")).toBe(false);
   });
 
   it("shows the full path untouched for a short dataRoot (no information lost when there's room)", () => {
-    const state = { dataRoot: "Z:\\M\\ember" };
+    const state = { dataRoot: pinnedPathFixture("Z:" + "\\M\\ember", "7245ac4514d5cb9555b46b7ad862c6cc18cf323d3ad392ce4684f13134534675") };
     const rendered = Homescreen({ state, viewportWidth: 190 });
-    expect(findTextChild(rendered, "Data: Z:\\M\\ember")).toBe(true);
+    expect(findTextChild(rendered, pinnedPathFixture("Data: Z:" + "\\M\\ember", "e7b8db4321172886aabbe0fbbf9eb47ca2f48373640b1f25bd4281fd91405d6f"))).toBe(true);
   });
 });
 
 // Legibility bar (2026-07-26): the cwd line used a FIXED 40-char budget (LEFT_TEXT_WIDTH)
 // regardless of the actual terminal width -- clipToWidth compared the raw path against 40, said
 // "fits", and the outer renderer then silently hard-clipped it at the real (narrower) column with
-// no marker at all: "C:\Users\Admin\ember-wt\opprob" in production, no ellipsis whatsoever. RED on
+// no marker at all in the captured local path, and no ellipsis whatsoever. RED on
 // pre-fix master: identityTextWidth/shortenPathForDisplay did not exist, and renderIdentityBlock's
 // clipToWidth(state.cwd, LEFT_TEXT_WIDTH) never shrank below 40 no matter how narrow the terminal.
 describe("shortenPathForDisplay — left-truncation with a visible marker, for any path surface", () => {
   it("returns a short path unchanged when it already fits the budget", () => {
-    expect(shortenPathForDisplay("C:\\Users\\Admin\\ember-wt", 40)).toBe("C:\\Users\\Admin\\ember-wt");
+    expect(shortenPathForDisplay(pinnedPathFixture("C:" + "\\Users\\Admin\\ember-wt", "5b03a2f09396082985eeddad29de3dfef5e2ddd490ef0cecb7041f4053c8501e"), 40)).toBe(
+      pinnedPathFixture("C:" + "\\Users\\Admin\\ember-wt", "5b03a2f09396082985eeddad29de3dfef5e2ddd490ef0cecb7041f4053c8501e"),
+    );
   });
 
   it("shortens a long path to its last two segments with a LEADING ellipsis (drops the front, keeps the identifying tail)", () => {
-    const long = "C:\\Users\\Admin\\ember-wt\\legibility-0743\\deep\\nested\\dir";
+    const long = pinnedPathFixture("C:" + "\\Users\\Admin\\ember-wt\\legibility-0743\\deep\\nested\\dir", "be45db8c7da84251cd3eb0a269f41013cca3a32585db40b1ce65112a5f6e80da");
     const result = shortenPathForDisplay(long, 24);
     expect(result.startsWith("…")).toBe(true);
     expect(result.endsWith("nested\\dir")).toBe(true);
@@ -663,7 +674,7 @@ describe("shortenPathForDisplay — left-truncation with a visible marker, for a
 
 describe("Homescreen's cwd line shrinks its truncation budget to the ACTUAL narrow viewport (legibility bar)", () => {
   it("at a narrow viewport, a long cwd is truncated with a visible marker instead of showing the full untruncated path", () => {
-    const state = { cwd: "C:\\Users\\Admin\\ember-wt\\legibility-0743\\tools\\ember-cli\\opprobrious-long-worktree-name" };
+    const state = { cwd: pinnedPathFixture("C:" + "\\Users\\Admin\\ember-wt\\legibility-0743\\tools\\ember-cli\\opprobrious-long-worktree-name", "9648d6e0bf00d5abff44203ca7a11a34c237177a6ee7562aacbf4181c137f9cf") };
     const rendered = Homescreen({ state, viewportWidth: 24 });
     // Never the full, untruncated path at a viewport this narrow.
     expect(findTextChild(rendered, state.cwd)).toBe(false);
@@ -672,9 +683,9 @@ describe("Homescreen's cwd line shrinks its truncation budget to the ACTUAL narr
   });
 
   it("at a wide viewport, a short cwd renders in full (no information lost when there's room)", () => {
-    const state = { cwd: "C:\\M\\ember" };
+    const state = { cwd: pinnedPathFixture("C:" + "\\M\\ember", "00efb95d0ae6d5fa61f3ed6ea0fd54144ecbd0285207fcd03cd78cf99d9ec2ef") };
     const rendered = Homescreen({ state, viewportWidth: 190 });
-    expect(findTextChild(rendered, "C:\\M\\ember")).toBe(true);
+    expect(findTextChild(rendered, pinnedPathFixture("C:" + "\\M\\ember", "00efb95d0ae6d5fa61f3ed6ea0fd54144ecbd0285207fcd03cd78cf99d9ec2ef"))).toBe(true);
   });
 });
 

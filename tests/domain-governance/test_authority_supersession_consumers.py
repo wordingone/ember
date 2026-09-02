@@ -19,7 +19,7 @@ import pytest
 
 
 REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-GATE_PATH = REPO / "scripts" / "authority_supersession_gate.py"
+GATE_PATH = REPO / "src" / "ember" / "governance" / "scripts" / "authority_supersession_gate.py"
 SPEC = importlib.util.spec_from_file_location("authority_supersession_gate", GATE_PATH)
 assert SPEC and SPEC.loader
 GATE = importlib.util.module_from_spec(SPEC)
@@ -34,7 +34,7 @@ def copy_crosswalk_tree(destination: Path) -> Path:
         GATE.VERIFIER_PATH.as_posix(),
     }
     paths.update(
-        f"docs/roadmap/milestones/EMBER-{index:02d}.md"
+        f"docs/domains/governance/roadmap/milestones/EMBER-{index:02d}.md"
         for index in range(12)
     )
     for registry in payload["source_registries"]:
@@ -91,3 +91,27 @@ def test_legacy_fixture_without_current_matrix_can_opt_out(tmp_path: Path) -> No
         )
         is None
     )
+
+
+def test_layout_selector_accepts_one_candidate(tmp_path: Path) -> None:
+    relative = GATE.MATRIX_PATHS[-1]
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.write_text("# matrix\n", encoding="utf-8")
+    assert GATE._select_unique_path(
+        tmp_path, "current authority matrix", GATE.MATRIX_PATHS
+    ) == relative
+
+
+def test_layout_selector_refuses_duplicate_candidates(tmp_path: Path) -> None:
+    for relative in (GATE.MATRIX_PATHS[0], GATE.MATRIX_PATHS[-1]):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# matrix\n", encoding="utf-8")
+    with pytest.raises(
+        GATE.AuthoritySupersessionGateError,
+        match="duplicate current authority matrix layouts; expected exactly one",
+    ):
+        GATE._select_unique_path(
+            tmp_path, "current authority matrix", GATE.MATRIX_PATHS
+        )
