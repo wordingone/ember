@@ -17,7 +17,7 @@ from typing import Any, Mapping, Sequence
 # the working directory.  Append the repository root so package-qualified
 # admission imports resolve without allowing repository modules to shadow
 # standard-library or site-package imports.
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
@@ -26,7 +26,7 @@ from candidate import (
     quarantine_candidate,
     stage_candidate,
 )
-from scripts.ember_admission.consumers import (
+from src.ember.governance.scripts.ember_admission.consumers import (
     CONSUMER_COMMAND_CONTRACTS,
     consumer_validator_closure_identity,
     run_identity_consumer,
@@ -35,7 +35,7 @@ from scripts.ember_admission.consumers import (
     verify_consumer_validators,
 )
 from descriptor import validate_descriptor
-from scripts.ember_admission.receipt import (
+from src.ember.governance.scripts.ember_admission.receipt import (
     verify_producer_receipt,
     write_producer_receipt,
 )

@@ -216,7 +216,7 @@ is R1/R2 — boring, mechanical, and worth ~1+ wall-day before June 22.
 ## 5. Prioritized plan
 
 Machine-shaped rows (an agent proof-gate schema, every required field):
-`docs/research/fp32-bottleneck-ledger.json`.
+`docs/domains/governance/research/fp32-bottleneck-ledger.json`.
 
 | # | what | cost | gate | status |
 |---|---|---|---|---|

@@ -48,7 +48,7 @@ scripts/ember_cbase_mixture.py
 src/ember/governance/scripts/ember_cbase_s6_acceptance.py
 scripts/ember_ceff_closure_confirmation.py
 src/ember/governance/scripts/ember_ceff_composition_ab.py
-scripts/ember_d3_broader_multifamily_admission_selftest.py
+src/ember/governance/scripts/ember_d3_broader_multifamily_admission_selftest.py
 scripts/ember_d3_broader_multifamily_loop_selftest.py
 src/ember/governance/scripts/ember_d3_generalized_candidate_exec_selftest.py
 src/ember/governance/scripts/ember_e2b_surpass_run.py
@@ -77,7 +77,7 @@ src/ember/governance/scripts/ember_governor_binding_selftest.py
 src/ember/governance/scripts/ember_growth_harness_selftest.py
 src/ember/governance/scripts/ember_mle_micro_harness.py
 src/ember/governance/scripts/ember_mle_micro_harness_selftest.py
-scripts/ember_mvp_cycle.py
+src/ember/governance/scripts/ember_mvp_cycle.py
 scripts/ember_mvp_cycle_selftest.py
 scripts/ember_mvp_readiness_selftest.py
 scripts/ember_mvp_wheel_runner_selftest.py
@@ -103,7 +103,7 @@ src/ember/governance/scripts/ember_scale_harness_selftest.py
 scripts/ember_scienceagentbench_admission_selftest.py
 scripts/ember_scienceagentbench_artifact_intake_selftest.py
 scripts/ember_scienceagentbench_artifact_materialization_selftest.py
-scripts/ember_state_substrate.py
+src/ember/governance/scripts/ember_state_substrate.py
 scripts/ember_state_substrate_selftest.py
 scripts/ember_tiny_bitnet_comparison_selftest.py
 src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py
@@ -129,13 +129,13 @@ scripts/ember_train_multimodal_resident_adapter.py
 scripts/ember_train_multimodal_resident_adapter_cli_selftest.py
 src/ember/governance/scripts/ember_wheel_harness.py
 scripts/ember_wheel_harness_selftest.py
-scripts/ember_windows_sandbox.py
+src/ember/governance/scripts/ember_windows_sandbox.py
 scripts/ember_windows_sandbox_selftest.py
 scripts/eng45_backfill_sha_convention.py
 scripts/exp711_permute.py
 scripts/exp711_sensitivity.py
 src/ember/governance/scripts/fp21b_prereg.py
-scripts/fp21b_scope_132.py
+src/ember/governance/scripts/fp21b_scope_132.py
 src/ember/governance/scripts/fp26_prereg.py
 scripts/fp30_total_consistency.py
 scripts/fp30b_register_deviations.py

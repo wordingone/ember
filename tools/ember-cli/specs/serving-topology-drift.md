@@ -18,7 +18,7 @@ Consumer: `tools/ember-cli/src/services/serving-topology-census.ts`
 
 Consumer: `tools/ember-cli/src/services/serving-topology-live.ts`
 
-Consumer: `tools/ember-cli/src/services/poll-failure-status.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/poll-failure-status.ts`
 
 ## Contract
 

@@ -101,7 +101,7 @@ class Cond3ArtifactBConsumerReplay(unittest.TestCase):
         if not MANIFEST_PATH.is_file():
             raise unittest.SkipTest(
                 f"fixture not generated yet: {MANIFEST_PATH} "
-                "(run scripts/ember_restart/build_cond3_artifact_b_fixture.py)"
+                "(run src/ember/governance/scripts/ember_restart/build_cond3_artifact_b_fixture.py)"
             )
         cls.manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
         cls.checkpoint_bytes = CHECKPOINT_PATH.read_bytes()

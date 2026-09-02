@@ -489,7 +489,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_eff.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_eff.py",
             "sha256": "66edc0de0cedb2462629278a7a1f3407f1f55f07a80a608fdc2e51917f4e28a0",
             "present": true
           },

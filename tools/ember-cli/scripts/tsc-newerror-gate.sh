@@ -7,7 +7,7 @@
 # Local pre-PR gate for ember-cli TypeScript type-debt (class-fix, PR #980
 # manifest-typing + mock-typing reduction: 61 -> 25 `error TS` lines).
 # Counts the CURRENT `tsc --noEmit` error count and compares it against a
-# frozen baseline recorded in tools/ember-cli/.tsc-baseline. Exits 1 (RED)
+# frozen baseline recorded in src/ember/infrastructure/tools/ember-cli/.tsc-baseline. Exits 1 (RED)
 # if the count has grown -- i.e. the class silently regrew -- exits 0
 # (GREEN) otherwise. LOCAL gate only: no GitHub Actions workflow, no CI
 # billing surface; run this by hand or from a pre-PR checklist.

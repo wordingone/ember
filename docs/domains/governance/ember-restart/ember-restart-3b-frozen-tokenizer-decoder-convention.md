@@ -6,7 +6,7 @@ Changing those bytes would invalidate existing tokenizer and lineage hashes, so
 decode consumers must not repair the tracked artifact in place.
 
 Any Ember consumer that decodes IDs from these frozen bytes must call
-`tools/ember-restart-3b/frozen_tokenizer_decoder.py::
+`src/ember/infrastructure/tools/ember-restart-3b/frozen_tokenizer_decoder.py::
 attach_frozen_bytelevel_decoder` on the
 same byte snapshot used to construct the `tokenizers.Tokenizer`. The helper:
 

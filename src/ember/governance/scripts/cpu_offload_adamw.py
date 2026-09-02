@@ -54,7 +54,7 @@ _DEFAULT_OPTSTATE_DIR = _REPO / "scratch" / "rung2-optstate"
 # time step() re-creates a `.grad.f32` memmap through the lazy fallback -- the
 # exact M1 term (governed subprocess re-fire per re-create per step) the v9
 # cure eliminates. In the cured steady state it stays 0; a positive-control
-# test (tests/test_stabilize_v9_cure.py) forces one and asserts it fires, so
+# test (tests/domain-governance/test_stabilize_v9_cure.py) forces one and asserts it fires, so
 # the counter is proven able to detect the failure it guards, never vacuously
 # green. Instance mirrors (self.grad_lazy_creates) exist for single-optimizer
 # unit assertions; the module counter is the cross-boundary observability

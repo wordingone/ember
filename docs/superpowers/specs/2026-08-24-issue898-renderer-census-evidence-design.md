@@ -32,7 +32,7 @@ same identity checks, join rule, windows, regressions, ratios, and receipt hash.
 
 ## Files and boundaries
 
-- `tools/ember-cli/src/services/issue898-renderer-census-evidence.ts` owns parsing,
+- `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts` owns parsing,
   validation, anchoring, fits, receipt construction, exclusive writing, and receipt
   verification.
 - `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts` owns the

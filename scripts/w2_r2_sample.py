@@ -1,6 +1,6 @@
 """w2_r2_sample.py — round-2 W-code sampling dispatch wrapper.
 
-Pinned to docs/research/round2-prereg.md §1.1 verbatim (pre-launch amendment
+Pinned to docs/domains/governance/research/round2-prereg.md §1.1 verbatim (pre-launch amendment
 a-commit): q3 + r1w-q3-mtp adapter, train split, k=8, ext-verify,
 calibrate, seed 18, tag q3-r2mtp. Daemon-wrapper shape (runpy + argv
 injection), same as the t4_r1_* / g1_r1w_* precedents.

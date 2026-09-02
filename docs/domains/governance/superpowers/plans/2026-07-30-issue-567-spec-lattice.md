@@ -54,7 +54,7 @@
 **Files:**
 - Modify: `scripts/github/live_pr_policy.py`
 - Create: `scripts/github/test_live_pr_spec_floor.py`
-- Modify: `scripts/github/test_live_pr_workflow_integration.py`
+- Modify: `src/ember/governance/scripts/github/test_live_pr_workflow_integration.py`
 - Modify: `.github/workflows/repo-policy-gate.yml`
 
 **Interfaces:**

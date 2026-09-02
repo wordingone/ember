@@ -98,7 +98,7 @@ GitHub REST/GraphQL through the repository's safe wrappers, Git, pytest/unittest
 ### Task 4: Build fail-closed validation
 
 **Files:**
-- Create: `scripts/roadmap/validate_roadmap.py`
+- Create: `src/ember/governance/scripts/roadmap/validate_roadmap.py`
 - Create: `tests/roadmap/test_validate_roadmap.py`
 
 **Interfaces:**

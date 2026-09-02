@@ -24,7 +24,7 @@
 ### Task 1: Modern checkpoint bundle verifier
 
 **Files:**
-- Create: `tools/ember-cli/src/services/checkpoint-load.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.ts`
 - Create: `src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts`
 
 **Interfaces:**
@@ -137,7 +137,7 @@ Expected: all verifier tests PASS and diff check is clean.
 - [ ] **Step 6: Commit the verifier**
 
 ```powershell
-git add tools/ember-cli/src/services/checkpoint-load.ts src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts
+git add src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.ts src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts
 git commit -m "feat: verify modern checkpoint bundles"
 ```
 

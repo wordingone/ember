@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """a1_quarantine_enum_v2.py -- ember #631 deliverable 2: SEMANTIC pre-freeze
-quarantine enumeration (supersedes scripts/a1_quarantine_enum.py).
+quarantine enumeration (supersedes src/ember/governance/scripts/a1_quarantine_enum.py).
 
 Cures A1 machinery defect #2 (refs #123 finding 2): the v1 enum searched only
 (i) the suite-(a) batch sha256, (ii) each suite-(b) split sha256, and (iii) the

@@ -15,11 +15,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PRODUCER_ROOT = REPO_ROOT / "scripts" / "ember_admission"
 sys.path.insert(0, str(PRODUCER_ROOT))
 
-from scripts.ember_admission.consumers import (  # noqa: E402
+from src.ember.governance.scripts.ember_admission.consumers import (  # noqa: E402
     CONSUMER_COMMAND_CONTRACTS,
     CONSUMER_ENTRYPOINTS,
 )
-from scripts.ember_admission.receipt import (  # noqa: E402
+from src.ember.governance.scripts.ember_admission.receipt import (  # noqa: E402
     verify_producer_receipt,
     write_producer_receipt,
 )

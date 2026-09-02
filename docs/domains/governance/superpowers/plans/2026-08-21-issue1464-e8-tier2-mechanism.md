@@ -31,7 +31,7 @@ terminal receipt, and fail-closed tests.
 
 Files:
 
-- Create tools/ember-restart-3b/a1_tier2_optimizer.py
+- Create src/ember/infrastructure/tools/ember-restart-3b/a1_tier2_optimizer.py
 - Create tests/ember_restart_model/domain-governance/test_a1_tier2_optimizer.py
 
 Steps:
@@ -72,7 +72,7 @@ Steps:
 
 Files:
 
-- Create tools/ember-restart-3b/a1_tier2_checkpoint.py
+- Create src/ember/infrastructure/tools/ember-restart-3b/a1_tier2_checkpoint.py
 - Create tests/ember_restart_model/domain-governance/test_a1_tier2_checkpoint.py
 
 Steps:

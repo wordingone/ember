@@ -10,7 +10,7 @@ Status: CURRENT
 
 Issue: #1370, extended by #1399 (home, labels, grouping)
 
-Consumer: `tools/ember-cli/src/services/command-buttons.ts`, `tools/ember-cli/src/components/command-bar-pane.ts`
+Consumer: `tools/ember-cli/src/services/command-buttons.ts`, `src/ember/infrastructure/tools/ember-cli/src/components/command-bar-pane.ts`
 
 ## Operator mandate this node implements
 

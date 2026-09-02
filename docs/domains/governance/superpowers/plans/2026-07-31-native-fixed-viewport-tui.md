@@ -47,7 +47,7 @@
 - Modify: `tools/ember-cli/src/ink/hooks.ts`
 - Modify: `tools/ember-cli/src/ink/reconciler.ts`
 - Modify: `tools/ember-cli/src/ink/mouse-input.test.ts`
-- Modify: `tools/ember-cli/src/components/operator-surface-pane.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
 - Modify: `tools/ember-cli/src/screens/repl.ts`
 - Modify: `tools/ember-cli/src/screens/repl-operator-control-wiring.test.ts`
 
@@ -67,7 +67,7 @@
 **Files:**
 - Modify: `tools/ember-cli/src/ink/components.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts`
-- Modify: `tools/ember-cli/src/components/operator-surface-pane.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
 - Modify: `tools/ember-cli/src/screens/repl.ts`
 - Create: `tools/ember-cli/src/screens/repl-scroll-containment.test.ts`
 
@@ -84,7 +84,7 @@
 ### Task 4: One-column graph cards and stable flame
 
 **Files:**
-- Modify: `tools/ember-cli/src/components/operator-surface-pane.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane-responsive-cards.test.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/fireball.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/fireball.test.ts`

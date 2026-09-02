@@ -116,7 +116,7 @@ CANDIDATE_ROOTS = [
     if p
 ]
 sys.path.insert(0, REPO_ROOT)
-from scripts.redact_local_paths import normalize_json_paths
+from src.ember.governance.scripts.redact_local_paths import normalize_json_paths
 
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 

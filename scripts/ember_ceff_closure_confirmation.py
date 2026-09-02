@@ -5,7 +5,7 @@
 """ember_ceff_closure_confirmation.py — C-EFF CLOSURE confirmation runner +
 RESOLVED-receipt assembler (issue #24, terminal rung).
 
-WHAT THIS ANSWERS. `scripts/ember_totality/test_c_eff.py` (ember-goalforge
+WHAT THIS ANSWERS. `src/ember/governance/scripts/ember_totality/test_c_eff.py` (ember-goalforge
 tree; lines 93-214) reads ONLY `receipts/ceff-RESOLVED-*.json` as a valid
 C-EFF closure — the prior "SHATTER" verdict
 (`receipts/ceff-closure-gate9-shatter-bf16ns5-20260623T132000Z.json`) is

@@ -15,7 +15,7 @@ sensitive-root placeholders remain permitted only where a more specific
 checked-in receipt contract requires them. `tools/repo-guard.sh` enforces this
 contract through its `[paths]` and `[path-frags]` gates.
 
-`scripts/redact_local_paths.py` is a first-landing safety tool, not a historical
+`src/ember/governance/scripts/redact_local_paths.py` is a first-landing safety tool, not a historical
 rewriter. It accepts explicit JSON file names only, reports per-file replacement
 counts, and refuses files already tracked at the selected base unless the
 operator supplies a reasoned `--first-landing-override`. `--check` reports

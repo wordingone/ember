@@ -82,7 +82,7 @@ to "launch multimodal (green-field)". This is the maintainer's directed scope, n
 the green-field state is the honest reality of executing it.
 
 CAVEAT (claim-scope): "green-field" = absent from the COMMITTED repo. the engineer had
-uncommitted WIP in the tree (scripts/t5_harm.py, w1_humaneval.py) and a crashed
+uncommitted WIP in the tree (src/ember/governance/scripts/t5_harm.py, w1_humaneval.py) and a crashed
 session — he may have multimodal work in flight; confirm on his return before
 treating the build as fully from-scratch.
 

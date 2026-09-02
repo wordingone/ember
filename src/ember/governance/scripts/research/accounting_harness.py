@@ -8,7 +8,7 @@ Implements §4 C3 accounting protocol (3-axis receipts) and §5 P2-G3 gate.
 Emits per-step FLOPs from model config, accumulates 3-axis ledger from training logs,
 and produces matched-budget comparison receipts for two arms (delta per axis, % mismatch).
 
-TDD selftest: python scripts/research/accounting_harness.py --selftest
+TDD selftest: python src/ember/governance/scripts/research/accounting_harness.py --selftest
   Runs with synthetic fixtures (two fake runs, known FLOPs).
   Marker: ACCOUNTING_HARNESS_SELFTEST_PASS.
 """
