@@ -8,7 +8,7 @@ on:
   push:
     branches: [master]
     paths:
-      - "tools/ember-cli/src/**"
+      - "src/ember/infrastructure/tools/ember-cli/src/**"
       - ".github/workflows/cli-build-smoke.yml"
 
 permissions:
@@ -26,17 +26,17 @@ jobs:
         with:
           bun-version: 1.3.12
       - run: bun install --frozen-lockfile
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
       - run: bun run build
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
       - name: Smoke-test built binary invocation
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         run: .\ember.exe --help
       - name: Fail closed on raw ConPTY NUL injection
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         shell: pwsh
         run: |
-          python -B ../../../src/ember/governance/scripts/owned_process.py --timeout-seconds 30 -- bun.exe run ./build-tools/conpty-nul-smoke.ts `
+          python -B ../../../../../../src/ember/governance/scripts/owned_process.py --timeout-seconds 30 -- bun.exe run ./build-tools/conpty-nul-smoke.ts `
             "$PWD/ember.exe" `
             "${{ runner.temp }}/conpty-nul-smoke" `
             "${{ github.sha }}" `

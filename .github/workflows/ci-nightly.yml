@@ -62,7 +62,7 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
