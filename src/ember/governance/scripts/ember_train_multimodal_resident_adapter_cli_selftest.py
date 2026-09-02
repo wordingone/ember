@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    repo = Path(__file__).resolve().parent.parent
+    repo = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     with tempfile.TemporaryDirectory(prefix="ember-train-adapter-cli-") as td:
         out_dir = Path(td) / "adapter-out"
         proc = subprocess.run(
