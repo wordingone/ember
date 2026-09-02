@@ -1400,6 +1400,19 @@ def test_train_partition_projection_dispatches_closed_schema_and_names_authority
     }
     assert media_types[alpha_sha] == "application/octet-stream"
     assert media_types[charlie_sha] == "text/plain; charset=utf-8"
+    assert all(edge["payload"] == {} for edge in manifest["edges"])
+
+    planted_unknown = json.loads(manifest_raw)
+    source_object = next(
+        edge for edge in planted_unknown["edges"] if edge["kind"] == "source_object"
+    )
+    source_object["payload"]["path_derived_media_type"] = "text/plain; charset=utf-8"
+    with pytest.raises(
+        ValueError, match="CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:source_object"
+    ):
+        catalog_admission_module.validate_edge_payloads_against_frozen_catalog_schema(
+            planted_unknown
+        )
 
     partition["repositories"][0]["files"].append(
         {"path": "future/new.brandnew", "blob_path": "blobs/d", "bytes": 3, "sha256": sha256(b"raw")}
