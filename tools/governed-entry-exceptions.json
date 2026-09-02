@@ -69,6 +69,11 @@
       "path": "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
       "sha256": "f59e7d30452aaa5611a4ec75e24f978c775c255d90543c7f77a50d465dde2ef7",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/a3_run_receipt.py",
+      "sha256": "ee7d9103e56d047065250a7aa4eda26b047cb9235f65f8c5c1929c2df32d6c34",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     }
   ]
 }
