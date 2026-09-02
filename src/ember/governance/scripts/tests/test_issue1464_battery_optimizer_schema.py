@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import r1_exit_battery as battery  # noqa: E402

@@ -62,7 +62,7 @@ src/ember/governance/scripts/ember_gate_full_parity_harness_selftest.py
 src/ember/governance/scripts/ember_gate_function_slash_commands_selftest.py
 src/ember/governance/scripts/ember_gate_goal_mode_parity_adapter_selftest.py
 src/ember/governance/scripts/ember_gate_hook_runner_selftest.py
-scripts/ember_gate_launch_packaging_selftest.py
+src/ember/governance/scripts/ember_gate_launch_packaging_selftest.py
 src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
 src/ember/governance/scripts/ember_gate_receipt_store.py
 scripts/ember_gate_receipt_store_selftest.py
@@ -202,13 +202,13 @@ src/ember/governance/scripts/tests/test_c15_receipt_selection.py
 src/ember/governance/scripts/tests/test_c_custody_probe.py
 src/ember/governance/scripts/tests/test_cneg1_annex_bom_fallback.py
 src/ember/governance/scripts/tests/test_cockpit_watchdog.py
-scripts/tests/test_gpu_lease_placeholder.ts
-scripts/tests/test_prev_receipt_selection.py
+src/ember/governance/scripts/tests/test_gpu_lease_placeholder.ts
+src/ember/governance/scripts/tests/test_prev_receipt_selection.py
 src/ember/governance/scripts/tests/test_screen792_bf16_momentum.py
-scripts/tests/test_serving_topology.py
+src/ember/governance/scripts/tests/test_serving_topology.py
 scripts/timeshare_pretrain.py
 src/ember/governance/scripts/token_shards_v0.py
-scripts/tokenizer_freeze_selftest.py
+src/ember/governance/scripts/tokenizer_freeze_selftest.py
 scripts/train_multimodal_v0.py
 scripts/trajgate_phase0_signal_gate.py
 src/ember/governance/scripts/v0_pretrain_launch_gate.py

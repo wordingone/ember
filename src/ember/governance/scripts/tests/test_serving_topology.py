@@ -9,7 +9,7 @@ CPU-only, no real servers. Tests include:
   - Identity assertion (success, mismatch, missing fields)
   - Topology drift detection (unregistered server, dead row)
 
-Run via: pytest scripts/tests/test_serving_topology.py -v
+Run via: pytest src/ember/governance/scripts/tests/test_serving_topology.py -v
 """
 
 import ast
