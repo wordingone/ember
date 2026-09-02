@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCORER = ROOT / "scripts" / "legb_live_candidate_v5_scorer.py"
 
 

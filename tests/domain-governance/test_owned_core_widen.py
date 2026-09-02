@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 # Add repo root to path
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO / "scripts"))
 
 import torch
