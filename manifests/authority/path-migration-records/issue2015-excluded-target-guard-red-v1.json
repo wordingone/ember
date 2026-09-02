@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-path-migration-negative-gate-receipt/v1",
   "goal_id": "EMBER-02",
-  "workstream_id": "EMBER-02A",
+  "workstream_id": "EMBER-02B",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "result": "RED_AS_EXPECTED",
   "base_commit": "a190f5d64b9a244e89add25f9a761696ebbd1a64",
