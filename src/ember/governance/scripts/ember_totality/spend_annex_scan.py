@@ -472,7 +472,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp38d-l9-prod-flash-*.json               scripts/fp38d_l9_prod_flash.py:274
 #   fp39-density-power-audit-*.json          src/ember/governance/scripts/fp39_density_power_audit.py:190
 #   fp40-l10-optimizer-ab-*.json             scripts/fp40_l10_optimizer_ab.py:596
-#   native-smoke-*.json                      scripts/t_native_smoke.py:99
+#   native-smoke-*.json                      src/ember/governance/scripts/t_native_smoke.py:99
 #     return receipts_dir / f"native-smoke-{ts}.json"
 #   probe-meminfo-*.json                     src/ember/governance/scripts/probe_meminfo.py:37
 #     path = f"{NC}/receipts/probe-meminfo-{ts}.json"
@@ -575,7 +575,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp38d-l9-prod-flash-.*\.json$"), "scripts/fp38d_l9_prod_flash.py"),
     (re.compile(r"^fp39-density-power-audit-.*\.json$"), "src/ember/governance/scripts/fp39_density_power_audit.py"),
     (re.compile(r"^fp40-l10-optimizer-ab-.*\.json$"), "scripts/fp40_l10_optimizer_ab.py"),
-    (re.compile(r"^native-smoke-.*\.json$"), "scripts/t_native_smoke.py"),
+    (re.compile(r"^native-smoke-.*\.json$"), "src/ember/governance/scripts/t_native_smoke.py"),
     (re.compile(r"^probe-meminfo-.*\.json$"), "src/ember/governance/scripts/probe_meminfo.py"),
     (re.compile(r"^resident-training-gate-.*\.json$"), "src/ember/governance/scripts/ember_resident_training_gate.py"),
     (re.compile(r"^resume-drill-.*\.json$"), "scripts/train_multimodal_v0.py"),
