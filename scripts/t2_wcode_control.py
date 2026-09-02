@@ -6,4 +6,4 @@ import sys
 NC = "<local-path>"
 sys.argv = ["t2_wcode.py", "--control"]
 sys.path.insert(0, f"{NC}/scripts")
-runpy.run_path(f"{NC}/scripts/t2_wcode.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/t2_wcode.py", run_name="__main__")

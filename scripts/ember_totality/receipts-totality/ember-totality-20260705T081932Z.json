@@ -354,12 +354,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "03c5e173c984cfea3574c5104ab3b3cb9e67c1fb6bbe8f07f791608b9f6e6d6c",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "f6fb756aa65434828038b4338771858d84cfde56344fc9e80dc10c1beefd4728",
             "present": true
           },
@@ -389,12 +389,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "03c5e173c984cfea3574c5104ab3b3cb9e67c1fb6bbe8f07f791608b9f6e6d6c",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "f6fb756aa65434828038b4338771858d84cfde56344fc9e80dc10c1beefd4728",
             "present": true
           },
@@ -424,12 +424,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "03c5e173c984cfea3574c5104ab3b3cb9e67c1fb6bbe8f07f791608b9f6e6d6c",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "f6fb756aa65434828038b4338771858d84cfde56344fc9e80dc10c1beefd4728",
             "present": true
           },
@@ -459,12 +459,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "03c5e173c984cfea3574c5104ab3b3cb9e67c1fb6bbe8f07f791608b9f6e6d6c",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "f6fb756aa65434828038b4338771858d84cfde56344fc9e80dc10c1beefd4728",
             "present": true
           },
@@ -847,7 +847,7 @@
           "docs/spec/receipts-v1.md",
           "scripts/receipt_check.py",
           "scripts/receipt_write.py",
-          "scripts/receipt_semantic_check.py"
+          "src/ember/governance/scripts/receipt_semantic_check.py"
         ],
         "files": [
           {
@@ -866,7 +866,7 @@
             "present": true
           },
           {
-            "path": "scripts/receipt_semantic_check.py",
+            "path": "src/ember/governance/scripts/receipt_semantic_check.py",
             "sha256": "03e13acdf4f592d1be8511b1dc45ac03f02a60f024c2d793c0b81ea26ef15949",
             "present": true
           }

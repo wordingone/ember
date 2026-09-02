@@ -195,7 +195,7 @@ def main() -> int:
                      for i, p in enumerate(POOL)],
             "selection_function": "index = int(beacon_outputValue[:8], 16) mod 8; "
                                   "collision handling (index+1) mod 8 while cited pre-freeze",
-            "supersedes_v1_mechanism": "docs/spec/a1-postfreeze-heldout-selection-v1.md (grindable "
+            "supersedes_v1_mechanism": "docs/domains/governance/spec/a1-postfreeze-heldout-selection-v1.md (grindable "
                                        "commit-sha beacon); the v1 ccde4a67->SciQ record is byte-law "
                                        "immutable and not re-rolled here (coordinator ruling pending "
                                        "on grandfather-vs-replace, refs ac4_anchoring)",

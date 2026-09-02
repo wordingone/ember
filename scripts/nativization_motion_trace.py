@@ -18,7 +18,7 @@ TRACE_SCHEMA_VERSION = "ember-run-import-trace-v3"
 TRACE_RUN_ID = "ember-02-governed-run-import-v2"
 TRACE_PHASES = ("creation", "current_rung_training", "growth_run")
 PHASE_ENTRYPOINTS = {
-    "creation": "tools/ember-restart-3b/model.py",
+    "creation": "src/ember/infrastructure/tools/ember-restart-3b/model.py",
     "current_rung_training": "tools/ember-restart-3b/pretrain.py",
     "growth_run": "tools/ember-restart-3b/run_vertical_slice.py",
 }

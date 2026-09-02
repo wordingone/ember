@@ -108,7 +108,7 @@ Unlike F-08/F-09, which explicitly cite `sigma_credit(m)` (sec2), R2-E4 (and
 D-01's backstop text, which says it "mirrors R2-E4") names only a
 confidence LEVEL, not a method. The previously disclosed implementation, now
 ratified by D-03, is the Wilson
-score interval (scripts/power.py's `wilson()`, imported not reimplemented
+score interval (src/ember/governance/scripts/power.py's `wilson()`, imported not reimplemented
 -- the same tool this repo already uses for "single-arm floors" per
 docs/domains/governance/archive/pre-restart/r2-prereg.md's "single-arm floors read as Wilson intervals" precedent)
 for metric_type="proportion" probes, substituting the ONE-SIDED z for T-24
@@ -324,7 +324,7 @@ HISTORICAL_SPEC_DEFECTS = [
             "sec2 defines sigma_eval (bootstrap, 10,000 "
             "resamples, or exact binomial SE) for a DIFFERENT consumer "
             "(F-08/F-09 suite metrics). This runner's disclosed default: "
-            "Wilson score interval (scripts/power.py wilson(), imported) "
+            "Wilson score interval (src/ember/governance/scripts/power.py wilson(), imported) "
             "for metric_type=proportion probes, one-sided by substituting "
             "the one-sided-T-24 z for the two-sided default; nonparametric "
             "bootstrap (sec2's named 10,000-resample count) for a future "
@@ -756,35 +756,35 @@ def one_sided_lower_wilson(successes: int, n: int, confidence: float = T24_CONFI
         raise R2ProbeBatteryRefusal(f"CI_INPUT_INVALID: successes={successes!r} n={n!r}")
     if not (0.5 <= confidence < 1.0):
         raise R2ProbeBatteryRefusal(f"CI_INPUT_INVALID: confidence={confidence!r} must be in [0.5, 1.0)")
-    # issue2015 exact-local-import:scripts/power.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/power.py
     import importlib.util as _ember_41d654a4576ceb0a_importlib
     import sys as _ember_41d654a4576ceb0a_sys
     from pathlib import Path as _ember_41d654a4576ceb0a_Path
     _ember_41d654a4576ceb0a_path = _ember_41d654a4576ceb0a_Path(__file__).resolve().parents[4].joinpath('scripts', 'power.py')
     if not _ember_41d654a4576ceb0a_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/power.py')
-    _ember_41d654a4576ceb0a_aliases = ('_ember_issue2015_41d654a4576ceb0a', 'power', 'scripts.power')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/power.py')
+    _ember_41d654a4576ceb0a_aliases = ('_ember_issue2015_41d654a4576ceb0a', 'power', 'src.ember.governance.scripts.power')
     _ember_41d654a4576ceb0a_existing = []
     for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
         _ember_41d654a4576ceb0a_candidate = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
         if _ember_41d654a4576ceb0a_candidate is not None and all(_ember_41d654a4576ceb0a_candidate is not item for item in _ember_41d654a4576ceb0a_existing):
             _ember_41d654a4576ceb0a_existing.append(_ember_41d654a4576ceb0a_candidate)
     if len(_ember_41d654a4576ceb0a_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/power.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/power.py')
     if _ember_41d654a4576ceb0a_existing:
         _ember_41d654a4576ceb0a_module = _ember_41d654a4576ceb0a_existing[0]
         _ember_41d654a4576ceb0a_observed = getattr(_ember_41d654a4576ceb0a_module, '__file__', None)
         if _ember_41d654a4576ceb0a_observed is None or _ember_41d654a4576ceb0a_Path(_ember_41d654a4576ceb0a_observed).resolve() != _ember_41d654a4576ceb0a_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/power.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/power.py')
     else:
         _ember_41d654a4576ceb0a_spec = _ember_41d654a4576ceb0a_importlib.spec_from_file_location('_ember_issue2015_41d654a4576ceb0a', _ember_41d654a4576ceb0a_path)
         if _ember_41d654a4576ceb0a_spec is None or _ember_41d654a4576ceb0a_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/power.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/power.py')
         _ember_41d654a4576ceb0a_module = _ember_41d654a4576ceb0a_importlib.module_from_spec(_ember_41d654a4576ceb0a_spec)
         for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
             _ember_41d654a4576ceb0a_prior = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
             if _ember_41d654a4576ceb0a_prior is not None and _ember_41d654a4576ceb0a_prior is not _ember_41d654a4576ceb0a_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/power.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/power.py')
             _ember_41d654a4576ceb0a_sys.modules[_ember_41d654a4576ceb0a_alias] = _ember_41d654a4576ceb0a_module
         try:
             _ember_41d654a4576ceb0a_spec.loader.exec_module(_ember_41d654a4576ceb0a_module)
@@ -796,10 +796,10 @@ def one_sided_lower_wilson(successes: int, n: int, confidence: float = T24_CONFI
     for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
         _ember_41d654a4576ceb0a_prior = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
         if _ember_41d654a4576ceb0a_prior is not None and _ember_41d654a4576ceb0a_prior is not _ember_41d654a4576ceb0a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/power.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/power.py')
         _ember_41d654a4576ceb0a_sys.modules[_ember_41d654a4576ceb0a_alias] = _ember_41d654a4576ceb0a_module
     wilson = getattr(_ember_41d654a4576ceb0a_module, 'wilson')
-    # issue2015 exact-local-import-end:scripts/power.py  # reused, never reimplemented
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/power.py  # reused, never reimplemented
     z = statistics.NormalDist().inv_cdf(confidence)
     lower, _upper = wilson(successes, n, z=z)
     return float(lower)

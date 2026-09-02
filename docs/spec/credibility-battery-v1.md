@@ -71,7 +71,7 @@ loop receipts, but the *program-level* from-scratch baseline is not yet a single
   `receipts/ember-post-resident-discovery/benchmark-discovery-20260622T011400Z.json` — the three
   candidate discovery receipts the board's `C1` row names as failing hash-verify (in-tree,
   openable now).
-- `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
+- `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
   board receipt in this checkout; its `C1` row reads `RED` for exactly this reason. Issue #487's
   fill cites a later board receipt (`ember-totality-20260708T215158Z`) generated locally in this
   repository's working tree but not yet landed via a board-run PR (`pending_landing`, per
@@ -142,7 +142,7 @@ a leakage predicate); no at-scale capability delta has survived it yet.
 **Check it yourself:**
 - `docs/domains/governance/spec/conditions-v1.md` §4.2, condition `C2` — the held-out-task CHK (frozen-before-run,
   no label-read in the candidate path).
-- `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
+- `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
   `C-SCALE`, `RED`: no at-scale capability point currently clears.
 - [issue #440](https://github.com/wordingone/ember/issues/440) — the corpus near-duplication
   defect this leakage predicate is designed against. **Disclosed gap:** no receipt path for the
@@ -165,7 +165,7 @@ itself is not yet fully clean.
   currently-cited-but-missing receipt path (governed by
   [issue #415](https://github.com/wordingone/ember/issues/415) and
   [PR #432](https://github.com/wordingone/ember/pull/432)).
-- `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
+- `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
   `C-CUSTODY`, `RED`, 27 violations in this checkout (issue #487's fill cites a different,
   later count from a board receipt not present here — the `RED` verdict is confirmed either way).
 
@@ -262,7 +262,7 @@ consolidated closure receipt.
 consolidated closure row exists yet — this is exactly what board condition `C-EFF` is RED for.
 
 **Check it yourself:**
-- `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
+- `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — board row
   `C-EFF`, `RED`: "no `receipts/ceff-RESOLVED-*.json` closure receipt."
 - `receipts/cbase-grow-rung2-gpu-offload-probe-20260708T172949Z.json` — VRAM + wall-clock +
   contention state measured together for one event (not a closure receipt, a component measurement).
@@ -305,7 +305,7 @@ reported.
 process-invariants), code-gated, honestly re-derived from artifacts every run.
 
 **Check it yourself:**
-- `scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
+- `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` — the newest
   board receipt in this checkout: 7-GREEN / 28-RED / 2-UNEVALUABLE / 3-AUDIT-PENDING-EPOCH.
   `docs/authority/CONTINUITY.md` generated status (`src/ember/governance/scripts/gen_readme_status.py`) always points
   at whichever receipt is newest in its selected receipt root.

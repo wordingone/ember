@@ -443,7 +443,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # rejected for exactly that reason, e.g. cbase_v0_segment_bf16ns5_live.py:7 only
 # *mentions* ceff-closure-gate9-shatter-bf16ns5 in a docstring; it writes
 # nc2-manifest.json, not that receipt -- stays unresolvable, see exclusion note below):
-#   c12-cognitive-mode-ablation-*.json       scripts/ember_cognitive_mode_ablation.py:275
+#   c12-cognitive-mode-ablation-*.json       src/ember/governance/scripts/ember_cognitive_mode_ablation.py:275
 #     out_path = out_dir / f"c12-cognitive-mode-ablation-{receipt['ts']}.json"
 #   cuda-graph-ab-*.json                     src/ember/governance/scripts/cuda_graph_ab.py:495
 #     out = os.path.join(RECEIPTS, f"cuda-graph-ab-{ts}.json")
@@ -453,10 +453,10 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out = f"{RECEIPTS}/density-ab-verdict-{ts_now}.json"
 #   econ-pass-loopecon-adapter-*.json        scripts/econ_pass.py:242
 #     adapter_path = receipts_dir / f"econ-pass-loopecon-adapter-{ts}.json"
-#   fp10-idiom-*.json                        scripts/fp10_idiom.py:324
+#   fp10-idiom-*.json                        src/ember/governance/scripts/fp10_idiom.py:324
 #   fp11-denominator-*.json                  scripts/fp11_denominator.py:265
 #   fp12-band-*.json                         scripts/fp12_band.py:233
-#   fp13-concentration-*.json                scripts/fp13_concentration.py:270
+#   fp13-concentration-*.json                src/ember/governance/scripts/fp13_concentration.py:270
 #   fp30d-shard-gate-*.json                  scripts/fp30d_shard_gate.py:189
 #   fp33-e2-full-tune-ceiling-*.json         scripts/fp33_e2_full_tune_ceiling.py:234
 #   fp33-e5-fp8-bench-*.json                 scripts/fp33_e5_fp8_bench.py:255
@@ -552,15 +552,15 @@ CONVENTION_MAP = [
     (re.compile(r"^proof-verifier-surface-coverage-.*\.json$"), "scripts/proofs/verifier_surface_coverage.py"),
     # --- second pass (gh issue #17 follow-up, 2026-07-03) ---
     # spend-annex-*.json deliberately NOT mapped here -- see comment above CONVENTION_MAP.
-    (re.compile(r"^c12-cognitive-mode-ablation-.*\.json$"), "scripts/ember_cognitive_mode_ablation.py"),
+    (re.compile(r"^c12-cognitive-mode-ablation-.*\.json$"), "src/ember/governance/scripts/ember_cognitive_mode_ablation.py"),
     (re.compile(r"^cuda-graph-ab-.*\.json$"), "src/ember/governance/scripts/cuda_graph_ab.py"),
     (re.compile(r"^d-gate-.*\.json$"), "src/ember/governance/scripts/d_gate.py"),
     (re.compile(r"^density-ab-verdict-.*\.json$"), "src/ember/governance/scripts/density_ab_verdict.py"),
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
-    (re.compile(r"^fp10-idiom-.*\.json$"), "scripts/fp10_idiom.py"),
+    (re.compile(r"^fp10-idiom-.*\.json$"), "src/ember/governance/scripts/fp10_idiom.py"),
     (re.compile(r"^fp11-denominator-.*\.json$"), "scripts/fp11_denominator.py"),
     (re.compile(r"^fp12-band-.*\.json$"), "scripts/fp12_band.py"),
-    (re.compile(r"^fp13-concentration-.*\.json$"), "scripts/fp13_concentration.py"),
+    (re.compile(r"^fp13-concentration-.*\.json$"), "src/ember/governance/scripts/fp13_concentration.py"),
     (re.compile(r"^fp30d-shard-gate-.*\.json$"), "scripts/fp30d_shard_gate.py"),
     (re.compile(r"^fp33-e2-full-tune-ceiling-.*\.json$"), "scripts/fp33_e2_full_tune_ceiling.py"),
     (re.compile(r"^fp33-e5-fp8-bench-.*\.json$"), "scripts/fp33_e5_fp8_bench.py"),

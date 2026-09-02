@@ -145,7 +145,7 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
     def test_specialist_stream_declares_hash_bound_exec(self) -> None:
         closure = load_closure()
         note = closure.load_manifest(ROOT)["dynamic_call_site_notes"][
-            "tools/ember-restart-3b/specialist_stream.py"
+            "src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py"
         ]
         self.assertIn("exec", note.lower())
         self.assertIn("sha256", note.lower())
@@ -162,7 +162,7 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
         closure = load_closure()
         caller = "tools/ember-restart-3b/text_lab_corpus.py"
         expected = {
-            "tools/corpus_connectors/pdf_to_utf8.py",
+            "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py",
             "tools/corpus_connectors/receipt.py",
             "tools/ember-restart-3b/mint_github_license_partition.py",
         }

@@ -803,7 +803,7 @@ _C_IND_ISOLATION_NOTE = (
 )
 
 _C_IND_OPERATOR_DOCS = {
-    "docs/operator/README.md": "# Operator entry point (fixture)\n",
+    "docs/domains/governance/operator/README.md": "# Operator entry point (fixture)\n",
     "docs/operator/interact.md": "# Interact (fixture)\n",
     "docs/operator/operate-launch.md": "# Launch (fixture)\n",
     "docs/operator/operate-teardown.md": "# Teardown (fixture)\n",
@@ -941,7 +941,7 @@ def _c_ind_write_shared_fixture(root):
             "baseline_packet": "docs/operator/baseline.md",
             "publication": "docs/operator/publication.md",
         },
-        "single_entry_path": "docs/operator/README.md",
+        "single_entry_path": "docs/domains/governance/operator/README.md",
         "no_dead_links": True,
     })
     # [issue #88] IND-5 re-spec: comprehend_v2 is now the ONLY receipt shape

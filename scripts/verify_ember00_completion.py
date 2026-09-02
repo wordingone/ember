@@ -182,7 +182,7 @@ def executable_checks(root: Path) -> list[dict[str, Any]]:
                 "src/ember/governance/scripts/tests/test_authority_conservation.py",
                 "src/ember/governance/scripts/tests/test_authority_completion.py",
                 "scripts/tests/test_registry_authority_gate.py",
-                "scripts/tests/test_pr_authority_binding.py",
+                "src/ember/governance/scripts/tests/test_pr_authority_binding.py",
             ],
             ["python", "-B", "-m", "pytest", "<four authority/gate suites>"],
         ),

@@ -359,7 +359,7 @@ I_MEMBERS = {
         "docs/spec/receipts-v1.md",
         "src/ember/governance/scripts/receipt_check.py",
         "src/ember/governance/scripts/receipt_write.py",
-        "scripts/receipt_semantic_check.py",
+        "src/ember/governance/scripts/receipt_semantic_check.py",
     ],
     # EXTENDS to M's item/data files the day they materialize (dated
     # expectation per docs/domains/governance/authority/GOAL.md §5 item 9 -- not yet applicable, no such files

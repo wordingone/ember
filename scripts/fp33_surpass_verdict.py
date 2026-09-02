@@ -15,7 +15,7 @@ pick, training plan) gate elsewhere (#255) and never touch this verdict.
 
 Pre-registration discipline (fp-39 / fp-44 class): the decision rule is frozen
 HERE, before the leg receipts exist, so the verdict cannot be shaped to the
-data. Companion schema doc: docs/research/fp33-surpass-verdict-gate.md.
+data. Companion schema doc: docs/domains/governance/research/fp33-surpass-verdict-gate.md.
 
 Statistics (verbatim from the prereg's statistics block):
   - paired bootstrap over tasks, 10,000 resamples, 95% CI on the per-task delta

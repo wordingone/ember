@@ -11,7 +11,7 @@
   "maximum_rows": 227,
   "rows": [
     {
-      "path": "scripts/architecture_map.py",
+      "path": "src/ember/governance/scripts/architecture_map.py",
       "line": 382,
       "target": "_DRIVE_ROOT_RE",
       "expression": "re.compile('(?<![A-Za-z0-9])[A-Za-z]:[\\\\\\\\/]')",
@@ -22,7 +22,7 @@
       "error": "call outside closed grammar: re.compile"
     },
     {
-      "path": "scripts/cbase_grow_measured_flops.py",
+      "path": "src/ember/governance/scripts/cbase_grow_measured_flops.py",
       "line": 239,
       "target": "_LIVE_TREE_ROOT",
       "expression": "None",
@@ -1166,7 +1166,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t2_round.py",
+      "path": "src/ember/governance/scripts/t2_round.py",
       "line": 49,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",

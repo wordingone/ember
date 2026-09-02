@@ -40,7 +40,7 @@ CheckpointCallback = Callable[[int, dict[str, Any]], None]
 ProgressCallback = Callable[[dict[str, object]], None]
 SignatureObserver = Callable[[dict[str, object]], None]
 VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
-VERIFIER_PUBLIC_PATH = "tools/ember-restart-3b/verify_capability_record.py"
+VERIFIER_PUBLIC_PATH = "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py"
 _DISPATCH_JOB_OBJECT_NAME_ENV = "EMBER_LAB_DISPATCH_JOB_OBJECT_NAME"
 _DISPATCH_CUSTODY_ENV = (
     "EMBER_LAB_DISPATCH_JOB_ID",

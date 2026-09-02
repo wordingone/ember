@@ -71,7 +71,7 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO / "scripts"))
 
 # issue2015 exact-local-import:src/ember/governance/scripts/governor.py

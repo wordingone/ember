@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""receipt_errata_scan.py -- mechanical generator for docs/ledgers/receipt-errata.jsonl
+"""receipt_errata_scan.py -- mechanical generator for docs/domains/governance/ledgers/receipt-errata.jsonl
 (gh issue #612, FROZEN SPEC).
 
 C-INV is RED after the #608 hardening: post-genesis receipts that lack a
@@ -29,7 +29,7 @@ scan that surfaced these violations ran as part of that hardening pass) --
 every row shares the same discovered_ts, which by construction predates or
 equals the cutoff that governs coverage eligibility.
 
-Run: python receipt_errata_scan.py [--out docs/ledgers/receipt-errata.jsonl]
+Run: python receipt_errata_scan.py [--out docs/domains/governance/ledgers/receipt-errata.jsonl]
 Deterministic: sorted receipts/ walk, fixed field order, no wall-clock read
 anywhere in classification (discovered_ts is the frozen hardening constant,
 not datetime.now()).

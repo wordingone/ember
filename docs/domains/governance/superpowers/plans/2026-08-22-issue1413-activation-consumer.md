@@ -23,7 +23,7 @@ Cover default-disabled behavior, missing/mismatched census hash, unapproved sign
 
 **Files:**
 - Modify: `tools/ember-restart-3b/training_acceleration.py`
-- Modify: `tools/ember-restart-3b/model.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/model.py`
 - Modify: `tools/ember-restart-3b/run_vertical_slice.py`
 
 Parse a closed activation contract, reopen the census sidecar, verify its exact hash and admitted signatures, and wrap only `SwiGLUExpert.down` instances. Preserve the original BF16 master parameters and checkpoint state identity.

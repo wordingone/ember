@@ -1,4 +1,4 @@
-Full historical context: docs/archive/goal/goal-archive.md
+Full historical context: docs/domains/governance/archive/goal/goal-archive.md
 
 # Ember Breakthrough Loop - Self-Improvement Plan
 

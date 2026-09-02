@@ -429,12 +429,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "65ac0bf7cf2187dd73030b14d5e1fcde2adf1c30201074949fa83af067207a0b",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_neg/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "d686ebe932038cb904807f9bdeddc4a1a214fd22224c4e1825eb0f500971f4ef",
             "present": true
           },
@@ -464,12 +464,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "65ac0bf7cf2187dd73030b14d5e1fcde2adf1c30201074949fa83af067207a0b",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_smuggled_pos/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "d686ebe932038cb904807f9bdeddc4a1a214fd22224c4e1825eb0f500971f4ef",
             "present": true
           },
@@ -499,12 +499,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "65ac0bf7cf2187dd73030b14d5e1fcde2adf1c30201074949fa83af067207a0b",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_neg/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "d686ebe932038cb904807f9bdeddc4a1a214fd22224c4e1825eb0f500971f4ef",
             "present": true
           },
@@ -534,12 +534,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/scripts/fp10_idiom.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/src/ember/governance/scripts/fp10_idiom.py",
             "sha256": "65ac0bf7cf2187dd73030b14d5e1fcde2adf1c30201074949fa83af067207a0b",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/scripts/fp13_concentration.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c_ladm_unreceipted_pos/src/ember/governance/scripts/fp13_concentration.py",
             "sha256": "d686ebe932038cb904807f9bdeddc4a1a214fd22224c4e1825eb0f500971f4ef",
             "present": true
           },
@@ -992,7 +992,7 @@
           "docs/spec/receipts-v1.md",
           "scripts/receipt_check.py",
           "scripts/receipt_write.py",
-          "scripts/receipt_semantic_check.py"
+          "src/ember/governance/scripts/receipt_semantic_check.py"
         ],
         "files": [
           {
@@ -1011,7 +1011,7 @@
             "present": true
           },
           {
-            "path": "scripts/receipt_semantic_check.py",
+            "path": "src/ember/governance/scripts/receipt_semantic_check.py",
             "sha256": "ec1ebd29c6882a583f141acf0d47235169acfe9ecd464db30befccc7982af403",
             "present": true
           }

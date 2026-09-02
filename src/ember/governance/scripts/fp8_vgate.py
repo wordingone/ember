@@ -155,35 +155,35 @@ def load_mbpp_episodes():
 
 def main():
     sys.path.insert(0, f"{NC}/scripts")
-    # issue2015 exact-local-import:scripts/t1_probe.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/t1_probe.py
     import importlib.util as _ember_c32cf5e860218889_importlib
     import sys as _ember_c32cf5e860218889_sys
     from pathlib import Path as _ember_c32cf5e860218889_Path
     _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
     if not _ember_c32cf5e860218889_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t1_probe.py')
-    _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'scripts.t1_probe', 't1_probe')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t1_probe.py')
+    _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'src.ember.governance.scripts.t1_probe', 't1_probe')
     _ember_c32cf5e860218889_existing = []
     for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
         _ember_c32cf5e860218889_candidate = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
         if _ember_c32cf5e860218889_candidate is not None and all(_ember_c32cf5e860218889_candidate is not item for item in _ember_c32cf5e860218889_existing):
             _ember_c32cf5e860218889_existing.append(_ember_c32cf5e860218889_candidate)
     if len(_ember_c32cf5e860218889_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t1_probe.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t1_probe.py')
     if _ember_c32cf5e860218889_existing:
         _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_existing[0]
         _ember_c32cf5e860218889_observed = getattr(_ember_c32cf5e860218889_module, '__file__', None)
         if _ember_c32cf5e860218889_observed is None or _ember_c32cf5e860218889_Path(_ember_c32cf5e860218889_observed).resolve() != _ember_c32cf5e860218889_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t1_probe.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t1_probe.py')
     else:
         _ember_c32cf5e860218889_spec = _ember_c32cf5e860218889_importlib.spec_from_file_location('_ember_issue2015_c32cf5e860218889', _ember_c32cf5e860218889_path)
         if _ember_c32cf5e860218889_spec is None or _ember_c32cf5e860218889_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t1_probe.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t1_probe.py')
         _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_importlib.module_from_spec(_ember_c32cf5e860218889_spec)
         for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
             _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
             if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t1_probe.py')
             _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
         try:
             _ember_c32cf5e860218889_spec.loader.exec_module(_ember_c32cf5e860218889_module)
@@ -195,10 +195,10 @@ def main():
     for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
         _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
         if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t1_probe.py')
         _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
     execute_batch = getattr(_ember_c32cf5e860218889_module, 'execute_batch')
-    # issue2015 exact-local-import-end:scripts/t1_probe.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t1_probe.py
     # issue2015 exact-local-import:scripts/w1_mbpp.py
     import importlib.util as _ember_53a439835d3991b4_importlib
     import sys as _ember_53a439835d3991b4_sys

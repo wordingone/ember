@@ -32,7 +32,7 @@
 // exports EMBER_STATE_ROOT into the watchdog's own launch environment). Three
 // implementations, not two — TS, PowerShell, Python — all pinned to the same fixture vectors
 // (ember-state-root.test.ts / tests/test_ember_root_launcher.py /
-// scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS) so none can drift apart
+// src/ember/governance/scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS) so none can drift apart
 // unnoticed. A fourth consumer needing this default belongs in this shared-vectors pattern
 // too, never a hand-rolled join.
 //

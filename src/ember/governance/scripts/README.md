@@ -30,7 +30,7 @@ find scripts -type f | wc -l                  # total
 ## Canonical entry points
 
 These are the scripts a new reader should run first — all already documented
-in root `README.md` / `docs/charter/REPRODUCIBILITY.md`; listed here so `scripts/`
+in root `README.md` / `docs/domains/governance/charter/REPRODUCIBILITY.md`; listed here so `scripts/`
 is self-describing without a second hop:
 
 | script | what it is |

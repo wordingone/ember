@@ -4,7 +4,7 @@
 """cond3 GAP-4: the research benchmark harness must validate the SUBJECT identity, fail-closed.
 
 Drives the REAL production entry point --
-``scripts.ember_research_benchmark_harness.build_admission_receipt`` (the exact callable
+``src.ember.governance.scripts.ember_research_benchmark_harness.build_admission_receipt`` (the exact callable
 ``main()``/the CLI wire into) -- with production-shaped inputs: a real benchmark
 admission manifest + operator receipt (the same shape
 ``ember_research_benchmark_harness_selftest.py`` already exercises) plus a SUBJECT

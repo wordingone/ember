@@ -72,7 +72,7 @@ scripts/ember_gate_state_persistence.py
 scripts/ember_gate_state_persistence_selftest.py
 scripts/ember_gate_tool_dispatch_permissions_selftest.py
 scripts/ember_gate_uiux_repl_components_selftest.py
-scripts/ember_governor_binding.py
+src/ember/governance/scripts/ember_governor_binding.py
 scripts/ember_governor_binding_selftest.py
 scripts/ember_growth_harness_selftest.py
 scripts/ember_mle_micro_harness.py
@@ -95,7 +95,7 @@ scripts/ember_phase5_c7/regime_operator.py
 scripts/ember_preloop_resident_gate_selftest.py
 scripts/ember_rebench_admission_selftest.py
 scripts/ember_rebench_first_loop_selftest.py
-scripts/ember_research_benchmark_harness_selftest.py
+src/ember/governance/scripts/ember_research_benchmark_harness_selftest.py
 scripts/ember_research_loop_harness_selftest.py
 scripts/ember_resident_training_candidate.py
 scripts/ember_resident_training_gate.py
@@ -145,7 +145,7 @@ scripts/fp32_e1b_gate.py
 scripts/fp32_r10_failure_taxonomy.py
 scripts/fp33_a_legs_prestage.py
 scripts/fp44_horizon_optimizer_equiv.py
-scripts/frontier.py
+src/ember/governance/scripts/frontier.py
 src/ember/governance/scripts/governor.py
 scripts/gpu_lock_selftest.py
 src/ember/governance/scripts/heartbeat_runner.py
@@ -201,7 +201,7 @@ scripts/tests/test_board_runner_emit.py
 scripts/tests/test_c15_receipt_selection.py
 scripts/tests/test_c_custody_probe.py
 scripts/tests/test_cneg1_annex_bom_fallback.py
-scripts/tests/test_cockpit_watchdog.py
+src/ember/governance/scripts/tests/test_cockpit_watchdog.py
 scripts/tests/test_gpu_lease_placeholder.ts
 scripts/tests/test_prev_receipt_selection.py
 scripts/tests/test_screen792_bf16_momentum.py

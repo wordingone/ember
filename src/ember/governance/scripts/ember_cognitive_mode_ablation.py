@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """C12 ablation runner -- real decision-point replay for the state-dependent
-cognitive-mode selector (scripts/ember_cognitive_mode_policy.py).
+cognitive-mode selector (src/ember/governance/scripts/ember_cognitive_mode_policy.py).
 
 What this does (all real, all executed, nothing hand-crafted):
 
@@ -38,7 +38,7 @@ What this does (all real, all executed, nothing hand-crafted):
 4. Aggregates measured divergence per ablation arm and writes ONE receipt to
    receipts/ember-mvp/c12-cognitive-mode-ablation-<UTC_TS>.json.
 
-Run:  python scripts/ember_cognitive_mode_ablation.py
+Run:  python src/ember/governance/scripts/ember_cognitive_mode_ablation.py
 """
 from __future__ import annotations
 
@@ -396,7 +396,7 @@ def run() -> dict[str, Any]:
         "sha_convention": SHA_CONVENTION,
         "invariant_sha256": INVARIANT_SHA256,
         "selector": "cognitive_mode_selector",
-        "selector_script": "scripts/ember_cognitive_mode_policy.py",
+        "selector_script": "src/ember/governance/scripts/ember_cognitive_mode_policy.py",
         "description": (
             "Replays REAL ember totality board-run receipts (real repo decision points, "
             "not invented inputs) through the live state-dependent cognitive mode selector "
@@ -404,11 +404,11 @@ def run() -> dict[str, Any]:
             "vectors, selected modes, and real MODE_GATE behavioral consequences."
         ),
         "provenance": {
-            "runner_script": "scripts/ember_cognitive_mode_ablation.py",
+            "runner_script": "src/ember/governance/scripts/ember_cognitive_mode_ablation.py",
             "git_sha": git_head_sha(REPO_ROOT),
             "git_branch": git_branch(REPO_ROOT),
             "python_version": sys.version,
-            "command": "python scripts/ember_cognitive_mode_ablation.py",
+            "command": "python src/ember/governance/scripts/ember_cognitive_mode_ablation.py",
             "source_totality_receipts": source_provenance,
             "n_decisions": n,
         },
@@ -430,7 +430,7 @@ def run() -> dict[str, Any]:
                     "state-dependent cognitive mode selector deleted -> consuming cycle "
                     "falls back to a single constant mode with no state-conditioning at all"
                 ),
-                "deleted_object": "scripts/ember_cognitive_mode_policy.py:select_mode",
+                "deleted_object": "src/ember/governance/scripts/ember_cognitive_mode_policy.py:select_mode",
                 "fallback_mode": DELETION_FALLBACK_MODE,
                 "n_decisions": n,
                 "mode_agreement_rate": mode_agreement_b,

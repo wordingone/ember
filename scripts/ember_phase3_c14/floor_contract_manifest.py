@@ -443,7 +443,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "Non-killable for this goal; symbolic/template proxy is never a pass; "
                 "zero-pass-rate on pre-registered pilot = kill condition (pilot, not component)"
             ),
-            evidence_path="scripts/ember_phase3_c14/igrpo_trainer.py",
+            evidence_path="src/ember/governance/scripts/ember_phase3_c14/igrpo_trainer.py",
         ),
         _row(
             key="floor_contract.FP8",
@@ -571,7 +571,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "Non-killable for C14; if recursion depth causes instability, "
                 "reduce max_depth not the mechanism"
             ),
-            evidence_path="scripts/ember_phase3_c14/igrpo_trainer.py",
+            evidence_path="src/ember/governance/scripts/ember_phase3_c14/igrpo_trainer.py",
         ),
         _row(
             key="floor_contract.phase3.iGRPO_two_stage",
@@ -835,7 +835,7 @@ def _make_nc2_rows(nc2_sha: str) -> List["FloorRow"]:
                 "Non-killable for C14; std-guard (A_j=0 if std=0) is invariant; "
                 "surrogate simplification requires receipt"
             ),
-            evidence_path="scripts/ember_phase3_c14/igrpo_trainer.py",
+            evidence_path="src/ember/governance/scripts/ember_phase3_c14/igrpo_trainer.py",
         ),
     ]
 

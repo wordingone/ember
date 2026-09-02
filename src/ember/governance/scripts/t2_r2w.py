@@ -96,35 +96,35 @@ def build_sft_examples(allow=None):
     state — the control arm recomputes this to mirror counts. `views`
     maps each view filename written here to its post-write
     path/rows/sha256 entry (eng #150)."""
-    # issue2015 exact-local-import:scripts/frontier.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/frontier.py
     import importlib.util as _ember_d8c02810056e6c3d_importlib
     import sys as _ember_d8c02810056e6c3d_sys
     from pathlib import Path as _ember_d8c02810056e6c3d_Path
     _ember_d8c02810056e6c3d_path = _ember_d8c02810056e6c3d_Path(__file__).resolve().parents[4].joinpath('scripts', 'frontier.py')
     if not _ember_d8c02810056e6c3d_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/frontier.py')
-    _ember_d8c02810056e6c3d_aliases = ('_ember_issue2015_d8c02810056e6c3d', 'frontier', 'scripts.frontier')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/frontier.py')
+    _ember_d8c02810056e6c3d_aliases = ('_ember_issue2015_d8c02810056e6c3d', 'frontier', 'src.ember.governance.scripts.frontier')
     _ember_d8c02810056e6c3d_existing = []
     for _ember_d8c02810056e6c3d_alias in _ember_d8c02810056e6c3d_aliases:
         _ember_d8c02810056e6c3d_candidate = _ember_d8c02810056e6c3d_sys.modules.get(_ember_d8c02810056e6c3d_alias)
         if _ember_d8c02810056e6c3d_candidate is not None and all(_ember_d8c02810056e6c3d_candidate is not item for item in _ember_d8c02810056e6c3d_existing):
             _ember_d8c02810056e6c3d_existing.append(_ember_d8c02810056e6c3d_candidate)
     if len(_ember_d8c02810056e6c3d_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/frontier.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/frontier.py')
     if _ember_d8c02810056e6c3d_existing:
         _ember_d8c02810056e6c3d_module = _ember_d8c02810056e6c3d_existing[0]
         _ember_d8c02810056e6c3d_observed = getattr(_ember_d8c02810056e6c3d_module, '__file__', None)
         if _ember_d8c02810056e6c3d_observed is None or _ember_d8c02810056e6c3d_Path(_ember_d8c02810056e6c3d_observed).resolve() != _ember_d8c02810056e6c3d_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/frontier.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/frontier.py')
     else:
         _ember_d8c02810056e6c3d_spec = _ember_d8c02810056e6c3d_importlib.spec_from_file_location('_ember_issue2015_d8c02810056e6c3d', _ember_d8c02810056e6c3d_path)
         if _ember_d8c02810056e6c3d_spec is None or _ember_d8c02810056e6c3d_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/frontier.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/frontier.py')
         _ember_d8c02810056e6c3d_module = _ember_d8c02810056e6c3d_importlib.module_from_spec(_ember_d8c02810056e6c3d_spec)
         for _ember_d8c02810056e6c3d_alias in _ember_d8c02810056e6c3d_aliases:
             _ember_d8c02810056e6c3d_prior = _ember_d8c02810056e6c3d_sys.modules.get(_ember_d8c02810056e6c3d_alias)
             if _ember_d8c02810056e6c3d_prior is not None and _ember_d8c02810056e6c3d_prior is not _ember_d8c02810056e6c3d_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/frontier.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/frontier.py')
             _ember_d8c02810056e6c3d_sys.modules[_ember_d8c02810056e6c3d_alias] = _ember_d8c02810056e6c3d_module
         try:
             _ember_d8c02810056e6c3d_spec.loader.exec_module(_ember_d8c02810056e6c3d_module)
@@ -136,11 +136,11 @@ def build_sft_examples(allow=None):
     for _ember_d8c02810056e6c3d_alias in _ember_d8c02810056e6c3d_aliases:
         _ember_d8c02810056e6c3d_prior = _ember_d8c02810056e6c3d_sys.modules.get(_ember_d8c02810056e6c3d_alias)
         if _ember_d8c02810056e6c3d_prior is not None and _ember_d8c02810056e6c3d_prior is not _ember_d8c02810056e6c3d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/frontier.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/frontier.py')
         _ember_d8c02810056e6c3d_sys.modules[_ember_d8c02810056e6c3d_alias] = _ember_d8c02810056e6c3d_module
     ext_clean = getattr(_ember_d8c02810056e6c3d_module, 'ext_clean')
     load_ext_flags = getattr(_ember_d8c02810056e6c3d_module, 'load_ext_flags')
-    # issue2015 exact-local-import-end:scripts/frontier.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/frontier.py
     # issue2015 exact-local-import:scripts/r2_arms.py
     import importlib.util as _ember_5e42585fbe8bb3e8_importlib
     import sys as _ember_5e42585fbe8bb3e8_sys
@@ -186,35 +186,35 @@ def build_sft_examples(allow=None):
     frontier_filter = getattr(_ember_5e42585fbe8bb3e8_module, 'frontier_filter')
     solve_rates_from_ledger = getattr(_ember_5e42585fbe8bb3e8_module, 'solve_rates_from_ledger')
     # issue2015 exact-local-import-end:scripts/r2_arms.py
-    # issue2015 exact-local-import:scripts/t2_round.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/t2_round.py
     import importlib.util as _ember_aa123631425aaf0a_importlib
     import sys as _ember_aa123631425aaf0a_sys
     from pathlib import Path as _ember_aa123631425aaf0a_Path
     _ember_aa123631425aaf0a_path = _ember_aa123631425aaf0a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_round.py')
     if not _ember_aa123631425aaf0a_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t2_round.py')
-    _ember_aa123631425aaf0a_aliases = ('_ember_issue2015_aa123631425aaf0a', 'scripts.t2_round', 't2_round')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_round.py')
+    _ember_aa123631425aaf0a_aliases = ('_ember_issue2015_aa123631425aaf0a', 'src.ember.governance.scripts.t2_round', 't2_round')
     _ember_aa123631425aaf0a_existing = []
     for _ember_aa123631425aaf0a_alias in _ember_aa123631425aaf0a_aliases:
         _ember_aa123631425aaf0a_candidate = _ember_aa123631425aaf0a_sys.modules.get(_ember_aa123631425aaf0a_alias)
         if _ember_aa123631425aaf0a_candidate is not None and all(_ember_aa123631425aaf0a_candidate is not item for item in _ember_aa123631425aaf0a_existing):
             _ember_aa123631425aaf0a_existing.append(_ember_aa123631425aaf0a_candidate)
     if len(_ember_aa123631425aaf0a_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t2_round.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t2_round.py')
     if _ember_aa123631425aaf0a_existing:
         _ember_aa123631425aaf0a_module = _ember_aa123631425aaf0a_existing[0]
         _ember_aa123631425aaf0a_observed = getattr(_ember_aa123631425aaf0a_module, '__file__', None)
         if _ember_aa123631425aaf0a_observed is None or _ember_aa123631425aaf0a_Path(_ember_aa123631425aaf0a_observed).resolve() != _ember_aa123631425aaf0a_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t2_round.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t2_round.py')
     else:
         _ember_aa123631425aaf0a_spec = _ember_aa123631425aaf0a_importlib.spec_from_file_location('_ember_issue2015_aa123631425aaf0a', _ember_aa123631425aaf0a_path)
         if _ember_aa123631425aaf0a_spec is None or _ember_aa123631425aaf0a_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t2_round.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t2_round.py')
         _ember_aa123631425aaf0a_module = _ember_aa123631425aaf0a_importlib.module_from_spec(_ember_aa123631425aaf0a_spec)
         for _ember_aa123631425aaf0a_alias in _ember_aa123631425aaf0a_aliases:
             _ember_aa123631425aaf0a_prior = _ember_aa123631425aaf0a_sys.modules.get(_ember_aa123631425aaf0a_alias)
             if _ember_aa123631425aaf0a_prior is not None and _ember_aa123631425aaf0a_prior is not _ember_aa123631425aaf0a_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_round.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_round.py')
             _ember_aa123631425aaf0a_sys.modules[_ember_aa123631425aaf0a_alias] = _ember_aa123631425aaf0a_module
         try:
             _ember_aa123631425aaf0a_spec.loader.exec_module(_ember_aa123631425aaf0a_module)
@@ -226,39 +226,39 @@ def build_sft_examples(allow=None):
     for _ember_aa123631425aaf0a_alias in _ember_aa123631425aaf0a_aliases:
         _ember_aa123631425aaf0a_prior = _ember_aa123631425aaf0a_sys.modules.get(_ember_aa123631425aaf0a_alias)
         if _ember_aa123631425aaf0a_prior is not None and _ember_aa123631425aaf0a_prior is not _ember_aa123631425aaf0a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_round.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_round.py')
         _ember_aa123631425aaf0a_sys.modules[_ember_aa123631425aaf0a_alias] = _ember_aa123631425aaf0a_module
     build_dataset = getattr(_ember_aa123631425aaf0a_module, 'build_dataset')
-    # issue2015 exact-local-import-end:scripts/t2_round.py
-    # issue2015 exact-local-import:scripts/t2_wcode.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t2_round.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/t2_wcode.py
     import importlib.util as _ember_ed04e2bafc742d3a_importlib
     import sys as _ember_ed04e2bafc742d3a_sys
     from pathlib import Path as _ember_ed04e2bafc742d3a_Path
     _ember_ed04e2bafc742d3a_path = _ember_ed04e2bafc742d3a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_wcode.py')
     if not _ember_ed04e2bafc742d3a_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t2_wcode.py')
-    _ember_ed04e2bafc742d3a_aliases = ('_ember_issue2015_ed04e2bafc742d3a', 'scripts.t2_wcode', 't2_wcode')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_wcode.py')
+    _ember_ed04e2bafc742d3a_aliases = ('_ember_issue2015_ed04e2bafc742d3a', 'src.ember.governance.scripts.t2_wcode', 't2_wcode')
     _ember_ed04e2bafc742d3a_existing = []
     for _ember_ed04e2bafc742d3a_alias in _ember_ed04e2bafc742d3a_aliases:
         _ember_ed04e2bafc742d3a_candidate = _ember_ed04e2bafc742d3a_sys.modules.get(_ember_ed04e2bafc742d3a_alias)
         if _ember_ed04e2bafc742d3a_candidate is not None and all(_ember_ed04e2bafc742d3a_candidate is not item for item in _ember_ed04e2bafc742d3a_existing):
             _ember_ed04e2bafc742d3a_existing.append(_ember_ed04e2bafc742d3a_candidate)
     if len(_ember_ed04e2bafc742d3a_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t2_wcode.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t2_wcode.py')
     if _ember_ed04e2bafc742d3a_existing:
         _ember_ed04e2bafc742d3a_module = _ember_ed04e2bafc742d3a_existing[0]
         _ember_ed04e2bafc742d3a_observed = getattr(_ember_ed04e2bafc742d3a_module, '__file__', None)
         if _ember_ed04e2bafc742d3a_observed is None or _ember_ed04e2bafc742d3a_Path(_ember_ed04e2bafc742d3a_observed).resolve() != _ember_ed04e2bafc742d3a_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t2_wcode.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t2_wcode.py')
     else:
         _ember_ed04e2bafc742d3a_spec = _ember_ed04e2bafc742d3a_importlib.spec_from_file_location('_ember_issue2015_ed04e2bafc742d3a', _ember_ed04e2bafc742d3a_path)
         if _ember_ed04e2bafc742d3a_spec is None or _ember_ed04e2bafc742d3a_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t2_wcode.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t2_wcode.py')
         _ember_ed04e2bafc742d3a_module = _ember_ed04e2bafc742d3a_importlib.module_from_spec(_ember_ed04e2bafc742d3a_spec)
         for _ember_ed04e2bafc742d3a_alias in _ember_ed04e2bafc742d3a_aliases:
             _ember_ed04e2bafc742d3a_prior = _ember_ed04e2bafc742d3a_sys.modules.get(_ember_ed04e2bafc742d3a_alias)
             if _ember_ed04e2bafc742d3a_prior is not None and _ember_ed04e2bafc742d3a_prior is not _ember_ed04e2bafc742d3a_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_wcode.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_wcode.py')
             _ember_ed04e2bafc742d3a_sys.modules[_ember_ed04e2bafc742d3a_alias] = _ember_ed04e2bafc742d3a_module
         try:
             _ember_ed04e2bafc742d3a_spec.loader.exec_module(_ember_ed04e2bafc742d3a_module)
@@ -270,10 +270,10 @@ def build_sft_examples(allow=None):
     for _ember_ed04e2bafc742d3a_alias in _ember_ed04e2bafc742d3a_aliases:
         _ember_ed04e2bafc742d3a_prior = _ember_ed04e2bafc742d3a_sys.modules.get(_ember_ed04e2bafc742d3a_alias)
         if _ember_ed04e2bafc742d3a_prior is not None and _ember_ed04e2bafc742d3a_prior is not _ember_ed04e2bafc742d3a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_wcode.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_wcode.py')
         _ember_ed04e2bafc742d3a_sys.modules[_ember_ed04e2bafc742d3a_alias] = _ember_ed04e2bafc742d3a_module
     write_view = getattr(_ember_ed04e2bafc742d3a_module, 'write_view')
-    # issue2015 exact-local-import-end:scripts/t2_wcode.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t2_wcode.py
 
     arm_recs = write_view(LEDGER, f"{VIEWS}/wcode-r2.jsonl")
     views = {"wcode-r2.jsonl":
@@ -317,35 +317,35 @@ def main():
     args, _unknown = ap.parse_known_args()  # daemon appends args; ignore
 
     sys.path.insert(0, f"{NC}/scripts")
-    # issue2015 exact-local-import:scripts/ledger_license.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/ledger_license.py
     import importlib.util as _ember_af5eca6d54450d11_importlib
     import sys as _ember_af5eca6d54450d11_sys
     from pathlib import Path as _ember_af5eca6d54450d11_Path
     _ember_af5eca6d54450d11_path = _ember_af5eca6d54450d11_Path(__file__).resolve().parents[4].joinpath('scripts', 'ledger_license.py')
     if not _ember_af5eca6d54450d11_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ledger_license.py')
-    _ember_af5eca6d54450d11_aliases = ('_ember_issue2015_af5eca6d54450d11', 'ledger_license', 'scripts.ledger_license')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ledger_license.py')
+    _ember_af5eca6d54450d11_aliases = ('_ember_issue2015_af5eca6d54450d11', 'ledger_license', 'src.ember.governance.scripts.ledger_license')
     _ember_af5eca6d54450d11_existing = []
     for _ember_af5eca6d54450d11_alias in _ember_af5eca6d54450d11_aliases:
         _ember_af5eca6d54450d11_candidate = _ember_af5eca6d54450d11_sys.modules.get(_ember_af5eca6d54450d11_alias)
         if _ember_af5eca6d54450d11_candidate is not None and all(_ember_af5eca6d54450d11_candidate is not item for item in _ember_af5eca6d54450d11_existing):
             _ember_af5eca6d54450d11_existing.append(_ember_af5eca6d54450d11_candidate)
     if len(_ember_af5eca6d54450d11_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ledger_license.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ledger_license.py')
     if _ember_af5eca6d54450d11_existing:
         _ember_af5eca6d54450d11_module = _ember_af5eca6d54450d11_existing[0]
         _ember_af5eca6d54450d11_observed = getattr(_ember_af5eca6d54450d11_module, '__file__', None)
         if _ember_af5eca6d54450d11_observed is None or _ember_af5eca6d54450d11_Path(_ember_af5eca6d54450d11_observed).resolve() != _ember_af5eca6d54450d11_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ledger_license.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ledger_license.py')
     else:
         _ember_af5eca6d54450d11_spec = _ember_af5eca6d54450d11_importlib.spec_from_file_location('_ember_issue2015_af5eca6d54450d11', _ember_af5eca6d54450d11_path)
         if _ember_af5eca6d54450d11_spec is None or _ember_af5eca6d54450d11_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ledger_license.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ledger_license.py')
         _ember_af5eca6d54450d11_module = _ember_af5eca6d54450d11_importlib.module_from_spec(_ember_af5eca6d54450d11_spec)
         for _ember_af5eca6d54450d11_alias in _ember_af5eca6d54450d11_aliases:
             _ember_af5eca6d54450d11_prior = _ember_af5eca6d54450d11_sys.modules.get(_ember_af5eca6d54450d11_alias)
             if _ember_af5eca6d54450d11_prior is not None and _ember_af5eca6d54450d11_prior is not _ember_af5eca6d54450d11_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ledger_license.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ledger_license.py')
             _ember_af5eca6d54450d11_sys.modules[_ember_af5eca6d54450d11_alias] = _ember_af5eca6d54450d11_module
         try:
             _ember_af5eca6d54450d11_spec.loader.exec_module(_ember_af5eca6d54450d11_module)
@@ -357,39 +357,39 @@ def main():
     for _ember_af5eca6d54450d11_alias in _ember_af5eca6d54450d11_aliases:
         _ember_af5eca6d54450d11_prior = _ember_af5eca6d54450d11_sys.modules.get(_ember_af5eca6d54450d11_alias)
         if _ember_af5eca6d54450d11_prior is not None and _ember_af5eca6d54450d11_prior is not _ember_af5eca6d54450d11_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ledger_license.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ledger_license.py')
         _ember_af5eca6d54450d11_sys.modules[_ember_af5eca6d54450d11_alias] = _ember_af5eca6d54450d11_module
     parse_allow = getattr(_ember_af5eca6d54450d11_module, 'parse_allow')
-    # issue2015 exact-local-import-end:scripts/ledger_license.py
-    # issue2015 exact-local-import:scripts/t2_round.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/ledger_license.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/t2_round.py
     import importlib.util as _ember_aa123631425aaf0a_importlib
     import sys as _ember_aa123631425aaf0a_sys
     from pathlib import Path as _ember_aa123631425aaf0a_Path
     _ember_aa123631425aaf0a_path = _ember_aa123631425aaf0a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_round.py')
     if not _ember_aa123631425aaf0a_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t2_round.py')
-    _ember_aa123631425aaf0a_aliases = ('_ember_issue2015_aa123631425aaf0a', 'scripts.t2_round', 't2_round')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_round.py')
+    _ember_aa123631425aaf0a_aliases = ('_ember_issue2015_aa123631425aaf0a', 'src.ember.governance.scripts.t2_round', 't2_round')
     _ember_aa123631425aaf0a_existing = []
     for _ember_aa123631425aaf0a_alias in _ember_aa123631425aaf0a_aliases:
         _ember_aa123631425aaf0a_candidate = _ember_aa123631425aaf0a_sys.modules.get(_ember_aa123631425aaf0a_alias)
         if _ember_aa123631425aaf0a_candidate is not None and all(_ember_aa123631425aaf0a_candidate is not item for item in _ember_aa123631425aaf0a_existing):
             _ember_aa123631425aaf0a_existing.append(_ember_aa123631425aaf0a_candidate)
     if len(_ember_aa123631425aaf0a_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t2_round.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t2_round.py')
     if _ember_aa123631425aaf0a_existing:
         _ember_aa123631425aaf0a_module = _ember_aa123631425aaf0a_existing[0]
         _ember_aa123631425aaf0a_observed = getattr(_ember_aa123631425aaf0a_module, '__file__', None)
         if _ember_aa123631425aaf0a_observed is None or _ember_aa123631425aaf0a_Path(_ember_aa123631425aaf0a_observed).resolve() != _ember_aa123631425aaf0a_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t2_round.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t2_round.py')
     else:
         _ember_aa123631425aaf0a_spec = _ember_aa123631425aaf0a_importlib.spec_from_file_location('_ember_issue2015_aa123631425aaf0a', _ember_aa123631425aaf0a_path)
         if _ember_aa123631425aaf0a_spec is None or _ember_aa123631425aaf0a_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t2_round.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t2_round.py')
         _ember_aa123631425aaf0a_module = _ember_aa123631425aaf0a_importlib.module_from_spec(_ember_aa123631425aaf0a_spec)
         for _ember_aa123631425aaf0a_alias in _ember_aa123631425aaf0a_aliases:
             _ember_aa123631425aaf0a_prior = _ember_aa123631425aaf0a_sys.modules.get(_ember_aa123631425aaf0a_alias)
             if _ember_aa123631425aaf0a_prior is not None and _ember_aa123631425aaf0a_prior is not _ember_aa123631425aaf0a_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_round.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_round.py')
             _ember_aa123631425aaf0a_sys.modules[_ember_aa123631425aaf0a_alias] = _ember_aa123631425aaf0a_module
         try:
             _ember_aa123631425aaf0a_spec.loader.exec_module(_ember_aa123631425aaf0a_module)
@@ -401,40 +401,40 @@ def main():
     for _ember_aa123631425aaf0a_alias in _ember_aa123631425aaf0a_aliases:
         _ember_aa123631425aaf0a_prior = _ember_aa123631425aaf0a_sys.modules.get(_ember_aa123631425aaf0a_alias)
         if _ember_aa123631425aaf0a_prior is not None and _ember_aa123631425aaf0a_prior is not _ember_aa123631425aaf0a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_round.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_round.py')
         _ember_aa123631425aaf0a_sys.modules[_ember_aa123631425aaf0a_alias] = _ember_aa123631425aaf0a_module
     build_dataset = getattr(_ember_aa123631425aaf0a_module, 'build_dataset')
     train_lora = getattr(_ember_aa123631425aaf0a_module, 'train_lora')
-    # issue2015 exact-local-import-end:scripts/t2_round.py
-    # issue2015 exact-local-import:scripts/t2_wcode.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t2_round.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/t2_wcode.py
     import importlib.util as _ember_ed04e2bafc742d3a_importlib
     import sys as _ember_ed04e2bafc742d3a_sys
     from pathlib import Path as _ember_ed04e2bafc742d3a_Path
     _ember_ed04e2bafc742d3a_path = _ember_ed04e2bafc742d3a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_wcode.py')
     if not _ember_ed04e2bafc742d3a_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t2_wcode.py')
-    _ember_ed04e2bafc742d3a_aliases = ('_ember_issue2015_ed04e2bafc742d3a', 'scripts.t2_wcode', 't2_wcode')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_wcode.py')
+    _ember_ed04e2bafc742d3a_aliases = ('_ember_issue2015_ed04e2bafc742d3a', 'src.ember.governance.scripts.t2_wcode', 't2_wcode')
     _ember_ed04e2bafc742d3a_existing = []
     for _ember_ed04e2bafc742d3a_alias in _ember_ed04e2bafc742d3a_aliases:
         _ember_ed04e2bafc742d3a_candidate = _ember_ed04e2bafc742d3a_sys.modules.get(_ember_ed04e2bafc742d3a_alias)
         if _ember_ed04e2bafc742d3a_candidate is not None and all(_ember_ed04e2bafc742d3a_candidate is not item for item in _ember_ed04e2bafc742d3a_existing):
             _ember_ed04e2bafc742d3a_existing.append(_ember_ed04e2bafc742d3a_candidate)
     if len(_ember_ed04e2bafc742d3a_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t2_wcode.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t2_wcode.py')
     if _ember_ed04e2bafc742d3a_existing:
         _ember_ed04e2bafc742d3a_module = _ember_ed04e2bafc742d3a_existing[0]
         _ember_ed04e2bafc742d3a_observed = getattr(_ember_ed04e2bafc742d3a_module, '__file__', None)
         if _ember_ed04e2bafc742d3a_observed is None or _ember_ed04e2bafc742d3a_Path(_ember_ed04e2bafc742d3a_observed).resolve() != _ember_ed04e2bafc742d3a_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t2_wcode.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t2_wcode.py')
     else:
         _ember_ed04e2bafc742d3a_spec = _ember_ed04e2bafc742d3a_importlib.spec_from_file_location('_ember_issue2015_ed04e2bafc742d3a', _ember_ed04e2bafc742d3a_path)
         if _ember_ed04e2bafc742d3a_spec is None or _ember_ed04e2bafc742d3a_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t2_wcode.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t2_wcode.py')
         _ember_ed04e2bafc742d3a_module = _ember_ed04e2bafc742d3a_importlib.module_from_spec(_ember_ed04e2bafc742d3a_spec)
         for _ember_ed04e2bafc742d3a_alias in _ember_ed04e2bafc742d3a_aliases:
             _ember_ed04e2bafc742d3a_prior = _ember_ed04e2bafc742d3a_sys.modules.get(_ember_ed04e2bafc742d3a_alias)
             if _ember_ed04e2bafc742d3a_prior is not None and _ember_ed04e2bafc742d3a_prior is not _ember_ed04e2bafc742d3a_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_wcode.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_wcode.py')
             _ember_ed04e2bafc742d3a_sys.modules[_ember_ed04e2bafc742d3a_alias] = _ember_ed04e2bafc742d3a_module
         try:
             _ember_ed04e2bafc742d3a_spec.loader.exec_module(_ember_ed04e2bafc742d3a_module)
@@ -446,39 +446,39 @@ def main():
     for _ember_ed04e2bafc742d3a_alias in _ember_ed04e2bafc742d3a_aliases:
         _ember_ed04e2bafc742d3a_prior = _ember_ed04e2bafc742d3a_sys.modules.get(_ember_ed04e2bafc742d3a_alias)
         if _ember_ed04e2bafc742d3a_prior is not None and _ember_ed04e2bafc742d3a_prior is not _ember_ed04e2bafc742d3a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t2_wcode.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t2_wcode.py')
         _ember_ed04e2bafc742d3a_sys.modules[_ember_ed04e2bafc742d3a_alias] = _ember_ed04e2bafc742d3a_module
     write_view = getattr(_ember_ed04e2bafc742d3a_module, 'write_view')
-    # issue2015 exact-local-import-end:scripts/t2_wcode.py
-    # issue2015 exact-local-import:scripts/t1_probe.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t2_wcode.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/t1_probe.py
     import importlib.util as _ember_c32cf5e860218889_importlib
     import sys as _ember_c32cf5e860218889_sys
     from pathlib import Path as _ember_c32cf5e860218889_Path
     _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
     if not _ember_c32cf5e860218889_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/t1_probe.py')
-    _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'scripts.t1_probe', 't1_probe')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t1_probe.py')
+    _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'src.ember.governance.scripts.t1_probe', 't1_probe')
     _ember_c32cf5e860218889_existing = []
     for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
         _ember_c32cf5e860218889_candidate = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
         if _ember_c32cf5e860218889_candidate is not None and all(_ember_c32cf5e860218889_candidate is not item for item in _ember_c32cf5e860218889_existing):
             _ember_c32cf5e860218889_existing.append(_ember_c32cf5e860218889_candidate)
     if len(_ember_c32cf5e860218889_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/t1_probe.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t1_probe.py')
     if _ember_c32cf5e860218889_existing:
         _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_existing[0]
         _ember_c32cf5e860218889_observed = getattr(_ember_c32cf5e860218889_module, '__file__', None)
         if _ember_c32cf5e860218889_observed is None or _ember_c32cf5e860218889_Path(_ember_c32cf5e860218889_observed).resolve() != _ember_c32cf5e860218889_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/t1_probe.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t1_probe.py')
     else:
         _ember_c32cf5e860218889_spec = _ember_c32cf5e860218889_importlib.spec_from_file_location('_ember_issue2015_c32cf5e860218889', _ember_c32cf5e860218889_path)
         if _ember_c32cf5e860218889_spec is None or _ember_c32cf5e860218889_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/t1_probe.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t1_probe.py')
         _ember_c32cf5e860218889_module = _ember_c32cf5e860218889_importlib.module_from_spec(_ember_c32cf5e860218889_spec)
         for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
             _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
             if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t1_probe.py')
             _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
         try:
             _ember_c32cf5e860218889_spec.loader.exec_module(_ember_c32cf5e860218889_module)
@@ -490,10 +490,10 @@ def main():
     for _ember_c32cf5e860218889_alias in _ember_c32cf5e860218889_aliases:
         _ember_c32cf5e860218889_prior = _ember_c32cf5e860218889_sys.modules.get(_ember_c32cf5e860218889_alias)
         if _ember_c32cf5e860218889_prior is not None and _ember_c32cf5e860218889_prior is not _ember_c32cf5e860218889_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/t1_probe.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t1_probe.py')
         _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
     pacing_snapshot = getattr(_ember_c32cf5e860218889_module, 'pacing_snapshot')
-    # issue2015 exact-local-import-end:scripts/t1_probe.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t1_probe.py
 
     allow = parse_allow(args.license_allow) if args.license_allow else None
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

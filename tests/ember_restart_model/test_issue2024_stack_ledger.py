@@ -23,7 +23,7 @@ def _event(
     event_id: int = 7,
     parent_id: int = 3,
     device_time_us: str = "10.000001",
-    stack: tuple[str, ...] = ("tools/ember-restart-3b/model.py:41",),
+    stack: tuple[str, ...] = ("src/ember/infrastructure/tools/ember-restart-3b/model.py:41",),
     parent_stack: tuple[str, ...] = (),
     has_parent: bool = True,
     has_shapes: bool = True,
@@ -185,7 +185,7 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
                 "input_shapes": [[2, 3], [3, 4]],
                 "key": "aten::mm",
                 "self_device_time_us": "10.000001",
-                "source_stack": ["tools/ember-restart-3b/model.py:41"],
+                "source_stack": ["src/ember/infrastructure/tools/ember-restart-3b/model.py:41"],
             },
             {
                 "ancestry_depth": 1,
@@ -195,7 +195,7 @@ def test_issue2024_ledger_preserves_event_identity_and_reconciles_within_one_ns(
                 "input_shapes": [[2, 3], [3, 4]],
                 "key": "aten::mm",
                 "self_device_time_us": "2.000002",
-                "source_stack": ["tools/ember-restart-3b/model.py:41"],
+                "source_stack": ["src/ember/infrastructure/tools/ember-restart-3b/model.py:41"],
             },
         ],
     }
@@ -257,11 +257,11 @@ def test_issue2024_ledger_reports_every_positive_time_metadata_violation_togethe
 
 def test_issue2024_ledger_inherits_source_stack_from_cpu_parent_for_device_event() -> None:
     ledger = subject.build_issue2024_event_ledger(
-        [_event(stack=(), parent_stack=("tools/ember-restart-3b/model.py:99",))],
+        [_event(stack=(), parent_stack=("src/ember/infrastructure/tools/ember-restart-3b/model.py:99",))],
         declared_self_device_time_total_us="10.000001",
     )
     assert ledger["events"][0]["source_stack"] == [
-        "tools/ember-restart-3b/model.py:99"
+        "src/ember/infrastructure/tools/ember-restart-3b/model.py:99"
     ]
 
 
@@ -505,7 +505,7 @@ def _shard_receipt(
     index: int,
     *,
     parser_source_sha256: str = "f" * 64,
-    stack: tuple[str, ...] = ("tools/ember-restart-3b/model.py:41",),
+    stack: tuple[str, ...] = ("src/ember/infrastructure/tools/ember-restart-3b/model.py:41",),
     key: str = "aten::mm",
     input_shapes: list[list[int]] | None = None,
 ) -> dict[str, object]:

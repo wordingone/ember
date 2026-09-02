@@ -95,7 +95,7 @@ def test_closed_pair_refuses_bytes_outside_selected_pin(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "relative",
     [
-        "tools/ember-restart-3b/certified_train_launch.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
         "tools/ember-restart-3b/eval_canary_image.py",
         "tools/ember-restart-3b/launch_packet.py",
         "tools/ember-restart-3b/parameter_counter.py",
@@ -171,7 +171,7 @@ def test_specialist_authorities_declare_canonical_preference(name: str) -> None:
     [
         "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
         "tests/ember_restart_model/test_a1_certified_launch.py",
-        "tests/ember_restart_model/test_certified_train_launch.py",
+        "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
         "tests/ember_restart_model/test_checkpoint_artifacts.py",
         "tests/ember_restart_model/test_counter_cli.py",
         "tests/ember_restart_model/test_frozen_tokenizer_decoder.py",

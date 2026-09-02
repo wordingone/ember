@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2021, `rusqlite`, `serde_json`, `windows-sys` Job Objects/process identity APIs, existing content-addressed receipt helpers and Windows integration tests.
 
-**Spec:** `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
+**Spec:** `docs/domains/governance/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 ## Global Constraints
 
@@ -133,7 +133,7 @@ Include one exact decision receipt's raw/self hashes and JSON, event rows, proce
 **Files:**
 - Verify: `runtime/ember-lab/src/lib.rs`
 - Verify: `runtime/ember-lab/tests/control_plane.rs`
-- Verify: `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
+- Verify: `docs/domains/governance/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 **Interfaces:**
 - Consumes: Tasks 1–2 and the foreign-pressure plan.

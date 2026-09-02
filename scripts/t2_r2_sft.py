@@ -210,7 +210,7 @@ def main():
     ] + extra
     print(f"[t2_r2_sft] delegating: sys.argv={sys.argv}", flush=True)
     runpy.run_path(
-        f"{NC}/scripts/t2_round.py",
+        f"{NC}/src/ember/governance/scripts/t2_round.py",
         run_name="__main__",
     )
 

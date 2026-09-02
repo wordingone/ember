@@ -72,15 +72,15 @@ def _write_source_fixture(root: Path, *, text: str = "Hello PDF") -> tuple[Path,
 
 class PdfToUtf8Tests(unittest.TestCase):
     def test_pdf_extraction_producer_exists(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         self.assertTrue(callable(module.produce_pdf_text_receipt))
 
     def test_normalization_is_nfc_lf_and_one_trailing_newline(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         self.assertEqual(module.normalize_extracted_text(" A \r\nCafe\u0301\r\n\r\n"), " A\nCaf\u00e9\n")
 
     def test_v2_repairs_surrogate_pairs_and_escapes_only_isolated_units(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         repaired, paired, escaped = module.repair_extracted_surrogates(
             "pair=\ud83d\ude00 isolated=\ud800 literal=\\uD800"
         )
@@ -89,7 +89,7 @@ class PdfToUtf8Tests(unittest.TestCase):
         self.assertEqual(escaped, 1)
 
     def test_v2_sanitizer_removes_only_exact_invalid_pgf_prefixes(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         sanitized, removed = module.sanitize_invalid_pgf_content(
             b"  obj @pgfcolorspaces bad\nnot obj @pgfcolorspaces keep\npagesize width bad\n"
         )
@@ -97,7 +97,7 @@ class PdfToUtf8Tests(unittest.TestCase):
         self.assertEqual(removed, 2)
 
     def test_v2_sanitizer_is_refusal_gated_and_receipts_triggered_pages(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
 
         class FakePage:
             def __init__(self, *, refuses_once: bool) -> None:
@@ -148,7 +148,7 @@ class PdfToUtf8Tests(unittest.TestCase):
                 self.assertEqual(audit["extractor_semantics_version"], "v2")
 
     def test_produce_and_independently_verify_real_pdf(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source_receipt, source_receipt_sha256, pdf_path = _write_source_fixture(root)
@@ -181,14 +181,14 @@ class PdfToUtf8Tests(unittest.TestCase):
             )
 
     def test_refuses_wrong_runtime_and_dependency_versions(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         with self.assertRaisesRegex(module.PdfExtractionRefusal, "Python 3.10"):
             module.require_runtime_contract(python_major_minor="3.12", pypdf_version="6.16.1")
         with self.assertRaisesRegex(module.PdfExtractionRefusal, "pypdf 6.16.1"):
             module.require_runtime_contract(python_major_minor="3.10", pypdf_version="6.1.3")
 
     def test_refuses_source_drift_output_overwrite_and_output_tamper(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source_receipt, source_receipt_sha256, pdf_path = _write_source_fixture(root)
@@ -222,7 +222,7 @@ class PdfToUtf8Tests(unittest.TestCase):
                 )
 
     def test_refuses_page_decoded_content_and_output_bounds(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source_receipt, source_receipt_sha256, _ = _write_source_fixture(root, text="x" * 200)
@@ -242,7 +242,7 @@ class PdfToUtf8Tests(unittest.TestCase):
                 )
 
     def test_refuses_empty_extracted_text(self) -> None:
-        module = importlib.import_module("tools.corpus_connectors.pdf_to_utf8")
+        module = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.pdf_to_utf8")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             source_receipt, source_receipt_sha256, _ = _write_source_fixture(root, text="   ")

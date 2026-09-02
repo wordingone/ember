@@ -124,7 +124,7 @@ INVENTORY: tuple[dict, ...] = (
          path="tools/ember-restart-3b/pretrain.py",
          provenance="Owned pretraining loop body; authored in-repo."),
     dict(category="training_loop", kind="file",
-         path="tools/ember-restart-3b/certified_train_launch.py",
+         path="src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
          provenance="The ONLY consumer ember-cli /train --execute may invoke; "
                     "fixed certified launch path."),
     dict(category="training_loop", kind="file",
@@ -138,7 +138,7 @@ INVENTORY: tuple[dict, ...] = (
          path="tools/ember-restart-3b/production_rung.py",
          provenance="Rung driver for the owned production run."),
     dict(category="training_loop", kind="file",
-         path="tools/ember-restart-3b/model.py",
+         path="src/ember/infrastructure/tools/ember-restart-3b/model.py",
          provenance="Owned unified decoder definition (clean random genesis, no "
                     "imported weights)."),
     dict(category="training_loop", kind="file",
@@ -148,7 +148,7 @@ INVENTORY: tuple[dict, ...] = (
          path="tools/ember-restart-3b/optimizer_transition.py",
          provenance="Optimizer state construction and transition rules."),
     dict(category="training_loop", kind="file",
-         path="tools/ember-restart-3b/checkpoint_artifacts.py",
+         path="src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
          provenance="Checkpoint writer producing the hash-chained sequence R1-E3 "
                     "round-trips."),
 

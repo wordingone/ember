@@ -18,7 +18,7 @@ C12 � State-dependent cognitive modes.
 Gloss (task): state-dependent cognitive modes (peer selector cognitive-mode policy):
   modes selected by state; deleting the selector or using fixed time slices
   degrades the cycle.
-Receipt hint: scripts/ember_cognitive_mode_policy.py + selftest,
+Receipt hint: src/ember/governance/scripts/ember_cognitive_mode_policy.py + selftest,
   ember_state_substrate.py, state-dependent receipt.
 
 This is a STATUS PROBE. It always exits 0 and prints exactly one line
@@ -256,7 +256,7 @@ def receipt_wires_selector(obj):
 # ---------------------------------------------------------------------------
 
 def _import_selector_module(repo_root):
-    """Import scripts/ember_cognitive_mode_policy.py from repo_root via
+    """Import src/ember/governance/scripts/ember_cognitive_mode_policy.py from repo_root via
     importlib (not a relative package import -- this probe runs standalone).
     Returns (module, None) on success or (None, error_string) on failure."""
     path = os.path.join(repo_root, SELECTOR_REL)

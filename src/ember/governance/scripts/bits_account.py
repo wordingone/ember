@@ -23,35 +23,35 @@ from datetime import datetime, timezone
 
 from receipt_write import checked_write
 
-# issue2015 exact-local-import:scripts/frontier.py
+# issue2015 exact-local-import:src/ember/governance/scripts/frontier.py
 import importlib.util as _ember_d8c02810056e6c3d_importlib
 import sys as _ember_d8c02810056e6c3d_sys
 from pathlib import Path as _ember_d8c02810056e6c3d_Path
 _ember_d8c02810056e6c3d_path = _ember_d8c02810056e6c3d_Path(__file__).resolve().parents[4].joinpath('scripts', 'frontier.py')
 if not _ember_d8c02810056e6c3d_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/frontier.py')
-_ember_d8c02810056e6c3d_aliases = ('_ember_issue2015_d8c02810056e6c3d', 'frontier', 'scripts.frontier')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/frontier.py')
+_ember_d8c02810056e6c3d_aliases = ('_ember_issue2015_d8c02810056e6c3d', 'frontier', 'src.ember.governance.scripts.frontier')
 _ember_d8c02810056e6c3d_existing = []
 for _ember_d8c02810056e6c3d_alias in _ember_d8c02810056e6c3d_aliases:
     _ember_d8c02810056e6c3d_candidate = _ember_d8c02810056e6c3d_sys.modules.get(_ember_d8c02810056e6c3d_alias)
     if _ember_d8c02810056e6c3d_candidate is not None and all(_ember_d8c02810056e6c3d_candidate is not item for item in _ember_d8c02810056e6c3d_existing):
         _ember_d8c02810056e6c3d_existing.append(_ember_d8c02810056e6c3d_candidate)
 if len(_ember_d8c02810056e6c3d_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/frontier.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/frontier.py')
 if _ember_d8c02810056e6c3d_existing:
     _ember_d8c02810056e6c3d_module = _ember_d8c02810056e6c3d_existing[0]
     _ember_d8c02810056e6c3d_observed = getattr(_ember_d8c02810056e6c3d_module, '__file__', None)
     if _ember_d8c02810056e6c3d_observed is None or _ember_d8c02810056e6c3d_Path(_ember_d8c02810056e6c3d_observed).resolve() != _ember_d8c02810056e6c3d_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/frontier.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/frontier.py')
 else:
     _ember_d8c02810056e6c3d_spec = _ember_d8c02810056e6c3d_importlib.spec_from_file_location('_ember_issue2015_d8c02810056e6c3d', _ember_d8c02810056e6c3d_path)
     if _ember_d8c02810056e6c3d_spec is None or _ember_d8c02810056e6c3d_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/frontier.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/frontier.py')
     _ember_d8c02810056e6c3d_module = _ember_d8c02810056e6c3d_importlib.module_from_spec(_ember_d8c02810056e6c3d_spec)
     for _ember_d8c02810056e6c3d_alias in _ember_d8c02810056e6c3d_aliases:
         _ember_d8c02810056e6c3d_prior = _ember_d8c02810056e6c3d_sys.modules.get(_ember_d8c02810056e6c3d_alias)
         if _ember_d8c02810056e6c3d_prior is not None and _ember_d8c02810056e6c3d_prior is not _ember_d8c02810056e6c3d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/frontier.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/frontier.py')
         _ember_d8c02810056e6c3d_sys.modules[_ember_d8c02810056e6c3d_alias] = _ember_d8c02810056e6c3d_module
     try:
         _ember_d8c02810056e6c3d_spec.loader.exec_module(_ember_d8c02810056e6c3d_module)
@@ -63,42 +63,42 @@ else:
 for _ember_d8c02810056e6c3d_alias in _ember_d8c02810056e6c3d_aliases:
     _ember_d8c02810056e6c3d_prior = _ember_d8c02810056e6c3d_sys.modules.get(_ember_d8c02810056e6c3d_alias)
     if _ember_d8c02810056e6c3d_prior is not None and _ember_d8c02810056e6c3d_prior is not _ember_d8c02810056e6c3d_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/frontier.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/frontier.py')
     _ember_d8c02810056e6c3d_sys.modules[_ember_d8c02810056e6c3d_alias] = _ember_d8c02810056e6c3d_module
 ext_clean = getattr(_ember_d8c02810056e6c3d_module, 'ext_clean')
 fpr_corrected_bits = getattr(_ember_d8c02810056e6c3d_module, 'fpr_corrected_bits')
 load_ext_flags = getattr(_ember_d8c02810056e6c3d_module, 'load_ext_flags')
 report_block = getattr(_ember_d8c02810056e6c3d_module, 'report_block')
-# issue2015 exact-local-import-end:scripts/frontier.py
-# issue2015 exact-local-import:scripts/power.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/frontier.py
+# issue2015 exact-local-import:src/ember/governance/scripts/power.py
 import importlib.util as _ember_41d654a4576ceb0a_importlib
 import sys as _ember_41d654a4576ceb0a_sys
 from pathlib import Path as _ember_41d654a4576ceb0a_Path
 _ember_41d654a4576ceb0a_path = _ember_41d654a4576ceb0a_Path(__file__).resolve().parents[4].joinpath('scripts', 'power.py')
 if not _ember_41d654a4576ceb0a_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/power.py')
-_ember_41d654a4576ceb0a_aliases = ('_ember_issue2015_41d654a4576ceb0a', 'power', 'scripts.power')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/power.py')
+_ember_41d654a4576ceb0a_aliases = ('_ember_issue2015_41d654a4576ceb0a', 'power', 'src.ember.governance.scripts.power')
 _ember_41d654a4576ceb0a_existing = []
 for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
     _ember_41d654a4576ceb0a_candidate = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
     if _ember_41d654a4576ceb0a_candidate is not None and all(_ember_41d654a4576ceb0a_candidate is not item for item in _ember_41d654a4576ceb0a_existing):
         _ember_41d654a4576ceb0a_existing.append(_ember_41d654a4576ceb0a_candidate)
 if len(_ember_41d654a4576ceb0a_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/power.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/power.py')
 if _ember_41d654a4576ceb0a_existing:
     _ember_41d654a4576ceb0a_module = _ember_41d654a4576ceb0a_existing[0]
     _ember_41d654a4576ceb0a_observed = getattr(_ember_41d654a4576ceb0a_module, '__file__', None)
     if _ember_41d654a4576ceb0a_observed is None or _ember_41d654a4576ceb0a_Path(_ember_41d654a4576ceb0a_observed).resolve() != _ember_41d654a4576ceb0a_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/power.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/power.py')
 else:
     _ember_41d654a4576ceb0a_spec = _ember_41d654a4576ceb0a_importlib.spec_from_file_location('_ember_issue2015_41d654a4576ceb0a', _ember_41d654a4576ceb0a_path)
     if _ember_41d654a4576ceb0a_spec is None or _ember_41d654a4576ceb0a_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/power.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/power.py')
     _ember_41d654a4576ceb0a_module = _ember_41d654a4576ceb0a_importlib.module_from_spec(_ember_41d654a4576ceb0a_spec)
     for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
         _ember_41d654a4576ceb0a_prior = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
         if _ember_41d654a4576ceb0a_prior is not None and _ember_41d654a4576ceb0a_prior is not _ember_41d654a4576ceb0a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/power.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/power.py')
         _ember_41d654a4576ceb0a_sys.modules[_ember_41d654a4576ceb0a_alias] = _ember_41d654a4576ceb0a_module
     try:
         _ember_41d654a4576ceb0a_spec.loader.exec_module(_ember_41d654a4576ceb0a_module)
@@ -110,10 +110,10 @@ else:
 for _ember_41d654a4576ceb0a_alias in _ember_41d654a4576ceb0a_aliases:
     _ember_41d654a4576ceb0a_prior = _ember_41d654a4576ceb0a_sys.modules.get(_ember_41d654a4576ceb0a_alias)
     if _ember_41d654a4576ceb0a_prior is not None and _ember_41d654a4576ceb0a_prior is not _ember_41d654a4576ceb0a_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/power.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/power.py')
     _ember_41d654a4576ceb0a_sys.modules[_ember_41d654a4576ceb0a_alias] = _ember_41d654a4576ceb0a_module
 wilson = getattr(_ember_41d654a4576ceb0a_module, 'wilson')
-# issue2015 exact-local-import-end:scripts/power.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/power.py
 
 NC = "<local-path>"
 RECEIPTS = f"{NC}/receipts"

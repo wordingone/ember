@@ -8,7 +8,7 @@ Mechanizes the three-conjunct gate `docs/spec/publication-v1.md` §3 names as th
 build target (its own §"Validation hook" paragraph). Checks, from ON-DISK evidence only,
 never from a spec's prose or a model's self-report:
 
-  (a) kernel_fired            — `docs/archive/pre-restart/kernel-v1-freeze-spec.md` §5 freeze artifact
+  (a) kernel_fired            — `docs/domains/governance/archive/pre-restart/kernel-v1-freeze-spec.md` §5 freeze artifact
                                  (`manifests/governance/kernel-v1.0.manifest`) PLUS a
                                  receipt demonstrating the math-core §9 flywheel-turn
                                  condition `dB/dround > 0 ∧ G1_delta > 0`.
@@ -136,35 +136,35 @@ OUTLINE_PATH = REPO_ROOT / "paper" / "outline.md"
 GOAL_PATH = REPO_ROOT / "docs/domains/governance/authority/GOAL.md"
 
 sys.path.insert(0, str(Path(__file__).parent))
-# issue2015 exact-local-import:scripts/receipt_fp.py
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_fp.py
 import importlib.util as _ember_69780e19bf0d970d_importlib
 import sys as _ember_69780e19bf0d970d_sys
 from pathlib import Path as _ember_69780e19bf0d970d_Path
 _ember_69780e19bf0d970d_path = _ember_69780e19bf0d970d_Path(__file__).resolve().parents[4].joinpath('scripts', 'receipt_fp.py')
 if not _ember_69780e19bf0d970d_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/receipt_fp.py')
-_ember_69780e19bf0d970d_aliases = ('_ember_issue2015_69780e19bf0d970d', 'receipt_fp', 'scripts.receipt_fp')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_fp.py')
+_ember_69780e19bf0d970d_aliases = ('_ember_issue2015_69780e19bf0d970d', 'receipt_fp', 'src.ember.governance.scripts.receipt_fp')
 _ember_69780e19bf0d970d_existing = []
 for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
     _ember_69780e19bf0d970d_candidate = _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias)
     if _ember_69780e19bf0d970d_candidate is not None and all(_ember_69780e19bf0d970d_candidate is not item for item in _ember_69780e19bf0d970d_existing):
         _ember_69780e19bf0d970d_existing.append(_ember_69780e19bf0d970d_candidate)
 if len(_ember_69780e19bf0d970d_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/receipt_fp.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_fp.py')
 if _ember_69780e19bf0d970d_existing:
     _ember_69780e19bf0d970d_module = _ember_69780e19bf0d970d_existing[0]
     _ember_69780e19bf0d970d_observed = getattr(_ember_69780e19bf0d970d_module, '__file__', None)
     if _ember_69780e19bf0d970d_observed is None or _ember_69780e19bf0d970d_Path(_ember_69780e19bf0d970d_observed).resolve() != _ember_69780e19bf0d970d_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/receipt_fp.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_fp.py')
 else:
     _ember_69780e19bf0d970d_spec = _ember_69780e19bf0d970d_importlib.spec_from_file_location('_ember_issue2015_69780e19bf0d970d', _ember_69780e19bf0d970d_path)
     if _ember_69780e19bf0d970d_spec is None or _ember_69780e19bf0d970d_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/receipt_fp.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_fp.py')
     _ember_69780e19bf0d970d_module = _ember_69780e19bf0d970d_importlib.module_from_spec(_ember_69780e19bf0d970d_spec)
     for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
         _ember_69780e19bf0d970d_prior = _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias)
         if _ember_69780e19bf0d970d_prior is not None and _ember_69780e19bf0d970d_prior is not _ember_69780e19bf0d970d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/receipt_fp.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_fp.py')
         _ember_69780e19bf0d970d_sys.modules[_ember_69780e19bf0d970d_alias] = _ember_69780e19bf0d970d_module
     try:
         _ember_69780e19bf0d970d_spec.loader.exec_module(_ember_69780e19bf0d970d_module)
@@ -176,10 +176,10 @@ else:
 for _ember_69780e19bf0d970d_alias in _ember_69780e19bf0d970d_aliases:
     _ember_69780e19bf0d970d_prior = _ember_69780e19bf0d970d_sys.modules.get(_ember_69780e19bf0d970d_alias)
     if _ember_69780e19bf0d970d_prior is not None and _ember_69780e19bf0d970d_prior is not _ember_69780e19bf0d970d_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/receipt_fp.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_fp.py')
     _ember_69780e19bf0d970d_sys.modules[_ember_69780e19bf0d970d_alias] = _ember_69780e19bf0d970d_module
 receipt_fp = _ember_69780e19bf0d970d_module
-# issue2015 exact-local-import-end:scripts/receipt_fp.py  # noqa: E402
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_fp.py  # noqa: E402
 import receipt_write  # noqa: E402
 
 SHA_CONVENTION = "bytes on disk as-is (binary read, no line-ending normalization)"
@@ -373,7 +373,7 @@ def check_kernel_fired():
     manifest_ok = len(manifest_hits) > 0
     if not manifest_ok:
         reasons.append("canonical manifests/governance/kernel-v1.0.manifest is absent "
-                        "(freeze procedure, docs/archive/pre-restart/kernel-v1-freeze-spec.md sec5, never executed)")
+                        "(freeze procedure, docs/domains/governance/archive/pre-restart/kernel-v1-freeze-spec.md sec5, never executed)")
 
     flywheel_receipts = []
     parse_errors = 0

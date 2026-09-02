@@ -6,7 +6,7 @@
 conditions-v1.md sec 4.2, made machine-evaluable (gh issue #94 C-DISC, phase 2; schema
 frozen by maintainer rulings R1-R7, phase-1 dossier).
 
-Conditions-v1.md sec 4.2 (live authority; archived pre-2026-07-06 at docs/archive/goal/goal-archive.md)
+Conditions-v1.md sec 4.2 (live authority; archived pre-2026-07-06 at docs/domains/governance/archive/goal/goal-archive.md)
 names three hinges, each carrying a disconfirmation predicate: EARNED_GROWTH (2 consecutive
 NOT-earned growth-rung attempts), B2_BOOTSTRAP (3 consecutive BOOTSTRAP_FAIL B-rung attempts),
 H0_CEILING (the L1-L5 lever ladder fully resolved with the composed stack still under the

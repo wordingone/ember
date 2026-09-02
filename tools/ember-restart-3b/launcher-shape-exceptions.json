@@ -5,7 +5,7 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "exceptions": [
     {
-      "path": "tests/ember_restart_model/test_certified_train_launch.py",
+      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
       "sha256": "8f1beaeb5066cf34b71dcaecf423a00120cf8ddc9a0702030bc81b1d7a8e04d0",
       "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },

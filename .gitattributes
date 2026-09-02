@@ -15,6 +15,7 @@ tokenizer/** -text
 # real, and only, directory is docs/research/. The gap left the decision
 # artifact unprotected and is the concrete mechanism identified for its drift.
 docs/research/** -text
+docs/domains/governance/research/** -text
 # ledger views + probe sets are sha-bound by audit receipts (sp-3/fp-28 bind
 # byte-true sha256); CRLF conversion on fresh checkouts drifts the bytes vs
 # the recorded sha. Pin -text (same class as the eng-47 research/** pin).
