@@ -65,6 +65,62 @@ from input_identity import (
 from mint_github_license_partition import validate_partition_receipt
 
 
+# Frozen from runtime/ember-lab/src/data_catalog.rs at source commit
+# 8c89896b1045c12eca6cc06bd7035966e48d2ba3 (raw SHA-256 below). The binary
+# deliberately accepts no authority-extension fields on any current edge.
+_FROZEN_DATA_CATALOG_SCHEMA_RAW_SHA256 = (
+    "554e775f1b631f0754922da331cc84981807e7fe0d847fb1c29d4684788b0941"
+)
+_FROZEN_EDGE_PAYLOAD_FIELDS = {
+    kind: frozenset()
+    for kind in (
+        "source_object",
+        "object_receipt",
+        "dataset_parent",
+        "transform_parent",
+        "transform_input",
+        "transform_output",
+        "transform_receipt",
+        "dataset_transform",
+        "version_membership",
+        "membership_object",
+        "evaluation_object",
+        "evaluation_receipt",
+        "consumer_dataset",
+        "consumer_evaluation",
+        "consumer_receipt",
+        "experience_consumer",
+        "experience_receipt",
+        "receipt_supersession",
+    )
+}
+
+
+def validate_edge_payloads_against_frozen_catalog_schema(
+    manifest: dict[str, Any] | bytes,
+) -> None:
+    """Refuse any edge payload not accepted by the frozen ember-lab binary."""
+
+    if isinstance(manifest, bytes):
+        try:
+            manifest = json.loads(manifest)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:manifest") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:manifest")
+    edges = manifest.get("edges")
+    if not isinstance(edges, list):
+        raise ValueError("CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:edges")
+    for edge in edges:
+        if not isinstance(edge, dict):
+            raise ValueError("CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:edge")
+        kind = edge.get("kind")
+        payload = edge.get("payload")
+        expected = _FROZEN_EDGE_PAYLOAD_FIELDS.get(kind)
+        if expected is None or not isinstance(payload, dict) or set(payload) != expected:
+            raise ValueError(f"CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:{kind}")
+
+
 def _canonical(value: object) -> bytes:
     return json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -253,17 +309,7 @@ def build_dataset_catalog_manifest(
                         "to_kind": "immutable_object",
                         "to_id": f"sha256:{digest}",
                         "ordinal": source_ordinal,
-                        "payload": {
-                            "path_derived_media_type": item.get(
-                                "path_derived_media_type", item["media_type"]
-                            ),
-                            "content_sniffed_media_type": item.get(
-                                "content_sniffed_media_type", item["media_type"]
-                            ),
-                            "predecessor_binding_applied": item.get(
-                                "predecessor_binding_applied", False
-                            ),
-                        },
+                        "payload": {},
                     },
                     {
                         "kind": "object_receipt",
@@ -295,7 +341,9 @@ def build_dataset_catalog_manifest(
                 ]
             )
             membership_ordinal += 1
-    return _sorted_manifest(records, edges)
+    manifest = _sorted_manifest(records, edges)
+    validate_edge_payloads_against_frozen_catalog_schema(manifest)
+    return manifest
 
 
 def _verified_import_receipt(
@@ -730,6 +778,8 @@ def _load_predecessor_media_type_table() -> dict[str, Any]:
         != "ember-issue1581-train-partition-predecessor-media-types-v1"
         or table.get("goal_id") != "EMBER-02"
         or table.get("workstream_id") != "EMBER-02B"
+        or table.get("next_executed_outcome")
+        != "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
         or table.get("predecessor_catalog_db_sha256")
         != "5c9ceccaa043dd0e568ff713572d6513fb33422f1a52fb7f4f98e8fbe6a9baa7"
         or table.get("projected_manifest_raw_sha256")
