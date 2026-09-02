@@ -330,6 +330,42 @@ class RotaryCoordinates(nn.Module):
             destination[..., 1::2].copy_(even * sin + odd * cos)
         return output
 
+    def apply_qk_sdpa(
+        self,
+        query: torch.Tensor,
+        key: torch.Tensor,
+        value: torch.Tensor,
+        coordinates: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Rotate q/k together in SDPA-ready B,H,S,D layout; leave value unchanged."""
+
+        if query.ndim != 4 or key.shape != query.shape or value.shape != query.shape:
+            raise ValueError("QK_ROPE_SDPA_REFUSED:QKV_SHAPE")
+        if query.dtype != key.dtype or query.dtype != value.dtype:
+            raise ValueError("QK_ROPE_SDPA_REFUSED:QKV_DTYPE")
+        if query.device != key.device or query.device != value.device:
+            raise ValueError("QK_ROPE_SDPA_REFUSED:QKV_DEVICE")
+        batch, _heads, sequence, head_dim = query.shape
+        if head_dim != self.head_dim:
+            raise ValueError("QK_ROPE_SDPA_REFUSED:HEAD_DIM")
+        if coordinates.shape != (batch, sequence, 2):
+            raise ValueError("QK_ROPE_SDPA_REFUSED:COORDINATE_SHAPE")
+        if coordinates.device != query.device or self.frequencies.device != query.device:
+            raise ValueError("QK_ROPE_SDPA_REFUSED:COORDINATE_DEVICE")
+
+        pairs_per_axis = head_dim // 4
+        angle = coordinates.to(torch.float32).unsqueeze(-1) * self.frequencies
+        cos = angle.cos().to(query.dtype).unsqueeze(0).unsqueeze(2)
+        sin = angle.sin().to(query.dtype).unsqueeze(0).unsqueeze(2)
+        qk = torch.stack((query, key), dim=0)
+        paired = qk.reshape(2, batch, _heads, sequence, 2, pairs_per_axis, 2)
+        even = paired[..., 0]
+        odd = paired[..., 1]
+        rotated = torch.stack(
+            (even * cos - odd * sin, even * sin + odd * cos), dim=-1
+        ).reshape(2, batch, _heads, sequence, head_dim)
+        return rotated[0], rotated[1], value
+
 
 class SharedAttention(nn.Module):
     def __init__(self, config: RestartDecoderConfig, *, device: torch.device | str | None = None) -> None:
@@ -345,12 +381,10 @@ class SharedAttention(nn.Module):
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
         batch, sequence, width = hidden_states.shape
         qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
-        query, key, value = qkv.unbind(dim=2)
+        query, key, value = qkv.permute(2, 0, 3, 1, 4).unbind(dim=0)
         query = self.q_norm(query)
         key = self.k_norm(key)
-        query = self.rope.apply(query.transpose(1, 2), coordinates)
-        key = self.rope.apply(key.transpose(1, 2), coordinates)
-        value = value.transpose(1, 2)
+        query, key, value = self.rope.apply_qk_sdpa(query, key, value, coordinates)
         attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
         return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
 
