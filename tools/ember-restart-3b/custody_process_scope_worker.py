@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Subprocess worker for the cross-process custody ledger regression suite
-(tests/ember_restart_model/test_custody_process_scope.py).
+(tests/ember_restart_model/domain-governance/test_custody_process_scope.py).
 
 Ported from the two ad-hoc negative-test harnesses run this session
 (fburst-proclock zzz_worker.py, fburst-unlinkwin zzz_unlink_worker.py) into a

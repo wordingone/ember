@@ -2431,7 +2431,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_restart_model/test_import_seams.py",
+      "path": "tests/ember_restart_model/domain-governance/test_import_seams.py",
       "line": 12,
       "target": "TEST_ROOT",
       "expression": "Path(__file__).resolve().parent",
@@ -2442,7 +2442,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_restart_model/test_issue1413_checkpoint_projection_regression.py",
+      "path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py",
       "line": 16,
       "target": "SOURCE_ROOT",
       "expression": "Path(os.environ.get('EMBER_SOURCE_ROOT', TEST_ROOT))",
@@ -2453,7 +2453,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "tests/ember_restart_model/test_issue1413_checkpoint_projection_regression.py",
+      "path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py",
       "line": 17,
       "target": "<sys.path.insert>",
       "expression": "str(SOURCE_ROOT / 'tools' / 'ember-restart-3b')",
