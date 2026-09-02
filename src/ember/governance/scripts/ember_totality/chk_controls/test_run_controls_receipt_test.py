@@ -12,8 +12,8 @@ line, no final receipt file surviving on disk.
 
 Run:
   PYTHONIOENCODING=utf-8 python \\
-    scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
-  or: python -m pytest scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
+    src/ember/governance/scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
+  or: python -m pytest src/ember/governance/scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
 """
 from __future__ import annotations
 

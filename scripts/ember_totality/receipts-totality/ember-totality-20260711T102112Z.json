@@ -569,12 +569,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
             "sha256": "356c654718355f29fa807c6883b586ec778ff2de59758d4a3df005aa920e0a5d",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
             "sha256": "356c654718355f29fa807c6883b586ec778ff2de59758d4a3df005aa920e0a5d",
             "present": true
           },
@@ -584,22 +584,22 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
             "sha256": "21d2122626014ed60e33c87a745814af9a93b0909d9d8cfc1ab33e4df16345d3",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/test_preflight.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_preflight.py",
             "sha256": "319c478fd3fd70270a01e93c3a70ecb7373de4011dc46b55a1aa101162771cb8",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/disconfirmation_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg.py",
             "sha256": "aa02a17eb92b94dcf6eb3306501edf49a57aacfbb248f044b86d0f4083d43f70",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/disconfirmation_leg_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg_test.py",
             "sha256": "7b8c76662303ce6167d2f5fae37be398965561653a1721ebec3b8f6d18e6f658",
             "present": true
           },
@@ -614,7 +614,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
             "sha256": "f4a052b92767961fc6a2d8a417825f0ed58090ae631c44ea931ff5f56937c757",
             "present": true
           },
@@ -624,7 +624,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind4_customize_experiment_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind4_customize_experiment_producer.py",
             "sha256": "b663b002eaefa74ac77a941fbec65fa824098c626f5df205b1d89857e207bae9",
             "present": true
           },
@@ -644,17 +644,17 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/probe_harden_683_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/probe_harden_683_test.py",
             "sha256": "044497c8a2a89e8a2a95d31c24daeaedd585855253fa142c64eb3e573297983b",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_chain_verify.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_chain_verify.py",
             "sha256": "2780d5cc46f1865041d0d964433d25e67be9e68f77883e869765f5d0f552eb78",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_chain_verify_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_chain_verify_test.py",
             "sha256": "1aefb35c0470d9cc5562d9998e0d3ae2f6f36882d08abfb96bdda660527d8c8f",
             "present": true
           },
@@ -664,12 +664,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_no_local_path_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_no_local_path_test.py",
             "sha256": "447453b8d6fb2ff9cd5d845a8927c4af42c3e613e0a29094bbed23cf70b090f0",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_ts_authority.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_ts_authority.py",
             "sha256": "4a767362242225405b204f01cb732c7b33917e9d1fe76374e220dbab41a358c1",
             "present": true
           },

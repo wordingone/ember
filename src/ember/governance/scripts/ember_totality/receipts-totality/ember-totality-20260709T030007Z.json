@@ -21,7 +21,7 @@
                      "condition":  "C-CUSTODY",
                      "status":  "RED",
                      "is_process_invariant":  false,
-                     "reason":  "RED C-CUSTODY: 27 custody violation(s) detected; untracked=3 unparseable=0 cited_missing=24 pattern=52 relocated=4 documented_absent=0 annex_attested=10 pending_landing=0; sidecar=scripts/ember_totality/receipts-custody/custody-20260709T031019Z.json (elapsed 3.1s)"
+                     "reason":  "RED C-CUSTODY: 27 custody violation(s) detected; untracked=3 unparseable=0 cited_missing=24 pattern=52 relocated=4 documented_absent=0 annex_attested=10 pending_landing=0; sidecar=src/ember/governance/scripts/ember_totality/receipts-custody/custody-20260709T031019Z.json (elapsed 3.1s)"
                  },
                  {
                      "condition":  "C-EFF",
@@ -556,12 +556,12 @@
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
                                                                      "sha256":  "14c75fb904c57c2197695141fb784fa0202c233163005a789791e5dc339d109c",
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
                                                                      "sha256":  "14c75fb904c57c2197695141fb784fa0202c233163005a789791e5dc339d109c",
                                                                      "present":  true
                                                                  },
@@ -571,22 +571,22 @@
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
                                                                      "sha256":  "21d2122626014ed60e33c87a745814af9a93b0909d9d8cfc1ab33e4df16345d3",
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/chk_controls/test_preflight.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/chk_controls/test_preflight.py",
                                                                      "sha256":  "319c478fd3fd70270a01e93c3a70ecb7373de4011dc46b55a1aa101162771cb8",
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/disconfirmation_leg.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/disconfirmation_leg.py",
                                                                      "sha256":  "9e0e33dd000d3f2da2bed638e9788735a3a50be804ca8fe6309edaa250c05a15",
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/disconfirmation_leg_test.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/disconfirmation_leg_test.py",
                                                                      "sha256":  "7b8c76662303ce6167d2f5fae37be398965561653a1721ebec3b8f6d18e6f658",
                                                                      "present":  true
                                                                  },
@@ -601,7 +601,7 @@
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/enforcement_leg_test.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
                                                                      "sha256":  "f4a052b92767961fc6a2d8a417825f0ed58090ae631c44ea931ff5f56937c757",
                                                                      "present":  true
                                                                  },
@@ -621,17 +621,17 @@
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/receipt_chain_verify.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/receipt_chain_verify.py",
                                                                      "sha256":  "2780d5cc46f1865041d0d964433d25e67be9e68f77883e869765f5d0f552eb78",
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/receipt_chain_verify_test.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/receipt_chain_verify_test.py",
                                                                      "sha256":  "1aefb35c0470d9cc5562d9998e0d3ae2f6f36882d08abfb96bdda660527d8c8f",
                                                                      "present":  true
                                                                  },
                                                                  {
-                                                                     "path":  "scripts/ember_totality/receipt_ts_authority.py",
+                                                                     "path":  "src/ember/governance/scripts/ember_totality/receipt_ts_authority.py",
                                                                      "sha256":  "4a767362242225405b204f01cb732c7b33917e9d1fe76374e220dbab41a358c1",
                                                                      "present":  true
                                                                  },
