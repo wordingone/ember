@@ -168,9 +168,8 @@ def authority_canonical_relative_path(name: str) -> PurePosixPath:
 def authority_candidate_relative_paths(name: str) -> tuple[PurePosixPath, ...]:
     old_rel = PurePosixPath(name)
     canonical_rel = authority_canonical_relative_path(name)
-    if name == "STATE.md":
-        return (old_rel, AUTHORITY_DIRECTORY / name, canonical_rel)
-    return (old_rel, canonical_rel)
+    domain_rel = AUTHORITY_DOMAIN_DIRECTORY / name
+    return tuple(dict.fromkeys((old_rel, AUTHORITY_DIRECTORY / name, domain_rel)))
 
 
 FORBIDDEN_MODEL_SIGNALS = [
@@ -238,13 +237,40 @@ GOVERNING_SURFACE_MIGRATIONS = {
     "docs/contracts/registry-dispatch-gate-spec-v0.md": "docs/registry-dispatch-gate-spec-v0.md",
     AUTHORITY_MATRIX: "docs/ember-authority-matrix.md",
 }
-HISTORICAL_EXECUTABLES = [
-    "scripts/conv_c03_muon_ns3_live.py",
-    "scripts/timeshare_pretrain.py",
-    "scripts/train_multimodal_v0.py",
-]
-TIMESHARE_IMPORT_BOUNDARY_MANIFEST = (
-    "docs/ember-restart/timeshare-importer-classification-1451-v1.json"
+GOVERNING_SURFACE_ALTERNATES = {
+    "docs/contracts/goal-clear-protocol.md": (
+        "docs/goal-clear-protocol.md",
+        "docs/contracts/goal-clear-protocol.md",
+        "docs/domains/governance/contracts/goal-clear-protocol.md",
+    ),
+    "docs/contracts/goal-mode-mechanism.md": (
+        "docs/goal-mode-mechanism.md",
+        "docs/contracts/goal-mode-mechanism.md",
+        "docs/domains/governance/contracts/goal-mode-mechanism.md",
+    ),
+    "docs/contracts/registry-dispatch-gate-spec-v0.md": (
+        "docs/registry-dispatch-gate-spec-v0.md",
+        "docs/contracts/registry-dispatch-gate-spec-v0.md",
+        "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md",
+    ),
+    AUTHORITY_MATRIX: (
+        "docs/ember-authority-matrix.md",
+        "docs/authority/ember-authority-matrix.md",
+        "docs/domains/governance/authority/ember-authority-matrix.md",
+    ),
+    "docs/spec/autonomy-relinquishment-ladder-v1.md": (
+        "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
+    ),
+}
+HISTORICAL_EXECUTABLE_CANDIDATES = (
+    ("scripts/conv_c03_muon_ns3_live.py", "src/ember/governance/scripts/conv_c03_muon_ns3_live.py"),
+    ("scripts/timeshare_pretrain.py", "src/ember/governance/scripts/timeshare_pretrain.py"),
+    ("scripts/train_multimodal_v0.py", "src/ember/governance/scripts/train_multimodal_v0.py"),
+)
+TIMESHARE_IMPORT_BOUNDARY_MANIFEST_CANDIDATES = (
+    "docs/ember-restart/timeshare-importer-classification-1451-v1.json",
+    "docs/domains/governance/ember-restart/timeshare-importer-classification-1451-v1.json",
 )
 TIMESHARE_EXECUTION_BOUNDARY_KEYS = {"helper", "main", "entrypoint"}
 TIMESHARE_IMPORT_MANIFEST_KEYS = {
@@ -337,23 +363,24 @@ def authority_path(root: Path, name: str) -> Path:
 
 
 def canonical_authority_reference(root: Path, name: str) -> str:
-    canonical_rel = authority_canonical_relative_path(name).as_posix()
-    if (root / canonical_rel).is_file() and not (root / name).is_file():
-        return canonical_rel
-    if name in {"STATE.md", "INVARIANT.md"}:
-        docs_rel = (AUTHORITY_DIRECTORY / name).as_posix()
-        if (root / docs_rel).is_file() and not (root / name).is_file():
-            return docs_rel
-    return name
+    try:
+        return authority_relative_path(root, name)
+    except ValueError:
+        # Path-layout validation owns missing/duplicate findings.  Consumers
+        # that merely assemble an allowlist must remain total so the verifier
+        # can emit the structured finding instead of aborting with a traceback.
+        return authority_canonical_relative_path(name).as_posix()
 
 
 def governing_surface_relative_path(root: Path, canonical_rel: str) -> str:
     old_rel = GOVERNING_SURFACE_MIGRATIONS.get(canonical_rel)
-    if old_rel is None:
-        return canonical_rel
+    candidates = GOVERNING_SURFACE_ALTERNATES.get(
+        canonical_rel,
+        (canonical_rel,) if old_rel is None else (old_rel, canonical_rel),
+    )
     present = [
         rel
-        for rel in (old_rel, canonical_rel)
+        for rel in candidates
         if (root / rel).exists() or (root / rel).is_symlink()
     ]
     if len(present) > 1:
@@ -362,8 +389,8 @@ def governing_surface_relative_path(root: Path, canonical_rel: str) -> str:
         )
     if not present:
         raise ValueError(
-            f"governing surface {canonical_rel} is absent from both "
-            f"{old_rel} and {canonical_rel}"
+            f"governing surface {canonical_rel} is absent from "
+            + ", ".join(candidates)
         )
     selected = root / present[0]
     if not selected.is_file() or selected.is_symlink():
@@ -863,9 +890,14 @@ def check_manifest(
 
 
 def _execution_boundary_for_source(root: Path) -> dict[str, str] | None:
-    manifest_path = root / TIMESHARE_IMPORT_BOUNDARY_MANIFEST
-    if not manifest_path.is_file():
+    present = [
+        rel
+        for rel in TIMESHARE_IMPORT_BOUNDARY_MANIFEST_CANDIDATES
+        if (root / rel).is_file()
+    ]
+    if len(present) != 1:
         return None
+    manifest_path = root / present[0]
     try:
         payload = json.loads(read_text(manifest_path))
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
@@ -875,7 +907,11 @@ def _execution_boundary_for_source(root: Path) -> dict[str, str] | None:
     boundary = payload.get("execution_boundary")
     if (
         set(payload) != TIMESHARE_IMPORT_MANIFEST_KEYS
-        or payload.get("source") != "scripts/timeshare_pretrain.py"
+        or payload.get("source")
+        not in {
+            "scripts/timeshare_pretrain.py",
+            "src/ember/governance/scripts/timeshare_pretrain.py",
+        }
     ):
         return None
     if (
@@ -976,7 +1012,14 @@ def _check_execution_only_shape(
 
 def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> None:
     execution_boundary = _execution_boundary_for_source(root)
-    for rel in HISTORICAL_EXECUTABLES:
+    for candidates in HISTORICAL_EXECUTABLE_CANDIDATES:
+        present = [rel for rel in candidates if (root / rel).exists() or (root / rel).is_symlink()]
+        if len(present) != 1:
+            errors.append(
+                finding(4, "historical.executable_layout", f"{', '.join(candidates)}: found {len(present)}")
+            )
+            continue
+        rel = present[0]
         path = root / rel
         if not path.is_file():
             errors.append(finding(4, "historical.executable_missing", rel))
@@ -992,7 +1035,7 @@ def check_historical_executables(root: Path, errors: list[dict[str, Any]]) -> No
         except SyntaxError as exc:
             errors.append(finding(4, "historical.syntax_invalid", f"{rel}: {exc}"))
             continue
-        if rel == "scripts/timeshare_pretrain.py" and execution_boundary is not None:
+        if rel.endswith("/timeshare_pretrain.py") and execution_boundary is not None:
             _check_execution_only_shape(rel, tree, execution_boundary, errors)
             continue
         first = _first_executable_statement(tree.body)
@@ -1022,9 +1065,17 @@ def check_execution_only_import_boundary(
     helper/main/__main__ execution shape; malformed or foreign manifests leave
     the base-kernel direct-raise rule active and are rejected below.
     """
-    manifest_path = root / TIMESHARE_IMPORT_BOUNDARY_MANIFEST
-    if not manifest_path.is_file():
+    present = [
+        rel
+        for rel in TIMESHARE_IMPORT_BOUNDARY_MANIFEST_CANDIDATES
+        if (root / rel).exists() or (root / rel).is_symlink()
+    ]
+    if len(present) > 1:
+        errors.append(finding(4, "historical.import_manifest_layout", f"found {len(present)}"))
         return
+    if not present:
+        return
+    manifest_path = root / present[0]
     try:
         payload = json.loads(read_text(manifest_path))
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
@@ -1067,8 +1118,12 @@ def check_execution_only_import_boundary(
             )
         )
     source_rel = payload.get("source")
-    source_path = root / "scripts" / "timeshare_pretrain.py"
-    if source_rel != "scripts/timeshare_pretrain.py":
+    valid_sources = {
+        "scripts/timeshare_pretrain.py",
+        "src/ember/governance/scripts/timeshare_pretrain.py",
+    }
+    source_path = root / str(source_rel)
+    if source_rel not in valid_sources:
         errors.append(
             finding(4, "historical.import_manifest_source", str(source_rel))
         )
@@ -1111,11 +1166,11 @@ def check_execution_only_import_boundary(
         rel = row["path"]
         if (
             not isinstance(rel, str)
-            or not rel.startswith("scripts/")
+            or not rel.startswith(("scripts/", "src/ember/governance/scripts/"))
             or Path(rel).is_absolute()
             or ".." in Path(rel).parts
             or rel in seen
-            or rel == "scripts/timeshare_pretrain.py"
+            or rel in valid_sources
         ):
             errors.append(
                 finding(4, "historical.import_manifest_path", str(rel))
@@ -1480,7 +1535,7 @@ def parse_config_classifications(
         if rel in classifications:
             errors.append(finding(4, "config.classification_duplicate", rel))
             continue
-        if not rel.startswith("configs/") or not rel.endswith(".json"):
+        if not rel.startswith(("configs/", "domains/model/configs/")) or not rel.endswith(".json"):
             errors.append(finding(4, "config.classification_path_invalid", rel))
             continue
         if item["artifact_class"] != "historical_only":
@@ -1494,13 +1549,19 @@ def parse_config_classifications(
 
 
 def check_configs(root: Path, policy: dict[str, Any] | None, errors: list[dict[str, Any]], active_goal: str | None = None) -> None:
-    config_root = root / "configs"
-    if not config_root.is_dir():
+    config_roots = [root / "configs", root / "domains/model/configs"]
+    if not any(config_root.is_dir() for config_root in config_roots):
         errors.append(finding(4, "configs.missing", "configs directory is absent"))
         return
     paths: list[Path] = []
     sidecar_authorities: dict[str, dict[str, Any]] = {}
-    for path in sorted(config_root.rglob("*.json")):
+    config_paths = sorted(
+        path
+        for config_root in config_roots
+        if config_root.is_dir()
+        for path in config_root.rglob("*.json")
+    )
+    for path in config_paths:
         if not path.name.endswith(".authority.json"):
             paths.append(path)
             continue
@@ -1665,7 +1726,11 @@ def _tracked_relative_paths(root: Path) -> set[str] | None:
 
 def check_lower_precedence_authority(root: Path, errors: list[dict[str, Any]]) -> None:
     allowed = {
-        *(canonical_authority_reference(root, name) for name in AUTHORITY_DOCUMENT_NAMES),
+        *(
+            rel.as_posix()
+            for name in AUTHORITY_DOCUMENT_NAMES
+            for rel in authority_candidate_relative_paths(name)
+        ),
         *expected_governing_surfaces(root),
     }
     excluded_prefixes = (

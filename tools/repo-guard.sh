@@ -427,7 +427,10 @@ GOVERNED_ENTRY_PATHSPEC=(
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
   ':(exclude)tools/ember-restart-3b'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli'
+  ':(exclude)src/ember/infrastructure/tools/ember-restart-3b'
   ':(exclude)tools/check_governed_entry_exceptions.py'
+  ':(exclude)src/ember/infrastructure/tools/check_governed_entry_exceptions.py'
   ':(exclude)tools/repo-guard.sh'
   ':(exclude)tests'
   ':(exclude)scripts/tests'
@@ -483,25 +486,32 @@ LAUNCHER_SHAPE_PATHSPEC=(
   -- '*.py' '*.sh'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli'
   ':(exclude)tools/check_governed_entry_exceptions.py'
+  ':(exclude)src/ember/infrastructure/tools/check_governed_entry_exceptions.py'
   ':(exclude)tools/repo-guard.sh'
 )
 LAUNCHER_NAMED_PATHSPEC=(
   -- '*launch*.py' '*launch*.sh' '*launcher*'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli'
   ':(exclude)tools/powershell-launcher-shape-guard.ps1'
+  ':(exclude)src/ember/infrastructure/tools/powershell-launcher-shape-guard.ps1'
 )
 LAUNCHER_PS_SHAPE_PATHSPEC=(
   -- '*.ps1'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli'
   ':(exclude)tools/powershell-launcher-shape-guard.ps1'
+  ':(exclude)src/ember/infrastructure/tools/powershell-launcher-shape-guard.ps1'
 )
 LAUNCHER_PS_NAMED_PATHSPEC=(
   -- '*launch*.ps1' '*launcher*.ps1'
   ':(exclude)runtime/ember-lab'
   ':(exclude)tools/ember-cli'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli'
 )
 if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   LAUNCHER_GREP=(git grep --cached)
@@ -582,10 +592,7 @@ STATE_REL=""
 for AUTHORITY_NAME in GOAL.md INVARIANT.md GOVERNANCE.md CONTINUITY.md REDACTIONS.md STATE.md; do
   OLD_REL="$AUTHORITY_NAME"
   NEW_REL="docs/authority/$AUTHORITY_NAME"
-  DOMAIN_REL=""
-  if [ "$AUTHORITY_NAME" = "GOAL.md" ] || [ "$AUTHORITY_NAME" = "STATE.md" ]; then
-    DOMAIN_REL="docs/domains/governance/authority/$AUTHORITY_NAME"
-  fi
+  DOMAIN_REL="docs/domains/governance/authority/$AUTHORITY_NAME"
   OLD_PRESENT=0
   NEW_PRESENT=0
   DOMAIN_PRESENT=0
