@@ -13,8 +13,98 @@ import pytest
 
 
 from scripts import lifecycle_census
-from src.ember.governance.scripts.lifecycle_census import CensusError, build_receipt, build_stale_report, collect_population
-from src.ember.governance.scripts.lifecycle_census import GitHubApi, collect_live_populations
+# issue2015 exact-local-import:src/ember/governance/scripts/lifecycle_census.py
+import importlib.util as _ember_e08f3c7c35cc91f0_importlib
+import sys as _ember_e08f3c7c35cc91f0_sys
+from pathlib import Path as _ember_e08f3c7c35cc91f0_Path
+_ember_e08f3c7c35cc91f0_path = _ember_e08f3c7c35cc91f0_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'lifecycle_census.py')
+if not _ember_e08f3c7c35cc91f0_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lifecycle_census.py')
+_ember_e08f3c7c35cc91f0_aliases = ('_ember_issue2015_e08f3c7c35cc91f0', 'lifecycle_census', 'scripts.lifecycle_census', 'src.ember.governance.scripts.lifecycle_census')
+_ember_e08f3c7c35cc91f0_existing = []
+for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+    _ember_e08f3c7c35cc91f0_candidate = _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias)
+    if _ember_e08f3c7c35cc91f0_candidate is not None and all(_ember_e08f3c7c35cc91f0_candidate is not item for item in _ember_e08f3c7c35cc91f0_existing):
+        _ember_e08f3c7c35cc91f0_existing.append(_ember_e08f3c7c35cc91f0_candidate)
+if len(_ember_e08f3c7c35cc91f0_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/lifecycle_census.py')
+if _ember_e08f3c7c35cc91f0_existing:
+    _ember_e08f3c7c35cc91f0_module = _ember_e08f3c7c35cc91f0_existing[0]
+    _ember_e08f3c7c35cc91f0_observed = getattr(_ember_e08f3c7c35cc91f0_module, '__file__', None)
+    if _ember_e08f3c7c35cc91f0_observed is None or _ember_e08f3c7c35cc91f0_Path(_ember_e08f3c7c35cc91f0_observed).resolve() != _ember_e08f3c7c35cc91f0_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/lifecycle_census.py')
+else:
+    _ember_e08f3c7c35cc91f0_spec = _ember_e08f3c7c35cc91f0_importlib.spec_from_file_location('_ember_issue2015_e08f3c7c35cc91f0', _ember_e08f3c7c35cc91f0_path)
+    if _ember_e08f3c7c35cc91f0_spec is None or _ember_e08f3c7c35cc91f0_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/lifecycle_census.py')
+    _ember_e08f3c7c35cc91f0_module = _ember_e08f3c7c35cc91f0_importlib.module_from_spec(_ember_e08f3c7c35cc91f0_spec)
+    for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+        _ember_e08f3c7c35cc91f0_prior = _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias)
+        if _ember_e08f3c7c35cc91f0_prior is not None and _ember_e08f3c7c35cc91f0_prior is not _ember_e08f3c7c35cc91f0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lifecycle_census.py')
+        _ember_e08f3c7c35cc91f0_sys.modules[_ember_e08f3c7c35cc91f0_alias] = _ember_e08f3c7c35cc91f0_module
+    try:
+        _ember_e08f3c7c35cc91f0_spec.loader.exec_module(_ember_e08f3c7c35cc91f0_module)
+    except BaseException:
+        for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+            if _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias) is _ember_e08f3c7c35cc91f0_module:
+                _ember_e08f3c7c35cc91f0_sys.modules.pop(_ember_e08f3c7c35cc91f0_alias, None)
+        raise
+for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+    _ember_e08f3c7c35cc91f0_prior = _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias)
+    if _ember_e08f3c7c35cc91f0_prior is not None and _ember_e08f3c7c35cc91f0_prior is not _ember_e08f3c7c35cc91f0_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lifecycle_census.py')
+    _ember_e08f3c7c35cc91f0_sys.modules[_ember_e08f3c7c35cc91f0_alias] = _ember_e08f3c7c35cc91f0_module
+CensusError = getattr(_ember_e08f3c7c35cc91f0_module, 'CensusError')
+build_receipt = getattr(_ember_e08f3c7c35cc91f0_module, 'build_receipt')
+build_stale_report = getattr(_ember_e08f3c7c35cc91f0_module, 'build_stale_report')
+collect_population = getattr(_ember_e08f3c7c35cc91f0_module, 'collect_population')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/lifecycle_census.py
+# issue2015 exact-local-import:src/ember/governance/scripts/lifecycle_census.py
+import importlib.util as _ember_e08f3c7c35cc91f0_importlib
+import sys as _ember_e08f3c7c35cc91f0_sys
+from pathlib import Path as _ember_e08f3c7c35cc91f0_Path
+_ember_e08f3c7c35cc91f0_path = _ember_e08f3c7c35cc91f0_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'lifecycle_census.py')
+if not _ember_e08f3c7c35cc91f0_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lifecycle_census.py')
+_ember_e08f3c7c35cc91f0_aliases = ('_ember_issue2015_e08f3c7c35cc91f0', 'lifecycle_census', 'scripts.lifecycle_census', 'src.ember.governance.scripts.lifecycle_census')
+_ember_e08f3c7c35cc91f0_existing = []
+for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+    _ember_e08f3c7c35cc91f0_candidate = _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias)
+    if _ember_e08f3c7c35cc91f0_candidate is not None and all(_ember_e08f3c7c35cc91f0_candidate is not item for item in _ember_e08f3c7c35cc91f0_existing):
+        _ember_e08f3c7c35cc91f0_existing.append(_ember_e08f3c7c35cc91f0_candidate)
+if len(_ember_e08f3c7c35cc91f0_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/lifecycle_census.py')
+if _ember_e08f3c7c35cc91f0_existing:
+    _ember_e08f3c7c35cc91f0_module = _ember_e08f3c7c35cc91f0_existing[0]
+    _ember_e08f3c7c35cc91f0_observed = getattr(_ember_e08f3c7c35cc91f0_module, '__file__', None)
+    if _ember_e08f3c7c35cc91f0_observed is None or _ember_e08f3c7c35cc91f0_Path(_ember_e08f3c7c35cc91f0_observed).resolve() != _ember_e08f3c7c35cc91f0_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/lifecycle_census.py')
+else:
+    _ember_e08f3c7c35cc91f0_spec = _ember_e08f3c7c35cc91f0_importlib.spec_from_file_location('_ember_issue2015_e08f3c7c35cc91f0', _ember_e08f3c7c35cc91f0_path)
+    if _ember_e08f3c7c35cc91f0_spec is None or _ember_e08f3c7c35cc91f0_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/lifecycle_census.py')
+    _ember_e08f3c7c35cc91f0_module = _ember_e08f3c7c35cc91f0_importlib.module_from_spec(_ember_e08f3c7c35cc91f0_spec)
+    for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+        _ember_e08f3c7c35cc91f0_prior = _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias)
+        if _ember_e08f3c7c35cc91f0_prior is not None and _ember_e08f3c7c35cc91f0_prior is not _ember_e08f3c7c35cc91f0_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lifecycle_census.py')
+        _ember_e08f3c7c35cc91f0_sys.modules[_ember_e08f3c7c35cc91f0_alias] = _ember_e08f3c7c35cc91f0_module
+    try:
+        _ember_e08f3c7c35cc91f0_spec.loader.exec_module(_ember_e08f3c7c35cc91f0_module)
+    except BaseException:
+        for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+            if _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias) is _ember_e08f3c7c35cc91f0_module:
+                _ember_e08f3c7c35cc91f0_sys.modules.pop(_ember_e08f3c7c35cc91f0_alias, None)
+        raise
+for _ember_e08f3c7c35cc91f0_alias in _ember_e08f3c7c35cc91f0_aliases:
+    _ember_e08f3c7c35cc91f0_prior = _ember_e08f3c7c35cc91f0_sys.modules.get(_ember_e08f3c7c35cc91f0_alias)
+    if _ember_e08f3c7c35cc91f0_prior is not None and _ember_e08f3c7c35cc91f0_prior is not _ember_e08f3c7c35cc91f0_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/lifecycle_census.py')
+    _ember_e08f3c7c35cc91f0_sys.modules[_ember_e08f3c7c35cc91f0_alias] = _ember_e08f3c7c35cc91f0_module
+GitHubApi = getattr(_ember_e08f3c7c35cc91f0_module, 'GitHubApi')
+collect_live_populations = getattr(_ember_e08f3c7c35cc91f0_module, 'collect_live_populations')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/lifecycle_census.py
 
 
 def _items(start: int, count: int, *, pull_request: bool = False) -> list[dict[str, object]]:

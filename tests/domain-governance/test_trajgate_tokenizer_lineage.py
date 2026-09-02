@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SPEC = importlib.util.spec_from_file_location(
     "trajgate_tokenizer_lineage",
     ROOT / "scripts" / "trajgate_tokenizer_lineage.py",

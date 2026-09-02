@@ -20,9 +20,9 @@ from types import SimpleNamespace
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())s if (parent / 'pyproject.toml').is_file())
 if not (ROOT / "scripts" / "timeshare_pretrain.py").is_file():
-    ROOT = Path(__file__).resolve().parent
+    ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(ROOT / "scripts"))
 
 

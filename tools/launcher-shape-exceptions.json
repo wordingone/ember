@@ -76,8 +76,8 @@
       "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {
-      "path": "tests/test_nativization_motion.py",
-      "sha256": "aedc8acd40bde45f2a8f5d271a217eb0fadab5269ecc0c4259eac964a759ed06",
+      "path": "tests/domain-governance/test_nativization_motion.py",
+      "sha256": "6da12aa38664e0423213ec6fcfeb5c0fbda138cbe19120766a14b0d25dc64e4b",
       "reason": "offline nativization-motion test suite. It executes only synthetic temporary runner/import fixtures to validate delta and receipt calculations, with zero network and no production training identity or custody."
     },
     {

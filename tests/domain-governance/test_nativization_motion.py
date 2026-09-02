@@ -654,7 +654,7 @@ RESULT = torch.cuda.is_available()
         assert receipt["run_import_manifest_sha256"] == manifest_sha
 
     def test_checked_in_manifest_and_receipt_reach_board_consumer(self):
-        root = Path(__file__).resolve().parent.parent
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         manifest_path = root / "manifests" / "run-import-manifest-v1.json"
         receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T060100Z.json"
         manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
@@ -859,7 +859,7 @@ RESULT = torch.cuda.is_available()
             )
 
     def test_board_cli_rejects_duplicate_missing_stale_and_open_receipt_shapes(self):
-        root = Path(__file__).resolve().parent.parent
+        root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         manifest_path = root / "manifests" / "run-import-manifest-v1.json"
         receipt_path = root / "receipts" / "nativization-motion" / "nm-20260807T051659Z.json"
         manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()

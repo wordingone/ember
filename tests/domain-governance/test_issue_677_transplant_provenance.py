@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0, str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "scripts"))
 
 import optimizer_transplant_provenance as provenance
 
@@ -294,7 +294,7 @@ def test_resume_consumer_requires_inline_sidecar_bytes_and_custody(tmp_path: Pat
         provenance.load_verified_custody_checkpoint(custody["destination_path"])
 
 def test_archived_launcher_wiring_has_no_unreceipted_resume_or_source_write() -> None:
-    repo = Path(__file__).resolve().parents[1]
+    repo = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     launcher = (repo / "scripts" / "cbase_grow_rung2_stabilize.py").read_text(
         encoding="utf-8"
     )

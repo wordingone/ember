@@ -167,7 +167,7 @@ def test_cli_disposition_refuses_malformed_manifest_without_writing_output(
     result = _run_hidden(
         [
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py"),
+            str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "tools" / "scratch_custody.py"),
             "disposition",
             "--manifest",
             str(manifest_path),
@@ -206,7 +206,7 @@ def test_cli_guard_has_no_success_on_tampered_root(tmp_path: Path):
     result = _run_hidden(
         [
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py"),
+            str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "tools" / "scratch_custody.py"),
             "guard",
             "--root",
             str(root),
@@ -229,7 +229,7 @@ def test_cli_census_refuses_nested_root_without_writing_output(tmp_path: Path):
     result = _run_hidden(
         [
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py"),
+            str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "tools" / "scratch_custody.py"),
             "census",
             "--root",
             str(nested),
@@ -392,7 +392,7 @@ def test_cli_writes_and_guards_closed_disposition_without_move_authority(tmp_pat
         root, manifest_path, label="issue-1450", max_bytes=1024,
     )
     annotations_path.write_text("{}", encoding="utf-8")
-    tool = str(Path(__file__).resolve().parents[1] / "tools" / "scratch_custody.py")
+    tool = str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "tools" / "scratch_custody.py")
 
     write_result = _run_hidden(
         [
@@ -434,7 +434,7 @@ def test_cli_writes_and_guards_closed_disposition_without_move_authority(tmp_pat
 
 
 def test_disposition_contract_documents_no_move_authority_and_closed_schema():
-    repo = Path(__file__).resolve().parents[1]
+    repo = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     contract = (repo / "docs" / "hygiene" / "issue-1450-scratch-custody-v1.md").read_text(
         encoding="utf-8",
     )
@@ -474,7 +474,7 @@ def test_disposition_contract_documents_no_move_authority_and_closed_schema():
 
 
 def test_public_disposition_satisfies_repository_receipt_floor():
-    repo = Path(__file__).resolve().parents[1]
+    repo = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     receipt = repo / "receipts" / "issue-1450" / "live-scratch-disposition-v1.json"
     result = _run_hidden(
         [sys.executable, str(repo / "scripts" / "receipt_check.py"), "--file", str(receipt)],
