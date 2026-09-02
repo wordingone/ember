@@ -21,7 +21,7 @@ REPLAY MODE IS INVALID FOR THE C-SURFACE2 BOARD (do not use it to try to clear
 that condition). Confirmed two ways: (1) issue #140 (filed by the repo
 maintainer, not an agent): "the condition demands a CURRENTLY-LIVE process
 receipt", replay receipts get invalid_surface2_non_live_provenance;
-(2) scripts/ember_totality/test_surface2.py's own CHK, cure #3 (issue #97),
+(2) src/ember/governance/scripts/ember_totality/test_surface2.py's own CHK, cure #3 (issue #97),
 already hard-rejects any receipt whose `provenance` is in
 NON_LIVE_PROVENANCE_MARKERS (which includes `replay_of_completed_run`, this
 mode's own provenance value) or whose `live_process_touched` is `False` (which

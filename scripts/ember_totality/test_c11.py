@@ -21,7 +21,7 @@ C11 -- Experience-horizon capability delta (duration-as-wall-clock is a timer,
      novelty_spoof, deletion_uses_wrong_baseline
   CHK: this file -- 9 recomputed checks, no trusted scalars.
 
-Spec: docs/design/c11-experience-horizon-spec.md (authored under issue #107; it is the
+Spec: docs/domains/governance/design/c11-experience-horizon-spec.md (authored under issue #107; it is the
 machine-checkable form of the conditions-v1.md C11 row and this probe implements
 it check-for-check).
 

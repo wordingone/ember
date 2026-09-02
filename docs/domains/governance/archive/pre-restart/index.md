@@ -56,7 +56,7 @@ Live chain (each step fail-closed on the previous step's receipt):
 
 ## Standing audits
 
-- `scripts/sp3_terminal_audit.py --run` — terminal-condition position,
+- `src/ember/governance/scripts/sp3_terminal_audit.py --run` — terminal-condition position,
   row-by-row: RECEIPTED (path + sha) or GAP-NAMED. No other verdict words.
 - Standing D-gate (deletion) and P-gate (process-boundary persistence)
   receipts gate every round and promotion.

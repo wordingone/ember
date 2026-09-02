@@ -24,7 +24,7 @@ into prose that outruns the receipts.
 | 02 | REPO_TOPOLOGY | directory layout, worktree lifecycle, repo-guard hooks |
 | 03 | MODEL_ARCHITECTURE | the c03 dense network + BitNet ternary twin (`scripts/timeshare_pretrain.py`, `src/ember/governance/scripts/ember_bitnet_core.py`) |
 | 04 | TRAINING_PIPELINE | pretraining entry points, the resident/CPU launch paths, the in-run commit governor |
-| 05 | GROWTH_AND_SCALING | `scripts/ember_growth_harness.py`, the C-GROW mechanisms, C-SCALE |
+| 05 | GROWTH_AND_SCALING | `src/ember/governance/scripts/ember_growth_harness.py`, the C-GROW mechanisms, C-SCALE |
 | 06 | EVALUATION_AND_BENCHMARKS | D3 native loop, the operator benchmark set, anti-gaming C1–C5 protocol |
 | 07 | GOVERNOR_AND_RESOURCE_MANAGEMENT | `src/ember/governance/scripts/governor.py` — VRAM/commit/device governance |
 | 08 | PROMPT_REGISTRY | **does not exist yet** — stated plainly, not invented |

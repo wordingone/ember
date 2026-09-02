@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """test_enforcement_leg.py — fixture-based unit tests + a fixture-analog negative control
-for scripts/ember_totality/enforcement_leg.py (issue #38 Deliverable 2).
+for src/ember/governance/scripts/ember_totality/enforcement_leg.py (issue #38 Deliverable 2).
 
 No real-checker dependence: every case here uses tiny FIXTURE checker scripts written to
 disk under <local-exec-root>/scratch/pubgate-enforce/fixtures/<case>/ (never the live tree's

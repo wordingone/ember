@@ -101,7 +101,7 @@ entry executes it. **Receipts:**
 `receipts/eval-suite-freeze/a1-freeze-admission-example-*.json` (the consumer's
 admission receipt discloses `pointer_is_ancestor_of_build_ref` plus the declaration
 sha256 at pointer / on disk / at build-ref), `src/ember/governance/scripts/a1_freeze_consumer.py` +
-`tests/test_a1_freeze_consumer.py` (PR #645). Relates to issues #631, #593, #487.
+`tests/domain-governance/test_a1_freeze_consumer.py` (PR #645). Relates to issues #631, #593, #487.
 
 ---
 

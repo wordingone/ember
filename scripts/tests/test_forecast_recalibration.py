@@ -71,7 +71,7 @@ def write_fixture(tmp_path: Path, *, run_ids: tuple[str, ...]) -> tuple[object, 
     telemetry.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
     energy = run_root / "energy-proxy-receipt.json"
     energy.parent.mkdir(parents=True, exist_ok=True)
-    # Real shape: scripts/energy_proxy_logger.py (schema ember-energy-proxy-run-v1)
+    # Real shape: src/ember/governance/scripts/energy_proxy_logger.py (schema ember-energy-proxy-run-v1)
     # always nests these fields under "energy" -- so does the E5 battery leg's read.
     energy.write_text(
         json.dumps({"energy": {"total_proxy_joules": 4.0, "energy_boundary": "CPU"}}),

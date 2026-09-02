@@ -6,7 +6,7 @@
 
 Hands-off by design: STATUS (OPEN/CLAIMED/SOLVED) is DERIVED from the JSON
 totality board + integrity audit (receipts-only truth); the human layer
-(title/meaning/difficulty/atomization/proof) comes from docs/problems-meta.yaml.
+(title/meaning/difficulty/atomization/proof) comes from docs/domains/governance/problems-meta.yaml.
 PROBLEMS.md is regenerated, never hand-edited.
 
   OPEN     board RED (or no probe yet)            -> unsolved
@@ -158,7 +158,7 @@ def main():
     L.append("> STATUS source (receipts-only): `%s` (sha %s)%s." % (
         os.path.basename(board_path), sha8(board_path),
         " + `%s` (sha %s)" % (os.path.basename(audit_path), sha8(audit_path)) if audit_path else ""))
-    L.append("> Add/edit problems in `docs/problems-meta.yaml` — never edit this file.\n")
+    L.append("> Add/edit problems in `docs/domains/governance/problems-meta.yaml` — never edit this file.\n")
     L.append("**Totals:** %d OPEN · %d CLAIMED (green, unverified) · %d SOLVED · %d total."
              % (n_open, n_claim, len(solved), len(items)))
     L.append("**Audit honest-green (max-skeptical):** %s.\n" % honest_green)

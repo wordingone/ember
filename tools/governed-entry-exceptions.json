@@ -12,22 +12,22 @@
   "exceptions": [
     {
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "6bfcad5fbca68fd2e2097b306d45208eb71a28f4c63ed725a92ef7fb4099dda4",
+      "sha256": "428ed6a182bd3e681fcc0f8fb61647c683015551819bdba81ea04c5a007a18d2",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "c1c918307c0274d54d54ab8269f3b583f5546849adb6d73db490508fe8ce4344",
+      "sha256": "f109bf1cbd487674a2d5f9fa8e4c800556f9eed235ff923d675203c5b2c9caa8",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "scripts/ember_surface2_capture.py",
-      "sha256": "d963ec44164128da77d0de70b65a540ea5253cc1daf6867901156903fd0d80e6",
+      "sha256": "9f307fc60983c63148894f9011fbdd466205aac93bfe5f963506c185263aa13e",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/forecast_recalibration.py",
-      "sha256": "d1964a4c66df7eb88ea57ec8c76febbaa21e3bacdc8db4666335d5baf1fc68d5",
+      "sha256": "27dbba03dcacf3a64799b661e7796f219d50d59bb4169408105f064c3fe7e4aa",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "94c7a296cba9c61966d86291836f278fd41e904cda913862f2c5dba949a67adb",
+      "sha256": "331f7b6862f80094d318b9ae743bf564a50d0e5c72ed764ce9fcaf6278fb2089",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "path": "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
-      "sha256": "c5c5b834ce40703f549b5ab51524f98b1d3744152a47d5954d679b980c211bfe",
+      "sha256": "358f8fa328d97a8a568797ee60ee8dab4a815fa2f31c036afd7975369d3de6a8",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {

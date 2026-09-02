@@ -142,7 +142,7 @@ FIRE4_RECEIPT_REL = "receipts/ember-c14-owned-run/live-20260703T215130Z.json"
 FIRE4_ADAPTER_REL = "receipts/ember-c14-owned-run/resident-adapter-20260703T215130Z.pt"
 FIRE4_ADAPTER_SHA256 = "401939b2429912a911bcc1f7d38e871c53554aa3bcdfda96fd3f674527b05f4e"
 
-# v1 leg-1 scoring formula (docs/spec/e2b-paired-protocol-v1.md, Leg 1):
+# v1 leg-1 scoring formula (docs/domains/governance/spec/e2b-paired-protocol-v1.md, Leg 1):
 # score = final_heldout_pass_count + 0.2 * max_train_pass_count.
 def _v1_leg1_score(checkpoint_evals: list, final_eval: dict) -> tuple[float, int, int]:
     """Returns (score, final_heldout_pass_count, max_train_pass_count),

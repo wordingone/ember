@@ -1385,7 +1385,7 @@ def cmd_owned_smoke(args: argparse.Namespace) -> int:
 def _build_candidate_manifest(seed_ckpt_path: Path, seed_sha: str, extra: Optional[dict] = None) -> dict:
     """RELATIVE in-tree path+sha pairs, in the <field>_path/<field>_sha256
     convention the C4/C5 probes resolve via resolve_in_tree (see the
-    goal-forge working tree's scripts/ember_totality/_lane14_common.py::
+    goal-forge working tree's src/ember/governance/scripts/ember_totality/_lane14_common.py::
     resolve_in_tree + check_path_sha_pairs — a sibling working tree's probe
     helper; this repo has no local resolve_in_tree today). Paths are made
     relative to REPO (this file's parent's parent) so they resolve

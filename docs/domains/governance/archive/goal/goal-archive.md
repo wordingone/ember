@@ -778,7 +778,7 @@ execution.
 - Kaggle Benchmarks frozen-heldout local delta CLI receipt:
   `receipts\ember-mvp\kaggle-benchmarks-frozen-heldout-cli-20260618\kaggle-benchmarks-livecodebench-frozen-heldout-delta-20260618T144017Z.json`
   was generated through
-  `scripts\ember_mle_micro_harness.py --kaggle-benchmarks-livecodebench-frozen-heldout-delta`
+  `src\ember\governance\scripts\ember_mle_micro_harness.py --kaggle-benchmarks-livecodebench-frozen-heldout-delta`
   and records `heldout_case_count=2`, `benchmark_delta_claimed=true`,
   `external_source_certified=false`, `external_benchmark_delta_claimed=false`,
   and `score.mean_normalized_improvement=1.0`.
@@ -1006,10 +1006,10 @@ python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbo
   - `scripts\ember_mvp_cycle.py` currently materializes the latent branch as a
     copied patch under `local-state\deltas\...` and binds verifier outcome as
     `verifier_result`.
-  - `scripts\ember_wheel_harness.py` marks B as `uses_dream_loop=true` and
+  - `src\ember\governance\scripts\ember_wheel_harness.py` marks B as `uses_dream_loop=true` and
     `uses_latent_branch=false`, while C uses both. This confirms that the B arm
     cannot yet isolate a predictive latent-world-model contribution.
-  - `scripts\ember_growth_harness.py` now emits the contraction/stability
+  - `src\ember\governance\scripts\ember_growth_harness.py` now emits the contraction/stability
     receipt that turns repeated positive cycles into growth proof; readiness
     must consume that receipt before reporting `GROWTH_READY`.
   - `GOAL.md` keeps first-principles issues constant by construction, and

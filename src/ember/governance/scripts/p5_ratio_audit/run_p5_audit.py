@@ -68,7 +68,7 @@ N/A -- never assumed):
     (line ~85) -- EXACT function-preserving duplication: gate_proj/up_proj
     rows -> cat([w, w]); down_proj columns -> cat([w*0.5, w*0.5], dim=1).
     No noise term anywhere in this operator (grep-confirmed across
-    scripts/cbase_grow_*.py and scripts/ember_growth_harness.py -- the
+    scripts/cbase_grow_*.py and src/ember/governance/scripts/ember_growth_harness.py -- the
     net2net path as actually coded is noise-free by construction). This is
     a genuine MEASUREMENT (epsilon = 0 exactly, not an N/A), reconfirmed
     empirically every run below (never merely assumed from the docstring)

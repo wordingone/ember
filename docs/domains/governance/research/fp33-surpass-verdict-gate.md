@@ -1,7 +1,7 @@
 # fp-33 — E2B-surpass conjunction-verdict gate (the goal's terminal gate)
 
 **Pre-registered before any leg receipt exists** (fp-39/fp-44 discipline). Scorer:
-`scripts/fp33_surpass_verdict.py` (`FP33_SURPASS_VERDICT_SELFTEST_PASS`, 17 cases).
+`src/ember/governance/scripts/fp33_surpass_verdict.py` (`FP33_SURPASS_VERDICT_SELFTEST_PASS`, 17 cases).
 Contract frozen in `docs/domains/governance/archive/pre-restart/fp33-surpass-prereg-v1.md`; this doc holds the receipt
 schema + the decision-machine notes. Decision logic is FROZEN in the scorer.
 

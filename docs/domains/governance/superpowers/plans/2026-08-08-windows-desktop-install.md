@@ -38,7 +38,7 @@
 
 **Files:**
 - Modify: the preparation-only cockpit build helper
-- Modify: `tests/test_ember_root_launcher.py`
+- Modify: `tests/domain-governance/test_ember_root_launcher.py`
 
 **Interfaces:**
 - Produces: `scripts/prepare-ember-cockpit.ps1`, which prints the application and governed-runtime paths and never launches the cockpit.

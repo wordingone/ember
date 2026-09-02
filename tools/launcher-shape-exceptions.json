@@ -12,7 +12,7 @@
     },
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "69bc5b935067fba465ff1d6627541ff0b7b007c35400c1a86d0dd4df957eda73",
+      "sha256": "29a8ef99eec3b320b39b9f827ca09b8e9a880ecb497adb4285d61cdc7c64b8ca",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
@@ -71,8 +71,8 @@
       "reason": "storage-preflight fixture operating on temporary checkpoint and custody paths. Its child-process cases exercise bounded runner storage diagnostics; they do not dispatch a model run or expose a production launcher."
     },
     {
-      "path": "tests/test_ember_root_launcher.py",
-      "sha256": "1626215e538be15ce0deceb5da539261f3fe3357d11b44f478200df9cbad76f1",
+      "path": "tests/domain-governance/test_ember_root_launcher.py",
+      "sha256": "ba476f72a5ef0db70c21e29aeffd42b8bed5615f644419085f0d8e33aca20b54",
       "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {

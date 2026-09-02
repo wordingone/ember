@@ -154,7 +154,7 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
         closure = load_closure()
         manifest = closure.load_manifest(ROOT)
         caller = "tools/ember-restart-3b/mint_github_license_partition.py"
-        target = "tools/corpus_connectors/receipt.py"
+        target = "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
         self.assertIn(target, manifest["code"])
         self.assertIn(target, manifest["dynamic_call_sites"][caller])
 
@@ -163,7 +163,7 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
         caller = "tools/ember-restart-3b/text_lab_corpus.py"
         expected = {
             "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py",
-            "tools/corpus_connectors/receipt.py",
+            "src/ember/infrastructure/tools/corpus_connectors/receipt.py",
             "tools/ember-restart-3b/mint_github_license_partition.py",
         }
 

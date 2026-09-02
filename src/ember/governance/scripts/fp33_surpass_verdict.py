@@ -30,8 +30,8 @@ Pure stdlib: seeded `random.Random` bootstrap (reproducible) + exact McNemar via
 `math.comb`. No numpy, no nondeterministic RNG — receipts-only-truth holds.
 
 Usage:
-  python scripts/fp33_surpass_verdict.py --receipts receipts   # analyze on-disk
-  python scripts/fp33_surpass_verdict.py --selftest            # synthetic gate
+  python src/ember/governance/scripts/fp33_surpass_verdict.py --receipts receipts   # analyze on-disk
+  python src/ember/governance/scripts/fp33_surpass_verdict.py --selftest            # synthetic gate
 """
 from __future__ import annotations
 import argparse

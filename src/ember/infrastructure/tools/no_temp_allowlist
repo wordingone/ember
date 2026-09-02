@@ -32,7 +32,7 @@ src/ember/governance/scripts/check_energy_law_theory.py
 src/ember/governance/scripts/check_goal_citations.py
 src/ember/governance/scripts/ckpt_locality.py
 src/ember/governance/scripts/cockpit_watchdog.py
-scripts/corpus_acquire_selftest.py
+src/ember/governance/scripts/corpus_acquire_selftest.py
 scripts/corpus_mix_selftest.py
 src/ember/governance/scripts/corpus_patch_encode.py
 scripts/e1b_pair_assemble.py
@@ -74,8 +74,8 @@ scripts/ember_gate_tool_dispatch_permissions_selftest.py
 scripts/ember_gate_uiux_repl_components_selftest.py
 src/ember/governance/scripts/ember_governor_binding.py
 scripts/ember_governor_binding_selftest.py
-scripts/ember_growth_harness_selftest.py
-scripts/ember_mle_micro_harness.py
+src/ember/governance/scripts/ember_growth_harness_selftest.py
+src/ember/governance/scripts/ember_mle_micro_harness.py
 scripts/ember_mle_micro_harness_selftest.py
 scripts/ember_mvp_cycle.py
 scripts/ember_mvp_cycle_selftest.py
@@ -110,7 +110,7 @@ src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_tes
 scripts/ember_totality/c_custody_dictkey_citations_test.py
 scripts/ember_totality/c_custody_extraction_cures_test.py
 scripts/ember_totality/c_custody_pattern_citation_test.py
-scripts/ember_totality/c_custody_sidecar_agewindow_test.py
+src/ember/governance/scripts/ember_totality/c_custody_sidecar_agewindow_test.py
 scripts/ember_totality/c_custody_twin_resolution_test.py
 scripts/ember_totality/c_disconfirmation_custody_test.py
 scripts/ember_totality/c_invariant_errata_structure_test.py
@@ -119,7 +119,7 @@ scripts/ember_totality/c_neg1_394_cited_missing_test.py
 scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/regime_operator.py
 scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/regime_operator.py
 scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py
-scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py
+src/ember/governance/scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py
 scripts/ember_totality/chk_controls/test_preflight.py
 scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
 scripts/ember_totality/disconfirmation_leg_test.py
@@ -127,7 +127,7 @@ src/ember/governance/scripts/ember_totality/milestone_leg_test.py
 scripts/ember_totality/test_c_ladm.py
 scripts/ember_train_multimodal_resident_adapter.py
 scripts/ember_train_multimodal_resident_adapter_cli_selftest.py
-scripts/ember_wheel_harness.py
+src/ember/governance/scripts/ember_wheel_harness.py
 scripts/ember_wheel_harness_selftest.py
 scripts/ember_windows_sandbox.py
 scripts/ember_windows_sandbox_selftest.py
@@ -173,8 +173,8 @@ src/ember/governance/scripts/registry_gate_selftest.py
 scripts/run_v0_segment_device_test.py
 scripts/screen792_bf16_momentum.py
 src/ember/governance/scripts/serving_registry.py
-scripts/sp3_terminal_audit.py
-scripts/stage1_first_words.py
+src/ember/governance/scripts/sp3_terminal_audit.py
+src/ember/governance/scripts/stage1_first_words.py
 scripts/t2_cap.py
 scripts/t2_cap_selftest.py
 scripts/t2_grpo.py
@@ -183,7 +183,7 @@ scripts/t2_mtp_viewpath_selftest.py
 scripts/t2r2w_viewsha_selftest.py
 scripts/test_ember_cbase_avir_augment.py
 scripts/test_ember_cbase_avir_data.py
-scripts/test_ember_cbase_avir_data_v2.py
+src/ember/governance/scripts/test_ember_cbase_avir_data_v2.py
 scripts/test_ember_cbase_launch.py
 scripts/test_ember_cbase_mixture.py
 scripts/test_ember_cbase_s6_acceptance.py

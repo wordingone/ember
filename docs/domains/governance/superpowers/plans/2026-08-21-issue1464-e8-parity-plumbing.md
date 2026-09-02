@@ -25,7 +25,7 @@
 ### Task 1: Shared pre-update gradient norm and telemetry
 
 **Files:**
-- Modify: `tools/ember-restart-3b/a1_optimizer.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/a1_optimizer.py`
 - Modify: `tools/ember-restart-3b/a1_execution.py`
 - Modify: `tests/ember_restart_model/test_a1_fused_backward.py`
 - Modify: `tests/ember_restart_model/test_a1_execution_e8_telemetry.py`

@@ -410,7 +410,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     receipt_path = _RECEIPTS / f"p-gate-{ts}.json"
 #   training-throughput-anchor-check-all-*.json  scripts/proofs/training_throughput_anchor_check.py:223
 #     out_path = RECEIPTS_DIR / f"training-throughput-anchor-check-all-{ts}.json"
-#   official-abc-wheel-runner-*.json         scripts/ember_mvp_wheel_runner.py:99
+#   official-abc-wheel-runner-*.json         src/ember/governance/scripts/ember_mvp_wheel_runner.py:99
 #     out = root / "receipts" / "wheel-runner" / f"official-abc-wheel-runner-{ts}.json"
 #   proof-replay-consistency-*.json          scripts/proofs/replay_consistency_check.py:792
 #     out_path = receipts_out_dir / f"proof-replay-consistency-{stamp}.json"
@@ -422,9 +422,9 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out_path = out_dir / f"proof-frontier-protocol-{receipt['ts']}.json"
 #   proof-ocal-sweep-*.json                  scripts/proofs/ocal_calibration_sweep.py:617
 #     out_path = out_dir / f"proof-ocal-sweep-{receipt['ts']}.json"
-#   wheel-real-*.json                        scripts/ember_wheel_harness.py:241
+#   wheel-real-*.json                        src/ember/governance/scripts/ember_wheel_harness.py:241
 #     out = root / "receipts" / "wheel" / f"wheel-real-{ts}.json"
-#   wheel-heldout-*.json                     scripts/ember_wheel_harness.py:452
+#   wheel-heldout-*.json                     src/ember/governance/scripts/ember_wheel_harness.py:452
 #     out = root / "receipts" / "wheel" / f"wheel-heldout-{ts}.json"
 #   contamination-verbatim-*.json            scripts/proofs/contamination_verbatim_check.py:319,326
 #     out_path = RECEIPTS_DIR / f"contamination-verbatim-{receipt['ts']}.json"
@@ -538,14 +538,14 @@ CONVENTION_MAP = [
     (re.compile(r"^p-gate-.*\.json$"), "scripts/p_gate.py"),
     (re.compile(r"^training-throughput-anchor-check-all-.*\.json$"),
      "scripts/proofs/training_throughput_anchor_check.py"),
-    (re.compile(r"^official-abc-wheel-runner-.*\.json$"), "scripts/ember_mvp_wheel_runner.py"),
+    (re.compile(r"^official-abc-wheel-runner-.*\.json$"), "src/ember/governance/scripts/ember_mvp_wheel_runner.py"),
     (re.compile(r"^proof-replay-consistency-.*\.json$"), "scripts/proofs/replay_consistency_check.py"),
     (re.compile(r"^scienceagentbench-first-loop-.*\.json$"), "scripts/ember_scienceagentbench_first_loop.py"),
     (re.compile(r"^eng123-timeshare-dryrun-.*\.json$"), "scripts/timeshare_dryrun.py"),
     (re.compile(r"^proof-frontier-protocol-.*\.json$"), "scripts/proofs/frontier_projection.py"),
     (re.compile(r"^proof-ocal-sweep-.*\.json$"), "scripts/proofs/ocal_calibration_sweep.py"),
-    (re.compile(r"^wheel-real-.*\.json$"), "scripts/ember_wheel_harness.py"),
-    (re.compile(r"^wheel-heldout-.*\.json$"), "scripts/ember_wheel_harness.py"),
+    (re.compile(r"^wheel-real-.*\.json$"), "src/ember/governance/scripts/ember_wheel_harness.py"),
+    (re.compile(r"^wheel-heldout-.*\.json$"), "src/ember/governance/scripts/ember_wheel_harness.py"),
     (re.compile(r"^contamination-verbatim-.*\.json$"), "scripts/proofs/contamination_verbatim_check.py"),
     (re.compile(r"^fp35c-weight-cache-ab-.*\.json$"), "scripts/fp35c_weight_cache_ab.py"),
     (re.compile(r"^placement-9p-bleed-.*\.json$"), "scripts/proofs/placement_9p_bleed_probe.py"),

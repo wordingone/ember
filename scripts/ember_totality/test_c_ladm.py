@@ -60,7 +60,7 @@ Rules enforced (recon dossier sec3, frozen 2026-07-04) and their mechanization:
      comparison stands on its own regardless.
   [RULING R2, no self-admission / self-judgment banned at admission, 2026-07-04] --
      INSTRUMENT-LEVEL CHECK, ONCE (not per-episode): the sole verifier comparator this repo
-     wires everywhere (scripts/v_compare.py, per scripts/proofs/verifier_surface_coverage.py's
+     wires everywhere (src/ember/governance/scripts/v_compare.py, per scripts/proofs/verifier_surface_coverage.py's
      own grounding) is confirmed present as SOURCE CODE (not a serialized-model artifact --
      .pt/.bin/.safetensors/.gguf/.ckpt/.pth extensions checked and absent). The per-episode
      gap -- independently confirming EACH row's `verified` value truly came from that

@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "scripts/density_ab_prep.py",
+  "artifact_path": "src/ember/governance/scripts/density_ab_prep.py",
   "artifact_sha256": "892637837959bb05a1b0cbb7a2c58a918efc2b9f948eb439babfb6d3938a20dd",
   "authority": {
     "goal_id": "EMBER-02",

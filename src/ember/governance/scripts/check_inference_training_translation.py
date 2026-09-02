@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 TABLE_PATH = Path("docs/domains/governance/design/inference-to-training-translation-v1.md")
 INTEGRATION_PATHS = (
     Path("docs/design/sota-stack-floor-spec.md"),
-    Path("docs/design/sota-stack-floor.md"),
+    Path("docs/domains/governance/design/sota-stack-floor.md"),
     Path("docs/domains/governance/design/scale-architecture-frontier-20260703.md"),
 )
 CANONICAL_LINK = TABLE_PATH.as_posix()
