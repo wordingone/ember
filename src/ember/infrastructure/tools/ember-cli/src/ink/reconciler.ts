@@ -17,7 +17,7 @@ import {
   type TextWrapMode,
   type StylePool,
   type HyperlinkPool,
-} from "./rendering-pipeline.ts";
+} from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 import type { Style } from "./termio.ts";
 import type { BorderStyleName } from "./border-glyphs.ts";

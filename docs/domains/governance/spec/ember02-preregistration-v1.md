@@ -1,7 +1,7 @@
 # EMBER-02 Pre-Registration v1
 
 **Status:** PRE-REGISTRATION — frozen upon merge; binds at rung-1 dispatch. Amendments only as versioned superseding documents (v2, v3, …) under the tighten-only rule (§9). Machine-readable threshold freeze: `ember02-preregistration-thresholds-v1.json` (this document and that file are generated from the same threshold table, §8; on any discrepancy, the stricter reading governs pending an errata amendment). Independent ratification pass 1 applied (edits E-A..E-G, §0).
-**Repo pin:** `wordingone/ember @ 3d48d3870919bd04cec735f68d0fad45fcfae0b2`. Authority order: INVARIANT.md → GOAL.md → CONTINUITY.md / docs/domains/governance/guides/START-HERE.md → the closed-boundary research annex (`docs/research/`, pinned).
+**Repo pin:** `wordingone/ember @ 3d48d3870919bd04cec735f68d0fad45fcfae0b2`. Authority order: INVARIANT.md → GOAL.md → CONTINUITY.md / docs/domains/governance/guides/START-HERE.md → the closed-boundary research annex (`docs/domains/governance/research/`, pinned).
 **Hard gate:** EMBER-01 certification must exist before any training step executes. Dispatch validates against this document's commit sha (`--prereg <sha256>`).
 **Verdict authority:** the repo's CI, guards, admission contract, and board conditions adjudicate all evidence; nothing here is self-declared credit (INVARIANT.md clauses 1–2).
 

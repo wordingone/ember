@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ember.internal/domains/governance/schemas/loop-graph/provenance-receipt-v1.schema.json",
+  "$id": "https://ember.internal/schemas/loop-graph/provenance-receipt-v1.schema.json",
   "title": "Ember provenance receipt v1 (loop/graph substrate, issue #1309)",
   "description": "Extends receipts/INDEX.jsonl's existing flat, append-only shape by making every field except claim_fields mandatory, and adding node_id as the join key back into the execution graph. Matches the approved loop/graph substrate schema sketch, section 3 (workstream B, issue #1309). One JSON object per line (JSONL), append-only.",
   "type": "object",

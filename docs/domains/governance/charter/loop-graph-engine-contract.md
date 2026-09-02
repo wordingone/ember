@@ -2,7 +2,7 @@
 
 ## The invariant
 
-The substrate in `schemas/loop-graph/` and `scripts/loop_graph/` stores
+The substrate in `domains/governance/schemas/loop-graph/` and `src/ember/governance/scripts/loop_graph/` stores
 authority graphs, execution graphs, and provenance receipts as plain JSON /
 JSONL, and verifies them with plain functions. **No field, schema, or module
 in this substrate references any specific driving engine** — not Claude
@@ -82,7 +82,7 @@ Because every step above is a plain function call over plain JSON files:
   running `command.argv` via its own tool-execution surface, and calling
   the same `lifecycle`/`mutex`/`receipts` functions.
 - A codex agent could drive the identical loop by importing the same
-  `scripts/loop_graph` package (stdlib only — no engine-specific dependency
+  `src/ember/governance/scripts/loop_graph` package (stdlib only — no engine-specific dependency
   to strip out) and calling the same five functions in the same order.
 - A future Ember-native runtime (the `runtime/ember-lab/` Rust control-plane
   crate already gives Ember a non-Claude-Code compute foothold, per

@@ -6,31 +6,13 @@
     "filing_regex_sha256": "9eafd7f2d1c867e71256f2df907e987b2d9e7a0644aa5f1d418f4751850475b8"
   },
   "counts": {
-    "contained_resolved_canonical_tokens": 9,
+    "contained_resolved_canonical_tokens": 40,
     "corrected_classifier_current_unresolved": 380,
     "documents": 393,
     "explicit_filing_dispositions": 444,
-    "filing_classifier_current_unresolved": 453
+    "filing_classifier_current_unresolved": 484
   },
   "rows": [
-    {
-      "document": "docs/DOCS-README.md",
-      "line": 27,
-      "resolution": {
-        "canonical_token": "domains/data/README.md",
-        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
-      },
-      "target": "data/README.md"
-    },
-    {
-      "document": "docs/DOCS-README.md",
-      "line": 30,
-      "resolution": {
-        "canonical_token": "domains/runtime/README.md",
-        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
-      },
-      "target": "runtime/README.md"
-    },
     {
       "document": "docs/INDEX.md",
       "line": 8,
@@ -48,318 +30,6 @@
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
       },
       "target": "runtime/README.md"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 217,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 217,
-        "source_target": "runtime/governor",
-        "visible_classification": "historical"
-      },
-      "target": "runtime/governor"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 321,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 321,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 399,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 399,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 604,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 604,
-        "source_target": "tokenizer/shard",
-        "visible_classification": "historical"
-      },
-      "target": "tokenizer/shard"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 627,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 627,
-        "source_target": "tokenizer/pretrain",
-        "visible_classification": "historical"
-      },
-      "target": "tokenizer/pretrain"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 629,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 629,
-        "source_target": "runtime/optimizer",
-        "visible_classification": "historical"
-      },
-      "target": "runtime/optimizer"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 670,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 670,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 674,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 674,
-        "source_target": "tokenizer/token-shard",
-        "visible_classification": "historical"
-      },
-      "target": "tokenizer/token-shard"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 939,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 939,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 941,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 941,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 954,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 954,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 1025,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 1025,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 1314,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 1314,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 1321,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 1321,
-        "source_target": "docs/research/journal",
-        "visible_classification": "historical"
-      },
-      "target": "docs/research/journal"
-    },
-    {
-      "document": "docs/archive/goal/goal-archive.md",
-      "line": 1660,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-archive.md",
-        "source_line": 1660,
-        "source_target": "receipts/tally-",
-        "visible_classification": "historical"
-      },
-      "target": "receipts/tally-"
-    },
-    {
-      "document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-      "line": 25,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-        "source_line": 25,
-        "source_target": "tools/goal-tools.ts",
-        "visible_classification": "historical"
-      },
-      "target": "tools/goal-tools.ts"
-    },
-    {
-      "document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-      "line": 26,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-        "source_line": 26,
-        "source_target": "tools/goal-tools.ts",
-        "visible_classification": "historical"
-      },
-      "target": "tools/goal-tools.ts"
-    },
-    {
-      "document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-      "line": 29,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-        "source_line": 29,
-        "source_target": "tools/goal-tools.ts",
-        "visible_classification": "historical"
-      },
-      "target": "tools/goal-tools.ts"
-    },
-    {
-      "document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-      "line": 30,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-        "source_line": 30,
-        "source_target": "tools/goal-tools.ts",
-        "visible_classification": "historical"
-      },
-      "target": "tools/goal-tools.ts"
-    },
-    {
-      "document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-      "line": 68,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
-        "source_line": 68,
-        "source_target": "tools/goal-tools.ts",
-        "visible_classification": "historical"
-      },
-      "target": "tools/goal-tools.ts"
-    },
-    {
-      "document": "docs/archive/pre-restart/barrier-program.md",
-      "line": 41,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/pre-restart/barrier-program.md",
-        "source_line": 41,
-        "source_target": "data/order/optimizer",
-        "visible_classification": "historical"
-      },
-      "target": "data/order/optimizer"
-    },
-    {
-      "document": "docs/archive/pre-restart/fp33-kernel-route-v0.md",
-      "line": 10,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/pre-restart/fp33-kernel-route-v0.md",
-        "source_line": 10,
-        "source_target": "scripts/probes/dispatches",
-        "visible_classification": "historical"
-      },
-      "target": "scripts/probes/dispatches"
-    },
-    {
-      "document": "docs/archive/pre-restart/fp34-owned-band-prereg-v1.md",
-      "line": 58,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/pre-restart/fp34-owned-band-prereg-v1.md",
-        "source_line": 58,
-        "source_target": "receipts/fp34-band-manifest-",
-        "visible_classification": "historical"
-      },
-      "target": "receipts/fp34-band-manifest-"
-    },
-    {
-      "document": "docs/archive/pre-restart/fp34-owned-band-prereg-v1.md",
-      "line": 59,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/archive/pre-restart/fp34-owned-band-prereg-v1.md",
-        "source_line": 59,
-        "source_target": "receipts/fp34-bandtransfer-",
-        "visible_classification": "historical"
-      },
-      "target": "receipts/fp34-bandtransfer-"
     },
     {
       "document": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
@@ -440,136 +110,6 @@
       "target": "scratch/c-neg1-staleness-sandbox"
     },
     {
-      "document": "docs/authority/REDACTIONS.md",
-      "line": 45,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/authority/REDACTIONS.md",
-        "source_line": 45,
-        "source_target": "receipts/foo.json",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/foo.json"
-    },
-    {
-      "document": "docs/charter/ember-01-identity-contract-consumer-map.md",
-      "line": 66,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/charter/ember-01-identity-contract-consumer-map.md",
-        "source_line": 66,
-        "source_target": "tokenizer/data/order/curriculum/",
-        "visible_classification": "reference"
-      },
-      "target": "tokenizer/data/order/curriculum/"
-    },
-    {
-      "document": "docs/charter/ember-01-identity-contract-consumer-map.md",
-      "line": 220,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/charter/ember-01-identity-contract-consumer-map.md",
-        "source_line": 220,
-        "source_target": "tokenizer/data/ancestry/mechanism/backend",
-        "visible_classification": "reference"
-      },
-      "target": "tokenizer/data/ancestry/mechanism/backend"
-    },
-    {
-      "document": "docs/charter/ember-01-identity-contract-consumer-map.md",
-      "line": 229,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/charter/ember-01-identity-contract-consumer-map.md",
-        "source_line": 229,
-        "source_target": "receipts/docs",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/docs"
-    },
-    {
-      "document": "docs/charter/probe-authoring-contract.md",
-      "line": 5,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/charter/probe-authoring-contract.md",
-        "source_line": 5,
-        "source_target": "scripts/ember_totality/test_",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/test_"
-    },
-    {
-      "document": "docs/charter/probe-authoring-contract.md",
-      "line": 118,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/charter/probe-authoring-contract.md",
-        "source_line": 118,
-        "source_target": "scripts/ember_totality/test_",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/test_"
-    },
-    {
-      "document": "docs/charter/probe-authoring-contract.md",
-      "line": 279,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/charter/probe-authoring-contract.md",
-        "source_line": 279,
-        "source_target": "baseline/model",
-        "visible_classification": "reference"
-      },
-      "target": "baseline/model"
-    },
-    {
-      "document": "docs/contracts/goal-clear-protocol.md",
-      "line": 32,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/contracts/goal-clear-protocol.md",
-        "source_line": 32,
-        "source_target": "data/tokenizer",
-        "visible_classification": "reference"
-      },
-      "target": "data/tokenizer"
-    },
-    {
-      "document": "docs/custody/ember-01-custody-README.md",
-      "line": 53,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/ember-01-custody-README.md",
-        "source_line": 53,
-        "source_target": "data/license",
-        "visible_classification": "reference"
-      },
-      "target": "data/license"
-    },
-    {
-      "document": "docs/custody/ember-01-custody-README.md",
-      "line": 115,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/ember-01-custody-README.md",
-        "source_line": 115,
-        "source_target": "manifests/ember-01-custody/census-receipt.json",
-        "visible_classification": "reference"
-      },
-      "target": "manifests/ember-01-custody/census-receipt.json"
-    },
-    {
       "document": "docs/custody/hf-sync.md",
       "line": 29,
       "resolution": {
@@ -635,455 +175,22 @@
       "target": "state/hf-custody/remint-receipt-"
     },
     {
-      "document": "docs/custody/r1-exit-evidence-inventory-20260805.md",
-      "line": 12,
+      "document": "docs/domains/governance/DOCS-README.md",
+      "line": 27,
       "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/r1-exit-evidence-inventory-20260805.md",
-        "source_line": 12,
-        "source_target": "artifacts/checkpoints/checkpoint-vertical-slice-seed-830001/",
-        "visible_classification": "reference"
-      },
-      "target": "artifacts/checkpoints/checkpoint-vertical-slice-seed-830001/"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 98,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 98,
-        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 99,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 99,
-        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 100,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 100,
-        "source_target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 104,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 104,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 105,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 105,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 106,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 106,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 107,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 107,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 108,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 108,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 109,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 109,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 110,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 110,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 111,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 111,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 112,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 112,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 113,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 113,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 114,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 114,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 115,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 115,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 116,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 116,
-        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 117,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 117,
-        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 118,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 118,
-        "source_target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 119,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 119,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 120,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 120,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 121,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 121,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 122,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 122,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 123,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 123,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 124,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 124,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 125,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 125,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 126,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 126,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 127,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 127,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 128,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 128,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 129,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 129,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 130,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 130,
-        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
-    },
-    {
-      "document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-      "line": 155,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
-        "source_line": 155,
-        "source_target": "docs/vera-c1m-branch-deletion-manifest",
-        "visible_classification": "reference"
-      },
-      "target": "docs/vera-c1m-branch-deletion-manifest"
-    },
-    {
-      "document": "docs/design/c11-experience-horizon-spec.md",
-      "line": 36,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/design/c11-experience-horizon-spec.md",
-        "source_line": 36,
-        "source_target": "receipts/ember-mvp/c11-experience-horizon/",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ember-mvp/c11-experience-horizon/"
-    },
-    {
-      "document": "docs/design/scale-architecture-frontier-20260703.md",
-      "line": 18,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/design/scale-architecture-frontier-20260703.md",
-        "source_line": 18,
-        "source_target": "state/activity/interaction",
-        "visible_classification": "reference"
-      },
-      "target": "state/activity/interaction"
-    },
-    {
-      "document": "docs/design/sota-stack-floor.md",
-      "line": 16,
-      "resolution": {
-        "canonical_token": "domains/model/tokenizer/tokenizer.json",
+        "canonical_token": "../data/README.md",
         "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
       },
-      "target": "tokenizer/tokenizer.json"
+      "target": "data/README.md"
+    },
+    {
+      "document": "docs/domains/governance/DOCS-README.md",
+      "line": 30,
+      "resolution": {
+        "canonical_token": "../runtime/README.md",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "runtime/README.md"
     },
     {
       "document": "docs/domains/governance/anatomy/02_REPO_TOPOLOGY.md",
@@ -1125,6 +232,24 @@
       "target": "src/core/"
     },
     {
+      "document": "docs/domains/governance/anatomy/03_MODEL_ARCHITECTURE.md",
+      "line": 30,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/anatomy/03_MODEL_ARCHITECTURE.md",
+      "line": 30,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v1-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v1-pretrain-config.json"
+    },
+    {
       "document": "docs/domains/governance/anatomy/08_PROMPT_REGISTRY.md",
       "line": 18,
       "resolution": {
@@ -1162,6 +287,15 @@
         "visible_classification": "reference"
       },
       "target": "tools/ember-cli/src/core/ember-world-state-repl.ts"
+    },
+    {
+      "document": "docs/domains/governance/anatomy/14_MODEL_CARD.md",
+      "line": 45,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v1-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v1-pretrain-config.json"
     },
     {
       "document": "docs/domains/governance/anatomy/14_MODEL_CARD.md",
@@ -1214,6 +348,266 @@
         "visible_classification": "historical"
       },
       "target": "baseline/dream/full-loop"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 217,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 217,
+        "source_target": "runtime/governor",
+        "visible_classification": "historical"
+      },
+      "target": "runtime/governor"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 321,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 399,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 604,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 604,
+        "source_target": "tokenizer/shard",
+        "visible_classification": "historical"
+      },
+      "target": "tokenizer/shard"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 627,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 627,
+        "source_target": "tokenizer/pretrain",
+        "visible_classification": "historical"
+      },
+      "target": "tokenizer/pretrain"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 629,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 629,
+        "source_target": "runtime/optimizer",
+        "visible_classification": "historical"
+      },
+      "target": "runtime/optimizer"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 670,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 674,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 674,
+        "source_target": "tokenizer/token-shard",
+        "visible_classification": "historical"
+      },
+      "target": "tokenizer/token-shard"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 939,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 941,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 954,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 1025,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 1314,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 1321,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 321,
+        "source_target": "docs/research/journal",
+        "visible_classification": "historical"
+      },
+      "target": "docs/research/journal"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-archive.md",
+      "line": 1660,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-archive.md",
+        "source_line": 1660,
+        "source_target": "receipts/tally-",
+        "visible_classification": "historical"
+      },
+      "target": "receipts/tally-"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md",
+      "line": 25,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
+        "source_line": 25,
+        "source_target": "tools/goal-tools.ts",
+        "visible_classification": "historical"
+      },
+      "target": "tools/goal-tools.ts"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md",
+      "line": 26,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
+        "source_line": 25,
+        "source_target": "tools/goal-tools.ts",
+        "visible_classification": "historical"
+      },
+      "target": "tools/goal-tools.ts"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md",
+      "line": 29,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
+        "source_line": 25,
+        "source_target": "tools/goal-tools.ts",
+        "visible_classification": "historical"
+      },
+      "target": "tools/goal-tools.ts"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md",
+      "line": 30,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
+        "source_line": 25,
+        "source_target": "tools/goal-tools.ts",
+        "visible_classification": "historical"
+      },
+      "target": "tools/goal-tools.ts"
+    },
+    {
+      "document": "docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md",
+      "line": 68,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/goal/goal-organ-floor-conformance-20260710.md",
+        "source_line": 25,
+        "source_target": "tools/goal-tools.ts",
+        "visible_classification": "historical"
+      },
+      "target": "tools/goal-tools.ts"
     },
     {
       "document": "docs/domains/governance/archive/pre-restart/band-a-4b-dispatch-template.md",
@@ -1279,6 +673,19 @@
         "visible_classification": "historical"
       },
       "target": "receipts/fp24-4b-verdict-"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/barrier-program.md",
+      "line": 41,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/pre-restart/barrier-program.md",
+        "source_line": 41,
+        "source_target": "data/order/optimizer",
+        "visible_classification": "historical"
+      },
+      "target": "data/order/optimizer"
     },
     {
       "document": "docs/domains/governance/archive/pre-restart/c-e2b-tie-diagnosis-20260705.md",
@@ -1736,6 +1143,45 @@
       "target": "data/eval"
     },
     {
+      "document": "docs/domains/governance/archive/pre-restart/fp33-kernel-route-v0.md",
+      "line": 10,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/pre-restart/fp33-kernel-route-v0.md",
+        "source_line": 10,
+        "source_target": "scripts/probes/dispatches",
+        "visible_classification": "historical"
+      },
+      "target": "scripts/probes/dispatches"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/fp34-owned-band-prereg-v1.md",
+      "line": 58,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/pre-restart/fp34-owned-band-prereg-v1.md",
+        "source_line": 58,
+        "source_target": "receipts/fp34-band-manifest-",
+        "visible_classification": "historical"
+      },
+      "target": "receipts/fp34-band-manifest-"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/fp34-owned-band-prereg-v1.md",
+      "line": 59,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/archive/pre-restart/fp34-owned-band-prereg-v1.md",
+        "source_line": 59,
+        "source_target": "receipts/fp34-bandtransfer-",
+        "visible_classification": "historical"
+      },
+      "target": "receipts/fp34-bandtransfer-"
+    },
+    {
       "document": "docs/domains/governance/archive/pre-restart/fp41-graded-probe-spec-v1.md",
       "line": 60,
       "resolution": {
@@ -1776,6 +1222,87 @@
     },
     {
       "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 20,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-invariants.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-invariants.json"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 28,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 33,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-invariants.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-invariants.json"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 39,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-baseline/",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-baseline/"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 41,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-baseline/nck-invariants.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-baseline/nck-invariants.json"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 46,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-baseline/",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-baseline/"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 123,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-baseline/",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-baseline/"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 130,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 173,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
       "line": 186,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
@@ -1786,6 +1313,15 @@
         "visible_classification": "historical"
       },
       "target": "docs/receipts-only-truth.md"
+    },
+    {
+      "document": "docs/domains/governance/archive/pre-restart/nck-invariants-v0.md",
+      "line": 199,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-baseline/",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-baseline/"
     },
     {
       "document": "docs/domains/governance/archive/pre-restart/r2-prereg.md",
@@ -1877,6 +1413,24 @@
         "visible_classification": "historical"
       },
       "target": "receipts/ledger/checkpoint/optimizer-state"
+    },
+    {
+      "document": "docs/domains/governance/authority/CONTINUITY.md",
+      "line": 304,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-c10.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-c10.json"
+    },
+    {
+      "document": "docs/domains/governance/authority/CONTINUITY.md",
+      "line": 305,
+      "resolution": {
+        "canonical_token": "domains/model/configs/nck-schedule.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/nck-schedule.json"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -2243,6 +1797,19 @@
       "target": "tests/test_ember_restart_measured_receipts"
     },
     {
+      "document": "docs/domains/governance/authority/REDACTIONS.md",
+      "line": 45,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/authority/REDACTIONS.md",
+        "source_line": 45,
+        "source_target": "receipts/foo.json",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/foo.json"
+    },
+    {
       "document": "docs/domains/governance/charter/doc-freshness-protocol.md",
       "line": 33,
       "resolution": {
@@ -2254,6 +1821,93 @@
         "visible_classification": "reference"
       },
       "target": "scripts/SOMETHING.py"
+    },
+    {
+      "document": "docs/domains/governance/charter/ember-01-identity-contract-consumer-map.md",
+      "line": 66,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/charter/ember-01-identity-contract-consumer-map.md",
+        "source_line": 66,
+        "source_target": "tokenizer/data/order/curriculum/",
+        "visible_classification": "reference"
+      },
+      "target": "tokenizer/data/order/curriculum/"
+    },
+    {
+      "document": "docs/domains/governance/charter/ember-01-identity-contract-consumer-map.md",
+      "line": 220,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/charter/ember-01-identity-contract-consumer-map.md",
+        "source_line": 220,
+        "source_target": "tokenizer/data/ancestry/mechanism/backend",
+        "visible_classification": "reference"
+      },
+      "target": "tokenizer/data/ancestry/mechanism/backend"
+    },
+    {
+      "document": "docs/domains/governance/charter/ember-01-identity-contract-consumer-map.md",
+      "line": 229,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/charter/ember-01-identity-contract-consumer-map.md",
+        "source_line": 229,
+        "source_target": "receipts/docs",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/docs"
+    },
+    {
+      "document": "docs/domains/governance/charter/loop-graph-engine-contract.md",
+      "line": 5,
+      "resolution": {
+        "canonical_token": "domains/governance/schemas/loop-graph/",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "schemas/loop-graph/"
+    },
+    {
+      "document": "docs/domains/governance/charter/probe-authoring-contract.md",
+      "line": 5,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/charter/probe-authoring-contract.md",
+        "source_line": 5,
+        "source_target": "scripts/ember_totality/test_",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/test_"
+    },
+    {
+      "document": "docs/domains/governance/charter/probe-authoring-contract.md",
+      "line": 118,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/charter/probe-authoring-contract.md",
+        "source_line": 5,
+        "source_target": "scripts/ember_totality/test_",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/test_"
+    },
+    {
+      "document": "docs/domains/governance/charter/probe-authoring-contract.md",
+      "line": 279,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/charter/probe-authoring-contract.md",
+        "source_line": 279,
+        "source_target": "baseline/model",
+        "visible_classification": "reference"
+      },
+      "target": "baseline/model"
     },
     {
       "document": "docs/domains/governance/contracts/ember-completeness.md",
@@ -2436,6 +2090,19 @@
         "visible_classification": "reference"
       },
       "target": "receipts/spend-annex-20260707T030421Z.json"
+    },
+    {
+      "document": "docs/domains/governance/contracts/goal-clear-protocol.md",
+      "line": 32,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/contracts/goal-clear-protocol.md",
+        "source_line": 32,
+        "source_target": "data/tokenizer",
+        "visible_classification": "reference"
+      },
+      "target": "data/tokenizer"
     },
     {
       "document": "docs/domains/governance/custody/custody-disposition-20260708.md",
@@ -3075,6 +2742,448 @@
       "target": "receipts/ember-resident-training-gate/resident-training-gate-20260622T152500Z-real-reference-observed.json"
     },
     {
+      "document": "docs/domains/governance/custody/ember-01-custody-README.md",
+      "line": 53,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/ember-01-custody-README.md",
+        "source_line": 53,
+        "source_target": "data/license",
+        "visible_classification": "reference"
+      },
+      "target": "data/license"
+    },
+    {
+      "document": "docs/domains/governance/custody/ember-01-custody-README.md",
+      "line": 115,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/ember-01-custody-README.md",
+        "source_line": 115,
+        "source_target": "manifests/ember-01-custody/census-receipt.json",
+        "visible_classification": "reference"
+      },
+      "target": "manifests/ember-01-custody/census-receipt.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/r1-exit-evidence-inventory-20260805.md",
+      "line": 12,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/r1-exit-evidence-inventory-20260805.md",
+        "source_line": 12,
+        "source_target": "artifacts/checkpoints/checkpoint-vertical-slice-seed-830001/",
+        "visible_classification": "reference"
+      },
+      "target": "artifacts/checkpoints/checkpoint-vertical-slice-seed-830001/"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 98,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 98,
+        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 99,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 99,
+        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 100,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 100,
+        "source_target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 104,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 104,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 105,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 105,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 106,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 106,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 107,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 107,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 108,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 108,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 109,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 109,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 110,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 110,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 111,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 111,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 112,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 112,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 113,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 113,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 114,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 114,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 115,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 115,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 116,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 98,
+        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 117,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 99,
+        "source_target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 118,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 100,
+        "source_target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 119,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 104,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 120,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 105,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T03-17-40Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 121,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 106,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T03-21-56-952Z/home-avir/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 122,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 107,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 123,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 108,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T05-44-30-Z/home-A3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 124,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 109,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T05-48-42-Z/home-A2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 125,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 110,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 126,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 111,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 127,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 112,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T06-58-45Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 128,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 113,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r1-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 129,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 114,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r2-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 130,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 115,
+        "source_target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-m10-surface3/2026-06-28T07-40-42Z/home-r3-baseline/.avir/plugins/marketplaces/claude-plugins-official"
+    },
+    {
+      "document": "docs/domains/governance/custody/vera-c1m-branch-deletion-manifest-v1.md",
+      "line": 155,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/custody/vera-c1m-branch-deletion-manifest-v1.md",
+        "source_line": 155,
+        "source_target": "docs/vera-c1m-branch-deletion-manifest",
+        "visible_classification": "reference"
+      },
+      "target": "docs/vera-c1m-branch-deletion-manifest"
+    },
+    {
       "document": "docs/domains/governance/design/DESIGN-1402-enforcement.md",
       "line": 67,
       "resolution": {
@@ -3127,6 +3236,19 @@
       "target": "state/receipts/cond3-legs34/bundle_v2"
     },
     {
+      "document": "docs/domains/governance/design/c11-experience-horizon-spec.md",
+      "line": 36,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/design/c11-experience-horizon-spec.md",
+        "source_line": 36,
+        "source_target": "receipts/ember-mvp/c11-experience-horizon/",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ember-mvp/c11-experience-horizon/"
+    },
+    {
       "document": "docs/domains/governance/design/c14-mechanism-dossier-20260703.md",
       "line": 65,
       "resolution": {
@@ -3153,6 +3275,64 @@
       "target": "state/answer"
     },
     {
+      "document": "docs/domains/governance/design/inference-to-training-translation-v1.md",
+      "line": 14,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/design/inference-to-training-translation-v1.md",
+      "line": 15,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/design/scale-architecture-frontier-20260703.md",
+      "line": 18,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/design/scale-architecture-frontier-20260703.md",
+        "source_line": 18,
+        "source_target": "state/activity/interaction",
+        "visible_classification": "reference"
+      },
+      "target": "state/activity/interaction"
+    },
+    {
+      "document": "docs/domains/governance/design/sota-stack-floor.md",
+      "line": 14,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/design/sota-stack-floor.md",
+      "line": 16,
+      "resolution": {
+        "canonical_token": "domains/model/tokenizer/tokenizer.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "tokenizer/tokenizer.json"
+    },
+    {
+      "document": "docs/domains/governance/design/the-actual-stack.md",
+      "line": 9,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v1-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v1-pretrain-config.json"
+    },
+    {
       "document": "docs/domains/governance/design/the-actual-stack.md",
       "line": 141,
       "resolution": {
@@ -3164,6 +3344,24 @@
         "visible_classification": "reference"
       },
       "target": "receipts/.../fp33-e2-full-tune-ceiling-"
+    },
+    {
+      "document": "docs/domains/governance/design/the-actual-stack.md",
+      "line": 164,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v1-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v1-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/design/the-actual-stack.md",
+      "line": 217,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v1-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v1-pretrain-config.json"
     },
     {
       "document": "docs/domains/governance/ember-restart-3b-a1-dense-contract-v1.md",
@@ -3212,6 +3410,33 @@
         "visible_classification": "reference"
       },
       "target": "tokenizer/corpus/script/verifier"
+    },
+    {
+      "document": "docs/domains/governance/ember-restart/launch-target-multimodal-reconciliation.md",
+      "line": 72,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/ember-restart/mtp-parameter-accounting-and-mechanism-identity-v1.md",
+      "line": 4,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/ember-restart/mtp-parameter-accounting-and-mechanism-identity-v1.md",
+      "line": 22,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
     },
     {
       "document": "docs/domains/governance/hygiene/deletion-manifest-20260708.md",
@@ -3448,6 +3673,45 @@
       "target": "receipts/ledger/evaluation"
     },
     {
+      "document": "docs/domains/governance/research/drafts/world-choice-r2-draft.md",
+      "line": 58,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/drafts/world-choice-r2-draft.md",
+        "source_line": 58,
+        "source_target": "scripts/w2_humanevalplus.py",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/w2_humanevalplus.py"
+    },
+    {
+      "document": "docs/domains/governance/research/drafts/world-choice-r2-draft.md",
+      "line": 134,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/drafts/world-choice-r2-draft.md",
+        "source_line": 134,
+        "source_target": "scripts/t4_arcade.py",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/t4_arcade.py"
+    },
+    {
+      "document": "docs/domains/governance/research/drafts/world-choice-r2-draft.md",
+      "line": 172,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/drafts/world-choice-r2-draft.md",
+        "source_line": 172,
+        "source_target": "scripts/w3_ifc_roundtrip.py",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/w3_ifc_roundtrip.py"
+    },
+    {
       "document": "docs/domains/governance/research/ember-artificial-physiology-closed-boundary-addendum-20260801.md",
       "line": 437,
       "resolution": {
@@ -3578,6 +3842,41 @@
       "target": "src/services/search/"
     },
     {
+      "document": "docs/domains/governance/research/first-principles-audit-2026-06-10.md",
+      "line": 1294,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/first-principles-audit-2026-06-10.md",
+        "source_line": 1294,
+        "source_target": "tokenizer/corpus",
+        "visible_classification": "reference"
+      },
+      "target": "tokenizer/corpus"
+    },
+    {
+      "document": "docs/domains/governance/research/fp19-envelope.md",
+      "line": 82,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/research/fp32-e1b-prereg.md",
+      "line": 52,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/fp32-e1b-prereg.md",
+        "source_line": 52,
+        "source_target": "receipts/fp32-e1b-lossmatch-",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/fp32-e1b-lossmatch-"
+    },
+    {
       "document": "docs/domains/governance/research/fp32-gpu-bottleneck-ledger.md",
       "line": 11,
       "resolution": {
@@ -3602,6 +3901,318 @@
         "visible_classification": "reference"
       },
       "target": "receipts/fp32-step-econ-"
+    },
+    {
+      "document": "docs/domains/governance/research/fp33-surpass-verdict-gate.md",
+      "line": 17,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/fp33-surpass-verdict-gate.md",
+        "source_line": 17,
+        "source_target": "receipts/fp33-surpass-verdict-",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/fp33-surpass-verdict-"
+    },
+    {
+      "document": "docs/domains/governance/research/fp33-surpass-verdict-gate.md",
+      "line": 18,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/fp33-surpass-verdict-gate.md",
+        "source_line": 18,
+        "source_target": "scripts/fp33_",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/fp33_"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 11,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 11,
+        "source_target": "docs/core/model_card_4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/core/model_card_4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 13,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 11,
+        "source_target": "docs/core/model_card_4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/core/model_card_4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 13,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 19,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 21,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 22,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 24,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 11,
+        "source_target": "docs/core/model_card_4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/core/model_card_4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 24,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 25,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 26,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 30,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 11,
+        "source_target": "docs/core/model_card_4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/core/model_card_4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 30,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 37,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 11,
+        "source_target": "docs/core/model_card_4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/core/model_card_4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 38,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 40,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 44,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 11,
+        "source_target": "docs/core/model_card_4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/core/model_card_4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 44,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 44,
+        "source_target": "docs/mtp/overview",
+        "visible_classification": "reference"
+      },
+      "target": "docs/mtp/overview"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 61,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 61,
+        "source_target": "docs/models/gemma-4/qat",
+        "visible_classification": "reference"
+      },
+      "target": "docs/models/gemma-4/qat"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 73,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 73,
+        "source_target": "data/training",
+        "visible_classification": "reference"
+      },
+      "target": "data/training"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 95,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 97,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
+    },
+    {
+      "document": "docs/domains/governance/research/gemma4-unified-architecture.md",
+      "line": 98,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/gemma4-unified-architecture.md",
+        "source_line": 13,
+        "source_target": "docs/transformers/model_doc/gemma4",
+        "visible_classification": "reference"
+      },
+      "target": "docs/transformers/model_doc/gemma4"
     },
     {
       "document": "docs/domains/governance/research/nc2-technique-survey-2026-06.md",
@@ -3667,6 +4278,71 @@
         "visible_classification": "reference"
       },
       "target": "data/compute"
+    },
+    {
+      "document": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
+      "line": 78,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/p3-memory-wall-ledger-20260706.md",
+        "source_line": 78,
+        "source_target": "receipts/expB-bandwidth-soak-20260706T153452Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/expB-bandwidth-soak-20260706T153452Z.json"
+    },
+    {
+      "document": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
+      "line": 150,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/p3-memory-wall-ledger-20260706.md",
+        "source_line": 78,
+        "source_target": "receipts/expB-bandwidth-soak-20260706T153452Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/expB-bandwidth-soak-20260706T153452Z.json"
+    },
+    {
+      "document": "docs/domains/governance/research/persistence-gates-spec.md",
+      "line": 33,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/persistence-gates-spec.md",
+        "source_line": 33,
+        "source_target": "state/quarantine/",
+        "visible_classification": "reference"
+      },
+      "target": "state/quarantine/"
+    },
+    {
+      "document": "docs/domains/governance/research/persistence-gates-spec.md",
+      "line": 51,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/persistence-gates-spec.md",
+        "source_line": 51,
+        "source_target": "receipts/ledger/adapter",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ledger/adapter"
+    },
+    {
+      "document": "docs/domains/governance/research/r1w-g1-decision-tree.md",
+      "line": 37,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/r1w-g1-decision-tree.md",
+        "source_line": 37,
+        "source_target": "data/steps",
+        "visible_classification": "reference"
+      },
+      "target": "data/steps"
     },
     {
       "document": "docs/domains/governance/research/triton-windows-research-2026-06-10.md",
@@ -3760,6 +4436,19 @@
       "target": "scripts/functions"
     },
     {
+      "document": "docs/domains/governance/roadmap/issue-155-directed-research-queue-conservation.md",
+      "line": 26,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/roadmap/issue-155-directed-research-queue-conservation.md",
+        "source_line": 26,
+        "source_target": "state/stability",
+        "visible_classification": "reference"
+      },
+      "target": "state/stability"
+    },
+    {
       "document": "docs/domains/governance/roadmap/issue-214-flame-observability-conservation.md",
       "line": 70,
       "resolution": {
@@ -3810,6 +4499,19 @@
         "visible_classification": "reference"
       },
       "target": "docs/ai-lab-corpus-charter.md"
+    },
+    {
+      "document": "docs/domains/governance/roadmap/issue-674-bitnet-pilot-conservation.md",
+      "line": 31,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/roadmap/issue-674-bitnet-pilot-conservation.md",
+        "source_line": 31,
+        "source_target": "tokenizer/corpus/checkpoint/evaluator",
+        "visible_classification": "reference"
+      },
+      "target": "tokenizer/corpus/checkpoint/evaluator"
     },
     {
       "document": "docs/domains/governance/roadmap/issue-696-ember-lab-supersession.md",
@@ -3877,6 +4579,58 @@
       "target": "data/order"
     },
     {
+      "document": "docs/domains/governance/roadmap/milestones/EMBER-01.md",
+      "line": 96,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/roadmap/milestones/EMBER-01.md",
+        "source_line": 96,
+        "source_target": "data/checkpoint",
+        "visible_classification": "reference"
+      },
+      "target": "data/checkpoint"
+    },
+    {
+      "document": "docs/domains/governance/roadmap/milestones/EMBER-01.md",
+      "line": 142,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/research/first-principles-audit-2026-06-10.md",
+        "source_line": 1294,
+        "source_target": "tokenizer/corpus",
+        "visible_classification": "reference"
+      },
+      "target": "tokenizer/corpus"
+    },
+    {
+      "document": "docs/domains/governance/roadmap/milestones/EMBER-02.md",
+      "line": 131,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/roadmap/milestones/EMBER-02.md",
+        "source_line": 131,
+        "source_target": "data/mechanism",
+        "visible_classification": "reference"
+      },
+      "target": "data/mechanism"
+    },
+    {
+      "document": "docs/domains/governance/roadmap/milestones/EMBER-05.md",
+      "line": 154,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/roadmap/milestones/EMBER-05.md",
+        "source_line": 154,
+        "source_target": "data/stopping",
+        "visible_classification": "reference"
+      },
+      "target": "data/stopping"
+    },
+    {
       "document": "docs/domains/governance/roadmap/milestones/EMBER-11-issue-99-transfer.md",
       "line": 9,
       "resolution": {
@@ -3888,6 +4642,45 @@
         "visible_classification": "reference"
       },
       "target": "tokenizer/source-lineage"
+    },
+    {
+      "document": "docs/domains/governance/spec/a1-postfreeze-heldout-selection-v1.md",
+      "line": 38,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/a1-postfreeze-heldout-selection-v1.md",
+        "source_line": 38,
+        "source_target": "receipts/eval-suite-freeze/a1-prefreeze-quarantine-",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/eval-suite-freeze/a1-prefreeze-quarantine-"
+    },
+    {
+      "document": "docs/domains/governance/spec/a1-postfreeze-heldout-selection-v2.md",
+      "line": 8,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/a1-postfreeze-heldout-selection-v2.md",
+        "source_line": 8,
+        "source_target": "receipts/eval-suite-freeze/a1-beacon-grindability-repro-",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/eval-suite-freeze/a1-beacon-grindability-repro-"
+    },
+    {
+      "document": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
+      "line": 55,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/domains/governance/spec/conditions-v1.md",
+        "source_line": 432,
+        "source_target": "receipts/autonomy-ladder/",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/autonomy-ladder/"
     },
     {
       "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
@@ -3930,6 +4723,15 @@
     },
     {
       "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "line": 108,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 115,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
@@ -3966,6 +4768,15 @@
         "visible_classification": "reference"
       },
       "target": "docs/spec/growth-v1.md"
+    },
+    {
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "line": 188,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
     },
     {
       "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
@@ -4164,6 +4975,15 @@
     },
     {
       "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
+      "line": 496,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/spec/c-scale-s1-growth-chain-DRAFT.md",
       "line": 500,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
@@ -4265,6 +5085,54 @@
         "visible_classification": "reference"
       },
       "target": "scratch/c-scale-s3/"
+    },
+    {
+      "document": "docs/domains/governance/spec/c8-f3-instrument-list-v1.md",
+      "line": 85,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v1-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v1-pretrain-config.json"
+    },
+    {
+      "document": "docs/domains/governance/spec/c8-f3-instrument-list-v1.md",
+      "line": 240,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/domains/governance/ledgers/deviations.md",
+        "source_line": 41,
+        "source_target": "data/validation-00000-of-00001.parquet",
+        "visible_classification": "reference"
+      },
+      "target": "data/validation-00000-of-00001.parquet"
+    },
+    {
+      "document": "docs/domains/governance/spec/c8-f3-instrument-list-v1.md",
+      "line": 301,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/c8-f3-instrument-list-v1.md",
+        "source_line": 301,
+        "source_target": "receipts/c8-prelaunch/f3-instrument-sensitivity-",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/c8-prelaunch/f3-instrument-sensitivity-"
+    },
+    {
+      "document": "docs/domains/governance/spec/c8-preregistration-v1.md",
+      "line": 104,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/c8-preregistration-v1.md",
+        "source_line": 104,
+        "source_target": "receipts/cgrow-v3-real/",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/cgrow-v3-real/"
     },
     {
       "document": "docs/domains/governance/spec/conditions-v1.md",
@@ -4488,6 +5356,58 @@
       "target": "data/seeds"
     },
     {
+      "document": "docs/domains/governance/spec/credibility-battery-v1.md",
+      "line": 266,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/credibility-battery-v1.md",
+        "source_line": 266,
+        "source_target": "receipts/ceff-RESOLVED-",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/ceff-RESOLVED-"
+    },
+    {
+      "document": "docs/domains/governance/spec/e2b-paired-protocol-v1.md",
+      "line": 103,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/e2b-paired-protocol-v1.md",
+        "source_line": 103,
+        "source_target": "scratch/c-e2b-merge/fire4-merge-wall-report.json",
+        "visible_classification": "reference"
+      },
+      "target": "scratch/c-e2b-merge/fire4-merge-wall-report.json"
+    },
+    {
+      "document": "docs/domains/governance/spec/e2b-paired-protocol-v1.md",
+      "line": 135,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/e2b-paired-protocol-v1.md",
+        "source_line": 135,
+        "source_target": "scratch/c-e2b-merge/probe-e-base-identity-and-real-callback-20260704T002000Z.json",
+        "visible_classification": "reference"
+      },
+      "target": "scratch/c-e2b-merge/probe-e-base-identity-and-real-callback-20260704T002000Z.json"
+    },
+    {
+      "document": "docs/domains/governance/spec/ember-run-root-layout-v1.md",
+      "line": 22,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/spec/ember-run-root-layout-v1.md",
+        "source_line": 22,
+        "source_target": "receipts/logs",
+        "visible_classification": "reference"
+      },
+      "target": "receipts/logs"
+    },
+    {
       "document": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
       "line": 37,
       "resolution": {
@@ -4664,6 +5584,15 @@
         "visible_classification": "reference"
       },
       "target": "docs/dossier/rung2-growth-ladder-dossier-v1.md"
+    },
+    {
+      "document": "docs/domains/governance/spec/rung2-stabilize-config-respec-v1.md",
+      "line": 55,
+      "resolution": {
+        "canonical_token": "domains/model/configs/v0-pretrain-config.json",
+        "kind": "CONTAINED_RESOLVED_CANONICAL_TOKEN"
+      },
+      "target": "configs/v0-pretrain-config.json"
     },
     {
       "document": "docs/domains/governance/spec/update-survival-preflight-v1.md",
@@ -4924,6 +5853,19 @@
         "visible_classification": "reference"
       },
       "target": "scratch/issue1251"
+    },
+    {
+      "document": "docs/domains/governance/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md",
+      "line": 72,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md",
+        "source_line": 72,
+        "source_target": "state/reports/issue1116-a1-lower-bound-pr-body.md",
+        "visible_classification": "reference"
+      },
+      "target": "state/reports/issue1116-a1-lower-bound-pr-body.md"
     },
     {
       "document": "docs/domains/governance/superpowers/plans/2026-08-22-issue1413-stage2-carriers.md",
@@ -5191,670 +6133,7 @@
       "target": "tools/ember-cli/src/scratchpad/rung1-reverify-20260710.ts"
     },
     {
-      "document": "docs/research/drafts/world-choice-r2-draft.md",
-      "line": 58,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/drafts/world-choice-r2-draft.md",
-        "source_line": 58,
-        "source_target": "scripts/w2_humanevalplus.py",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/w2_humanevalplus.py"
-    },
-    {
-      "document": "docs/research/drafts/world-choice-r2-draft.md",
-      "line": 134,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/drafts/world-choice-r2-draft.md",
-        "source_line": 134,
-        "source_target": "scripts/t4_arcade.py",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/t4_arcade.py"
-    },
-    {
-      "document": "docs/research/drafts/world-choice-r2-draft.md",
-      "line": 172,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/drafts/world-choice-r2-draft.md",
-        "source_line": 172,
-        "source_target": "scripts/w3_ifc_roundtrip.py",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/w3_ifc_roundtrip.py"
-    },
-    {
-      "document": "docs/research/first-principles-audit-2026-06-10.md",
-      "line": 1294,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/first-principles-audit-2026-06-10.md",
-        "source_line": 1294,
-        "source_target": "tokenizer/corpus",
-        "visible_classification": "reference"
-      },
-      "target": "tokenizer/corpus"
-    },
-    {
-      "document": "docs/research/fp32-e1b-prereg.md",
-      "line": 52,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/fp32-e1b-prereg.md",
-        "source_line": 52,
-        "source_target": "receipts/fp32-e1b-lossmatch-",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/fp32-e1b-lossmatch-"
-    },
-    {
-      "document": "docs/research/fp33-surpass-verdict-gate.md",
-      "line": 17,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/fp33-surpass-verdict-gate.md",
-        "source_line": 17,
-        "source_target": "receipts/fp33-surpass-verdict-",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/fp33-surpass-verdict-"
-    },
-    {
-      "document": "docs/research/fp33-surpass-verdict-gate.md",
-      "line": 18,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/fp33-surpass-verdict-gate.md",
-        "source_line": 18,
-        "source_target": "scripts/fp33_",
-        "visible_classification": "reference"
-      },
-      "target": "scripts/fp33_"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 11,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 11,
-        "source_target": "docs/core/model_card_4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/core/model_card_4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 13,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 13,
-        "source_target": "docs/core/model_card_4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/core/model_card_4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 13,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 13,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 19,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 19,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 21,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 21,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 22,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 22,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 24,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 24,
-        "source_target": "docs/core/model_card_4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/core/model_card_4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 24,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 24,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 25,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 25,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 26,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 26,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 30,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 30,
-        "source_target": "docs/core/model_card_4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/core/model_card_4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 30,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 30,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 37,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 37,
-        "source_target": "docs/core/model_card_4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/core/model_card_4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 38,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 38,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 40,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 40,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 44,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 44,
-        "source_target": "docs/core/model_card_4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/core/model_card_4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 44,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 44,
-        "source_target": "docs/mtp/overview",
-        "visible_classification": "reference"
-      },
-      "target": "docs/mtp/overview"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 61,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 61,
-        "source_target": "docs/models/gemma-4/qat",
-        "visible_classification": "reference"
-      },
-      "target": "docs/models/gemma-4/qat"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 73,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 73,
-        "source_target": "data/training",
-        "visible_classification": "reference"
-      },
-      "target": "data/training"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 95,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 95,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 97,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 97,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/gemma4-unified-architecture.md",
-      "line": 98,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/gemma4-unified-architecture.md",
-        "source_line": 98,
-        "source_target": "docs/transformers/model_doc/gemma4",
-        "visible_classification": "reference"
-      },
-      "target": "docs/transformers/model_doc/gemma4"
-    },
-    {
-      "document": "docs/research/p3-memory-wall-ledger-20260706.md",
-      "line": 78,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/p3-memory-wall-ledger-20260706.md",
-        "source_line": 78,
-        "source_target": "receipts/expB-bandwidth-soak-20260706T153452Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/expB-bandwidth-soak-20260706T153452Z.json"
-    },
-    {
-      "document": "docs/research/p3-memory-wall-ledger-20260706.md",
-      "line": 150,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/p3-memory-wall-ledger-20260706.md",
-        "source_line": 150,
-        "source_target": "receipts/expB-bandwidth-soak-20260706T153452Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/expB-bandwidth-soak-20260706T153452Z.json"
-    },
-    {
-      "document": "docs/research/persistence-gates-spec.md",
-      "line": 33,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/persistence-gates-spec.md",
-        "source_line": 33,
-        "source_target": "state/quarantine/",
-        "visible_classification": "reference"
-      },
-      "target": "state/quarantine/"
-    },
-    {
-      "document": "docs/research/persistence-gates-spec.md",
-      "line": 51,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/persistence-gates-spec.md",
-        "source_line": 51,
-        "source_target": "receipts/ledger/adapter",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ledger/adapter"
-    },
-    {
-      "document": "docs/research/r1w-g1-decision-tree.md",
-      "line": 37,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/research/r1w-g1-decision-tree.md",
-        "source_line": 37,
-        "source_target": "data/steps",
-        "visible_classification": "reference"
-      },
-      "target": "data/steps"
-    },
-    {
-      "document": "docs/roadmap/issue-155-directed-research-queue-conservation.md",
-      "line": 26,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/roadmap/issue-155-directed-research-queue-conservation.md",
-        "source_line": 26,
-        "source_target": "state/stability",
-        "visible_classification": "reference"
-      },
-      "target": "state/stability"
-    },
-    {
-      "document": "docs/roadmap/issue-674-bitnet-pilot-conservation.md",
-      "line": 31,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/roadmap/issue-674-bitnet-pilot-conservation.md",
-        "source_line": 31,
-        "source_target": "tokenizer/corpus/checkpoint/evaluator",
-        "visible_classification": "reference"
-      },
-      "target": "tokenizer/corpus/checkpoint/evaluator"
-    },
-    {
-      "document": "docs/roadmap/milestones/EMBER-01.md",
-      "line": 96,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/roadmap/milestones/EMBER-01.md",
-        "source_line": 96,
-        "source_target": "data/checkpoint",
-        "visible_classification": "reference"
-      },
-      "target": "data/checkpoint"
-    },
-    {
-      "document": "docs/roadmap/milestones/EMBER-01.md",
-      "line": 142,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/roadmap/milestones/EMBER-01.md",
-        "source_line": 142,
-        "source_target": "tokenizer/corpus",
-        "visible_classification": "reference"
-      },
-      "target": "tokenizer/corpus"
-    },
-    {
-      "document": "docs/roadmap/milestones/EMBER-02.md",
-      "line": 131,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/roadmap/milestones/EMBER-02.md",
-        "source_line": 131,
-        "source_target": "data/mechanism",
-        "visible_classification": "reference"
-      },
-      "target": "data/mechanism"
-    },
-    {
-      "document": "docs/roadmap/milestones/EMBER-05.md",
-      "line": 154,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/roadmap/milestones/EMBER-05.md",
-        "source_line": 154,
-        "source_target": "data/stopping",
-        "visible_classification": "reference"
-      },
-      "target": "data/stopping"
-    },
-    {
-      "document": "docs/spec/a1-postfreeze-heldout-selection-v1.md",
-      "line": 38,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/a1-postfreeze-heldout-selection-v1.md",
-        "source_line": 38,
-        "source_target": "receipts/eval-suite-freeze/a1-prefreeze-quarantine-",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/eval-suite-freeze/a1-prefreeze-quarantine-"
-    },
-    {
-      "document": "docs/spec/a1-postfreeze-heldout-selection-v2.md",
-      "line": 8,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/a1-postfreeze-heldout-selection-v2.md",
-        "source_line": 8,
-        "source_target": "receipts/eval-suite-freeze/a1-beacon-grindability-repro-",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/eval-suite-freeze/a1-beacon-grindability-repro-"
-    },
-    {
-      "document": "docs/spec/autonomy-relinquishment-ladder-v1.md",
-      "line": 55,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/autonomy-relinquishment-ladder-v1.md",
-        "source_line": 55,
-        "source_target": "receipts/autonomy-ladder/",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/autonomy-ladder/"
-    },
-    {
-      "document": "docs/spec/c8-f3-instrument-list-v1.md",
-      "line": 240,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/c8-f3-instrument-list-v1.md",
-        "source_line": 240,
-        "source_target": "data/validation-00000-of-00001.parquet",
-        "visible_classification": "reference"
-      },
-      "target": "data/validation-00000-of-00001.parquet"
-    },
-    {
-      "document": "docs/spec/c8-f3-instrument-list-v1.md",
-      "line": 301,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/c8-f3-instrument-list-v1.md",
-        "source_line": 301,
-        "source_target": "receipts/c8-prelaunch/f3-instrument-sensitivity-",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/c8-prelaunch/f3-instrument-sensitivity-"
-    },
-    {
-      "document": "docs/spec/c8-preregistration-v1.md",
-      "line": 104,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/c8-preregistration-v1.md",
-        "source_line": 104,
-        "source_target": "receipts/cgrow-v3-real/",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/cgrow-v3-real/"
-    },
-    {
-      "document": "docs/spec/credibility-battery-v1.md",
-      "line": 266,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/credibility-battery-v1.md",
-        "source_line": 266,
-        "source_target": "receipts/ceff-RESOLVED-",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/ceff-RESOLVED-"
-    },
-    {
-      "document": "docs/spec/e2b-paired-protocol-v1.md",
-      "line": 103,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/e2b-paired-protocol-v1.md",
-        "source_line": 103,
-        "source_target": "scratch/c-e2b-merge/fire4-merge-wall-report.json",
-        "visible_classification": "reference"
-      },
-      "target": "scratch/c-e2b-merge/fire4-merge-wall-report.json"
-    },
-    {
-      "document": "docs/spec/e2b-paired-protocol-v1.md",
-      "line": 135,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/e2b-paired-protocol-v1.md",
-        "source_line": 135,
-        "source_target": "scratch/c-e2b-merge/probe-e-base-identity-and-real-callback-20260704T002000Z.json",
-        "visible_classification": "reference"
-      },
-      "target": "scratch/c-e2b-merge/probe-e-base-identity-and-real-callback-20260704T002000Z.json"
-    },
-    {
-      "document": "docs/spec/ember-run-root-layout-v1.md",
-      "line": 22,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/spec/ember-run-root-layout-v1.md",
-        "source_line": 22,
-        "source_target": "receipts/logs",
-        "visible_classification": "reference"
-      },
-      "target": "receipts/logs"
-    },
-    {
-      "document": "docs/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md",
-      "line": 72,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md",
-        "source_line": 72,
-        "source_target": "state/reports/issue1116-a1-lower-bound-pr-body.md",
-        "visible_classification": "reference"
-      },
-      "target": "state/reports/issue1116-a1-lower-bound-pr-body.md"
-    },
-    {
-      "document": "docs/verification/ember-cli-live-board-20260706.md",
+      "document": "docs/domains/governance/verification/ember-cli-live-board-20260706.md",
       "line": 130,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
@@ -5867,7 +6146,7 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "9bdead8a91472b7bd9e5c54c06b25dab802c2f327dcb0f2e45ff3890ee692ab5",
+  "rows_sha256": "d5d38290f0bfefa9e6ceeae0fa5a7363c5598d255998421629397408007853e1",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",

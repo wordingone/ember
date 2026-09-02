@@ -10,7 +10,7 @@ import types
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).resolve().parents[2] / "src" / "ember" / "governance" / "scripts" / "check_milestone_reconciliation.py"
+MODULE_PATH = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()) / "src" / "ember" / "governance" / "scripts" / "check_milestone_reconciliation.py"
 SPEC = importlib.util.spec_from_file_location("check_milestone_reconciliation", MODULE_PATH)
 assert SPEC and SPEC.loader
 milestone = importlib.util.module_from_spec(SPEC)

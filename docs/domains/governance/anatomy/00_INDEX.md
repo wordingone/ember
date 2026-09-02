@@ -1,6 +1,6 @@
 # 00 — Anatomy Index
 
-This directory (`docs/anatomy/`) is the canonical 16-doc architecture set for
+This directory (`docs/domains/governance/anatomy/`) is the canonical 16-doc architecture set for
 Ember (condition C-ANAT, `docs/domains/governance/spec/conditions-v1.md` §4.2, invalid-token
 `invalid_anatomy_incomplete`). Each doc describes one real subsystem as it
 exists in this repository **today**, cites real file paths for every claim,
@@ -12,7 +12,7 @@ than describing aspirational behavior as fact.
 Start here, then read the doc for the subsystem you're touching. Each doc
 ends with a short "current gaps" note pointing at the totality-board
 condition(s) that track that subsystem's remaining work, so this set stays
-anchored to `scripts/ember_totality/receipts-totality/` rather than drifting
+anchored to `src/ember/governance/scripts/ember_totality/receipts-totality/` rather than drifting
 into prose that outruns the receipts.
 
 ## The 16 docs

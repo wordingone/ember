@@ -26,7 +26,7 @@ really inspecting state under its resolved root — never hardcoded.
 
 Executes every `test_*.py` probe in its own directory as a subprocess,
 parses each probe's status line, aggregates all rows into one board, prints
-it, and writes a receipt under `scripts/ember_totality/receipts-totality/
+it, and writes a receipt under `src/ember/governance/scripts/ember_totality/receipts-totality/
 ember-totality-<UTC-ts>.json`. Registry sync is self-enforcing: the runner's
 own condition-id set must byte-compare equal to `conditions-v1.md`'s
 registry, or the WHOLE RUN aborts with `REGISTRY_DRIFT` before any probe

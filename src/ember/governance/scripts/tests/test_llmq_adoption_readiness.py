@@ -14,7 +14,7 @@ from pathlib import Path
 import importlib.util as _ember_4ae2cd0e8ca5415d_importlib
 import sys as _ember_4ae2cd0e8ca5415d_sys
 from pathlib import Path as _ember_4ae2cd0e8ca5415d_Path
-_ember_4ae2cd0e8ca5415d_path = _ember_4ae2cd0e8ca5415d_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'llmq_adoption_readiness.py')
+_ember_4ae2cd0e8ca5415d_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'llmq_adoption_readiness.py')
 if not _ember_4ae2cd0e8ca5415d_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/llmq_adoption_readiness.py')
 _ember_4ae2cd0e8ca5415d_aliases = ('_ember_issue2015_4ae2cd0e8ca5415d', 'llmq_adoption_readiness', 'scripts.llmq_adoption_readiness')

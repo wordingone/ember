@@ -25,6 +25,13 @@ BASELINE_EXPIRY_AUTHORITY = "OPERATOR_ONLY"
 BASELINE_EXPIRY_CONSEQUENCE = (
     "after this date the gate fails on every baselined row, blocking all pull requests"
 )
+BASELINE_GOAL_BINDING = {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": (
+        "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    ),
+}
 
 
 class Unsupported(ValueError):
@@ -215,6 +222,7 @@ def enforce_baseline(rows: list[dict[str, object]], baseline: dict[str, object],
     baseline_rows = baseline["rows"]
     if (
         minted > expires
+        or any(baseline.get(key) != value for key, value in BASELINE_GOAL_BINDING.items())
         or baseline.get("expiry_change_authority") != BASELINE_EXPIRY_AUTHORITY
         or baseline.get("expiry_consequence") != BASELINE_EXPIRY_CONSEQUENCE
         or baseline.get("baselined_row_count") != len(baseline_rows)
@@ -259,6 +267,7 @@ def mint_baseline(
     failures = [row for row in rows if row["status"] != "MATCH"]
     baseline: dict[str, object] = {
         "schema_version": BASELINE_SCHEMA,
+        **BASELINE_GOAL_BINDING,
         "minted_on": minted_on.isoformat(),
         "expires_on": expires_on.isoformat(),
         "expiry_change_authority": BASELINE_EXPIRY_AUTHORITY,
@@ -288,7 +297,11 @@ def main() -> int:
         payload = mint_baseline(
             scan_files(root, paths), minted_on=args.today, expires_on=args.mint_baseline_expiry,
         )
-        args.baseline.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.baseline.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="",
+        )
         print(json.dumps({"result": "BASELINE_MINTED", "rows": payload["maximum_rows"], "self_sha256": payload["self_sha256"]}, sort_keys=True))
         return 0
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))

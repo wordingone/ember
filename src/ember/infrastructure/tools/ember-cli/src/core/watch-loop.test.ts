@@ -26,7 +26,7 @@ import {
 } from "./watch-loop.ts";
 import { renderMonitorPanel } from "./monitor-render.ts";
 import { renderReceiptsTail } from "./watch-render.ts";
-import type { EmberWorldState, Claim } from "./ember-world-state.ts";
+import type { EmberWorldState, Claim } from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
 import type { ReceiptStat } from "./watch-render.ts";
 
 // ---------------------------------------------------------------------------

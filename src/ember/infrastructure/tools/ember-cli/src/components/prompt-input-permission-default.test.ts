@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import React, { useState } from "react";
 import { Text } from "../ink/components.ts";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import {
   DEFAULT_PROMPT_PERMISSION_MODE,
   PERMISSION_MODES,

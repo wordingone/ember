@@ -7,10 +7,10 @@ import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
+import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
 import { IDENTITY_TAGLINE } from "../components/logo-homescreen.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
-import { ReplScreen } from "./repl.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 const COLS = 100;
 const ROWS = 40;

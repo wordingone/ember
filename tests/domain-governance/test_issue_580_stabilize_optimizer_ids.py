@@ -20,10 +20,13 @@ from types import SimpleNamespace
 import torch
 
 
-ROOT = next(parent for parent in next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())s if (parent / 'pyproject.toml').is_file())
-if not (ROOT / "scripts" / "timeshare_pretrain.py").is_file():
-    ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-sys.path.insert(0, str(ROOT / "scripts"))
+ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "pyproject.toml").is_file()
+)
+GOVERNANCE_SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
+sys.path.insert(0, str(GOVERNANCE_SCRIPTS))
 
 
 def _load_functions(path: Path, names: set[str], namespace: dict) -> SimpleNamespace:
@@ -43,7 +46,7 @@ def _load_functions(path: Path, names: set[str], namespace: dict) -> SimpleNames
 
 
 timeshare = _load_functions(
-    ROOT / "scripts" / "timeshare_pretrain.py",
+    GOVERNANCE_SCRIPTS / "timeshare_pretrain.py",
     {"split_param_groups_from_state_dict", "build_optimizer_id_maps"},
     {},
 )
@@ -280,7 +283,7 @@ class TestStabilizeOptimizerIdConvention(unittest.TestCase):
 
     def test_real_checkpoint_absence_is_reported_as_skip_not_pass(self) -> None:
         helper = _load_functions(
-            ROOT / "scripts" / "test_580_optimizer_id_helper.py",
+            GOVERNANCE_SCRIPTS / "test_580_optimizer_id_helper.py",
             {"test_ac2_zero_missing_against_real_seed_checkpoint"},
             {
                 "_get_seed_opt_state": lambda: None,
@@ -292,7 +295,7 @@ class TestStabilizeOptimizerIdConvention(unittest.TestCase):
             helper.test_ac2_zero_missing_against_real_seed_checkpoint()
 
     def test_forensic_emitter_describes_muon_local_resolution(self) -> None:
-        source = (ROOT / "scripts" / "p513_p3_forensic.py").read_text(
+        source = (GOVERNANCE_SCRIPTS / "p513_p3_forensic.py").read_text(
             encoding="utf-8"
         )
         self.assertNotIn(

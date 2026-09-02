@@ -18,7 +18,7 @@ import {
   diffBoardConditions,
   requireBoardReceiptCommit,
   type BoardRow,
-} from "./ember-world-state.ts";
+} from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
 
 const FIXTURE_GOAL = "# Fixture Goal\n\n## Topology Heading One\n\nbody text\n";
 const FIXTURE_LEDGER = [

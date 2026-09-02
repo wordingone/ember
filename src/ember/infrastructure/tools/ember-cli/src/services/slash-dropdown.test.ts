@@ -27,7 +27,7 @@ import {
   slashDropdownCanRender,
   DROPDOWN_COMPACT_CHROME_ROWS,
   DROPDOWN_BORDER_ROWS,
-} from "./slash-dropdown.ts";
+} from "../../../../../../../tools/ember-cli/src/services/slash-dropdown.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
 function cmd(over: Partial<RegistryCommand> & { name: string }): RegistryCommand {

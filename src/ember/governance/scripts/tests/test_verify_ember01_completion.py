@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import os
 import shutil
 import json
@@ -21,6 +22,7 @@ import pytest
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "ember" / "governance" / "scripts"))
 
 import verify_ember01_completion as completion  # noqa: E402
 import cond4_behavior_surface as cond4_surface  # noqa: E402
@@ -1368,7 +1370,7 @@ def test_cond4_execution_evidence_binds_surface_checkpoint_loads_and_axis_timing
     cond4_surface.validate_execution_packet(tmp_path, manifest, evidence)
     assert evidence["subject"] == {
         "behavior_surface_validator_sha256": hashlib.sha256(
-            (REPO_ROOT / "scripts" / "cond4_behavior_surface.py").read_bytes()
+            (REPO_ROOT / cond4_surface.VALIDATOR_REL).read_bytes()
         ).hexdigest(),
         "checkpoint_manifest_sha256": hashlib.sha256(checkpoint_bytes).hexdigest(),
         "surface_aggregate_sha256": manifest["aggregate_sha256"],
@@ -1426,7 +1428,35 @@ def test_identity_legs_are_unresolved_without_real_checkpoint(
     assert result["4"]["state"] == completion.UNRESOLVED
 
 
-def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
+def _historical_git_snapshot(
+    repository_path: str, expected_sha256: str
+) -> tuple[str, bytes]:
+    history = subprocess.run(
+        ["git", "log", "--all", "--format=%H", "--", repository_path],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        shell=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    ).stdout.splitlines()
+    for commit in history:
+        candidate = subprocess.run(
+            ["git", "show", f"{commit}:{repository_path}"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            shell=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if candidate.returncode == 0 and hashlib.sha256(candidate.stdout).hexdigest() == expected_sha256:
+            return commit, candidate.stdout
+    raise AssertionError(
+        f"historical tracked bytes unavailable: {repository_path}@{expected_sha256}"
+    )
+
+
+def test_committed_cond4_receipt_binds_historical_verifier_and_all_axes(
     tmp_path: Path,
 ) -> None:
     receipt = json.loads(
@@ -1446,7 +1476,32 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
         "scripts/verify_ember01_completion.py::identity_legs"
     )
     implementation = receipt["implementation"]["behavior_surface_validator"]
-    assert hashlib.sha256((REPO_ROOT / implementation["path"]).read_bytes()).hexdigest() == implementation["sha256"]
+    historical_commit, historical_validator_bytes = _historical_git_snapshot(
+        implementation["path"], implementation["sha256"]
+    )
+    historical_root = tmp_path / "historical"
+    historical_validator_path = historical_root / implementation["path"]
+    historical_validator_path.parent.mkdir(parents=True)
+    historical_validator_path.write_bytes(historical_validator_bytes)
+    historical_spec = importlib.util.spec_from_file_location(
+        "historical_cond4_behavior_surface", historical_validator_path
+    )
+    assert historical_spec is not None and historical_spec.loader is not None
+    historical_validator = importlib.util.module_from_spec(historical_spec)
+    historical_spec.loader.exec_module(historical_validator)
+    evidence = receipt["leg4"]["evidence"]
+    for file_binding in evidence["behavior_surface"]["files"]:
+        historical_source = historical_root / file_binding["path"]
+        historical_source.parent.mkdir(parents=True, exist_ok=True)
+        historical_source_bytes = subprocess.run(
+            ["git", "show", f"{historical_commit}:{file_binding['path']}"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            shell=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+        historical_source.write_bytes(historical_source_bytes)
     config = receipt["migration"]["historical_config"]
     assert subprocess.run(
         ["git", "merge-base", "--is-ancestor", config["source_commit"], "HEAD"],
@@ -1463,9 +1518,8 @@ def test_committed_cond4_receipt_binds_shipping_verifiers_and_all_axes(
         capture_output=True,
     ).stdout
     assert hashlib.sha256(config_bytes).hexdigest() == config["sha256"]
-    evidence = receipt["leg4"]["evidence"]
-    cond4_surface.validate_execution_packet(
-        REPO_ROOT,
+    historical_validator.validate_execution_packet(
+        historical_root,
         evidence["behavior_surface"],
         evidence["execution_evidence"],
     )

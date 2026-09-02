@@ -458,7 +458,7 @@ wall-clock target) per rung — this dossier deliberately does not choose.
 ## 8. Citation-checker verification
 
 `python src/ember/governance/scripts/check_goal_citations.py` was run against the repo (this document included, under
-`docs/spec/`) — three times: the first pass caught a real gap (a citation of `src/ember/governance/scripts/cbase_grow_live.py`
+`docs/domains/governance/spec/`) — three times: the first pass caught a real gap (a citation of `src/ember/governance/scripts/cbase_grow_live.py`
 in §3.1 with no adjacent absent-marker, plus a typo that mis-prefixed the same filename under the
 wrong top-level directory in §5.1), both fixed; a second pass then caught the same filename appearing
 a third time, unprefixed, inside this very verification paragraph's own description of the first fix

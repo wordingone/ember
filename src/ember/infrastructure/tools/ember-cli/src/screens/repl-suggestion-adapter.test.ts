@@ -17,7 +17,7 @@ import { describe, it, expect } from "bun:test";
 import {
   adaptSessionMessagesForSuggestion,
   applyResultEvent,
-} from "./repl.ts";
+} from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
 import { tryGenerateSuggestion } from "../services/prompt-suggestion.ts";
 import type { ForkedAgentExecutor } from "../services/prompt-suggestion.ts";

@@ -17,7 +17,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.ember.governance.scripts.github.labels import GhClient, capture_label_snapshot  # noqa: E402
-from src.ember.governance.src.ember.governance.scripts.github.labels_engine import (  # noqa: E402
+from src.ember.governance.scripts.github.labels_engine import (  # noqa: E402
     authority_binding,
     load_data,
     receipt_metadata,

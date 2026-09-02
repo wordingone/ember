@@ -231,7 +231,7 @@ pre-epoch history.
 - **C-ORGANISM — three adaptation machineries present BEFORE pretraining.** R: ingestion (C7 devour
   loop), growth (C-GROW grow-operator interface), and portability (C-PORT device-adaptive governor)
   wired into the seed graph at step 0 — provably present before any pretraining run, deletion-sensitive.
-  Does NOT count: a machinery retrofitted after pretraining; a machinery present as docs/spec but not
+  Does NOT count: a machinery retrofitted after pretraining; a machinery present as docs/domains/governance/spec but not
   wired into the runnable seed. ✗ `invalid_machinery_retrofitted`. CHK: a seed-graph inspection
   receipt shows all three interfaces callable on the pre-pretrain seed; deleting each degrades its
   adaptation selftest.

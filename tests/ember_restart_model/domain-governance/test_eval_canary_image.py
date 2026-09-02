@@ -17,8 +17,8 @@ import torch
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-CANARY = ROOT / "tools" / "ember-restart-3b" / "eval_canary_image.py"
-FIXTURE = ROOT / "tests" / "ember_restart_model" / "fixtures" / "eval-canary-image-v1"
+CANARY = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "eval_canary_image.py"
+FIXTURE = ROOT / "tests" / "ember_restart_model" / "domain-governance" / "fixtures" / "eval-canary-image-v1"
 DISPOSITIONS = FIXTURE / "mechanics-only-dispositions.json"
 
 

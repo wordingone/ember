@@ -115,7 +115,7 @@ they cannot reduce, defer, replace, or reinterpret it.
   "conservation_hashes": {
     "authority_matrix_sha256": "4032A7C488B1AC495FDDDFB3AA439C9B94EE62D1A7F429D1EB684FEDF6080B25",
     "governing_surfaces_sha256": {
-      "docs/domains/governance/authority/CONTINUITY.md": "E035EC445170374446530037BA9115B72B0464DE15A9262B4F7BD1D9CD2D6507",
+      "docs/domains/governance/authority/CONTINUITY.md": "2B639671AADDA5166434958D3F460D2002F4AC654F190002102993C9261C2BF9",
       "docs/domains/governance/authority/GOVERNANCE.md": "E46CA8F60BA2686D509A13BF42B0A51B4FB339B2D9627F98786F953EAD1E53EA",
       "README.md": "828B316BA1E88F722E81AA7CF7DEF92B7CB037F2A69E8C16C4F3E7EDBC68399A",
       "docs/domains/governance/authority/ember-authority-matrix.md": "4032A7C488B1AC495FDDDFB3AA439C9B94EE62D1A7F429D1EB684FEDF6080B25",
@@ -125,7 +125,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/domains/governance/spec/conditions-v1.md": "FC0397870DC78CDEA995B9F31D5F209BFC91799769D8EABCDA67689BE6AB7187"
+      "docs/domains/governance/spec/conditions-v1.md": "132813AA959D4E03E3C4A4C8AAE7470FC8F12ACF4375ECC427B6209FEC11FC18"
     }
   },
   "authority_only_goal": false,
@@ -485,7 +485,7 @@ machinery are not progress without that link.
 ## 12. Completion and precedence
 
 docs/domains/governance/contracts/goal-clear-protocol.md defines the executable completion audit without
-changing this goal. docs/authority/ember-authority-matrix.md maps D-001 through D-062 to
+changing this goal. docs/domains/governance/authority/ember-authority-matrix.md maps D-001 through D-062 to
 enforcement, historical evidence, and explicit open research. docs/domains/governance/authority/STATE.md resolves
 every current model, checkpoint, backend, and benchmark class.
 

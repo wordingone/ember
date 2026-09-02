@@ -56,7 +56,7 @@ Expected: all assertions PASS.
 
 - [ ] **Step 5: Run policy and whitespace verification**
 
-Run the repository policy guard relevant to `docs/spec` plus `git diff --check`.
+Run the repository policy guard relevant to `docs/domains/governance/spec` plus `git diff --check`.
 Expected: PASS with no generated identity change because the amendment is outside the training closure.
 
 - [ ] **Step 6: Commit the frozen carrier**

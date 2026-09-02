@@ -21,7 +21,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { execFile } from "child_process";
-import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
+import type { CommandContext, CommandResult, RegistryCommand } from "../../../../src/ember/infrastructure/tools/ember-cli/src/types/command-types.ts";
 import {
   buildEmberWorldState,
   GOALFORGE_ROOT,
@@ -30,8 +30,8 @@ import {
 import type { EmberWorldState, Claim } from "../core/ember-world-state.ts";
 import { validateConfirmation, logEncounter, CONFIRM_TOKEN } from "../core/encounter-membrane.ts";
 import type { EncounterOffer } from "../core/encounter-membrane.ts";
-import { renderMonitor, renderMonitorPanel, sortMonitorConditions, colorEnabledFor } from "../core/monitor-render.ts";
-import { findNewestReceipts, renderReceiptsTail } from "../core/watch-render.ts";
+import { renderMonitor, renderMonitorPanel, sortMonitorConditions, colorEnabledFor } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.ts";
+import { findNewestReceipts, renderReceiptsTail } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/watch-render.ts";
 
 const ENCOUNTER_LOG = process.env.EMBER_COBS_ENCOUNTER_LOG || "encounters.jsonl";
 

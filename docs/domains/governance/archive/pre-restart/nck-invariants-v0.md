@@ -36,14 +36,14 @@ instead on the baseline-comparison step (see §2).  This is correct: a file
 cannot hash itself without a fixed-point, and the baseline comparison is the
 actual self-verification mechanism.
 
-### 2. Outside-write-surface baseline  (`configs/nck-baseline/`)
+### 2. Outside-write-surface baseline  (`domains/model/configs/nck-baseline/`)
 
 A second copy of the manifest lives at `domains/model/configs/nck-baseline/nck-invariants.json`.
 The resident's tool registry CANNOT write to this directory:
 
 - The `check_write_path(path)` function in `invariants.py` raises
   `PermissionError("WRITE_PROTECTED: ...")` for any path under
-  `configs/nck-baseline/`.
+  `domains/model/configs/nck-baseline/`.
 - The `IdempotenceEnforcingRegistry.register()` method calls `check_write_path`
   for every path in the verb's declared `write_paths` list.
 - Verbs that do not declare `write_paths` are not blocked at registration time;
@@ -120,7 +120,7 @@ manifest entry for itself is present and the checker cannot silently omit it.
 The following paths are protected — the registered verb layer cannot write
 to them through `IdempotenceEnforcingRegistry`:
 
-- `configs/nck-baseline/` — the baseline directory (hard-enforced via
+- `domains/model/configs/nck-baseline/` — the baseline directory (hard-enforced via
   `check_write_path`).
 
 The following paths are protected by hash (in the manifest) but not by the
@@ -196,7 +196,7 @@ No file outside this repository was read.  No predecessor-CLI source was accesse
    dir is "outside the write surface" (enforced by the registry) while the
    other invariant files are inside the write surface (reachable by promotion).
    Resolution: `check_write_path` blocks registered-verb writes to
-   `configs/nck-baseline/` only.  Protection of the other files is hash-based
+   `domains/model/configs/nck-baseline/` only.  Protection of the other files is hash-based
    (boot-time detection) rather than filesystem-ACL-based, matching the threat
    model (accidental self-modification, not adversarial attack).
 

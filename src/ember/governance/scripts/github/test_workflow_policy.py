@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts.github import workflow_policy
+from src.ember.governance.scripts.github import workflow_policy
 
 
 class WorkflowPolicyTests(unittest.TestCase):

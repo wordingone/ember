@@ -22,7 +22,7 @@ import {
   getToolResultBudget,
   getCircuitBreakerState,
   resolveInitServerUrl,
-} from "./session-init.ts";
+} from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
 import { ModelHttpError } from "../services/api-openai-adapter.ts";
 import { CircuitOpenError } from "../services/model-circuit-breaker-client.ts";
 

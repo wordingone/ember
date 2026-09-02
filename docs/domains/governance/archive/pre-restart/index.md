@@ -66,4 +66,4 @@ Live chain (each step fail-closed on the previous step's receipt):
 - No transfer claim beyond the preregistered floor and budget it was
   measured at.
 - No capability claim for the owned core before its floor receipt exists.
-- Internal `docs/research/` notes are working artifacts, not claims.
+- Internal `docs/domains/governance/research/` notes are working artifacts, not claims.

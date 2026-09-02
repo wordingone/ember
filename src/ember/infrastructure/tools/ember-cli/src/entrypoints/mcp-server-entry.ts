@@ -9,8 +9,8 @@
 // MCP stdio transport (newline-delimited JSON-RPC). No TUI, no managed model
 // server.
 
-import { EMBER_CLI_VERSION } from "./process-entry.ts";
-import { init as sessionInit } from "./session-init.ts";
+import { EMBER_CLI_VERSION } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+import { init as sessionInit } from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
 
 // ---------------------------------------------------------------------------
 // MCP server identity (AC7: server name for the MCP transport)

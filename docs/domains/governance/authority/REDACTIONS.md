@@ -34,7 +34,7 @@ class) found 118 tracked files carrying one or both shapes:
   name) — 2 files.
 - This harness's per-session scratch directory (drive letter, then `Windows`, then
   `Temp`, then a session-scoped subpath that also embeds the workspace/org token) — 38
-  terminal-capture `.txt`/`.json` files under `docs/verification/receipts-20260706/`.
+  terminal-capture `.txt`/`.json` files under `docs/domains/governance/verification/receipts-20260706/`.
 
 ## What was redacted, and how
 
@@ -44,7 +44,7 @@ Every leaked path string was replaced in place with one of two neutral tokens:
   remainder of the path is repo-structure-relative and non-identifying (e.g.
   `<TEMP_WORKSPACE>/ember/receipts/foo.json`), that remainder is kept for diagnostic
   value. Where the path is a terminal-capture display string with no further meaning
-  beyond "some temp path was shown here" (the 38 `docs/verification/receipts-20260706/**`
+  beyond "some temp path was shown here" (the 38 `docs/domains/governance/verification/receipts-20260706/**`
   files), the entire path was replaced with the bare token, dropping the tail.
 - `<USER_HOME>` — for the 2 files carrying the operator's home directory
   (`baseline/receipts/deepseek-dspark-resolution-2026-06-29.json`,

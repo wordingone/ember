@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Selftest for ScienceAgentBench admission receipt generation."""
 from __future__ import annotations
 

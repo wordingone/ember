@@ -15,7 +15,7 @@ mechanism_erasure=forbidden
 1. Read docs/authority/INVARIANT.md and verify its SHA256 against docs/domains/governance/authority/GOAL.md.
 2. Read docs/domains/governance/authority/GOAL.md, including EMBER_AUTHORITY_V1.
 3. Read the operator-owned durable goal selection when available.
-4. Read docs/authority/CONTINUITY.md for exact artifact identities and maturity;
+4. Read docs/domains/governance/authority/CONTINUITY.md for exact artifact identities and maturity;
    docs/domains/governance/authority/STATE.md is only its compatibility pointer.
 5. Run the authority verifier and mutation suite.
 6. Read only the subordinate contract needed for the selected goal.
@@ -169,7 +169,7 @@ information.
 
 This file resolves object identity. It does not establish model birth,
 capability, lineage admissibility, or goal completion. `docs/domains/governance/authority/GOAL.md` is the highest
-amendable authority; `docs/authority/CONTINUITY.md` records the current work cursor.
+amendable authority; `docs/domains/governance/authority/CONTINUITY.md` records the current work cursor.
 
 An object is **current and addressable** only when it has a row below. Every
 other legacy config, receipt, checkpoint copy, branch artifact, or benchmark

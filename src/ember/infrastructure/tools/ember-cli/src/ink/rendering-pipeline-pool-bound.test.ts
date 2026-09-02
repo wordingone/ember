@@ -33,7 +33,7 @@ import {
   HyperlinkPool,
   STYLE_POOL_CAP,
   HYPERLINK_POOL_CAP,
-} from "./rendering-pipeline.ts";
+} from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 
 describe("StylePool / HyperlinkPool primitives (issue #1455)", () => {
   test("StylePool.intern never evicts on its own -- N distinct styles produce N+1 live slots", () => {

@@ -21,7 +21,7 @@
       "condition": "C-CUSTODY",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-CUSTODY: 29 custody violation(s) detected; untracked=1 unparseable=0 cited_missing=28 pattern=81 relocated=5 documented_absent=0 annex_attested=7 resolved_redacted=5 pending_landing=2; sidecar=src/ember/governance/scripts/ember_totality/receipts-custody/custody-20260710T150615Z.json (elapsed 0.5s)"
+      "reason": "RED C-CUSTODY: 29 custody violation(s) detected; untracked=1 unparseable=0 cited_missing=28 pattern=81 relocated=5 documented_absent=0 annex_attested=7 resolved_redacted=5 pending_landing=2; sidecar=scripts/ember_totality/receipts-custody/custody-20260710T150615Z.json (elapsed 0.5s)"
     },
     {
       "condition": "C-EFF",
@@ -106,7 +106,7 @@
       "condition": "C6",
       "status": "GREEN",
       "is_process_invariant": false,
-      "reason": "GREEN C6 satisfied by receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z\\d3-generalized-candidate-receipt.json: complete reusable recipe (commands/hashes/env/seeds/paths/rerun_command present, no invalid_not_reusable flag) AND rerun reproduction verified (reproducibility.deterministic_mismatch(structured: cause=\"generator-script identity drift: src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py did not exist in this repository's git history until the 2026-06-28 history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. 2026-06-22T221223Z, all before 2026-06-28). A concrete post-consolidation corruption in this exact file was found and fixed in commit 879e939 (2026-07-08, 'exec runner format-string fix (refs #483)'): the arm-B template's %s format specifier had been mangled to the literal token %<local-path> by the consolidation's path-redaction sweep, and was restored to %s. The recipe's reproducibility block hashes only the GENERATED arm_*.py solution files (reproducibility.solution_hashes), never the generator script that produces them from the fresh-rows input -- so re-running the recorded rerun_command today necessarily executes a provably different generator than the one that produced this receipt. Two independent, same-day CPU-only dry-run reruns (rerun_command with --execute dropped: no docker invoked, no network touched -- verified by reading run_official_arm/docker_image_digest/docker_inspect_text call sites, all gated on execute=True) against the identical fresh-rows input agree with EACH OTHER byte-for-byte (arm_solution_sha256 rep1==rep2 for all 4 arms), bounding the divergence to a stable, non-random function of generator-script version -- but diverge from the historically recorded arm C hash specifically (arm C = build_shared_solution_source, the only arm whose source is built from extracted eval_script/task_instruction text and therefore sensitive to the drifted region; arms A and Deleted are constant stub strings and arm B is instruction-only extraction, both structurally insensitive to whatever the consolidation sweep touched).\", reruns=2)); rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z\\\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute' (elapsed 0.1s)"
+      "reason": "GREEN C6 satisfied by receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z\\d3-generalized-candidate-receipt.json: complete reusable recipe (commands/hashes/env/seeds/paths/rerun_command present, no invalid_not_reusable flag) AND rerun reproduction verified (reproducibility.deterministic_mismatch(structured: cause=\"generator-script identity drift: scripts/ember_d3_generalized_candidate_exec.py did not exist in this repository's git history until the 2026-06-28 history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. 2026-06-22T221223Z, all before 2026-06-28). A concrete post-consolidation corruption in this exact file was found and fixed in commit 879e939 (2026-07-08, 'exec runner format-string fix (refs #483)'): the arm-B template's %s format specifier had been mangled to the literal token %<local-path> by the consolidation's path-redaction sweep, and was restored to %s. The recipe's reproducibility block hashes only the GENERATED arm_*.py solution files (reproducibility.solution_hashes), never the generator script that produces them from the fresh-rows input -- so re-running the recorded rerun_command today necessarily executes a provably different generator than the one that produced this receipt. Two independent, same-day CPU-only dry-run reruns (rerun_command with --execute dropped: no docker invoked, no network touched -- verified by reading run_official_arm/docker_image_digest/docker_inspect_text call sites, all gated on execute=True) against the identical fresh-rows input agree with EACH OTHER byte-for-byte (arm_solution_sha256 rep1==rep2 for all 4 arms), bounding the divergence to a stable, non-random function of generator-script version -- but diverge from the historically recorded arm C hash specifically (arm C = build_shared_solution_source, the only arm whose source is built from extracted eval_script/task_instruction text and therefore sensitive to the drifted region; arms A and Deleted are constant stub strings and arm B is instruction-only extraction, both structurally insensitive to whatever the consolidation sweep touched).\", reruns=2)); rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z\\\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute' (elapsed 0.1s)"
     },
     {
       "condition": "C7",
@@ -350,7 +350,7 @@
             "present": false
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/_lane14_common.py",
+            "path": "scripts/ember_totality/_lane14_common.py",
             "sha256": "5c5d133271344b620c8fb2b3af7f3bed5f41f768afbaf57dbc5ced1c6feefae0",
             "present": true
           },
@@ -360,37 +360,37 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_custody_dictkey_citations_test.py",
+            "path": "scripts/ember_totality/c_custody_dictkey_citations_test.py",
             "sha256": "4301a0554cba31251684265bdf0d636b83ec28cf46cc309d88e6ba609f8a9240",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_custody_extraction_cures_test.py",
+            "path": "scripts/ember_totality/c_custody_extraction_cures_test.py",
             "sha256": "9f9b45941268bdeb5394098bedb310ab1840ccec78fb4569058d5024807313ae",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_custody_pattern_citation_test.py",
+            "path": "scripts/ember_totality/c_custody_pattern_citation_test.py",
             "sha256": "77e5d9bae7df9b5c5870a1a07512ef1ad12c1de761afa7b7b9d4fea98c87006f",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
+            "path": "scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
             "sha256": "4d7ae4e4b21abc6905be7d289a76be31495ac3739c93c690d2e862f95fbadda8",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_custody_twin_resolution_test.py",
+            "path": "scripts/ember_totality/c_custody_twin_resolution_test.py",
             "sha256": "b42b683ee0d2b4df72c9ee4867243659167c080432024c256f5b010e317302be",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_disconfirmation_custody_test.py",
+            "path": "scripts/ember_totality/c_disconfirmation_custody_test.py",
             "sha256": "51ddd8081c291d13f9d6a25a8acac217ee25eade82d2a09ecfcbb0033eaaaab9",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/c_neg1_394_cited_missing_test.py",
+            "path": "scripts/ember_totality/c_neg1_394_cited_missing_test.py",
             "sha256": "7f91f4038b7681e96d81fe55e528d38e3660f4005e64d690100e6a101958785d",
             "present": true
           },
@@ -400,57 +400,57 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/c7_selftest.py",
             "sha256": "ee7fdc638642487671f8ce118029bc98251de953ec9fe872b4937b1c96690393",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/regime_operator.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/regime_operator.py",
             "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/c7_selftest.py",
             "sha256": "ee7fdc638642487671f8ce118029bc98251de953ec9fe872b4937b1c96690393",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/regime_operator.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/regime_operator.py",
             "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
             "sha256": "14c75fb904c57c2197695141fb784fa0202c233163005a789791e5dc339d109c",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
             "sha256": "14c75fb904c57c2197695141fb784fa0202c233163005a789791e5dc339d109c",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/chk_controls/run_controls.py",
+            "path": "scripts/ember_totality/chk_controls/run_controls.py",
             "sha256": "0dcc260c33374875e8f431a62444233d5d5fd0aea7b415fe19f47be00b3f8aea",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
+            "path": "scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
             "sha256": "21d2122626014ed60e33c87a745814af9a93b0909d9d8cfc1ab33e4df16345d3",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_preflight.py",
+            "path": "scripts/ember_totality/chk_controls/test_preflight.py",
             "sha256": "319c478fd3fd70270a01e93c3a70ecb7373de4011dc46b55a1aa101162771cb8",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg.py",
+            "path": "scripts/ember_totality/disconfirmation_leg.py",
             "sha256": "9e0e33dd000d3f2da2bed638e9788735a3a50be804ca8fe6309edaa250c05a15",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg_test.py",
+            "path": "scripts/ember_totality/disconfirmation_leg_test.py",
             "sha256": "7b8c76662303ce6167d2f5fae37be398965561653a1721ebec3b8f6d18e6f658",
             "present": true
           },
@@ -460,27 +460,27 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg.py",
+            "path": "scripts/ember_totality/enforcement_leg.py",
             "sha256": "795e3e9a785aff718c547eff60d14da1445d6e7c9aee6c276fbc792ac550ce05",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
+            "path": "scripts/ember_totality/enforcement_leg_test.py",
             "sha256": "f4a052b92767961fc6a2d8a417825f0ed58090ae631c44ea931ff5f56937c757",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/ind3_operate_producer.py",
+            "path": "scripts/ember_totality/ind3_operate_producer.py",
             "sha256": "71c707ab00b711433617da751ec0c0be4f0712cf5e86b69998c1bd30539cb7de",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/ind4_customize_experiment_producer.py",
+            "path": "scripts/ember_totality/ind4_customize_experiment_producer.py",
             "sha256": "b3fd42dd4ceb49f6fe01afdf0eb14e78fb62d11fcfc8d5e00fc8f973ffba1071",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
+            "path": "scripts/ember_totality/ind5_comprehend_producer.py",
             "sha256": "f220520ee6643cbf3815573d60cd6fd46858a8746226f0f456ce86fe9da00c2d",
             "present": true
           },
@@ -495,37 +495,37 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/receipt_chain_verify.py",
+            "path": "scripts/ember_totality/receipt_chain_verify.py",
             "sha256": "2780d5cc46f1865041d0d964433d25e67be9e68f77883e869765f5d0f552eb78",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/receipt_chain_verify_test.py",
+            "path": "scripts/ember_totality/receipt_chain_verify_test.py",
             "sha256": "1aefb35c0470d9cc5562d9998e0d3ae2f6f36882d08abfb96bdda660527d8c8f",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/receipt_errata_scan.py",
+            "path": "scripts/ember_totality/receipt_errata_scan.py",
             "sha256": "b876ec978a3d167aed2057c5a5c65b013c7839ea720d476696dff08b533a7fbd",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/receipt_no_local_path_test.py",
+            "path": "scripts/ember_totality/receipt_no_local_path_test.py",
             "sha256": "447453b8d6fb2ff9cd5d845a8927c4af42c3e613e0a29094bbed23cf70b090f0",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/receipt_ts_authority.py",
+            "path": "scripts/ember_totality/receipt_ts_authority.py",
             "sha256": "4a767362242225405b204f01cb732c7b33917e9d1fe76374e220dbab41a358c1",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/root_placeholder_test.py",
+            "path": "scripts/ember_totality/root_placeholder_test.py",
             "sha256": "9bd7c03e03360efe669e7fe649d4102846388b53697cf0286c65f4f17fdffe87",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/spend_annex_scan.py",
+            "path": "scripts/ember_totality/spend_annex_scan.py",
             "sha256": "1a31dc38604affa68f447c1a54d0428efe47131172332ff7123f4856c1fc977a",
             "present": true
           },
@@ -535,77 +535,77 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c1.py",
+            "path": "scripts/ember_totality/test_c1.py",
             "sha256": "d2bbe7a77e476a328a0aa49453d995edc9b92256838397d69f7b66fc764fc53d",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c10.py",
+            "path": "scripts/ember_totality/test_c10.py",
             "sha256": "f54ab6c4d4523f749ad79de288316653798905c525b2c95d00c886b2cafdae3b",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
+            "path": "scripts/ember_totality/test_c11.py",
             "sha256": "ddc00de4549b03e149379d44fb3e17900dcc9569b30385e170b2c02750335c33",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c12.py",
+            "path": "scripts/ember_totality/test_c12.py",
             "sha256": "370361ea08e57be8a2e6e5a27a098e69c2e3db46455d8418d60bda0dc4bf8fdb",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c13.py",
+            "path": "scripts/ember_totality/test_c13.py",
             "sha256": "a365c7df26a9a6432fc8ac510899464ddcbaffcee151177384b8ab983f3e8d97",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c14.py",
+            "path": "scripts/ember_totality/test_c14.py",
             "sha256": "7d30eba9848359ac5d3b8ef88b8ced73e46ed6523f980b862b8e9533ea8a1026",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c15.py",
+            "path": "scripts/ember_totality/test_c15.py",
             "sha256": "0fb82689ad1329e186fac1e722ba8766596e417c80523f2014cc5b107302c14a",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c2.py",
+            "path": "scripts/ember_totality/test_c2.py",
             "sha256": "281dc5f5269e65840becf042422bf328f3a755d9db96ea2f007bead3106806e2",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c3.py",
+            "path": "scripts/ember_totality/test_c3.py",
             "sha256": "266408fee05875ca4b7923d1145c66fed5be092af5097dbea64f06e453b53f04",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c4.py",
+            "path": "scripts/ember_totality/test_c4.py",
             "sha256": "6769ef1d883a27a39185b400cdaeeb0b6af48f368db874d07ed385eacf389eb6",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c5.py",
+            "path": "scripts/ember_totality/test_c5.py",
             "sha256": "057abf1c9826eb1f84087ac3363065c28fad89849c54882484ed845faa49065f",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c6.py",
+            "path": "scripts/ember_totality/test_c6.py",
             "sha256": "e9cef416fbcfe0672f219c2d43339a32c37656063db40ad3c3a59ebcf345d988",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c7.py",
+            "path": "scripts/ember_totality/test_c7.py",
             "sha256": "c3f027ecf2acd7edc53071444c5d615c420689b03dd2929c79fbd6722542d586",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c8.py",
+            "path": "scripts/ember_totality/test_c8.py",
             "sha256": "a31fc9e5f3c3de5792346a199fa9091ec89178894cd7ef0ee785ecc1a5c81ba1",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c9.py",
+            "path": "scripts/ember_totality/test_c9.py",
             "sha256": "375f41e41a6a113b71f6abf25ff498b00b46780c63a2be5eac82489b48b59e2c",
             "present": true
           },
@@ -615,12 +615,12 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_auto.py",
+            "path": "scripts/ember_totality/test_c_auto.py",
             "sha256": "4605b87450d0865baf5b277f5f023cdb325dba11c33ad87dd943c6f139f0172a",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_base.py",
+            "path": "scripts/ember_totality/test_c_base.py",
             "sha256": "a11731b8030b59c4333bd8dc2bac44f1b55d23fb914133eadf5f009e81f34e58",
             "present": true
           },
@@ -630,7 +630,7 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_disc.py",
+            "path": "scripts/ember_totality/test_c_disc.py",
             "sha256": "994c121d06a4fecaf279184606256b30557fc756aa64cd718e2f7123a13503c7",
             "present": true
           },
@@ -640,17 +640,17 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_eff.py",
+            "path": "scripts/ember_totality/test_c_eff.py",
             "sha256": "47adbe8332124c3448ee9b47987f9866f4da36efd9a6d7ff306ee2848ab66b36",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_enf.py",
+            "path": "scripts/ember_totality/test_c_enf.py",
             "sha256": "05c794f0220089518680bbe61edffeb488dfac74fe24502467b5b9b26841508c",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_fed.py",
+            "path": "scripts/ember_totality/test_c_fed.py",
             "sha256": "6dffc96ec295b6a38dc0987b5f97e4ef9099ec08af2b3431d750b7be23a1a233",
             "present": true
           },
@@ -660,7 +660,7 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_ind.py",
+            "path": "scripts/ember_totality/test_c_ind.py",
             "sha256": "22b99fa878bb0c5749d1b4b17fdeeff089d1d355e60f66611119f4475e819dc7",
             "present": true
           },
@@ -670,12 +670,12 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_ladm.py",
+            "path": "scripts/ember_totality/test_c_ladm.py",
             "sha256": "5e6efcdcaca15feca20f64cb75bd67e582d22a371c471aa7b4fe015e9d3cb84b",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_legib.py",
+            "path": "scripts/ember_totality/test_c_legib.py",
             "sha256": "d1b78bb875299b4fd6188febee853ec448d656213ba64599fe437fb470a170e5",
             "present": true
           },
@@ -685,12 +685,12 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_mile.py",
+            "path": "scripts/ember_totality/test_c_mile.py",
             "sha256": "195bdaea27d2ffade77c3285cb09cbba6f6c140534010e9a0cc6cef2ba812638",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_neg1.py",
+            "path": "scripts/ember_totality/test_c_neg1.py",
             "sha256": "e19ce983cede347233430679a882b44e7d740cbad1c64e134f9192b1cd1c203c",
             "present": true
           },
@@ -700,12 +700,12 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_organism.py",
+            "path": "scripts/ember_totality/test_c_organism.py",
             "sha256": "08d31068eb76ff7c8e13d1687adbd90b917d8dcda75152f104908d890567e853",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_port.py",
+            "path": "scripts/ember_totality/test_c_port.py",
             "sha256": "faa46691298357ddf3e3503a883987b45e2d8596f311c3a7f7cfbf003fe28093",
             "present": true
           },
@@ -720,27 +720,27 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_c_tally.py",
+            "path": "scripts/ember_totality/test_c_tally.py",
             "sha256": "699f635c6dd435a2c07dec739d61e8e9992d31675ee505a67e91335093c13ad1",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
+            "path": "scripts/ember_totality/test_surface2.py",
             "sha256": "6017c24301129ca4184e90cf83b30d52b7b3069d292bc3b9c2e43c3913d1e45f",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/void_supersession.py",
+            "path": "scripts/ember_totality/void_supersession.py",
             "sha256": "768b521680f9d70c1ee12b24837150acfb75b10589b11e87c7f046a723e141b7",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/working_set_test.py",
+            "path": "scripts/ember_totality/working_set_test.py",
             "sha256": "c7124b7c73d79a6879c11b7e4f3d504167043413a72e2a86eead971e3f2edc3a",
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py",
+            "path": "scripts/ember_totality/writers_custody_two_run_test.py",
             "sha256": "6f5d2f21c5695e1ec71409b9b36cfb8d30b388fbbdbde47210ef8e6b1381501c",
             "present": true
           }
@@ -838,7 +838,7 @@
           "docs/spec/receipts-v1.md",
           "scripts/receipt_check.py",
           "scripts/receipt_write.py",
-          "src/ember/governance/scripts/receipt_semantic_check.py"
+          "scripts/receipt_semantic_check.py"
         ],
         "files": [
           {
@@ -857,7 +857,7 @@
             "present": true
           },
           {
-            "path": "src/ember/governance/scripts/receipt_semantic_check.py",
+            "path": "scripts/receipt_semantic_check.py",
             "sha256": null,
             "present": false
           }

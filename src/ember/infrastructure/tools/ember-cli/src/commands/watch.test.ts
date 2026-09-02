@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import type { CommandContext } from "../types/command-types.ts";
 import { createWatchCommand } from "./watch.ts";
-import type { TelemetryState } from "../services/telemetry-watch.ts";
+import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers

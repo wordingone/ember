@@ -5,14 +5,14 @@ param(
     [ValidateSet("Install", "Repair", "Rollback", "Uninstall")]
     [string]$Action = "Install",
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\Ember"),
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")),
     [string]$DesktopRoot = [Environment]::GetFolderPath("Desktop"),
     [string]$StartMenuProgramsRoot = (Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs")
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
-$boundRepositoryRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot)).TrimEnd('\', '/')
+$boundRepositoryRoot = [IO.Path]::GetFullPath((Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path).TrimEnd('\', '/')
 $requestedRepositoryRoot = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', '/')
 if (-not $requestedRepositoryRoot.Equals($boundRepositoryRoot, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Installation RepositoryRoot must be the exact checkout containing this installer."
@@ -332,7 +332,7 @@ try {
     $status = & git -C $RepositoryRoot status --porcelain --untracked-files=no
     if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($status -join "`n"))) { throw "Installation requires a clean tracked source checkout." }
     $commit = (& git -C $RepositoryRoot rev-parse HEAD | Select-Object -First 1).Trim()
-    $lines = @(& (Join-Path $PSScriptRoot "prepare-ember-cockpit.ps1"))
+    $lines = @(& (Join-Path $RepositoryRoot "scripts\prepare-ember-cockpit.ps1"))
     $built = @($lines | Where-Object { $_ -is [string] -and $_.StartsWith("EMBER_APPLICATION=") } | ForEach-Object { $_.Substring(18) } | Select-Object -Last 1)[0]
     $builtRuntime = @($lines | Where-Object { $_ -is [string] -and $_.StartsWith("EMBER_LAB=") } | ForEach-Object { $_.Substring(10) } | Select-Object -Last 1)[0]
     if ($commit -notmatch '^[0-9a-f]{40}$') { throw "Installation requires an exact lowercase source commit." }

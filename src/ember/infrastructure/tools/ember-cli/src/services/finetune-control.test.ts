@@ -8,12 +8,12 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { unlink, readFile } from "fs/promises";
-import type { FinetuneControlCmd } from "./finetune-control.ts";
+import type { FinetuneControlCmd } from "../../../../../../../tools/ember-cli/src/services/finetune-control.ts";
 import {
   validateControlCmd,
   emitControlCmd,
   CONTROL_CHANNEL_PATH,
-} from "./finetune-control.ts";
+} from "../../../../../../../tools/ember-cli/src/services/finetune-control.ts";
 
 // ---------------------------------------------------------------------------
 // Test helpers

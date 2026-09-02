@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ANIMATION_LOOP_MS } from "../components/spinner.ts";
-import { spinnerCadenceForBusy } from "./repl.ts";
+import { spinnerCadenceForBusy } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 describe("issue #898 idle spinner cadence", () => {
   test("does not schedule the spinner clock while idle", () => {

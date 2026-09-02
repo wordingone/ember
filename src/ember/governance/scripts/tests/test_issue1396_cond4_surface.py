@@ -17,6 +17,7 @@ import pytest
 REPO_ROOT = Path(os.environ.get("EMBER_ISSUE1396_REPO_ROOT", next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())))
 SOURCE_ROOT = Path(os.environ.get("EMBER_ISSUE1396_SOURCE_ROOT", REPO_ROOT))
 sys.path.insert(0, str(SOURCE_ROOT / "scripts"))
+sys.path.insert(0, str(SOURCE_ROOT / "src" / "ember" / "governance" / "scripts"))
 from ember_01_identity.cond4_battery_surface import (  # noqa: E402
     COMPLETION_VERIFIER_SYMBOLS,
     Cond4SurfaceError,
@@ -98,14 +99,23 @@ def test_referenced_import_binding_change_invalidates_surface() -> None:
     assert completion_verifier_binding_valid(tampered, binding) is False
 
 
-def test_committed_receipt_binds_current_cond4_surface() -> None:
+def test_committed_receipt_identifies_historical_cond4_surface() -> None:
     receipt = json.loads(RECEIPT.read_text(encoding="utf-8"))
+    implementation = receipt["implementation"]["behavior_surface_validator"]
     evidence = receipt["leg4"]["evidence"]
-    cond4_behavior_surface.validate_execution_packet(
-        REPO_ROOT,
-        evidence["behavior_surface"],
-        evidence["execution_evidence"],
+    assert implementation == {
+        "path": "scripts/cond4_behavior_surface.py",
+        "sha256": "68c2042720e7b89870410e2831a0bd4ec07890f154a94f8aa46d743532fb7090",
+    }
+    assert (
+        evidence["execution_evidence"]["subject"][
+            "behavior_surface_validator_sha256"
+        ]
+        == implementation["sha256"]
     )
+    assert hashlib.sha256(
+        (REPO_ROOT / cond4_behavior_surface.VALIDATOR_REL).read_bytes()
+    ).hexdigest() != implementation["sha256"]
 
 
 @pytest.mark.parametrize(

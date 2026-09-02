@@ -7,7 +7,7 @@ unplanned interruption (a crash, a closed terminal, a killed process).
 The example below uses the real `/watch` telemetry mechanism
 (`tools/ember-cli/src/services/telemetry-watch.ts`'s `startTelemetryWatch()`)
 running as its own OS process, wrapped by a small launcher
-(`scratch/ind3-operate-worker/telemetry-watch-worker.ts`) that gives it a
+(the historical telemetry-watch worker) that gives it a
 file-based ready/stop protocol so it can be operated the same way any
 long-running ember process is operated — this is the same mechanism the
 live `/watch` slash command wires into the cockpit; the wrapper only adds
@@ -19,7 +19,7 @@ Start the worker with three paths: a telemetry channel file, a heartbeat
 file, and a stop-marker file.
 
 ```
-bun run scratch/ind3-operate-worker/telemetry-watch-worker.ts <channel> <heartbeat> <stopmarker>
+# Historical command omitted: its scratch worker is not tracked at current head.
 ```
 
 The process is up once `<heartbeat>` contains `{"status":"ready", "pid": ...}`.

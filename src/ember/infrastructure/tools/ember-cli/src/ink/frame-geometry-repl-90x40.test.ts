@@ -8,10 +8,10 @@
 import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "./reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "./rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "./components.ts";
-import { resetCommandRegistryForTests } from "../command-registry.ts";
-import { ReplScreen } from "../screens/repl.ts";
+import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 import { checkFrameGeometry } from "./frame-geometry.ts";
 
 function renderedLines(raw: string, columns: number, rows: number): string[] {

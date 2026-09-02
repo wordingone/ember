@@ -8,7 +8,7 @@
   "inputs": {
     "docs/ember-completeness.md": "goalforge",
     "docs/PROBLEMS.md": "goalforge",
-    "docs/domains/governance/problems-meta.yaml": "goalforge"
+    "docs/problems-meta.yaml": "goalforge"
   },
   "exit": "FAIL",
   "error": "docs/spec/milestones-v1.md: absent from the goalforge worktree (no fallback permitted)"

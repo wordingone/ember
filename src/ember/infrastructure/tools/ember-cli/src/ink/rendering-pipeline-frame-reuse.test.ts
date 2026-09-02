@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 import { describe, expect, test } from "bun:test";
-import { buildFrame, prepareFrame } from "./rendering-pipeline.ts";
+import { buildFrame, prepareFrame } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 
 describe("renderer frame-buffer reuse", () => {
   test("clears and reuses a same-geometry frame without allocating new cells", () => {

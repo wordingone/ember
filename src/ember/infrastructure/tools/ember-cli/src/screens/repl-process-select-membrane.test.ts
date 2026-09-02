@@ -23,15 +23,15 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { access, mkdtemp, rm, unlink, writeFile } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
-import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
-import { startTelemetryWatch } from "../services/telemetry-watch.ts";
-import { createTrainCommand, outstandingTrainOfferForSession } from "../commands/train.ts";
+import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { startTelemetryWatch } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import { createTrainCommand, outstandingTrainOfferForSession } from "../../../../../../../tools/ember-cli/src/commands/train.ts";
 import { buildProcessOptions, startActivation } from "../services/process-select.ts";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
-import { ReplScreen } from "./repl.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 class FakeStdin extends EventEmitter {
   isTTY = true;

@@ -22,7 +22,11 @@ import tempfile
 import unittest
 
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = next(
+    parent
+    for parent in pathlib.Path(__file__).resolve().parents
+    if (parent / "pyproject.toml").is_file()
+)
 CLOSURE_MODULE_PATH = (
     ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
 )

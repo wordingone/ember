@@ -50,16 +50,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = str(Path(__file__).resolve().parents[4])
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-from scripts.ember_totality import quarantine_sweep
-from scripts.ember_totality import tree_provenance
+GOVERNANCE_SCRIPTS = str(Path(__file__).resolve().parent)
+for import_root in (GOVERNANCE_SCRIPTS, ROOT):
+    if import_root not in sys.path:
+        sys.path.insert(0, import_root)
+from ember_totality import quarantine_sweep
+from ember_totality import tree_provenance
 from src.ember.governance.scripts.branch_inventory import (
     InventoryError as BranchInventoryError,
     check_inventory,
 )
 
-DEFAULT_DATA_ROOT = os.path.join(ROOT, "scripts", "ember_totality", "receipts-totality")
+DEFAULT_DATA_ROOT = os.path.join(
+    GOVERNANCE_SCRIPTS, "ember_totality", "receipts-totality"
+)
 README_PATH = os.path.join(ROOT, "README.md")
 CONTINUITY_PATH = os.path.join(ROOT, "docs/domains/governance/authority/CONTINUITY.md")
 CURRENT_SUBJECT_PATH = os.path.join(ROOT, "manifests", "ember-current-subject-v1.json")

@@ -13,7 +13,7 @@ from pathlib import Path
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 RECEIPTS = REPO_ROOT / "receipts"
-TARGET = REPO_ROOT / "scripts" / "ember_totality" / "test_c_base.py"
+TARGET = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_totality" / "test_c_base.py"
 
 
 def _load_target():

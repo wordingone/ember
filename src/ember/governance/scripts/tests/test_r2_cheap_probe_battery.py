@@ -33,7 +33,7 @@ pytest.importorskip("torch", reason="checkpoint fixture requires optional PyTorc
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO_ROOT / "src" / "ember" / "governance" / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-sys.path.insert(0, str(REPO_ROOT / "tests"))
+sys.path.insert(0, str(REPO_ROOT / "tests" / "domain-governance"))
 
 import r2_cheap_probe_battery as battery  # noqa: E402
 from test_ember_restart_eval_checkpoint_consumer_v3_contract import write_v3  # noqa: E402 -- reused, never reimplemented

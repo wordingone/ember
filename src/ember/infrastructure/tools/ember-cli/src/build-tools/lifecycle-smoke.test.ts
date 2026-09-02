@@ -7,6 +7,11 @@ import xtermHeadless from "@xterm/headless";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+
+const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..", "..", "..", "..");
+const RETAINED_CLI_ROOT = join(REPO_ROOT, "tools", "ember-cli", "src");
+const RETAINED_LIFECYCLE_DRIVER = join(RETAINED_CLI_ROOT, "build-tools", "lifecycle-smoke-driver.ts");
+const RETAINED_PROCESS_ENTRY = join(RETAINED_CLI_ROOT, "entrypoints", "process-entry.ts");
 import {
   LIFECYCLE_ACTIONS,
   inspectLifecycleSurface,
@@ -296,7 +301,7 @@ describe("validateLifecycleReceipt", () => {
   });
 
   test("measures clean exit before deciding whether forced cleanup is required", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.terminateLifecycleChild).toBeFunction();
     let forced = 0;
     let observed = false;
@@ -337,7 +342,7 @@ describe("validateLifecycleReceipt", () => {
   });
 
   test("does not write to a lifecycle child whose exit was already observed", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     let exitRequests = 0;
     let forced = 0;
     const result = await driver.terminateLifecycleChild!(
@@ -359,7 +364,7 @@ describe("validateLifecycleReceipt", () => {
   });
 
   test("waits for the exit event when ConPTY closes its socket first", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     let observed = false;
     let forced = 0;
     const socketClosed = Object.assign(new Error("Socket is closed"), {
@@ -381,7 +386,7 @@ describe("validateLifecycleReceipt", () => {
   });
 
   test("classifies only the Windows closed-socket race as benign", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.isBenignConptyClosureError({
       code: "ERR_SOCKET_CLOSED",
     })).toBe(true);
@@ -391,7 +396,7 @@ describe("validateLifecycleReceipt", () => {
   });
 
   test("binds the Windows node-pty input stream rather than its output emitter", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     let bound: ((error: unknown) => void) | undefined;
     const fakePty = {
       _agent: {
@@ -451,7 +456,7 @@ describe("compiled lifecycle driver host", () => {
       windowsHide: true,
     });
     expect(located.status).toBe(0);
-    const driver = join(import.meta.dir, "lifecycle-smoke-driver.ts");
+    const driver = RETAINED_LIFECYCLE_DRIVER;
     const result = spawnSync(
       "node",
       ["--experimental-strip-types", driver],
@@ -470,7 +475,7 @@ describe("compiled lifecycle driver host", () => {
   }, 57_000);
 
   test("checkpoint fixture is driven through a repo-relative source path", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.actionInputs).toBeFunction();
     const repoRoot = "D:\\a\\ember\\ember";
     const inputs = driver.actionInputs!("C:\\temp\\ember-smoke", repoRoot);
@@ -484,7 +489,7 @@ describe("compiled lifecycle driver host", () => {
 
 describe("compiled lifecycle action completion", () => {
   test("does not grant completion while the submitted command remains in the prompt", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.completedPromptFrame).toBeFunction();
     const completedPromptFrame = driver.completedPromptFrame!;
     expect(driver.slashCommandNeedsSecondEnter).toBeFunction();
@@ -509,7 +514,7 @@ describe("compiled lifecycle action completion", () => {
   });
 
   test("types prompt input as ordered keystrokes with bounded inter-key pacing", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.writePromptInput).toBeFunction();
     const writes: string[] = [];
     const waits: number[] = [];
@@ -526,7 +531,7 @@ describe("compiled lifecycle action completion", () => {
   });
 
   test("isolates the current action output from prior full-screen repaint history", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.actionLocalDelta).toBeFunction();
 
     const continued = driver.actionLocalDelta!(
@@ -544,7 +549,7 @@ describe("compiled lifecycle action completion", () => {
   });
 
   test("derives an action-local visible delta without unchanged viewport history", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.actionVisibleDelta).toBeFunction();
     expect(driver.actionVisibleDelta!(
       "stale prior error\nunchanged dashboard\n",
@@ -557,7 +562,7 @@ describe("compiled lifecycle action completion", () => {
   });
 
   test("classifies the rendered action and retains the exact modern save result", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.classifyActionFrame).toBeFunction();
     expect(driver.actionOutputExcerpt).toBeFunction();
 
@@ -708,7 +713,7 @@ describe("compiled lifecycle action completion", () => {
   });
 
   test("submits a second Enter only while the slash command remains pending", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.submitSecondEnterIfNeeded).toBeFunction();
 
     const pendingWrites: string[] = [];
@@ -734,7 +739,7 @@ describe("compiled lifecycle action completion", () => {
 
   test("routes lifecycle actions through the production operator pipe", () => {
     const source = readFileSync(
-      join(import.meta.dir, "lifecycle-smoke-driver.ts"),
+      RETAINED_LIFECYCLE_DRIVER,
       "utf8",
     );
     expect(source).toContain("operatorPipeName");
@@ -743,7 +748,7 @@ describe("compiled lifecycle action completion", () => {
 
   test("interactive cleanup terminates the packaged process after releasing terminal ownership", () => {
     const source = readFileSync(
-      join(import.meta.dir, "..", "entrypoints", "process-entry.ts"),
+      RETAINED_PROCESS_ENTRY,
       "utf8",
     );
     const cleanup = source.slice(source.indexOf("await exitPromise;"));
@@ -754,7 +759,7 @@ describe("compiled lifecycle action completion", () => {
 
 describe("compiled lifecycle durable state evidence", () => {
   test("binds one exact append-only control row to before, after, and delta bytes", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.deriveControlAppendState).toBeFunction();
     const appended =
       '{"verb":"pause","runId":"smoke-run","ts":"2026-07-25T00:00:00.000Z"}\n';
@@ -776,7 +781,7 @@ describe("compiled lifecycle durable state evidence", () => {
   });
 
   test("refuses changed prefixes, extra rows, or the wrong control command", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     const pause =
       '{"verb":"pause","runId":"smoke-run","ts":"2026-07-25T00:00:00.000Z"}\n';
     const resume =
@@ -804,7 +809,7 @@ describe("compiled lifecycle durable state evidence", () => {
   });
 
   test("binds publication bytes without inventing a prior state", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.derivePublicationState).toBeFunction();
     expect(driver.derivePublicationState!(
       null,
@@ -825,7 +830,7 @@ describe("compiled lifecycle durable state evidence", () => {
 
 describe("compiled lifecycle visible frame", () => {
   test("reads the active viewport after terminal output scrolls", async () => {
-    const driver = await import("./lifecycle-smoke-driver.ts");
+    const driver = await import(RETAINED_LIFECYCLE_DRIVER);
     expect(driver.visibleFrameLines).toBeFunction();
     const { Terminal } = xtermHeadless;
     const terminal = new Terminal({ cols: 12, rows: 3, allowProposedApi: true });
@@ -846,7 +851,7 @@ describe("compiled lifecycle visible frame", () => {
 describe("compiled lifecycle workflow authority", () => {
   test("checks out the immutable event head and installs the identity-validator runtime", () => {
     const workflow = readFileSync(
-      join(import.meta.dir, "..", "..", "..", "..", ".github", "workflows", "cli-windows-lifecycle-e2e.yml"),
+      join(REPO_ROOT, ".github", "workflows", "cli-windows-lifecycle-e2e.yml"),
       "utf8",
     );
 

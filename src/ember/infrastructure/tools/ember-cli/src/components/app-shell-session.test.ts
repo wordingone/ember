@@ -7,11 +7,11 @@ import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { ReplScreen, type ReplScreenProps } from "../screens/repl.ts";
-import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
-import { createTrainCommand } from "../commands/train.ts";
+import { ReplScreen, type ReplScreenProps } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { resetCommandRegistryForTests, setCommandRegistryDeps } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { createTrainCommand } from "../../../../../../../tools/ember-cli/src/commands/train.ts";
 import { sessionIdForAppRoot } from "./app-shell.ts";
-import { buildInteractiveReplElement } from "../entrypoints/process-entry.ts";
+import { buildInteractiveReplElement } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
 
 describe("mounted process-entry session identity handoff", () => {
   it("passes the minted session identity into the production REPL element", () => {

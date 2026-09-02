@@ -20,12 +20,12 @@ import { EventEmitter } from "node:events";
 import readline from "node:readline";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
-import { getCommands, resetCommandRegistryForTests } from "../command-registry.ts";
-import { startTelemetryWatch } from "../services/telemetry-watch.ts";
-import { ReplScreen } from "./repl.ts";
+import { getCommands, resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { startTelemetryWatch } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 class FakeStdin extends EventEmitter {
   isTTY = true;

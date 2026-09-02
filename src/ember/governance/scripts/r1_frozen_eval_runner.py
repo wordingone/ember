@@ -28,7 +28,7 @@ from typing import Protocol
 from urllib.parse import urlsplit
 
 try:
-    from scripts.r1_cheap_probe_suite import SuiteRefusal, load_source_manifest
+    from src.ember.governance.scripts.r1_cheap_probe_suite import SuiteRefusal, load_source_manifest
 except ModuleNotFoundError:  # Direct ``python src/ember/governance/scripts/r1_frozen_eval_runner.py`` execution.
     from r1_cheap_probe_suite import SuiteRefusal, load_source_manifest
 

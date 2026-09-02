@@ -24,10 +24,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
-import { resetCommandRegistryForTests } from "../command-registry.ts";
-import { ReplScreen } from "./repl.ts";
+import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 async function flushRepl(): Promise<void> {
   for (let index = 0; index < 5; index++) {

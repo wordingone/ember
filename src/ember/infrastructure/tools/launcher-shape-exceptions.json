@@ -32,12 +32,12 @@
     },
     {
       "path": "src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1",
-      "sha256": "b9add9cd433729ded921c0abde7af2cf201a5cc1dc31782c22b1d3eeb1f0b66a",
+      "sha256": "2ec08a8d07c0e9e02b83ee9eb65bd68aca5e3dd2321c33a39a41bcca4385b8c3",
       "reason": "genuine hermetic deployment fixture. It creates fake application and runtime executables and invokes the installer only inside a unique temporary repository/install root; it never starts a training run or a production cockpit. The exact digest is required because filename-based test exclusions are forbidden."
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "54687fd47750e8ff4918a585ae1f98ffe70db0112ec9389115ed8408806feec8",
+      "sha256": "596fbaa2b2e0d0d5620d843ed7ab7fde2ede3d18961d8209e9dc4c9693634b42",
       "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "path": "tests/domain-governance/test_ember_root_launcher.py",
-      "sha256": "6b793acbbad821a295335f8d779b1c4d627a5aee2f941fd41d0353b39b8c1e87",
+      "sha256": "16cdaad0af1c8b9da2dc593262c7f03f5bc8be9a49f09f491ed3717c75a97ed5",
       "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {
@@ -87,7 +87,7 @@
     },
     {
       "path": "src/ember/governance/scripts/install-ember-desktop.ps1",
-      "sha256": "d990065b924266d77424f376213f2ea99acf7959dd3bb92178a73ce906fa5c00",
+      "sha256": "51e15be7122e7d1fae299f17552f116a5c0baa4b05da55d5b4df9fa85075cafb",
       "reason": "desktop installer, not a training launcher. It starts only the installed desktop application after copying the reviewed application/runtime bundle; it never selects or dispatches a model training run."
     }
   ]

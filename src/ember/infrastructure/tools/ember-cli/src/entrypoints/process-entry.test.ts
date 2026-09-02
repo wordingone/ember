@@ -34,10 +34,10 @@ import {
   type ServerSpawnOptions,
   type ServerHandle,
   main,
-} from "./process-entry.ts";
+} from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
 import type { OutageMarker } from "../services/activity-feed.ts";
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
-import { _resetInitForTests } from "./session-init.ts";
+import { _resetInitForTests } from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import { OwnedSeatStaleBindingError } from "./owned-seat-loader.ts";
 import type { LoopDeps, CallModelParams } from "../query/query-loop-support.ts";

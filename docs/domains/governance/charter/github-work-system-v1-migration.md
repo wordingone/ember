@@ -148,7 +148,7 @@ explicit, and all jobs have timeouts.
 
 The source transaction must pass:
 
-- `python -B -m unittest discover -s scripts/github -p "test_*.py"`;
+- `python -B -m unittest discover -s src/ember/governance/scripts/github -p "test_*.py"`;
 - `python -B src/ember/governance/scripts/github/workflow_policy.py --root .`;
 - `python -B src/ember/governance/scripts/github/template_policy.py --root .`;
 - repository guard in both policy and PR-context modes;

@@ -1126,7 +1126,7 @@ config fits the remaining continuous-GPU days, receipts-grade?
 governed (fraction 0.80, margin assert, paced duty; budget = paced
 rate); plus the gpu-math-attack workflow's refuter-adjusted multiplier
 table (24 subagents; saved `.agent/workflows/gpu-math-attack.js`;
-table persisted to docs/research/).
+table persisted to docs/domains/governance/research/).
 
 **Result (receipt `fp19-bench-20260611T024648Z.json`):** 0.1B = 19×
 compute-optimal margin in 8 days (55k paced tok/s); **0.37B = 1.9×

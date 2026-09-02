@@ -7,13 +7,13 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { getCommands, resetCommandRegistryForTests } from "../command-registry.ts";
+import { getCommands, resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
 import { getActivityFeedState } from "../services/activity-feed.ts";
-import { ReplScreen } from "./repl.ts";
-import { operatorSurfaceWidth } from "./repl.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { operatorSurfaceWidth } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 async function flushRepl(): Promise<void> {
   for (let index = 0; index < 5; index++) {

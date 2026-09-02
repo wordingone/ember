@@ -14,10 +14,10 @@ This index is generated from `manifests/documentation/current-documents-v1.json`
 ## Governance
 
 - [`ember.architecture.system`](architecture/system-overview.md) — Adopted domains, interfaces, dependencies, and maturity (normative; new-user, user, contributor, auditor)
-- [`ember.authority.continuity`](authority/CONTINUITY.md) — Canonical mutable current-truth owner (normative; operator, auditor)
+- [`ember.authority.continuity`](domains/governance/authority/CONTINUITY.md) — Canonical mutable current-truth owner (normative; operator, auditor)
 - [`ember.docs.generated-index`](INDEX.md) — Generated current and normative entry-document index (current; user, contributor, auditor)
 - [`ember.docs.glossary`](GLOSSARY.md) — Canonical definitions for first-level project terms (current; new-user, user, contributor, auditor)
-- [`ember.docs.map`](DOCS-README.md) — Audience, task, and domain navigation (normative; new-user, user, contributor, operator, auditor)
+- [`ember.docs.map`](domains/governance/DOCS-README.md) — Audience, task, and domain navigation (normative; new-user, user, contributor, operator, auditor)
 - [`ember.domain.governance`](domains/governance/README.md) — Authority, evidence, and lifecycle (normative; contributor, operator, auditor)
 - [`ember.entry.root`](../README.md) — Evergreen project front door and public routes (normative; new-user, user, contributor, operator, auditor)
 - [`ember.guide.contributing`](contributing.md) — Canonical public contribution and evidence route (current; contributor)
@@ -32,7 +32,7 @@ This index is generated from `manifests/documentation/current-documents-v1.json`
 
 - [`ember.domain.lab`](domains/lab/README.md) — Cross-domain experiments and integration (normative; user, contributor, operator)
 - [`ember.guide.start`](domains/governance/guides/START-HERE.md) — First-reader inspection and installation route (current; new-user, user, operator)
-- [`ember.operator.map`](operator/README.md) — Canonical operator route (current; operator)
+- [`ember.operator.map`](domains/governance/operator/README.md) — Canonical operator route (current; operator)
 
 ## Model
 

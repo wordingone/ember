@@ -28,7 +28,7 @@ import path from "node:path";
 import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
 import { emberStatePath, EmberStateRootError } from "../utils/ember-state-root.ts";
 import { isHeadlessCapture, HEADLESS_CAPTURE_ENV } from "./headless-capture.ts";
-import type { TelemetryDiagnostics } from "./telemetry-watch.ts";
+import type { TelemetryDiagnostics } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
 
 // Re-exported so this module's existing importers and tests keep one import site. The
 // predicate itself lives in headless-capture.ts because the heartbeat is only ONE of the

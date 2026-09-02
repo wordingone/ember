@@ -23,7 +23,7 @@ import {
   CONTROL_CHANNEL_PATH,
   type FinetuneControlCmd,
   type FinetuneControlVerb,
-} from "./finetune-control.ts";
+} from "../../../../../../../tools/ember-cli/src/services/finetune-control.ts";
 
 export type OperatorControlAction = "START" | "PAUSE" | "RESUME" | "RESTART";
 

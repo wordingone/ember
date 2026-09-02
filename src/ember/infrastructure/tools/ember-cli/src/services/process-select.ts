@@ -34,7 +34,7 @@ import {
   type CommandButton,
   type CommandButtonActivation,
 } from "./command-buttons.ts";
-import { outstandingTrainOfferForSession } from "../commands/train.ts";
+import { outstandingTrainOfferForSession } from "../../../../../../../tools/ember-cli/src/commands/train.ts";
 
 // ---------------------------------------------------------------------------
 // Process / subordinate split

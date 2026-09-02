@@ -10,5 +10,5 @@ claim that the full protected plane is released. Evaluation may depend on Model,
 Infrastructure, and Governance.
 
 Smallest safe inspection: read the frozen evaluation specifications under
-[`docs/spec/`](../../spec/) and do not execute protected workloads. The exact deferral is in the
+[the frozen evaluation specifications](../governance/spec/) and do not execute protected workloads. The exact deferral is in the
 [architecture manifest](../../../manifests/architecture/domain-authority-v1.json).

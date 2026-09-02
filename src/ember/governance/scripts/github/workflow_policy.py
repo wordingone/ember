@@ -368,6 +368,7 @@ def validate_workflow(path: Path) -> list[str]:
                 if (
                     re.search(r"\b(bun|npm|pip|pytest|cargo|python)\b", run)
                     and "trusted-kernel/scripts/github/" not in run
+                    and "trusted-kernel/src/ember/governance/scripts/github/" not in run
                     and "pull_request_target" in event_names
                 ):
                     errors.append(

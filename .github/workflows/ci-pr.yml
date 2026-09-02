@@ -45,7 +45,7 @@ jobs:
       - name: Guard tracked Python self-location roots
         run: python -B scripts/check_self_location_roots.py --root . --baseline scripts/self-location-baseline.json
       - name: Compile changed governance tooling
-        run: python -B -m compileall -q scripts/github
+        run: python -B -m compileall -q src/ember/governance/scripts/github
       - name: Bootstrap exact-head live PR policy (read-only)
         if: github.event_name == 'pull_request'
         env:
@@ -75,7 +75,7 @@ jobs:
             --event-head-sha "${HEAD_SHA}" \
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
       - name: Run deterministic policy tests
-        run: python -B -m unittest discover -s scripts/github -p "test_*.py" -v
+        run: python -B -m unittest discover -s src/ember/governance/scripts/github -p "test_*.py" -v
       - name: Enforce Cond-4 battery surface transition
         if: github.event_name == 'pull_request'
         env:
@@ -268,7 +268,7 @@ jobs:
     timeout-minutes: 25
     defaults:
       run:
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -282,7 +282,7 @@ jobs:
       # Keep the merge gate executable and deterministic by naming only the
       # independently green suites that protect load-bearing production paths,
       # rather than making every PR inherit that historical failure surface.
-      - run: bun run test -- build-tools/lifecycle-smoke.test.ts build-tools/drive-job-memory-probe.test.ts commands/train.test.ts
+      - run: bun run test -- ./build-tools/lifecycle-smoke.test.ts ./build-tools/drive-job-memory-probe.test.ts ./commands/train.test.ts
       # The launcher compiles the cockpit straight into its external state root by
       # setting EMBER_BUILD_OUTFILE (#1330). Nothing in CI exercised that override, so
       # a regression in it only surfaced on a real launch. This runs BEFORE the default
@@ -315,7 +315,7 @@ jobs:
       - name: Verify repository guard selftests
         run: python -B src/ember/infrastructure/tools/repo_guard_selftest.py
       - name: Run root launcher suite
-        run: python -B -m unittest discover -s tests -p "test_ember_root_launcher.py" -v
+        run: python -B -m unittest discover -s tests/domain-governance -p "test_ember_root_launcher.py" -v
       - name: Verify versioned desktop deployment and shortcuts
         run: powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1
       - name: Verify Windows Job Object process-tree cleanup

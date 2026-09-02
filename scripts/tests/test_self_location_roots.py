@@ -158,6 +158,9 @@ def test_baseline_manifest_binds_operator_expiry_policy_and_exact_count(tmp_path
     rows = subject.scan_files(tmp_path, [source])
     frozen = baseline(rows)
     assert frozen["minted_on"] == "2026-09-01"
+    assert {key: frozen[key] for key in subject.BASELINE_GOAL_BINDING} == (
+        subject.BASELINE_GOAL_BINDING
+    )
     assert frozen["baselined_row_count"] == len(frozen["rows"]) == frozen["maximum_rows"]
     assert frozen["expiry_change_authority"] == "OPERATOR_ONLY"
     assert frozen["expiry_consequence"] == (
@@ -172,6 +175,19 @@ def test_baseline_manifest_binds_operator_expiry_policy_and_exact_count(tmp_path
     ).hexdigest()
     assert subject.enforce_baseline(rows, frozen, dt.date(2026, 9, 1)) == [
         "BASELINE_POLICY_INVALID"
+    ]
+
+
+def test_baseline_manifest_self_hash_binds_goal_metadata(tmp_path: Path) -> None:
+    source = write(
+        tmp_path / "src" / "nested" / "probe.py",
+        "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n",
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    frozen = baseline(rows)
+    frozen["goal_id"] = "EMBER-OTHER"
+    assert subject.enforce_baseline(rows, frozen, dt.date(2026, 9, 1)) == [
+        "BASELINE_SELF_HASH_INVALID"
     ]
 
 

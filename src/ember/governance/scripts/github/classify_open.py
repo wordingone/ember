@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from scripts.github import classify_open_engine as engine
+    from src.ember.governance.scripts.github import classify_open_engine as engine
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from scripts.github import classify_open_engine as engine
+    from src.ember.governance.scripts.github import classify_open_engine as engine
 
 
 def classify(item: dict[str, Any]) -> dict[str, Any]:

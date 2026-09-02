@@ -206,7 +206,7 @@ async function captureOperatorFrames(
 ): Promise<GoalLiveFrameCapture[]> {
   const React = (await import("react")).default;
   const { Text } = await import("../ink/components.ts");
-  const frontendShell = await import("../core/frontend-shell.ts");
+  const frontendShell = await import("../../../../../../../tools/ember-cli/src/core/frontend-shell.ts");
   const stream = new PassThrough() as PassThrough & { columns: number; rows: number };
   stream.columns = GOAL_LIVE_FRAME_WIDTH;
   stream.rows = GOAL_LIVE_FRAME_HEIGHT;

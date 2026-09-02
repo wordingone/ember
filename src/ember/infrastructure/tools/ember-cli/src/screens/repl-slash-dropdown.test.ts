@@ -17,9 +17,9 @@ import { describe, it, expect, afterAll } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
-import { ReplScreen } from "./repl.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
 
 const COLS = 80;
 // #561 P0-A: was 24. The banner (now an always-mounted, flexShrink:0-protected top-locked region,
