@@ -334,12 +334,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/disconfirmation_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg.py",
             "sha256": "9ed9b8aa7afdc1827c99fd433e5c1d4f9b65b0e1dda57d567e0e08a104941c37",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/disconfirmation_leg_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg_test.py",
             "sha256": "a42ab8e4fcb590700504177e20b019cc6eb738fdba750a3c559226d3ad11eff4",
             "present": true
           },
@@ -354,7 +354,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
             "sha256": "8eed3792224630f9ab4b56cd2b7bf029f3636b56c1a32d1e20e12326dc4503b9",
             "present": true
           },
@@ -374,7 +374,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_ts_authority.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_ts_authority.py",
             "sha256": "4a767362242225405b204f01cb732c7b33917e9d1fe76374e220dbab41a358c1",
             "present": true
           },

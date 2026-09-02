@@ -145,7 +145,7 @@ INVENTORY: tuple[dict, ...] = (
          path="src/ember/infrastructure/tools/ember-restart-3b/batch.py",
          provenance="Batch assembly and data-cursor discipline."),
     dict(category="training_loop", kind="file",
-         path="tools/ember-restart-3b/optimizer_transition.py",
+         path="src/ember/infrastructure/tools/ember-restart-3b/optimizer_transition.py",
          provenance="Optimizer state construction and transition rules."),
     dict(category="training_loop", kind="file",
          path="src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
