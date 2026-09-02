@@ -35,7 +35,7 @@ test("the CURRENT topology spec binds every added production consumer", () => {
   for (const path of [
     "src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-drift.ts",
     "src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-census.ts",
-    "tools/ember-cli/src/services/serving-topology-live.ts",
+    "src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-live.ts",
   ]) {
     expect(spec).toContain(`Consumer: \`${path}\``);
   }

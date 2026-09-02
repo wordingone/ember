@@ -36,7 +36,7 @@ test("the CURRENT spec binds every added production consumer", () => {
     "tools/ember-cli/src/services/process-memory-census.ts",
     "tools/ember-cli/src/services/memory-footprint-service.ts",
     "tools/ember-cli/src/services/memory-footprint-live.ts",
-    "tools/ember-cli/src/services/memory-footprint-cockpit.ts",
+    "src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-cockpit.ts",
   ]) {
     expect(spec).toContain(`Consumer: \`${path}\``);
   }

@@ -43,7 +43,7 @@ Frozen identity (issue #674 — canonical; DO NOT EDIT without a re-freeze):
 
 Device policy: CPU-only in this module.
 
-Selftest: python scripts/ember_bitnet_exact_twin.py
+Selftest: python src/ember/governance/scripts/ember_bitnet_exact_twin.py
   Marker: EMBER_BITNET_EXACT_TWIN_SELFTEST_PASS
 """
 

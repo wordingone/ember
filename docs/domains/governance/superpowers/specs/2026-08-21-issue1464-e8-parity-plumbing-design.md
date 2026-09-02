@@ -134,7 +134,7 @@ overwritten.
   composition-receipt closure, and no-overwrite behavior.
 - Add producer success, exact arithmetic, no-overwrite, missing/duplicate step,
   identity mismatch, E7 mismatch, and honest `FAIL` tests.
-- Replay `tests/test_r1_e8_validator.py` against the v2 E7 shape and assert that
+- Replay `tests/domain-governance/test_r1_e8_validator.py` against the v2 E7 shape and assert that
   the old `{loss, grad_norm}`-only shape still refuses `E7_SIGMA_MISSING`.
 
 ## Publication and runtime sequence

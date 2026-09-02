@@ -12,7 +12,7 @@ Same class as #1394's input admission; same cure: verify at consumption, fail cl
 
 ## Exact change
 
-### 1. New function — `scripts/build_fixed_prior_manifest.py`
+### 1. New function — `src/ember/governance/scripts/build_fixed_prior_manifest.py`
 
 ```python
 def assert_fresh(manifest_path: Path = REPO_ROOT / MANIFEST_REL) -> dict:
@@ -27,7 +27,7 @@ def assert_fresh(manifest_path: Path = REPO_ROOT / MANIFEST_REL) -> dict:
     if not ok:
         raise FixedPriorDriftError(
             "FIXED_PRIOR_MANIFEST_STALE: re-mint via "
-            "'python scripts/build_fixed_prior_manifest.py --write' at this "
+            "'python src/ember/governance/scripts/build_fixed_prior_manifest.py --write' at this "
             "checkout before launching; findings:\n" + "\n".join(findings))
     return {"manifest_path": str(MANIFEST_REL).replace("\\", "/"),
             "manifest_sha256": sha256_file(manifest_path)}
@@ -42,7 +42,7 @@ staleness — the run would execute under versions the declaration does not desc
 Add preflight `preflight_fixed_prior(cfg, root)` to the existing preflight chain
 (alongside `preflight_no_sub_3b` / `preflight_resource` / `preflight_storage` /
 `preflight_clean_genesis`): import `assert_fresh` from
-`scripts/build_fixed_prior_manifest.py` (via the existing `_ensure_tools_on_path`
+`src/ember/governance/scripts/build_fixed_prior_manifest.py` (via the existing `_ensure_tools_on_path`
 / sys.path mechanics, `root / "scripts"`), call it, and embed the returned
 `fixed_prior` block in the packet. Any `FixedPriorDriftError` -> preflight FAIL,
 packet not producible, so `certified_train_launch.py` (the ONLY path ember-cli

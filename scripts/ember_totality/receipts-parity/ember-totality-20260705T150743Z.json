@@ -439,7 +439,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c5.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c5.py",
             "sha256": "71549affc9f9968717e195649f4e9fbabb491052079e2181bff46f32362b82ce",
             "present": true
           },
@@ -519,7 +519,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_legib.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_legib.py",
             "sha256": "d1b78bb875299b4fd6188febee853ec448d656213ba64599fe437fb470a170e5",
             "present": true
           },

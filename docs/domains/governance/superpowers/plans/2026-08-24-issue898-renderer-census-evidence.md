@@ -350,7 +350,7 @@ input substitution.
 ### Task 4: RED/GREEN executable Bun entrypoint
 
 **Files:**
-- Create: `tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts`
 - Create after RED: `tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts`
 
 **Interfaces:**
@@ -389,7 +389,7 @@ test("parses the exact evidence invocation", () => {
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 ```
 
 - [ ] **Step 3: Implement strict parser and main path**
@@ -419,7 +419,7 @@ Run both focused test files together and require pristine output.
 - [ ] **Step 1: Run focused and neighboring suites**
 
 ```powershell
-bun test tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+bun test tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 bun test tools/ember-cli/src/services/issue898-installed-cockpit-soak.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline-diagnostic.test.ts
 ```
 
@@ -434,7 +434,7 @@ never relabel baseline failures as GREEN.
 ```powershell
 git diff --check
 git status --short
-git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 ```
 
 Confirm no runtime producer, existing receipt schema, or arm custody path changed.

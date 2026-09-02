@@ -18,7 +18,7 @@ Consumer: `tools/ember-cli/src/services/memory-footprint-service.ts`
 
 Consumer: `tools/ember-cli/src/services/memory-footprint-live.ts`
 
-Consumer: `tools/ember-cli/src/services/memory-footprint-cockpit.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-cockpit.ts`
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/issue1455-memory-soak-receipt.ts`
 

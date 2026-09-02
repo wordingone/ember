@@ -44,7 +44,7 @@
 **Files:**
 - Modify: `tools/ember-cli/src/ink/termio.ts`
 - Modify: `tools/ember-cli/src/ink/stdin-bridge.ts`
-- Modify: `tools/ember-cli/src/ink/hooks.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/hooks.ts`
 - Modify: `tools/ember-cli/src/ink/reconciler.ts`
 - Modify: `tools/ember-cli/src/ink/mouse-input.test.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
