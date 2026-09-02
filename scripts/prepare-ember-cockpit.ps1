@@ -4,7 +4,8 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-. (Join-Path $PSScriptRoot "ember-launch-staging.ps1")
+$repositoryRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $repositoryRoot "src\ember\governance\scripts\ember-launch-staging.ps1")
 
 $BunVersion = "1.3.12"
 $BunArchiveUrl = "https://github.com/oven-sh/bun/releases/download/bun-v1.3.12/bun-windows-x64.zip"

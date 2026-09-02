@@ -27,17 +27,17 @@ Its operating constraint is one consumer GPU.
   `python src/ember/governance/scripts/verify_authority_conservation.py --root .`. Success reports authority
   conservation; it requires no credentials, weights, or GPU and grants no model capability.
 - Exact mutable current truth lives only in
-  [`docs/domains/governance/authority/CONTINUITY.md`](../../../authority/CONTINUITY.md); entry documentation links rather
+  [`docs/domains/governance/authority/CONTINUITY.md`](../authority/CONTINUITY.md); entry documentation links rather
   than copying it. Public roadmap certificates, not prose or progress bars, carry completion.
 - Contribution and independent reproduction start at
   [`docs/contributing.md`](../../../contributing.md) and the public
-  [reproducibility charter](../../../charter/REPRODUCIBILITY.md): bind an exact public source, replay
+  [reproducibility charter](../charter/REPRODUCIBILITY.md): bind an exact public source, replay
   documented commands, and verify source identities and receipts without hidden or local evidence.
 
 ## Inspect the repository
 
-Begin at the root README, then use the [documentation map](../../../DOCS-README.md). The canonical mutable
-execution position is [continuity](../../../authority/CONTINUITY.md); the README deliberately does not
+Begin at the root README, then use the [documentation map](../DOCS-README.md). The canonical mutable
+execution position is [continuity](../authority/CONTINUITY.md); the README deliberately does not
 copy its changing identities. The [roadmap](../roadmap/README.md) distinguishes target contracts
 from certified completion.
 
@@ -78,6 +78,6 @@ validation, exact requirements, and claim boundaries.
 - Understand the eight domains and Lab: [system overview](../../../architecture/system-overview.md)
 - Reproduce public evidence: [verification guide](../../../guides/VERIFY.md)
 - Contribute: [contribution guide](../../../contributing.md)
-- Operate current surfaces: [operator route](../../../operator/README.md)
-- Audit authority and mutable state: [continuity](../../../authority/CONTINUITY.md)
+- Operate current surfaces: [operator route](../operator/README.md)
+- Audit authority and mutable state: [continuity](../authority/CONTINUITY.md)
 - Define project vocabulary: [glossary](../../../GLOSSARY.md)

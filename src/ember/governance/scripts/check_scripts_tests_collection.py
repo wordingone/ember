@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Fail-closed collection guard for the ci-nightly ``scripts/tests`` suite.
+"""Fail-closed collection guard for the canonical governance scripts test suite.
 
 The normal suite invocation reports test failures, but a module-level import
 failure can truncate collection before the suite reports its population.  This
@@ -78,7 +78,7 @@ def run_collection(
         "pytest",
         "--collect-only",
         "-q",
-        "scripts/tests",
+        "src/ember/governance/scripts/tests",
     )
     try:
         completed = subprocess.run(

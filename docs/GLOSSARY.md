@@ -22,4 +22,4 @@ contract. A receipt proves only its bound fields and claim boundary.
 execution, measurement, independent reproduction, or admission may still be absent.
 
 For exact mutable definitions and execution state, use
-[`authority/CONTINUITY.md`](authority/CONTINUITY.md).
+[`docs/domains/governance/authority/CONTINUITY.md`](domains/governance/authority/CONTINUITY.md).

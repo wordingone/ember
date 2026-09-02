@@ -258,7 +258,7 @@ describe("truncation marks itself", () => {
 // PRODUCTION ENTRY — the test that would have caught "wired but nothing feeds it"
 // ---------------------------------------------------------------------------
 
-import { getCommands, resetCommandRegistryForTests, clearCommandsCache } from "../command-registry.ts";
+import { getCommands, resetCommandRegistryForTests, clearCommandsCache } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
 import { Homescreen, FeedComponent, rootDisclosure, samePathForDisplay } from "./logo-homescreen.ts";
 
 function findText(el: any, pred: (s: string) => boolean): string | null {

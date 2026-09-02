@@ -13,7 +13,7 @@
 import {
   getCommands as realGetCommands,
   findCommand as realFindCommand,
-} from "../command-registry.ts";
+} from "../../../../../../../tools/ember-cli/src/command-registry.ts";
 import type {
   CommandContext,
   CommandResult,

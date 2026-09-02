@@ -14,9 +14,9 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-if __package__:
-    from .verify_authority_conservation import authority_path
-else:
+try:
+    from src.ember.governance.scripts.verify_authority_conservation import authority_path
+except ModuleNotFoundError:  # Direct execution with only this script directory importable.
     from verify_authority_conservation import authority_path
 
 

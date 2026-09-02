@@ -25,7 +25,7 @@ capability or admission claims.
 
 The integration founder declares these integration namespaces before the first commit:
 
-- `docs/ember-restart/`
+- `docs/domains/governance/ember-restart/`
 - `scripts/ember_restart/`
 - `tests/ember_restart/`
 - the narrow Ember CLI model-seat and process-entry changes required to consume an admitted manifest

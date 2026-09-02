@@ -30,7 +30,7 @@ verified at each growth event, under iso-FLOP accounting — not the growth oper
   with budget-matched evaluation, the delta narrows or the class is re-registered (dated).
 
 **Prior-art sweep adjudication (dated 2026-07-05, pre-launch — §6 obligation DISCHARGED;
-sweep log: state/c8-priorart-sweep-20260705.md, 17 works, 8 axes):** criterion-TRIGGERED growth
+sweep log: historical pre-launch sweep log (not tracked at current head), 17 works, 8 axes):** criterion-TRIGGERED growth
 is established prior art and is hereby named, not claimed: When-To-Grow/ORL (arXiv 2401.03104),
 LAG (arXiv 2406.02469 — spot-verified: early-dynamics STRATEGY SELECTION, single-stage, no
 function-preservation verification, no matched-compute framing), SECNN/NES (arXiv 2401.05686),

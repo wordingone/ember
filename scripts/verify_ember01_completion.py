@@ -47,7 +47,18 @@ from typing import Any, Callable, Sequence
 
 sys.path.insert(
     0,
-    str(Path(__file__).resolve().parent / "ember_01_custody"),
+    str(
+        next(
+            parent
+            for parent in Path(__file__).resolve().parents
+            if (parent / "pyproject.toml").is_file()
+        )
+        / "src"
+        / "ember"
+        / "governance"
+        / "scripts"
+        / "ember_01_custody"
+    ),
 )
 from issue_census import canonical_open_issue_source_snapshot
 
@@ -165,7 +176,18 @@ LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
-COND4_SURFACE_VALIDATOR_PATH = Path(__file__).with_name("cond4_behavior_surface.py")
+COND4_SURFACE_VALIDATOR_PATH = (
+    next(
+        parent
+        for parent in Path(__file__).resolve().parents
+        if (parent / "pyproject.toml").is_file()
+    )
+    / "src"
+    / "ember"
+    / "governance"
+    / "scripts"
+    / "cond4_behavior_surface.py"
+)
 COND4_SURFACE_MANIFEST_REL = (
     "manifests/ember-01-identity/cond4-behavior-surface-v1.json"
 )

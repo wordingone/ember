@@ -2,7 +2,7 @@
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { describe, expect, test } from "bun:test";
-import { freshInteractiveReplConfig } from "./process-entry.ts";
+import { freshInteractiveReplConfig } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
 
 describe("#1215 process-entry sandbox default", () => {
   test("the production interactive REPL is constructed in sandbox mode", () => {

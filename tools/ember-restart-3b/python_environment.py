@@ -1547,7 +1547,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = args.root.resolve()
     manifest_path = root / "manifests" / "python-environment-v1.json"
-    build_manifest_path = root / "tools" / "ember-restart-3b" / "python-environment-build-v1.json"
+    build_manifest_path = (
+        root
+        / "src"
+        / "ember"
+        / "infrastructure"
+        / "tools"
+        / "ember-restart-3b"
+        / "python-environment-build-v1.json"
+    )
     pyproject_path = root / "pyproject.toml"
     manifest = load_manifest(manifest_path)
     build_manifest = load_build_manifest(build_manifest_path)

@@ -22,7 +22,7 @@ import tempfile
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO_ROOT = str(next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()))
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "src", "ember", "governance", "scripts")
 sys.path.insert(0, SCRIPTS_DIR)
 

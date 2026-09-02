@@ -265,7 +265,7 @@ class DocsFreshnessChecker:
     def check_front_door_marker_coherence(self):
         readme = (self.repo / "README.md").read_text(encoding="utf-8")
         continuity = (
-            self.repo / "docs" / "authority" / "CONTINUITY.md"
+            self.repo / "docs" / "domains" / "governance" / "authority" / "CONTINUITY.md"
         ).read_text(encoding="utf-8")
         expected = (
             ("state-as-of", STATE_AS_OF_PATTERN, 0, 1),
@@ -385,7 +385,7 @@ class DocsFreshnessChecker:
     def check_readme_state_marker(self):
         """Check that CONTINUITY.md state-as-of marker is recent."""
         continuity = (
-            self.repo / "docs" / "authority" / "CONTINUITY.md"
+            self.repo / "docs" / "domains" / "governance" / "authority" / "CONTINUITY.md"
         ).read_text(encoding="utf-8")
 
         # Extract state-as-of: YYYY-MM-DD
@@ -498,7 +498,7 @@ def run_selftests():
 
         # Create minimal structure
         (tmpdir / "scripts").mkdir()
-        (tmpdir / "docs" / "authority").mkdir(parents=True)
+        (tmpdir / "docs" / "domains" / "governance" / "authority").mkdir(parents=True)
         (tmpdir / "receipts").mkdir()
 
         # Create README.md with broken reference
@@ -511,7 +511,14 @@ See `docs/NONEXISTENT.md` for details.
 See `scripts/test.py` for the harness.
 
 """)
-        (tmpdir / "docs" / "authority" / "CONTINUITY.md").write_text(
+        (
+            tmpdir
+            / "docs"
+            / "domains"
+            / "governance"
+            / "authority"
+            / "CONTINUITY.md"
+        ).write_text(
             "<!-- state-as-of: 2026-07-06 -->\n",
             encoding="utf-8",
         )

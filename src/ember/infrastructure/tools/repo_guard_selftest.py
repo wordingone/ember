@@ -126,6 +126,7 @@ def make_fixture(branch: str = "fix/selftest") -> Path:
     before calling commit_fixture()."""
     tmp = Path(tempfile.mkdtemp(prefix="repo_guard_selftest_"))
     subprocess.run(["git", "init", "-q", "-b", branch, str(tmp)], check=True)
+    (tmp / "scripts").mkdir(exist_ok=True)
     for rel in GUARD_SUPPORT_FILES:
         dst = tmp / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -150,7 +151,7 @@ def make_fixture(branch: str = "fix/selftest") -> Path:
 
 
 def write_fixture_crosswalk(root: Path) -> None:
-    matrix = root / "docs" / "authority" / "ember-authority-matrix.md"
+    matrix = root / "docs" / "domains" / "governance" / "authority" / "ember-authority-matrix.md"
     matrix_sha = hashlib.sha256(matrix.read_bytes()).hexdigest()
     discrepancy_ids = sorted(
         set(re.findall(r"\|\s*(D-\d{3})\s*\|", matrix.read_text(encoding="utf-8")))
@@ -266,6 +267,12 @@ def hashed_denylist_path(root: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
+
+def names_exclude_path(root: Path) -> Path:
+    path = root / "src" / "ember" / "infrastructure" / "tools" / "repo-guard-names-exclude.cfg"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
 def make_split_kernel(test_word: str) -> Path:
     """Build the smallest real trusted kernel with a test-only hashed denylist."""
     kernel = Path(tempfile.mkdtemp(prefix="repo-guard-kernel-"))
@@ -288,9 +295,7 @@ def make_split_kernel(test_word: str) -> Path:
         encoding="utf-8",
         newline="\n",
     )
-    (kernel / "tools" / "repo-guard-names-exclude.cfg").write_text(
-        "", encoding="utf-8", newline="\n"
-    )
+    names_exclude_path(kernel).write_text("", encoding="utf-8", newline="\n")
     return kernel
 
 
@@ -484,7 +489,11 @@ def test_green_canonical_authority_paths():
     try:
         for name in ("INVARIANT.md", "GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md"):
             assert not (tmp / name).exists()
-            assert (tmp / "docs" / "authority" / name).is_file()
+        assert (tmp / "docs" / "authority" / "INVARIANT.md").is_file()
+        for name in ("GOVERNANCE.md", "CONTINUITY.md", "REDACTIONS.md"):
+            assert (
+                tmp / "docs" / "domains" / "governance" / "authority" / name
+            ).is_file()
         assert not (tmp / "STATE.md").exists()
         assert not (tmp / "docs" / "authority" / "STATE.md").exists()
         assert (
@@ -508,12 +517,10 @@ def test_green_canonical_authority_paths():
 def test_green_domain_state_authority_path():
     tmp = make_fixture("fix/selftest-domain-state-authority")
     try:
-        legacy_state = tmp / "docs" / "authority" / "STATE.md"
         domain_state = (
             tmp / "docs" / "domains" / "governance" / "authority" / "STATE.md"
         )
-        domain_state.parent.mkdir(parents=True, exist_ok=True)
-        legacy_state.replace(domain_state)
+        assert domain_state.is_file()
         commit_fixture(tmp)
 
         rc, output = run_guard(tmp)
@@ -532,8 +539,8 @@ def test_red_duplicate_state_authority_paths():
         domain_state = (
             tmp / "docs" / "domains" / "governance" / "authority" / "STATE.md"
         )
-        domain_state.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(legacy_state, domain_state)
+        legacy_state.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(domain_state, legacy_state)
         commit_fixture(tmp)
 
         rc, output = run_guard(tmp)
@@ -558,7 +565,7 @@ def test_green_domain_goal_authority_path():
             old_goal.replace(domain_goal)
         # This test isolates repo-guard's structural path leg. Full semantic
         # authority tolerance is covered by test_authority_conservation.py.
-        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+        (tmp / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py").write_text(
             "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
         )
         commit_fixture(tmp)
@@ -582,7 +589,7 @@ def test_red_both_migrated_goal_authority_paths():
         duplicate_goal.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source_goal, duplicate_goal)
         # Keep this deliberate-red leg specific to duplicate path detection.
-        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+        (tmp / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py").write_text(
             "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
         )
         commit_fixture(tmp)
@@ -611,9 +618,9 @@ def test_red_duplicate_authority_path():
                 tmp / resolve_goal_support_file(tmp, tracked=False)
                 if name == "GOAL.md"
                 else (
-                    tmp / "docs" / "domains" / "governance" / "authority" / name
-                    if name == "STATE.md"
-                    else authority / name
+                    authority / name
+                    if name == "INVARIANT.md"
+                    else tmp / "docs" / "domains" / "governance" / "authority" / name
                 )
             )
             shutil.copyfile(source, tmp / name)
@@ -776,7 +783,7 @@ def test_red_name_outside_exclude_scope():
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
-        (tmp / "tools" / "repo-guard-names-exclude.cfg").write_text(
+        names_exclude_path(tmp).write_text(
             "# selftest fixture\ntokenizer/\n", encoding="utf-8", newline="\n",
         )
         (tmp / "docs").mkdir(exist_ok=True)
@@ -803,7 +810,7 @@ def test_green_name_inside_excluded_path():
             "# selftest fixture — not a real denylist\n" + sha256_lower(test_word) + "\n",
             encoding="utf-8", newline="\n",
         )
-        (tmp / "tools" / "repo-guard-names-exclude.cfg").write_text(
+        names_exclude_path(tmp).write_text(
             "# selftest fixture\ntokenizer/\n", encoding="utf-8", newline="\n",
         )
         (tmp / "tokenizer").mkdir()
@@ -867,7 +874,7 @@ def test_trusted_kernel_ignores_subject_guard_and_helpers():
             encoding="utf-8",
             newline="\n",
         )
-        (tmp / "scripts" / "verify_authority_conservation.py").write_text(
+        (tmp / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py").write_text(
             "from pathlib import Path\n"
             "Path('candidate-helper-ran').write_text('unsafe', encoding='utf-8')\n"
             "raise SystemExit(0)\n",

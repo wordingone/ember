@@ -18,7 +18,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { pathToFileURL } from "url";
 import { mkdir, writeFile, rm } from "fs/promises";
-import { createWorldStateCommand } from "./world-state.ts";
+import { createWorldStateCommand } from "../../../../../../../tools/ember-cli/src/commands/world-state.ts";
 import { DEFAULT_STALE_THRESHOLD_MS } from "../core/receipt-age.ts";
 
 const SRC_DIR = join(import.meta.dir, ".."); // tools/ember-cli/src (parent of commands/)

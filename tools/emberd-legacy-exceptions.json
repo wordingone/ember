@@ -31,7 +31,7 @@
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "54687fd47750e8ff4918a585ae1f98ffe70db0112ec9389115ed8408806feec8",
+      "sha256": "596fbaa2b2e0d0d5620d843ed7ab7fde2ede3d18961d8209e9dc4c9693634b42",
       "reason": "preparation-only successor retains retired daemon spellings solely in fail-closed migration checks and operator guidance for legacy state; it never invokes that retired daemon"
     }
   ]

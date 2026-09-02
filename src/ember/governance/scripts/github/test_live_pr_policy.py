@@ -84,7 +84,8 @@ def human_pr() -> dict[str, object]:
 
 class LivePullRequestPolicyTests(unittest.TestCase):
     def test_dependabot_github_actions_prefix_matches_live_policy(self) -> None:
-        config_path = pathlib.Path(__file__).parents[2] / ".github" / "dependabot.yml"
+        root = next(parent for parent in pathlib.Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
+        config_path = root / ".github" / "dependabot.yml"
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         updates = [
             update

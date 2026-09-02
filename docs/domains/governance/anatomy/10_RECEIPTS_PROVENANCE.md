@@ -46,7 +46,7 @@ Receipts live under `receipts/`, generally namespaced by subsystem
 (`receipts/ember-anatomy/`, `receipts/ember-restart-3b/`,
 `receipts/process-visibility/`, `receipts/ember-totality-audit/`, etc.) with
 filenames carrying a compact UTC timestamp suffix
-(`<name>-<YYYYMMDDTHHMMSSZ>.json`). `scripts/ember_totality/receipts-totality/`
+(`<name>-<YYYYMMDDTHHMMSSZ>.json`). `src/ember/governance/scripts/ember_totality/receipts-totality/`
 is a special-cased sibling directory holding the totality board's own
 receipts (excluded from the generic receipts/ scan to avoid the board
 recursively citing itself — see 11_TOTALITY_BOARD_CONDITIONS.md).

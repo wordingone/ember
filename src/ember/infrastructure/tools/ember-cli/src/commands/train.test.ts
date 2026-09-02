@@ -16,7 +16,7 @@ import {
   createTrainCommand,
   type LaunchPacketRunResult,
   type CertifiedLaunchHandle,
-} from "./train.ts";
+} from "../../../../../../../tools/ember-cli/src/commands/train.ts";
 import type { CommandContext } from "../types/command-types.ts";
 import { tryDispatchSlashCommand } from "../services/slash-dispatch.ts";
 import {

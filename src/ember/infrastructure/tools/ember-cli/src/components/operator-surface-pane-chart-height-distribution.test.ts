@@ -5,10 +5,10 @@
 import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { OperatorSurfacePane, type OperatorSurfacePaneProps } from "./operator-surface-pane.ts";
 import type { HostMetricSeries, HostTelemetrySnapshot } from "../services/host-telemetry-poller.ts";
-import type { TelemetryState } from "../services/telemetry-watch.ts";
+import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
 
 function telemetry(overrides: Partial<TelemetryState> = {}): TelemetryState {
   return { recentEvents: [], ...overrides };

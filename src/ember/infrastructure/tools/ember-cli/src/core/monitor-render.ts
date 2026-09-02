@@ -15,7 +15,7 @@
 // "${status}: ${reason}" (core/ember-world-state.ts), so splitStatusAndReason parses it back out
 // on the first ": " rather than adding a new field to the shared Claim shape.
 
-import type { Claim, EmberWorldState, BoardConditionTransition } from "./ember-world-state.ts";
+import type { Claim, EmberWorldState, BoardConditionTransition } from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
 import { formatReceiptAge, isReceiptStale } from "./receipt-age.ts";
 import { color as tokenColor } from "../components/design-system.ts";
 

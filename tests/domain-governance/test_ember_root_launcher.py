@@ -25,8 +25,9 @@ def canonical(path: str | Path) -> str:
     return os.path.normcase(os.path.realpath(path))
 PUBLIC_LAUNCHER = REPOSITORY / "tools" / "launchers" / "Ember.cmd"
 LAUNCH_IMPL = REPOSITORY / "scripts" / "prepare-ember-cockpit.ps1"
-LAUNCH_STAGING = REPOSITORY / "scripts" / "ember-launch-staging.ps1"
-WINDOW_PLACEMENT = REPOSITORY / "scripts" / "ember-window-placement.ps1"
+GOVERNANCE_SCRIPTS = REPOSITORY / "src" / "ember" / "governance" / "scripts"
+LAUNCH_STAGING = GOVERNANCE_SCRIPTS / "ember-launch-staging.ps1"
+WINDOW_PLACEMENT = GOVERNANCE_SCRIPTS / "ember-window-placement.ps1"
 START_HERE = REPOSITORY / "docs" / "domains" / "governance" / "guides" / "START-HERE.md"
 
 
@@ -41,10 +42,10 @@ class EmberRootLauncherTests(unittest.TestCase):
         launcher.parent.mkdir(parents=True)
         shutil.copy2(PUBLIC_LAUNCHER, launcher)
         shutil.copy2(LAUNCH_IMPL, root / "scripts" / "prepare-ember-cockpit.ps1")
-        # The preparation helper dot-sources the staging sibling at startup; the
-        # fixture mirrors the deployed scripts/ layout so the copy can actually run.
-        shutil.copy2(LAUNCH_STAGING, root / "scripts" / "ember-launch-staging.ps1")
-        shutil.copy2(WINDOW_PLACEMENT, root / "scripts" / "ember-window-placement.ps1")
+        fixture_governance = root / "src" / "ember" / "governance" / "scripts"
+        fixture_governance.mkdir(parents=True)
+        shutil.copy2(LAUNCH_STAGING, fixture_governance / "ember-launch-staging.ps1")
+        shutil.copy2(WINDOW_PLACEMENT, fixture_governance / "ember-window-placement.ps1")
         (source / "entrypoints" / "main.ts").write_text("throw new Error('fixture only');\n", encoding="utf-8")
         (source / "package.json").write_text('{"name":"ember-cli","type":"module"}\n', encoding="utf-8")
         (source / "bun.lock").write_text("fixture-lock\n", encoding="utf-8")

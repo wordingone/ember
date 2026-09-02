@@ -19,7 +19,7 @@ import { useInput } from "../ink/hooks.ts";
 import type { CognitiveMode } from "../cognitive-mode.ts";
 import { modeGlyph as cognitiveGlyph } from "../cognitive-mode.ts";
 import { telemetryMemoKey } from "../services/telemetry-label.ts";
-import type { TelemetryState } from "../services/telemetry-watch.ts";
+import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
 import { normalizeModelSeatState, type ModelSeatState } from "../entrypoints/model-seat.ts";
 import type { PollFailureStatusEntry } from "../services/poll-failure-status.ts";
 

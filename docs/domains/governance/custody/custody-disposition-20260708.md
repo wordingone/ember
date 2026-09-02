@@ -410,7 +410,7 @@ existed either), the true path here **is real** — verified present on disk in 
 tree at the exact full path the citer's own field spells out (`"receipts/"` matched here as a
 substring inside `"...serve-receipts/..."`, the identical extraction defect as the original Class
 3 rows, just with a real file at the far end this time). It is not a `receipts/` custody artifact
-at all: it lives under `tools/ember-cli/state/`, which the repo's own `.gitignore` excludes
+at all: it lives under the ignored ember-cli state directory, which the repo's own `.gitignore` excludes
 wholesale (`state/` pattern, confirmed via `git check-ignore -v`), and it is machine-local runtime
 sentinel state (a serve-readiness marker), not evidence a receipt should cite by a `receipts/`-
 rooted path in the first place.

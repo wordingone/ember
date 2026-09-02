@@ -16,7 +16,7 @@ import React from "react";
 import type { RegistryCommand } from "../types/command-types.ts";
 import { Box, Text } from "../ink/components.ts";
 import { color, PANEL_BORDER_STYLE } from "./design-system.ts";
-import { truncateWithEllipsis, slashDropdownDescriptionWidth } from "../services/slash-dropdown.ts";
+import { truncateWithEllipsis, slashDropdownDescriptionWidth } from "../../../../../../../tools/ember-cli/src/services/slash-dropdown.ts";
 
 export interface SlashDropdownProps {
   /** Already filtered + capped to the visible slice (services/slash-dropdown.ts's

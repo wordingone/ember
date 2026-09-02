@@ -15,7 +15,7 @@
 
 import { describe, it, expect } from "bun:test";
 
-import { renderMsgDispatch } from "./repl.ts";
+import { renderMsgDispatch } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 import {
   buildMessageLookups,
   CompactionProgressMessage,

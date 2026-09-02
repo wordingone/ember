@@ -17,7 +17,7 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.ember.governance.src.ember.governance.scripts.github.labels_engine import (  # noqa: E402,F401
+from src.ember.governance.scripts.github.labels_engine import (  # noqa: E402,F401
     MigrationError,
     RecordingClient,
     apply_plan,

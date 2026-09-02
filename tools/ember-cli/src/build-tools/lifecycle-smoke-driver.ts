@@ -22,10 +22,10 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
-import { headlessCaptureEnv } from "../services/headless-capture.ts";
-import { READY_OSC } from "../cli/ready-sentinel.ts";
-import { operatorPipeName } from "../services/operator-pipe.ts";
-import { cockpitCompileArgs } from "./build-cockpit.ts";
+import { headlessCaptureEnv } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/headless-capture.ts";
+import { READY_OSC } from "../../../../src/ember/infrastructure/tools/ember-cli/src/cli/ready-sentinel.ts";
+import { operatorPipeName } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/operator-pipe.ts";
+import { cockpitCompileArgs } from "../../../../src/ember/infrastructure/tools/ember-cli/src/build-tools/build-cockpit.ts";
 import {
   LIFECYCLE_ACTIONS,
   validateLifecycleActionArtifacts,
@@ -34,7 +34,7 @@ import {
   type LifecycleActionEvidence,
   type LifecycleReceipt,
   type LifecycleStateEvidence,
-} from "./lifecycle-smoke.ts";
+} from "../../../../src/ember/infrastructure/tools/ember-cli/src/build-tools/lifecycle-smoke.ts";
 
 const { Terminal } = xtermHeadless;
 type HeadlessTerminal = InstanceType<typeof Terminal>;

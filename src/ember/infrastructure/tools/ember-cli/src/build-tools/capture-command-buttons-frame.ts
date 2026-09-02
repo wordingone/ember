@@ -25,10 +25,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
-import { ReplScreen } from "../screens/repl.ts";
-import { startTelemetryWatch } from "../services/telemetry-watch.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { startTelemetryWatch } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
 import { headlessCaptureEnv } from "../services/headless-capture.ts";
 
 // Belt and braces: writers that read the ambient process env rather than the screen's `env` prop

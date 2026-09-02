@@ -15,7 +15,7 @@ import {
   serializePatchRuns,
   type FrameCell,
   type RenderNode,
-} from "./rendering-pipeline.ts";
+} from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { createLayoutNode } from "./layout-engine.ts";
 
 interface RunFixture {
