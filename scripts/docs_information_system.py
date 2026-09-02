@@ -507,22 +507,77 @@ def validate_reader_instrument(root: Path, instrument: dict[str, Any]) -> None:
         raise DocsInfoError("READER_INSTRUMENT_V3_PREDECESSOR_BINDING_INVALID")
 
 
-def reference_target_resolves(root: Path, document: Path, target: str) -> bool:
+def tracked_repository_paths(root: Path) -> set[str]:
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=NO_WINDOW,
+        check=False,
+    )
+    if result.returncode:
+        raise DocsInfoError("TRACKED_REPOSITORY_PATHS_UNAVAILABLE")
+    return {
+        value.decode("utf-8")
+        for value in result.stdout.split(b"\0")
+        if value
+    }
+
+
+def normalized_repository_target(base: PurePosixPath, target: str) -> str | None:
+    parts: list[str] = []
+    for part in (base / PurePosixPath(target.replace("\\", "/"))).parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not parts:
+                return None
+            parts.pop()
+            continue
+        parts.append(part)
+    return "/".join(parts)
+
+
+def tracked_target_exists(target: str | None, tracked_paths: set[str]) -> bool:
+    if target is None:
+        return False
+    prefix = target.rstrip("/") + "/"
+    return target in tracked_paths or any(path.startswith(prefix) for path in tracked_paths)
+
+
+def reference_target_resolves(
+    root: Path,
+    document: Path,
+    target: str,
+    *,
+    tracked_paths: set[str] | None = None,
+) -> bool:
     if "://" in target:
         return False
-    try:
-        root_candidate = root / target
-        if root_candidate.exists():
-            return True
-        return (document.parent / target).exists()
-    except OSError:
-        return False
+    if tracked_paths is None:
+        tracked_paths = tracked_repository_paths(root)
+    document_relative = PurePosixPath(document.relative_to(root).as_posix())
+    return tracked_target_exists(
+        normalized_repository_target(PurePosixPath(), target), tracked_paths
+    ) or tracked_target_exists(
+        normalized_repository_target(document_relative.parent, target), tracked_paths
+    )
 
 
 def current_unresolved_reference_rows(
-    root: Path, pattern: re.Pattern[str],
+    root: Path,
+    pattern: re.Pattern[str],
+    *,
+    tracked_paths: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    documents = [root / "README.md", *sorted((root / "docs").rglob("*.md"))]
+    if tracked_paths is None:
+        tracked_paths = tracked_repository_paths(root)
+    document_names = sorted(
+        path for path in tracked_paths
+        if path == "README.md" or (path.startswith("docs/") and path.endswith(".md"))
+    )
+    documents = [root / PurePosixPath(path) for path in document_names]
     rows: dict[tuple[str, int, str], dict[str, Any]] = {}
     for document in documents:
         relative = document.relative_to(root).as_posix()
@@ -531,7 +586,9 @@ def current_unresolved_reference_rows(
         ):
             for match in pattern.finditer(line):
                 target = match.group(1).rstrip(".,:;)]}")
-                if reference_target_resolves(root, document, target):
+                if reference_target_resolves(
+                    root, document, target, tracked_paths=tracked_paths
+                ):
                     continue
                 containing_token = next(
                     (
@@ -548,7 +605,10 @@ def current_unresolved_reference_rows(
                     "target": target,
                     "containing_token": containing_token,
                     "containing_token_resolves": reference_target_resolves(
-                        root, document, containing_token
+                        root,
+                        document,
+                        containing_token,
+                        tracked_paths=tracked_paths,
                     ),
                 }
     return [rows[key] for key in sorted(rows)]
@@ -586,8 +646,13 @@ def validate_current_reference_reconciliation(
     }
     if classifiers != expected_classifiers:
         raise DocsInfoError("CURRENT_REFERENCE_RECONCILIATION_CLASSIFIER_INVALID")
-    filing_rows = current_unresolved_reference_rows(root, FILING_REFERENCE_RE)
-    corrected_rows = current_unresolved_reference_rows(root, CORRECTED_REFERENCE_RE)
+    tracked_paths = tracked_repository_paths(root)
+    filing_rows = current_unresolved_reference_rows(
+        root, FILING_REFERENCE_RE, tracked_paths=tracked_paths
+    )
+    corrected_rows = current_unresolved_reference_rows(
+        root, CORRECTED_REFERENCE_RE, tracked_paths=tracked_paths
+    )
     filing_by_key = {
         (row["document"], row["line"], row["target"]): row for row in filing_rows
     }
@@ -636,7 +701,12 @@ def validate_current_reference_reconciliation(
                 or not isinstance(canonical_token, str)
                 or str(row["target"]) not in canonical_token
                 or canonical_token != current["containing_token"]
-                or not reference_target_resolves(root, document, canonical_token)
+                or not reference_target_resolves(
+                    root,
+                    document,
+                    canonical_token,
+                    tracked_paths=tracked_paths,
+                )
             ):
                 raise DocsInfoError(
                     f"CURRENT_REFERENCE_RECONCILIATION_CONTAINER_INVALID:{key}"
