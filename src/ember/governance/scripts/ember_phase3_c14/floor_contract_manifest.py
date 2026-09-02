@@ -113,7 +113,7 @@ FORBIDDEN_DISPOSITION_WORDS = frozenset([
 ])
 
 NATIVE_ENGINE_ROW_KEY = "floor_contract.ember-native-engine"
-NATIVE_ENGINE_SOURCE = "docs/spec/ember-native-engine-trigger-ladder-v1.md"
+NATIVE_ENGINE_SOURCE = "docs/domains/governance/spec/ember-native-engine-trigger-ladder-v1.md"
 
 
 # ---------------------------------------------------------------------------
@@ -1220,7 +1220,7 @@ def _run_cpu_selftest(verbose: bool = True) -> bool:
     # T4: manifest builds and validates without errors
     # ------------------------------------------------------------------
     # Use the nc-ladder repo root (parent of parent of this file's dir)
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     manifest = build_manifest(repo_root)
     errors = validate_manifest(manifest)
 
@@ -1332,7 +1332,7 @@ def main() -> None:
     verbose = not args.quiet
 
     if args.manifest:
-        repo_root = Path(__file__).resolve().parent.parent.parent
+        repo_root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
         manifest = build_manifest(repo_root)
         print(f"Manifest: {len(manifest)} rows")
         used_now = sum(1 for r in manifest.values() if r["disposition"] == USED_NOW)

@@ -48,7 +48,7 @@ ORIGINALS = [
 ]
 
 CAUSE_TEXT = (
-    "generator-script identity drift: scripts/ember_d3_generalized_candidate_exec.py "
+    "generator-script identity drift: src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py "
     "did not exist in this repository's git history until the 2026-06-28 "
     "history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable "
     "public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. "
@@ -144,7 +144,7 @@ def main():
                 "method": "recorded reproducibility.rerun_command re-run verbatim with the "
                           "--execute flag dropped (no docker invoked, no network touched -- "
                           "confirmed by reading run_official_arm/docker_image_digest/"
-                          "docker_inspect_text call sites in scripts/ember_d3_generalized_candidate_exec.py, "
+                          "docker_inspect_text call sites in src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py, "
                           "all gated on execute=True), executed twice independently",
                 "rep1_command": cmd1,
                 "rep2_command": cmd2,

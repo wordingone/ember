@@ -34,7 +34,7 @@ completed 2.2B benchmark is claimed by this ruling.
 ## Why the named vehicle is obsolete
 
 The 434M and 2.2B networks in #764 are historical sub-3B subjects. Current
-`GOAL.md`, `docs/roadmap/milestones/EMBER-01.md`, and the EMBER-05 contract
+`GOAL.md`, `docs/domains/governance/roadmap/milestones/EMBER-01.md`, and the EMBER-05 contract
 prohibit creating, training, growing, evaluating, or serving sub-3B research
 networks as current Ember work. The 2.2B/cbase path is read-only history, and
 the old optimizer-state identity cannot authorize a present 3B experiment.

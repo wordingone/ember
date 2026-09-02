@@ -15,13 +15,13 @@
   "nodes": [
     {
       "id": "EMBER-00",
-      "contract": "docs/roadmap/milestones/EMBER-00.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-00.md",
       "state": "AUTHORITY_IN_FORCE",
       "depends_on": []
     },
     {
       "id": "EMBER-01",
-      "contract": "docs/roadmap/milestones/EMBER-01.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-01.md",
       "state": "ACTIVE_CERTIFICATION_GATE",
       "depends_on": ["EMBER-00"]
     },
@@ -51,7 +51,7 @@
     },
     {
       "id": "EMBER-05",
-      "contract": "docs/roadmap/milestones/EMBER-05.md",
+      "contract": "docs/domains/governance/roadmap/milestones/EMBER-05.md",
       "state": "WAITING_ON_PREREQUISITE",
       "depends_on": ["EMBER-04"]
     },

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.ember_cli_spec_policy import (
+from src.ember.governance.scripts.ember_cli_spec_policy import (
     SpecPolicyError,
     load_spec_nodes,
     validate_added_component_coverage,

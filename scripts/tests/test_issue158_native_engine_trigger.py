@@ -31,7 +31,7 @@ def test_native_engine_is_a_hashed_trigger_gated_floor_row():
     source = REPO_ROOT / row["source_file"]
 
     assert row["disposition"] == floor.PRESERVED_TRIGGER_GATED
-    assert row["source_file"] == "docs/spec/ember-native-engine-trigger-ladder-v1.md"
+    assert row["source_file"] == "docs/domains/governance/spec/ember-native-engine-trigger-ladder-v1.md"
     assert source.is_file()
     assert row["source_hash"] == hashlib.sha256(source.read_bytes()).hexdigest()
 
@@ -58,7 +58,7 @@ def test_native_engine_board_review_is_closed_and_carries_t2_t3_every_run():
     assert review == {
         "floor_row_key": ROW_KEY,
         "disposition": floor.PRESERVED_TRIGGER_GATED,
-        "source_file": "docs/spec/ember-native-engine-trigger-ladder-v1.md",
+        "source_file": "docs/domains/governance/spec/ember-native-engine-trigger-ladder-v1.md",
         "source_sha256": _manifest()[ROW_KEY]["source_hash"],
         "issue": 158,
         "coupled_issue": 155,

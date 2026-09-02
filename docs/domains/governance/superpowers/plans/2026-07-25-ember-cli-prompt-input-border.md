@@ -301,7 +301,7 @@ git commit -m "test(cli): prove prompt border resize paint"
 ### Task 4: Add a bounded compiled-binary ConPTY capture tool
 
 **Files:**
-- Create: `tools/ember-cli/src/build-tools/capture-prompt-input-243.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.ts`
 - Create: `src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts`
 
 **Interfaces:**
@@ -372,7 +372,7 @@ Expected: all discriminator tests pass.
 - [ ] **Step 5: Commit the capture tool**
 
 ```powershell
-git add tools/ember-cli/src/build-tools/capture-prompt-input-243.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
+git add src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts
 git commit -m "test(cli): add compiled prompt border capture"
 ```
 
@@ -412,7 +412,7 @@ Expected: guard PASS and `ember.exe` produced with the exact commit banner.
 - [ ] **Step 3: Capture the real compiled-binary resize receipt**
 
 ```powershell
-bun run tools/ember-cli/src/build-tools/capture-prompt-input-243.ts --binary tools/ember-cli/src/ember.exe --out-dir receipts/ember-cli/issue-243/live-resize-v1
+bun run src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.ts --binary tools/ember-cli/src/ember.exe --out-dir receipts/ember-cli/issue-243/live-resize-v1
 ```
 
 Expected: receipt succeeds only after all three raw/frame stages and the

@@ -88,7 +88,7 @@ def sha(s):
 def samples_to_records(rows, round_n, ts="", receipt=""):
     """w1 sample rows -> (verified_records, failed_records). Pure.
 
-    Emits ledger schema v3 (docs/charter/ledger-schema-v3.md): explicit verified/ts/
+    Emits ledger schema v3 (docs/domains/governance/charter/ledger-schema-v3.md): explicit verified/ts/
     origin/receipt on every record — origin absorbs the w1 sampler identity
     (one provenance field; sampler kept as passthrough for leave-set-out
     tooling). "solved" mirrors "verified" for W-code: the MBPP harness'

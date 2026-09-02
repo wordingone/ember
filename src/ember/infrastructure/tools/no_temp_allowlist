@@ -33,7 +33,7 @@ src/ember/governance/scripts/check_goal_citations.py
 src/ember/governance/scripts/ckpt_locality.py
 src/ember/governance/scripts/cockpit_watchdog.py
 src/ember/governance/scripts/corpus_acquire_selftest.py
-scripts/corpus_mix_selftest.py
+src/ember/governance/scripts/corpus_mix_selftest.py
 src/ember/governance/scripts/corpus_patch_encode.py
 scripts/e1b_pair_assemble.py
 src/ember/governance/scripts/ember_avir_harness.py
@@ -50,7 +50,7 @@ scripts/ember_ceff_closure_confirmation.py
 src/ember/governance/scripts/ember_ceff_composition_ab.py
 scripts/ember_d3_broader_multifamily_admission_selftest.py
 scripts/ember_d3_broader_multifamily_loop_selftest.py
-scripts/ember_d3_generalized_candidate_exec_selftest.py
+src/ember/governance/scripts/ember_d3_generalized_candidate_exec_selftest.py
 src/ember/governance/scripts/ember_e2b_surpass_run.py
 scripts/ember_gate_backend_coordinator_agents_selftest.py
 scripts/ember_gate_cleanroom_inventory_selftest.py
@@ -158,7 +158,7 @@ scripts/manifest_sha.py
 scripts/nck/checkpoint_probe.py
 scripts/nck/e2b_shakedown.py
 scripts/nck/ember_shakedown.py
-scripts/nck/nck_e2e_proof.py
+src/ember/governance/scripts/nck/nck_e2e_proof.py
 src/ember/governance/scripts/nck/replay_rig.py
 scripts/nck/selftest_b_run_designation.py
 scripts/nck/selftest_c10_resident.py
@@ -228,7 +228,7 @@ scripts/w2_heldout/w1c_certification_e2e.py
 scripts/w4_control_selftest.py
 tools/ember-cli/src/agent-management.test.ts
 tools/ember-cli/src/commands/finetune.test.ts
-tools/ember-cli/src/commands/model.test.ts
+src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts
 tools/ember-cli/src/commands/world-state.test.ts
 tools/ember-cli/src/core/ember-world-state.test.ts
 tools/ember-cli/src/core/watch-render.test.ts

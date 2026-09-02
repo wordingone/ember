@@ -314,7 +314,7 @@ the governor, and how does the ladder get there without un-receipting
 itself?
 
 **Derivation receipt `fp3-vram-derivation-20260610T230456Z.json`**
-(`scripts/fp3_vram_math.py`, selftest PASS — executed arithmetic from
+(`src/ember/governance/scripts/fp3_vram_math.py`, selftest PASS — executed arithmetic from
 stated assumptions + the receipted governor block; NOT a measurement; the
 smoke below supersedes it):
 

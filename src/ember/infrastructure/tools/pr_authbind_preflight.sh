@@ -59,7 +59,7 @@
 # neither earlier step looks at. Step C delegates to the same
 # validate_live_pull_request() the CI gate calls, via
 # scripts/github/pr_intent_policy.py, so the contract is not restated here. To
-# check a PR that does not exist yet, use tools/pr_intent_preflight.sh.
+# check a PR that does not exist yet, use src/ember/infrastructure/tools/pr_intent_preflight.sh.
 
 set -u
 ROOT="$(git rev-parse --show-toplevel)" || { echo "not in a git repo"; exit 2; }

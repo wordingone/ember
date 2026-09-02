@@ -23,7 +23,7 @@
 
 **Files:**
 - Create: `assets/ember.ico`
-- Modify: `tools/ember-cli/src/build-tools/build-cockpit.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/build-tools/build-cockpit.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/build-tools/build-cockpit.test.ts`
 
 **Interfaces:**

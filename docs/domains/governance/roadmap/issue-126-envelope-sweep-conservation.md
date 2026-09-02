@@ -31,7 +31,7 @@ old-scale point, not an eight-point fit, current owned 3B result, or #126
 completion.
 
 Issue #118 is closed as `not_planned`. Its ruling
-`docs/roadmap/issue-118-energy-law-conservation.md` (Git blob
+`docs/domains/governance/roadmap/issue-118-energy-law-conservation.md` (Git blob
 `e527d17a7fc6eac711c5e5cafeddeffdd1fcb1f5`) and accepted #1116 transfer
 https://github.com/wordingone/ember/issues/1116#issuecomment-5221234668 retire
 the old W1/c03/C14 execution subjects while retaining the current 3B envelope,

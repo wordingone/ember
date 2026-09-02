@@ -35,7 +35,7 @@ LAUNCH INTERLOCK: any code path that could execute a real eval/train leg
   is gated behind EMBER_GATE_AUTHORIZED=1 AND --live.
   Default invocation and --selftest are 100% CPU-local on synthetic fixtures.
 
-Spec: docs/research/persistence-gates-spec.md §P-gate (frozen 2026-06-11, #36).
+Spec: docs/domains/governance/research/persistence-gates-spec.md §P-gate (frozen 2026-06-11, #36).
 """
 
 import argparse

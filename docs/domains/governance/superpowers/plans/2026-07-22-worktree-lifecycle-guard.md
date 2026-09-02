@@ -22,14 +22,14 @@
 
 **Files:**
 - Create: `src/ember/governance/scripts/worktree_lifecycle.py`
-- Create: `tests/test_worktree_lifecycle.py`
+- Create: `tests/domain-governance/test_worktree_lifecycle.py`
 
 **Interfaces:**
 - Produces: CLI commands `install`, `audit`, `create`, and `retire`.
 - Persists: `<git-common-dir>/ember-worktree-lifecycle.json` and an adjacent lock file.
 
 - [ ] Write real-repository tests for initialization, malformed state, unmanaged raw additions, expired leases, and downward ratcheting.
-- [ ] Run `python -m pytest -q tests/test_worktree_lifecycle.py` and confirm failures are caused by the missing CLI.
+- [ ] Run `python -m pytest -q tests/domain-governance/test_worktree_lifecycle.py` and confirm failures are caused by the missing CLI.
 - [ ] Implement porcelain parsing, canonical path identity, atomic JSON state, locking, install, and audit.
 - [ ] Re-run the focused tests and confirm the audit/install cases pass.
 
@@ -37,7 +37,7 @@
 
 **Files:**
 - Modify: `src/ember/governance/scripts/worktree_lifecycle.py`
-- Modify: `tests/test_worktree_lifecycle.py`
+- Modify: `tests/domain-governance/test_worktree_lifecycle.py`
 
 **Interfaces:**
 - `create --path PATH --branch BRANCH --owner OWNER --purpose PURPOSE --expires YYYY-MM-DD [--start-point REF]`
@@ -54,7 +54,7 @@
 - Modify: `.githooks/pre-commit`
 - Modify: `.githooks/pre-push`
 - Modify: `AGENTS.md`
-- Modify: `tests/test_worktree_lifecycle.py`
+- Modify: `tests/domain-governance/test_worktree_lifecycle.py`
 
 **Interfaces:**
 - Hooks invoke `python "$ROOT/src/ember/governance/scripts/worktree_lifecycle.py" audit --quiet` before existing guards.

@@ -12,12 +12,12 @@
   "exceptions": [
     {
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "428ed6a182bd3e681fcc0f8fb61647c683015551819bdba81ea04c5a007a18d2",
+      "sha256": "d0f2e3f608cc540c630ac94f0a17f0276691b09fc8731b9d66f3cee5dfee2d27",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "f109bf1cbd487674a2d5f9fa8e4c800556f9eed235ff923d675203c5b2c9caa8",
+      "sha256": "1097590005a472f5bd0e783a480528d7e61380d63788d4d13c86dfe6dfa08f07",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "path": "scripts/nativization_motion_trace.py",
-      "sha256": "0427f9df8414b2bffbdc2136573644c6a1ed6519385d89c86035bce2b9de2d5f",
+      "sha256": "1ee47fdaac359da9d42bfffb02171f06311019f55e59fb1bcad30ee2dfcbfc12",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -63,6 +63,11 @@
     {
       "path": "src/ember/infrastructure/tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
       "sha256": "1450be1c8519263731e8cd24f0be80b60ca701a7dde5b7f2027b5ed991c9efec",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
+      "sha256": "735ed29fc8d6bb400351467787b45f71f96350ccefb7bd129e7f9c1f636b6cf4",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     }
   ]

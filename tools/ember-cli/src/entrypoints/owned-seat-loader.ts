@@ -41,7 +41,7 @@ const TRUSTED_DEVELOPMENT_SOURCE_FILES = [
   "scripts/ember_restart_eval_checkpoint_consumer.py",
   "scripts/ember_restart_eval_raw_forward.py",
   "domains/model/tokenizer/tokenizer.json",
-  "tools/ember-restart-3b/batch.py",
+  "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
   "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
   "tools/ember-restart-3b/infer.py",
   "src/ember/infrastructure/tools/ember-restart-3b/model.py",

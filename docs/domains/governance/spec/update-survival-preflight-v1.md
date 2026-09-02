@@ -89,7 +89,7 @@ state fail closed.
 
 ## Mandatory CPU selftest
 
-`python -B scripts/preflight/update_survival.py --selftest --receipt <path>`
+`python -B src/ember/governance/scripts/preflight/update_survival.py --selftest --receipt <path>`
 must prove:
 
 1. AdamW `param=1, lr=.01, wd=1, grad=1e-12` has a perfect-looking total delta

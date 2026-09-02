@@ -2,7 +2,7 @@
 
 Status: **design only, no implementation**. This is Cure A from the #898
 2026-08-21 amendment, specified here so its real cost can be weighed against
-the host setup contract (`docs/host-setup-contract.md`) before either is
+the host setup contract (`docs/domains/governance/host-setup-contract.md`) before either is
 built out further. Nothing in this document is wired into any code path.
 
 ## Problem restated
@@ -208,7 +208,7 @@ trade-off.
 
 Rejecting the arena and formalizing a pagefile floor as Ember's durable
 answer are independent claims — declining one does not establish the other
-(operator scoping ruling, 2026-08-21, `docs/host-setup-contract.md`). What
+(operator scoping ruling, 2026-08-21, `docs/domains/governance/host-setup-contract.md`). What
 this comparison does establish: if disk-as-ledger backing is needed at all
 for state that already fits in RAM, the OS's own paging mechanism is the
 better place for it than a second, less-tested userspace one, since it

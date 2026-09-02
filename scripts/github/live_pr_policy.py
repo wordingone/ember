@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from scripts.check_pr_authority_binding import load_goal_binding, validate_pr_body
-from scripts.ember_cli_spec_policy import (
+from src.ember.governance.scripts.ember_cli_spec_policy import (
     validate_added_component_coverage_between_roots,
 )
 

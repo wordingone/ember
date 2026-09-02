@@ -123,7 +123,7 @@
       "condition": "C6",
       "status": "GREEN",
       "is_process_invariant": false,
-      "reason": "GREEN C6 satisfied by receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z\\d3-generalized-candidate-receipt.json: complete reusable recipe (commands/hashes/env/seeds/paths/rerun_command present, no invalid_not_reusable flag) AND rerun reproduction verified (reproducibility.deterministic_mismatch(structured: cause=\"generator-script identity drift: scripts/ember_d3_generalized_candidate_exec.py did not exist in this repository's git history until the 2026-06-28 history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. 2026-06-22T221223Z, all before 2026-06-28). A concrete post-consolidation corruption in this exact file was found and fixed in commit 879e939 (2026-07-08, 'exec runner format-string fix (refs #483)'): the arm-B template's %s format specifier had been mangled to the literal token %<local-path> by the consolidation's path-redaction sweep, and was restored to %s. The recipe's reproducibility block hashes only the GENERATED arm_*.py solution files (reproducibility.solution_hashes), never the generator script that produces them from the fresh-rows input -- so re-running the recorded rerun_command today necessarily executes a provably different generator than the one that produced this receipt. Two independent, same-day CPU-only dry-run reruns (rerun_command with --execute dropped: no docker invoked, no network touched -- verified by reading run_official_arm/docker_image_digest/docker_inspect_text call sites, all gated on execute=True) against the identical fresh-rows input agree with EACH OTHER byte-for-byte (arm_solution_sha256 rep1==rep2 for all 4 arms), bounding the divergence to a stable, non-random function of generator-script version -- but diverge from the historically recorded arm C hash specifically (arm C = build_shared_solution_source, the only arm whose source is built from extracted eval_script/task_instruction text and therefore sensitive to the drifted region; arms A and Deleted are constant stub strings and arm B is instruction-only extraction, both structurally insensitive to whatever the consolidation sweep touched).\", reruns=2, recomputed: 2 rerun receipts resolved+parsed, arm_solution_sha256 agree pairwise across all, cause cites resolvable commit(s) ['58ddf8d', '879e939'])); rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z\\\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute' (elapsed 0.4s)"
+      "reason": "GREEN C6 satisfied by receipts\\ember-d3-native-loop\\d3-broader-multifamily-loop-20260621T150246Z-c6-rerun-20260709T233518Z\\d3-generalized-candidate-receipt.json: complete reusable recipe (commands/hashes/env/seeds/paths/rerun_command present, no invalid_not_reusable flag) AND rerun reproduction verified (reproducibility.deterministic_mismatch(structured: cause=\"generator-script identity drift: src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py did not exist in this repository's git history until the 2026-06-28 history-consolidation commit 58ddf8d ('Consolidate to a clean, externally-auditable public root') -- all 10 C6 recipe receipts predate it (ts 2026-06-21T133833Z .. 2026-06-22T221223Z, all before 2026-06-28). A concrete post-consolidation corruption in this exact file was found and fixed in commit 879e939 (2026-07-08, 'exec runner format-string fix (refs #483)'): the arm-B template's %s format specifier had been mangled to the literal token %<local-path> by the consolidation's path-redaction sweep, and was restored to %s. The recipe's reproducibility block hashes only the GENERATED arm_*.py solution files (reproducibility.solution_hashes), never the generator script that produces them from the fresh-rows input -- so re-running the recorded rerun_command today necessarily executes a provably different generator than the one that produced this receipt. Two independent, same-day CPU-only dry-run reruns (rerun_command with --execute dropped: no docker invoked, no network touched -- verified by reading run_official_arm/docker_image_digest/docker_inspect_text call sites, all gated on execute=True) against the identical fresh-rows input agree with EACH OTHER byte-for-byte (arm_solution_sha256 rep1==rep2 for all 4 arms), bounding the divergence to a stable, non-random function of generator-script version -- but diverge from the historically recorded arm C hash specifically (arm C = build_shared_solution_source, the only arm whose source is built from extracted eval_script/task_instruction text and therefore sensitive to the drifted region; arms A and Deleted are constant stub strings and arm B is instruction-only extraction, both structurally insensitive to whatever the consolidation sweep touched).\", reruns=2, recomputed: 2 rerun receipts resolved+parsed, arm_solution_sha256 agree pairwise across all, cause cites resolvable commit(s) ['58ddf8d', '879e939'])); rerun_command='python scripts\\\\ember_d3_generalized_candidate_exec.py --fresh-rows receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z\\\\d3-broader-multifamily-fresh-rows.json --out-dir receipts\\\\ember-d3-native-loop\\\\d3-broader-multifamily-loop-20260621T150246Z --timeout-seconds 180 --task-id task_17 --task-id task_18 --task-id task_19 --task-id task_20 --execute' (elapsed 0.4s)"
     },
     {
       "condition": "C7",
@@ -462,12 +462,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/c_auto_v2_fixture.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/c_auto_v2_fixture.py",
             "sha256": "ac68cf0d907e85e3754a2e62146e811b62fe18f37b06b0593499d727476405a4",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/c7_selftest.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
             "sha256": "ee7fdc638642487671f8ce118029bc98251de953ec9fe872b4937b1c96690393",
             "present": true
           },
@@ -477,7 +477,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/c7_selftest.py",
+            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
             "sha256": "ee7fdc638642487671f8ce118029bc98251de953ec9fe872b4937b1c96690393",
             "present": true
           },
@@ -497,7 +497,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/run_controls.py",
+            "path": "src/ember/governance/scripts/ember_totality/chk_controls/run_controls.py",
             "sha256": "e0a1ae36bc511cb7ce0af6b3a9e9c5f587be3895e65f18af06ad786c40eb75de",
             "present": true
           },
@@ -777,7 +777,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_ind.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_ind.py",
             "sha256": "5571f98e9d6ec668c817229e087f329d977de38a2c35908b9638f61aaa4d7ca3",
             "present": true
           },
@@ -867,7 +867,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/writers_custody_two_run_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py",
             "sha256": "2109687cfb83b17e434df3e8b6dabb3968a99ae4d6b89fa5dfc2594712ba893d",
             "present": true
           }
@@ -1018,7 +1018,7 @@
   "native_engine_trigger_review": {
     "floor_row_key": "floor_contract.ember-native-engine",
     "disposition": "preserved_trigger_gated",
-    "source_file": "docs/spec/ember-native-engine-trigger-ladder-v1.md",
+    "source_file": "docs/domains/governance/spec/ember-native-engine-trigger-ladder-v1.md",
     "source_sha256": "f68945185a77c5ddcc4d365a33b8aa0c6d3fef0bdecf351a89fc3d9adcdd0ef5",
     "issue": 158,
     "coupled_issue": 155,

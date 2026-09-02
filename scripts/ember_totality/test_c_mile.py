@@ -38,7 +38,7 @@ Fail-closed: milestone_leg.py or enforcement_leg.py missing/unimportable = RED (
 itself is gone -- that IS the regression), never UNEVALUABLE. UNEVALUABLE is reserved for
 environment failure (no usable ROOT).
 
-[ISSUE #749 cure, docs/charter/probe-authoring-contract.md] Execution-binding hardening. The
+[ISSUE #749 cure, docs/domains/governance/charter/probe-authoring-contract.md] Execution-binding hardening. The
 pre-cure checker trusted `run_milestone_leg()`'s IN-PROCESS return dict alone -- if
 milestone_leg.py were ever broken/tampered to fabricate a `{"executed": True,
 "verdict": "PASS", ...}` dict without actually launching the checker subprocess, this

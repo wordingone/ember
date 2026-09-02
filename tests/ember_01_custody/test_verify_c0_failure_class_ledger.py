@@ -388,7 +388,7 @@ def test_live_ledger_closed_guarded_rows_resolve() -> None:
 _DEAD_GUARD_REL_PATH = "tests/ember_01_custody/fixtures/dead_on_import_fixture.py"
 
 # A KNOWN collectable guard, for the positive control (must NOT be falsely flagged).
-_LIVE_GUARD_REL_PATH = "scripts/test_v0_launch_gate_shard_dir_override.py"
+_LIVE_GUARD_REL_PATH = "src/ember/governance/scripts/test_v0_launch_gate_shard_dir_override.py"
 
 
 def _ledger_with_single_dead_test_guard(rel_path: str) -> dict:

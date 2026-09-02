@@ -36,7 +36,7 @@ full (t5 powered; MTP default; param caveat addressed; exact stats).
      unchanged from r1).
    - **t5 POWERED (r1 binding consequence):** FULL sanitized MBPP test
      split, per-problem paired analysis, MDE quoted on any FLAT.
-   - **D-gate + P-gate** legs per `docs/research/persistence-gates-spec.md`
+   - **D-gate + P-gate** legs per `docs/domains/governance/research/persistence-gates-spec.md`
      (eng-32 harness; P-gate boundary = daemon restart).
    - **Pacing:** every t2 receipt carries the fp-14 measured block;
      fp-20 (#116) settles on the sampling receipt; fp-21 (#120)

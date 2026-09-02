@@ -241,7 +241,7 @@ sub-quadratic, MTP, small-core) is a residency tool — see GOAL.md annex.
 
 Five-cluster adversarial sweep (expert-iteration/STaR/SOAR; DGM/self-
 rewriting; Voyager/memory; TTT/continual; verifier-gated-data) — full
-verdict table with citations: `docs/research/novelty-verdicts-2026-06-10.md`.
+verdict table with citations: `docs/domains/governance/research/novelty-verdicts-2026-06-10.md`.
 **No candidate survived as stated in v0; all four survive narrowed. The v0
 verbatim forms are retracted as over-claims.**
 

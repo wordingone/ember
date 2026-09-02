@@ -398,7 +398,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # found nothing -- a receipt that declares a real cmd/script field is still
 # resolved via that field first.
 #
-#   c7-selftest-*.json                       scripts/ember_phase5_c7/c7_selftest.py:65
+#   c7-selftest-*.json                       src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py:65
 #     SELFTEST_RECEIPT_PATH: pathlib.Path = RECEIPTS_DIR / f"c7-selftest-{_TS}.json"
 #   citation-check-*.json                    src/ember/governance/scripts/check_goal_citations.py:804
 #     receipt_path = RECEIPTS_DIR / f"citation-check-{receipt['timestamp']}.json"
@@ -531,7 +531,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # with paid-client pattern googleapis_client on both spend-annex rows). Stays
 # unresolvable, honestly, rather than risk a self-referential carve-out.
 CONVENTION_MAP = [
-    (re.compile(r"^c7-selftest-.*\.json$"), "scripts/ember_phase5_c7/c7_selftest.py"),
+    (re.compile(r"^c7-selftest-.*\.json$"), "src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py"),
     (re.compile(r"^citation-check-.*\.json$"), "src/ember/governance/scripts/check_goal_citations.py"),
     (re.compile(r"^publication-gate-.*\.json$"), "src/ember/governance/scripts/check_publication_gate.py"),
     (re.compile(r"^proof-judge-admission-.*\.json$"), "scripts/proofs/judge_admission_sweep.py"),

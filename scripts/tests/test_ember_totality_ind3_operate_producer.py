@@ -33,7 +33,7 @@ producer = _load(
 )
 validator = _load(
     "test_c_ind_under_test",
-    "scripts/ember_totality/test_c_ind.py",
+    "src/ember/governance/scripts/ember_totality/test_c_ind.py",
 )
 
 

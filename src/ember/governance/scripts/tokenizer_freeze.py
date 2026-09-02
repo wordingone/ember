@@ -60,7 +60,7 @@ SAMPLE_BUDGET_BYTES = 1_000_000_000  # fp-22: "stratified ~1GB sample"
 # Reserved multimodal special-token band — NC2 own-technique contract
 # component 8, v0 LOCK #1 ("Reserved vocab band with pre-assigned
 # multimodal delimiter/placeholder token IDs"); names follow the
-# gemma-4 deep-dive pattern (docs/research/gemma4-unified-architecture.md:
+# gemma-4 deep-dive pattern (docs/domains/governance/research/gemma4-unified-architecture.md:
 # boi/eoi/image_soft/boa/eoa/audio_soft/video_soft). v0 is text-only —
 # the IDs are pre-assigned, never produced by training data; the
 # embedder that splices over them is a proven retrofit. Fixed
@@ -442,7 +442,7 @@ def main():
                                 "v0 LOCK #1: reserved vocab band with "
                                 "pre-assigned multimodal delimiter/"
                                 "placeholder ids (gemma-4 pattern, "
-                                "docs/research/gemma4-unified-architecture.md); "
+                                "docs/domains/governance/research/gemma4-unified-architecture.md); "
                                 "v0 text-only — ids never produced by "
                                 "training data, verified post-train"),
         "model": "ByteLevel BPE (HF tokenizers)",

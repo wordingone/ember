@@ -147,7 +147,7 @@ git commit -m "feat: verify modern checkpoint bundles"
 
 **Files:**
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/commands/model.ts`
-- Modify: `tools/ember-cli/src/commands/model.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts`
 
 **Interfaces:**
 - Consumes `verifyCheckpointBundle()` and `VerifiedCheckpointBundle` from Task 1.
@@ -181,7 +181,7 @@ expect(ensured).toEqual([]);
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/commands/model.test.ts --filter "checkpoint load"
+bun test src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts --filter "checkpoint load"
 ```
 
 Expected: FAIL because `checkpoint load` is not dispatched.
@@ -237,5 +237,5 @@ Add tests proving:
 - [ ] **Step 5: Run command and service suites**
 
 ```powershell
-bun test tools/ember-cli/src/services/checkpoint-load.test.ts tools/ember-cli/src/commands/model.test.ts
+bun test tools/ember-cli/src/services/checkpoint-load.test.ts src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts
 ```

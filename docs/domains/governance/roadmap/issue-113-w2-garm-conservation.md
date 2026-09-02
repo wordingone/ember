@@ -34,7 +34,7 @@ rung-2 growth chain, but that path depended on the same historical sub-3B
 subject and an exact-duplication grow operator that issue #280 measured as
 capacity-null.
 
-Current `GOAL.md` and `docs/roadmap/milestones/EMBER-05.md` prohibit newly
+Current `GOAL.md` and `docs/domains/governance/roadmap/milestones/EMBER-05.md` prohibit newly
 created, trained, grown, evaluated, or served Ember research networks below 3B.
 The former 2.2B/cbase subject is read-only history; allocating a second live
 launcher or reviving the old chain would violate both the current model floor

@@ -125,7 +125,7 @@ R1_LEGS = {
 # added BEFORE any round-3 sampling receipt exists) ----
 # The bars (RATIO_BAR/PERM_N/SEED) and the R1 band legs are DERIVED ON
 # the borrowed-core w1-MBPP world. The fp-26 shape decision
-# (docs/research/fp26-round3-shape-decision.md) makes the next sampling round
+# (docs/domains/governance/research/fp26-round3-shape-decision.md) makes the next sampling round
 # most likely the OWNED core in the fp-22 world. Cross-world application
 # of these bars + borrowed band legs would be silent methodological
 # breakage; the executor refuses it mechanically: sampling from a

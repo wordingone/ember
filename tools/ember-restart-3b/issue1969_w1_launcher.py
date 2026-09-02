@@ -123,7 +123,7 @@ def validate_source(root: Path, spec: Mapping[str, object]) -> dict[str, str]:
         raise TypeError("SPEC_SOURCE_INVALID")
     rows = {
         "model": (root / "src/ember/infrastructure/tools/ember-restart-3b/model.py", source.get("treatment_model_blob")),
-        "pretrain": (root / "tools/ember-restart-3b/pretrain.py", source.get("pretrain_blob")),
+        "pretrain": (root / "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py", source.get("pretrain_blob")),
         "training_acceleration": (root / "tools/ember-restart-3b/training_acceleration.py", source.get("training_acceleration_blob")),
     }
     observed: dict[str, str] = {}

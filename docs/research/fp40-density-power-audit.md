@@ -2,7 +2,7 @@
 
 **Question:** the density A/B verdict (DENSITY-AB-VERDICT, `density-ab-verdict-20260613T043948Z`)
 returned **DENSITY_CONFIRMED** at delta = 33.33pp, read as decisive because the
-spec (#359 / `docs/archive/pre-restart/c04-token-budget-v1.md` F-4) sized **n=400 prompts → 3.85pp MDE**
+spec (#359 / `docs/domains/governance/archive/pre-restart/c04-token-budget-v1.md` F-4) sized **n=400 prompts → 3.85pp MDE**
 and 33.33 ≫ 3.85. Is that confirmation statistically real, and is it safe to drive
 the c04 pick → pretrain commit?
 

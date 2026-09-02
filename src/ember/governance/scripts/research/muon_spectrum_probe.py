@@ -5,7 +5,7 @@
 """muon_spectrum_probe.py -- EXP-C1b Muon-update spectrum harness (extended)
 Extended with real-data arms (synthetic, real, real-shuffled, permuted) per EXP-C1b-R spec.
 (P3 memory-wall track, ember issue #207,
-docs/research/p3-memory-wall-ledger-20260706.md)
+docs/domains/governance/research/p3-memory-wall-ledger-20260706.md)
 
 EXECUTION EXTENSION:
   --arm {synthetic,real,real-shuffled,permuted} -- which arm to run
@@ -719,7 +719,7 @@ def main() -> int:
         receipt = {
             "ticket": "EXPC1B-SPECTRUM", "ts": ts, "mode": "dry-run", "dry_run": True,
             "issue": "#207",
-            "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+            "spec_ref": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
             "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
             "harness_sha": _harness_sha(),
             "status": "OK",
@@ -892,7 +892,7 @@ def main() -> int:
         "mode": arm,
         "arm": arm,
         "issue": "#207",
-        "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+        "spec_ref": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
         "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
         "harness_sha": _harness_sha(),
         "status": "OK",

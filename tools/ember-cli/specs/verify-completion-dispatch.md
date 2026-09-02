@@ -292,7 +292,7 @@ asks the REAL `verify_ember01_completion.inspect_checkout` what it sees, asserti
 worktree dirtied the way a killed leg dirties it can still be released — but only by its
 own owner.
 
-`tests/test_worktree_lifecycle.py` covers the lifecycle-script half: `--detach` leaves HEAD
+`tests/domain-governance/test_worktree_lifecycle.py` covers the lifecycle-script half: `--detach` leaves HEAD
 detached and mints no branch ref, `--detach` with `--branch` and neither-of-them are both
 refused, a detached row's retire archives its head, and `--force-owner` retires a dirty
 worktree for its own owner while still refusing another owner and while never weakening a

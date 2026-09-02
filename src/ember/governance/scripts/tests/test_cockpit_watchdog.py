@@ -743,7 +743,7 @@ def test_run_cycle_never_kills_or_closes_or_restores():
 # ---------------------------------------------------------------------------
 
 #: [repo root, expected key] -- mirrored verbatim from KEY_PARITY_VECTORS in
-#: tools/ember-cli/src/utils/ember-state-root.test.ts and tests/domain-governance/test_ember_root_launcher.py.
+#: src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.test.ts and tests/domain-governance/test_ember_root_launcher.py.
 KEY_PARITY_VECTORS = [
     (r"C:\fixture\ember", "c-fixture-ember"),
     ("C:\\Fixture\\Ember\\", "c-fixture-ember"),

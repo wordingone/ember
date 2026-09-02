@@ -1,6 +1,6 @@
 # Next-world admission analysis — round 2 (#33)
 
-Survey detail in `docs/research/drafts/world-choice-r2-draft.md` (Haiku draft,
+Survey detail in `docs/domains/governance/research/drafts/world-choice-r2-draft.md` (Haiku draft,
 gated here; receipts cited per claim, UNVERIFIED marked). This file is the
 binding read: criteria from `docs/domains/governance/research/world-choice.md` §7 — (a) floor
 accessibility MEASURED at affordable k, (b) verification density, (c)

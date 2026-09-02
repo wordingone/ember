@@ -66,7 +66,7 @@ and `merge_blob` are equal for every changed path.
 | `src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` | `3108c417c52e3dbe387d7dedaee131744d795b68` |
 | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | `5376e5c569239478c8b470a0564d97b5573e692f` |
 | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | `61054671de25c057492ee12e5a5faec2ecd91c10` |
-| `scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` |
+| `src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` |
 
 ### PR 409
 
@@ -98,7 +98,7 @@ The complete six-commit chain was refreshed from the PR API. The path digest is 
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034146Z.json` | `e6975d8d209ad4f67e45f3f59758eec8b0c44a8d` | later-removed by `965863ba` |
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/receipts-milestone/milestone-reconciliation-20260708T034147Z.json` | `6c2a5339cfdadf7a3897fd585376157ce6b8caf2` | later-removed by `965863ba` |
 | `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/receipts-publication/publication-gate-20260708T034147Z.json` | `c850a070d4d985f47c3c5d7156fe0b47958241cb` | later-removed by `965863ba` |
-| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | retained |
+| `db541939ccbabc7d38ad4eed98152b83a3e93d87` | `src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py` | `9a0b02d3d6a1fab6e1161a14ed318bd7abaf2a0a` | retained |
 | `d01b59fe5c223cafc6999e05dce5e12b55af4519` | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T033700Z.json` | `3329b3077836bf5881cd7b9f06a507b9f4bb9dfa` | retained |
 | `d01b59fe5c223cafc6999e05dce5e12b55af4519` | `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260708T034014Z.json` | `20e06ef52176ceb508953977cd1b2c0d0f511bc5` | retained |
 | `5ebc9ef8a7c5d6fea222da75fb24277c325eb167` | `receipts/ember-m10-surface3/2026-06-28T03-17-28Z/temp-home/baseline/.avir/plugins/marketplaces/claude-plugins-official` | `30a213f9b39e3c40b0073bb5b41081da9f2b6634` | later-removed by `d105e2e7` |

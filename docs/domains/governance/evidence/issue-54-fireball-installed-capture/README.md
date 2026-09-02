@@ -21,7 +21,7 @@ geometry remains live rather than being a frozen image.
 - Historical clause: diagnose and remove horizontal flame jitter, originally
   suspected to be per-frame string-width variance; preserve the separate
   operator art-quality obligation.
-- Current owner: `tools/ember-cli/src/components/fireball.ts`, the production
+- Current owner: `src/ember/infrastructure/tools/ember-cli/src/components/fireball.ts`, the production
   `ReplScreen`/`Homescreen` path, and the real compiled Ember CLI capture in this
   directory.
 - Mechanism status: `SUPERSEDED`. Current source uses one fixed occupancy for

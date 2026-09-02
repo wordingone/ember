@@ -49,7 +49,7 @@ from typing import Any
 # Reuse the canonical authority/invariant/convention constants rather than re-declaring them,
 # so this tool's receipts cannot drift from scratch_custody.py's under repository schema
 # changes -- both are read by the same repo-guard receipt-floor check. The two import forms
-# cover this module's two run contexts: `python tools/scratch_reference_scan.py` puts `tools/`
+# cover this module's two run contexts: `python src/ember/infrastructure/tools/scratch_reference_scan.py` puts `tools/`
 # itself on sys.path (no `tools` package visible), while `from tools import
 # scratch_reference_scan` (pytest, run from the repo root) puts the repo root on sys.path (only
 # the qualified form resolves).

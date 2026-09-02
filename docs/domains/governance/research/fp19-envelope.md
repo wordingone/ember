@@ -16,7 +16,7 @@ Frozen 2026-06-11 (#111). Inputs: MEASURED bench receipt
 `fp19-bench-20260611T024648Z.json` (daemon eval b839e851, governed:
 VRAM fraction 0.80, margin assert ≥1.5 GiB held, paced duty cycle;
 budget math uses PACED tok/s) + the refuter-adjusted multiplier table
-`docs/research/gpu-math-multiplier-table-2026-06-11.json` (gpu-math-attack
+`docs/domains/governance/research/gpu-math-multiplier-table-2026-06-11.json` (gpu-math-attack
 workflow, 24 agents).
 
 ## Envelope table (full training steps: fwd+loss+bwd+AdamW, seq 1024, grad-ckpt ON)
@@ -72,7 +72,7 @@ synthetic program-curriculum, MBPP-easy stratum, ARC micro-tasks).
 ## Addendum 2026-07-06 — multiplier-table citation superseded (issue #248 item 4)
 
 This page's frozen rationale above cites
-`docs/research/gpu-math-multiplier-table-2026-06-11.json` (the 24-agent
+`docs/domains/governance/research/gpu-math-multiplier-table-2026-06-11.json` (the 24-agent
 first pass) and its 1.77× Muon figure — left as-is, unedited, since it is
 what was actually read when fp-19 froze on 2026-06-11. A same-day,
 127-agent follow-up pass,
