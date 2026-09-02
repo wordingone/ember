@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,13 +24,15 @@ def valid_plan() -> dict[str, object]:
     legs = []
     for name in MODULE.REQUIRED_LEG_IDS:
         argv = ["C:/bound/tool.exe", "--verify", name]
+        contract_files = [{"path": f"contracts/{name}.txt", "raw_sha256": "a" * 64}]
         legs.append({
             "id": name,
             "argv": argv,
             "argv_sha256": MODULE.sha256_bytes(MODULE.canonical_json(argv)),
             "executable_raw_sha256": MODULE.sha256_bytes(("exe:" + name).encode()),
             "semantic_contract_id": name,
-            "semantic_contract_sha256": MODULE.sha256_bytes(("contract:" + name).encode()),
+            "semantic_contract_files": contract_files,
+            "semantic_contract_sha256": MODULE.sha256_bytes(MODULE.canonical_json(contract_files)),
             "expected_exit": 2 if name in MODULE.NEGATIVE_LEG_IDS else 0,
         })
     plan = {
@@ -137,6 +141,82 @@ class ACleanTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.ACleanRefusal, "LEG_EXECUTABLE_IDENTITY_REFUSED"):
                 MODULE.validate_executable_identity(row)
 
+    def test_semantic_contract_files_are_reopened_from_the_exact_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contract = root / "contracts" / "canonical.txt"
+            contract.parent.mkdir()
+            contract.write_bytes(b"contract-v1\n")
+            row = {
+                "id": "canonical_domain_imports",
+                "semantic_contract_files": [{
+                    "path": "contracts/canonical.txt",
+                    "raw_sha256": MODULE.sha256_file(contract),
+                }],
+            }
+            MODULE.validate_semantic_contract_identity(root, row)
+            contract.write_bytes(b"contract-v2\n")
+            with self.assertRaisesRegex(MODULE.ACleanRefusal, "LEG_CONTRACT_FILE_IDENTITY_REFUSED"):
+                MODULE.validate_semantic_contract_identity(root, row)
+
+    def test_mint_plan_resolves_platform_bytes_and_is_no_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "fresh clone é"
+            root.mkdir()
+            contract_files = []
+            for leg_id in MODULE.REQUIRED_LEG_IDS:
+                contract = root / "contracts" / f"{leg_id}.txt"
+                contract.parent.mkdir(exist_ok=True)
+                contract.write_text(leg_id)
+                contract_files.append(contract.relative_to(root).as_posix())
+            for command in (
+                ["git", "init", str(root)],
+                ["git", "-C", str(root), "config", "user.email", "test@example.invalid"],
+                ["git", "-C", str(root), "config", "user.name", "test"],
+                ["git", "-C", str(root), "add", "."],
+                ["git", "-C", str(root), "commit", "-m", "fixture"],
+                ["git", "-C", str(root), "remote", "add", "origin", "https://example.invalid/ember.git"],
+            ):
+                subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               creationflags=MODULE.NO_WINDOW)
+            head = MODULE._git(root, "rev-parse", "HEAD").decode().strip()
+            spec_path = base / "spec.json"
+            spec = {
+                "schema_version": "ember-issue1949-a-clean-leg-spec-v1",
+                "platform": "windows",
+                "legs": [{
+                    "id": leg_id,
+                    "argv": ["${PYTHON}", "--leg", leg_id],
+                    "contract_files": [contract_files[index]],
+                    "expected_exit": 2 if leg_id in MODULE.NEGATIVE_LEG_IDS else 0,
+                } for index, leg_id in enumerate(MODULE.REQUIRED_LEG_IDS)],
+            }
+            spec["self_sha256"] = MODULE.derive_self(spec)
+            spec_path.write_bytes(MODULE.canonical_json(spec) + b"\n")
+            artifacts = base / "artifacts"
+            artifacts.mkdir()
+            install = artifacts / "install.json"
+            sdist = artifacts / "setuptools-84.0.0.tar.gz"
+            install.write_text("{}")
+            sdist.write_text("fixture")
+            output = artifacts / "plan.json"
+            plan = MODULE.mint_plan(
+                repo_root=root, leg_spec_path=spec_path, output=output,
+                declared_head=head, platform_name="windows",
+                python_executable=Path(sys.executable), cargo_executable=Path(sys.executable),
+                artifact_root=artifacts, install_receipt=install, sdist_path=sdist,
+            )
+            self.assertEqual(plan["self_sha256"], MODULE.derive_self(plan))
+            self.assertTrue(output.is_file())
+            with self.assertRaises(FileExistsError):
+                MODULE.mint_plan(
+                    repo_root=root, leg_spec_path=spec_path, output=output,
+                    declared_head=head, platform_name="windows",
+                    python_executable=Path(sys.executable), cargo_executable=Path(sys.executable),
+                    artifact_root=artifacts, install_receipt=install, sdist_path=sdist,
+                )
+
     def test_refusal_receipt_preserves_named_class_plan_and_partial_streams(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -166,7 +246,12 @@ class ACleanTests(unittest.TestCase):
         windows = (ROOT / "scripts/issue1949-a-clean-windows.ps1").read_text(encoding="utf-8")
         self.assertIn("ref: ${{ inputs.declared_head }}", workflow)
         self.assertIn('test "$actual" = "$DECLARED_HEAD"', workflow)
-        self.assertIn("PLAN_BASE64: ${{ inputs.plan_base64 }}", workflow)
+        self.assertIn("LEG_SPEC_BASE64: ${{ inputs.leg_spec_base64 }}", workflow)
+        self.assertIn("Mint and publish exact Linux platform plan identity", workflow)
+        self.assertLess(
+            workflow.index("Mint and publish exact Linux platform plan identity"),
+            workflow.index("Run published Linux CPU clean-clone plan"),
+        )
         self.assertIn("sha256sum --check --strict", workflow)
         self.assertNotIn('${{ inputs.declared_head }}"', workflow.split("run: |", 1)[1])
         self.assertIn("fresh clone é", workflow)
@@ -174,6 +259,8 @@ class ACleanTests(unittest.TestCase):
         self.assertIn("scripts\\headless-python.ps1", windows)
         self.assertIn("-NoLogo -NoProfile -NonInteractive", windows)
         self.assertIn("A_CLEAN_PLAN_RAW_HASH_REFUSED", windows)
+        self.assertIn('ValidateSet("Mint", "Run")', windows)
+        self.assertIn("A_CLEAN_WINDOWS_VERIFY_REFUSED", windows)
         self.assertIn("--platform windows", windows)
 
 

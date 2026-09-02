@@ -129,6 +129,21 @@ def validate_plan(plan: Mapping[str, object]) -> dict[str, Any]:
             or row.get("argv_sha256") != sha256_bytes(canonical_json(argv))
         ):
             raise ACleanRefusal(f"LEG_CONTRACT_REFUSED:{row.get('id')}")
+        contract_files = row.get("semantic_contract_files")
+        if not isinstance(contract_files, list) or not contract_files:
+            raise ACleanRefusal(f"LEG_CONTRACT_FILES_REFUSED:{row.get('id')}")
+        for binding in contract_files:
+            if (
+                not isinstance(binding, dict)
+                or not isinstance(binding.get("path"), str)
+                or not binding["path"]
+                or PurePosixPath(binding["path"]).is_absolute()
+                or ".." in PurePosixPath(binding["path"]).parts
+                or not _hex64(binding.get("raw_sha256"))
+            ):
+                raise ACleanRefusal(f"LEG_CONTRACT_FILES_REFUSED:{row.get('id')}")
+        if row["semantic_contract_sha256"] != sha256_bytes(canonical_json(contract_files)):
+            raise ACleanRefusal(f"LEG_CONTRACT_REFUSED:{row.get('id')}:files")
         signature = canonical_json({
             "argv": argv,
             "executable_raw_sha256": row["executable_raw_sha256"],
@@ -197,6 +212,119 @@ def validate_executable_identity(row: Mapping[str, object]) -> None:
         raise ACleanRefusal(f"LEG_EXECUTABLE_IDENTITY_REFUSED:{row.get('id')}:{actual}")
 
 
+def validate_semantic_contract_identity(repo_root: Path, row: Mapping[str, object]) -> None:
+    bindings = row["semantic_contract_files"]
+    assert isinstance(bindings, list)
+    for binding in bindings:
+        assert isinstance(binding, dict)
+        path = repo_root / PurePosixPath(binding["path"])
+        if not path.is_file():
+            raise ACleanRefusal(f"LEG_CONTRACT_FILE_MISSING:{row.get('id')}:{binding['path']}")
+        actual = sha256_file(path)
+        if actual != binding["raw_sha256"]:
+            raise ACleanRefusal(
+                f"LEG_CONTRACT_FILE_IDENTITY_REFUSED:{row.get('id')}:{binding['path']}:{actual}"
+            )
+
+
+def _load_self_hashed_leg_spec(path: Path, platform_name: str) -> dict[str, Any]:
+    spec = json.loads(path.read_bytes())
+    if spec.get("schema_version") != "ember-issue1949-a-clean-leg-spec-v1":
+        raise ACleanRefusal("LEG_SPEC_SCHEMA_REFUSED")
+    if spec.get("platform") != platform_name:
+        raise ACleanRefusal("LEG_SPEC_PLATFORM_REFUSED")
+    if spec.get("self_sha256") != derive_self(spec):
+        raise ACleanRefusal("LEG_SPEC_SELF_REFUSED")
+    legs = spec.get("legs")
+    if not isinstance(legs, list) or tuple(
+        row.get("id") for row in legs if isinstance(row, dict)
+    ) != REQUIRED_LEG_IDS:
+        raise ACleanRefusal("LEG_SPEC_SET_REFUSED")
+    return spec
+
+
+def mint_plan(
+    *, repo_root: Path, leg_spec_path: Path, output: Path, declared_head: str,
+    platform_name: str, python_executable: Path, cargo_executable: Path,
+    artifact_root: Path, install_receipt: Path, sdist_path: Path,
+) -> dict[str, object]:
+    if output.exists():
+        raise FileExistsError(f"OUTPUT_EXISTS_REFUSED:{output}")
+    repo_root = repo_root.resolve(strict=True)
+    validate_fresh_clone(repo_root)
+    actual_head = _git(repo_root, "rev-parse", "HEAD").decode().strip()
+    porcelain = _git(repo_root, "status", "--porcelain")
+    if declared_head != actual_head or not _hex40(declared_head) or porcelain:
+        raise ACleanRefusal("MINT_CHECKOUT_IDENTITY_REFUSED")
+    spec = _load_self_hashed_leg_spec(leg_spec_path.resolve(strict=True), platform_name)
+    python_executable = python_executable.resolve(strict=True)
+    cargo_executable = cargo_executable.resolve(strict=True)
+    artifact_root = artifact_root.resolve(strict=True)
+    install_receipt = install_receipt.resolve(strict=True)
+    sdist_path = sdist_path.resolve(strict=True)
+    tokens = {
+        "${REPO_ROOT}": str(repo_root),
+        "${PYTHON}": str(python_executable),
+        "${CARGO}": str(cargo_executable),
+        "${ARTIFACT_ROOT}": str(artifact_root),
+        "${INSTALL_RECEIPT}": str(install_receipt),
+        "${SDIST}": str(sdist_path),
+        "${PYENV}": str(repo_root / "tools/ember-restart-3b/python_environment.py"),
+    }
+    rows = []
+    for spec_row in spec["legs"]:
+        argv = []
+        for part in spec_row["argv"]:
+            rendered = part
+            for token, value in tokens.items():
+                rendered = rendered.replace(token, value)
+            if "${" in rendered:
+                raise ACleanRefusal(f"LEG_SPEC_TOKEN_REFUSED:{spec_row['id']}:{rendered}")
+            argv.append(rendered)
+        contract_files = []
+        for rel in spec_row["contract_files"]:
+            path = repo_root / PurePosixPath(rel)
+            if not path.is_file():
+                raise ACleanRefusal(f"LEG_CONTRACT_FILE_MISSING:{spec_row['id']}:{rel}")
+            contract_files.append({"path": rel, "raw_sha256": sha256_file(path)})
+        executable = Path(argv[0]).resolve(strict=True)
+        rows.append({
+            "id": spec_row["id"],
+            "argv": argv,
+            "argv_sha256": sha256_bytes(canonical_json(argv)),
+            "executable_raw_sha256": sha256_file(executable),
+            "semantic_contract_id": spec_row["id"],
+            "semantic_contract_files": contract_files,
+            "semantic_contract_sha256": sha256_bytes(canonical_json(contract_files)),
+            "expected_exit": spec_row["expected_exit"],
+            "timeout_seconds": spec_row.get("timeout_seconds", 300),
+        })
+    plan: dict[str, object] = {
+        "schema_version": "ember-issue1949-a-clean-plan-v1",
+        "declared_head": declared_head,
+        "repository_origin": _git(repo_root, "remote", "get-url", "origin").decode().strip(),
+        "platform": platform_name,
+        "leg_spec_raw_sha256": sha256_file(leg_spec_path),
+        "leg_spec_self_sha256": spec["self_sha256"],
+        "setuptools": {
+            "wheel": "setuptools-84.0.0-py3-none-any.whl",
+            "wheel_sha256": WHEEL_SHA256,
+            "refused_sdist": "setuptools-84.0.0.tar.gz",
+            "refused_sdist_sha256": SDIST_SHA256,
+        },
+        "legs": rows,
+    }
+    plan["self_sha256"] = derive_self(plan)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("xb") as handle:
+        handle.write(canonical_json(plan) + b"\n")
+    print(json.dumps({
+        "result": "PLAN_MINTED", "path": str(output),
+        "raw_sha256": sha256_file(output), "self_sha256": plan["self_sha256"],
+    }, sort_keys=True))
+    return plan
+
+
 def _actual_platform() -> str:
     system = platform.system().lower()
     if system == "windows":
@@ -229,6 +357,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
     rows = []
     for leg in plan["legs"]:
         validate_executable_identity(leg)
+        validate_semantic_contract_identity(repo_root, leg)
         stdout_path = stream_root / f"{leg['id']}.stdout.log"
         stderr_path = stream_root / f"{leg['id']}.stderr.log"
         result = subprocess.run(
@@ -319,14 +448,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--plan", type=Path, required=True)
     run_parser.add_argument("--output", type=Path, required=True)
     run_parser.add_argument("--platform", choices=["windows", "linux"], required=True)
+    mint_parser = subparsers.add_parser("mint-plan")
+    mint_parser.add_argument("--repo-root", type=Path, required=True)
+    mint_parser.add_argument("--leg-spec", type=Path, required=True)
+    mint_parser.add_argument("--output", type=Path, required=True)
+    mint_parser.add_argument("--declared-head", required=True)
+    mint_parser.add_argument("--platform", choices=["windows", "linux"], required=True)
+    mint_parser.add_argument("--python-executable", type=Path, required=True)
+    mint_parser.add_argument("--cargo-executable", type=Path, required=True)
+    mint_parser.add_argument("--artifact-root", type=Path, required=True)
+    mint_parser.add_argument("--install-receipt", type=Path, required=True)
+    mint_parser.add_argument("--setuptools-sdist", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--receipt", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        result = (
-            run_plan(args.repo_root, args.plan, args.output, args.platform)
-            if args.command == "run" else verify_receipt(args.receipt)
-        )
+        if args.command == "run":
+            result = run_plan(args.repo_root, args.plan, args.output, args.platform)
+        elif args.command == "mint-plan":
+            result = mint_plan(
+                repo_root=args.repo_root, leg_spec_path=args.leg_spec,
+                output=args.output, declared_head=args.declared_head,
+                platform_name=args.platform, python_executable=args.python_executable,
+                cargo_executable=args.cargo_executable, artifact_root=args.artifact_root,
+                install_receipt=args.install_receipt, sdist_path=args.setuptools_sdist,
+            )
+        else:
+            result = verify_receipt(args.receipt)
     except (ACleanRefusal, FileExistsError, json.JSONDecodeError, OSError, subprocess.TimeoutExpired) as exc:
         if args.command == "run" and not args.output.exists():
             refusal = write_refusal_receipt(

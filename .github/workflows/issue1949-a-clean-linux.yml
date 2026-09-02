@@ -10,12 +10,12 @@ on:
         description: Exact merged commit to prove
         required: true
         type: string
-      plan_base64:
-        description: Base64 of the externally bound immutable Linux plan
+      leg_spec_base64:
+        description: Base64 of the externally bound immutable Linux leg specification
         required: true
         type: string
-      plan_raw_sha256:
-        description: Publicly bound raw SHA-256 of the decoded Linux plan
+      leg_spec_raw_sha256:
+        description: Publicly bound raw SHA-256 of the decoded Linux leg specification
         required: true
         type: string
 
@@ -45,25 +45,64 @@ jobs:
           test "$actual" = "$DECLARED_HEAD"
           test -z "$(git status --porcelain)"
 
-      - name: Run Linux CPU clean-clone plan outside checkout CWD
+      - name: Bootstrap exact declared environment and refused sdist bytes
         shell: bash
         env:
           CHECKOUT: ${{ github.workspace }}/fresh clone é
-          PLAN_BASE64: ${{ inputs.plan_base64 }}
-          PLAN_RAW_SHA256: ${{ inputs.plan_raw_sha256 }}
+          INSTALL: ${{ runner.temp }}/issue1949-a-clean-linux-install.json
+          SDIST: ${{ runner.temp }}/setuptools-84.0.0.tar.gz
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          python3 -m pip download --disable-pip-version-check --no-deps --no-binary=:all: \
+            --dest "$RUNNER_TEMP" setuptools==84.0.0
+          printf '%s  %s\n' 'f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73' "$SDIST" \
+            | sha256sum --check --strict -
+          python3 "$CHECKOUT/tools/ember-restart-3b/python_environment.py" \
+            --root "$CHECKOUT" install --receipt "$INSTALL"
+
+      - name: Mint and publish exact Linux platform plan identity
+        shell: bash
+        env:
+          CHECKOUT: ${{ github.workspace }}/fresh clone é
+          DECLARED_HEAD: ${{ inputs.declared_head }}
+          LEG_SPEC_BASE64: ${{ inputs.leg_spec_base64 }}
+          LEG_SPEC_RAW_SHA256: ${{ inputs.leg_spec_raw_sha256 }}
+          LEG_SPEC: ${{ runner.temp }}/issue1949-a-clean-linux-leg-spec.json
+          PLAN: ${{ runner.temp }}/issue1949-a-clean-linux-plan.json
+          INSTALL: ${{ runner.temp }}/issue1949-a-clean-linux-install.json
+          SDIST: ${{ runner.temp }}/setuptools-84.0.0.tar.gz
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEG_SPEC_BASE64" | base64 --decode > "$LEG_SPEC"
+          printf '%s  %s\n' "$LEG_SPEC_RAW_SHA256" "$LEG_SPEC" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/B:/tmp"
+          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+            "$CHECKOUT/scripts/issue1949_a_clean.py" mint-plan \
+            --repo-root "$CHECKOUT" --leg-spec "$LEG_SPEC" --output "$PLAN" \
+            --declared-head "$DECLARED_HEAD" --platform linux \
+            --python-executable "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+            --cargo-executable "$(command -v cargo)" --artifact-root "$RUNNER_TEMP" \
+            --install-receipt "$INSTALL" --setuptools-sdist "$SDIST"
+
+      - name: Run published Linux CPU clean-clone plan outside checkout CWD
+        shell: bash
+        env:
+          CHECKOUT: ${{ github.workspace }}/fresh clone é
           PLAN: ${{ runner.temp }}/issue1949-a-clean-linux-plan.json
           RECEIPT: ${{ runner.temp }}/issue1949-a-clean-linux.json
         working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
-          printf '%s' "$PLAN_BASE64" | base64 --decode > "$PLAN"
-          printf '%s  %s\n' "$PLAN_RAW_SHA256" "$PLAN" | sha256sum --check --strict -
-          python3 "$CHECKOUT/scripts/issue1949_a_clean.py" run \
+          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+            "$CHECKOUT/scripts/issue1949_a_clean.py" run \
             --repo-root "$CHECKOUT" \
             --plan "$PLAN" \
             --output "$RECEIPT" \
             --platform linux
-          python3 "$CHECKOUT/scripts/issue1949_a_clean.py" verify --receipt "$RECEIPT"
+          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+            "$CHECKOUT/scripts/issue1949_a_clean.py" verify --receipt "$RECEIPT"
 
       - name: Upload raw receipt and per-leg streams
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -71,5 +110,8 @@ jobs:
           name: issue1949-a-clean-linux-${{ inputs.declared_head }}
           path: |
             ${{ runner.temp }}/issue1949-a-clean-linux.json
+            ${{ runner.temp }}/issue1949-a-clean-linux-plan.json
+            ${{ runner.temp }}/issue1949-a-clean-linux-leg-spec.json
+            ${{ runner.temp }}/issue1949-a-clean-linux-install.json
             ${{ runner.temp }}/issue1949-a-clean-linux.streams/**
           if-no-files-found: error
