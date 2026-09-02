@@ -14,13 +14,54 @@ from unittest import mock
 
 import pytest
 
-from src.ember.governance.scripts.ember_restart.r1_launch_packet import (
-    _build_run_spec,
-    build_ready_for_compute_packet,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_restart/r1_launch_packet.py
+import importlib.util as _ember_4d57af04c363ba35_importlib
+import sys as _ember_4d57af04c363ba35_sys
+from pathlib import Path as _ember_4d57af04c363ba35_Path
+_ember_4d57af04c363ba35_path = _ember_4d57af04c363ba35_Path(__file__).resolve().parents[3].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'r1_launch_packet.py')
+if not _ember_4d57af04c363ba35_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/r1_launch_packet.py')
+_ember_4d57af04c363ba35_aliases = ('_ember_issue2015_4d57af04c363ba35', 'r1_launch_packet', 'scripts.ember_restart.r1_launch_packet', 'src.ember.governance.scripts.ember_restart.r1_launch_packet')
+_ember_4d57af04c363ba35_existing = []
+for _ember_4d57af04c363ba35_alias in _ember_4d57af04c363ba35_aliases:
+    _ember_4d57af04c363ba35_candidate = _ember_4d57af04c363ba35_sys.modules.get(_ember_4d57af04c363ba35_alias)
+    if _ember_4d57af04c363ba35_candidate is not None and all(_ember_4d57af04c363ba35_candidate is not item for item in _ember_4d57af04c363ba35_existing):
+        _ember_4d57af04c363ba35_existing.append(_ember_4d57af04c363ba35_candidate)
+if len(_ember_4d57af04c363ba35_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_restart/r1_launch_packet.py')
+if _ember_4d57af04c363ba35_existing:
+    _ember_4d57af04c363ba35_module = _ember_4d57af04c363ba35_existing[0]
+    _ember_4d57af04c363ba35_observed = getattr(_ember_4d57af04c363ba35_module, '__file__', None)
+    if _ember_4d57af04c363ba35_observed is None or _ember_4d57af04c363ba35_Path(_ember_4d57af04c363ba35_observed).resolve() != _ember_4d57af04c363ba35_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_restart/r1_launch_packet.py')
+else:
+    _ember_4d57af04c363ba35_spec = _ember_4d57af04c363ba35_importlib.spec_from_file_location('_ember_issue2015_4d57af04c363ba35', _ember_4d57af04c363ba35_path)
+    if _ember_4d57af04c363ba35_spec is None or _ember_4d57af04c363ba35_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_restart/r1_launch_packet.py')
+    _ember_4d57af04c363ba35_module = _ember_4d57af04c363ba35_importlib.module_from_spec(_ember_4d57af04c363ba35_spec)
+    for _ember_4d57af04c363ba35_alias in _ember_4d57af04c363ba35_aliases:
+        _ember_4d57af04c363ba35_prior = _ember_4d57af04c363ba35_sys.modules.get(_ember_4d57af04c363ba35_alias)
+        if _ember_4d57af04c363ba35_prior is not None and _ember_4d57af04c363ba35_prior is not _ember_4d57af04c363ba35_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/r1_launch_packet.py')
+        _ember_4d57af04c363ba35_sys.modules[_ember_4d57af04c363ba35_alias] = _ember_4d57af04c363ba35_module
+    try:
+        _ember_4d57af04c363ba35_spec.loader.exec_module(_ember_4d57af04c363ba35_module)
+    except BaseException:
+        for _ember_4d57af04c363ba35_alias in _ember_4d57af04c363ba35_aliases:
+            if _ember_4d57af04c363ba35_sys.modules.get(_ember_4d57af04c363ba35_alias) is _ember_4d57af04c363ba35_module:
+                _ember_4d57af04c363ba35_sys.modules.pop(_ember_4d57af04c363ba35_alias, None)
+        raise
+for _ember_4d57af04c363ba35_alias in _ember_4d57af04c363ba35_aliases:
+    _ember_4d57af04c363ba35_prior = _ember_4d57af04c363ba35_sys.modules.get(_ember_4d57af04c363ba35_alias)
+    if _ember_4d57af04c363ba35_prior is not None and _ember_4d57af04c363ba35_prior is not _ember_4d57af04c363ba35_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_restart/r1_launch_packet.py')
+    _ember_4d57af04c363ba35_sys.modules[_ember_4d57af04c363ba35_alias] = _ember_4d57af04c363ba35_module
+_build_run_spec = getattr(_ember_4d57af04c363ba35_module, '_build_run_spec')
+build_ready_for_compute_packet = getattr(_ember_4d57af04c363ba35_module, 'build_ready_for_compute_packet')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/r1_launch_packet.py
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SOURCE_COMMIT = subprocess.check_output(
     ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
 ).strip()

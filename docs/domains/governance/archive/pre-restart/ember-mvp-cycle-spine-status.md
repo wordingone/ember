@@ -78,7 +78,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
 - `scripts/ember_wheel_harness_selftest.py` verifies equal budget, C>B>A
   normalized improvement ordering, non-leaderboard benchmark boundary, and
   growth-gate refusal for fixture and real wheel receipts.
-- `scripts/ember_mvp_readiness.py` is a fail-closed readiness gate over a
+- `src/ember/governance/scripts/ember_mvp_readiness.py` is a fail-closed readiness gate over a
   top-level cycle receipt. It refuses `MVP_READY` unless linked receipts prove
   cycle topology from observation to latent branch to state commit, production
   sandbox execution with the exact named required probe set including actual
@@ -90,7 +90,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   with one numeric per-task result row for each frozen task and positive
   external delta, and a real equal-budget A/B/C wheel whose arm contracts are
   explicitly valid.
-- `scripts/ember_mvp_readiness_selftest.py` verifies fixture receipts are
+- `src/ember/governance/scripts/ember_mvp_readiness_selftest.py` verifies fixture receipts are
   rejected as `NOT_READY`, synthetic real-proof receipts can pass MVP
   readiness, missing observation/latent topology is rejected, missing named
   sandbox probes are rejected, missing durable assimilation artifacts are
@@ -811,7 +811,7 @@ python src\ember\governance\scripts\ember_windows_sandbox.py --selftest
 python src\ember\governance\scripts\ember_windows_sandbox.py --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
-python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
+python src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
@@ -834,14 +834,14 @@ python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
+python src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --sample-submission-bootstrap --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --auto-sample-submission --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
-python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
+python src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --raw-data-audit --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
@@ -862,18 +862,18 @@ python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <lo
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python src\ember\governance\scripts\ember_wheel_harness.py --fixture-out <local-path> --real --arm-a <local-path> --arm-b <local-path> --arm-c <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_readiness_selftest.py
-python scripts\ember_mvp_readiness.py --selftest
+python src\ember\governance\scripts\ember_mvp_readiness_selftest.py
+python src\ember\governance\scripts\ember_mvp_readiness.py --selftest
 python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
-python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
+python src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
-python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
+python src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
-python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
+python src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\v_soundness_probe.py --selftest
+python src\ember\governance\scripts\v_soundness_probe.py --selftest
 python scripts\nck\selftest_replay_rig.py
 python scripts\governor.py --selftest
 python scripts\t1_multimodal_selftest.py
@@ -1278,7 +1278,7 @@ fallback evidence and does not allow growth.
   arms because prepared task answers are absent.
 - Require repeated positive real cycles before increasing beyond the fixture
   growth gate.
-- Use `scripts\ember_mvp_readiness.py --cycle-receipt <cycle.json> --out <readiness.json>`
+- Use `src\ember\governance\scripts\ember_mvp_readiness.py --cycle-receipt <cycle.json> --out <readiness.json>`
   as the fail-closed gate before any `MVP_READY` or growth claim.
 
 ## Do Not Infer

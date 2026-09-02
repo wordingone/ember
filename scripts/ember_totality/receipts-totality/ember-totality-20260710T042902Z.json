@@ -519,7 +519,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/spend_annex_scan.py",
+            "path": "src/ember/governance/scripts/ember_totality/spend_annex_scan.py",
             "sha256": "1a31dc38604affa68f447c1a54d0428efe47131172332ff7123f4856c1fc977a",
             "present": true
           },
@@ -574,7 +574,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c4.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c4.py",
             "sha256": "6769ef1d883a27a39185b400cdaeeb0b6af48f368db874d07ed385eacf389eb6",
             "present": true
           },
@@ -684,7 +684,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_neg1.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_neg1.py",
             "sha256": "e19ce983cede347233430679a882b44e7d740cbad1c64e134f9192b1cd1c203c",
             "present": true
           },
@@ -724,7 +724,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/void_supersession.py",
+            "path": "src/ember/governance/scripts/ember_totality/void_supersession.py",
             "sha256": "768b521680f9d70c1ee12b24837150acfb75b10589b11e87c7f046a723e141b7",
             "present": true
           },

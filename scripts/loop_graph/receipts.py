@@ -8,7 +8,7 @@ gap-matrix.md's "Receipt reconstruction" gap: Ember's receipts/INDEX.jsonl
 has 5,823 rows with a schema that varies row-to-row and no node_id field at
 all -- reconstructing what happened for a given node means grepping raw
 receipt files by convention. This module makes node_id mandatory (enforced
-by schemas/loop-graph/provenance-receipt-v1.schema.json) and provides the
+by domains/governance/schemas/loop-graph/provenance-receipt-v1.schema.json) and provides the
 join query directly.
 """
 

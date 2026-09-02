@@ -12,7 +12,7 @@ registry, or restart authority. Ember Lab remains the sole serving lifecycle
 owner; this consumer only observes the live process set and the canonical
 `state/serving-registry.json` rows.
 
-Consumer: `tools/ember-cli/src/services/serving-topology-drift.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-drift.ts`
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/serving-topology-census.ts`
 

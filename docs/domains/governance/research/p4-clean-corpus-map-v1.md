@@ -176,6 +176,6 @@ Per-source probes required before any data ingestion. **No data acquisition unti
 ## 9. References
 
 - **Constitutional foundation:** L3 (anti-distillation corpus scope), L4 (receipted lineage).
-- **Ruling v2:** docs/spec/l3-corpus-boundary-v2-PROPOSED.md (this repo).
+- **Ruling v2:** docs/domains/governance/spec/l3-corpus-boundary-v2-PROPOSED.md (this repo).
 - **Upstream archives:** LibriVox (librivox.org), Gutenberg Project (gutenberg.org), Smithsonian Open Access (www.si.edu), Common Voice (commonvoice.mozilla.org), Chronicling America (chroniclingamerica.loc.gov), Internet Archive (archive.org).
 - **Feasibility:** verified arithmetic from panel synthesis; estimates marked "unreceipted" are provisional pending bulk-access probes.
