@@ -174,7 +174,7 @@ function redactHostPaths(
 function writeKillReceipt(pid: number, matchRule: string, survivorsExpected: string): void {
   const row = {
     ts: new Date().toISOString(),
-    script: "tools/ember-cli/src/build-tools/verify-burst-submit-251.ts",
+    script: "src/ember/infrastructure/tools/ember-cli/src/build-tools/verify-burst-submit-251.ts",
     pids: [pid],
     match_rule: matchRule,
     survivors_expected: survivorsExpected,
