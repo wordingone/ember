@@ -14,7 +14,7 @@ Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/memory-footprin
 
 Consumer: `tools/ember-cli/src/services/process-memory-census.ts`
 
-Consumer: `tools/ember-cli/src/services/memory-footprint-service.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-service.ts`
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/memory-footprint-live.ts`
 

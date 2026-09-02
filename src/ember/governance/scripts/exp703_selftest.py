@@ -129,7 +129,7 @@ pass, no slice measurement, no Claim A/B number):
       pre-tokenization-byte incidence is UNMEASURABLE in this checkout) is
       cited LIVE against the two disposition receipts on disk.
 
-Usage: python scripts/exp703_selftest.py
+Usage: python src/ember/governance/scripts/exp703_selftest.py
 """
 
 from __future__ import annotations

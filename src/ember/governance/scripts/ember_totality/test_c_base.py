@@ -74,7 +74,7 @@ from c_base_verification_hardening import (  # noqa: E402
     verification_receipt_disposition as _verification_receipt_disposition,
 )
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
 ROOT = next(
     (p for p in (Path(_env_root) if _env_root else None, REPO_ROOT,
