@@ -73,7 +73,7 @@ nor a trigger for any unplanned intervention.
 
 ## Consistency guard
 
-`scripts/fp36_consistency.py` — fail-closed: asserts the trajectory
+`src/ember/governance/scripts/fp36_consistency.py` — fail-closed: asserts the trajectory
 table's numbers (tokens, verified, governed-min) byte-derive from the two
 named receipts on disk, and that no `fp24-verdict-1B-*.json` exists yet
 (frame frozen pre-data). Run it in the same PR that lands this doc and at

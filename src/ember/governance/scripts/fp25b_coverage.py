@@ -21,4 +21,4 @@ sys.argv = ["w4_eval.py",
             "--k", "8", "--batch-size", "8",
             "--temp", "0.8", "--seed", "16", "--tag", "fp25b-cov"]
 sys.path.insert(0, f"{NC}/scripts")
-runpy.run_path(f"{NC}/scripts/w4_eval.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/w4_eval.py", run_name="__main__")

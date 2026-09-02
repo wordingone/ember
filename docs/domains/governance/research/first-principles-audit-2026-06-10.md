@@ -770,7 +770,7 @@ pacing (headroom rule). The same absolute pause is a larger FRACTION of
 the faster core's wall. Does any headline ordering flip when the
 denominator is re-accounted?
 
-**Method (`scripts/fp11_denominator.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp11_denominator.py`, selftest PASS, receipt
 `fp11-denominator-20260611T010052Z.json`, CPU-from-receipts):** three
 accountings — A1 as-receipted; A2 throttle-exact (inter-batch sleep is
 exactly computable: 120 batches × 0.6 s = 72.0 s per leg, 19.8% of the

@@ -24,7 +24,7 @@
 
 **Files:**
 - Create: `tools/ember-cli/src/ink/terminal-session.ts`
-- Create: `tools/ember-cli/src/ink/terminal-session.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.test.ts`
 - Modify: `tools/ember-cli/src/ink/termio.ts`
 - Modify: `tools/ember-cli/src/core/frontend-shell.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/core/frontend-shell.test.ts`

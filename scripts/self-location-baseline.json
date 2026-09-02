@@ -924,7 +924,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/fp25_recall_dryrun.py",
+      "path": "src/ember/governance/scripts/fp25_recall_dryrun.py",
       "line": 14,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -946,7 +946,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/fp25_split_check.py",
+      "path": "src/ember/governance/scripts/fp25_split_check.py",
       "line": 13,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -957,7 +957,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/fp25b_coverage.py",
+      "path": "src/ember/governance/scripts/fp25b_coverage.py",
       "line": 23,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -990,7 +990,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/fp32_r10_failure_taxonomy.py",
+      "path": "src/ember/governance/scripts/fp32_r10_failure_taxonomy.py",
       "line": 148,
       "target": "ROOT_CAUSED",
       "expression": "{'93e74934': 'R3 torch.compile dynamo NameError at bench cell \u2014 root-caused, per-cell containment added; receipts/fp32-step-econ-20260611T142831Z.json', 'cb003e88': 'D-gate harness effective-count divisor bug \u2014 caught live, fixed same session; successful re-run receipted receipts/d-gate-adapter_model-20260611T070448Z.json'}",
@@ -1001,7 +1001,7 @@
       "error": "node outside closed grammar: Dict"
     },
     {
-      "path": "scripts/fp33_e1_open_base_inventory.py",
+      "path": "src/ember/governance/scripts/fp33_e1_open_base_inventory.py",
       "line": 61,
       "target": "DEFAULT_SCAN_ROOTS",
       "expression": "[Path.home() / '.cache' / 'huggingface' / 'hub']",
@@ -1034,7 +1034,7 @@
       "error": "unknown alias NC_SCRIPTS"
     },
     {
-      "path": "scripts/fp37_l7_duty_cycle.py",
+      "path": "src/ember/governance/scripts/fp37_l7_duty_cycle.py",
       "line": 69,
       "target": "RUN_DIR",
       "expression": "'<local-path>' if os.name == 'nt' else '<local-path>'",
@@ -1507,7 +1507,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/w4_eval.py",
+      "path": "src/ember/governance/scripts/w4_eval.py",
       "line": 34,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
