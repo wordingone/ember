@@ -20,6 +20,26 @@ INVARIANT = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 
 class ChangedReceiptGateTests(unittest.TestCase):
+    def test_canonical_frozen_policy_layout_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            legacy = root / "tools/frozen-receipt-exceptions.json"
+            canonical = root / "src/ember/infrastructure/tools/frozen-receipt-exceptions.json"
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            legacy.replace(canonical)
+            result = self.run_checker(root)
+            self.assertEqual(result.returncode, 0, self.output(result))
+
+    def test_duplicate_frozen_policy_layout_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = self.seed(td)
+            canonical = root / "src/ember/infrastructure/tools/frozen-receipt-exceptions.json"
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            canonical.write_bytes((root / "tools/frozen-receipt-exceptions.json").read_bytes())
+            result = self.run_checker(root)
+            self.assertEqual(result.returncode, 1, self.output(result))
+            self.assertIn("exactly one", self.output(result))
+
     def run_checker(
         self, root: Path, *paths: str, null_delimited: bool = False
     ) -> subprocess.CompletedProcess[bytes]:

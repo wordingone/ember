@@ -587,6 +587,30 @@ def test_repository_old_or_new_authority_layout_passes() -> None:
     assert payload["ok"] is True
 
 
+def test_domain_governance_authority_path_is_selected(tmp_path: Path) -> None:
+    verifier = load_verifier_module()
+    path = tmp_path / "docs/domains/governance/authority/GOVERNANCE.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("# governance\n", encoding="utf-8")
+    assert (
+        verifier.authority_relative_path(tmp_path, "GOVERNANCE.md")
+        == "docs/domains/governance/authority/GOVERNANCE.md"
+    )
+
+
+def test_duplicate_intermediate_and_domain_authority_paths_refuse(tmp_path: Path) -> None:
+    verifier = load_verifier_module()
+    for relative in (
+        "docs/authority/GOVERNANCE.md",
+        "docs/domains/governance/authority/GOVERNANCE.md",
+    ):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# governance\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate canonical authority document GOVERNANCE.md"):
+        verifier.authority_relative_path(tmp_path, "GOVERNANCE.md")
+
+
 def test_duplicate_governing_surface_migration_is_rejected(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
     new_matrix = tmp_path / "docs" / "authority" / "ember-authority-matrix.md"

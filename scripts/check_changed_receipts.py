@@ -74,7 +74,10 @@ DISPOSITION_PACKET_PREFIX = ("receipts", "oldest-issue-disposition", "approved")
 #
 # Digests are taken from the same bytes the floor itself reads (working tree),
 # so an exception can never cover bytes other than the ones being validated.
-FROZEN_EXCEPTIONS_PATH = ("tools", "frozen-receipt-exceptions.json")
+FROZEN_EXCEPTIONS_PATHS = (
+    ("tools", "frozen-receipt-exceptions.json"),
+    ("src", "ember", "infrastructure", "tools", "frozen-receipt-exceptions.json"),
+)
 FROZEN_EXCEPTIONS_SCHEMA = "frozen-receipt-exceptions-v1"
 
 
@@ -136,11 +139,18 @@ class FrozenPolicyError(Exception):
 
 def load_frozen_exceptions(root: Path) -> dict[str, str]:
     """Return {repo-relative path: sha256}. Raises when the policy is unusable."""
-    path = root.joinpath(*FROZEN_EXCEPTIONS_PATH)
+    present = [parts for parts in FROZEN_EXCEPTIONS_PATHS if root.joinpath(*parts).exists()]
+    if len(present) != 1:
+        choices = ", ".join("/".join(parts) for parts in FROZEN_EXCEPTIONS_PATHS)
+        raise FrozenPolicyError(
+            f"policy must exist at exactly one of {choices} (found {len(present)})"
+        )
+    selected = present[0]
+    path = root.joinpath(*selected)
     try:
         value = json.loads(path.read_text(encoding="utf-8", errors="strict"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise FrozenPolicyError(f"{'/'.join(FROZEN_EXCEPTIONS_PATH)}: {exc}") from exc
+        raise FrozenPolicyError(f"{'/'.join(selected)}: {exc}") from exc
     if not isinstance(value, dict) or value.get("schema") != FROZEN_EXCEPTIONS_SCHEMA:
         raise FrozenPolicyError(f"schema must be {FROZEN_EXCEPTIONS_SCHEMA}")
     entries = value.get("entries")
