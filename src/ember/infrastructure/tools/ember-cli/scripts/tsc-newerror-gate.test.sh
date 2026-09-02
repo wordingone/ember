@@ -2,14 +2,14 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-# tools/ember-cli/scripts/tsc-newerror-gate.test.sh
+# src/ember/infrastructure/tools/ember-cli/scripts/tsc-newerror-gate.test.sh
 #
 # Minimal self-contained bash test for tsc-newerror-gate.sh (oburst-0926
 # 2026-07-21 false-green defect). Reproduces the false-GREEN (tsc/bun
 # absent from PATH must no longer report GREEN) and asserts the real
 # clean/at-baseline run still reports GREEN. Exits nonzero on any failure.
 #
-# Usage: tools/ember-cli/scripts/tsc-newerror-gate.test.sh   (from anywhere)
+# Usage: src/ember/infrastructure/tools/ember-cli/scripts/tsc-newerror-gate.test.sh   (from anywhere)
 
 set -uo pipefail
 

@@ -466,7 +466,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     fp35-fused-muon-ab-*.json, no "kernel" -- that one has NO confirmed writer, excluded below)
 #   fp35d-k4096-steady-state-*.json          src/ember/governance/scripts/fp35d_k4096_steady_state.py:216
 #   fp35g-width-cond-fp8-ab-*.json           src/ember/governance/scripts/fp35g_width_cond_fp8_ab.py:484
-#   fp38-l9-flash-ab-*.json                  scripts/fp38_l9_flash_ab.py:239
+#   fp38-l9-flash-ab-*.json                  src/ember/governance/scripts/fp38_l9_flash_ab.py:239
 #   fp38b-l9-completion-*.json               scripts/fp38b_l9_completion.py:232
 #   fp38c-l9-eager-*.json                    scripts/fp38c_l9_eager.py:213
 #   fp38d-l9-prod-flash-*.json               scripts/fp38d_l9_prod_flash.py:274
@@ -569,7 +569,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp35-fused-muon-kernel-ab-.*\.json$"), "src/ember/governance/scripts/fp35_fused_muon_kernel_ab.py"),
     (re.compile(r"^fp35d-k4096-steady-state-.*\.json$"), "src/ember/governance/scripts/fp35d_k4096_steady_state.py"),
     (re.compile(r"^fp35g-width-cond-fp8-ab-.*\.json$"), "src/ember/governance/scripts/fp35g_width_cond_fp8_ab.py"),
-    (re.compile(r"^fp38-l9-flash-ab-.*\.json$"), "scripts/fp38_l9_flash_ab.py"),
+    (re.compile(r"^fp38-l9-flash-ab-.*\.json$"), "src/ember/governance/scripts/fp38_l9_flash_ab.py"),
     (re.compile(r"^fp38b-l9-completion-.*\.json$"), "scripts/fp38b_l9_completion.py"),
     (re.compile(r"^fp38c-l9-eager-.*\.json$"), "scripts/fp38c_l9_eager.py"),
     (re.compile(r"^fp38d-l9-prod-flash-.*\.json$"), "scripts/fp38d_l9_prod_flash.py"),

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 PRODUCER = ROOT / "tools" / "corpus_connectors" / "mint_connector_license_sidecar.py"
 CC0_URL = "http://creativecommons.org/publicdomain/zero/1.0/"
 CC0_URL_RECEIPT_NAME = "20260818T202142Z-paper-list-paper-list.txt-939-ids.json"

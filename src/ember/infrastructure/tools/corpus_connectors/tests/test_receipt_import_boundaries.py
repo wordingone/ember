@@ -24,7 +24,7 @@ import sys
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 ADMISSION = ROOT / "scripts" / "ember_admission"
 CONNECTORS = ROOT / "tools" / "corpus_connectors"
 FAMILY_ROOTS = (ADMISSION, CONNECTORS)

@@ -36,7 +36,7 @@ doc lived at the old path). This script defaults to skipping those paths and rep
 skip explicitly in the receipt and summary -- never silently.
 
 Usage:
-    python tools/docs_consolidate.py \\
+    python src/ember/infrastructure/tools/docs_consolidate.py \\
         --repo-root . \\
         --move-map path/to/docs-move-map.json \\
         --reference-graph path/to/docs-reference-graph.json \\
