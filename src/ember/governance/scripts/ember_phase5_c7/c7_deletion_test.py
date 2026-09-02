@@ -15,7 +15,7 @@ Verdict is machine-checkable:
 CPU selftest exits 0 on pass and asserts the load-bearing property on a toy corpus.
 
 Usage:
-  python scripts/ember_phase5_c7/c7_deletion_test.py        # runs selftest
+  python src/ember/governance/scripts/ember_phase5_c7/c7_deletion_test.py        # runs selftest
   python -c "from ember_phase5_c7.c7_deletion_test import run_deletion_test; ..."
 """
 # goal_id: EMBER-02

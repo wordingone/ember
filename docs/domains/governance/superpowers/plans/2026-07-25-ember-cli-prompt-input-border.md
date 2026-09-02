@@ -152,7 +152,7 @@ git commit -m "fix(cli): close the prompt input border"
 
 **Files:**
 - Modify: `tools/ember-cli/src/screens/repl.ts`
-- Modify: `tools/ember-cli/src/screens/repl-operator-surface.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts`
 
 **Interfaces:**
 - Consumes: `PromptInputProps.statusLine` from Task 1 and the existing `StatusLine` props/state.
@@ -182,7 +182,7 @@ names or source-text inspection.
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/screens/repl-operator-surface.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts
 ```
 
 Expected: the status component is still a sibling of `PromptInput`.
@@ -214,7 +214,7 @@ state source.
 Run:
 
 ```powershell
-bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts
 ```
 
 Expected: both suites pass and exactly one status component is rendered.
@@ -222,7 +222,7 @@ Expected: both suites pass and exactly one status component is rendered.
 - [ ] **Step 5: Commit status anchoring**
 
 ```powershell
-git add tools/ember-cli/src/screens/repl.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
+git add tools/ember-cli/src/screens/repl.ts src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts
 git commit -m "fix(cli): anchor status inside prompt panel"
 ```
 
@@ -286,7 +286,7 @@ element inspection.
 - [ ] **Step 4: Run the three focused suites**
 
 ```powershell
-bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts
 ```
 
 Expected: all pass, with the 40-column positive-viewport assertion executed.
@@ -394,7 +394,7 @@ git commit -m "test(cli): add compiled prompt border capture"
 - [ ] **Step 1: Run the focused and adjacent regression suites**
 
 ```powershell
-bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/border-rendering.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/app-resize.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/border-rendering.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/app-resize.test.ts
 ```
 
 Expected: all pass.

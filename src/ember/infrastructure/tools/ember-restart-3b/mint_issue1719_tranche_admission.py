@@ -295,7 +295,7 @@ def _validate_identity_cure(
         raise ValueError("source identity cure commit is not an ancestor of current source")
     paths = {
         "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
-        "train": "tools/ember-restart-3b/train.py",
+        "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
         "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
     }
     reopened = {
@@ -335,7 +335,7 @@ def _validate_authority_with_identity_cure(
 ) -> dict[str, Any]:
     paths = {
         "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
-        "train": "tools/ember-restart-3b/train.py",
+        "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
         "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
     }
     resolved_commit = cure_evidence["resolved_source_commit"]

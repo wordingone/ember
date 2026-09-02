@@ -198,7 +198,7 @@
       "error": "unknown alias GOALFORGE_ROOT"
     },
     {
-      "path": "scripts/ember_surface2_capture.py",
+      "path": "src/ember/governance/scripts/ember_surface2_capture.py",
       "line": 115,
       "target": "SCRATCH_ROOT",
       "expression": "os.environ.get('EMBER_SURFACE2_SCRATCH', os.path.join(EXEC_ROOT, 'scratch', 's2cap'))",
@@ -308,7 +308,7 @@
       "error": "unknown alias _exec_root"
     },
     {
-      "path": "scripts/ember_totality/receipt_errata_scan.py",
+      "path": "src/ember/governance/scripts/ember_totality/receipt_errata_scan.py",
       "line": 95,
       "target": "ROOT",
       "expression": "c_inv.ROOT",

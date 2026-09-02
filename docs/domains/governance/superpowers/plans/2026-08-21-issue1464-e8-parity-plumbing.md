@@ -104,7 +104,7 @@ Expected: PASS with no diff in `src/ember/governance/scripts/r1_e8_validator.py`
 ### Task 3: No-overwrite parity producer
 
 **Files:**
-- Create: `tools/ember-restart-3b/a1_e8_parity.py`
+- Create: `src/ember/infrastructure/tools/ember-restart-3b/a1_e8_parity.py`
 - Create: `tests/ember_restart_model/domain-governance/test_a1_e8_parity.py`
 
 **Interfaces:**
