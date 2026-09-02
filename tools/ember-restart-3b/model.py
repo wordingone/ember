@@ -264,25 +264,50 @@ class RawAudioProjector(nn.Module):
 class RotaryCoordinates(nn.Module):
     """Parameter-free 1D text/audio and 2D image rotary coordinates."""
 
-    def __init__(self, head_dim: int) -> None:
+    def __init__(self, head_dim: int, *, device: torch.device | str | None = None) -> None:
         super().__init__()
+        if head_dim % 4 != 0:
+            raise ValueError("head_dim must be divisible by 4")
         self.head_dim = head_dim
         self.axis_dim = head_dim // 2
+        base = torch.arange(0, self.axis_dim, 2, device=device, dtype=torch.float32)
+        self.register_buffer(
+            "frequencies",
+            torch.pow(10000.0, -base / self.axis_dim),
+            persistent=False,
+        )
+
+    def _apply(self, fn):
+        result = super()._apply(fn)
+        # Rotary frequency arithmetic is part of the frozen float32 contract;
+        # dtype-wide module transforms must not quantize this nonpersistent cache.
+        base = torch.arange(
+            0, self.axis_dim, 2, device=self.frequencies.device, dtype=torch.float32
+        )
+        self.frequencies = torch.pow(10000.0, -base / self.axis_dim)
+        return result
 
     def apply(self, values: torch.Tensor, coordinates: torch.Tensor) -> torch.Tensor:
-        chunks = values.split(self.axis_dim, dim=-1)
-        rotated: list[torch.Tensor] = []
-        base = torch.arange(0, self.axis_dim, 2, device=values.device, dtype=torch.float32)
-        frequencies = torch.pow(10000.0, -base / self.axis_dim)
-        for axis, chunk in enumerate(chunks):
-            angle = coordinates[..., axis].to(torch.float32).unsqueeze(-1) * frequencies
+        if values.shape[-1] != self.head_dim:
+            raise ValueError("rotary values width must match head_dim")
+        if coordinates.shape[-1] != 2:
+            raise ValueError("rotary coordinates must have exactly two axes")
+        output = torch.empty_like(values)
+        for axis in range(2):
+            start = axis * self.axis_dim
+            chunk = values[..., start : start + self.axis_dim]
+            destination = output[..., start : start + self.axis_dim]
+            angle = (
+                coordinates[..., axis].to(torch.float32).unsqueeze(-1)
+                * self.frequencies
+            )
             cos = angle.cos().to(chunk.dtype).unsqueeze(1)
             sin = angle.sin().to(chunk.dtype).unsqueeze(1)
             even = chunk[..., 0::2]
             odd = chunk[..., 1::2]
-            rotated_axis = torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1)
-            rotated.append(rotated_axis.flatten(-2))
-        return torch.cat(rotated, dim=-1)
+            destination[..., 0::2].copy_(even * cos - odd * sin)
+            destination[..., 1::2].copy_(even * sin + odd * cos)
+        return output
 
 
 class SharedAttention(nn.Module):
@@ -294,7 +319,7 @@ class SharedAttention(nn.Module):
         self.q_norm = RMSNorm(self.head_dim, device=device)
         self.k_norm = RMSNorm(self.head_dim, device=device)
         self.output = nn.Linear(config.hidden_size, config.hidden_size, bias=False, device=device)
-        self.rope = RotaryCoordinates(self.head_dim)
+        self.rope = RotaryCoordinates(self.head_dim, device=device)
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
         batch, sequence, width = hidden_states.shape
