@@ -1,0 +1,43 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: issue1947 protected eval scheduled verification
+
+on:
+  schedule:
+    - cron: "23 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  family-fixtures-and-latest-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: python -m pip install pytest
+      - run: >-
+          python -m pytest -p no:cacheprovider -q
+          tests/ember_restart_model/domain-governance/test_issue1947_release_preflight.py
+          tests/ember_restart_model/domain-governance/test_issue1947_release_execute.py
+          tests/ember_restart_model/domain-governance/test_issue1947_release_recompute.py
+      - name: Refuse without and verify newest committed redacted bundle
+        shell: bash
+        run: |
+          bundle="$(find receipts -type f -name release-bundle.json -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          test -n "$bundle"
+          python src/ember/governance/scripts/issue1947_release_recompute.py \
+            --bundle "$bundle" \
+            --receipt "issue1947-scheduled-recompute-${GITHUB_RUN_ID}.json"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue1947-scheduled-recompute
+          path: issue1947-scheduled-recompute-*.json
+          if-no-files-found: error
+          retention-days: 30
