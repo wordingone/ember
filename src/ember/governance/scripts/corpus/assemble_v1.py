@@ -9,7 +9,7 @@ Assembles v1 corpus by:
 4. Tracking L4 provenance in JSONL manifest
 5. Fail-closed on unknown provenance
 
-Execution: python scripts/corpus/assemble_v1.py --config configs/v1-pretrain-config.json --output-dir <path>
+Execution: python src/ember/governance/scripts/corpus/assemble_v1.py --config configs/v1-pretrain-config.json --output-dir <path>
 """
 
 import json

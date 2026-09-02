@@ -399,7 +399,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c11.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
             "sha256": "c4ba2f1792ba11a13bb0b134b83da310eccaa675014545f3adb317369195fb04",
             "present": true
           },

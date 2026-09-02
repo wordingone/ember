@@ -130,7 +130,7 @@ THE THREE-LEG PIPELINE
       candidate and writes `receipts/ceff-closure-attempt-<ts>Z.json`
       instead — never a RESOLVED receipt that fails its own probe re-run.
 
-C04_DECIDING_AXES — sourced from `docs/archive/pre-restart/c04-pick-decision-table-v1.md`
+C04_DECIDING_AXES — sourced from `docs/domains/governance/archive/pre-restart/c04-pick-decision-table-v1.md`
 (ember tree; "c04 pick decision table"), cross-referenced against its own
 resolution receipt `receipts/c04-receipt3-20260613T052223Z.json`:
   - Axis 1 (L10 optimizer swap, #363): that receipt's `c3_summary` states
@@ -279,7 +279,7 @@ CE_CHUNK_TOKENS = 256
 MODEL_SEED      = 42
 BATCH_GEN_SEED  = 20260703
 
-# ── c04_deciding_axes — sourced from docs/archive/pre-restart/c04-pick-decision-table-v1.md +
+# ── c04_deciding_axes — sourced from docs/domains/governance/archive/pre-restart/c04-pick-decision-table-v1.md +
 #    its resolution receipt receipts/c04-receipt3-20260613T052223Z.json
 #    (see module docstring "C04_DECIDING_AXES" section for the full trace)
 C04_DECIDING_AXES = {
@@ -288,7 +288,7 @@ C04_DECIDING_AXES = {
 }
 C04_DECIDING_AXES_DETAIL = {
     "L10_optimizer_swap": (
-        "docs/archive/pre-restart/c04-pick-decision-table-v1.md Axis 1 (#363): L10 candidate never "
+        "docs/domains/governance/archive/pre-restart/c04-pick-decision-table-v1.md Axis 1 (#363): L10 candidate never "
         "cleared the <=15% optimizer-wall bar (receipts/c04-receipt3-20260613T052223Z.json "
         "c3_summary: 'ALL FAIL -- optimizer >15% step wall on all candidates', measured "
         "opt_share 0.4137/0.6838/0.6485/0.5895/0.7318 across all 5 candidates) -- the "
@@ -298,7 +298,7 @@ C04_DECIDING_AXES_DETAIL = {
         "not silently dropped."
     ),
     "density_ab": (
-        "docs/archive/pre-restart/c04-pick-decision-table-v1.md Axis 2: density A/B verdict DENSITY_CONFIRMED "
+        "docs/domains/governance/archive/pre-restart/c04-pick-decision-table-v1.md Axis 2: density A/B verdict DENSITY_CONFIRMED "
         "(receipts/c04-receipt3-20260613T052223Z.json density_verdict) maps to D-CONF per "
         "the frozen aggregator; consumed as a directional prior for curriculum/budget "
         "sizing (seed-level Fisher p=0.50, underpowering disclosed in the same receipt, "

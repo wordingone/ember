@@ -56,7 +56,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   grade execution path: it runs `mlebench.cli grade-sample` only after grading
   preflight is ready, parses one numeric score per frozen task, and emits a
   real benchmark receipt for the wheel gate.
-- `scripts/ember_mle_micro_harness_selftest.py` verifies subset freezing,
+- `src/ember/governance/scripts/ember_mle_micro_harness_selftest.py` verifies subset freezing,
   non-leaderboard comparability, tiny fixture execution, and mean normalized
   improvement scoring. It also verifies hydration preflight `READY` and
   `BLOCKED` receipts, plus local execution `PASS` and `BLOCKED` receipts.
@@ -815,7 +815,7 @@ python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness_selftest.py
+python src\ember\governance\scripts\ember_mle_micro_harness_selftest.py
 python src\ember\governance\scripts\ember_mle_micro_harness.py --selftest
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --sample-submission-bootstrap --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>

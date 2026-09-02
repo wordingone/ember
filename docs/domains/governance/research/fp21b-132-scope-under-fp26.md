@@ -60,7 +60,7 @@ The scope cannot drift from the freeze without breaking the gate.
 - `docs/domains/governance/research/fp26-round3-shape-decision.md` (sha `5ef7cc20…`) — the frozen
   decision this scope is tied to; `binds.fp21b_132` = "retargets to the owned
   core's FIRST sampling round".
-- `scripts/fp21b_prereg.py` — `WORLD_PIN` + `check_sampling_world`; its selftest
+- `src/ember/governance/scripts/fp21b_prereg.py` — `WORLD_PIN` + `check_sampling_world`; its selftest
   already proves the owned-core refusal.
 - `src/ember/governance/scripts/fp26_prereg.py` — the freeze executor (`prereg_frozen:true`,
   G-prereg row of the v0 launch gate).

@@ -224,7 +224,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "reusable_artifacts": [
                 "src/ember/governance/scripts/ember_connected_cycle_audit.py",
                 "scripts/ember_native_operator_external_transfer_link.py",
-                "scripts/ember_field_level_contribution_proof.py",
+                "src/ember/governance/scripts/ember_field_level_contribution_proof.py",
                 "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py",
             ],
             "external_disjoint_validation": [
@@ -240,7 +240,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "reusable_artifact_present": all((repo / p).exists() for p in [
                 "src/ember/governance/scripts/ember_connected_cycle_audit.py",
                 "scripts/ember_native_operator_external_transfer_link.py",
-                "scripts/ember_field_level_contribution_proof.py",
+                "src/ember/governance/scripts/ember_field_level_contribution_proof.py",
                 "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py",
             ]),
             "external_disjoint_validation_present": external_rows_ok,

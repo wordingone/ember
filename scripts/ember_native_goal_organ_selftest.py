@@ -32,7 +32,7 @@ def main() -> int:
 ## Current Blocker Packet
 - **Current blocker:** native_goal_organ row is missing.
 - **Current executable command:** implement and run
-  `python scripts/ember_native_goal_organ.py --out receipts/ember-preloop-resident-gate/native-goal-organ-<timestamp>.json`.
+  `python src/ember/governance/scripts/ember_native_goal_organ.py --out receipts/ember-preloop-resident-gate/native-goal-organ-<timestamp>.json`.
 - **Required receipt:** `NATIVE_GOAL_ORGAN_PASS` or `NATIVE_GOAL_ORGAN_BLOCKED`.
 - **Kill/ablate test:** deleting native goal organ blocks current-blocker selection.
 - **Next blocker if pass:** rerun full parity gate.

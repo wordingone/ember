@@ -455,7 +455,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     adapter_path = receipts_dir / f"econ-pass-loopecon-adapter-{ts}.json"
 #   fp10-idiom-*.json                        src/ember/governance/scripts/fp10_idiom.py:324
 #   fp11-denominator-*.json                  scripts/fp11_denominator.py:265
-#   fp12-band-*.json                         scripts/fp12_band.py:233
+#   fp12-band-*.json                         src/ember/governance/scripts/fp12_band.py:233
 #   fp13-concentration-*.json                src/ember/governance/scripts/fp13_concentration.py:270
 #   fp30d-shard-gate-*.json                  scripts/fp30d_shard_gate.py:189
 #   fp33-e2-full-tune-ceiling-*.json         scripts/fp33_e2_full_tune_ceiling.py:234
@@ -495,8 +495,8 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   neural_policy_update_trace.json          scripts/ember_train_multimodal_resident_adapter.py:313
 #   train_multimodal_resident_adapter_receipt.json  scripts/ember_train_multimodal_resident_adapter.py:317
 #   policy_update_trace.json (exact basename, distinct from neural_policy_update_trace.json)
-#                                             scripts/ember_resident_training_candidate.py:217
-#   resident_training_candidate_receipt.json scripts/ember_resident_training_candidate.py:222
+#                                             src/ember/governance/scripts/ember_resident_training_candidate.py:217
+#   resident_training_candidate_receipt.json src/ember/governance/scripts/ember_resident_training_candidate.py:222
 #
 # Deliberately EXCLUDED after a real search turned up no confirmed writer (these
 # stay unresolvable, honestly, rather than guessed): cbase-grow-dryrun-*.json
@@ -559,7 +559,7 @@ CONVENTION_MAP = [
     (re.compile(r"^econ-pass-loopecon-adapter-.*\.json$"), "scripts/econ_pass.py"),
     (re.compile(r"^fp10-idiom-.*\.json$"), "src/ember/governance/scripts/fp10_idiom.py"),
     (re.compile(r"^fp11-denominator-.*\.json$"), "scripts/fp11_denominator.py"),
-    (re.compile(r"^fp12-band-.*\.json$"), "scripts/fp12_band.py"),
+    (re.compile(r"^fp12-band-.*\.json$"), "src/ember/governance/scripts/fp12_band.py"),
     (re.compile(r"^fp13-concentration-.*\.json$"), "src/ember/governance/scripts/fp13_concentration.py"),
     (re.compile(r"^fp30d-shard-gate-.*\.json$"), "scripts/fp30d_shard_gate.py"),
     (re.compile(r"^fp33-e2-full-tune-ceiling-.*\.json$"), "scripts/fp33_e2_full_tune_ceiling.py"),
@@ -587,8 +587,8 @@ CONVENTION_MAP = [
     (re.compile(r"^neural_policy_update_trace\.json$"), "scripts/ember_train_multimodal_resident_adapter.py"),
     (re.compile(r"^train_multimodal_resident_adapter_receipt\.json$"),
      "scripts/ember_train_multimodal_resident_adapter.py"),
-    (re.compile(r"^policy_update_trace\.json$"), "scripts/ember_resident_training_candidate.py"),
-    (re.compile(r"^resident_training_candidate_receipt\.json$"), "scripts/ember_resident_training_candidate.py"),
+    (re.compile(r"^policy_update_trace\.json$"), "src/ember/governance/scripts/ember_resident_training_candidate.py"),
+    (re.compile(r"^resident_training_candidate_receipt\.json$"), "src/ember/governance/scripts/ember_resident_training_candidate.py"),
 ]
 
 # Exact-path writer bindings for receipt names that are not globally unique.

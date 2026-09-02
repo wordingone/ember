@@ -25,7 +25,7 @@
 
 **Files:**
 - Create: `tools/ember-cli/src/services/checkpoint-load.ts`
-- Create: `tools/ember-cli/src/services/checkpoint-load.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts`
 
 **Interfaces:**
 - Produces:
@@ -58,7 +58,7 @@ The fixture's manifest names exactly:
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/services/checkpoint-load.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts
 ```
 
 Expected: FAIL because `verifyCheckpointBundle` does not exist.
@@ -128,7 +128,7 @@ digest equals a digest independently computed in the test.
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/services/checkpoint-load.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts
 git diff --check
 ```
 
@@ -137,7 +137,7 @@ Expected: all verifier tests PASS and diff check is clean.
 - [ ] **Step 6: Commit the verifier**
 
 ```powershell
-git add tools/ember-cli/src/services/checkpoint-load.ts tools/ember-cli/src/services/checkpoint-load.test.ts
+git add tools/ember-cli/src/services/checkpoint-load.ts src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts
 git commit -m "feat: verify modern checkpoint bundles"
 ```
 
@@ -237,5 +237,5 @@ Add tests proving:
 - [ ] **Step 5: Run command and service suites**
 
 ```powershell
-bun test tools/ember-cli/src/services/checkpoint-load.test.ts src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.test.ts src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts
 ```

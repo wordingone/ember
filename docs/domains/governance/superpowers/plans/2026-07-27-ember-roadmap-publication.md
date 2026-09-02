@@ -115,7 +115,7 @@ GitHub REST/GraphQL through the repository's safe wrappers, Git, pytest/unittest
 ### Task 5: Build idempotent projection tooling
 
 **Files:**
-- Create: `scripts/roadmap/apply_github_projection.py`
+- Create: `src/ember/governance/scripts/roadmap/apply_github_projection.py`
 - Create: `tests/roadmap/test_apply_github_projection.py`
 
 **Interfaces:**

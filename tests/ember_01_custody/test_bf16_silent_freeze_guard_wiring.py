@@ -19,7 +19,7 @@ silent-freeze signature (a run that LOOKS like it trained because parameters mov
 but the movement was pure decay, not a gradient-caused update).
 
 This file adds the C0-custody-owned wiring proof on top of #1232's own focused
-suite (tests/test_update_survival_preflight.py etc., already collectable and
+suite (tests/domain-governance/test_update_survival_preflight.py etc., already collectable and
 green -- confirmed directly, not assumed):
 
 1. RED-first positive control: the module's own BitNet 15-of-24 bf16 fixture (9

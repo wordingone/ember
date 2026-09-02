@@ -85,7 +85,7 @@
 
 **Files:**
 - Modify: `tools/ember-cli/src/components/operator-surface-pane.ts`
-- Modify: `tools/ember-cli/src/components/operator-surface-pane-responsive-cards.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane-responsive-cards.test.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/fireball.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/fireball.test.ts`
 

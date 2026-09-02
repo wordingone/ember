@@ -83,7 +83,7 @@ resolve_repository_authority = getattr(_ember_93a28f5fd2fd0068_module, 'resolve_
 CLOSURE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/training_closure.py"
 # Issue #1706: same load-out-of-the-tree-being-launched discipline as
 # CLOSURE_MODULE_RELATIVE_PATH, for the shared git-subprocess-env hardening.
-GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "scripts/git_env_hardening.py"
+GIT_ENV_HARDENING_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/git_env_hardening.py"
 # Issue #1721: same fixed-installation discipline as GIT_ENV_HARDENING_MODULE_
 # RELATIVE_PATH -- the custody gate is infrastructure with no dependency on
 # which tree is being launched, so it is loaded from THIS file's own tree even
@@ -320,7 +320,7 @@ JOB_MEMORY_CEILING_PROBE_PERMITTED_RUN_SPEC_KEYS = (
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
 CHECKPOINT_QUARANTINE_COMPONENT = ".checkpoint-quarantine"
-RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
+RUN_ROOT_LAYOUT_SPEC_PATH = "docs/domains/governance/spec/ember-run-root-layout-v1.md"
 _ATTEMPT_REASON_RE = re.compile(r"^[A-Z0-9]+(?:_[A-Z0-9]+)*$")
 _ATTEMPT_TIMESTAMP_RE = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
 AUTHORIZED_SCOPE_KEYS = {

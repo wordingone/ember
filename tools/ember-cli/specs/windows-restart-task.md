@@ -10,7 +10,7 @@ Status: CURRENT
 
 Issue: #562
 
-Consumer: `tools/ember-cli/src/services/windows-restart-task.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/windows-restart-task.ts`
 
 `ember liveness install` registers the exact installed `ember.exe` with Windows
 Task Scheduler as the cockpit's model-free restart-on-failure authority. The

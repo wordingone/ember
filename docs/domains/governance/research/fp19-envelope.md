@@ -76,7 +76,7 @@ This page's frozen rationale above cites
 first pass) and its 1.77× Muon figure — left as-is, unedited, since it is
 what was actually read when fp-19 froze on 2026-06-11. A same-day,
 127-agent follow-up pass,
-`docs/research/gpu-math-multiplier-table-v2-2026-06-11.json`, revised
+`docs/domains/governance/research/gpu-math-multiplier-table-v2-2026-06-11.json`, revised
 the Muon estimate downward to 1.35× with tighter refutation and is now
 the VERSION-ACTIVE table — it is the "survivor stack" basis cited by
 `configs/v0-pretrain-config.json` and every `baseline/` reference. Muon

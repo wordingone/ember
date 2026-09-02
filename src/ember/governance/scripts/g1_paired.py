@@ -4,7 +4,7 @@
 """g1_paired.py — W-code round-1 G1 paired analysis (pre-registered).
 
 Executes the EXACT invocation pre-registered in
-docs/research/r1w-g1-decision-tree.md (#32, committed BEFORE the control/MTP
+docs/domains/governance/research/r1w-g1-decision-tree.md (#32, committed BEFORE the control/MTP
 legs landed): samples files (base/a/control/mtp, + grpo when its leg
 landed via #24; validation 43 x k=8, seed 16 across arms -> per-task
 pairing), two metrics with fixed roles —
@@ -210,7 +210,7 @@ def main():
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     receipt = {
         "ticket": "G1-PAIRED-R1W", "ts": ts, "files": files,
-        "pre_registration": "docs/research/r1w-g1-decision-tree.md (#32, PR #40)",
+        "pre_registration": "docs/domains/governance/research/r1w-g1-decision-tree.md (#32, PR #40)",
         "comparisons": blocks,
         "tree": {"cell": cell, "why": why,
                  "d3_mtp_overlay": {"flag": mtp_a, "reading": d3},

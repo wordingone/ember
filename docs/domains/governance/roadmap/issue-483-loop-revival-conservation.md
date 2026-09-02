@@ -50,7 +50,7 @@ autonomy, capability, training or result.
 6. C11 uses current experience-horizon admission, never the retired 1h/3h
    wall-clock target. The owned-3B short/medium/long and deletion receipts under
    `receipts/ember-mvp/c11-experience-horizon/` must pass all nine recomputed
-   checks in `scripts/ember_totality/test_c11.py`, blob
+   checks in `src/ember/governance/scripts/ember_totality/test_c11.py`, blob
    `529f2f9727159d858b108704e3f09b085f5e8539`: increasing novel-problem-set
    ordering; no repeats or pretrain overlap; real pre/post parameter change
    with distinct checkpoints; gradient steps Merkle-bound to novel IDs;

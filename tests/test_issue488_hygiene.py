@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def _module():
     """Resolve the producer inside each test so the RED is intentional."""
-    return importlib.import_module("scripts.ember_totality.issue488_hygiene")
+    return importlib.import_module("src.ember.governance.scripts.ember_totality.issue488_hygiene")
 
 
 def _seal_manifest(mod, manifest):

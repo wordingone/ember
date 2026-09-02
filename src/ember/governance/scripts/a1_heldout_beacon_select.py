@@ -15,10 +15,10 @@ offline-testable. Without a beacon value the consumer emits a PENDING receipt re
 frozen mechanism (the pulse cannot exist until T > merge, by design).
 
 Usage:
-  python scripts/a1_heldout_beacon_select.py \\
+  python src/ember/governance/scripts/a1_heldout_beacon_select.py \\
       [--beacon-value <512-bit hex outputValue>] [--beacon-pulse-uri <uri>] \\
       --out receipts/eval-suite-freeze/a1-heldout-selection-v2-<UTCts>.json
-  python scripts/a1_heldout_beacon_select.py --selftest
+  python src/ember/governance/scripts/a1_heldout_beacon_select.py --selftest
 """
 from __future__ import annotations
 

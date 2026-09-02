@@ -43,7 +43,7 @@ tip -- is exactly the shape the local-config rewrite cannot touch, because
 `resolve_governed_master` already runs with no repository context at all.
 The other shape -- `require_published_ancestry`'s fetch in
 `source_authority.py`, and the `origin`-remote contact in
-`scripts/ember_totality/tree_provenance.py` -- does need repository context
+`src/ember/governance/scripts/ember_totality/tree_provenance.py` -- does need repository context
 (a fetch must land in a real object store; a named remote must be resolved
 from a real config), so it is not context-free, but it is sha-anchored: the
 commit it is fetching was already fixed by the prior, context-free

@@ -189,7 +189,7 @@ def main():
         emit("UNEVALUABLE", "C8: state root not found under any known layout -- input-missing, dead branch under the flat-layout resolver (paper-consistency flip, 2026-07-02)")
 
     # --- (A) Find the field-level contribution PROOF receipt(s) --------------
-    # Receipt hint: scripts/ember_field_level_contribution_proof.py emits
+    # Receipt hint: src/ember/governance/scripts/ember_field_level_contribution_proof.py emits
     # receipts/**/field-level-contribution-proof-*.json with a top-level verdict
     # FIELD_LEVEL_CONTRIBUTION_PROOF_PASS / _BLOCKED and field_level_claim_proven.
     patterns = [

@@ -619,7 +619,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind3_operate_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind3_operate_producer.py",
             "sha256": "4c1f2fbfa6431f0ce36f67ac269b98a226efd95a1ab3eedbb2fa91f54273eca4",
             "present": true
           },
@@ -699,7 +699,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c11.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
             "sha256": "ddc00de4549b03e149379d44fb3e17900dcc9569b30385e170b2c02750335c33",
             "present": true
           },

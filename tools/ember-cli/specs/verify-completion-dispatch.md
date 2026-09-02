@@ -10,7 +10,7 @@ Status: CURRENT
 
 Issues: #1344, #1371 (slice 1)
 
-Consumer: `tools/ember-cli/src/services/verify-watch.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/verify-watch.ts`
 
 ## Operator mandate this node implements
 

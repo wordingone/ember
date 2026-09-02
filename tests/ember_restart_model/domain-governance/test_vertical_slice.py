@@ -13,7 +13,7 @@ from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
 
 import batch

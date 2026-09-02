@@ -147,7 +147,7 @@ ISSUE_REF = "#1463"
 PREREG_DOC = "docs/domains/governance/spec/ember02-preregistration-v1.md"
 PREREG_PIN = "3d48d3870919bd04cec735f68d0fad45fcfae0b2"
 RECEIPT_SCHEMA = "r1-exit-battery/v1"
-RUN_ROOT_LAYOUT_SPEC_PATH = "docs/spec/ember-run-root-layout-v1.md"
+RUN_ROOT_LAYOUT_SPEC_PATH = "docs/domains/governance/spec/ember-run-root-layout-v1.md"
 RUN_ROOT_LAYOUT_SPEC = RUN_ROOT_LAYOUT_SPEC_PATH
 
 SHA_CONVENTION = (
@@ -3042,7 +3042,7 @@ def run_selftest() -> None:
     assert thresholds["T-01"] == 100 and thresholds["T-07"] == 2, thresholds
     layout_spec_path = _layout_spec_path()
     layout_spec_text = layout_spec_path.read_text(encoding="utf-8")
-    assert RUN_ROOT_LAYOUT_SPEC == "docs/spec/ember-run-root-layout-v1.md", RUN_ROOT_LAYOUT_SPEC
+    assert RUN_ROOT_LAYOUT_SPEC == "docs/domains/governance/spec/ember-run-root-layout-v1.md", RUN_ROOT_LAYOUT_SPEC
     assert "attempt-" in layout_spec_text and "telemetry" in layout_spec_text, layout_spec_path
 
     with tempfile.TemporaryDirectory(prefix="r1_exit_battery_selftest_") as tmp:

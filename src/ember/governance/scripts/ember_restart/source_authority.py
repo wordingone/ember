@@ -52,7 +52,7 @@ _GIT_ENV_HARDENING_MODULE_NAME = "_ember_source_authority_git_env_hardening"
 
 
 def _load_git_env_hardening():
-    """Load scripts/git_env_hardening.py by file path (issue #1706).
+    """Load src/ember/governance/scripts/git_env_hardening.py by file path (issue #1706).
 
     Same discipline as ``_load_worktree_lifecycle`` below and for the same
     reason: this module is executed both as ``scripts.ember_restart.source_authority``
@@ -60,7 +60,7 @@ def _load_git_env_hardening():
     which falls back to a bare ``import source_authority`` -- see contract.py's
     own try/except). Under direct execution, ``sys.path[0]`` is
     ``scripts/ember_restart/``, not ``scripts/``, so a plain
-    ``from scripts.git_env_hardening import ...`` would raise ModuleNotFoundError
+    ``from src.ember.governance.scripts.git_env_hardening import ...`` would raise ModuleNotFoundError
     in that shape -- this failed exactly that way against the CLI-subprocess
     tests before being caught. File-path loading, relative to this module's
     own installation, works under every execution shape.

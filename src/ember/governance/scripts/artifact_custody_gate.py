@@ -58,7 +58,7 @@ def _durable_repo_root(repo_root: Path) -> Path:
     (lifecycle-managed or ad hoc) ``.git`` is a FILE pointing elsewhere -- so the
     common dir's parent always names the main tree, whichever tree issued the
     query. This is a purely local ``rev-parse`` (no remote contact), so the
-    remote-config-injection hardening ``scripts/git_env_hardening.py`` exists for
+    remote-config-injection hardening ``src/ember/governance/scripts/git_env_hardening.py`` exists for
     does not apply here; matches this module's own unhardened ``custody_verify``
     subprocess style.
     """
