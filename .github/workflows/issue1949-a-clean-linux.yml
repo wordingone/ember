@@ -10,8 +10,12 @@ on:
         description: Exact merged commit to prove
         required: true
         type: string
-      plan_path:
-        description: Repository-relative immutable A-CLEAN plan
+      plan_base64:
+        description: Base64 of the externally bound immutable Linux plan
+        required: true
+        type: string
+      plan_raw_sha256:
+        description: Publicly bound raw SHA-256 of the decoded Linux plan
         required: true
         type: string
 
@@ -32,25 +36,31 @@ jobs:
 
       - name: Refuse checkout identity drift
         shell: bash
+        env:
+          DECLARED_HEAD: ${{ inputs.declared_head }}
         working-directory: fresh clone é
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "${{ inputs.declared_head }}"
+          test "$actual" = "$DECLARED_HEAD"
           test -z "$(git status --porcelain)"
 
       - name: Run Linux CPU clean-clone plan outside checkout CWD
         shell: bash
         env:
           CHECKOUT: ${{ github.workspace }}/fresh clone é
-          PLAN_RELATIVE: ${{ inputs.plan_path }}
+          PLAN_BASE64: ${{ inputs.plan_base64 }}
+          PLAN_RAW_SHA256: ${{ inputs.plan_raw_sha256 }}
+          PLAN: ${{ runner.temp }}/issue1949-a-clean-linux-plan.json
           RECEIPT: ${{ runner.temp }}/issue1949-a-clean-linux.json
         working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
+          printf '%s' "$PLAN_BASE64" | base64 --decode > "$PLAN"
+          printf '%s  %s\n' "$PLAN_RAW_SHA256" "$PLAN" | sha256sum --check --strict -
           python3 "$CHECKOUT/scripts/issue1949_a_clean.py" run \
             --repo-root "$CHECKOUT" \
-            --plan "$CHECKOUT/$PLAN_RELATIVE" \
+            --plan "$PLAN" \
             --output "$RECEIPT" \
             --platform linux
           python3 "$CHECKOUT/scripts/issue1949_a_clean.py" verify --receipt "$RECEIPT"

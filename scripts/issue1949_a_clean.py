@@ -30,6 +30,7 @@ REQUIRED_LEG_IDS = (
     "external_data_absent_refusal",
     "zero_adapter_dangling_duplicate_authority_scan",
 )
+NEGATIVE_LEG_IDS = frozenset(("refused_dependency_sdist", "external_data_absent_refusal"))
 SHELL_EXECUTABLES = {
     "bash", "bash.exe", "cmd", "cmd.exe", "powershell", "powershell.exe",
     "pwsh", "pwsh.exe", "sh", "sh.exe",
@@ -79,11 +80,17 @@ def _hex64(value: object) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
+def _hex40(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 40 and all(character in "0123456789abcdef" for character in value)
+
+
 def validate_plan(plan: Mapping[str, object]) -> dict[str, Any]:
     if plan.get("schema_version") != "ember-issue1949-a-clean-plan-v1":
         raise ACleanRefusal("PLAN_SCHEMA_REFUSED")
+    if plan.get("self_sha256") != derive_self(plan):
+        raise ACleanRefusal("PLAN_SELF_REFUSED")
     declared_head = plan.get("declared_head")
-    if not isinstance(declared_head, str) or len(declared_head) != 40:
+    if not _hex40(declared_head):
         raise ACleanRefusal("PLAN_HEAD_REFUSED")
     setuptools = plan.get("setuptools")
     if not isinstance(setuptools, dict):
@@ -98,6 +105,7 @@ def validate_plan(plan: Mapping[str, object]) -> dict[str, Any]:
     legs = plan.get("legs")
     if not isinstance(legs, list) or tuple(row.get("id") for row in legs if isinstance(row, dict)) != REQUIRED_LEG_IDS:
         raise ACleanRefusal("PLAN_LEG_SET_REFUSED")
+    leg_contracts: set[bytes] = set()
     for row in legs:
         if not isinstance(row, dict):
             raise ACleanRefusal("PLAN_LEG_REFUSED")
@@ -110,6 +118,25 @@ def validate_plan(plan: Mapping[str, object]) -> dict[str, Any]:
         expected_exit = row.get("expected_exit")
         if not isinstance(expected_exit, int):
             raise ACleanRefusal(f"LEG_EXPECTED_EXIT_REFUSED:{row.get('id')}")
+        if row.get("id") in NEGATIVE_LEG_IDS and expected_exit == 0:
+            raise ACleanRefusal(f"NEGATIVE_LEG_EXPECTED_EXIT_REFUSED:{row.get('id')}")
+        if row.get("id") not in NEGATIVE_LEG_IDS and expected_exit != 0:
+            raise ACleanRefusal(f"POSITIVE_LEG_EXPECTED_EXIT_REFUSED:{row.get('id')}")
+        if (
+            row.get("semantic_contract_id") != row.get("id")
+            or not _hex64(row.get("semantic_contract_sha256"))
+            or not _hex64(row.get("executable_raw_sha256"))
+            or row.get("argv_sha256") != sha256_bytes(canonical_json(argv))
+        ):
+            raise ACleanRefusal(f"LEG_CONTRACT_REFUSED:{row.get('id')}")
+        signature = canonical_json({
+            "argv": argv,
+            "executable_raw_sha256": row["executable_raw_sha256"],
+            "semantic_contract_sha256": row["semantic_contract_sha256"],
+        })
+        if signature in leg_contracts:
+            raise ACleanRefusal(f"LEG_CONTRACT_REFUSED:{row.get('id')}:duplicate")
+        leg_contracts.add(signature)
     topology = plan.get("topology_canary")
     if topology is not None:
         if not isinstance(topology, dict) or topology.get("result") != "PASS":
@@ -154,6 +181,22 @@ def _git(repo_root: Path, *arguments: str) -> bytes:
     return result.stdout
 
 
+def validate_fresh_clone(repo_root: Path) -> None:
+    if not (repo_root / ".git").is_dir():
+        raise ACleanRefusal("FRESH_CLONE_IDENTITY_REFUSED")
+
+
+def validate_executable_identity(row: Mapping[str, object]) -> None:
+    argv = row["argv"]
+    assert isinstance(argv, list)
+    executable = Path(argv[0])
+    if not executable.is_file():
+        raise ACleanRefusal(f"LEG_EXECUTABLE_MISSING:{row.get('id')}:{executable}")
+    actual = sha256_file(executable)
+    if actual != row.get("executable_raw_sha256"):
+        raise ACleanRefusal(f"LEG_EXECUTABLE_IDENTITY_REFUSED:{row.get('id')}:{actual}")
+
+
 def _actual_platform() -> str:
     system = platform.system().lower()
     if system == "windows":
@@ -166,9 +209,11 @@ def _actual_platform() -> str:
 def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: str) -> dict[str, object]:
     if output.exists():
         raise FileExistsError(f"OUTPUT_EXISTS_REFUSED:{output}")
-    plan_raw = plan_path.read_bytes()
-    plan = validate_plan(json.loads(plan_raw))
     repo_root = repo_root.resolve(strict=True)
+    plan_path = plan_path.resolve(strict=True)
+    plan_raw = plan_path.read_bytes()
+    validate_fresh_clone(repo_root)
+    plan = validate_plan(json.loads(plan_raw))
     caller_cwd = Path.cwd().resolve()
     actual_head = _git(repo_root, "rev-parse", "HEAD").decode().strip()
     porcelain = _git(repo_root, "status", "--porcelain")
@@ -183,6 +228,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
     stream_root.mkdir(parents=True)
     rows = []
     for leg in plan["legs"]:
+        validate_executable_identity(leg)
         stdout_path = stream_root / f"{leg['id']}.stdout.log"
         stderr_path = stream_root / f"{leg['id']}.stderr.log"
         result = subprocess.run(
@@ -198,9 +244,17 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
         rows.append({
             "id": leg["id"], "argv": leg["argv"], "expected_exit": leg["expected_exit"],
             "actual_exit": result.returncode,
+            "argv_sha256": leg["argv_sha256"],
+            "executable_raw_sha256": leg["executable_raw_sha256"],
+            "semantic_contract_id": leg["semantic_contract_id"],
+            "semantic_contract_sha256": leg["semantic_contract_sha256"],
             "stdout_raw_sha256": sha256_bytes(result.stdout),
             "stderr_raw_sha256": sha256_bytes(result.stderr),
         })
+    final_head = _git(repo_root, "rev-parse", "HEAD").decode().strip()
+    final_porcelain = _git(repo_root, "status", "--porcelain")
+    if final_head != actual_head or final_porcelain:
+        raise ACleanRefusal("CHECKOUT_POST_RUN_MUTATION_REFUSED")
     return write_receipt_no_overwrite(output, {
         "schema_version": "ember-issue1949-a-clean-v1",
         "result": "PASS",
@@ -209,6 +263,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
         "repo_root": str(repo_root),
         "caller_cwd": str(caller_cwd),
         "plan_raw_sha256": sha256_bytes(plan_raw),
+        "plan_self_sha256": plan["self_sha256"],
         "legs": rows,
         "topology_canary": plan.get("topology_canary"),
         "claim_boundary": "ARCHITECTURE_AND_PORTABILITY_MATRIX_ONLY; NO CORPUS CAPABILITY TRAINING THROUGHPUT OR MILESTONE CREDIT",
@@ -227,6 +282,35 @@ def verify_receipt(path: Path) -> dict[str, object]:
     return {"result": "PASS", "raw_sha256": sha256_bytes(raw), "self_sha256": supplied["self_sha256"]}
 
 
+def write_refusal_receipt(
+    *, output: Path, repo_root: Path, plan_path: Path, declared_platform: str, refusal: BaseException,
+) -> dict[str, object]:
+    streams = []
+    stream_root = output.parent / f"{output.stem}.streams"
+    if stream_root.is_dir():
+        for path in sorted(candidate for candidate in stream_root.rglob("*") if candidate.is_file()):
+            streams.append({
+                "path": path.relative_to(stream_root).as_posix(),
+                "bytes": path.stat().st_size,
+                "raw_sha256": sha256_file(path),
+            })
+    plan_identity: dict[str, object] = {"path": str(plan_path)}
+    if plan_path.is_file():
+        plan_identity.update({"bytes": plan_path.stat().st_size, "raw_sha256": sha256_file(plan_path)})
+    detail = str(refusal)
+    return write_receipt_no_overwrite(output, {
+        "schema_version": "ember-issue1949-a-clean-refusal-v1",
+        "result": "REFUSED",
+        "refusal_class": detail.split(":", 1)[0],
+        "refusal_detail": detail,
+        "platform": declared_platform,
+        "repo_root": str(repo_root),
+        "plan": plan_identity,
+        "streams": streams,
+        "claim_boundary": "FAIL_CLOSED_DIAGNOSTIC_ONLY; ZERO ARCHITECTURE PORTABILITY OR CAMPAIGN CREDIT",
+    })
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -243,7 +327,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_plan(args.repo_root, args.plan, args.output, args.platform)
             if args.command == "run" else verify_receipt(args.receipt)
         )
-    except (ACleanRefusal, FileExistsError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
+    except (ACleanRefusal, FileExistsError, json.JSONDecodeError, OSError, subprocess.TimeoutExpired) as exc:
+        if args.command == "run" and not args.output.exists():
+            refusal = write_refusal_receipt(
+                output=args.output, repo_root=args.repo_root, plan_path=args.plan,
+                declared_platform=args.platform, refusal=exc,
+            )
+            print(json.dumps({
+                "result": "REFUSED", "raw_sha256": sha256_file(args.output),
+                "self_sha256": refusal["self_sha256"], "refusal_class": refusal["refusal_class"],
+            }, sort_keys=True))
         print(f"A_CLEAN_REFUSED:{exc}", file=os.sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True))
