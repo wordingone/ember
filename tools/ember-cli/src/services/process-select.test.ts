@@ -28,7 +28,7 @@ const PROCESS_SELECT_DOC = join(import.meta.dir, "../../specs/process-select-run
 
 test("#1298 operator doc names the keyboard START path and its real regression", () => {
   const doc = readFileSync(PROCESS_SELECT_DOC, "utf8");
-  expect(doc).toContain("Consumer: `tools/ember-cli/src/services/process-select.ts`");
+  expect(doc).toContain("Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/process-select.ts`");
   expect(doc).toContain("Consumer: `src/ember/infrastructure/tools/ember-cli/src/components/start-parameters.ts`");
   expect(doc).toContain("Keyboard path and workaround");
   expect(doc).toContain("Tab");

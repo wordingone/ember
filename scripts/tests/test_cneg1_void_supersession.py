@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """TDD: gh issue #358 -- mirror the scanner's VOID-supersession exclusion in
 test_c_neg1.py's own _decisive_claim_files() corpus, via the shared helper
-module scripts/ember_totality/void_supersession.py (factored out of
+module src/ember/governance/scripts/ember_totality/void_supersession.py (factored out of
 spend_annex_scan.py, gh issue #353).
 
 Incident this fixes (PR #350's own body): spend_annex_scan.py excludes a

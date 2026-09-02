@@ -18,35 +18,35 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.finalize_remote_branch_salvage import build_certification_receipt
-# issue2015 exact-local-import:scripts/remote_branch_salvage.py
+# issue2015 exact-local-import:src/ember/governance/scripts/remote_branch_salvage.py
 import importlib.util as _ember_ea37ccce90bbd51b_importlib
 import sys as _ember_ea37ccce90bbd51b_sys
 from pathlib import Path as _ember_ea37ccce90bbd51b_Path
 _ember_ea37ccce90bbd51b_path = _ember_ea37ccce90bbd51b_Path(__file__).resolve().parents[4].joinpath('scripts', 'remote_branch_salvage.py')
 if not _ember_ea37ccce90bbd51b_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/remote_branch_salvage.py')
-_ember_ea37ccce90bbd51b_aliases = ('_ember_issue2015_ea37ccce90bbd51b', 'remote_branch_salvage', 'scripts.remote_branch_salvage')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/remote_branch_salvage.py')
+_ember_ea37ccce90bbd51b_aliases = ('_ember_issue2015_ea37ccce90bbd51b', 'remote_branch_salvage', 'src.ember.governance.scripts.remote_branch_salvage')
 _ember_ea37ccce90bbd51b_existing = []
 for _ember_ea37ccce90bbd51b_alias in _ember_ea37ccce90bbd51b_aliases:
     _ember_ea37ccce90bbd51b_candidate = _ember_ea37ccce90bbd51b_sys.modules.get(_ember_ea37ccce90bbd51b_alias)
     if _ember_ea37ccce90bbd51b_candidate is not None and all(_ember_ea37ccce90bbd51b_candidate is not item for item in _ember_ea37ccce90bbd51b_existing):
         _ember_ea37ccce90bbd51b_existing.append(_ember_ea37ccce90bbd51b_candidate)
 if len(_ember_ea37ccce90bbd51b_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/remote_branch_salvage.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/remote_branch_salvage.py')
 if _ember_ea37ccce90bbd51b_existing:
     _ember_ea37ccce90bbd51b_module = _ember_ea37ccce90bbd51b_existing[0]
     _ember_ea37ccce90bbd51b_observed = getattr(_ember_ea37ccce90bbd51b_module, '__file__', None)
     if _ember_ea37ccce90bbd51b_observed is None or _ember_ea37ccce90bbd51b_Path(_ember_ea37ccce90bbd51b_observed).resolve() != _ember_ea37ccce90bbd51b_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/remote_branch_salvage.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/remote_branch_salvage.py')
 else:
     _ember_ea37ccce90bbd51b_spec = _ember_ea37ccce90bbd51b_importlib.spec_from_file_location('_ember_issue2015_ea37ccce90bbd51b', _ember_ea37ccce90bbd51b_path)
     if _ember_ea37ccce90bbd51b_spec is None or _ember_ea37ccce90bbd51b_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/remote_branch_salvage.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/remote_branch_salvage.py')
     _ember_ea37ccce90bbd51b_module = _ember_ea37ccce90bbd51b_importlib.module_from_spec(_ember_ea37ccce90bbd51b_spec)
     for _ember_ea37ccce90bbd51b_alias in _ember_ea37ccce90bbd51b_aliases:
         _ember_ea37ccce90bbd51b_prior = _ember_ea37ccce90bbd51b_sys.modules.get(_ember_ea37ccce90bbd51b_alias)
         if _ember_ea37ccce90bbd51b_prior is not None and _ember_ea37ccce90bbd51b_prior is not _ember_ea37ccce90bbd51b_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/remote_branch_salvage.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/remote_branch_salvage.py')
         _ember_ea37ccce90bbd51b_sys.modules[_ember_ea37ccce90bbd51b_alias] = _ember_ea37ccce90bbd51b_module
     try:
         _ember_ea37ccce90bbd51b_spec.loader.exec_module(_ember_ea37ccce90bbd51b_module)
@@ -58,11 +58,11 @@ else:
 for _ember_ea37ccce90bbd51b_alias in _ember_ea37ccce90bbd51b_aliases:
     _ember_ea37ccce90bbd51b_prior = _ember_ea37ccce90bbd51b_sys.modules.get(_ember_ea37ccce90bbd51b_alias)
     if _ember_ea37ccce90bbd51b_prior is not None and _ember_ea37ccce90bbd51b_prior is not _ember_ea37ccce90bbd51b_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/remote_branch_salvage.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/remote_branch_salvage.py')
     _ember_ea37ccce90bbd51b_sys.modules[_ember_ea37ccce90bbd51b_alias] = _ember_ea37ccce90bbd51b_module
 PacketError = getattr(_ember_ea37ccce90bbd51b_module, 'PacketError')
 _canonical = getattr(_ember_ea37ccce90bbd51b_module, '_canonical')
-# issue2015 exact-local-import-end:scripts/remote_branch_salvage.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/remote_branch_salvage.py
 
 
 _SOURCE_NAMES = {

@@ -11,7 +11,7 @@ Status: SHIPPED — implemented as src/services/prompt-suggestion.ts (+ prompt-s
 never from the predecessor source tree.
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/prompt-suggestion.ts`
-Consumer: `tools/ember-cli/src/services/speculation.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/speculation.ts`
 
 Clean-room: build from THIS spec + existing ember-cli interfaces only. No founder/user
 names, no predecessor-stack lineage, no avir-cli vendor names in code or comments.

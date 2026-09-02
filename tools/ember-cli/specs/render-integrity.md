@@ -11,7 +11,7 @@ Status: SHIPPED
 Issue: #561
 
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/screens/activity-flood-render-integrity.test.ts`
-Consumer: `tools/ember-cli/src/services/activity-feed.test.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.test.ts`
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/ink/welcome-top-anchor.test.ts`
 
 The ember-cli body has three invariant regions: the welcome/banner region remains locked at the

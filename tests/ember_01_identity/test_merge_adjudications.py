@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from scripts.ember_01_identity.merge_adjudications import merge_adjudication_lanes
+from src.ember.governance.scripts.ember_01_identity.merge_adjudications import merge_adjudication_lanes
 
 
 SOURCE_COMMIT = "a" * 40

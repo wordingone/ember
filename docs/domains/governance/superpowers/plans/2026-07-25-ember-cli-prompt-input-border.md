@@ -394,7 +394,7 @@ git commit -m "test(cli): add compiled prompt border capture"
 - [ ] **Step 1: Run the focused and adjacent regression suites**
 
 ```powershell
-bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/app-resize.test.ts
 ```
 
 Expected: all pass.

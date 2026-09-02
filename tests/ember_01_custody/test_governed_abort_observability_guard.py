@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Regression test for
-scripts/ember_01_custody/governed_abort_observability_guard.py -- the C0
+src/ember/governance/scripts/ember_01_custody/governed_abort_observability_guard.py -- the C0
 GOVERNED_ABORT_OBSERVABILITY guard (EMBER-01 conjunct-3 CLOSURE increment 2).
 
 No live training run, no real kill-discipline event: every test drives

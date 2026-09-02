@@ -1,6 +1,6 @@
 # c04 token budget v1 — fp-38 (#355): the budget half of the joint constraint (2026-06-12, ~3:25 PM LA)
 
-Receipt: `receipts/c04-budget-20260612T222520Z.json` (`scripts/c04_budget.py`,
+Receipt: `receipts/c04-budget-20260612T222520Z.json` (`src/ember/governance/scripts/c04_budget.py`,
 receipt-chained to the fp-37 grid — selftest anchors reproduce the #352
 table). Recalibrates mechanically on the engineer's measured L9 flash F via
 `--f-sustained` (fp-39 carries that).

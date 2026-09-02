@@ -17,7 +17,7 @@ through the named consumers WITHOUT field reinterpretation:
 
 The /model status+load leg (real subprocess, same validate_identity.py
 invocation convention as model.ts) is exercised in
-tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts.
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts.
 """
 
 from __future__ import annotations
@@ -187,7 +187,7 @@ class Cond3ArtifactBConsumerReplay(unittest.TestCase):
     # torch shard, so it is not the shape this rework's bridge accepts (no
     # raw-file fallback -- see seat_identity_bridge._resolve_checkpoint_
     # envelope). Rather than edit the checked-in fixture (shared with
-    # tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts, out of this
+    # src/ember/infrastructure/tools/ember-cli/src/entrypoints/cond3-artifact-b.test.ts, out of this
     # Python-only rework's scope), these two bridge-level tests build a
     # local, self-contained real single-shard checkpoint (same pattern as
     # src/ember/governance/scripts/ember_restart/test_seat_identity_bridge.py::

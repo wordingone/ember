@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Regression test for scripts/ember_01_custody/native_crash_guard.py -- the C0
+"""Regression test for src/ember/governance/scripts/ember_01_custody/native_crash_guard.py -- the C0
 NATIVE_CRASH supervised-dispatch guard (EMBER-01 conjunct-3 CLOSURE increment 2).
 
 classify_exit() correctness is proven with hand-picked returncode fixtures for BOTH

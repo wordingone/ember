@@ -15,7 +15,7 @@ ROOT = Path(os.environ.get("EMBER_ISSUE1267_ROOT", Path(__file__).parents[2]))
 DISPOSITION = Path(
     os.environ.get(
         "EMBER_ISSUE1267_DISPOSITION",
-        ROOT / "docs/spec/c4-c5-frozen-receipt-disposition-v1.md",
+        ROOT / "docs/domains/governance/spec/c4-c5-frozen-receipt-disposition-v1.md",
     )
 )
 FROZEN = ROOT / (

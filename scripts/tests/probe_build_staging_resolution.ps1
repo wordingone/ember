@@ -5,7 +5,7 @@
 # Pins the staged-artifact path expectation against bun's actual win32 output naming
 # (issue #1368): bun --compile force-appends .exe to any outfile not already ending in
 # it. Fakes both landing layouts in a temp dir and asserts the launcher's resolution
-# logic (scripts/ember-launch-staging.ps1) finds the binary in each.
+# logic (src/ember/governance/scripts/ember-launch-staging.ps1) finds the binary in each.
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 

@@ -66,7 +66,7 @@ Pass `optimizer.finish_gradient_norm()` after `optimizer.step()` and before the 
 
 **Files:**
 - Create: `src/ember/governance/scripts/r1_e7_ratio_sigma.py`
-- Create: `tests/test_r1_e7_ratio_sigma.py`
+- Create: `tests/domain-governance/test_r1_e7_ratio_sigma.py`
 - Modify: `tests/test_r1_e8_validator.py`
 
 **Interfaces:**
@@ -79,7 +79,7 @@ Use two steps with literal seed pairs `(1, 3)` and `(2, 2)`. Normalized values a
 
 - [ ] **Step 2: Verify RED**
 
-Run: `python -B -m pytest tests/test_r1_e7_ratio_sigma.py -q`
+Run: `python -B -m pytest tests/domain-governance/test_r1_e7_ratio_sigma.py -q`
 
 Expected: import failure because the composer does not exist.
 

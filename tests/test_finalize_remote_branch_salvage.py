@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 
 from test_remote_branch_salvage import capture  # noqa: E402
-from scripts.remote_branch_salvage import build_packet, build_public_summary  # noqa: E402
+from src.ember.governance.scripts.remote_branch_salvage import build_packet, build_public_summary  # noqa: E402
 
 
 FINALIZER = ROOT / "scripts" / "finalize_remote_branch_salvage.py"

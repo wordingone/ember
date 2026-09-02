@@ -523,7 +523,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # by scripts/timeshare_pretrain.py or anywhere else in tree -- a likely post-hoc
 # rename, not a script-confirmed convention).
 # spend-annex-*.json (this scanner's own output, confirmed generator:
-# scripts/ember_totality/spend_annex_scan.py:557-563,567) is DELIBERATELY left out of
+# src/ember/governance/scripts/ember_totality/spend_annex_scan.py:557-563,567) is DELIBERATELY left out of
 # CONVENTION_MAP: mapping the scanner to itself makes it re-scan its own source text,
 # where PAID_CLIENT_PATTERNS itself literally contains the substring "googleapiclient"
 # as detector-pattern text -- a confirmed false paid_surface_violation on pure
