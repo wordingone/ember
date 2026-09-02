@@ -25,6 +25,10 @@ VALIDATOR = (
 )
 
 
+def test_governed_repository_root_tracks_relocated_contract() -> None:
+    assert contract.governed_repository_root() == REPO_ROOT
+
+
 def _current_source_commit() -> str:
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True
