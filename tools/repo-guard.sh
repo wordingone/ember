@@ -193,9 +193,9 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # self-exclude (surface_bytes_match requires kernel == subject bytes).
 PATHPAT_FIXTURE_EXCLUDE_ARGS=(
   ':(exclude)src/ember/governance/scripts/test_w1b_continuation.py'
-  ':(exclude)tools/ember-cli/src/core/monitor-render.test.ts'
-  ':(exclude)tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
-  ':(exclude)tools/ember-cli/src/components/logo-homescreen.test.ts'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.test.ts'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli/src/components/homescreen-mock1-parity.test.ts'
+  ':(exclude)src/ember/infrastructure/tools/ember-cli/src/components/logo-homescreen.test.ts'
   ':(exclude)receipts/ember-d3-native-loop/d3-gym-fresh-rows-offset20-len12-20260708T221652Z.json'
   ':(exclude)receipts/ember-d3-native-loop/d3-broader-multifamily-fresh-rows-reconstructed.json'
   ':(exclude)receipts/ember-02-launch-authority/certificate.json'

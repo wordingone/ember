@@ -12,10 +12,10 @@
 // command from launch_packet output is never executed as a command string. On any
 // preflight, certificate-consumer, or response failure, execution fails closed.
 
-import type { CommandContext, RegistryCommand } from "../../../../src/ember/infrastructure/tools/ember-cli/src/types/command-types.ts";
-import { resolveEmberLabBinary } from "../../../../src/ember/infrastructure/tools/ember-cli/src/commands/verify-training.ts";
-import { resolveEmberSourceRootOrCwd } from "../../../../src/ember/infrastructure/tools/ember-cli/src/utils/repo-root.ts";
-import { publishActivityFeedInfrastructureFailure } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.ts";
+import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
+import { resolveEmberLabBinary } from "./verify-training.ts";
+import { resolveEmberSourceRootOrCwd } from "../utils/repo-root.ts";
+import { publishActivityFeedInfrastructureFailure } from "../services/activity-feed.ts";
 import { spawn } from "child_process";
 import { createHash } from "crypto";
 import { existsSync, readFileSync } from "fs";

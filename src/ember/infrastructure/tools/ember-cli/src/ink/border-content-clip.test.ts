@@ -24,7 +24,7 @@ import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Box, Text } from "./components.ts";
 import { mountInk } from "./reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 
 function mountAndFrame(el: React.ReactElement, cols: number, rows: number) {
   let buf = "";

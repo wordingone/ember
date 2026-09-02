@@ -277,11 +277,11 @@ from pathlib import Path
 LAUNCHER_CANDIDATE_SUFFIXES = {".cmd", ".bat", ".ps1", ".exe", ".sh"}
 LAUNCHER_NAME_HINT = re.compile(r"^(ember|launch|start|run)", re.IGNORECASE)
 DOC_FILES = ("README.md", "docs/domains/governance/guides/START-HERE.md")
-COMMANDS_DIR = "tools/ember-cli/src/commands"
-PACKAGE_JSON = "tools/ember-cli/src/package.json"
-COMMAND_REGISTRY = "tools/ember-cli/src/command-registry.ts"
-REPL_TS = "tools/ember-cli/src/screens/repl.ts"
-SLASH_DROPDOWN_TS = "tools/ember-cli/src/services/slash-dropdown.ts"
+COMMANDS_DIR = "src/ember/infrastructure/tools/ember-cli/src/commands"
+PACKAGE_JSON = "src/ember/infrastructure/tools/ember-cli/src/package.json"
+COMMAND_REGISTRY = "src/ember/infrastructure/tools/ember-cli/src/command-registry.ts"
+REPL_TS = "src/ember/infrastructure/tools/ember-cli/src/screens/repl.ts"
+SLASH_DROPDOWN_TS = "src/ember/infrastructure/tools/ember-cli/src/services/slash-dropdown.ts"
 
 # Rendered-frame capture: the executable closure of the palette chain's last
 # link (SlashDropdown JSX -> actual terminal cells). The capture tool drives
@@ -291,9 +291,9 @@ SLASH_DROPDOWN_TS = "tools/ember-cli/src/services/slash-dropdown.ts"
 # rendered row. The harness consumes the tool's per-target verdict lines,
 # never its exit code alone (byte provenance: every asserted substring can
 # only have been written by the product's renderer through the PTY).
-CAPTURE_TOOL = "tools/ember-cli/src/build-tools/palette-frame-capture.ts"
-CAPTURE_CWD = "tools/ember-cli/src"
-COCKPIT_BINARY = "tools/ember-cli/src/ember.exe"
+CAPTURE_TOOL = "src/ember/infrastructure/tools/ember-cli/src/build-tools/palette-frame-capture.ts"
+CAPTURE_CWD = "src/ember/infrastructure/tools/ember-cli/src"
+COCKPIT_BINARY = "src/ember/infrastructure/tools/ember-cli/src/ember.exe"
 CAPTURE_TARGETS = ("custody", "model", "benchmark", "train")
 CAPTURE_TIMEOUT_S = 240
 
@@ -526,7 +526,7 @@ _BATCH_COMMENT_RE = re.compile(r"^(rem\b|::)", re.IGNORECASE)
 _HASH_COMMENT_RE = re.compile(r"^#")
 
 # A print statement's argument is text the script DISPLAYS, never a target it
-# invokes -- "tools/ember-cli/src" inside an echo/Write-Host string proves
+# invokes -- "src/ember/infrastructure/tools/ember-cli/src" inside an echo/Write-Host string proves
 # only that the string exists, the same shape as a comment.
 _PRINT_LINE_RE = re.compile(
     r"write-host|write-output|write-warning|write-verbose|^\s*(echo\b|printf\b)",
@@ -1068,7 +1068,7 @@ def run_sentinel_probe(launcher: Path, root: Path) -> dict:
         # Skip any real dependency install a genuine launcher chain might
         # attempt -- a network-touching probe is refused by the rails
         # regardless of what it would have found.
-        dummy_react = scratch_root / "tools/ember-cli/src/node_modules/react/package.json"
+        dummy_react = scratch_root / "src/ember/infrastructure/tools/ember-cli/src/node_modules/react/package.json"
         dummy_react.parent.mkdir(parents=True, exist_ok=True)
         dummy_react.write_text('{"name":"react","version":"0.0.0-probe-stub"}\n', encoding="utf-8")
     except OSError as exc:

@@ -18,12 +18,12 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { main } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+import { main } from "../entrypoints/process-entry.ts";
 import { selectedModelContract } from "./model-seat.ts";
 import type { ModelSeatDecision, SelectedModelContract } from "./model-seat.ts";
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
-import type { ServerHandle } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+import type { ServerHandle } from "../entrypoints/process-entry.ts";
 
 function makeFakeHandle(port = 29910): ServerHandle {
   return {

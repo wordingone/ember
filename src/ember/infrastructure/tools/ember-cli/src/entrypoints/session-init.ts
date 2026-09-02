@@ -12,13 +12,13 @@ import {
   type LoopDeps,
   type CallModelParams,
   type ModelResponse,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/query/query-loop-support.ts";
+} from "../query/query-loop-support.ts";
 import { writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import {
   assembleModelRequest,
   extractSamplingParams,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/api-model-facing.ts";
+} from "../services/api-model-facing.ts";
 import {
   buildOpenAIRequest,
   createSseParserContext,
@@ -29,11 +29,11 @@ import {
   CHARS_PER_TOKEN_ESTIMATE,
   ModelHttpError,
   normalizeModelServerUrl,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/api-openai-adapter.ts";
-import { createMicrocompact } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/compaction.ts";
-import { wrapModelClientWithCircuitBreaker } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/model-circuit-breaker-client.ts";
-import type { CircuitBreakerState } from "../../../../src/ember/infrastructure/tools/ember-cli/src/services/model-circuit-breaker.ts";
-import type { ModelSeatState } from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.ts";
+} from "../services/api-openai-adapter.ts";
+import { createMicrocompact } from "../services/compaction.ts";
+import { wrapModelClientWithCircuitBreaker } from "../services/model-circuit-breaker-client.ts";
+import type { CircuitBreakerState } from "../services/model-circuit-breaker.ts";
+import type { ModelSeatState } from "./model-seat.ts";
 import {
   modelSupportsStructuredOutputs,
   type ModelCapabilityDeclaration,

@@ -31,7 +31,7 @@ import {
   pollForNewerBoardTs,
   diffBoardConditions,
   type BoardRow,
-} from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
+} from "../core/ember-world-state.ts";
 import { formatBoardTransitionEvent } from "../core/monitor-render.ts";
 
 /** Poll cadence for the live boardTs refresh -- #420 spec: "30-60s interval, NOT per-second". */

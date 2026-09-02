@@ -14,14 +14,14 @@
 //
 // Registered in command-registry.ts's builtins list. Reaching a running compiled cockpit requires
 // whatever binary is currently launched to have been built AFTER this file last changed -- run
-// `bun build ./entrypoints/main.ts --compile --outfile ember.exe` from tools/ember-cli/src/ to
+// `bun build ./entrypoints/main.ts --compile --outfile ember.exe` from src/ember/infrastructure/tools/ember-cli/src/ to
 // pick up the current source.
 
 // goal_id: EMBER-02
 // workstream_id: EMBER-02A
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import { execFile } from "child_process";
-import type { CommandContext, CommandResult, RegistryCommand } from "../../../../src/ember/infrastructure/tools/ember-cli/src/types/command-types.ts";
+import type { CommandContext, CommandResult, RegistryCommand } from "../types/command-types.ts";
 import {
   buildEmberWorldState,
   GOALFORGE_ROOT,
@@ -30,8 +30,8 @@ import {
 import type { EmberWorldState, Claim } from "../core/ember-world-state.ts";
 import { validateConfirmation, logEncounter, CONFIRM_TOKEN } from "../core/encounter-membrane.ts";
 import type { EncounterOffer } from "../core/encounter-membrane.ts";
-import { renderMonitor, renderMonitorPanel, sortMonitorConditions, colorEnabledFor } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.ts";
-import { findNewestReceipts, renderReceiptsTail } from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/watch-render.ts";
+import { renderMonitor, renderMonitorPanel, sortMonitorConditions, colorEnabledFor } from "../core/monitor-render.ts";
+import { findNewestReceipts, renderReceiptsTail } from "../core/watch-render.ts";
 
 const ENCOUNTER_LOG = process.env.EMBER_COBS_ENCOUNTER_LOG || "encounters.jsonl";
 

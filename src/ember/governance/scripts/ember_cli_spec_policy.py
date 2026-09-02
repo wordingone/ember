@@ -24,7 +24,7 @@ CHANGED_FILE_STATUSES = {
     "renamed",
 }
 ADDED_COMPONENT_RE = re.compile(
-    r"^tools/ember-cli/src/(?:components|screens|services)/"
+    r"^src/ember/infrastructure/tools/ember-cli/src/(?:components|screens|services)/"
     r"(?!.*(?:\.test|\.spec|\.d)\.ts$).+\.ts$"
 )
 STATUS_RE = re.compile(

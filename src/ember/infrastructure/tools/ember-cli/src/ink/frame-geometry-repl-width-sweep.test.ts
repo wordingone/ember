@@ -12,10 +12,10 @@
 import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "./reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { Homescreen } from "../components/logo-homescreen.ts";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
-import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import type { TelemetryState } from "../services/telemetry-watch.ts";
 import { checkFrameGeometry } from "./frame-geometry.ts";
 
 function telemetry(overrides: Partial<TelemetryState> = {}): TelemetryState {

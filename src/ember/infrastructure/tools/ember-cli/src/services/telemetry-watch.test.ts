@@ -12,7 +12,7 @@ import {
   getDiagnostics,
   getState,
   startTelemetryWatch,
-} from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+} from "../services/telemetry-watch.ts";
 
 let scratch: string | undefined;
 

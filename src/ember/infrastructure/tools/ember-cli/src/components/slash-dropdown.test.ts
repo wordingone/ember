@@ -10,7 +10,7 @@ import { describe, test, expect } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { SlashDropdown } from "./slash-dropdown.ts";
-import { slashDropdownDescriptionWidth, truncateWithEllipsis } from "../../../../../../../tools/ember-cli/src/services/slash-dropdown.ts";
+import { slashDropdownDescriptionWidth, truncateWithEllipsis } from "../services/slash-dropdown.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
 function cmd(name: string, description: string): RegistryCommand {

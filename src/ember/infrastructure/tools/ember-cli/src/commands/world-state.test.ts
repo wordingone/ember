@@ -18,10 +18,10 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { pathToFileURL } from "url";
 import { mkdir, writeFile, rm } from "fs/promises";
-import { createWorldStateCommand } from "../../../../../../../tools/ember-cli/src/commands/world-state.ts";
+import { createWorldStateCommand } from "../commands/world-state.ts";
 import { DEFAULT_STALE_THRESHOLD_MS } from "../core/receipt-age.ts";
 
-const SRC_DIR = join(import.meta.dir, ".."); // tools/ember-cli/src (parent of commands/)
+const SRC_DIR = join(import.meta.dir, ".."); // src/ember/infrastructure/tools/ember-cli/src (parent of commands/)
 
 // #412: the fixture receipt's "ts" is a fixed calendar timestamp, so any test that lets the
 // /cockpit turn call the REAL Date.now() drifts further stale every day this suite runs (it had

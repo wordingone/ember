@@ -17,7 +17,7 @@
 // requires -- never a single bundled "everything worked" boolean.
 //
 // Run yourself:
-//   cd tools/ember-cli/src
+//   cd src/ember/infrastructure/tools/ember-cli/src
 //   EMBER_GOALFORGE_ROOT=<repo-root> bun scripts/cobs-proof-pack-run.ts monitor
 //   EMBER_GOALFORGE_ROOT=<repo-root> bun scripts/cobs-proof-pack-run.ts understand
 //   EMBER_GOALFORGE_ROOT=<repo-root> bun scripts/cobs-proof-pack-run.ts interact

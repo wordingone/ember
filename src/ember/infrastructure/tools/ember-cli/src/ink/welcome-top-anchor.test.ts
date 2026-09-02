@@ -23,12 +23,12 @@ import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Box } from "./components.ts";
 import { mountInk } from "./reconciler.ts";
-import { renderMsgDispatch, transcriptJustifyContent, transcriptFlexGrow } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { renderMsgDispatch, transcriptJustifyContent, transcriptFlexGrow } from "../screens/repl.ts";
 import { buildMessageLookups } from "../components/message-renderers.ts";
 import { StatusLine } from "../components/status-bar.ts";
 import { PromptInput } from "../components/prompt-input.ts";
 import { Homescreen } from "../components/logo-homescreen.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
 
 const COLS = 170;

@@ -26,7 +26,7 @@ import { describe, test, expect } from "bun:test";
 import React from "react";
 import { Homescreen } from "./logo-homescreen.ts";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 
 function rightEdgeColumn(rendered: string, cols: number, rows: number): number {
   const frame = buildFrame(cols, rows);

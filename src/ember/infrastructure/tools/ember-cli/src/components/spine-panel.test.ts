@@ -32,7 +32,7 @@ import { resolveEmberRepoRoot } from "../utils/repo-root.ts";
 import type { CommandContext, RegistryCommand } from "../types/command-types.ts";
 import type { ModelSeatDecision } from "../entrypoints/model-seat.ts";
 import type { RootBindingsStore } from "../services/custody-bindings.ts";
-import type { EmberWorldState } from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
+import type { EmberWorldState } from "../core/ember-world-state.ts";
 
 const mockCtx: CommandContext = { sessionId: "test-session", mode: "test", cwd: "/test" };
 

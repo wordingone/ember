@@ -54,15 +54,15 @@ import {
   renderCustodyStatus,
   renderRootBindings,
 } from "../commands/custody.ts";
-import { createTrainCommand } from "../../../../../../../tools/ember-cli/src/commands/train.ts";
-import { createWorldStateCommand } from "../../../../../../../tools/ember-cli/src/commands/world-state.ts";
+import { createTrainCommand } from "../commands/train.ts";
+import { createWorldStateCommand } from "../commands/world-state.ts";
 import { selectedModelContract, type ModelSeatDecision } from "../entrypoints/model-seat.ts";
 import {
   readRootBindingsStore,
   rootBindingsStorePath,
   type RootBindingsStore,
 } from "../services/custody-bindings.ts";
-import { GOALFORGE_ROOT, buildEmberWorldState, type EmberWorldState } from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
+import { GOALFORGE_ROOT, buildEmberWorldState, type EmberWorldState } from "../core/ember-world-state.ts";
 
 // ---------------------------------------------------------------------------
 // Path conventions (repo-root-relative)

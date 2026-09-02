@@ -47,7 +47,7 @@ import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
 import type { ModelResponse } from "../query/query-loop-support.ts";
-import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { ReplScreen } from "../screens/repl.ts";
 
 function nextMacrotask(ms = 0): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

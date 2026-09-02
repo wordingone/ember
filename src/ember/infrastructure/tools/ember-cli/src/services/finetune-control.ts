@@ -1,3 +1,7 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
 // services/finetune-control.ts — append-only control channel for governed finetune.
 //
 // The control channel is the write-back counterpart of the read-only telemetry channel:

@@ -53,7 +53,7 @@ async function settle(
 
 async function main(): Promise<void> {
   const repoRoot = resolve(process.argv[2] ?? process.cwd());
-  const binary = resolve(process.argv[3] ?? join(repoRoot, "tools/ember-cli/src/ember.exe"));
+  const binary = resolve(process.argv[3] ?? join(repoRoot, "src/ember/infrastructure/tools/ember-cli/src/ember.exe"));
   const outDir = resolve(process.argv[4] ?? join(tmpdir(), "train-frame"));
   mkdirSync(outDir, { recursive: true });
 

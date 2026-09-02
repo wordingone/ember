@@ -8,11 +8,11 @@ import { join } from "node:path";
 import React, { useState } from "react";
 import { Box, Text } from "../ink/components.ts";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
 import { VirtualMessageList } from "../components/app-shell.ts";
 import { OperatorSurfacePane } from "../components/operator-surface-pane.ts";
-import { isExitCommandInput, transcriptViewportJustifyContent } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { isExitCommandInput, transcriptViewportJustifyContent } from "../screens/repl.ts";
 
 class FakeStdin extends EventEmitter {
   isTTY = true;

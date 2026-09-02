@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tools/ember-cli/src/components"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src/ember/infrastructure/tools/ember-cli/src/components"))
 
 from activity_log import emit
 

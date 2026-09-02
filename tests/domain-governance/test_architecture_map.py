@@ -361,7 +361,7 @@ class CensusContractTests(unittest.TestCase):
 
         rust = compiler.scan_rust_source("runtime/a.rs", "use crate::model;\n")
         typescript = compiler.scan_typescript_source(
-            "tools/ember-cli/src/a.ts", "import runtime from './runtime';\n"
+            "src/ember/infrastructure/tools/ember-cli/src/a.ts", "import runtime from './runtime';\n"
         )
 
         self.assertEqual(
@@ -370,7 +370,7 @@ class CensusContractTests(unittest.TestCase):
         )
         self.assertEqual(
             typescript,
-            [{"consumer_path": "tools/ember-cli/src/a.ts", "target": "typescript:./runtime", "discovery_class": "typescript-import", "line": 1}],
+            [{"consumer_path": "src/ember/infrastructure/tools/ember-cli/src/a.ts", "target": "typescript:./runtime", "discovery_class": "typescript-import", "line": 1}],
         )
 
     def test_dynamic_python_loader_is_an_executable_consumer(self) -> None:

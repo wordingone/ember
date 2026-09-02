@@ -48,12 +48,12 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { TerminalSizeContext, Text } from "../ink/components.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
-import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
-import { startTelemetryWatch } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
-import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { startTelemetryWatch } from "../services/telemetry-watch.ts";
+import { ReplScreen } from "../screens/repl.ts";
 import { usePromptInput, type PromptInputDeps } from "../components/prompt-input.ts";
 import { useInput as useRawInput, _deliverKeyEvent } from "../ink/hooks.ts";
 import {

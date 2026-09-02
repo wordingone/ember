@@ -24,7 +24,7 @@ import { describe, it, expect } from "bun:test";
 import {
   adaptSessionMessagesForSuggestion,
   applyResultEvent,
-} from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+} from "../screens/repl.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
 import type { ResultEvent } from "../core/query-engine.ts";
 

@@ -27,7 +27,7 @@ import {
   getCommands,
   resetCommandRegistryForTests,
   setCommandRegistryDeps,
-} from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+} from "../command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
 function cmd(name: string, overrides: Partial<RegistryCommand> = {}): RegistryCommand {

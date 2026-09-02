@@ -24,9 +24,9 @@ import { describe, it, expect } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { App } from "../ink/components.ts";
-import { ReplScreen, operatorSurfaceWidth } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { ReplScreen, operatorSurfaceWidth } from "../screens/repl.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { resetCommandRegistryForTests, getCommands } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { resetCommandRegistryForTests, getCommands } from "../command-registry.ts";
 
 resetCommandRegistryForTests();
 

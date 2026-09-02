@@ -151,7 +151,7 @@ GOVERNED_REMOTE = "https://github.com/wordingone/ember"
 GOVERNED_REMOTE_REF = "refs/heads/master"
 R1_ENTRY_SOURCE_FILES = {
     "contract": "src/ember/governance/scripts/ember_restart/contract.py",
-    "cli_train": "tools/ember-cli/src/commands/train.ts",
+    "cli_train": "src/ember/infrastructure/tools/ember-cli/src/commands/train.ts",
     "certified_consumer": "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
     "ember_lab_verify": "runtime/ember-lab/src/training_verify.rs",
 }

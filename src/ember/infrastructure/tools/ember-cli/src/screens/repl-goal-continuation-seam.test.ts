@@ -52,7 +52,7 @@ import {
   resetGoalRuntimeForTests,
 } from "../core/goal-runtime.ts";
 import { createGoalStore, createInMemoryGoalPersistence } from "../core/goal-store.ts";
-import { clearInputRefForSubmit } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { clearInputRefForSubmit } from "../screens/repl.ts";
 
 function nextMacrotask(ms = 0): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

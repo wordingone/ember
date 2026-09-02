@@ -14,7 +14,7 @@
 // without waiting on the model server at all, even while it is unreachable.
 
 import { useState, useEffect } from "react";
-import { getCircuitBreakerState } from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
+import { getCircuitBreakerState } from "../entrypoints/session-init.ts";
 import { describeDegradedBanner, describeRoundtripAge } from "./model-circuit-breaker.ts";
 import type { DegradedBannerState, RoundtripAgeState } from "../components/status-bar.ts";
 

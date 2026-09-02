@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import xtermHeadless from "@xterm/headless";
 import { spawn as spawnPty, type IPty } from "node-pty";
-import { READY_OSC } from "../../../../src/ember/infrastructure/tools/ember-cli/src/cli/ready-sentinel.ts";
+import { READY_OSC } from "../cli/ready-sentinel.ts";
 
 const { Terminal } = xtermHeadless;
 const COLS = 160;
@@ -157,7 +157,7 @@ async function main(): Promise<void> {
       // driven binary running would be the worse outcome, so the fallback is a loud warning.
       const receipt = {
         ts: new Date().toISOString(),
-        script: "tools/ember-cli/src/build-tools/palette-frame-capture.ts",
+        script: "src/ember/infrastructure/tools/ember-cli/src/build-tools/palette-frame-capture.ts",
         pids: [child.pid],
         match_rule: "pid returned by this process's own node-pty spawn of the binary under test",
         survivors_expected: "none",

@@ -7,8 +7,8 @@
 // Spec: state/field-ux-map.md §8b/§9; step-A mockups (state/design-mockups/welcome-homescreen...).
 
 import { describe, it, expect } from "bun:test";
-import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock, shortenDataRootForDisplay, shortenPathForDisplay } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/logo-homescreen.ts";
-import { color } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/design-system.ts";
+import { WelcomeV2, LogoV2, Homescreen, IDENTITY_TAGLINE, FeedComponent, rightColWidth, clipToWidth, formatWallClock, shortenDataRootForDisplay, shortenPathForDisplay } from "./logo-homescreen.ts";
+import { color } from "./design-system.ts";
 
 // React.createElement returns a plain {type, props} tree -- inspectable without a renderer.
 function children(el: any): any[] {

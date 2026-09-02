@@ -50,11 +50,11 @@ def _minimal_ember_root(root: Path) -> None:
     _write(root / "docs/authority/INVARIANT.md", "placeholder\n")
     _write(root / "docs/domains/governance/authority/GOAL.md", "placeholder\n")
     _write(
-        root / "tools/ember-cli/src/package.json",
+        root / "src/ember/infrastructure/tools/ember-cli/src/package.json",
         '{"name": "ember-cli", "bin": {"ember": "./entrypoints/main.js"}}\n',
     )
     _write(
-        root / "tools/ember-cli/src/command-registry.ts",
+        root / "src/ember/infrastructure/tools/ember-cli/src/command-registry.ts",
         "import { getModeHistory } from './state/app-state.ts';\n"
         "const defaultDeps = {\n"
         "  getBuiltinCommands: () => [],\n"
@@ -64,13 +64,13 @@ def _minimal_ember_root(root: Path) -> None:
 
 def _registry_importing(root: Path, stems: list[str]) -> None:
     """Overwrite command-registry.ts so it imports and calls createXCommand()
-    for each given stem under tools/ember-cli/src/commands/<stem>.ts."""
+    for each given stem under src/ember/infrastructure/tools/ember-cli/src/commands/<stem>.ts."""
     imports = "\n".join(
         f"import {{ create{_camel(s)}Command }} from './commands/{s}.ts';" for s in stems
     )
     calls = "\n".join(f"    create{_camel(s)}Command()," for s in stems)
     _write(
-        root / "tools/ember-cli/src/command-registry.ts",
+        root / "src/ember/infrastructure/tools/ember-cli/src/command-registry.ts",
         f"{imports}\n"
         "const defaultDeps = {\n"
         "  getBuiltinCommands: () => [\n"
@@ -104,7 +104,7 @@ def _write_real_launcher_chain(root: Path, filename: str = "Real.cmd") -> None:
 
 def _command_module(root: Path, stem: str, name: str, description: str) -> None:
     _write(
-        root / f"tools/ember-cli/src/commands/{stem}.ts",
+        root / f"src/ember/infrastructure/tools/ember-cli/src/commands/{stem}.ts",
         f"export function create{_camel(stem)}Command() {{\n"
         "  return {\n"
         f'    name: "{name}",\n'
@@ -128,7 +128,7 @@ class HostileFixtureTests(unittest.TestCase):
             # The orphan module: right keywords, right shape, NOT imported
             # by command-registry.ts (which stays empty, per _minimal_ember_root).
             _write(
-                root / "tools/ember-cli/src/commands/all.ts",
+                root / "src/ember/infrastructure/tools/ember-cli/src/commands/all.ts",
                 "export function createAllSpineCommand() {\n"
                 "  return {\n"
                 '    name: "all-spine",\n'
@@ -275,7 +275,7 @@ class L3RegistryGraphTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write(root / "tools" / "launchers" / "Real.cmd", '@echo off\r\ncall "%~dp0..\\..\\tools\\ember-cli\\src\\x.ts"\r\n')
             _write(
-                root / "tools/ember-cli/src/commands/modelish.ts",
+                root / "src/ember/infrastructure/tools/ember-cli/src/commands/modelish.ts",
                 "export function createModelishCommand() {\n"
                 "  // implements checkpoint save/load internally\n"
                 "  return {\n"
@@ -642,7 +642,7 @@ class Round3TextPositionTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write(
                 root / "tools" / "launchers" / "Ember.cmd",
-                '@echo off\r\necho "tools/ember-cli/src is where the code lives"\r\n',
+                '@echo off\r\necho "src/ember/infrastructure/tools/ember-cli/src is where the code lives"\r\n',
             )
             report = harness.run(root)
             self.assertNotEqual(
@@ -719,19 +719,19 @@ class Round3TextPositionTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write(root / "tools" / "launchers" / "Real.cmd", '@echo off\r\ncall "%~dp0..\\..\\tools\\ember-cli\\src\\x.ts"\r\n')
             _write(
-                root / "tools/ember-cli/src/commands/real-train.ts",
+                root / "src/ember/infrastructure/tools/ember-cli/src/commands/real-train.ts",
                 "export function createTrainCommand() {\n"
                 '  return { name: "train", description: "training launch 3b" };\n'
                 "}\n",
             )
             _write(
-                root / "tools/ember-cli/src/commands/decoy-orphan.ts",
+                root / "src/ember/infrastructure/tools/ember-cli/src/commands/decoy-orphan.ts",
                 "export function createTrainCommand() {\n"
                 '  return { name: "train-decoy", description: "not the real training launch" };\n'
                 "}\n",
             )
             _write(
-                root / "tools/ember-cli/src/command-registry.ts",
+                root / "src/ember/infrastructure/tools/ember-cli/src/command-registry.ts",
                 "import { createTrainCommand } from './commands/real-train.ts';\n"
                 "import { createTrainCommand } from './commands/decoy-orphan.ts';\n"
                 "const defaultDeps = {\n"
@@ -813,7 +813,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 'REM stub, does nothing. "tools/ember-cli/anything-at-all" is never invoked.\r\n'
                 "echo This launcher performs no action.\r\n"
             ),
-            "echo.cmd": '@echo off\r\necho "tools/ember-cli/src is where the code lives"\r\n',
+            "echo.cmd": '@echo off\r\necho "src/ember/infrastructure/tools/ember-cli/src is where the code lives"\r\n',
             "deadcode.cmd": (
                 "@echo off\r\n"
                 "exit /b 0\r\n"
@@ -887,7 +887,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
                 root / "tools" / "launchers" / "ViaRuntime.cmd",
                 "@echo off\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
-                "run tools/ember-cli/src/entrypoints/main.js\r\n"
+                "run src/ember/infrastructure/tools/ember-cli/src/entrypoints/main.js\r\n"
                 "exit /b 0\r\n",
             )
             report = harness.run(root)
@@ -900,7 +900,7 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
             )
             diag_key = "runtime_marker_argv_DIAGNOSTIC_ONLY_NOT_VERDICT_BEARING"
             self.assertIn(
-                "tools/ember-cli/src/entrypoints/main.js", receipt.get(diag_key, "")
+                "src/ember/infrastructure/tools/ember-cli/src/entrypoints/main.js", receipt.get(diag_key, "")
             )
 
     def test_probe_env_is_closed_ambient_secrets_are_not_inherited(self):
@@ -1092,12 +1092,12 @@ class Round4RuntimeSentinelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _minimal_ember_root(root)
-            _write(root / "tools/ember-cli/src/unrelated.js", "// not the entry\n")
+            _write(root / "src/ember/infrastructure/tools/ember-cli/src/unrelated.js", "// not the entry\n")
             _write(
                 root / "tools" / "launchers" / "Decoy4.cmd",
                 "@echo off\r\n"
                 'if defined EMBER_LAUNCH_TEST_RUNTIME call "%EMBER_LAUNCH_TEST_RUNTIME%" '
-                "run tools/ember-cli/src/unrelated.js\r\n"
+                "run src/ember/infrastructure/tools/ember-cli/src/unrelated.js\r\n"
                 "exit /b 0\r\n",
             )
             report = harness.run(root)
@@ -1127,7 +1127,7 @@ def _palette_chain_fixture(root: Path, wired: bool = True) -> None:
     palette reads none of them."""
     consumed = "slashCommands" if wired else "hardcodedList"
     _write(
-        root / "tools/ember-cli/src/screens/repl.ts",
+        root / "src/ember/infrastructure/tools/ember-cli/src/screens/repl.ts",
         "const [slashCommands, setSlashCommands] = useState([]);\n"
         "useEffect(() => {\n"
         "  let cancelled = false;\n"
@@ -1145,7 +1145,7 @@ def _palette_chain_fixture(root: Path, wired: bool = True) -> None:
         "});\n",
     )
     _write(
-        root / "tools/ember-cli/src/services/slash-dropdown.ts",
+        root / "src/ember/infrastructure/tools/ember-cli/src/services/slash-dropdown.ts",
         "export function filterSlashCommands(commands, query) {\n"
         '  if (query === "") return commands;\n'
         "  return commands.filter((c) => c.name.startsWith(query));\n"
@@ -1163,7 +1163,7 @@ def _registry_with_availability_filter(root: Path, stems: list[str]) -> None:
     )
     calls = "\n".join(f"    create{_camel(s)}Command()," for s in stems)
     _write(
-        root / "tools/ember-cli/src/command-registry.ts",
+        root / "src/ember/infrastructure/tools/ember-cli/src/command-registry.ts",
         f"{imports}\n"
         "const defaultDeps = {\n"
         "  getBuiltinCommands: () => [\n"
@@ -1213,7 +1213,7 @@ class PaletteReachabilityTests(unittest.TestCase):
             _minimal_ember_root(root)
             _write_real_launcher_chain(root)
             _write(
-                root / "tools/ember-cli/src/commands/benchmod.ts",
+                root / "src/ember/infrastructure/tools/ember-cli/src/commands/benchmod.ts",
                 "export function createBenchmodCommand() {\n"
                 "  return {\n"
                 '    name: "benchmark",\n'

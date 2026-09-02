@@ -130,7 +130,7 @@ def test_ember_cli_specs_accept_existing_bound_consumer(tmp_path: Path) -> None:
     (specs / "current.md").write_text(
         "# Current spec\n\n"
         "Status: SHIPPED\n"
-        "Consumer: `tools/ember-cli/src/services/current.ts`\n",
+        "Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/current.ts`\n",
         encoding="utf-8",
     )
 

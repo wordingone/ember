@@ -4,8 +4,8 @@
 // issue #1361: production lazy model-seat contract
 
 import { describe, expect, test } from "bun:test";
-import { buildLazyOwnedCallModel, getModelSeatState, _resetInitForTests } from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
-import { main } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+import { buildLazyOwnedCallModel, getModelSeatState, _resetInitForTests } from "../entrypoints/session-init.ts";
+import { main } from "../entrypoints/process-entry.ts";
 import type { OwnedModelIdentity } from "./model-seat.ts";
 
 const PROCESS_ENTRY = new URL("./process-entry.ts", import.meta.url);

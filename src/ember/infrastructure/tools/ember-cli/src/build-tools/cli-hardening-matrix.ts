@@ -248,7 +248,7 @@ function requireCleanSource(repositoryRoot: string): void {
       "--porcelain",
       "--untracked-files=all",
       "--",
-      "tools/ember-cli/src",
+      "src/ember/infrastructure/tools/ember-cli/src",
       ".github/workflows/cli-windows-lifecycle-e2e.yml",
     ],
     { encoding: "utf8", windowsHide: true, timeout: 15_000 },

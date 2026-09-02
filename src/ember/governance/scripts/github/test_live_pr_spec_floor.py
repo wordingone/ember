@@ -30,7 +30,7 @@ class LivePullRequestSpecFloorTests(unittest.TestCase):
     def test_added_component_without_changed_bound_spec_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base, subject = _roots(Path(tmp))
-            component = "tools/ember-cli/src/services/new-service.ts"
+            component = "src/ember/infrastructure/tools/ember-cli/src/services/new-service.ts"
             (subject / component).write_text("export {};\n", encoding="utf-8")
             snapshot = human_pr()
             snapshot["changed_files"] = [component]
@@ -47,7 +47,7 @@ class LivePullRequestSpecFloorTests(unittest.TestCase):
     def test_added_component_with_exact_changed_consumer_spec_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base, subject = _roots(Path(tmp))
-            component = "tools/ember-cli/src/services/new-service.ts"
+            component = "src/ember/infrastructure/tools/ember-cli/src/services/new-service.ts"
             spec = "tools/ember-cli/specs/new-service.md"
             (subject / component).write_text("export {};\n", encoding="utf-8")
             (subject / spec).write_text(
