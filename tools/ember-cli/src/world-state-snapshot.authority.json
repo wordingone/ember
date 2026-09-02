@@ -1,6 +1,6 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
-  "artifact_path": "tools/ember-cli/src/world-state-snapshot.json",
+  "artifact_path": "src/ember/infrastructure/tools/ember-cli/src/world-state-snapshot.json",
   "artifact_sha256": "27ae0cc58e76a630fbcc72981635ff4e6fe5ad461948280c51a186281779848d",
   "authority": {
     "goal_id": "EMBER-02",
