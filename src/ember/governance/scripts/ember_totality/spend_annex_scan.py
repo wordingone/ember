@@ -488,7 +488,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   v0-live-<digits>.json (excludes -import-edition, see below)  scripts/timeshare_pretrain.py:2092
 #     out = os.path.join(repo, "receipts", f"v0-live-{receipt['ts']}.json")
 #   v0ext-dryrun-*.json                      scripts/timeshare_pretrain.py:2049
-#   wsl9p-probe-*.json                       scripts/wsl9p_probe.py:353
+#   wsl9p-probe-*.json                       src/ember/governance/scripts/wsl9p_probe.py:353
 #     default_output = f".../receipts/wsl9p-probe-{ts...}.json" (default path is an
 #     absolute WSL nc-ladder path; this repo's copy required an explicit --out
 #     override, confirmed by the file existing at a non-default receipts/ location)
@@ -583,7 +583,7 @@ CONVENTION_MAP = [
     # anchored to digits-only so it never swallows v0-live-import-edition-*.json
     (re.compile(r"^v0-live-\d{8}T\d{6}Z\.json$"), "scripts/timeshare_pretrain.py"),
     (re.compile(r"^v0ext-dryrun-.*\.json$"), "scripts/timeshare_pretrain.py"),
-    (re.compile(r"^wsl9p-probe-.*\.json$"), "scripts/wsl9p_probe.py"),
+    (re.compile(r"^wsl9p-probe-.*\.json$"), "src/ember/governance/scripts/wsl9p_probe.py"),
     (re.compile(r"^neural_policy_update_trace\.json$"), "scripts/ember_train_multimodal_resident_adapter.py"),
     (re.compile(r"^train_multimodal_resident_adapter_receipt\.json$"),
      "scripts/ember_train_multimodal_resident_adapter.py"),
