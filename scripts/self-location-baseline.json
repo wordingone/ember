@@ -1353,7 +1353,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/w2_heldout/build_decontam_batch.py",
+      "path": "src/ember/governance/scripts/w2_heldout/build_decontam_batch.py",
       "line": 54,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1364,7 +1364,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/build_decontam_batch.py",
+      "path": "src/ember/governance/scripts/w2_heldout/build_decontam_batch.py",
       "line": 87,
       "target": "DEFAULT_SHARD_DIR",
       "expression": "os.environ.get('EMBER_SHARD_DIR', '')",
@@ -1375,7 +1375,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/w2_heldout/certify_heldout_batch.py",
+      "path": "src/ember/governance/scripts/w2_heldout/certify_heldout_batch.py",
       "line": 54,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1386,7 +1386,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/corpus_boilerplate_bloom.py",
+      "path": "src/ember/governance/scripts/w2_heldout/corpus_boilerplate_bloom.py",
       "line": 61,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1397,7 +1397,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/test_certify_heldout_batch.py",
+      "path": "src/ember/governance/scripts/w2_heldout/test_certify_heldout_batch.py",
       "line": 20,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1408,7 +1408,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/test_corpus_boilerplate_bloom.py",
+      "path": "src/ember/governance/scripts/w2_heldout/test_corpus_boilerplate_bloom.py",
       "line": 20,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1419,7 +1419,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/test_fcalib_default_mode_equivalence.py",
+      "path": "src/ember/governance/scripts/w2_heldout/test_fcalib_default_mode_equivalence.py",
       "line": 23,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1430,7 +1430,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/test_w1c_batch_orchestrator.py",
+      "path": "src/ember/governance/scripts/w2_heldout/test_w1c_batch_orchestrator.py",
       "line": 17,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1441,7 +1441,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/test_w1c_certification_e2e.py",
+      "path": "src/ember/governance/scripts/w2_heldout/test_w1c_certification_e2e.py",
       "line": 38,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1452,7 +1452,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/w1c_batch_orchestrator.py",
+      "path": "src/ember/governance/scripts/w2_heldout/w1c_batch_orchestrator.py",
       "line": 61,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1463,7 +1463,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_heldout/w1c_batch_orchestrator.py",
+      "path": "src/ember/governance/scripts/w2_heldout/w1c_batch_orchestrator.py",
       "line": 74,
       "target": "DEFAULT_SHARD_DIR",
       "expression": "os.environ.get('EMBER_SHARD_DIR', '')",
@@ -1474,7 +1474,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/w2_heldout/w1c_certification_e2e.py",
+      "path": "src/ember/governance/scripts/w2_heldout/w1c_certification_e2e.py",
       "line": 42,
       "target": "SCRIPTS_ROOT",
       "expression": "os.path.dirname(HERE)",
@@ -1485,7 +1485,7 @@
       "error": null
     },
     {
-      "path": "scripts/w2_r1_ingest_q3.py",
+      "path": "src/ember/governance/scripts/w2_r1_ingest_q3.py",
       "line": 12,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1496,7 +1496,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/w2_r2_ingest.py",
+      "path": "src/ember/governance/scripts/w2_r2_ingest.py",
       "line": 12,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1518,7 +1518,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/w4_r2_g1.py",
+      "path": "src/ember/governance/scripts/w4_r2_g1.py",
       "line": 19,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -2244,7 +2244,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_census.py",
+      "path": "tests/ember_01_custody/domain-governance/test_census.py",
       "line": 17,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
@@ -2255,7 +2255,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_governed_abort_observability_guard.py",
+      "path": "tests/ember_01_custody/domain-governance/test_governed_abort_observability_guard.py",
       "line": 23,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
@@ -2266,7 +2266,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_issue_census.py",
+      "path": "tests/ember_01_custody/domain-governance/test_issue_census.py",
       "line": 16,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
@@ -2277,7 +2277,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_native_crash_guard.py",
+      "path": "tests/ember_01_custody/domain-governance/test_native_crash_guard.py",
       "line": 28,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
@@ -2288,7 +2288,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_resource_dispatch_guard.py",
+      "path": "tests/ember_01_custody/domain-governance/test_resource_dispatch_guard.py",
       "line": 30,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
@@ -2299,7 +2299,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_resumable_discovery.py",
+      "path": "tests/ember_01_custody/domain-governance/test_resumable_discovery.py",
       "line": 15,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
@@ -2321,7 +2321,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_identity/test_census_consumers.py",
+      "path": "tests/ember_01_identity/domain-governance/test_census_consumers.py",
       "line": 27,
       "target": "ROOT_LOCATOR_SPEC_PATH",
       "expression": "ROOT / 'manifests' / 'ember-01-identity' / 'consumer-census-roots-v1.json'",
