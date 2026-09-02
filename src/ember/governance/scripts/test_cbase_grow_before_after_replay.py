@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = ROOT / "scripts" / "cbase_grow_before_after_replay.py"
 SPEC = importlib.util.spec_from_file_location("before_after", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None

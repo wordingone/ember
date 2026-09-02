@@ -10,7 +10,7 @@ import json
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT_DIR = REPO_ROOT / "src" / "ember" / "governance" / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 from build_claims_index import build_index, render_claims_md, write_outputs  # noqa: E402

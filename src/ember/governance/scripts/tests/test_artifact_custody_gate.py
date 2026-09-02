@@ -5,7 +5,7 @@
 the durable main-tree root, not whichever worktree happens to be executing them.
 
 #1741 Known Limitation B: both functions took ``repo_root`` as a caller-supplied
-path and every real call site computed it as ``Path(__file__).resolve().parents[2]``
+path and every real call site computed it as ``next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())``
 (``src/ember/governance/scripts/ember_restart/contract.py``) -- the tree the *executing script* lives
 in. From a worktree (the normal working pattern here), that resolves to the
 worktree's own (nonexistent) ``state/`` directory instead of the durable
@@ -33,7 +33,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 MODULE_PATH = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "artifact_custody_gate.py"
 
 

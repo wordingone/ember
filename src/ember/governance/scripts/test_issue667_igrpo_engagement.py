@@ -10,7 +10,7 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPTS = ROOT / "scripts"
 PHASE3 = SCRIPTS / "ember_phase3_c14"
 for path in (str(PHASE3), str(SCRIPTS)):
