@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_ind1_context_carry_capture.py -- IND-1 element_1_talk_context_carry cure.
 
 Cures the ONLY missing IND-1 matrix element (operator-independence-v1.md sec2, IND-1 row,

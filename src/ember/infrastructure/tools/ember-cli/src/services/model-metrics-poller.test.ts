@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/model-metrics-poller.test.ts — AC9 tests for the model-metrics poller.
 //
 // AC9a: parsePrometheusLine — comment lines, blank lines, metric+value, label stripping

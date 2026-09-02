@@ -49,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ember_3d71974c0755051a_importlib
 import sys as _ember_3d71974c0755051a_sys
 from pathlib import Path as _ember_3d71974c0755051a_Path
-_ember_3d71974c0755051a_path = _ember_3d71974c0755051a_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_totality', 'receipt_ts_authority.py')
+_ember_3d71974c0755051a_path = _ember_3d71974c0755051a_Path(__file__).resolve().parent.joinpath('receipt_ts_authority.py')
 if not _ember_3d71974c0755051a_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
 _ember_3d71974c0755051a_aliases = ('_ember_issue2015_3d71974c0755051a', 'receipt_ts_authority', 'src.ember.governance.scripts.ember_totality.receipt_ts_authority')

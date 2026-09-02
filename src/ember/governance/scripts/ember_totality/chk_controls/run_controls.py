@@ -1957,7 +1957,7 @@ def build_c_auto_base():
     # Write the honest zero-claim canonical autonomy ladder state.
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": None,
         "rungs": {
             "R0": {"status": "IN_BUILD", "claimed": False, "windows": []},
@@ -1990,7 +1990,7 @@ def build_c_auto_unreceipted_claim():
     # Write state with R0 claimed but no claim receipt.
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R0",
         "rungs": {
             "R0": {
@@ -2044,7 +2044,7 @@ def build_c_auto_dangling_window():
     # Write state with R0 claimed; one window ref does not exist.
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R0",
         "rungs": {
             "R0": {
@@ -2104,7 +2104,7 @@ def build_c_auto_missing_provenance():
     # Write state with R1 claimed (requires scheduler_provenance field).
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R1",
         "rungs": {
             "R0": {"status": "IN_BUILD", "claimed": False, "windows": []},
@@ -2165,7 +2165,7 @@ def build_c_auto_state_claim_mismatch():
     # Write state with R1 claimed but current_rung set to R0.
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R0",  # Mismatch: should be R1.
         "rungs": {
             "R0": {"status": "IN_BUILD", "claimed": False, "windows": []},
@@ -2228,7 +2228,7 @@ def build_c_auto_receipts_dir_absent():
     # Write state with R0 claimed.
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R0",
         "rungs": {
             "R0": {
@@ -2274,7 +2274,7 @@ def build_c_auto_empty_provenance():
     # Write state with R1 claimed (requires scheduler_provenance).
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R1",
         "rungs": {
             "R0": {"status": "IN_BUILD", "claimed": False, "windows": []},
@@ -2335,7 +2335,7 @@ def build_c_auto_stale_reversion_claim():
 
     state = {
         "schema": "autonomy-ladder-state/v1",
-        "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+        "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
         "current_rung": "R1",
         "rungs": {
             "R0": {"status": "IN_BUILD", "claimed": False, "windows": []},

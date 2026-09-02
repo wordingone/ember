@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for remote-agent-task — covers spec ACs 1–5.
 import { test, expect, describe, mock } from "bun:test";
 import {

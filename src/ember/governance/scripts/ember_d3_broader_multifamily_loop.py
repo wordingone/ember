@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Run a broader D3 multi-family A/B/C/deleted loop from an admission receipt."""
 from __future__ import annotations
 

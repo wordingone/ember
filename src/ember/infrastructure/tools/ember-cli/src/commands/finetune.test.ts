@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // commands/finetune.test.ts — /finetune control command (AC8-AC9)
 // Spec: specs/surface2-steerable-watch-control.md
 

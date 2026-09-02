@@ -51,7 +51,7 @@ def main() -> int:
     import importlib.util as _ember_2ad73f5df12b45ee_importlib
     import sys as _ember_2ad73f5df12b45ee_sys
     from pathlib import Path as _ember_2ad73f5df12b45ee_Path
-    _ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
+    _ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
     if not _ember_2ad73f5df12b45ee_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_check.py')
     _ember_2ad73f5df12b45ee_aliases = ('_ember_issue2015_2ad73f5df12b45ee', 'receipt_check', 'scripts.receipt_check')

@@ -22,7 +22,7 @@ SOURCE_CROSSWALK = Path(
 PACKET_PATH = Path(
     "manifests/authority/issue-35-terminal-dispositions-v1.json"
 )
-SOURCE_VERIFIER = Path("scripts/verify_authority_supersession_crosswalk.py")
+SOURCE_VERIFIER = Path("src/ember/governance/scripts/verify_authority_supersession_crosswalk.py")
 HISTORICAL_TERMINAL = "HISTORICAL_ORPHANED"
 GAP_DISPOSITION = "HISTORICAL_CUSTODY_GAP_CONSERVED"
 REOPEN_RULE = "REOPEN_ON_AUTHENTIC_SOURCE_RECOVERY"

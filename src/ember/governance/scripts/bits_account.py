@@ -27,7 +27,7 @@ from receipt_write import checked_write
 import importlib.util as _ember_d8c02810056e6c3d_importlib
 import sys as _ember_d8c02810056e6c3d_sys
 from pathlib import Path as _ember_d8c02810056e6c3d_Path
-_ember_d8c02810056e6c3d_path = _ember_d8c02810056e6c3d_Path(__file__).resolve().parents[4].joinpath('scripts', 'frontier.py')
+_ember_d8c02810056e6c3d_path = _ember_d8c02810056e6c3d_Path(__file__).resolve().parent.joinpath('frontier.py')
 if not _ember_d8c02810056e6c3d_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/frontier.py')
 _ember_d8c02810056e6c3d_aliases = ('_ember_issue2015_d8c02810056e6c3d', 'frontier', 'src.ember.governance.scripts.frontier')
@@ -74,7 +74,7 @@ report_block = getattr(_ember_d8c02810056e6c3d_module, 'report_block')
 import importlib.util as _ember_41d654a4576ceb0a_importlib
 import sys as _ember_41d654a4576ceb0a_sys
 from pathlib import Path as _ember_41d654a4576ceb0a_Path
-_ember_41d654a4576ceb0a_path = _ember_41d654a4576ceb0a_Path(__file__).resolve().parents[4].joinpath('scripts', 'power.py')
+_ember_41d654a4576ceb0a_path = _ember_41d654a4576ceb0a_Path(__file__).resolve().parent.joinpath('power.py')
 if not _ember_41d654a4576ceb0a_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/power.py')
 _ember_41d654a4576ceb0a_aliases = ('_ember_issue2015_41d654a4576ceb0a', 'power', 'src.ember.governance.scripts.power')

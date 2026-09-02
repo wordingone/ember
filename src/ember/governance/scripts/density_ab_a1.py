@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ember_86fa83cbbef8e61b_importlib
 import sys as _ember_86fa83cbbef8e61b_sys
 from pathlib import Path as _ember_86fa83cbbef8e61b_Path
-_ember_86fa83cbbef8e61b_path = _ember_86fa83cbbef8e61b_Path(__file__).resolve().parents[4].joinpath('scripts', 'density_ab_bench.py')
+_ember_86fa83cbbef8e61b_path = _ember_86fa83cbbef8e61b_Path(__file__).resolve().parent.joinpath('density_ab_bench.py')
 if not _ember_86fa83cbbef8e61b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/density_ab_bench.py')
 _ember_86fa83cbbef8e61b_aliases = ('_ember_issue2015_86fa83cbbef8e61b', 'density_ab_bench', 'src.ember.governance.scripts.density_ab_bench')

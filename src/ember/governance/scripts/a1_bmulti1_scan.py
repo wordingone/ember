@@ -52,7 +52,7 @@ sys.path.insert(0, os.path.join(HERE, "w2_heldout"))
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -97,7 +97,7 @@ import build_decontam_batch_mp as bdbm  # noqa: E402
 import importlib.util as _ember_376b57c2d601539f_importlib
 import sys as _ember_376b57c2d601539f_sys
 from pathlib import Path as _ember_376b57c2d601539f_Path
-_ember_376b57c2d601539f_path = _ember_376b57c2d601539f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'a1_predicate_scan.py')
+_ember_376b57c2d601539f_path = _ember_376b57c2d601539f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'a1_predicate_scan.py')
 if not _ember_376b57c2d601539f_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/a1_predicate_scan.py')
 _ember_376b57c2d601539f_aliases = ('_ember_issue2015_376b57c2d601539f', 'a1_predicate_scan', 'scripts.a1_predicate_scan')

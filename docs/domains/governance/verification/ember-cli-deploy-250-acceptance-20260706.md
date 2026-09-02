@@ -148,7 +148,7 @@ discipline: control arm first, `:8082` requests-only exception, exact-PID teardo
   accepting any ACK match) confirms a genuine preemption: raw transcript shows
   `You ... PREEMPT-CHECK: ... / ●ACK [operator]` — a real, correct, standalone assistant
   reply, immediately followed by the next autonomous continuation marker. "User always
-  preempts" (docs/contracts/goal-mode-mechanism.md §3) holds once the message actually reaches the engine.
+  preempts" (docs/domains/governance/contracts/goal-mode-mechanism.md §3) holds once the message actually reaches the engine.
 - **New finding, filed separately, does not block this leg:**
   [ember#283](https://github.com/wordingone/ember/issues/283) — the FIRST Enter pressed while
   ember-cli is busy (an autonomous continuation in flight) is silently dropped rather than

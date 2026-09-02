@@ -64,7 +64,7 @@ violation. Premature clearing is a spec violation.
 
 ### 4.0.7 Authority conservation (C-AUTHORITY)
 
-- **C-AUTHORITY — Authority and totality conservation.** R: the current tree passes the seven-leg EMBER-00 conservation certificate: invariant bytes unchanged; D-001 through D-062 present and classified; all governing surfaces conserve the 3B native text-image-audio-reasoning-tool birth and >27B destination; lower-precedence artifacts cannot authorize sub-3B, borrowed-lineage, modality-reduced, model-mediated, or mechanism-erasing work; every known artifact identity is qualified; and this authority-only goal makes no model, training, runtime, benchmark, or capability completion claim. Does NOT count: prose agreement without executable mutations; a verifier absent from repository, dispatch, merge, or board gates; a historical config that remains executable; a borrowed backend presented as Ember. CHK: `src/ember/governance/scripts/ember_totality/test_c_authority.py` executes `scripts/verify_authority_conservation.py`; GREEN iff every certificate leg passes. ✗ `invalid_authority_drift`, `invalid_goal_binding`, `invalid_identity_conflation`.
+- **C-AUTHORITY — Authority and totality conservation.** R: the current tree passes the seven-leg EMBER-00 conservation certificate: invariant bytes unchanged; D-001 through D-062 present and classified; all governing surfaces conserve the 3B native text-image-audio-reasoning-tool birth and >27B destination; lower-precedence artifacts cannot authorize sub-3B, borrowed-lineage, modality-reduced, model-mediated, or mechanism-erasing work; every known artifact identity is qualified; and this authority-only goal makes no model, training, runtime, benchmark, or capability completion claim. Does NOT count: prose agreement without executable mutations; a verifier absent from repository, dispatch, merge, or board gates; a historical config that remains executable; a borrowed backend presented as Ember. CHK: `src/ember/governance/scripts/ember_totality/test_c_authority.py` executes `src/ember/governance/scripts/verify_authority_conservation.py`; GREEN iff every certificate leg passes. ✗ `invalid_authority_drift`, `invalid_goal_binding`, `invalid_identity_conflation`.
 
 ### 4.1 Substrate pre-conditions (gate C14)
 
@@ -425,7 +425,7 @@ pre-epoch history.
   CHK: `test_c_ladm.py`; GREEN iff zero offending rows across all rules.
 
 - **C-AUTO — autonomy-ladder claim faithfulness (gh issue #104; added 2026-07-04 by
-  maintainer; ladder contract `docs/spec/autonomy-relinquishment-ladder-v1.md`).** R: the
+  maintainer; ladder contract `docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md`).** R: the
   ladder state file (`docs/domains/governance/authority/autonomy-ladder-state.json`) is schema-valid, cites a resolvable
   contract, and names the never-transfer safety floor (operator escalation set, governor
   caps, kill-discipline); every CLAIMED rung is backed by K≥5 consecutive resolvable window

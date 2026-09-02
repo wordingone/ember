@@ -15,7 +15,7 @@
 #   1. env var  REPO_GUARD_NAMES        = pipe-separated names (CI injects from a secret), or
 #   2. local file tools/.repo-guard-denylist (one name per line; git-ignored), or
 #   3. committed src/ember/infrastructure/tools/repo-guard-denylist.sha256 (one sha256-per-lowercase-name;
-#      contains no reversible names, safe to commit) via tools/check_names_hashed.py.
+#      contains no reversible names, safe to commit) via src/ember/infrastructure/tools/check_names_hashed.py.
 # Modes 1/2 take precedence when present (exact string match on the real names).
 # Mode 3 lets CI enforce the same invariant with no secret at all. If none of the
 # three is usable, the name check is SKIPPED with a notice; all other (structural)
@@ -123,7 +123,7 @@ else
 fi
 
 # ---- 1b. tracked text files must be LF-only ------------------------------
-if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_line_endings.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -133,14 +133,14 @@ fi
 # Use trusted kernel bytes against the subject checkout. Git's -I heuristic
 # skips NUL-heavy content, so every Git text-attributed subject blob must pass
 # this explicit byte-level check before the names/path scans below.
-if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_text_encoding.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
 fi
 
 # ---- 1d. repository data-manifest path bindings must resolve and hash ----
-if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" \
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" \
   "$KERNEL_ROOT/tools/ember-restart-3b/check_manifest_path_bindings.py" --root "$SUBJECT_ROOT"; then
   :
 else
@@ -151,7 +151,7 @@ fi
 # Frozen receipts/prose may truthfully mention placeholders. The trusted
 # checker rejects only the runtime-crashing boundary: a redacted token used as
 # a percent-format or str.format operand (issue #502).
-if bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
+if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_executable_redaction_placeholders.py" "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1
@@ -170,13 +170,13 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # Files that intentionally embed a leaked-path-shaped literal as adversarial
 # test input (proving the app's own sanitization/redaction/clipping logic
 # strips exactly this shape) -- these are the fixture, not a leak, and must
-# keep the literal string to stay meaningful. See docs/authority/REDACTIONS.md (issue #456).
+# keep the literal string to stay meaningful. See docs/domains/governance/authority/REDACTIONS.md (issue #456).
 #
 # Class 2 (issue #537, C2-restore ruling 2026-07-09): HASH-PINNED FROZEN
 # ARTIFACTS. Byte-exact sha256 is load-bearing (C2 CHK frozen-rows hash-match
 # + frozen-before law): redaction breaks the pin, re-pinning breaks
 # frozen-before. Enumerated individually -- NEVER directory globs. Each entry
-# has a docs/authority/REDACTIONS.md row. The operator-name checks still cover these files
+# has a docs/domains/governance/authority/REDACTIONS.md row. The operator-name checks still cover these files
 # in full (this exclusion applies ONLY to the paths grep).
 #
 # Class 3 (issue #1401, 2026-08-04): the EMBER-02 LAUNCH-AUTHORITY DECLARATION
@@ -186,7 +186,7 @@ PATHPAT='([A-Za-z]:[/\\]+(Users|M|Downloads))|([A-Za-z]:[/\\]+[Ww][Ii][Nn][Dd][O
 # document that is not the certificate that was declared. The run-spec's
 # requested_scope is compared literally against the certificate's
 # execution_scope, so redacting one and not the other would make a consistent
-# pair read as a mismatch. Landed standalone (this file + docs/authority/REDACTIONS.md only)
+# pair read as a mismatch. Landed standalone (this file + docs/domains/governance/authority/REDACTIONS.md only)
 # so the entries exist at the PR BASE the #1401 evidence-pack PR is judged
 # against -- CI pins repo-guard.sh at the base kernel, and a PR that both
 # introduces class-3 receipts AND edits this file to exempt them can never
@@ -237,7 +237,7 @@ PATHFRAG="(/mnt/[^/]*/${PRIVATE_MOUNT_FRAGMENT}/)|(/${PRIVATE_MOUNT_FRAGMENT})"
 PATHFRAG_SELF_EXCLUDE_ARGS=()
 for relative in \
   'tools/repo-guard.sh' \
-  'tools/check_names_hashed.py' \
+  'src/ember/infrastructure/tools/check_names_hashed.py' \
   'src/ember/infrastructure/tools/repo-guard-denylist.sha256'
 do
   if surface_bytes_match "$relative"; then
@@ -261,13 +261,13 @@ fi
 # committed hashed src/ember/infrastructure/tools/repo-guard-denylist.sha256 (via check_names_hashed.py) >
 # unusable (CI fail-closed / local skip).
 #
-# tools/repo-guard-names-exclude.cfg lists path-prefixes (one per line) that
+# src/ember/infrastructure/tools/repo-guard-names-exclude.cfg lists path-prefixes (one per line) that
 # the names scan skips entirely — machine-generated vocab/data artifacts only
 # (e.g. domains/model/tokenizer/), never prose. Both modes read it.
 # SKIP all NAME checks if backup exemption is applied (exact-match private mirror only)
 if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
   NAMES_EXCLUDE_ARGS=()
-  NAMES_EXCLUDE_FILE="$KERNEL_ROOT/tools/repo-guard-names-exclude.cfg"
+  NAMES_EXCLUDE_FILE="$KERNEL_ROOT/src/ember/infrastructure/tools/repo-guard-names-exclude.cfg"
   if [ -f "$NAMES_EXCLUDE_FILE" ]; then
     while IFS= read -r prefix; do
       prefix="$(printf '%s' "$prefix" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -313,7 +313,7 @@ if [ "$BACKUP_EXEMPTION_APPLIED" -eq 0 ]; then
       HASHED_SELF_ARGS+=(--scan-guard-surfaces)
     fi
     HASHED_OUT="$(
-      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_names_hashed.py" \
+      bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_names_hashed.py" \
         --root "$SUBJECT_ROOT" \
         --denylist "$KERNEL_ROOT/src/ember/infrastructure/tools/repo-guard-denylist.sha256" \
         --names-exclude "$NAMES_EXCLUDE_FILE" "${HASHED_SELF_ARGS[@]}" 2>&1
@@ -347,7 +347,7 @@ fi
 
 # ---- 3b. emberd legacy-name: content-addressed exceptions only -----------
 # Separate from the [names] check above and from its path-prefix
-# tools/repo-guard-names-exclude.cfg, which is left exactly as-is. A tracked
+# src/ember/infrastructure/tools/repo-guard-names-exclude.cfg, which is left exactly as-is. A tracked
 # path matching the legacy name passes ONLY if it is enumerated in
 # tools/emberd-legacy-exceptions.json AND its current content's sha256 equals
 # the digest recorded there — path alone is never sufficient (anyone can
@@ -386,7 +386,7 @@ if [ -z "$EMBERD_HITS" ]; then
 else
   EMBERD_PATHS="$(printf '%s\n' "$EMBERD_HITS" | cut -d: -f1 | sort -u)"
 fi
-EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
+EMBERD_CHECK_OUT="$(EMBERD_PATHS="$EMBERD_PATHS" bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_emberd_legacy_exceptions.py" 2>&1)"
 EMBERD_CHECK_RC=$?
 if [ "$EMBERD_CHECK_RC" -eq 0 ]; then
   if [ -z "$EMBERD_HITS" ]; then
@@ -409,7 +409,7 @@ fi
 # API is launcher-shaped, and a standalone launcher is exactly the class this
 # check keeps out of the tree.
 #
-# Adjudication is by (path, sha256) PAIR via tools/check_governed_entry_exceptions.py,
+# Adjudication is by (path, sha256) PAIR via src/ember/infrastructure/tools/check_governed_entry_exceptions.py,
 # never by path alone -- a file can be renamed into an exempted prefix, but its
 # digest cannot be forged, and editing an enumerated file un-exempts it so the new
 # behaviour is re-adjudicated rather than inherited.
@@ -442,7 +442,7 @@ if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
 else
   GOVERNED_ENTRY_PATHS="$(git grep -lIE "$GOVERNED_ENTRY_RE" "${GOVERNED_ENTRY_PATHSPEC[@]}" 2>/dev/null || true)"
 fi
-GOVERNED_ENTRY_OUT="$(GOVERNED_ENTRY_PATHS="$GOVERNED_ENTRY_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_governed_entry_exceptions.py" 2>&1)"
+GOVERNED_ENTRY_OUT="$(GOVERNED_ENTRY_PATHS="$GOVERNED_ENTRY_PATHS" bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_governed_entry_exceptions.py" 2>&1)"
 GOVERNED_ENTRY_RC=$?
 if [ "$GOVERNED_ENTRY_RC" -eq 0 ]; then
   ok "governed-entry" "$(printf '%s' "$GOVERNED_ENTRY_OUT" | head -1)"
@@ -545,14 +545,14 @@ if [ -n "$LAUNCHER_PS_PATHS" ]; then
   # load-bearing no-engine refusal is exercised by the hermetic selftest
   # instead of remaining an untested host contingency.
   if [ "${REPO_GUARD_DISABLE_POWERSHELL_AST_ENGINE:-}" = "1" ]; then
-    LAUNCHER_PS_AST_OUT=$'tools/powershell-launcher-shape-guard.ps1\tREFUSED: no PowerShell AST engine is available'
+    LAUNCHER_PS_AST_OUT=$'src/ember/infrastructure/tools/powershell-launcher-shape-guard.ps1\tREFUSED: no PowerShell AST engine is available'
     LAUNCHER_PS_AST_RC=1
   elif command -v pwsh >/dev/null 2>&1; then
     LAUNCHER_PS_ENGINE=(pwsh -NoLogo -NoProfile -NonInteractive -File)
   elif command -v powershell.exe >/dev/null 2>&1; then
     LAUNCHER_PS_ENGINE=(powershell.exe -NoLogo -NoProfile -NonInteractive -File)
   else
-    LAUNCHER_PS_AST_OUT=$'tools/powershell-launcher-shape-guard.ps1\tREFUSED: no PowerShell AST engine is available'
+    LAUNCHER_PS_AST_OUT=$'src/ember/infrastructure/tools/powershell-launcher-shape-guard.ps1\tREFUSED: no PowerShell AST engine is available'
     LAUNCHER_PS_AST_RC=1
   fi
   if [ "$LAUNCHER_PS_AST_RC" -eq 0 ]; then
@@ -560,7 +560,7 @@ if [ -n "$LAUNCHER_PS_PATHS" ]; then
     LAUNCHER_PS_SCOPE="worktree"
     [ "${REPO_GUARD_SCOPE:-}" = "staged" ] && LAUNCHER_PS_SCOPE="staged"
     LAUNCHER_PS_AST_OUT="$(
-      "${LAUNCHER_PS_ENGINE[@]}" "$KERNEL_ROOT/tools/powershell-launcher-shape-guard.ps1" \
+      "${LAUNCHER_PS_ENGINE[@]}" "$KERNEL_ROOT/src/ember/infrastructure/tools/powershell-launcher-shape-guard.ps1" \
         -Scope "$LAUNCHER_PS_SCOPE" "${LAUNCHER_PS_PATH_ARRAY[@]}" 2>&1
     )"
     LAUNCHER_PS_AST_RC=$?
@@ -573,7 +573,7 @@ LAUNCHER_PS_AST_PATHS="$(
 LAUNCHER_SHAPE_PATHS="$(printf '%s\n%s\n%s\n' \
   "$LAUNCHER_ARM_A" "$LAUNCHER_ARM_B" "$LAUNCHER_PS_AST_PATHS" \
   | sed '/^$/d' | sort -u)"
-LAUNCHER_SHAPE_OUT="$(LAUNCHER_SHAPE_PATHS="$LAUNCHER_SHAPE_PATHS" bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/tools/check_governed_entry_exceptions.py" launcher-shape 2>&1)"
+LAUNCHER_SHAPE_OUT="$(LAUNCHER_SHAPE_PATHS="$LAUNCHER_SHAPE_PATHS" bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/infrastructure/tools/check_governed_entry_exceptions.py" launcher-shape 2>&1)"
 LAUNCHER_SHAPE_RC=$?
 if [ "$LAUNCHER_PS_AST_RC" -ne 0 ] && [ -n "$LAUNCHER_PS_REFUSALS" ]; then
   fail "launcher-shape" "PowerShell source could not be safely parsed for launcher shape"
@@ -701,20 +701,20 @@ fi
 CHANGED_RECEIPT_SCOPE=0
 CHANGED_RECEIPT_OUT=""
 CHANGED_RECEIPT_RC=0
-if [ ! -f "$KERNEL_ROOT/scripts/check_changed_receipts.py" ]; then
-  fail "changed-receipts" "trusted scripts/check_changed_receipts.py is missing"
+if [ ! -f "$KERNEL_ROOT/src/ember/governance/scripts/check_changed_receipts.py" ]; then
+  fail "changed-receipts" "trusted src/ember/governance/scripts/check_changed_receipts.py is missing"
 elif [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
   CHANGED_RECEIPT_SCOPE=1
   CHANGED_RECEIPT_OUT="$(
     git diff --cached --name-only --diff-filter=ACMR -z -- receipts |
-      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+      bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/governance/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
   )"
   CHANGED_RECEIPT_RC=$?
 elif [ -n "$RANGE" ]; then
   CHANGED_RECEIPT_SCOPE=1
   CHANGED_RECEIPT_OUT="$(
     git diff --name-only --diff-filter=ACMR -z "$RANGE" -- receipts |
-      bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
+      bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/governance/scripts/check_changed_receipts.py" --root "$SUBJECT_ROOT" --null 2>&1
   )"
   CHANGED_RECEIPT_RC=$?
 fi
@@ -743,8 +743,8 @@ if [ -n "$RANGE" ]; then
 fi
 
 # ---- 9. authority and totality conservation -----------------------------
-if [ ! -f "$KERNEL_ROOT/scripts/verify_authority_conservation.py" ]; then
-  fail "authority" "trusted scripts/verify_authority_conservation.py is missing"
+if [ ! -f "$KERNEL_ROOT/src/ember/governance/scripts/verify_authority_conservation.py" ]; then
+  fail "authority" "trusted src/ember/governance/scripts/verify_authority_conservation.py is missing"
 else
   AUTHORITY_ARGS=(--root .)
   if [ "${REPO_GUARD_SCOPE:-}" = "staged" ]; then
@@ -752,7 +752,7 @@ else
   elif [ -n "$RANGE" ]; then
     AUTHORITY_ARGS+=(--changed-range "$RANGE")
   fi
-  AUTHORITY_OUT="$(bash "$KERNEL_ROOT/tools/run-python-hidden.sh" "$KERNEL_ROOT/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
+  AUTHORITY_OUT="$(bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" "$KERNEL_ROOT/src/ember/governance/scripts/verify_authority_conservation.py" "${AUTHORITY_ARGS[@]}" 2>&1)"
   AUTHORITY_RC=$?
   if [ "$AUTHORITY_RC" -eq 0 ]; then
     ok "authority" "EMBER authority conservation certificate passes"

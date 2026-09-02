@@ -52,7 +52,7 @@ P-2 adjudicates on the b4 re-run (in flight, PR #515 branch):
 - **Branch B (P-2 KILLED: reset ≥ transplant, or reset > 0.85, or transplant < 0.75):**
   reset-at-boundary stays, now as a MEASURED law rather than a checkpoint contingency; the paper
   section reports the corrected measurement either way.
-- Either branch: lr_muon = 0.02 (configs/v0-pretrain-config.json) is the disclosed executed
+- Either branch: lr_muon = 0.02 (domains/model/configs/v0-pretrain-config.json) is the disclosed executed
   value; no WSD schedule exists at this rung — a rung-3 schedule decision is OUT OF SCOPE here
   and gets its own spec.
 

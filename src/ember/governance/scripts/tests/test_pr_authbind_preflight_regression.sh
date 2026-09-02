@@ -355,13 +355,13 @@ EOF
 # back to the raw path unchanged on platforms without cygpath.
 MARKER_B_FOR_PY="$MARKER_B"
 command -v cygpath >/dev/null 2>&1 && MARKER_B_FOR_PY="$(cygpath -w "$MARKER_B")"
-cat >"$E2E_WORK/scripts/check_pr_authority_binding.py" <<EOF
+cat >"$E2E_WORK/src/ember/governance/scripts/check_pr_authority_binding.py" <<EOF
 import pathlib
 pathlib.Path(r"$MARKER_B_FOR_PY").touch()
 print("stub check_pr_authority_binding: ok")
 EOF
 chmod +x "$E2E_WORK/tools/repo-guard.sh"
-git -C "$E2E_WORK" add tools/repo-guard.sh scripts/check_pr_authority_binding.py
+git -C "$E2E_WORK" add tools/repo-guard.sh src/ember/governance/scripts/check_pr_authority_binding.py
 git -C "$E2E_WORK" commit --quiet -m "base with stub CI steps"
 E2E_BASE_SHA="$(git -C "$E2E_WORK" rev-parse HEAD)"
 git -C "$E2E_WORK" push --quiet origin master

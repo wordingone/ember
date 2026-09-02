@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/query-engine.compaction.test.ts — locks the microcompact wiring into the
 // agent loop. Without this, microcompact could silently revert to never-invoked
 // (the exact unit-green-hides-functional class this fix addresses).

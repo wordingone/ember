@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // screens/repl.dispatch.test.ts — receipts for the LIVE renderMsgDispatch (the
 // one wired into the mounted ReplScreen via core/frontend-shell.ts, distinct
 // from the legacy duplicate in src/repl.ts which has no production importer).

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // commands/stubs.ts — Disabled / null-export stub slots.
 // These hold the shape of features that are not yet enabled or that have been
 // replaced by plugin-delivered equivalents. All stubs are hidden from /help and

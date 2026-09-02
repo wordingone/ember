@@ -172,7 +172,7 @@ class Land210jOwnedDryRunTests(unittest.TestCase):
             revalidator.validate_public_lineage(ROOT, "0" * 40, digests)
 
         changed = dict(digests)
-        changed["scripts/ember_cbase_launch.py"] = "0" * 64
+        changed["src/ember/governance/scripts/ember_cbase_launch.py"] = "0" * 64
         with self.assertRaisesRegex(ValueError, "unexpected current byte drift"):
             revalidator.validate_current_sources(ROOT, changed)
 

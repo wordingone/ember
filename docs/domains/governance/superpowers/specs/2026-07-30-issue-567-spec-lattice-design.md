@@ -31,7 +31,7 @@ repository roots.
 `src/ember/governance/scripts/check_docs_freshness.py` calls the same parser over the complete ember-cli spec directory,
 so scheduled/local freshness checks include the operator-visible body.
 
-`scripts/github/live_pr_policy.py` invokes the trusted parser with separate base and subject roots.
+`src/ember/governance/scripts/github/live_pr_policy.py` invokes the trusted parser with separate base and subject roots.
 The base-pinned repository guard therefore evaluates candidate spec data and component existence
 without trusting GitHub status strings or executing candidate-owned policy code.
 

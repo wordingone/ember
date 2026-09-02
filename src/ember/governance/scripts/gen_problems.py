@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Generate docs/roadmap/PROBLEMS.md — the single human-readable Ember problem ledger.
+"""Generate docs/domains/governance/roadmap/PROBLEMS.md — the single human-readable Ember problem ledger.
 
 Hands-off by design: STATUS (OPEN/CLAIMED/SOLVED) is DERIVED from the JSON
 totality board + integrity audit (receipts-only truth); the human layer

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // border-rendering.test.ts — B2 (border rendering increment). Written BEFORE any implementation
 // change (TDD red-first): a Box{borderStyle} currently renders NOTHING for its border (confirmed
 // by team-lead's independent diagnosis: components.ts only drops borderStyle/borderColor into

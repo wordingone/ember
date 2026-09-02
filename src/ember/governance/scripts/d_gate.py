@@ -129,7 +129,7 @@ def _exact_paired_ci(vec_a: list, vec_b: list, conf: float = 0.95) -> dict:
     import importlib.util as _ember_0ad50f51eb437c22_importlib
     import sys as _ember_0ad50f51eb437c22_sys
     from pathlib import Path as _ember_0ad50f51eb437c22_Path
-    _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parents[4].joinpath('scripts', 'stats_exact.py')
+    _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parent.joinpath('stats_exact.py')
     if not _ember_0ad50f51eb437c22_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/stats_exact.py')
     _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'src.ember.governance.scripts.stats_exact', 'stats_exact')
@@ -239,7 +239,7 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     import importlib.util as _ember_35cf90ffec8cbce1_importlib
     import sys as _ember_35cf90ffec8cbce1_sys
     from pathlib import Path as _ember_35cf90ffec8cbce1_Path
-    _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parents[4].joinpath('scripts', 'w4_eval.py')
+    _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parent.joinpath('w4_eval.py')
     if not _ember_35cf90ffec8cbce1_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w4_eval.py')
     _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'src.ember.governance.scripts.w4_eval', 'w4_eval')
@@ -293,7 +293,7 @@ def _run_real_arm(arm_name: str, adapter_path, model: str, n_tasks: int,
     import importlib.util as _ember_35cf90ffec8cbce1_importlib
     import sys as _ember_35cf90ffec8cbce1_sys
     from pathlib import Path as _ember_35cf90ffec8cbce1_Path
-    _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parents[4].joinpath('scripts', 'w4_eval.py')
+    _ember_35cf90ffec8cbce1_path = _ember_35cf90ffec8cbce1_Path(__file__).resolve().parent.joinpath('w4_eval.py')
     if not _ember_35cf90ffec8cbce1_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w4_eval.py')
     _ember_35cf90ffec8cbce1_aliases = ('_ember_issue2015_35cf90ffec8cbce1', 'src.ember.governance.scripts.w4_eval', 'w4_eval')
@@ -575,7 +575,7 @@ def _selftest():
     import importlib.util as _ember_0ad50f51eb437c22_importlib
     import sys as _ember_0ad50f51eb437c22_sys
     from pathlib import Path as _ember_0ad50f51eb437c22_Path
-    _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parents[4].joinpath('scripts', 'stats_exact.py')
+    _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parent.joinpath('stats_exact.py')
     if not _ember_0ad50f51eb437c22_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/stats_exact.py')
     _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'src.ember.governance.scripts.stats_exact', 'stats_exact')

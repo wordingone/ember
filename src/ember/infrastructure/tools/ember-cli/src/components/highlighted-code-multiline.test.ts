@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // highlighted-code-multiline.test.ts — D5 finding: a multi-line code block handed to a SINGLE
 // Text (or RawAnsi) node never advances rows on its own embedded "\n" characters --
 // renderNodeToOutput's text-walk (ink/rendering-pipeline.ts) computes col/row purely from the

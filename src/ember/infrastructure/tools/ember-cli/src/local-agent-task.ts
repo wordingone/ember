@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // local-agent-task.ts — lifecycle and token-usage tracking for local subagent tasks.
 // W2-B: local-only mode. LARGE_MODELS is empty — all model names pass through unchanged.
 

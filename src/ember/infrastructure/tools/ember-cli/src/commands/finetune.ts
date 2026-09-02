@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // commands/finetune.ts — /finetune control command.
 // Parses and emits finetune control commands (start/stop/pause/resume/adjust).
 // Alias: ft

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // commands/goal.test.ts — /goal slash command tests (ember issue #211): dispatch
 // parsing (/goal <objective> | /goal | /goal clear), status formatting, the
 // create-vs-edit branch, ephemeral-session refusal, and the objective-updated

@@ -1,1 +1,0 @@
-{"artifact_path":"scripts/verify_authority_conservation.py","artifact_sha256":"88fd2578a4b9a3b22c46b42e2a1d1934fcfb719cf01dac90f1d5138ba3596398","authority":{"goal_id":"EMBER-02","next_executed_outcome":"EMBER-02 first sufficiently pretrained clean-genesis 3B Ember","workstream_id":"EMBER-02A"},"schema_version":"ember-content-addressed-authority-binding/v1"}

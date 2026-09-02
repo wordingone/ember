@@ -69,7 +69,7 @@ For every decisive-claim receipt this script does exactly one of:
                         ceff_* gate-closure/repudiation analyses derived from them): a
                         train-daemon-dispatched, currently-LIVE sibling infra repo
                         actually assembles and writes these receipts. This tree's own
-                        scripts/timeshare_pretrain.py defines no --conv / opt_variant
+                        src/ember/governance/scripts/timeshare_pretrain.py defines no --conv / opt_variant
                         flag at all (confirmed: zero matches for either string anywhere
                         in that file), so the conv_c03_*_live.py wrappers' constructed
                         sys.argv could never even be processed by this tree's copy --
@@ -416,7 +416,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out_path = receipts_out_dir / f"proof-replay-consistency-{stamp}.json"
 #   scienceagentbench-first-loop-*.json      src/ember/governance/scripts/ember_scienceagentbench_first_loop.py:260
 #     out = Path(args.out) if args.out else DEFAULT_OUT_DIR / f"scienceagentbench-first-loop-{ts}.json"
-#   eng123-timeshare-dryrun-*.json           scripts/timeshare_dryrun.py:275
+#   eng123-timeshare-dryrun-*.json           src/ember/governance/scripts/timeshare_dryrun.py:275
 #     out_path = os.path.join(receipts_dir, f"eng123-timeshare-dryrun-{ts}.json")
 #   proof-frontier-protocol-*.json           scripts/proofs/frontier_projection.py:467
 #     out_path = out_dir / f"proof-frontier-protocol-{receipt['ts']}.json"
@@ -469,9 +469,9 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #   fp38-l9-flash-ab-*.json                  src/ember/governance/scripts/fp38_l9_flash_ab.py:239
 #   fp38b-l9-completion-*.json               src/ember/governance/scripts/fp38b_l9_completion.py:232
 #   fp38c-l9-eager-*.json                    src/ember/governance/scripts/fp38c_l9_eager.py:213
-#   fp38d-l9-prod-flash-*.json               scripts/fp38d_l9_prod_flash.py:274
+#   fp38d-l9-prod-flash-*.json               src/ember/governance/scripts/fp38d_l9_prod_flash.py:274
 #   fp39-density-power-audit-*.json          src/ember/governance/scripts/fp39_density_power_audit.py:190
-#   fp40-l10-optimizer-ab-*.json             scripts/fp40_l10_optimizer_ab.py:596
+#   fp40-l10-optimizer-ab-*.json             src/ember/governance/scripts/fp40_l10_optimizer_ab.py:596
 #   native-smoke-*.json                      src/ember/governance/scripts/t_native_smoke.py:99
 #     return receipts_dir / f"native-smoke-{ts}.json"
 #   probe-meminfo-*.json                     src/ember/governance/scripts/probe_meminfo.py:37
@@ -482,18 +482,18 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     timestamp convention (caller supplies the full filename), but the naming
 #     convention it documents for itself (line 925, its own next-command generator)
 #     is exactly "resident-training-gate-<timestamp>.json", matching this receipt.
-#   resume-drill-*.json                      scripts/train_multimodal_v0.py:3189
+#   resume-drill-*.json                      src/ember/governance/scripts/train_multimodal_v0.py:3189
 #     receipt_path = receipts_dir / f"resume-drill-{ts}.json"
 #   selective-recompute-ab-*.json            src/ember/governance/scripts/selective_recompute_ab.py:444
-#   v0-live-<digits>.json (excludes -import-edition, see below)  scripts/timeshare_pretrain.py:2092
+#   v0-live-<digits>.json (excludes -import-edition, see below)  src/ember/governance/scripts/timeshare_pretrain.py:2092
 #     out = os.path.join(repo, "receipts", f"v0-live-{receipt['ts']}.json")
-#   v0ext-dryrun-*.json                      scripts/timeshare_pretrain.py:2049
+#   v0ext-dryrun-*.json                      src/ember/governance/scripts/timeshare_pretrain.py:2049
 #   wsl9p-probe-*.json                       src/ember/governance/scripts/wsl9p_probe.py:353
 #     default_output = f".../receipts/wsl9p-probe-{ts...}.json" (default path is an
 #     absolute WSL nc-ladder path; this repo's copy required an explicit --out
 #     override, confirmed by the file existing at a non-default receipts/ location)
-#   neural_policy_update_trace.json          scripts/ember_train_multimodal_resident_adapter.py:313
-#   train_multimodal_resident_adapter_receipt.json  scripts/ember_train_multimodal_resident_adapter.py:317
+#   neural_policy_update_trace.json          src/ember/governance/scripts/ember_train_multimodal_resident_adapter.py:313
+#   train_multimodal_resident_adapter_receipt.json  src/ember/governance/scripts/ember_train_multimodal_resident_adapter.py:317
 #   policy_update_trace.json (exact basename, distinct from neural_policy_update_trace.json)
 #                                             src/ember/governance/scripts/ember_resident_training_candidate.py:217
 #   resident_training_candidate_receipt.json src/ember/governance/scripts/ember_resident_training_candidate.py:222
@@ -520,7 +520,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 # report). v0-live-import-edition-*.json is EXCLUDED from the v0-live-* mapping
 # above on purpose (see GENERATOR_ABSENT_HISTORICAL_BASENAMES: same ticket shape
 # as v0-live but the exact literal "-import-edition-" suffix is never constructed
-# by scripts/timeshare_pretrain.py or anywhere else in tree -- a likely post-hoc
+# by src/ember/governance/scripts/timeshare_pretrain.py or anywhere else in tree -- a likely post-hoc
 # rename, not a script-confirmed convention).
 # spend-annex-*.json (this scanner's own output, confirmed generator:
 # src/ember/governance/scripts/ember_totality/spend_annex_scan.py:557-563,567) is DELIBERATELY left out of
@@ -541,7 +541,7 @@ CONVENTION_MAP = [
     (re.compile(r"^official-abc-wheel-runner-.*\.json$"), "src/ember/governance/scripts/ember_mvp_wheel_runner.py"),
     (re.compile(r"^proof-replay-consistency-.*\.json$"), "scripts/proofs/replay_consistency_check.py"),
     (re.compile(r"^scienceagentbench-first-loop-.*\.json$"), "src/ember/governance/scripts/ember_scienceagentbench_first_loop.py"),
-    (re.compile(r"^eng123-timeshare-dryrun-.*\.json$"), "scripts/timeshare_dryrun.py"),
+    (re.compile(r"^eng123-timeshare-dryrun-.*\.json$"), "src/ember/governance/scripts/timeshare_dryrun.py"),
     (re.compile(r"^proof-frontier-protocol-.*\.json$"), "scripts/proofs/frontier_projection.py"),
     (re.compile(r"^proof-ocal-sweep-.*\.json$"), "scripts/proofs/ocal_calibration_sweep.py"),
     (re.compile(r"^wheel-real-.*\.json$"), "src/ember/governance/scripts/ember_wheel_harness.py"),
@@ -572,21 +572,21 @@ CONVENTION_MAP = [
     (re.compile(r"^fp38-l9-flash-ab-.*\.json$"), "src/ember/governance/scripts/fp38_l9_flash_ab.py"),
     (re.compile(r"^fp38b-l9-completion-.*\.json$"), "src/ember/governance/scripts/fp38b_l9_completion.py"),
     (re.compile(r"^fp38c-l9-eager-.*\.json$"), "src/ember/governance/scripts/fp38c_l9_eager.py"),
-    (re.compile(r"^fp38d-l9-prod-flash-.*\.json$"), "scripts/fp38d_l9_prod_flash.py"),
+    (re.compile(r"^fp38d-l9-prod-flash-.*\.json$"), "src/ember/governance/scripts/fp38d_l9_prod_flash.py"),
     (re.compile(r"^fp39-density-power-audit-.*\.json$"), "src/ember/governance/scripts/fp39_density_power_audit.py"),
-    (re.compile(r"^fp40-l10-optimizer-ab-.*\.json$"), "scripts/fp40_l10_optimizer_ab.py"),
+    (re.compile(r"^fp40-l10-optimizer-ab-.*\.json$"), "src/ember/governance/scripts/fp40_l10_optimizer_ab.py"),
     (re.compile(r"^native-smoke-.*\.json$"), "src/ember/governance/scripts/t_native_smoke.py"),
     (re.compile(r"^probe-meminfo-.*\.json$"), "src/ember/governance/scripts/probe_meminfo.py"),
     (re.compile(r"^resident-training-gate-.*\.json$"), "src/ember/governance/scripts/ember_resident_training_gate.py"),
-    (re.compile(r"^resume-drill-.*\.json$"), "scripts/train_multimodal_v0.py"),
+    (re.compile(r"^resume-drill-.*\.json$"), "src/ember/governance/scripts/train_multimodal_v0.py"),
     (re.compile(r"^selective-recompute-ab-.*\.json$"), "src/ember/governance/scripts/selective_recompute_ab.py"),
     # anchored to digits-only so it never swallows v0-live-import-edition-*.json
-    (re.compile(r"^v0-live-\d{8}T\d{6}Z\.json$"), "scripts/timeshare_pretrain.py"),
-    (re.compile(r"^v0ext-dryrun-.*\.json$"), "scripts/timeshare_pretrain.py"),
+    (re.compile(r"^v0-live-\d{8}T\d{6}Z\.json$"), "src/ember/governance/scripts/timeshare_pretrain.py"),
+    (re.compile(r"^v0ext-dryrun-.*\.json$"), "src/ember/governance/scripts/timeshare_pretrain.py"),
     (re.compile(r"^wsl9p-probe-.*\.json$"), "src/ember/governance/scripts/wsl9p_probe.py"),
-    (re.compile(r"^neural_policy_update_trace\.json$"), "scripts/ember_train_multimodal_resident_adapter.py"),
+    (re.compile(r"^neural_policy_update_trace\.json$"), "src/ember/governance/scripts/ember_train_multimodal_resident_adapter.py"),
     (re.compile(r"^train_multimodal_resident_adapter_receipt\.json$"),
-     "scripts/ember_train_multimodal_resident_adapter.py"),
+     "src/ember/governance/scripts/ember_train_multimodal_resident_adapter.py"),
     (re.compile(r"^policy_update_trace\.json$"), "src/ember/governance/scripts/ember_resident_training_candidate.py"),
     (re.compile(r"^resident_training_candidate_receipt\.json$"), "src/ember/governance/scripts/ember_resident_training_candidate.py"),
 ]
@@ -600,7 +600,7 @@ CONVENTION_PATH_MAP = {
     "receipts/ember-c-scale/land210j-public-revalidation-20260729T135005Z.json":
         "scripts/land210j_public_revalidation.py",
     "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json":
-        "tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
+        "src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
     "receipts/issue-457-current-acceptance-20260730.json":
         "src/ember/governance/scripts/issue457_acceptance.py",
 }
@@ -779,7 +779,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "bcdca5f adds only this receipt + docs/domains/governance/authority/STATE.md, no script; a hand-written PR review verdict."),
     (re.compile(r"^succession-trial-\d+-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored, cross-confirmed by (b): git log --follow shows commit "
-     "676fac9 adds only this receipt + docs/authority/CONTINUITY.md/README.md, no script; a hand-typed "
+     "676fac9 adds only this receipt + docs/domains/governance/authority/CONTINUITY.md/README.md, no script; a hand-typed "
      "succession-trial grading record (prose verdict/score/frictions fields, no measured-data "
      "shape) -- the zero-context trial's examiner consolidation, not a script output."),
     (re.compile(r"^eng26-replay-.*\.json$"), "manually_authored",
@@ -813,7 +813,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "not scriptable (a scripted writer would defeat the point of a cold read)."),
     (re.compile(r"^v0-live-import-edition-.*\.json$"), "manually_authored",
      "evidence (c) likely manual rename: ticket=='TIMESHARE-V0-SEGMENT', same shape as "
-     "scripts/timeshare_pretrain.py's run_v0_segment() output, but that script's write-site "
+     "src/ember/governance/scripts/timeshare_pretrain.py's run_v0_segment() output, but that script's write-site "
      "(line 2092) hardcodes f\"v0-live-{receipt['ts']}.json\" -- it never constructs the exact "
      "literal '-import-edition-' suffix; no in-tree code does. Most likely this file is a v0-live "
      "output copied/renamed post-hoc to flag the C-BASE import-edition milestone (commit 67a784e "
@@ -852,7 +852,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "evidence (c) manually-authored: a prose root-cause diagnostic (muon-routing-code citation + "
      "checkpoint-forensics reasoning, disposition per team-lead ruling), no measured-data shape and "
      "no cmd/script/generator field -- the `code_cited.file` field names "
-     "scripts/timeshare_pretrain.py as the CODE BEING ANALYZED (an investigation subject), not this "
+     "src/ember/governance/scripts/timeshare_pretrain.py as the CODE BEING ANALYZED (an investigation subject), not this "
      "receipt's own generator; that script has no receipt-writing call anywhere in it constructing "
      "this filename (confirmed by exhaustive fixed-string search) -- same citation-vs-generator "
      "distinction already drawn for eng38-b-multi-1-* above."),
@@ -948,7 +948,7 @@ def _check_generator_absent_historical(rel, d):
 _EXTERNAL_LIVE_GENERATOR_FAMILY_NOTE = (
     "same train-daemon-exec family documented in cbase_v0_segment_bf16ns5_live.py's own "
     "docstring (\"This script is exec'd by the train-daemon (external live infra tree, "
-    "path redacted) with NO CLI args\"); this tree's scripts/timeshare_pretrain.py "
+    "path redacted) with NO CLI args\"); this tree's src/ember/governance/scripts/timeshare_pretrain.py "
     "defines no --conv/opt_variant flag at all (confirmed: zero matches for either "
     "string anywhere in that file), so the conv_c03_*_live.py wrappers' constructed "
     "sys.argv could never be processed by this tree's copy -- the receipt-assembly "

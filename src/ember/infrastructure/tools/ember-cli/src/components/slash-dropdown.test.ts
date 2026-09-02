@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/slash-dropdown.test.ts — render tests for the slash-command completion dropdown
 // (issue b22 item 1). Mounts the real component via mountInk with a capture stream (the same
 // pattern as fireball.test.ts's renderFireballLines tests and scratchpad/bug2-render-capture.test.ts),

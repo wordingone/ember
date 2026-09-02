@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // companion-ui — acceptance criteria tests.
 // Spec: specs/buddy/companion-ui.md
 // Pure logic + helpers tested directly; React rendering is structural only.

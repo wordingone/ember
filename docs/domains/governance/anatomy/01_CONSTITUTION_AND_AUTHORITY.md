@@ -26,21 +26,21 @@ Every PR-bound artifact (a `.json` receipt, a `.md` doc, a `.py`/`.ts` config)
 that claims to advance the active goal must declare `goal_id`, `workstream_id`
 (one of the active set), and `next_executed_outcome` matching the value in
 this block, either as top-level fields or nested under an `"authority"` key.
-`scripts/verify_authority_conservation.py` (leg 4, `artifact.goal_binding`)
+`src/ember/governance/scripts/verify_authority_conservation.py` (leg 4, `artifact.goal_binding`)
 enforces this at commit/push time via `validate_artifact_binding()`.
 
 ## Authority conservation legs
 
-`scripts/verify_authority_conservation.py` runs multiple numbered "legs" of
+`src/ember/governance/scripts/verify_authority_conservation.py` runs multiple numbered "legs" of
 checks (referenced elsewhere in this repo as leg 4, leg 7, etc.) against
 staged/changed files: goal-binding presence and correctness, workstream
 uniqueness per artifact, policy invariants (`policy.authority_only` must be
 `False` — EMBER-02 must retain model-execution authority — and
 `policy.new_network` must be `True`, both asserted at
-`scripts/verify_authority_conservation.py` around line 551-552), plus a
-conservation matrix documented in `docs/authority/ember-authority-matrix.md`. It exits
+`src/ember/governance/scripts/verify_authority_conservation.py` around line 551-552), plus a
+conservation matrix documented in `docs/domains/governance/authority/ember-authority-matrix.md`. It exits
 `EMBER_AUTHORITY_CONSERVATION PASS` or `FAIL <leg> <finding>` and is invoked
-both standalone (`python scripts/verify_authority_conservation.py --root .`)
+both standalone (`python src/ember/governance/scripts/verify_authority_conservation.py --root .`)
 and as part of the repo-guard pre-commit/pre-push hooks.
 
 ## The genesis invariant

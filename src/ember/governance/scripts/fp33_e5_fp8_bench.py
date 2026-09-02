@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_e5_fp8_bench.py — torchao float8 rowwise engage-or-fallback bench.
 
 E5 leg of fp-33 (fp33-e2b-surpass-envelope.md). Benchmarks torchao float8

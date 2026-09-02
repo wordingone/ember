@@ -34,7 +34,7 @@ from milestone_leg import MILESTONE_CHECKER, run_milestone_leg  # noqa: E402
 import importlib.util as _ember_e1051383780249b3_importlib
 import sys as _ember_e1051383780249b3_sys
 from pathlib import Path as _ember_e1051383780249b3_Path
-_ember_e1051383780249b3_path = _ember_e1051383780249b3_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_totality', 'enforcement_leg.py')
+_ember_e1051383780249b3_path = _ember_e1051383780249b3_Path(__file__).resolve().parent.joinpath('enforcement_leg.py')
 if not _ember_e1051383780249b3_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
 _ember_e1051383780249b3_aliases = ('_ember_issue2015_e1051383780249b3', 'enforcement_leg', 'src.ember.governance.scripts.ember_totality.enforcement_leg')
@@ -131,7 +131,7 @@ def _write_valid_fixture_tree(root: Path) -> None:
     )
     (spec_dir / "milestones-v1.md").write_text(milestones_text, encoding="utf-8")
 
-    # docs/roadmap/PROBLEMS.md -- H0..H2 gates lines matching the lattice groups (check_b never
+    # docs/domains/governance/roadmap/PROBLEMS.md -- H0..H2 gates lines matching the lattice groups (check_b never
     # flips the verdict either way, but a real-shaped input is still built for fidelity).
     problems_text = (
         "# Problems (fixture)\n\n"

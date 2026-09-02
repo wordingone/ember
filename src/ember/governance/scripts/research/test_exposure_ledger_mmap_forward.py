@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_exposure_ledger_mmap_forward.py -- regression coverage for issue
 #575's exposure_ledger.py:93 site: ExposureLedgerBuilder.__init__'s
 PackedShardLoader construction never forwarded mmap_cache_dir, so every

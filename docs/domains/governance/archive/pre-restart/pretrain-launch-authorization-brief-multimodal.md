@@ -78,7 +78,7 @@ layer is *faster raw* than the Llama proxy on real data. No attention wall. Meas
 correct.
 
 **BUT precondition-1 is NOT green — the loader that produced the valid N cannot teach
-grounding (source-verified, `scripts/train_multimodal_v0.py` PackedCorpusLoader, lines
+grounding (source-verified, `src/ember/governance/scripts/train_multimodal_v0.py` PackedCorpusLoader, lines
 282–372).** PackedCorpusLoader loads ONE anchor image, **discards its own caption**, fills
 each of the 4 batch rows with text drawn from **subsequent, unrelated pairs**, and
 **replicates that one anchor image across all 4 rows** (`np.stack([patches_np]*batch_size)`).

@@ -27,6 +27,6 @@ jobs:
       - run: python -m pip install "PyYAML==6.0.2"
       - name: Validate manifest and migration contract
         run: |
-          python -B scripts/github/policy.py labels --manifest .github/labels.yml
-          python -B scripts/github/policy.py migrations --manifest .github/labels.yml --migrations .github/label-migrations.yml
+          python -B src/ember/governance/scripts/github/policy.py labels --manifest .github/labels.yml
+          python -B src/ember/governance/scripts/github/policy.py migrations --manifest .github/labels.yml --migrations .github/label-migrations.yml
           python -B -m unittest src.ember.governance.scripts.github.test_labels src.ember.governance.scripts.github.test_policy -v

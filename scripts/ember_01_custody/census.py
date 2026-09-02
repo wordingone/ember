@@ -20,7 +20,50 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
-from issue_census import validate_issue_census
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_01_custody/issue_census.py
+import importlib.util as _ember_70f78baaa2487a6e_importlib
+import sys as _ember_70f78baaa2487a6e_sys
+from pathlib import Path as _ember_70f78baaa2487a6e_Path
+_ember_70f78baaa2487a6e_path = _ember_70f78baaa2487a6e_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_01_custody', 'issue_census.py')
+if not _ember_70f78baaa2487a6e_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_01_custody/issue_census.py')
+_ember_70f78baaa2487a6e_aliases = ('_ember_issue2015_70f78baaa2487a6e', 'issue_census', 'scripts.ember_01_custody.issue_census')
+_ember_70f78baaa2487a6e_existing = []
+for _ember_70f78baaa2487a6e_alias in _ember_70f78baaa2487a6e_aliases:
+    _ember_70f78baaa2487a6e_candidate = _ember_70f78baaa2487a6e_sys.modules.get(_ember_70f78baaa2487a6e_alias)
+    if _ember_70f78baaa2487a6e_candidate is not None and all(_ember_70f78baaa2487a6e_candidate is not item for item in _ember_70f78baaa2487a6e_existing):
+        _ember_70f78baaa2487a6e_existing.append(_ember_70f78baaa2487a6e_candidate)
+if len(_ember_70f78baaa2487a6e_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_01_custody/issue_census.py')
+if _ember_70f78baaa2487a6e_existing:
+    _ember_70f78baaa2487a6e_module = _ember_70f78baaa2487a6e_existing[0]
+    _ember_70f78baaa2487a6e_observed = getattr(_ember_70f78baaa2487a6e_module, '__file__', None)
+    if _ember_70f78baaa2487a6e_observed is None or _ember_70f78baaa2487a6e_Path(_ember_70f78baaa2487a6e_observed).resolve() != _ember_70f78baaa2487a6e_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_01_custody/issue_census.py')
+else:
+    _ember_70f78baaa2487a6e_spec = _ember_70f78baaa2487a6e_importlib.spec_from_file_location('_ember_issue2015_70f78baaa2487a6e', _ember_70f78baaa2487a6e_path)
+    if _ember_70f78baaa2487a6e_spec is None or _ember_70f78baaa2487a6e_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_01_custody/issue_census.py')
+    _ember_70f78baaa2487a6e_module = _ember_70f78baaa2487a6e_importlib.module_from_spec(_ember_70f78baaa2487a6e_spec)
+    for _ember_70f78baaa2487a6e_alias in _ember_70f78baaa2487a6e_aliases:
+        _ember_70f78baaa2487a6e_prior = _ember_70f78baaa2487a6e_sys.modules.get(_ember_70f78baaa2487a6e_alias)
+        if _ember_70f78baaa2487a6e_prior is not None and _ember_70f78baaa2487a6e_prior is not _ember_70f78baaa2487a6e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_custody/issue_census.py')
+        _ember_70f78baaa2487a6e_sys.modules[_ember_70f78baaa2487a6e_alias] = _ember_70f78baaa2487a6e_module
+    try:
+        _ember_70f78baaa2487a6e_spec.loader.exec_module(_ember_70f78baaa2487a6e_module)
+    except BaseException:
+        for _ember_70f78baaa2487a6e_alias in _ember_70f78baaa2487a6e_aliases:
+            if _ember_70f78baaa2487a6e_sys.modules.get(_ember_70f78baaa2487a6e_alias) is _ember_70f78baaa2487a6e_module:
+                _ember_70f78baaa2487a6e_sys.modules.pop(_ember_70f78baaa2487a6e_alias, None)
+        raise
+for _ember_70f78baaa2487a6e_alias in _ember_70f78baaa2487a6e_aliases:
+    _ember_70f78baaa2487a6e_prior = _ember_70f78baaa2487a6e_sys.modules.get(_ember_70f78baaa2487a6e_alias)
+    if _ember_70f78baaa2487a6e_prior is not None and _ember_70f78baaa2487a6e_prior is not _ember_70f78baaa2487a6e_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_01_custody/issue_census.py')
+    _ember_70f78baaa2487a6e_sys.modules[_ember_70f78baaa2487a6e_alias] = _ember_70f78baaa2487a6e_module
+validate_issue_census = getattr(_ember_70f78baaa2487a6e_module, 'validate_issue_census')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_01_custody/issue_census.py
 
 
 DIRECT_MANDATE_IDS = {

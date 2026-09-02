@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp14_pacing_selftest.py — pacing meter correctness + wiring receipt (#88).
 
 The fp-14 instrumentation half: t1_probe gains a PACING meter (throttle +

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // cli/structured-io.ts — structured NDJSON IO surface for headless and interactive sessions.
 // Parses NDJSON from an async input stream, buffers prepended messages, and dispatches
 // control request/response round-trips over the same wire.

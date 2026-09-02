@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/query-engine.error-event.test.ts — issue #49: a transport-level generate failure
 // (callModel throws, e.g. ECONNREFUSED against an unreachable model server) must surface real
 // error information on the yielded result event, not be silently swallowed.

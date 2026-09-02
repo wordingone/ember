@@ -69,7 +69,7 @@ def test_a_real_buffer_resolves_nonzero():
     import importlib.util as _ember_ba82af0721d80c9f_importlib
     import sys as _ember_ba82af0721d80c9f_sys
     from pathlib import Path as _ember_ba82af0721d80c9f_Path
-    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
     if not _ember_ba82af0721d80c9f_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
     _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
@@ -144,7 +144,7 @@ def test_b_mis_keyed_checkpoint_fails_closed():
     import importlib.util as _ember_ba82af0721d80c9f_importlib
     import sys as _ember_ba82af0721d80c9f_sys
     from pathlib import Path as _ember_ba82af0721d80c9f_Path
-    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
     if not _ember_ba82af0721d80c9f_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
     _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
@@ -245,7 +245,7 @@ def test_c_receipt_fields_present():
     import importlib.util as _ember_ba82af0721d80c9f_importlib
     import sys as _ember_ba82af0721d80c9f_sys
     from pathlib import Path as _ember_ba82af0721d80c9f_Path
-    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
+    _ember_ba82af0721d80c9f_path = _ember_ba82af0721d80c9f_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p5_ratio_audit', 'run_p5_audit.py')
     if not _ember_ba82af0721d80c9f_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p5_ratio_audit/run_p5_audit.py')
     _ember_ba82af0721d80c9f_aliases = ('_ember_issue2015_ba82af0721d80c9f', 'p5_ratio_audit.run_p5_audit', 'run_p5_audit', 'scripts.p5_ratio_audit.run_p5_audit')
@@ -299,7 +299,7 @@ def test_c_receipt_fields_present():
     grad_post_gate = torch.randn(8, 4)
     discovery = {"pre_grow_rung1": {"found": True}, "post_grow_rung1": {"found": True}}
 
-    resolved_lr_muon = 0.02  # the real config value (configs/v0-pretrain-config.json), not 0.015
+    resolved_lr_muon = 0.02  # the real config value (domains/model/configs/v0-pretrain-config.json), not 0.015
     result = compute_d_comm_real_run(
         discovery, grad_pre_gate, grad_post_gate,
         pre_model_state, pre_opt_state, post_model_state, post_opt_state,
@@ -323,7 +323,7 @@ def test_d_resolved_lr_muon_matches_frozen_config():
     cfg_path = os.path.join(REPO_ROOT, "configs", "v0-pretrain-config.json")
     cfg = json.load(open(cfg_path, encoding="utf-8"))
     lr_muon = cfg["optimizer"]["lr_muon"]
-    print(f"[test_d] configs/v0-pretrain-config.json optimizer.lr_muon={lr_muon}")
+    print(f"[test_d] domains/model/configs/v0-pretrain-config.json optimizer.lr_muon={lr_muon}")
     assert lr_muon == 0.02, f"[test_d] FAIL: lr_muon={lr_muon}, expected 0.02"
     assert lr_muon != 0.015, "[test_d] FAIL: lr_muon reads as the never-executed script constant 0.015"
     print("[test_d] PASS")

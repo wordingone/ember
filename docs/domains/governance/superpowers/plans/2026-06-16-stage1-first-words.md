@@ -58,7 +58,7 @@ Expected: `V0_LAUNCH_GATE_SELFTEST_PASS`.
 
 **Files:**
 - Existing: `src/ember/governance/scripts/corpus_patch_encode.py`
-- Existing: `scripts/train_multimodal_v0.py`
+- Existing: `src/ember/governance/scripts/train_multimodal_v0.py`
 
 - [ ] **Step 1: Encode the curated training raw dir**
 

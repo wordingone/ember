@@ -40,7 +40,7 @@ def test_current_receipt_paths_resolve_only_to_their_real_writers():
         "receipts/ember-c-scale/land210j-public-revalidation-20260729T135005Z.json":
             "scripts/land210j_public_revalidation.py",
         "receipts/ember-cli/issue-1043-text-wrap/capture-receipt.json":
-            "tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
+            "src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-text-wrap-1043.ts",
         "receipts/issue-457-current-acceptance-20260730.json":
             "src/ember/governance/scripts/issue457_acceptance.py",
     }

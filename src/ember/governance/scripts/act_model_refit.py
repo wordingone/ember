@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """act_model_refit.py - leg-2 pre-stage (fp-39): refit the activation-memory
 model against MEASURED OOM/fit rows after fp38-l9 falsified the grid's
 20 B/unit assumption.

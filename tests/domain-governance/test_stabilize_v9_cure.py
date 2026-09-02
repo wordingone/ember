@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_stabilize_v9_cure.py — ember #627 stabilize v9 cure, reproduce-first.
 
 Each audit ground the issue cites is a test here; every test is a FAILING test

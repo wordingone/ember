@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ember_010558b39c5df353_importlib
 import sys as _ember_010558b39c5df353_sys
 from pathlib import Path as _ember_010558b39c5df353_Path
-_ember_010558b39c5df353_path = _ember_010558b39c5df353_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'w2_heldout', 'launch_gate.py')
+_ember_010558b39c5df353_path = _ember_010558b39c5df353_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'w2_heldout', 'launch_gate.py')
 if not _ember_010558b39c5df353_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w2_heldout/launch_gate.py')
 _ember_010558b39c5df353_aliases = ('_ember_issue2015_010558b39c5df353', 'launch_gate', 'scripts.w2_heldout.launch_gate')

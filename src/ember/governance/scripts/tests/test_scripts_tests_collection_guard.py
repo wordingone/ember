@@ -71,6 +71,6 @@ def test_ci_pr_runs_complete_scripts_tests_collection_guard() -> None:
     assert matches == [
         {
             "name": "Guard complete scripts/tests collection",
-            "run": "python -B scripts/check_scripts_tests_collection.py --minimum 380",
+            "run": "python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380",
         }
     ]

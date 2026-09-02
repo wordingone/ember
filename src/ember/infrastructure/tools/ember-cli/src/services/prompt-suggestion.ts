@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/prompt-suggestion.ts — prediction of next user input.
 // Enables type-ahead and pipeline optimization by generating candidate inputs
 // before the user types them.

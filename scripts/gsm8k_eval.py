@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """gsm8k_eval.py — GSM8K-200 greedy exact-match eval harness (issue #341).
 
 Both-seat capable: --core <model_id> [--adapter <path>]
@@ -182,7 +185,50 @@ def _check_determinism(model, tok, tasks: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 def run_eval(core: str, adapter: str | None, local_data: str) -> None:
-    from t1_probe import load_model  # type: ignore[import]
+    # issue2015 exact-local-import:src/ember/governance/scripts/t1_probe.py
+    import importlib.util as _ember_4b363a0f8b46f8a4_importlib
+    import sys as _ember_4b363a0f8b46f8a4_sys
+    from pathlib import Path as _ember_4b363a0f8b46f8a4_Path
+    _ember_4b363a0f8b46f8a4_path = _ember_4b363a0f8b46f8a4_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 't1_probe.py')
+    if not _ember_4b363a0f8b46f8a4_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t1_probe.py')
+    _ember_4b363a0f8b46f8a4_aliases = ('_ember_issue2015_4b363a0f8b46f8a4', 'scripts.t1_probe', 't1_probe')
+    _ember_4b363a0f8b46f8a4_existing = []
+    for _ember_4b363a0f8b46f8a4_alias in _ember_4b363a0f8b46f8a4_aliases:
+        _ember_4b363a0f8b46f8a4_candidate = _ember_4b363a0f8b46f8a4_sys.modules.get(_ember_4b363a0f8b46f8a4_alias)
+        if _ember_4b363a0f8b46f8a4_candidate is not None and all(_ember_4b363a0f8b46f8a4_candidate is not item for item in _ember_4b363a0f8b46f8a4_existing):
+            _ember_4b363a0f8b46f8a4_existing.append(_ember_4b363a0f8b46f8a4_candidate)
+    if len(_ember_4b363a0f8b46f8a4_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/t1_probe.py')
+    if _ember_4b363a0f8b46f8a4_existing:
+        _ember_4b363a0f8b46f8a4_module = _ember_4b363a0f8b46f8a4_existing[0]
+        _ember_4b363a0f8b46f8a4_observed = getattr(_ember_4b363a0f8b46f8a4_module, '__file__', None)
+        if _ember_4b363a0f8b46f8a4_observed is None or _ember_4b363a0f8b46f8a4_Path(_ember_4b363a0f8b46f8a4_observed).resolve() != _ember_4b363a0f8b46f8a4_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/t1_probe.py')
+    else:
+        _ember_4b363a0f8b46f8a4_spec = _ember_4b363a0f8b46f8a4_importlib.spec_from_file_location('_ember_issue2015_4b363a0f8b46f8a4', _ember_4b363a0f8b46f8a4_path)
+        if _ember_4b363a0f8b46f8a4_spec is None or _ember_4b363a0f8b46f8a4_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/t1_probe.py')
+        _ember_4b363a0f8b46f8a4_module = _ember_4b363a0f8b46f8a4_importlib.module_from_spec(_ember_4b363a0f8b46f8a4_spec)
+        for _ember_4b363a0f8b46f8a4_alias in _ember_4b363a0f8b46f8a4_aliases:
+            _ember_4b363a0f8b46f8a4_prior = _ember_4b363a0f8b46f8a4_sys.modules.get(_ember_4b363a0f8b46f8a4_alias)
+            if _ember_4b363a0f8b46f8a4_prior is not None and _ember_4b363a0f8b46f8a4_prior is not _ember_4b363a0f8b46f8a4_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t1_probe.py')
+            _ember_4b363a0f8b46f8a4_sys.modules[_ember_4b363a0f8b46f8a4_alias] = _ember_4b363a0f8b46f8a4_module
+        try:
+            _ember_4b363a0f8b46f8a4_spec.loader.exec_module(_ember_4b363a0f8b46f8a4_module)
+        except BaseException:
+            for _ember_4b363a0f8b46f8a4_alias in _ember_4b363a0f8b46f8a4_aliases:
+                if _ember_4b363a0f8b46f8a4_sys.modules.get(_ember_4b363a0f8b46f8a4_alias) is _ember_4b363a0f8b46f8a4_module:
+                    _ember_4b363a0f8b46f8a4_sys.modules.pop(_ember_4b363a0f8b46f8a4_alias, None)
+            raise
+    for _ember_4b363a0f8b46f8a4_alias in _ember_4b363a0f8b46f8a4_aliases:
+        _ember_4b363a0f8b46f8a4_prior = _ember_4b363a0f8b46f8a4_sys.modules.get(_ember_4b363a0f8b46f8a4_alias)
+        if _ember_4b363a0f8b46f8a4_prior is not None and _ember_4b363a0f8b46f8a4_prior is not _ember_4b363a0f8b46f8a4_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/t1_probe.py')
+        _ember_4b363a0f8b46f8a4_sys.modules[_ember_4b363a0f8b46f8a4_alias] = _ember_4b363a0f8b46f8a4_module
+    load_model = getattr(_ember_4b363a0f8b46f8a4_module, 'load_model')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/t1_probe.py  # type: ignore[import]
 
     seat = _seat(core, adapter)
     print(f"[gsm8k_eval] seat={seat} core={core} adapter={adapter}", flush=True)

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/query-engine.conversation-budget.test.ts — issue #197 Leg 1: per-result
 // truncation (issue #157) bounds any ONE tool result, but not the SUM of the
 // assembled conversation. Operator session #5 (2026-07-06): a single turn

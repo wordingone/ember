@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // hardening/hardening-receipts.ts — issue #159: one JSONL receipt row per battle-test harness
 // cell, so a CI run's per-cell pass/fail is a checkable artifact rather than lost in log output.
 // Same append-only, best-effort discipline as the rest of this codebase's receipt writers

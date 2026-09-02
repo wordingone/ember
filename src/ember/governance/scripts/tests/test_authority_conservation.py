@@ -32,14 +32,14 @@ def load_verifier_module():
     return module
 
 GOVERNING_SURFACES = [
-    "docs/contracts/goal-clear-protocol.md",
+    "docs/domains/governance/contracts/goal-clear-protocol.md",
     "docs/contracts/nc2-own-technique-contract.md",
     "docs/contracts/ember-floor-contract.md",
-    "docs/contracts/goal-mode-mechanism.md",
-    "docs/contracts/registry-dispatch-gate-spec-v0.md",
-    "docs/spec/autonomy-relinquishment-ladder-v1.md",
+    "docs/domains/governance/contracts/goal-mode-mechanism.md",
+    "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md",
+    "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/domains/governance/spec/conditions-v1.md",
-    "docs/authority/ember-authority-matrix.md",
+    "docs/domains/governance/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
     "CONTINUITY.md",
@@ -307,11 +307,11 @@ def write_valid_crosswalk(root: Path, matrix_path: Path) -> None:
     """Give the fixture the authority supersession packet leg 4 demands.
 
     A valid minimal authority repo is not just the D-matrix. Once
-    docs/authority/ember-authority-matrix.md exists, authority_supersession_gate treats the
+    docs/domains/governance/authority/ember-authority-matrix.md exists, authority_supersession_gate treats the
     tree as a current-authority tree and requires, fail-closed, all three of:
 
       1. manifests/authority/issue-35-authority-supersession-crosswalk-v1.json,
-      2. scripts/verify_authority_supersession_crosswalk.py (the gate imports the
+      2. src/ember/governance/scripts/verify_authority_supersession_crosswalk.py (the gate imports the
          validator from the tree under test, not from this repo), and
       3. docs/roadmap/milestones/EMBER-*.md, because the crosswalk's milestone_ids
          must equal the live roadmap contracts and an empty roadmap is an error.
@@ -322,7 +322,7 @@ def write_valid_crosswalk(root: Path, matrix_path: Path) -> None:
     needs exactly one row, no row may claim completion credit, and
     crosswalk_sha256 is the canonical hash of the payload minus that field.
     Anything added here must keep all of those true -- see
-    scripts/verify_authority_supersession_crosswalk.py for the contract, and
+    src/ember/governance/scripts/verify_authority_supersession_crosswalk.py for the contract, and
     manifests/authority/issue-35-authority-supersession-crosswalk-v1.json in this
     repo for the production-scale example.
 
@@ -426,7 +426,7 @@ def write_valid_fixture(root: Path) -> None:
     (root / "REDACTIONS.md").write_text("# Fixture redactions policy\n", encoding="utf-8")
 
     for rel in GOVERNING_SURFACES:
-        if rel == "docs/authority/ember-authority-matrix.md":
+        if rel == "docs/domains/governance/authority/ember-authority-matrix.md":
             continue
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -483,9 +483,9 @@ def write_valid_fixture(root: Path) -> None:
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     for rel in (
-        "scripts/conv_c03_muon_ns3_live.py",
-        "scripts/timeshare_pretrain.py",
-        "scripts/train_multimodal_v0.py",
+        "src/ember/governance/scripts/conv_c03_muon_ns3_live.py",
+        "src/ember/governance/scripts/timeshare_pretrain.py",
+        "src/ember/governance/scripts/train_multimodal_v0.py",
     ):
         runner = root / rel
         runner.parent.mkdir(parents=True, exist_ok=True)
@@ -692,7 +692,7 @@ def migrate_authority_fixture(root: Path) -> None:
     hashes = policy["conservation_hashes"]["governing_surfaces_sha256"]
     for name in ("GOVERNANCE.md", "CONTINUITY.md"):
         hashes[f"docs/authority/{name}"] = hashes.pop(name)
-    hashes["docs/authority/ember-authority-matrix.md"] = matrix_digest.upper()
+    hashes["docs/domains/governance/authority/ember-authority-matrix.md"] = matrix_digest.upper()
     policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest.upper()
     goal_path.write_text(render_goal(policy), encoding="utf-8")
 
@@ -1649,7 +1649,7 @@ def test_workstream_path_scope_prevents_parallel_authority_overlap() -> None:
         "scripts/ember_01_custody/hash_roots.py", "EMBER-02B", scopes
     )
     assert not workstream_path_allowed(
-        "scripts/verify_authority_conservation.py", "EMBER-02B", scopes
+        "src/ember/governance/scripts/verify_authority_conservation.py", "EMBER-02B", scopes
     )
 
 
@@ -1704,7 +1704,7 @@ def test_staged_verification_reads_governing_bytes_from_index(tmp_path: Path) ->
         valid_working_copy.replace("ledger D-045", "staged semantic drift"),
         encoding="utf-8",
     )
-    git_fixture(tmp_path, "add", "docs/authority/ember-authority-matrix.md")
+    git_fixture(tmp_path, "add", "docs/domains/governance/authority/ember-authority-matrix.md")
     matrix.write_text(valid_working_copy, encoding="utf-8")
 
     result = run_verifier(tmp_path, extra_args=("--staged",))
@@ -2520,7 +2520,7 @@ def _crosswalk_fixture(
         "repository": "wordingone/ember",
         "source_commit": source_commit,
         "current_authority": {
-            "matrix_path": "docs/authority/ember-authority-matrix.md",
+            "matrix_path": "docs/domains/governance/authority/ember-authority-matrix.md",
             "matrix_sha256": matrix_sha,
         },
         "source_registries": [

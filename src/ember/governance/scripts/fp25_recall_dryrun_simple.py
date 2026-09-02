@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp25_recall_dryrun_simple.py — CPU-only dry-run without dataset loading.
 
 Strategy: The task ids extracted from wcode-r2-sft.jsonl are certified

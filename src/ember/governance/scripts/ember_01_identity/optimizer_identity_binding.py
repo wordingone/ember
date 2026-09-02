@@ -36,7 +36,7 @@ instant ``training.optimizer_state_sha256`` diverges from the sha256 of the supp
 optimizer state bytes, or the realization receipt is not a VERIFIED/REALIZED
 ``ember-optimizer-realization-v1`` naming a concrete optimizer contract. The round-trip
 is proved end-to-end against the real ``validate_manifest`` in
-tests/ember_01_identity/test_optimizer_identity_roundtrip.py.
+tests/ember_01_identity/domain-governance/test_optimizer_identity_roundtrip.py.
 """
 
 from __future__ import annotations

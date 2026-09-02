@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp29_curriculum_generator.py — curriculum-synthesis episode generator.
 
 Pre-stages the curriculum generator for the fp-29 synthesis-window (Row 9,
@@ -48,7 +51,7 @@ import fp23_probe_prereg as fp23                           # noqa: E402
 import importlib.util as _ember_0fe497804b6560b7_importlib
 import sys as _ember_0fe497804b6560b7_sys
 from pathlib import Path as _ember_0fe497804b6560b7_Path
-_ember_0fe497804b6560b7_path = _ember_0fe497804b6560b7_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fp28_v0_coverage.py')
+_ember_0fe497804b6560b7_path = _ember_0fe497804b6560b7_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'fp28_v0_coverage.py')
 if not _ember_0fe497804b6560b7_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp28_v0_coverage.py')
 _ember_0fe497804b6560b7_aliases = ('_ember_issue2015_0fe497804b6560b7', 'fp28_v0_coverage', 'scripts.fp28_v0_coverage')
@@ -93,7 +96,7 @@ import fp31_l2_grammar as fp31                             # noqa: E402
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -137,7 +140,7 @@ checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 import importlib.util as _ember_2ad73f5df12b45ee_importlib
 import sys as _ember_2ad73f5df12b45ee_sys
 from pathlib import Path as _ember_2ad73f5df12b45ee_Path
-_ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
+_ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
 if not _ember_2ad73f5df12b45ee_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_check.py')
 _ember_2ad73f5df12b45ee_aliases = ('_ember_issue2015_2ad73f5df12b45ee', 'receipt_check', 'scripts.receipt_check')

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // commands/watch.test.ts — /watch command (AC1-AC4)
 // Spec: specs/surface2-steerable-watch-control.md
 

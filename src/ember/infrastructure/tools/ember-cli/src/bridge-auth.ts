@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // bridge-auth.ts — WorkSecret decoding, SDK URL construction, JWT helpers, and token refresh.
 
 // ---- WorkSecret decoding ----

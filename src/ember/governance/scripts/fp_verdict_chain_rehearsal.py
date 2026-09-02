@@ -35,7 +35,7 @@ sys.path.insert(0, HERE)
 import importlib.util as _ember_fb70764d2afdfc4d_importlib
 import sys as _ember_fb70764d2afdfc4d_sys
 from pathlib import Path as _ember_fb70764d2afdfc4d_Path
-_ember_fb70764d2afdfc4d_path = _ember_fb70764d2afdfc4d_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fp24_verdict.py')
+_ember_fb70764d2afdfc4d_path = _ember_fb70764d2afdfc4d_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'fp24_verdict.py')
 if not _ember_fb70764d2afdfc4d_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp24_verdict.py')
 _ember_fb70764d2afdfc4d_aliases = ('_ember_issue2015_fb70764d2afdfc4d', 'fp24_verdict', 'scripts.fp24_verdict')
@@ -79,7 +79,7 @@ fp24 = _ember_fb70764d2afdfc4d_module
 import importlib.util as _ember_5d95172bf57f935c_importlib
 import sys as _ember_5d95172bf57f935c_sys
 from pathlib import Path as _ember_5d95172bf57f935c_Path
-_ember_5d95172bf57f935c_path = _ember_5d95172bf57f935c_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fp29_kill_synthesis_gate.py')
+_ember_5d95172bf57f935c_path = _ember_5d95172bf57f935c_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'fp29_kill_synthesis_gate.py')
 if not _ember_5d95172bf57f935c_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp29_kill_synthesis_gate.py')
 _ember_5d95172bf57f935c_aliases = ('_ember_issue2015_5d95172bf57f935c', 'fp29_kill_synthesis_gate', 'scripts.fp29_kill_synthesis_gate')
@@ -123,7 +123,7 @@ fp29gate = _ember_5d95172bf57f935c_module
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -167,7 +167,7 @@ checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 import importlib.util as _ember_2ad73f5df12b45ee_importlib
 import sys as _ember_2ad73f5df12b45ee_sys
 from pathlib import Path as _ember_2ad73f5df12b45ee_Path
-_ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
+_ember_2ad73f5df12b45ee_path = _ember_2ad73f5df12b45ee_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_check.py')
 if not _ember_2ad73f5df12b45ee_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_check.py')
 _ember_2ad73f5df12b45ee_aliases = ('_ember_issue2015_2ad73f5df12b45ee', 'receipt_check', 'scripts.receipt_check')

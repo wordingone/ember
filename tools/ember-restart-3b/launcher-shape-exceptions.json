@@ -21,7 +21,7 @@
     },
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "29a8ef99eec3b320b39b9f827ca09b8e9a880ecb497adb4285d61cdc7c64b8ca",
+      "sha256": "a96c8b3ea40beb7b4c9b904035179b3a1190103717267b3407ff77fd9ea289d6",
       "reason": "02B-owned production vertical runner after canonical governance and documentation consumer relocation; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     }
   ]

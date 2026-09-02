@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // operator-focus-safety.test.ts — ember #165 acceptance: "no focus change during
 // injection (foreground window unchanged)". GetForegroundWindow before/after is
 // not exercisable from a headless test runner, so the substitute that IS

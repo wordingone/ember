@@ -100,7 +100,7 @@ for the machine-checkable copy embedded in every receipt):
 
   Newton-Schulz orthogonalization: the quintic iteration
   (zeropower_via_newtonschulz5 below) is COPIED VERBATIM (byte-identical
-  algorithm, not re-derived) from scripts/timeshare_pretrain.py's own
+  algorithm, not re-derived) from src/ember/governance/scripts/timeshare_pretrain.py's own
   _zeropower_via_newtonschulz5 -- reused literally since it is the exact
   same math, kept as a self-contained copy (rather than an import) so this
   micro-scale research harness stays decoupled from timeshare_pretrain's
@@ -302,7 +302,7 @@ def _assert_cuda_engaged(model, batch, label: str) -> None:
 
 # ---------------------------------------------------------------------------
 # Newton-Schulz polar-orthogonalization -- copied verbatim from
-# scripts/timeshare_pretrain.py::_zeropower_via_newtonschulz5 (see module
+# src/ember/governance/scripts/timeshare_pretrain.py::_zeropower_via_newtonschulz5 (see module
 # docstring for why this is a self-contained copy, not an import).
 # ---------------------------------------------------------------------------
 

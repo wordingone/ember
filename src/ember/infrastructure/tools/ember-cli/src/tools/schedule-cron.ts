@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/schedule-cron.ts — Cron scheduling tools: CronCreate, CronDelete, CronList.
 //
 // Schedules prompt-enqueue jobs against a standard 5-field cron expression.

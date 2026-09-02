@@ -96,7 +96,7 @@ def verify_paths_match_class(file_paths: List[str], pr_class: str) -> bool:
             r"^scripts/ember_totality/receipts-.*"
         ]
     elif pr_class == "docs":
-        # Allow: docs/**, README.md, docs/authority/GOVERNANCE.md, .github/**
+        # Allow: docs/**, README.md, docs/domains/governance/authority/GOVERNANCE.md, .github/**
         allowed_patterns = [
             r"^docs/.*",
             r"^README\.md$",

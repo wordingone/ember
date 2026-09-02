@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // homescreen-live-resize.test.ts — b14 item 1: real-OS-window resize reflow.
 //
 // homescreen-border-clip.test.ts proves the panel renders correctly at a GIVEN width on a FRESH

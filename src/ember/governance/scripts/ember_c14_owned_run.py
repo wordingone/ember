@@ -97,7 +97,7 @@ REPO = Path(__file__).resolve().parents[4]
 import importlib.util as _ember_a15ae7b5497c49d1_importlib
 import sys as _ember_a15ae7b5497c49d1_sys
 from pathlib import Path as _ember_a15ae7b5497c49d1_Path
-_ember_a15ae7b5497c49d1_path = _ember_a15ae7b5497c49d1_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_c14_contract_rig.py')
+_ember_a15ae7b5497c49d1_path = _ember_a15ae7b5497c49d1_Path(__file__).resolve().parent.joinpath('ember_c14_contract_rig.py')
 if not _ember_a15ae7b5497c49d1_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_contract_rig.py')
 _ember_a15ae7b5497c49d1_aliases = ('_ember_issue2015_a15ae7b5497c49d1', 'ember_c14_contract_rig', 'src.ember.governance.scripts.ember_c14_contract_rig')
@@ -145,7 +145,7 @@ Task = getattr(_ember_a15ae7b5497c49d1_module, 'Task')
 import importlib.util as _ember_d0a8f6627b10c41d_importlib
 import sys as _ember_d0a8f6627b10c41d_sys
 from pathlib import Path as _ember_d0a8f6627b10c41d_Path
-_ember_d0a8f6627b10c41d_path = _ember_d0a8f6627b10c41d_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_resident_igrpo.py')
+_ember_d0a8f6627b10c41d_path = _ember_d0a8f6627b10c41d_Path(__file__).resolve().parent.joinpath('ember_resident_igrpo.py')
 if not _ember_d0a8f6627b10c41d_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_resident_igrpo.py')
 _ember_d0a8f6627b10c41d_aliases = ('_ember_issue2015_d0a8f6627b10c41d', 'ember_resident_igrpo', 'src.ember.governance.scripts.ember_resident_igrpo')

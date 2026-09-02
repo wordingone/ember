@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // generate-version.ts — writes generated/version.ts from package.json's "version" field, so the
 // compiled binary shows the real build version without depending on an env var being set at
 // launch time (B7 gate ask, 2026-07-03: a welcome screen permanently reading v0.0.0 via a

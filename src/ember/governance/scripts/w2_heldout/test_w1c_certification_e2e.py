@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_w1c_certification_e2e.py -- Tier-2 INTEGRATION test for the #372
 W1c certification re-scope (RE-SCOPE RULING, issue #374 comment 4920277395).
 

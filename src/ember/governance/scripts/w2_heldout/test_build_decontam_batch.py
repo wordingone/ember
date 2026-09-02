@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_build_decontam_batch.py -- hermetic fixture tests for
 src/ember/governance/scripts/w2_heldout/build_decontam_batch.py's window I/O and self-match-aware
 classification logic. Real code, synthetic-only corpus (two tiny .bin shard

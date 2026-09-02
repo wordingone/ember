@@ -81,7 +81,7 @@ SHA_RE = re.compile(r"[0-9a-f]{64}")
 SOURCE_REL = Path("src/ember/governance/scripts/cbase_grow_rung2_event.py")
 PUBLIC_TEST_RELS = (
     Path("src/ember/governance/scripts/test_580_b1m_resolver_fix.py"),
-    Path("scripts/test_580_optimizer_id_helper.py"),
+    Path("src/ember/governance/scripts/test_580_optimizer_id_helper.py"),
 )
 
 

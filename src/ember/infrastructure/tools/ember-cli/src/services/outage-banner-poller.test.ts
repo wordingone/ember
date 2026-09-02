@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/outage-banner-poller.test.ts — issue #475: pins the pure projection from a raw
 // planned-outage.json read to status-bar.ts's OutageBannerState, plus the real-fs read path
 // (including the BOM-tolerance fix). The React hook (useOutageBanner) is a thin

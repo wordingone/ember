@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - run: python -B scripts/github/labels.py apply
+      - run: python -B src/ember/governance/scripts/github/labels.py apply
 """
         )
         errors = workflow_policy.validate_workflow(path)
@@ -117,7 +117,7 @@ jobs:
         with:
           repository: attacker/controlled
           ref: master
-      - run: python -B scripts/github/labels.py apply
+      - run: python -B src/ember/governance/scripts/github/labels.py apply
 """
         )
         errors = workflow_policy.validate_workflow(path)
@@ -304,7 +304,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - run: python -B scripts/github/labels.py apply
+      - run: python -B src/ember/governance/scripts/github/labels.py apply
 """
         )
         errors = workflow_policy.validate_workflow(path)
@@ -428,7 +428,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: python -m scripts.github.live_pr_policy --root .
+      - run: python -m src.ember.governance.scripts.github.live_pr_policy --root .
 """
         )
         errors = workflow_policy.validate_workflow(path)
@@ -449,7 +449,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: python scripts/check_pr_authority_binding.py --body-file body.txt
+      - run: python src/ember/governance/scripts/check_pr_authority_binding.py --body-file body.txt
 """
         )
         errors = workflow_policy.validate_workflow(path)
@@ -470,7 +470,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: python scripts/check_pr_authority_binding.py --body-file body.txt
+      - run: python src/ember/governance/scripts/check_pr_authority_binding.py --body-file body.txt
 """
         )
         self.assertEqual([], workflow_policy.validate_workflow(path))
@@ -516,7 +516,7 @@ jobs:
         ]
         self.assertTrue(bootstrap_runs, "bootstrap step not found in ci-pr.yml")
         for run in bootstrap_runs:
-            self.assertIn("scripts.github.live_pr_policy", run)
+            self.assertIn("src.ember.governance.scripts.github.live_pr_policy", run)
             self.assertIn("--root .", run)
             self.assertIn("--subject-root .", run)
 

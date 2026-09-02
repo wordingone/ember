@@ -93,7 +93,7 @@ jobs:
             --jq '[.data.repository.pullRequest.closingIssuesReferences.nodes[].number]' \
             > "${RUNNER_TEMP}/pr-closing-issues.json"
           cd "${kernel}"
-          python -m scripts.github.live_pr_policy \
+          python -m src.ember.governance.scripts.github.live_pr_policy \
             --root "${kernel}" \
             --subject-root "${subject}" \
             --pr-json "${RUNNER_TEMP}/pr.json" \
@@ -115,7 +115,7 @@ jobs:
             else
               range_base="$(git merge-base "${BASE_SHA}" HEAD)"
             fi
-            python "${kernel}/scripts/check_pr_authority_binding.py" \
+            python "${kernel}/src/ember/governance/scripts/check_pr_authority_binding.py" \
               --root "${subject}" \
               --body-file "${RUNNER_TEMP}/pr_body.txt" \
               --changed-range "${range_base}..HEAD"

@@ -33,9 +33,9 @@ jobs:
         run: python -m pip install "PyYAML==6.0.2"
       - name: Validate repository policy sources
         run: |
-          python -B scripts/github/policy.py labels --manifest .github/labels.yml
-          python -B scripts/github/policy.py migrations --manifest .github/labels.yml --migrations .github/label-migrations.yml
-          python -B scripts/github/template_policy.py --root .
-          python -B scripts/github/workflow_policy.py --root .
+          python -B src/ember/governance/scripts/github/policy.py labels --manifest .github/labels.yml
+          python -B src/ember/governance/scripts/github/policy.py migrations --manifest .github/labels.yml --migrations .github/label-migrations.yml
+          python -B src/ember/governance/scripts/github/template_policy.py --root .
+          python -B src/ember/governance/scripts/github/workflow_policy.py --root .
       - name: Run policy unit tests
         run: python -B -m unittest discover -s scripts/github -p "test_*.py" -v

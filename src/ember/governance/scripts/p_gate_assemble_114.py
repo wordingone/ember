@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """p_gate_assemble_114.py — #114 instance assembler for the P-gate.
 
 the engineer's eng-32 harness (p_gate.py, Mode 1) verifies a PRE/POST receipt pair

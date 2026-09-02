@@ -19,7 +19,7 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("ref: ${{ github.event.pull_request.base.sha", workflow)
         self.assertIn("gh api --paginate --slurp", workflow)
-        self.assertIn("python -m scripts.github.live_pr_policy", workflow)
+        self.assertIn("python -m src.ember.governance.scripts.github.live_pr_policy", workflow)
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
         self.assertIn('--subject-root "${subject}"', workflow)
@@ -32,7 +32,7 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         self.assertNotIn("pull-requests: write", workflow)
         self.assertNotIn("contents: write", workflow)
         self.assertIn("Bootstrap exact-head live PR policy (read-only)", workflow)
-        self.assertIn("python -m scripts.github.live_pr_policy", workflow)
+        self.assertIn("python -m src.ember.governance.scripts.github.live_pr_policy", workflow)
         self.assertIn("--event-base-sha", workflow)
         self.assertIn("--event-head-sha", workflow)
         # Every required job that checks out does so at the exact PR head,
@@ -68,9 +68,9 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
             for name in ("ci-pr.yml", "repo-policy-gate.yml")
         ]
         for workflow in workflows:
-            self.assertIn("python -m scripts.github.live_pr_policy", workflow)
+            self.assertIn("python -m src.ember.governance.scripts.github.live_pr_policy", workflow)
             self.assertNotIn(
-                "python scripts/github/live_pr_policy.py",
+                "python src/ember/governance/scripts/github/live_pr_policy.py",
                 workflow,
             )
 
@@ -78,13 +78,13 @@ class LivePullRequestWorkflowIntegrationTests(unittest.TestCase):
         workflow = (
             ROOT / ".github" / "workflows" / "repo-policy-gate.yml"
         ).read_text(encoding="utf-8")
-        live_policy = workflow.index("python -m scripts.github.live_pr_policy")
+        live_policy = workflow.index("python -m src.ember.governance.scripts.github.live_pr_policy")
         actor_read = workflow.index('["actor_login"]')
         bot_boundary = workflow.index(
             'if [[ "${actor_login}" != "dependabot[bot]" ]]; then'
         )
         authority_binding = workflow.index(
-            'python "${kernel}/scripts/check_pr_authority_binding.py"'
+            'python "${kernel}/src/ember/governance/scripts/check_pr_authority_binding.py"'
         )
         self.assertLess(live_policy, actor_read)
         self.assertLess(actor_read, bot_boundary)

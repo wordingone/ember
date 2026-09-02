@@ -135,7 +135,7 @@ def test_receipt_and_continuity_block_are_content_bound(tmp_path):
     assert receipt["rows"][0]["identity_sha256"] in block
     assert "scripts/new.py" not in json.dumps(receipt)
     assert module.sha256_bytes(b"scripts/new.py") in receipt["path_dictionary"]
-    continuity = tmp_path / "docs/authority/CONTINUITY.md"
+    continuity = tmp_path / "docs/domains/governance/authority/CONTINUITY.md"
     continuity.parent.mkdir(parents=True, exist_ok=True)
     continuity.write_text(f"before\n{block}\nafter\n", encoding="utf-8")
     module.check_inventory(
@@ -166,7 +166,7 @@ def test_stale_inventory_fails_closed(tmp_path):
     manifest = tmp_path / "receipts" / "branch-inventory" / "current.json"
     manifest.parent.mkdir(parents=True)
     module._write_json(manifest, receipt)
-    continuity = tmp_path / "docs/authority/CONTINUITY.md"
+    continuity = tmp_path / "docs/domains/governance/authority/CONTINUITY.md"
     continuity.parent.mkdir(parents=True, exist_ok=True)
     continuity.write_text(
         module.render_continuity_block(receipt, "receipts/branch-inventory/current.json"),
@@ -194,7 +194,7 @@ def test_master_binding_allows_only_capture_or_introducing_commit(tmp_path, monk
     manifest = tmp_path / "receipts" / "branch-inventory" / "current.json"
     manifest.parent.mkdir(parents=True)
     module._write_json(manifest, receipt)
-    continuity = tmp_path / "docs/authority/CONTINUITY.md"
+    continuity = tmp_path / "docs/domains/governance/authority/CONTINUITY.md"
     continuity.parent.mkdir(parents=True, exist_ok=True)
     continuity.write_text(module.render_continuity_block(receipt, "receipts/branch-inventory/current.json"), encoding="utf-8")
 

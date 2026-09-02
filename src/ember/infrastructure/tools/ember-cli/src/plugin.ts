@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // plugin.ts
 // /plugin slash command: argument parsing, routing (ant vs standard), and
 // the pagination helper used by plugin/MCP list views.

@@ -412,7 +412,7 @@ def build_receipt(
         "floor_contract_preservation_references": [
             "docs/contracts/ember-floor-contract.md",
             "nc2-own-technique-contract.md",
-            "scripts/train_multimodal_v0.py §6 action log",
+            "src/ember/governance/scripts/train_multimodal_v0.py §6 action log",
         ],
         "field_level_status": "progress_not_field_breakthrough",
         "limits": [

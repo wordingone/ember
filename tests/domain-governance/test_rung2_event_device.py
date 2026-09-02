@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_rung2_event_device.py — DEFECT 1: b3 device placement regression test
 
 Verifies that tensors loaded on CPU are moved to the correct device before

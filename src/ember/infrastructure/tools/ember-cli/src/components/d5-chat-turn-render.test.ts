@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // d5-chat-turn-render.test.ts — B3 D5: a fresh render exercising mock2's markdown/code path
 // (state/design-mockups/chat-turn-markdown-code.mockup.ansi.txt), through the REAL pipeline
 // (mountInk), not just prop inspection. No live model server is available in this environment

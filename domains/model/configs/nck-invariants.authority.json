@@ -1,0 +1,12 @@
+{
+  "schema_version": "ember-content-addressed-authority-binding/v1",
+  "artifact_path": "domains/model/configs/nck-invariants.json",
+  "artifact_sha256": "688af302c133c22acf140267497754e47b2e842f9cd8f8b3371bcd808ebffc4c",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "artifact_class": "historical_only",
+    "execution_authority": "denied"
+  }
+}

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/receipt-landing-poller.ts — issue #447: "last-receipt age" telemetry -- the newest
 // file mtime anywhere under the repo's receipts/ tree, so the cockpit can show "receipts are
 // landing" vs "nothing landed for N hours" independent of any specific board/run receipt.

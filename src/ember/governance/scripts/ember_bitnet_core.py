@@ -43,7 +43,7 @@ import torch.nn.functional as F
 
 # ---------------------------------------------------------------------------
 # C03 architecture constants (mirrored from timeshare_pretrain.py /
-# configs/v0-pretrain-config.json)
+# domains/model/configs/v0-pretrain-config.json)
 # ---------------------------------------------------------------------------
 C03_HIDDEN: int = 1024
 C03_DEPTH: int = 20

@@ -7,7 +7,7 @@ The v1-provenance-manifest RULED fineweb_edu DROP/EXCLUDED on 2026-07-06 (Llama-
 Instruct classifier taint, arXiv:2406.17557; receipts/v1-provenance-manifest-20260706.jsonl).
 No shards-v1 binary was ever produced, so shards-v0 is the only stream that exists and it
 still physically contains all 1,666,837,789 fineweb_edu tokens with zero source-awareness in
-`PackedShardLoader` (scripts/timeshare_pretrain.py) — the ruling was prose, not bytes. The
+`PackedShardLoader` (src/ember/governance/scripts/timeshare_pretrain.py) — the ruling was prose, not bytes. The
 2026-08-04 L3 provenance audit derived the exact fineweb_edu
 token-offset range from the receipted per-source stream_tokens counts, in the writer's own
 fp22_row concatenation order.
@@ -310,7 +310,7 @@ def _excluded_index_runs(n_windows_full, seq, block_len, excluded_ranges):
 class WindowPlan:
     """The loader's window geometry, as an IMPORTABLE object (#1436 rework).
 
-    `PackedShardLoader` (scripts/timeshare_pretrain.py) delegates both its
+    `PackedShardLoader` (src/ember/governance/scripts/timeshare_pretrain.py) delegates both its
     window count and its index -> start-offset remap here, so the selection
     behavior a training run actually executes can be constructed and asserted
     on without importing that module -- which is execution-denied under the

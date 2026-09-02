@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // shell-provider.ts
 // Shell resolution, read-only command validation, and bash/powershell provider classes.
 // L1 leaf: no intra-ember dependencies.

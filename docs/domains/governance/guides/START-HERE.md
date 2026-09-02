@@ -24,10 +24,10 @@ Its operating constraint is one consumer GPU.
   is the operator entry. Python uses `manifests/python-environment-v1.json`; Rust uses
   `runtime/ember-lab/Cargo.toml`; `ember-cli` uses `tools/ember-cli/src/package.json`.
 - The smallest safe executable check is CPU-only authority verification from the repository root:
-  `python scripts/verify_authority_conservation.py --root .`. Success reports authority
+  `python src/ember/governance/scripts/verify_authority_conservation.py --root .`. Success reports authority
   conservation; it requires no credentials, weights, or GPU and grants no model capability.
 - Exact mutable current truth lives only in
-  [`docs/authority/CONTINUITY.md`](../../../authority/CONTINUITY.md); entry documentation links rather
+  [`docs/domains/governance/authority/CONTINUITY.md`](../../../authority/CONTINUITY.md); entry documentation links rather
   than copying it. Public roadmap certificates, not prose or progress bars, carry completion.
 - Contribution and independent reproduction start at
   [`docs/contributing.md`](../../../contributing.md) and the public
@@ -67,7 +67,7 @@ Launching the operator body is different from training, evaluation, or proof of 
 Run the CPU-only authority verifier from the repository root:
 
 ```text
-python scripts/verify_authority_conservation.py --root .
+python src/ember/governance/scripts/verify_authority_conservation.py --root .
 ```
 
 Then read the [verification guide](../../../guides/VERIFY.md) for expected output, receipt selftest, documentation

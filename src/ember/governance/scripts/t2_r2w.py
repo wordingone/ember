@@ -100,7 +100,7 @@ def build_sft_examples(allow=None):
     import importlib.util as _ember_d8c02810056e6c3d_importlib
     import sys as _ember_d8c02810056e6c3d_sys
     from pathlib import Path as _ember_d8c02810056e6c3d_Path
-    _ember_d8c02810056e6c3d_path = _ember_d8c02810056e6c3d_Path(__file__).resolve().parents[4].joinpath('scripts', 'frontier.py')
+    _ember_d8c02810056e6c3d_path = _ember_d8c02810056e6c3d_Path(__file__).resolve().parent.joinpath('frontier.py')
     if not _ember_d8c02810056e6c3d_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/frontier.py')
     _ember_d8c02810056e6c3d_aliases = ('_ember_issue2015_d8c02810056e6c3d', 'frontier', 'src.ember.governance.scripts.frontier')
@@ -145,7 +145,7 @@ def build_sft_examples(allow=None):
     import importlib.util as _ember_5e42585fbe8bb3e8_importlib
     import sys as _ember_5e42585fbe8bb3e8_sys
     from pathlib import Path as _ember_5e42585fbe8bb3e8_Path
-    _ember_5e42585fbe8bb3e8_path = _ember_5e42585fbe8bb3e8_Path(__file__).resolve().parents[4].joinpath('scripts', 'r2_arms.py')
+    _ember_5e42585fbe8bb3e8_path = _ember_5e42585fbe8bb3e8_Path(__file__).resolve().parent.joinpath('r2_arms.py')
     if not _ember_5e42585fbe8bb3e8_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/r2_arms.py')
     _ember_5e42585fbe8bb3e8_aliases = ('_ember_issue2015_5e42585fbe8bb3e8', 'r2_arms', 'src.ember.governance.scripts.r2_arms')
@@ -190,7 +190,7 @@ def build_sft_examples(allow=None):
     import importlib.util as _ember_aa123631425aaf0a_importlib
     import sys as _ember_aa123631425aaf0a_sys
     from pathlib import Path as _ember_aa123631425aaf0a_Path
-    _ember_aa123631425aaf0a_path = _ember_aa123631425aaf0a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_round.py')
+    _ember_aa123631425aaf0a_path = _ember_aa123631425aaf0a_Path(__file__).resolve().parent.joinpath('t2_round.py')
     if not _ember_aa123631425aaf0a_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_round.py')
     _ember_aa123631425aaf0a_aliases = ('_ember_issue2015_aa123631425aaf0a', 'src.ember.governance.scripts.t2_round', 't2_round')
@@ -234,7 +234,7 @@ def build_sft_examples(allow=None):
     import importlib.util as _ember_ed04e2bafc742d3a_importlib
     import sys as _ember_ed04e2bafc742d3a_sys
     from pathlib import Path as _ember_ed04e2bafc742d3a_Path
-    _ember_ed04e2bafc742d3a_path = _ember_ed04e2bafc742d3a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_wcode.py')
+    _ember_ed04e2bafc742d3a_path = _ember_ed04e2bafc742d3a_Path(__file__).resolve().parent.joinpath('t2_wcode.py')
     if not _ember_ed04e2bafc742d3a_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_wcode.py')
     _ember_ed04e2bafc742d3a_aliases = ('_ember_issue2015_ed04e2bafc742d3a', 'src.ember.governance.scripts.t2_wcode', 't2_wcode')
@@ -321,7 +321,7 @@ def main():
     import importlib.util as _ember_af5eca6d54450d11_importlib
     import sys as _ember_af5eca6d54450d11_sys
     from pathlib import Path as _ember_af5eca6d54450d11_Path
-    _ember_af5eca6d54450d11_path = _ember_af5eca6d54450d11_Path(__file__).resolve().parents[4].joinpath('scripts', 'ledger_license.py')
+    _ember_af5eca6d54450d11_path = _ember_af5eca6d54450d11_Path(__file__).resolve().parent.joinpath('ledger_license.py')
     if not _ember_af5eca6d54450d11_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ledger_license.py')
     _ember_af5eca6d54450d11_aliases = ('_ember_issue2015_af5eca6d54450d11', 'ledger_license', 'src.ember.governance.scripts.ledger_license')
@@ -365,7 +365,7 @@ def main():
     import importlib.util as _ember_aa123631425aaf0a_importlib
     import sys as _ember_aa123631425aaf0a_sys
     from pathlib import Path as _ember_aa123631425aaf0a_Path
-    _ember_aa123631425aaf0a_path = _ember_aa123631425aaf0a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_round.py')
+    _ember_aa123631425aaf0a_path = _ember_aa123631425aaf0a_Path(__file__).resolve().parent.joinpath('t2_round.py')
     if not _ember_aa123631425aaf0a_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_round.py')
     _ember_aa123631425aaf0a_aliases = ('_ember_issue2015_aa123631425aaf0a', 'src.ember.governance.scripts.t2_round', 't2_round')
@@ -410,7 +410,7 @@ def main():
     import importlib.util as _ember_ed04e2bafc742d3a_importlib
     import sys as _ember_ed04e2bafc742d3a_sys
     from pathlib import Path as _ember_ed04e2bafc742d3a_Path
-    _ember_ed04e2bafc742d3a_path = _ember_ed04e2bafc742d3a_Path(__file__).resolve().parents[4].joinpath('scripts', 't2_wcode.py')
+    _ember_ed04e2bafc742d3a_path = _ember_ed04e2bafc742d3a_Path(__file__).resolve().parent.joinpath('t2_wcode.py')
     if not _ember_ed04e2bafc742d3a_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t2_wcode.py')
     _ember_ed04e2bafc742d3a_aliases = ('_ember_issue2015_ed04e2bafc742d3a', 'src.ember.governance.scripts.t2_wcode', 't2_wcode')
@@ -454,7 +454,7 @@ def main():
     import importlib.util as _ember_c32cf5e860218889_importlib
     import sys as _ember_c32cf5e860218889_sys
     from pathlib import Path as _ember_c32cf5e860218889_Path
-    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parents[4].joinpath('scripts', 't1_probe.py')
+    _ember_c32cf5e860218889_path = _ember_c32cf5e860218889_Path(__file__).resolve().parent.joinpath('t1_probe.py')
     if not _ember_c32cf5e860218889_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/t1_probe.py')
     _ember_c32cf5e860218889_aliases = ('_ember_issue2015_c32cf5e860218889', 'src.ember.governance.scripts.t1_probe', 't1_probe')

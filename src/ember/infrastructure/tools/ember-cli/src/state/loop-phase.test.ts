@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // state/loop-phase.test.ts — tests for setLoopPhase/getCognitiveMode/getModeHistory (AC9-AC10)
 // Spec: specs/surface6-fireball-observatory.md
 
