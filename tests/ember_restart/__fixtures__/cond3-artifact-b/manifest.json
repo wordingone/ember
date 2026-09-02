@@ -1,7 +1,7 @@
 {
   "architecture": {
     "sha256": "b90af815e62ef5534c1200d30e47b6af36c18ab2d8ec76c72ca198c143b41006",
-    "source": "scripts/ember_restart/build_cond3_artifact_b_fixture.py:EVIDENCE['architecture']"
+    "source": "src/ember/governance/scripts/ember_restart/build_cond3_artifact_b_fixture.py:EVIDENCE['architecture']"
   },
   "authority": {
     "goal_id": "EMBER-02",

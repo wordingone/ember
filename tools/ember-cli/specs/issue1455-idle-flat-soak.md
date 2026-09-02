@@ -10,7 +10,7 @@ Status: CURRENT
 
 Issue: #1455
 
-Consumer: `tools/ember-cli/src/services/issue1455-idle-soak-harness.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/issue1455-idle-soak-harness.ts`
 
 Consumer: `tools/ember-cli/src/services/ols-fit.ts`
 

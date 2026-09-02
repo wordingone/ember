@@ -34,7 +34,7 @@ Classification rule (mechanical, disclosed):
   label only explains WHY each is in the list.
 
 Usage:
-  python scripts/a1_quarantine_enum.py \\
+  python src/ember/governance/scripts/a1_quarantine_enum.py \\
       --heldout-receipt receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json \\
       --freeze-receipt receipts/eval-suite-freeze/eval-suite-freeze-v1.json \\
       --out receipts/eval-suite-freeze/a1-prefreeze-quarantine-<UTCts>.json

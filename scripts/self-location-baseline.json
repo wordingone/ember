@@ -704,7 +704,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_eff.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_eff.py",
       "line": 61,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -715,7 +715,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_eff.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_eff.py",
       "line": 66,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -1232,7 +1232,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t5_harm.py",
+      "path": "src/ember/governance/scripts/t5_harm.py",
       "line": 29,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -2310,7 +2310,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_01_custody/test_verify_c0_failure_class_ledger.py",
+      "path": "tests/ember_01_custody/domain-governance/test_verify_c0_failure_class_ledger.py",
       "line": 14,
       "target": "SCRIPT_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",

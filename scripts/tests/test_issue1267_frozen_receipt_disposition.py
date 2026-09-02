@@ -57,7 +57,7 @@ def test_c4_c5_have_no_supplemental_merge_authority() -> None:
 
 
 def test_canonical_board_language_keeps_artifact_reachability_red() -> None:
-    evaluation = _text(ROOT / "docs/anatomy/06_EVALUATION_AND_BENCHMARKS.md")
+    evaluation = _text(ROOT / "docs/domains/governance/anatomy/06_EVALUATION_AND_BENCHMARKS.md")
     report = _text(ROOT / "docs/anatomy/15_TECHNICAL_REPORT.md")
     evaluation_normalized = " ".join(evaluation.split())
     report_normalized = " ".join(report.split())

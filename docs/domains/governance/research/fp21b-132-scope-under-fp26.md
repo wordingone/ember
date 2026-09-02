@@ -5,7 +5,7 @@ reduced. This note pins the exact world in which #132's re-execution fires,
 and ties that scope to the frozen fp-26 decision sha so it cannot silently
 drift from the freeze.
 
-Artifact: `scripts/fp21b_scope_132.py` (`--selftest` / `--emit`).
+Artifact: `src/ember/governance/scripts/fp21b_scope_132.py` (`--selftest` / `--emit`).
 Receipt: `receipts/fp21b-scope-132-20260611T124051Z.json`
 (verdict `SCOPE-PINNED`, `fires_in_world: w1-mbpp`, `owned_core_b_refuses: true`).
 

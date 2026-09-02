@@ -22,7 +22,7 @@ prose.
 - `env_limits()`, `preflight()`, `throttle_step()` — the core VRAM/pace floor above
 - `commit_env_limit()`, `estimate_checkpoint_mapped_bytes()`, `_commit_status()`, `commit_margin_preflight()` — the **in-run commit governor**: tracks committed (not just reserved) memory against a limit as checkpoints grow, so a long training run cannot silently exceed host commit and crash the box
 - `device_capability()`, `select_precision()`, `device_relative_threshold()` — the **device-adaptive precision ladder** (feeds condition `C-PORT`): queries actual device capability (with a `simulate` override for non-GPU test hosts) and selects a precision scheme relative to a reference device ("4090") rather than hardcoding an absolute floor
-- `fp8_matmul_with_fallback()` — torch-importing fp8 matmul with a fallback path (covered separately by `scripts/test_governor.py`, since it needs torch)
+- `fp8_matmul_with_fallback()` — torch-importing fp8 matmul with a fallback path (covered separately by `src/ember/governance/scripts/test_governor.py`, since it needs torch)
 - `make_headroom_callback()` — a reusable headroom-check callback for long-running loops
 
 ## Selftest

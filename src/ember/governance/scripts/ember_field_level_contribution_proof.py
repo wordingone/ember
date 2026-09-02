@@ -93,7 +93,7 @@ def run_deleted_method_ablation(repo: Path, args: argparse.Namespace, out_dir: P
     native_receipt = out_dir / "deleted-method-native-link-receipt.json"
     cmd = [
         sys.executable,
-        "scripts/ember_native_operator_external_transfer_link.py",
+        "src/ember/governance/scripts/ember_native_operator_external_transfer_link.py",
         "--audit",
         rel(repo, deleted_audit),
         "--native-goal-receipt",
@@ -223,7 +223,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "candidate_name": "zero-cost native-operator external-transfer link with connected-cycle audit",
             "reusable_artifacts": [
                 "src/ember/governance/scripts/ember_connected_cycle_audit.py",
-                "scripts/ember_native_operator_external_transfer_link.py",
+                "src/ember/governance/scripts/ember_native_operator_external_transfer_link.py",
                 "src/ember/governance/scripts/ember_field_level_contribution_proof.py",
                 "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py",
             ],
@@ -239,7 +239,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "material_difference_defined": bool(material_difference),
             "reusable_artifact_present": all((repo / p).exists() for p in [
                 "src/ember/governance/scripts/ember_connected_cycle_audit.py",
-                "scripts/ember_native_operator_external_transfer_link.py",
+                "src/ember/governance/scripts/ember_native_operator_external_transfer_link.py",
                 "src/ember/governance/scripts/ember_field_level_contribution_proof.py",
                 "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py",
             ]),

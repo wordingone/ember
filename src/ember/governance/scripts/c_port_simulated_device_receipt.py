@@ -17,7 +17,7 @@ itself is REAL (an actual nn.Linear + matmul on real tensors, real
 finite-output assertion) -- only the DEVICE IDENTITY used for gating is
 simulated, and the receipt says so explicitly.
 
-Run:  wsl python3 scripts/c_port_simulated_device_receipt.py [--device 3090:86]
+Run:  wsl python3 src/ember/governance/scripts/c_port_simulated_device_receipt.py [--device 3090:86]
 
 Writes receipts/c-port-device-portability-sim-<ts>.json via
 receipt_write.checked_write (fail-closed schema floor -- deletes the file if
@@ -288,7 +288,7 @@ def main() -> int:
         ),
         "note": "governor change is tighten only, never loosen the 4090 floor",
         "provenance": {
-            "script": "scripts/c_port_simulated_device_receipt.py",
+            "script": "src/ember/governance/scripts/c_port_simulated_device_receipt.py",
             "args": {"device": args.device,
                      "out_dir": os.path.relpath(str(args.out_dir), REPO_ROOT).replace(os.sep, "/")},
             "git_sha": _git_sha(args.git_sha),
@@ -298,7 +298,7 @@ def main() -> int:
             "host_platform": platform.platform(),
             "host_cuda_available": real_cuda_available,
             "rerun_command": (
-                f"wsl python3 scripts/c_port_simulated_device_receipt.py --device {args.device}"
+                f"wsl python3 src/ember/governance/scripts/c_port_simulated_device_receipt.py --device {args.device}"
             ),
         },
     }

@@ -15,7 +15,7 @@ clause rules out for a fixed equal-duration / round-robin timer substitute.
 
 Each mode carries a MODE_GATE entry describing how a consuming cycle must
 change its real behavior for that mode (forced_promotion, skip_act,
-retry_verifier, budget_multiplier). scripts/ember_mvp_cycle.py binds this
+retry_verifier, budget_multiplier). src/ember/governance/scripts/ember_mvp_cycle.py binds this
 gate load-bearingly -- see run_fixture_cycle(use_cognitive_mode_policy=...).
 
 CLI:

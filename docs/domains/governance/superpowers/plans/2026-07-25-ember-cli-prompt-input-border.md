@@ -26,7 +26,7 @@
 
 **Files:**
 - Modify: `tools/ember-cli/src/components/prompt-input.ts`
-- Modify: `tools/ember-cli/src/components/prompt-input.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts`
 
 **Interfaces:**
 - Consumes: existing `Box`, `Text`, `computeInputViewport`, `color`, and `PANEL_BORDER_STYLE`.
@@ -76,7 +76,7 @@ it("leaves a positive viewport at width 40 and clamps tiny widths", () => {
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts
 ```
 
 Expected: failures because the component still emits rule rows, has no rounded box or `statusLine`, and does not export `promptInputViewportWidth`.
@@ -136,7 +136,7 @@ Use `promptInputViewportWidth(width)` for the cursor-windowed text width.
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts
 ```
 
 Expected: all tests pass with no skipped structural test.
@@ -144,7 +144,7 @@ Expected: all tests pass with no skipped structural test.
 - [ ] **Step 5: Commit the component increment**
 
 ```powershell
-git add tools/ember-cli/src/components/prompt-input.ts tools/ember-cli/src/components/prompt-input.test.ts
+git add tools/ember-cli/src/components/prompt-input.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts
 git commit -m "fix(cli): close the prompt input border"
 ```
 
@@ -214,7 +214,7 @@ state source.
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
 ```
 
 Expected: both suites pass and exactly one status component is rendered.
@@ -286,7 +286,7 @@ element inspection.
 - [ ] **Step 4: Run the three focused suites**
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
 ```
 
 Expected: all pass, with the 40-column positive-viewport assertion executed.
@@ -394,7 +394,7 @@ git commit -m "test(cli): add compiled prompt border capture"
 - [ ] **Step 1: Run the focused and adjacent regression suites**
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
 ```
 
 Expected: all pass.

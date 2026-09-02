@@ -891,7 +891,7 @@ execution.
   `receipts\ember-mvp\core-loop-attempt-1-20260618\` was generated with:
 
 ```powershell
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
 ```
 
   It binds production sandbox evidence, real governed GPU training, local
@@ -1003,7 +1003,7 @@ python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbo
   progress superseded by the growth-ready receipt set above; it remains useful as
   prior route evidence, not as the active completion receipt.
 - Audit verification anchors:
-  - `scripts\ember_mvp_cycle.py` currently materializes the latent branch as a
+  - `src\ember\governance\scripts\ember_mvp_cycle.py` currently materializes the latent branch as a
     copied patch under `local-state\deltas\...` and binds verifier outcome as
     `verifier_result`.
   - `src\ember\governance\scripts\ember_wheel_harness.py` marks B as `uses_dream_loop=true` and

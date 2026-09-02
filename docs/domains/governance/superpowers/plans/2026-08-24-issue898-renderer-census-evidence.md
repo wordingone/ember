@@ -28,7 +28,7 @@
 
 **Files:**
 - Create: `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
-- Create after RED only: `tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
+- Create after RED only: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 
 **Interfaces:**
 - Consumes: `verifyInstalledCockpitSoakCustody(receiptText, pollsText)` and `linearFit(points)`.
@@ -94,7 +94,7 @@ required.
 ### Task 2: GREEN parser, anchor, interval, fit, and receipt core
 
 **Files:**
-- Create: `tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 - Modify: `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
 
 **Interfaces:**
@@ -262,7 +262,7 @@ warnings or errors.
 
 **Files:**
 - Modify: `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
-- Modify: `tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 
 **Interfaces:**
 - Consumes: service and verifier from Task 2.
@@ -434,7 +434,7 @@ never relabel baseline failures as GREEN.
 ```powershell
 git diff --check
 git status --short
-git diff -- tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 ```
 
 Confirm no runtime producer, existing receipt schema, or arm custody path changed.
