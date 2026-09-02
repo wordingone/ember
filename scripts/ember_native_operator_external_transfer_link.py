@@ -67,7 +67,7 @@ def select_action(repo: Path, audit: dict[str, Any], native_goal: dict[str, Any]
 
 
 def run_d3_delegate(repo: Path, fresh_rows: Path, out_dir: Path, task_ids: list[str], timeout_seconds: int, execute: bool) -> dict[str, Any]:
-    cmd = [sys.executable, "scripts/ember_d3_generalized_candidate_exec.py", "--fresh-rows", str(fresh_rows), "--out-dir", str(out_dir), "--timeout-seconds", str(timeout_seconds), "--require-prospective"]
+    cmd = [sys.executable, "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py", "--fresh-rows", str(fresh_rows), "--out-dir", str(out_dir), "--timeout-seconds", str(timeout_seconds), "--require-prospective"]
     for task_id in task_ids:
         cmd.extend(["--task-id", task_id])
     if execute:

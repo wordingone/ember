@@ -34,7 +34,7 @@ a per-file findings table with exit code 0 (report mode).
 
 ```bash
 python src/ember/governance/scripts/corpus_acquire_selftest.py
-python scripts/corpus_mix_selftest.py
+python src/ember/governance/scripts/corpus_mix_selftest.py
 ```
 
 These test the pipeline logic against constructed fixtures; they do not
@@ -73,7 +73,7 @@ python scripts/ember_candidate_generator_selftest.py
 ```bash
 python scripts/ember_d3_broader_multifamily_admission_selftest.py
 python scripts/ember_d3_broader_multifamily_loop_selftest.py
-python scripts/ember_d3_generalized_candidate_exec_selftest.py
+python src/ember/governance/scripts/ember_d3_generalized_candidate_exec_selftest.py
 ```
 
 ## Checks that require out-of-tree data or hardware

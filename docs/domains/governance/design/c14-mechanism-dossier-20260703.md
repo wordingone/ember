@@ -1,6 +1,6 @@
 # C14 Mechanism Design Dossier — issue #41
 
-Sources: `src/ember/governance/scripts/ember_c14_owned_run.py`, `scripts/ember_c14_contract_rig.py`,
+Sources: `src/ember/governance/scripts/ember_c14_owned_run.py`, `src/ember/governance/scripts/ember_c14_contract_rig.py`,
 `src/ember/governance/scripts/ember_resident_igrpo.py`, `src/ember/governance/scripts/ember_phase3_c14/igrpo_trainer.py`,
 `src/ember/governance/scripts/ember_phase3_c14/resident_adapter.py`, `src/ember/governance/scripts/ember_c14_owned_core.py`,
 `receipts/ember-c14-owned-run/live-20260703T215130Z.json` (fire-4, verdict

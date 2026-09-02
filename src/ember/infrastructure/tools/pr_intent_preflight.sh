@@ -28,14 +28,14 @@
 # family exactly as convincingly as `area:tools` does.
 #
 # Usage:
-#   bash tools/pr_intent_preflight.sh \
+#   bash src/ember/infrastructure/tools/pr_intent_preflight.sh \
 #     --title "fix(scope): summary" \
 #     --body-file /path/to/body.md \
 #     --label kind:defect --label area:tools --label state:review \
 #     --label priority:p2 --label review:self-only \
 #     --milestone "EMBER-02 — Three-billion-parameter foundation birth"
 #
-#   bash tools/pr_intent_preflight.sh --intent-json /path/to/intent.json
+#   bash src/ember/infrastructure/tools/pr_intent_preflight.sh --intent-json /path/to/intent.json
 #
 # --base defaults to origin/master and --head to HEAD. Exit 0 only if the
 # intended PR would satisfy the live policy; 1 on a policy verdict of FAIL; 2 on

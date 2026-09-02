@@ -62,7 +62,7 @@ from fp29_kill_synthesis_gate import (                 # noqa: E402
     SYNTHESIS_REQUIRED_FIELDS, validate_kill)
 
 # ---- pinned premises (drift = refuse) --------------------------------
-FP26_DECISION = "docs/research/fp26-round3-shape-decision.md"
+FP26_DECISION = "docs/domains/governance/research/fp26-round3-shape-decision.md"
 FP26_DECISION_SHA = ("5ef7cc20f22168878f139af00e6ac9a75d43c758"
                      "ffd2b3eb181372c50081c939")
 FP26_PREREG_GLOB = "receipts/fp26-prereg-*.json"       # must exist + frozen

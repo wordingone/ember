@@ -225,7 +225,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 "src/ember/governance/scripts/ember_connected_cycle_audit.py",
                 "scripts/ember_native_operator_external_transfer_link.py",
                 "scripts/ember_field_level_contribution_proof.py",
-                "scripts/ember_d3_generalized_candidate_exec.py",
+                "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py",
             ],
             "external_disjoint_validation": [
                 "ScienceAgentBench stronger transfer C=1.0 on four disjoint deterministic rows",
@@ -241,7 +241,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 "src/ember/governance/scripts/ember_connected_cycle_audit.py",
                 "scripts/ember_native_operator_external_transfer_link.py",
                 "scripts/ember_field_level_contribution_proof.py",
-                "scripts/ember_d3_generalized_candidate_exec.py",
+                "src/ember/governance/scripts/ember_d3_generalized_candidate_exec.py",
             ]),
             "external_disjoint_validation_present": external_rows_ok,
             "contribution_level_deletion_ablation_present": ablation is not None and ablation.get("native_link_verdict") == "NATIVE_OPERATOR_EXTERNAL_TRANSFER_LINK_BLOCKED",

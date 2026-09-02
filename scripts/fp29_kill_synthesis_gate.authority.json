@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/fp29_kill_synthesis_gate.py",
-  "artifact_sha256": "d6d65fdb35b5e508165c111d859c5f6d3b8537487cc621d98d9f8cfbd195335d",
+  "artifact_sha256": "0ebe29ce4958e9c3e9ff36ecb58be30b5851ae1684fe41e9349e1c1ff51c1980",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

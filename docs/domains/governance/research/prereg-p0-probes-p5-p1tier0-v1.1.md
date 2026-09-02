@@ -1,6 +1,6 @@
 # PRE-REGISTRATION v1.1 (FROZEN 2026-07-06): P0 probes P5 + P1-tier-0 + muP audit
 
-Source: docs/research/p0-composition-law-panel-20260706.md (panel synthesis, #207).
+Source: docs/domains/governance/research/p0-composition-law-panel-20260706.md (panel synthesis, #207).
 v1.1 note: v1 was adversarially reviewed BEFORE first execution (Fable verdict leg,
 2026-07-06 — 15 amendments: operational definitions pinned, LR/state-provenance confounds
 closed, assertion semantics repaired, verdict bands made coherent, cell count corrected).

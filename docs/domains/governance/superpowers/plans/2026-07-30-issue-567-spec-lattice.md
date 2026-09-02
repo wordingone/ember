@@ -20,7 +20,7 @@
 ### Task 1: Fail-closed spec-node parser
 
 **Files:**
-- Create: `scripts/ember_cli_spec_policy.py`
+- Create: `src/ember/governance/scripts/ember_cli_spec_policy.py`
 - Create: `tests/test_ember_cli_spec_policy.py`
 
 **Interfaces:**

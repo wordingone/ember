@@ -75,7 +75,7 @@ receipt carrying only `loss` and `grad_norm` correctly refuses
 `E7_SIGMA_MISSING`.
 
 The reviewed estimator lives in a focused in-repository composer,
-`scripts/r1_e7_ratio_sigma.py`. Its command accepts the immutable v1 evidence
+`src/ember/governance/scripts/r1_e7_ratio_sigma.py`. Its command accepts the immutable v1 evidence
 path, v1 receipt path, two explicit telemetry paths, threshold authority, and a
 clean output directory. It reopens all pins, derives the v2 metrics, and emits
 both the v2 E7 receipt and a no-overwrite composition receipt containing input
@@ -129,7 +129,7 @@ overwritten.
 - Add E7 ratio-sigma analytic fixtures with two seeds and known normalized
   variance, seed-order invariance, the disclosed two-seed identity, and
   zero-mean/non-finite refusals.
-- Test the real `scripts/r1_e7_ratio_sigma.py` composer against v1-shaped
+- Test the real `src/ember/governance/scripts/r1_e7_ratio_sigma.py` composer against v1-shaped
   fixtures, prereg-block byte identity, input/output hash bindings,
   composition-receipt closure, and no-overwrite behavior.
 - Add producer success, exact arithmetic, no-overwrite, missing/duplicate step,

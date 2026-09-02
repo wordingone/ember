@@ -386,7 +386,7 @@ def inspect_clean_room_harness(repo: Path, full_parity_receipt: Path | None = No
         Path("docs/domains/governance/archive/pre-restart/nck-invariants-v0.md"),
         Path("src/ember/governance/scripts/nck/event_loop.py"),
         Path("src/ember/governance/scripts/nck/invariants.py"),
-        Path("scripts/nck/nck_e2e_proof.py"),
+        Path("src/ember/governance/scripts/nck/nck_e2e_proof.py"),
         Path("receipts/nck-e2e-proof-20260612T142318Z.json"),
     ]
     errors: list[str] = []
@@ -1443,7 +1443,7 @@ def build_fixture_repo(root: Path) -> tuple[Path, Path, Path]:
         ),
         "src/ember/governance/scripts/nck/event_loop.py": "# event\n",
         "src/ember/governance/scripts/nck/invariants.py": "# inv\n",
-        "scripts/nck/nck_e2e_proof.py": "# proof\n",
+        "src/ember/governance/scripts/nck/nck_e2e_proof.py": "# proof\n",
     }.items():
         path = repo / rel
         path.parent.mkdir(parents=True, exist_ok=True)

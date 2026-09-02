@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/fp27_round1_prereg.py",
-  "artifact_sha256": "fc2e69d2a22ad6ece99ca56b7a70e9ce65ee3f130cfeed835da5ae0ee24713ce",
+  "artifact_sha256": "8b676d0f9913fb7b0cdc9a4611c8524a2db45c89fbb93dd806b5a12674e1500e",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

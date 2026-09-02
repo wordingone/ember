@@ -12,7 +12,7 @@ from pathlib import Path
 
 import torch
 
-from scripts.preflight.update_survival import (
+from src.ember.governance.scripts.preflight.update_survival import (
     OptimizerSpec,
     TensorProbe,
     run_update_survival_preflight,

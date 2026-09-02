@@ -509,7 +509,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_ind.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_ind.py",
             "sha256": "e202b8c05890fa933271f9bb23541d9c1b69387283cdc47854a0fecdaa036e12",
             "present": true
           },

@@ -42,12 +42,12 @@ EXIT_SOURCE_PATHS = {
         "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
         "tools/ember-restart-3b/semantic_stream.py",
-        "tools/ember-restart-3b/pretrain.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
     ),
     "E2": (
         "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
-        "tools/ember-restart-3b/pretrain.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
     ),
     "E3": (
         "src/ember/governance/scripts/r1_exit_battery.py",

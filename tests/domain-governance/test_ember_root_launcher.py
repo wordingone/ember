@@ -268,7 +268,7 @@ class EmberRootLauncherTests(unittest.TestCase):
     # migrated out on launch, and a reappearing one refuses the launch outright.
 
     #: [repo root, expected key] -- mirrored verbatim by KEY_PARITY_VECTORS in
-    #: tools/ember-cli/src/utils/ember-state-root.test.ts. The launcher and the cockpit must
+    #: src/ember/infrastructure/tools/ember-cli/src/utils/ember-state-root.test.ts. The launcher and the cockpit must
     #: derive the SAME default state directory; if either side drifts, one suite goes red.
     KEY_PARITY_VECTORS = [
         (r"C:\fixture\ember", "c-fixture-ember"),

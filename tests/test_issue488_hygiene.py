@@ -138,7 +138,7 @@ class Issue488HygieneTests(unittest.TestCase):
     def test_checked_in_manifest_and_receipt_bind_full_cadence_policy(self):
         mod = _module()
         manifest = json.loads(
-            (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(
+            (REPO_ROOT / "docs/domains/governance/hygiene/issue-488-reference-manifest-v1.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -424,7 +424,7 @@ class Issue488HygieneTests(unittest.TestCase):
     def test_checked_artifact_selected_candidate_cli_positive(self):
         """A receipt may select one DELETE_CANDIDATE while others remain queued."""
         mod = _module()
-        source_manifest = REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json"
+        source_manifest = REPO_ROOT / "docs/domains/governance/hygiene/issue-488-reference-manifest-v1.json"
         source_receipt = REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
         receipt = json.loads(source_receipt.read_text(encoding="utf-8"))
@@ -451,7 +451,7 @@ class Issue488HygieneTests(unittest.TestCase):
 
     def test_checked_artifact_rejects_selected_cleanup_omission_and_foreign_row(self):
         mod = _module()
-        source_manifest = REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json"
+        source_manifest = REPO_ROOT / "docs/domains/governance/hygiene/issue-488-reference-manifest-v1.json"
         source_receipt = REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
         receipt = json.loads(source_receipt.read_text(encoding="utf-8"))
@@ -493,7 +493,7 @@ class Issue488HygieneTests(unittest.TestCase):
 
     def test_checked_artifact_rejects_selected_delete_that_remains_or_canonical_drifts(self):
         mod = _module()
-        source_manifest = REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json"
+        source_manifest = REPO_ROOT / "docs/domains/governance/hygiene/issue-488-reference-manifest-v1.json"
         source_receipt = REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
         receipt = json.loads(source_receipt.read_text(encoding="utf-8"))
@@ -681,7 +681,7 @@ class Issue488HygieneTests(unittest.TestCase):
 
     def _checked_post_cleanup_inputs(self, mod):
         manifest = json.loads(
-            (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(encoding="utf-8")
+            (REPO_ROOT / "docs/domains/governance/hygiene/issue-488-reference-manifest-v1.json").read_text(encoding="utf-8")
         )
         receipt = json.loads(
             (REPO_ROOT / "receipts/hygiene/issue-488-first-cleanup-v1.json").read_text(encoding="utf-8")
@@ -865,7 +865,7 @@ class Issue488HygieneTests(unittest.TestCase):
     def test_cleanup_receipt_rejects_missing_constitutional_invariant(self):
         mod = _module()
         manifest = json.loads(
-            (REPO_ROOT / "docs/hygiene/issue-488-reference-manifest-v1.json").read_text(
+            (REPO_ROOT / "docs/domains/governance/hygiene/issue-488-reference-manifest-v1.json").read_text(
                 encoding="utf-8"
             )
         )

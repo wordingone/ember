@@ -121,7 +121,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_cli_spec_policy.py",
+      "path": "src/ember/governance/scripts/ember_cli_spec_policy.py",
       "line": 15,
       "target": "SPEC_ROOT",
       "expression": "PurePosixPath('tools/ember-cli/specs')",
@@ -231,7 +231,7 @@
       "error": null
     },
     {
-      "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/scripts/ember_phase5_c7/c7_selftest.py",
+      "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
       "line": 51,
       "target": "_REPO_ROOT",
       "expression": "_SCRIPTS_DIR.parent",
@@ -242,7 +242,7 @@
       "error": null
     },
     {
-      "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/scripts/ember_phase5_c7/c7_selftest.py",
+      "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
       "line": 51,
       "target": "_REPO_ROOT",
       "expression": "_SCRIPTS_DIR.parent",
@@ -1023,7 +1023,7 @@
       "error": "unknown alias NC_SCRIPTS"
     },
     {
-      "path": "scripts/fp33_e3b_gemma_e2b_proper.py",
+      "path": "src/ember/governance/scripts/fp33_e3b_gemma_e2b_proper.py",
       "line": 49,
       "target": "<sys.path.insert>",
       "expression": "NC_SCRIPTS",
@@ -1067,7 +1067,7 @@
       "error": "unknown alias REPO_ROOT"
     },
     {
-      "path": "scripts/nck/nck_e2e_proof.py",
+      "path": "src/ember/governance/scripts/nck/nck_e2e_proof.py",
       "line": 63,
       "target": "_MAILBOX_SIGNAL_DIR",
       "expression": "os.environ.get('EMBER_MAILBOX_SIGNAL_DIR', '')",

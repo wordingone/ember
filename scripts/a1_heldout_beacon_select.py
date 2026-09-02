@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """a1_heldout_beacon_select.py -- ember #631 deliverable 4: the executable consumer
-of the non-grindable held-out selection rule (docs/spec/a1-postfreeze-heldout-selection-v2.md).
+of the non-grindable held-out selection rule (docs/domains/governance/spec/a1-postfreeze-heldout-selection-v2.md).
 
 Given the external beacon value B (NIST Randomness Beacon v2 outputValue hex, from the
 pre-registered pulse T), computes the selection deterministically:
@@ -168,7 +168,7 @@ def main() -> int:
             "invariant_sha256": INVARIANT_SHA256,
             "sha_convention": SHA_CONVENTION,
             "issue_refs": ["#631", "#123", "#593", "#582"],
-            "rule_doc": "docs/spec/a1-postfreeze-heldout-selection-v2.md",
+            "rule_doc": "docs/domains/governance/spec/a1-postfreeze-heldout-selection-v2.md",
             "status": "RESOLVED",
             "beacon": {"source": "NIST Randomness Beacon v2", "pulse_uri": args.beacon_pulse_uri,
                        "output_value_first16": (args.beacon_value.lower()[2:]
@@ -185,7 +185,7 @@ def main() -> int:
             "invariant_sha256": INVARIANT_SHA256,
             "sha_convention": SHA_CONVENTION,
             "issue_refs": ["#631", "#123", "#593", "#582"],
-            "rule_doc": "docs/spec/a1-postfreeze-heldout-selection-v2.md",
+            "rule_doc": "docs/domains/governance/spec/a1-postfreeze-heldout-selection-v2.md",
             "status": "PENDING-BEACON",
             "pending_reason": "the pre-registered NIST pulse T is defined as the first pulse after "
                               "this spec's MERGE commit; the beacon value cannot exist in-PR (that is "

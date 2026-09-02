@@ -74,7 +74,7 @@ exact hash.
 ## The nine certificate legs
 
 The milestone contract's completion certificate
-(`docs/roadmap/milestones/EMBER-01.md`, clauses `EMBER-01.CERT.002` through
+(`docs/domains/governance/roadmap/milestones/EMBER-01.md`, clauses `EMBER-01.CERT.002` through
 `EMBER-01.CERT.010`) defines nine legs. The verifier
 (`scripts/verify_ember01_completion.py`) evaluates them in contract order;
 every leg resolved true in the certifying run:

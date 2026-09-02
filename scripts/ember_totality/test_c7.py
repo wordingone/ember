@@ -38,7 +38,7 @@ What a GREEN here actually requires (receipts-only, no self-attestation):
      defense)" -- the hash-binding proves the receipt matches the live
      OPERATOR DEFINITION, but proves nothing about the DELETION TEST'S
      OUTCOME, which was reduced to one bare boolean before being written
-     (scripts/ember_phase5_c7/c7_selftest.py's run_c7_deletion_test()
+     (src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py's run_c7_deletion_test()
      computes real_trained_pass_rate / real_deleted_pass_rate /
      degenerate_deleted_pass_rate internally, then run_selftest() discards
      all three before writing the receipt -- exactly the kind of "trust the
@@ -156,7 +156,7 @@ def main():
         emit("UNEVALUABLE", "C7: state root not found under any known layout -- input-missing, dead branch under the flat-layout resolver (paper-consistency flip, 2026-07-02)")
 
     # --- (A) Find the C7 self-growth-operator receipt(s) ---------------------
-    # Receipt hint: scripts/ember_phase5_c7/c7_selftest.py writes
+    # Receipt hint: src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py writes
     # receipts/c7-selftest-<ts>.json; the operator-ablation result is inside it
     # (proves_load_bearing, held_out_slices, degenerate_slice).
     patterns = [

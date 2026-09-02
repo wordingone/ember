@@ -25,7 +25,7 @@ LAUNCH INTERLOCK: any real eval/train leg is gated behind
   EMBER_GATE_AUTHORIZED=1 (env) AND --live (flag).
 Default invocation and --selftest run 100% CPU-only on synthetic fixtures.
 
-Spec: docs/research/persistence-gates-spec.md §D-gate (frozen 2026-06-11, #36).
+Spec: docs/domains/governance/research/persistence-gates-spec.md §D-gate (frozen 2026-06-11, #36).
 """
 
 import argparse

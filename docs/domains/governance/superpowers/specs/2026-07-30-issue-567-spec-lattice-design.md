@@ -24,7 +24,7 @@ executed. Dependabot remains governed by its narrower existing schema.
 
 ## Components
 
-`scripts/ember_cli_spec_policy.py` owns strict spec parsing, consumer-path normalization, and
+`src/ember/governance/scripts/ember_cli_spec_policy.py` owns strict spec parsing, consumer-path normalization, and
 new-component coverage. It has no network access and accepts only caller-supplied paths and
 repository roots.
 

@@ -3,7 +3,7 @@
  "ts": "2026-06-11T06:30Z",
  "run": "wxgtzfcg1",
  "agents": 127,
- "version_status": "VERSION-ACTIVE (issue #248 item 4, 2026-07-06) — this 127-agent pass is the live gpu-math-multiplier-table; it supersedes docs/research/gpu-math-multiplier-table-2026-06-11.json (the 24-agent first pass). configs/v0-pretrain-config.json's basis field and every baseline/ citation of this table already treat this file as the survivor stack. Cite this file, not the non-v2 one, for current multiplier values.",
+ "version_status": "VERSION-ACTIVE (issue #248 item 4, 2026-07-06) — this 127-agent pass is the live gpu-math-multiplier-table; it supersedes docs/domains/governance/research/gpu-math-multiplier-table-2026-06-11.json (the 24-agent first pass). configs/v0-pretrain-config.json's basis field and every baseline/ citation of this table already treat this file as the survivor stack. Cite this file, not the non-v2 one, for current multiplier values.",
  "multiplier_table": [
   {
    "technique": "int4 weight-only W4A16 decode kernels (Marlin / AWQ-Marlin / GPTQ-Marlin) in vLLM for the batch-1 episode sampler",
@@ -592,7 +592,7 @@
     "NVIDIA/TransformerEngine (repo README + issue #1159 'compute capability 8.9 or higher required for FP8 execution') — current TE advertises FP8 training on Hopper, Ada AND Blackwell at CC>=8.9; this REFUTES the survey-prior 'TE silently falls back to BF16 on Ada'. Issue #15 (Oct 2022, CLOSED) was the OLD '9.x required' rejection, since superseded",
     "pytorch/ao torchao float8 (docs.pytorch.org/ao training workflow + issue #889) — tensorwise scaling runs on sm89/Ada; rowwise FP8 GEMM kernels are Hopper+; published float8 speedups (~25% tensorwise) are H100/B200, no RTX 4090 numbers in torchao docs",
     "arXiv:2412.19437 (DeepSeek-V3) — fine-grained block-scaled FP8 recipe (1x128 act / 128x128 weight), <0.25% loss penalty at 671B; the robust recipe, but no sm89 kernel exists for it",
-    "Local prior: state/nc-ladder/docs/research/gpu-math-multiplier-table-2026-06-11.json (FP8-Ada surviving_multiplier 0.96) and nc2-technique-survey-2026-06.md §7 (FP8 SKIP-AT-THIS-SCALE)"
+    "Local prior: state/nc-ladder/docs/domains/governance/research/gpu-math-multiplier-table-2026-06-11.json (FP8-Ada surviving_multiplier 0.96) and nc2-technique-survey-2026-06.md §7 (FP8 SKIP-AT-THIS-SCALE)"
    ],
    "confidence": "medium",
    "fits_4090_24gb": true,
