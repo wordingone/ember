@@ -1319,3 +1319,101 @@ def test_projection_spec_is_closed_path_free_and_outputs_refuse_overwrite(
     write_new(direct_output, manifest_raw)
     with pytest.raises(FileExistsError):
         write_new(direct_output, b"replacement")
+
+
+def test_train_partition_projection_dispatches_closed_schema_and_names_authority_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    partition_path = tmp_path / "partition-receipt.json"
+    partition_path.write_bytes(b"partition-v1")
+    source_receipt = tmp_path / "source-receipt.json"
+    source_receipt.write_bytes(canonical({
+        "schema": "corpus-connector-receipt-v1",
+        "canonical_url": "https://github.com/search?q=topic%3Acuda",
+        "fetched_at": "2026-08-15T00:00:00Z",
+    }))
+    partition = {
+        "source_id": "candidate-training_infrastructure-train-1",
+        "domain": "training_infrastructure",
+        "split": "train",
+        "partition_root_sha256": "b" * 64,
+        "source_connector_receipt_path": str(source_receipt),
+        "source_connector_receipt_sha256": sha256(source_receipt.read_bytes()),
+        "license_summary": ["Apache-2.0", "MIT"],
+        "repositories": [{"files": [
+            {"path": "src/main.py", "bytes": 5, "sha256": "a" * 64},
+            {"path": "cmake/Modules/FindFAISS.cmake", "bytes": 7, "sha256": "c" * 64},
+        ]}],
+    }
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "validate_partition_receipt",
+        lambda _path: partition,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "_load_partition_media_type_table",
+        lambda: {
+            "classes": {
+                ".cmake": {
+                    "count": 1,
+                    "media_type": "text/plain; charset=utf-8",
+                    "reason": "explicit source or build-language class",
+                }
+            }
+        },
+        raising=False,
+    )
+    spec = canonical({
+        "schema_version": "ember-issue1581-catalog-projection-spec-v1",
+        "tokenizer_sha256": "4" * 64,
+        "created_at_ms": 1,
+        "rows": [{
+            "license_partition_receipt_path": str(partition_path),
+            "license_partition_receipt_sha256": sha256(partition_path.read_bytes()),
+            "source_id": "candidate-training_infrastructure-train-1",
+            "domain": "training_infrastructure",
+            "split": "train",
+            "supporting_receipts": [],
+        }],
+    })
+    manifest_raw = project_catalog_spec(spec_raw=spec)
+    manifest = json.loads(manifest_raw)
+    assert str(tmp_path).encode() not in manifest_raw
+    assert next(row for row in manifest["records"] if row["kind"] == "source")["id"] == "source:candidate-training_infrastructure-train-1"
+    media_types = {
+        row["sha256"]: row["media_type"]
+        for row in manifest["records"]
+        if row["kind"] == "immutable_object"
+    }
+    assert media_types["a" * 64] == "text/x-python; charset=utf-8"
+    assert media_types["c" * 64] == "text/plain; charset=utf-8"
+
+    partition["repositories"][0]["files"].append(
+        {"path": "future/new.brandnew", "bytes": 3, "sha256": "d" * 64}
+    )
+    with pytest.raises(ValueError, match="PARTITION_PROJECTION_MEDIA_CLASS_UNMAPPED:.brandnew"):
+        project_catalog_spec(spec_raw=spec)
+    partition["repositories"][0]["files"].pop()
+
+    partition_path.write_bytes(b"partition-with-one-repository-row-removed")
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "validate_partition_receipt",
+        lambda _path: (_ for _ in ()).throw(ValueError("repository count mismatch")),
+        raising=False,
+    )
+    tampered = json.loads(spec)
+    tampered["rows"][0]["license_partition_receipt_sha256"] = sha256(partition_path.read_bytes())
+    with pytest.raises(ValueError, match="PARTITION_PROJECTION_AUTHORITY_REFUSED:repository count mismatch"):
+        project_catalog_spec(spec_raw=canonical(tampered))
+
+
+def test_train_partition_media_table_is_goal_bound() -> None:
+    table = catalog_admission_module._load_partition_media_type_table()
+    assert table["goal_id"] == "EMBER-02"
+    assert table["workstream_id"] == "EMBER-02B"
+    assert table["next_executed_outcome"] == (
+        "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    )

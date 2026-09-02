@@ -10,7 +10,7 @@ import hashlib
 import json
 import sys
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py
@@ -56,11 +56,13 @@ for _ember_465614ebb0a85785_alias in _ember_465614ebb0a85785_aliases:
         raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
     _ember_465614ebb0a85785_sys.modules[_ember_465614ebb0a85785_alias] = _ember_465614ebb0a85785_module
 load_bulk_domain_connector_receipt = getattr(_ember_465614ebb0a85785_module, 'load_bulk_domain_connector_receipt')
+_connector_media_type = getattr(_ember_465614ebb0a85785_module, '_connector_media_type')
 # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py
 from input_identity import (
     resolve_catalog_evaluation_dataset,
     resolve_catalog_training_datasets,
 )
+from mint_github_license_partition import validate_partition_receipt
 
 
 def _canonical(value: object) -> bytes:
@@ -666,7 +668,133 @@ _PROJECTION_ROW_FIELDS = {
     "split",
     "supporting_receipts",
 }
+_TRAIN_PARTITION_PROJECTION_ROW_FIELDS = {
+    "license_partition_receipt_path",
+    "license_partition_receipt_sha256",
+    "source_id",
+    "domain",
+    "split",
+    "supporting_receipts",
+}
 _SUPPORTING_RECEIPT_FIELDS = {"path", "sha256"}
+_PARTITION_MEDIA_TYPE_TABLE = Path(__file__).with_name("train_partition_media_types.json")
+
+
+def _partition_media_class(path: PurePosixPath) -> str:
+    return path.suffix.lower() if path.suffix else f"<name:{path.name.lower()}>"
+
+
+def _load_partition_media_type_table() -> dict[str, Any]:
+    raw = _read(_PARTITION_MEDIA_TYPE_TABLE)
+    table = json.loads(raw)
+    self_sha = table.pop("self_sha256", None)
+    if self_sha != _sha256(_canonical(table)):
+        raise ValueError("PARTITION_PROJECTION_MEDIA_TABLE_SELF_HASH_REFUSED")
+    table["self_sha256"] = self_sha
+    if (
+        table.get("schema_version") != "ember-issue1581-train-partition-media-types-v1"
+        or table.get("goal_id") != "EMBER-02"
+        or table.get("workstream_id") != "EMBER-02B"
+        or table.get("next_executed_outcome")
+        != "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+        or table.get("class_count") != len(table.get("classes", {}))
+        or table.get("file_count") != sum(row.get("count", 0) for row in table.get("classes", {}).values())
+    ):
+        raise ValueError("PARTITION_PROJECTION_MEDIA_TABLE_SCHEMA_REFUSED")
+    return table
+
+
+def _partition_media_type(path: PurePosixPath, table: dict[str, Any]) -> str:
+    """Classify via the existing mapper or an explicit census-bound class row."""
+
+    try:
+        return _connector_media_type(path)
+    except ValueError as error:
+        if "unsupported media type" not in str(error):
+            raise
+        key = _partition_media_class(path)
+        row = table["classes"].get(key)
+        if row is None:
+            raise ValueError(
+                f"PARTITION_PROJECTION_MEDIA_CLASS_UNMAPPED:{key}:{path.as_posix()}"
+            ) from error
+        return row["media_type"]
+
+
+def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
+    if row.get("split") != "train" or "-train-" not in row.get("source_id", ""):
+        raise ValueError("PARTITION_PROJECTION_SPLIT_REFUSED:train authority required")
+    receipt_path = Path(row["license_partition_receipt_path"])
+    expected_sha = _require_sha(
+        row["license_partition_receipt_sha256"], "partition receipt identity"
+    )
+    receipt_raw = _read(receipt_path)
+    if _sha256(receipt_raw) != expected_sha:
+        raise ValueError("PARTITION_PROJECTION_RECEIPT_HASH_DRIFT")
+    try:
+        receipt = validate_partition_receipt(receipt_path)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"PARTITION_PROJECTION_AUTHORITY_REFUSED:{error}") from error
+    for field in ("source_id", "domain", "split"):
+        if receipt.get(field) != row[field]:
+            raise ValueError(f"PARTITION_PROJECTION_{field.upper()}_SUBSTITUTION")
+    source_path = Path(receipt["source_connector_receipt_path"])
+    source_raw = _read(source_path)
+    if _sha256(source_raw) != receipt["source_connector_receipt_sha256"]:
+        raise ValueError("PARTITION_PROJECTION_SOURCE_RECEIPT_HASH_DRIFT")
+    try:
+        source = json.loads(source_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("PARTITION_PROJECTION_SOURCE_RECEIPT_UNREADABLE") from error
+    if (
+        not isinstance(source, dict)
+        or source.get("schema") != "corpus-connector-receipt-v1"
+        or not isinstance(source.get("canonical_url"), str)
+        or not isinstance(source.get("fetched_at"), str)
+    ):
+        raise ValueError("PARTITION_PROJECTION_SOURCE_RECEIPT_SCHEMA_REFUSED")
+    media_table = _load_partition_media_type_table()
+    unsupported_counts: dict[str, int] = {}
+    files = [
+        {
+            "bytes": item["bytes"],
+            "sha256": item["sha256"],
+            "media_type": _partition_media_type(PurePosixPath(item["path"]), media_table),
+        }
+        for repository in receipt["repositories"]
+        for item in repository["files"]
+        if item["bytes"] > 0
+    ]
+    for repository in receipt["repositories"]:
+        for item in repository["files"]:
+            if item["bytes"] <= 0:
+                continue
+            path = PurePosixPath(item["path"])
+            try:
+                _connector_media_type(path)
+            except ValueError as error:
+                if "unsupported media type" not in str(error):
+                    raise
+                key = _partition_media_class(path)
+                unsupported_counts[key] = unsupported_counts.get(key, 0) + 1
+    expected_counts = {
+        key: row["count"] for key, row in media_table["classes"].items()
+    }
+    if unsupported_counts != expected_counts:
+        raise ValueError("PARTITION_PROJECTION_MEDIA_CLASS_COUNTS_REFUSED")
+    if not files:
+        raise ValueError("PARTITION_PROJECTION_EMPTY_PARTITION_REFUSED")
+    return {
+        "source_id": row["source_id"],
+        "domain": row["domain"],
+        "split": row["split"],
+        "receipt_sha256": expected_sha,
+        "manifest_sha256": receipt["partition_root_sha256"],
+        "canonical_url": source["canonical_url"],
+        "fetched_at": source["fetched_at"],
+        "license_text_sha256": _sha256(_canonical(receipt["license_summary"])),
+        "files": files,
+    }
 
 
 def project_catalog_spec(*, spec_raw: bytes) -> bytes:
@@ -686,7 +814,10 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
         raise ValueError("catalog projection spec has an invalid closed schema")
     rows = []
     for row in spec["rows"]:
-        if not isinstance(row, dict) or set(row) != _PROJECTION_ROW_FIELDS:
+        if not isinstance(row, dict) or set(row) not in (
+            _PROJECTION_ROW_FIELDS,
+            _TRAIN_PARTITION_PROJECTION_ROW_FIELDS,
+        ):
             raise ValueError("catalog projection row has an invalid closed schema")
         supporting_receipt_sha256 = []
         supporting_receipts = row["supporting_receipts"]
@@ -705,15 +836,18 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
                     "supporting receipt bytes do not match the frozen identity"
                 )
             supporting_receipt_sha256.append(claimed)
-        projected = load_bulk_domain_connector_receipt(
-            receipt_path=Path(row["receipt_path"]),
-            expected_receipt_sha256=row["expected_receipt_sha256"],
-            source_id=row["source_id"],
-            expected_source_selector=row["expected_source_selector"],
-            expected_license_text_sha256=row["expected_license_text_sha256"],
-            domain=row["domain"],
-            split=row["split"],
-        )
+        if set(row) == _TRAIN_PARTITION_PROJECTION_ROW_FIELDS:
+            projected = _load_train_partition_projection(row)
+        else:
+            projected = load_bulk_domain_connector_receipt(
+                receipt_path=Path(row["receipt_path"]),
+                expected_receipt_sha256=row["expected_receipt_sha256"],
+                source_id=row["source_id"],
+                expected_source_selector=row["expected_source_selector"],
+                expected_license_text_sha256=row["expected_license_text_sha256"],
+                domain=row["domain"],
+                split=row["split"],
+            )
         projected["supporting_receipt_sha256"] = supporting_receipt_sha256
         rows.append(projected)
     return build_dataset_catalog_manifest(
