@@ -1,0 +1,2 @@
+{"schema_version":"ember-issue1945-source-owner-allowlist-v1","source_rules":[{"basename":"model.py","class":"non_overhead"},{"basename":"pretrain.py","class":"overhead"},{"basename":"packed_specialist_run.py","class":"overhead"}],"mapping_rule":"FIRST_STACK_FRAME_MATCHING_EXACTLY_ONE_DECLARED_BASENAME","selection_rule":"MAX_ATTRIBUTED_NON_OVERHEAD_DEVICE_TIME_THEN_LEXICAL_SOURCE_SITE","minimum_named_attribution_ratio":"0.99"}
+
