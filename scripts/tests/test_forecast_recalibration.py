@@ -311,7 +311,7 @@ def test_consumer_refuses_foreign_rung_and_path_tamper(tmp_path: Path) -> None:
     assert any("rung" in defect for defect in defects)
 
     receipt["rung"] = "R2"
-    receipt["forecast_path"] = "docs/spec/ember02-r1-forecast-v1.json"
+    receipt["forecast_path"] = "docs/domains/governance/spec/ember02-r1-forecast-v1.json"
     candidate.write_text(json.dumps(receipt), encoding="utf-8")
     defects = battery._validate_recalibration_content(
         candidate, repo_root=run_root.parent, run_root=run_root, t01=2, rung="R2"

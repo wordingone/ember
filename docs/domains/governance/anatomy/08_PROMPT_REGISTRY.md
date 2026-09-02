@@ -18,7 +18,7 @@ call sites rather than centrally registered:
   `scripts/ember_restart_eval_*.py` family (each evaluator builds its own
   prompt text for its benchmark, per-file, not from a shared source).
 - Cognitive-mode / operator-protocol text embedded in
-  `scripts/ember_cognitive_mode_policy.py` and related mode-selector modules.
+  `src/ember/governance/scripts/ember_cognitive_mode_policy.py` and related mode-selector modules.
 
 None of these share a common loader, versioning scheme, or content-hash
 binding — each is a standalone template owned by its call site.

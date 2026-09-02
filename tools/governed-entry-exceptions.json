@@ -12,48 +12,58 @@
   "exceptions": [
     {
       "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "cba78d68919d4b6b2cc593f90d378b0c216c0ad5fde9a1f5895c5f4636ef83d6",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "sha256": "6bfcad5fbca68fd2e2097b306d45208eb71a28f4c63ed725a92ef7fb4099dda4",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "2b960eaaeacba74843ff68fd5e0bdb75742a3b0aa218c3a7aef83bcc1152b124",
-      "reason": "emits the packet manifest, including the single daemon launch command a contributor runs; derives no child process itself"
+      "sha256": "c1c918307c0274d54d54ab8269f3b583f5546849adb6d73db490508fe8ce4344",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "scripts/ember_surface2_capture.py",
       "sha256": "d963ec44164128da77d0de70b65a540ea5253cc1daf6867901156903fd0d80e6",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/forecast_recalibration.py",
       "sha256": "d1964a4c66df7eb88ea57ec8c76febbaa21e3bacdc8db4666335d5baf1fc68d5",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "8d54d44ad8aac100d406df48ba8c74fbfac5eee4182deffdebded428a10fd756",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "sha256": "970ab114ab142a2ffac0890462d68cbe1bc9e41682ce4fd123c6ea116c759e10",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "scripts/nativization_motion_trace.py",
-      "sha256": "478be400244249979b1fee3044e3b81c0f7f813f0432305bb63a052f3e556454",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "sha256": "0427f9df8414b2bffbdc2136573644c6a1ed6519385d89c86035bce2b9de2d5f",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "c6ea360fdbe58ac713cfa61789e5f5622d76fdcffb971adcb9aa2086f5e00e37",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "sha256": "94c7a296cba9c61966d86291836f278fd41e904cda913862f2c5dba949a67adb",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/training_closure.py",
-      "sha256": "24cc56c385e6002872ffde95d8f2c8b4b772b3b4a4495c3deed79a3305f6a97f",
-      "reason": "pre-existing consumer of the governed training-segment API; not a standalone launcher"
+      "sha256": "826f41fa46ad036eea7a6024455ac300366546f78314631505168d7d9020718f",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "tools/repo_guard_selftest.py",
       "sha256": "2101d514092a416bd14cfa1a4e9565bbb4feb38b0a6a75f1d2e6aef2542c32b1",
-      "reason": "repository-policy selftest names the governed training entry only inside a deliberate refusal fixture; it does not import, execute, or dispatch that entry"
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
+      "sha256": "c5c5b834ce40703f549b5ab51524f98b1d3744152a47d5954d679b980c211bfe",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+    },
+    {
+      "path": "src/ember/infrastructure/tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
+      "sha256": "1450be1c8519263731e8cd24f0be80b60ca701a7dde5b7f2027b5ed991c9efec",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     }
   ]
 }

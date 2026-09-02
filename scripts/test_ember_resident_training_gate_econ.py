@@ -4,7 +4,7 @@
 """test_ember_resident_training_gate_econ.py -- TDD suite for gh #128 (resident
 gate loop-econ wiring). Exercises the real DT-6 field extraction + invoked
 check_econ_gate conjunct in ember_resident_training_gate.py against the three
-ACs in docs/archive/pre-restart/dt6-loop-economics-gate-amendment.md:
+ACs in docs/domains/governance/archive/pre-restart/dt6-loop-economics-gate-amendment.md:
 
   AC1: PASS verdict missing a required field -> REJECT (named field(s))
   AC2: all three fields + exceeds_band:true, signal > band -> ACCEPT

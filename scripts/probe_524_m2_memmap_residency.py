@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """probe_524_m2_memmap_residency.py — issue #524, cell M2.
 
-CPU-only verification of scripts/cpu_offload_adamw.py's
+CPU-only verification of src/ember/governance/scripts/cpu_offload_adamw.py's
 `estimate_required_gib_offloaded()` claim `optimizer_state_gib_vram_resident:
 0.0`. This is Phase 1 of #524 (GPU contended; the GPU-side leg is out of
 scope for this probe -- see verdict below for what remains unmeasured and
@@ -214,7 +214,7 @@ def main() -> int:
         "refs": ["#480", "#429", "#513", "#459"],
         "scope": (
             "Phase 1 of #524 (CPU-only; GPU contended). Verifies "
-            "scripts/cpu_offload_adamw.py's estimate_required_gib_offloaded() "
+            "src/ember/governance/scripts/cpu_offload_adamw.py's estimate_required_gib_offloaded() "
             "claim optimizer_state_gib_vram_resident=0.0, via (a) a static "
             "code-read assertion of the module itself and (b) a real "
             "checkpoint + real production-routing measurement of a SEPARATE "
@@ -224,7 +224,7 @@ def main() -> int:
             "gated on GPU-WINDOW-GO."
         ),
         "code_read": {
-            "module": "scripts/cpu_offload_adamw.py",
+            "module": "src/ember/governance/scripts/cpu_offload_adamw.py",
             "findings": code_read,
             "verdict": (
                 "optimizer_state_gib_vram_resident=0.0 is TRUE for the "

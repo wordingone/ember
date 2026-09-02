@@ -4,7 +4,7 @@
 
 This is a snapshot tied to the totality board render current at the time
 this anatomy set was authored:
-`scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json`
+`src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260801T052815Z.json`
 (41 conditions: 14 GREEN / 23 RED / 1 UNEVALUABLE / 3 AUDIT-OK,
 `pct_complete: 36.8`). To get a FRESH snapshot rather than trust this
 report's numbers as they age, run the totality runner

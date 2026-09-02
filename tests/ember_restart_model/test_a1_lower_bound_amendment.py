@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-AMENDMENT = ROOT / "docs/spec/ember02-a1-lower-bound-only-amendment-v2.json"
+AMENDMENT = ROOT / "docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json"
 PREREG = ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md"
 THRESHOLDS = ROOT / "docs/spec/ember02-preregistration-thresholds-v1.json"
 

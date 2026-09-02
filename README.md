@@ -49,7 +49,7 @@ one into another.
   copying it. Public roadmap certificates, not prose or progress bars, carry completion.
 - Contribution and independent reproduction start at
   [`docs/contributing.md`](docs/contributing.md) and the public
-  [reproducibility charter](docs/charter/REPRODUCIBILITY.md): bind an exact public source, replay
+  [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md): bind an exact public source, replay
   documented commands, and verify source identities and receipts without hidden or local evidence.
 
 Start with the [first-reader route](docs/domains/governance/guides/START-HERE.md), or use the
@@ -119,8 +119,8 @@ completion claim.
   [glossary](docs/GLOSSARY.md).
 - Use or inspect it: [start guide](docs/domains/governance/guides/START-HERE.md).
 - Verify evidence: [verification guide](docs/guides/VERIFY.md) and
-  [reproducibility charter](docs/charter/REPRODUCIBILITY.md).
-- Operate it: [operator documentation](docs/operator/README.md).
+  [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md).
+- Operate it: [operator documentation](docs/domains/governance/operator/README.md).
 - Audit authority: [continuity](docs/authority/CONTINUITY.md),
   [invariant](docs/authority/INVARIANT.md), and
   [governance](docs/authority/GOVERNANCE.md).

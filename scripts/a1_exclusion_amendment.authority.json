@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/a1_exclusion_amendment.py",
-  "artifact_sha256": "54d3c647735b89b441ef5585411b1547605c2a81d3128f9d29faa92e7b7c0aa1",
+  "artifact_sha256": "12efbb297d6cf149dd4770f02f2f156e17e2a3a662abed85783cb8d4db4bebb4",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

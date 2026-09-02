@@ -74,11 +74,11 @@ class SpecialistStreamTests(unittest.TestCase):
     @staticmethod
     def _bounded_stream_fixture(root: Path) -> tuple[Path, Path]:
         for relative in (
-            "tools/ember-restart-3b/build_owned_vision_scenes.py",
-            "tools/ember-restart-3b/build_owned_audio_frames.py",
-            "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
-            "tools/ember-restart-3b/specialist_semantics.py",
-            "tools/ember-restart-3b/verify_capability_record.py",
+            "src/ember/infrastructure/tools/ember-restart-3b/build_owned_vision_scenes.py",
+            "src/ember/infrastructure/tools/ember-restart-3b/build_owned_audio_frames.py",
+            "src/ember/infrastructure/tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
+            "src/ember/infrastructure/tools/ember-restart-3b/specialist_semantics.py",
+            "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py",
             "configs/ember-restart-3b.json",
         ):
             target = root / relative

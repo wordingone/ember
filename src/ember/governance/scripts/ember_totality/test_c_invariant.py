@@ -60,7 +60,7 @@ INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e
 GENESIS_TS = "2026-07-06T14:13:23-07:00"
 
 # [ERRATA cure, gh issue #612, FROZEN SPEC] Append-only historical-defect annex:
-# docs/ledgers/receipt-errata.jsonl. One row per pre-hardening post-genesis receipt that
+# docs/domains/governance/ledgers/receipt-errata.jsonl. One row per pre-hardening post-genesis receipt that
 # lacks (or mismatches) the invariant_sha256 stamp -- discovered by the #608
 # hardening scan, recorded rather than retro-stamped (refs #482, receipts are
 # append-only; landed receipt bytes are never touched).
@@ -178,7 +178,7 @@ def _parse_receipt_ts(ts: Any) -> Optional[float]:
 
 
 def _load_errata_coverage(cutoff_epoch: float) -> tuple[Dict[str, Dict[str, Any]], list[str]]:
-    """[ERRATA cure, gh issue #612] Load docs/ledgers/receipt-errata.jsonl (if it
+    """[ERRATA cure, gh issue #612] Load docs/domains/governance/ledgers/receipt-errata.jsonl (if it
     exists) into a {receipt_path: row} map. A row only counts as coverage if
     it parses as a JSON object, carries a non-empty `receipt_path`, and its
     own `discovered_ts` parses and predates-or-equals ERRATA_CUTOFF_TS (issue
@@ -495,7 +495,7 @@ def _errata_append_only_violation(errata_file: Path) -> Optional[str]:
 
 
 # [ERRATA cure, gh issue #612, FROZEN SPEC] Required non-empty string fields
-# on every docs/ledgers/receipt-errata.jsonl row.
+# on every docs/domains/governance/ledgers/receipt-errata.jsonl row.
 ERRATA_ROW_REQUIRED_FIELDS = (
     "defect", "discovered_ts", "discovery_source", "disposition", "note", "receipt_path",
 )
@@ -503,7 +503,7 @@ ERRATA_ROW_REQUIRED_FIELDS = (
 
 def _errata_row_schema_violations(cutoff_epoch: float) -> list[str]:
     """[ERRATA cure, gh issue #625 point 3, FROZEN SPEC] Row-by-row schema
-    validation of ERRATA_FILE (docs/ledgers/receipt-errata.jsonl): every non-blank
+    validation of ERRATA_FILE (docs/domains/governance/ledgers/receipt-errata.jsonl): every non-blank
     line must parse as a JSON object carrying every field in
     ERRATA_ROW_REQUIRED_FIELDS as a non-empty string, and no row's own
     `discovered_ts` may be strictly after ERRATA_CUTOFF_TS -- the annex is a
@@ -550,7 +550,7 @@ def _errata_row_schema_violations(cutoff_epoch: float) -> list[str]:
 
 def check_errata_structure() -> tuple[bool, str]:
     """[ERRATA cure, gh issue #625 point 3, FROZEN SPEC] Check that
-    docs/ledgers/receipt-errata.jsonl -- the REAL errata file _load_errata_coverage()
+    docs/domains/governance/ledgers/receipt-errata.jsonl -- the REAL errata file _load_errata_coverage()
     reads for coverage lookups (gh issue #612) -- is genuinely append-only,
     schema-conformant per ERRATA_ROW_REQUIRED_FIELDS, and carries no row whose
     own `discovered_ts` postdates the hard cutoff.
@@ -558,7 +558,7 @@ def check_errata_structure() -> tuple[bool, str]:
     [PROBE-HARDEN cure, PR #623 finding] This repoints the prior check away
     from INVARIANT-ERRATA.md -- a filename that was never created anywhere in
     this repo's history; the check was a structurally-untestable stub against
-    a file that could never exist. docs/ledgers/receipt-errata.jsonl is the file that
+    a file that could never exist. docs/domains/governance/ledgers/receipt-errata.jsonl is the file that
     actually carries the historical annex.
 
     Returns:

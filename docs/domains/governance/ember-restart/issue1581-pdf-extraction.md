@@ -14,7 +14,7 @@ powershell.exe -NoLogo -NoProfile -NonInteractive -File $env:USERPROFILE\.codex\
 ```
 
 Set `PYTHONPATH` to that isolated target when invoking
-`tools/corpus_connectors/pdf_to_utf8.py`. The producer refuses any other Python
+`src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py`. The producer refuses any other Python
 major/minor or pypdf version. Its receipt binds the wheel digest, installed
 Python-source tree digest, full Python version, producer digest, source
 connector receipt, immutable source PDF, limits, normalized output, and receipt

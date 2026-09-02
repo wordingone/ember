@@ -192,7 +192,7 @@ def main() -> int:
                     "coordinator's (see the scan receipt's convention_stats)",
         },
         "postfreeze_heldout_selection": {
-            "rule_doc": "docs/spec/a1-postfreeze-heldout-selection-v1.md",
+            "rule_doc": "docs/domains/governance/spec/a1-postfreeze-heldout-selection-v1.md",
             "rule": "index = int(eval_freeze_hash[:8], 16) mod 8 over the frozen "
                     "8-candidate public pool; resolved alongside the pointer file "
                     "once the freeze hash exists",

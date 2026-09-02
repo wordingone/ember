@@ -12,7 +12,7 @@
     },
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "37ca8853fa3f8df24646c40f991a3a801fac95b7bac977de11659c064a4de0c9",
+      "sha256": "69bc5b935067fba465ff1d6627541ff0b7b007c35400c1a86d0dd4df957eda73",
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
@@ -51,13 +51,13 @@
       "reason": "CPU-only wrapper test with CUDA explicitly disabled. Its child commands are temporary stub-core fixtures used to prove STOP/CEILING_STOP and receipt shapes; it does not launch a GPU job or daemon."
     },
     {
-      "path": "tests/ember_restart_model/test_certified_train_launch.py",
-      "sha256": "9330cf72f931825637622868e75f7730be64c6a2ed0fd05b536a232149897a30",
+      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
+      "sha256": "8f1beaeb5066cf34b71dcaecf423a00120cf8ddc9a0702030bc81b1d7a8e04d0",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {
       "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
-      "sha256": "4289d6fc2a69659d2921b1b2baa27844d341e69b12d8d58b3444960e47df314c",
+      "sha256": "c898df21988301f7def1251708104140d558fb29c0ac67bcd62edd785a0d1c98",
       "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
     },
     {

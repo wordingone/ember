@@ -29,7 +29,7 @@ the schema (see `scratch_custody.py`'s `_validate_annotation`), deliberately.
 ## Why `references` is a floor, not a ceiling
 
 `path_hits` (the precise `scratch/<name>` string) is not sufficient on its
-own. `scripts/cpu_offload_adamw.py` builds its default optimizer-state
+own. `src/ember/governance/scripts/cpu_offload_adamw.py` builds its default optimizer-state
 directory as `_REPO / "scratch" / "rung2-optstate"` — three separate path
 segments joined at runtime — so the literal substring `scratch/rung2-optstate`
 never appears in its source. Only `name_hits` (the bare directory name)
@@ -50,7 +50,7 @@ to is not committed — see below):
   reference (54.4 GiB of the 89.9 GiB census). **55 / 82** (35.5 GiB) show
   zero references from either signal — floor, not proof of safety, per above.
 - `rung2-optstate` (25.7 GiB, the largest entry) is referenced by
-  `scripts/cpu_offload_adamw.py`'s default optimizer-state path — a live,
+  `src/ember/governance/scripts/cpu_offload_adamw.py`'s default optimizer-state path — a live,
   executable consumer, not a historical mention. This alone rules out moving
   it without either updating that script or re-pointing it at the new
   location first.

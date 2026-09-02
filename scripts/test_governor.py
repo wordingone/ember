@@ -6,7 +6,7 @@ src/ember/governance/scripts/governor.py (issue #21): the fp8 gate, bf16 fallbac
 device-relative throughput threshold.
 
 CPU-only, fast, matches the repo's existing pytest convention
-(scripts/test_p1_envelope_sweep.py: sys.path insert + plain `import governor`).
+(src/ember/governance/scripts/test_p1_envelope_sweep.py: sys.path insert + plain `import governor`).
 fp8_matmul_with_fallback needs torch (CPU tensors only here -- no CUDA
 required); the other three surfaces (device_capability, select_precision,
 device_relative_threshold) are pure Python and are additionally covered by

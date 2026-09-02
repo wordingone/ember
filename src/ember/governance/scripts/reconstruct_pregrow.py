@@ -92,7 +92,7 @@ for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
 checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 
 # Expected SHA for rung-1 source checkpoint (step-00000730, cbase-grow-rung)

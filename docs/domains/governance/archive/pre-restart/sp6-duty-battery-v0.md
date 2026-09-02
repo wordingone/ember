@@ -45,7 +45,7 @@ scored separately per the prereg.
 
 ## Encoding half (landed — closes #269)
 
-`docs/archive/pre-restart/sp6-duty-battery-encodings.jsonl` — one row per episode:
+`docs/domains/governance/archive/pre-restart/sp6-duty-battery-encodings.jsonl` — one row per episode:
 `{id, events: [{source, kind, ts, payload}], fixtures: [{relpath,
 content_json|content_text, mtime_offset_s?}], notes}`. Selftest-enforced
 contract (scripts/sp6_battery_selftest.py):

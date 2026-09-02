@@ -49,10 +49,10 @@ PROVENANCE = {
     "teacher_outputs": False,
 }
 GENERATOR_RELATIVE = {
-    "vision": "tools/ember-restart-3b/build_owned_vision_scenes.py",
-    "audio": "tools/ember-restart-3b/build_owned_audio_frames.py",
-    "reasoning": "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
-    "tool": "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
+    "vision": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_vision_scenes.py",
+    "audio": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_audio_frames.py",
+    "reasoning": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
+    "tool": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
 }
 
 

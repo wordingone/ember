@@ -196,7 +196,7 @@ this file as `protocol_frozen_ref`.
 
 2. **founder_likeness** -- the nck/ 20-episode duty battery
    (src/ember/governance/scripts/nck/replay_rig.py::join_battery_encodings +
-   scripts/nck/seat_adapter.py::make_seat_core), the SAME battery the
+   src/ember/governance/scripts/nck/seat_adapter.py::make_seat_core), the SAME battery the
    2026-06-12 sp6c-e2b-shakedown receipts already ran the E2B seat through.
    Both arms are bound into the SAME seat_adapter core protocol
    (generate_fn(prompt) -> completion text, greedy decode) and scored by the

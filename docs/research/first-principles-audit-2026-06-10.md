@@ -713,7 +713,7 @@ sanitized reference solutions (human-written)? Bar frozen before the
 run: **pooled CV-AUC ≥ 0.75 = signature real**; below = contamination
 concern demoted at this granularity.
 
-**Method (`scripts/fp10_idiom.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp10_idiom.py`, selftest PASS, receipt
 `fp10-idiom-20260611T003930Z.json`, daemon eval 7b13577d):** 956
 episodes vs 109 reference solutions for the SAME 109 tasks (pairing by
 task controls the task-content confound; `load_split` lacks the dataset's
@@ -886,7 +886,7 @@ Hodel DSL code, 399 originals + 1,510 re-arc variants) was never probed
 for ITS concentration. A from-scratch core inherits the DOMINANT
 distribution.
 
-**Method (`scripts/fp13_concentration.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp13_concentration.py`, selftest PASS, receipt
 `fp13-concentration-20260611T012048Z.json`, daemon eval 3131e77c —
 within-corpus by design, since cross-world separability is
 domain-confounded):** (1) effective-N: exact-dup count + near-dup
@@ -995,7 +995,7 @@ duplication surviving into a build is CROSS-TASK — re-arc variants are
 separate task keys (`tid`, `tid#a1`, …) sharing solver text, putting
 the same completion under many prompts.
 
-**Method (`scripts/fp17_mixweights.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp17_mixweights.py`, selftest PASS, receipt
 `fp17-mixweights-20260611T014512Z.json`, daemon-run, replay views under
 /tmp — production receipts/ledger/views untouched):** replay the two live build
 shapes (A `arc_round` = build_dataset(LEDGER, default caps); B

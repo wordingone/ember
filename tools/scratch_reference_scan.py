@@ -21,7 +21,7 @@ Two signals, both advisory:
    consumer can build the path from separate segments at runtime
    (``Path(...) / "scratch" / "rung2-optstate"``) without the literal substring
    ``scratch/rung2-optstate`` ever appearing in its source, and grep cannot see that. This is
-   not a hypothetical -- ``scripts/cpu_offload_adamw.py`` does exactly this for
+   not a hypothetical -- ``src/ember/governance/scripts/cpu_offload_adamw.py`` does exactly this for
    ``rung2-optstate`` (the single largest entry in the live census), and only ``name_hits``
    finds it; a scan that trusted ``path_hits`` alone would have called it unreferenced. Treat
    every field this tool reports as a FLOOR on what is referenced, never a ceiling: absence of

@@ -53,7 +53,7 @@ matched Tier-2/reference segment has run.
 
 ## Liveness evidence producer
 
-`tools/ember-restart-3b/a1_e8_evidence.py::mint_liveness_receipt` mints the
+`src/ember/infrastructure/tools/ember-restart-3b/a1_e8_evidence.py::mint_liveness_receipt` mints the
 `ember02-r1-e8-liveness-v1` packet from already-produced evidence: it reopens
 the Tier-1 A1 run (`a1_execution.finalize_tier1_run`'s output) and the
 matched A3 run by exact raw SHA-256, copies both plus the externally frozen

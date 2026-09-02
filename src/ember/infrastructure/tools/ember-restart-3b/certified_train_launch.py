@@ -25,7 +25,50 @@ from typing import Any, NamedTuple
 _LAUNCH_MODULE_DIRECTORY = pathlib.Path(__file__).resolve().parent
 if str(_LAUNCH_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_LAUNCH_MODULE_DIRECTORY))
-from repository_layout import resolve_repository_authority  # noqa: E402
+# issue2015 exact-local-import:tools/ember-restart-3b/repository_layout.py
+import importlib.util as _ember_93a28f5fd2fd0068_importlib
+import sys as _ember_93a28f5fd2fd0068_sys
+from pathlib import Path as _ember_93a28f5fd2fd0068_Path
+_ember_93a28f5fd2fd0068_path = _ember_93a28f5fd2fd0068_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'repository_layout.py')
+if not _ember_93a28f5fd2fd0068_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/repository_layout.py')
+_ember_93a28f5fd2fd0068_aliases = ('_ember_issue2015_93a28f5fd2fd0068', 'repository_layout', 'tools.ember-restart-3b.repository_layout')
+_ember_93a28f5fd2fd0068_existing = []
+for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+    _ember_93a28f5fd2fd0068_candidate = _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias)
+    if _ember_93a28f5fd2fd0068_candidate is not None and all(_ember_93a28f5fd2fd0068_candidate is not item for item in _ember_93a28f5fd2fd0068_existing):
+        _ember_93a28f5fd2fd0068_existing.append(_ember_93a28f5fd2fd0068_candidate)
+if len(_ember_93a28f5fd2fd0068_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tools/ember-restart-3b/repository_layout.py')
+if _ember_93a28f5fd2fd0068_existing:
+    _ember_93a28f5fd2fd0068_module = _ember_93a28f5fd2fd0068_existing[0]
+    _ember_93a28f5fd2fd0068_observed = getattr(_ember_93a28f5fd2fd0068_module, '__file__', None)
+    if _ember_93a28f5fd2fd0068_observed is None or _ember_93a28f5fd2fd0068_Path(_ember_93a28f5fd2fd0068_observed).resolve() != _ember_93a28f5fd2fd0068_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tools/ember-restart-3b/repository_layout.py')
+else:
+    _ember_93a28f5fd2fd0068_spec = _ember_93a28f5fd2fd0068_importlib.spec_from_file_location('_ember_issue2015_93a28f5fd2fd0068', _ember_93a28f5fd2fd0068_path)
+    if _ember_93a28f5fd2fd0068_spec is None or _ember_93a28f5fd2fd0068_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tools/ember-restart-3b/repository_layout.py')
+    _ember_93a28f5fd2fd0068_module = _ember_93a28f5fd2fd0068_importlib.module_from_spec(_ember_93a28f5fd2fd0068_spec)
+    for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+        _ember_93a28f5fd2fd0068_prior = _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias)
+        if _ember_93a28f5fd2fd0068_prior is not None and _ember_93a28f5fd2fd0068_prior is not _ember_93a28f5fd2fd0068_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/repository_layout.py')
+        _ember_93a28f5fd2fd0068_sys.modules[_ember_93a28f5fd2fd0068_alias] = _ember_93a28f5fd2fd0068_module
+    try:
+        _ember_93a28f5fd2fd0068_spec.loader.exec_module(_ember_93a28f5fd2fd0068_module)
+    except BaseException:
+        for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+            if _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias) is _ember_93a28f5fd2fd0068_module:
+                _ember_93a28f5fd2fd0068_sys.modules.pop(_ember_93a28f5fd2fd0068_alias, None)
+        raise
+for _ember_93a28f5fd2fd0068_alias in _ember_93a28f5fd2fd0068_aliases:
+    _ember_93a28f5fd2fd0068_prior = _ember_93a28f5fd2fd0068_sys.modules.get(_ember_93a28f5fd2fd0068_alias)
+    if _ember_93a28f5fd2fd0068_prior is not None and _ember_93a28f5fd2fd0068_prior is not _ember_93a28f5fd2fd0068_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/repository_layout.py')
+    _ember_93a28f5fd2fd0068_sys.modules[_ember_93a28f5fd2fd0068_alias] = _ember_93a28f5fd2fd0068_module
+resolve_repository_authority = getattr(_ember_93a28f5fd2fd0068_module, 'resolve_repository_authority')
+# issue2015 exact-local-import-end:tools/ember-restart-3b/repository_layout.py  # noqa: E402
 
 
 # A certificate that carries closure_sha256 binds the TRAINING DEPENDENCY
@@ -4448,10 +4491,51 @@ def _validate_tier1_host_setup_contract(
         sys.path.insert(0, tools_directory)
     try:
         from checkpoint_artifacts import available_host_commit_bytes
-        from host_setup_contract import (
-            dense_a1_full_state_cpu_offload_profile,
-            validate_host_setup_contract,
-        )
+        # issue2015 exact-local-import:tools/ember-restart-3b/host_setup_contract.py
+        import importlib.util as _ember_476f08b55fb79131_importlib
+        import sys as _ember_476f08b55fb79131_sys
+        from pathlib import Path as _ember_476f08b55fb79131_Path
+        _ember_476f08b55fb79131_path = _ember_476f08b55fb79131_Path(__file__).resolve().parents[5].joinpath('tools', 'ember-restart-3b', 'host_setup_contract.py')
+        if not _ember_476f08b55fb79131_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:tools/ember-restart-3b/host_setup_contract.py')
+        _ember_476f08b55fb79131_aliases = ('_ember_issue2015_476f08b55fb79131', 'host_setup_contract', 'tools.ember-restart-3b.host_setup_contract')
+        _ember_476f08b55fb79131_existing = []
+        for _ember_476f08b55fb79131_alias in _ember_476f08b55fb79131_aliases:
+            _ember_476f08b55fb79131_candidate = _ember_476f08b55fb79131_sys.modules.get(_ember_476f08b55fb79131_alias)
+            if _ember_476f08b55fb79131_candidate is not None and all(_ember_476f08b55fb79131_candidate is not item for item in _ember_476f08b55fb79131_existing):
+                _ember_476f08b55fb79131_existing.append(_ember_476f08b55fb79131_candidate)
+        if len(_ember_476f08b55fb79131_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:tools/ember-restart-3b/host_setup_contract.py')
+        if _ember_476f08b55fb79131_existing:
+            _ember_476f08b55fb79131_module = _ember_476f08b55fb79131_existing[0]
+            _ember_476f08b55fb79131_observed = getattr(_ember_476f08b55fb79131_module, '__file__', None)
+            if _ember_476f08b55fb79131_observed is None or _ember_476f08b55fb79131_Path(_ember_476f08b55fb79131_observed).resolve() != _ember_476f08b55fb79131_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:tools/ember-restart-3b/host_setup_contract.py')
+        else:
+            _ember_476f08b55fb79131_spec = _ember_476f08b55fb79131_importlib.spec_from_file_location('_ember_issue2015_476f08b55fb79131', _ember_476f08b55fb79131_path)
+            if _ember_476f08b55fb79131_spec is None or _ember_476f08b55fb79131_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:tools/ember-restart-3b/host_setup_contract.py')
+            _ember_476f08b55fb79131_module = _ember_476f08b55fb79131_importlib.module_from_spec(_ember_476f08b55fb79131_spec)
+            for _ember_476f08b55fb79131_alias in _ember_476f08b55fb79131_aliases:
+                _ember_476f08b55fb79131_prior = _ember_476f08b55fb79131_sys.modules.get(_ember_476f08b55fb79131_alias)
+                if _ember_476f08b55fb79131_prior is not None and _ember_476f08b55fb79131_prior is not _ember_476f08b55fb79131_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/host_setup_contract.py')
+                _ember_476f08b55fb79131_sys.modules[_ember_476f08b55fb79131_alias] = _ember_476f08b55fb79131_module
+            try:
+                _ember_476f08b55fb79131_spec.loader.exec_module(_ember_476f08b55fb79131_module)
+            except BaseException:
+                for _ember_476f08b55fb79131_alias in _ember_476f08b55fb79131_aliases:
+                    if _ember_476f08b55fb79131_sys.modules.get(_ember_476f08b55fb79131_alias) is _ember_476f08b55fb79131_module:
+                        _ember_476f08b55fb79131_sys.modules.pop(_ember_476f08b55fb79131_alias, None)
+                raise
+        for _ember_476f08b55fb79131_alias in _ember_476f08b55fb79131_aliases:
+            _ember_476f08b55fb79131_prior = _ember_476f08b55fb79131_sys.modules.get(_ember_476f08b55fb79131_alias)
+            if _ember_476f08b55fb79131_prior is not None and _ember_476f08b55fb79131_prior is not _ember_476f08b55fb79131_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:tools/ember-restart-3b/host_setup_contract.py')
+            _ember_476f08b55fb79131_sys.modules[_ember_476f08b55fb79131_alias] = _ember_476f08b55fb79131_module
+        dense_a1_full_state_cpu_offload_profile = getattr(_ember_476f08b55fb79131_module, 'dense_a1_full_state_cpu_offload_profile')
+        validate_host_setup_contract = getattr(_ember_476f08b55fb79131_module, 'validate_host_setup_contract')
+        # issue2015 exact-local-import-end:tools/ember-restart-3b/host_setup_contract.py
 
         return validate_host_setup_contract(
             dense_a1_full_state_cpu_offload_profile(),

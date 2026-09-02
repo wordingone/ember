@@ -14,7 +14,7 @@
 //! What this module deliberately does NOT do: re-walk Python imports/exec edges to prove
 //! the closure DECLARATION is honest (`src/ember/governance/scripts/training_closure.py::audit_closure`'s
 //! reachability half). That is a boundary-drift guard that already runs in CI and again,
-//! live, inside `tools/ember-restart-3b/certified_train_launch.py::read_live_closure_sha256`
+//! live, inside `src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py::read_live_closure_sha256`
 //! immediately before a launch consumes this receipt. Porting a second Python-AST walker
 //! into Rust would duplicate a check the launch path already makes, for no verification
 //! this receipt needs to make on its own. See docs referenced in the #1400 PR body for the
@@ -331,7 +331,7 @@ fn local_git_pin_is_ancestor(
 
 /// The certificate's `closure_sha256` must equal the live-computed hash, and its
 /// `public_master_sha` must be an ancestor of live HEAD -- exactly the two checks
-/// `tools/ember-restart-3b/certified_train_launch.py::validate_certified_request` makes for
+/// `src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py::validate_certified_request` makes for
 /// a closure-carrying certificate. The `git merge-base --is-ancestor` call is the only
 /// subprocess this module ever spawns: local-object-graph only, `GIT_OPTIONAL_LOCKS=0` set,
 /// never a fetch/ls-remote/gh call.
