@@ -56,7 +56,7 @@ def test_connector_consumer_ignores_preloaded_admission_receipt(
     monkeypatch.syspath_prepend(str(ADMISSION))
     admission_receipt = _load_as_top_level_receipt(ADMISSION / "receipt.py")
 
-    connector = importlib.import_module("tools.corpus_connectors.arxiv_fetch")
+    connector = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.arxiv_fetch")
     canonical = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.receipt")
 
     assert connector.rcpt is canonical
@@ -119,7 +119,7 @@ def test_every_direct_package_entrypoint_has_nonshadowing_root_preamble() -> Non
     entrypoints = _direct_package_entrypoints()
     assert {path.relative_to(ROOT).as_posix() for path in entrypoints} == {
         "src/ember/governance/scripts/ember_admission/produce_candidate.py",
-        "tools/corpus_connectors/arxiv_fetch.py",
+        "src/ember/infrastructure/tools/corpus_connectors/arxiv_fetch.py",
         "tools/corpus_connectors/bulk_fetch.py",
         "tools/corpus_connectors/github_fetch.py",
         "tools/corpus_connectors/hf_fetch.py",

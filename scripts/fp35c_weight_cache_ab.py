@@ -17,7 +17,7 @@ grad-ckpt recompute arm, µnit-Scaling default, governed, live v0 untouched.
 Bar unchanged: beat bf16 or the receipt records the kill.
 
 If this variant also fails at c03 widths, receipt records fp8 as
-width-conditional (wins at K>=4096) per docs/archive/pre-restart/fp33-kernel-route-v0.md.
+width-conditional (wins at K>=4096) per docs/domains/governance/archive/pre-restart/fp33-kernel-route-v0.md.
 
 Receipt: receipts/fp35c-weight-cache-ab-<ts>.json
 NOT run via train MCP.  Native Windows Python (torch 2.10+cu126).

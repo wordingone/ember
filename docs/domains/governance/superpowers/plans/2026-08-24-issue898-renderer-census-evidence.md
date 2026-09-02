@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Bun, `bun:test`, Node `fs`/`path`/`crypto`, existing `linearFit` and installed-cockpit soak verifiers.
 
-**Spec:** `docs/superpowers/specs/2026-08-24-issue898-renderer-census-evidence-design.md`
+**Spec:** `docs/domains/governance/superpowers/specs/2026-08-24-issue898-renderer-census-evidence-design.md`
 
 ## Global Constraints
 

@@ -116,7 +116,7 @@ GitHub REST/GraphQL through the repository's safe wrappers, Git, pytest/unittest
 
 **Files:**
 - Create: `src/ember/governance/scripts/roadmap/apply_github_projection.py`
-- Create: `tests/roadmap/test_apply_github_projection.py`
+- Create: `tests/roadmap/domain-governance/test_apply_github_projection.py`
 
 **Interfaces:**
 - Consumes: validated projection and current GitHub state.

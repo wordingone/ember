@@ -83,7 +83,7 @@ describe("live memory footprint service", () => {
   test("binds the canonical spec bytes and appends one external JSONL trip before request", async () => {
     const { repoRoot, receiptPath } = fixture();
     const binding = loadMemoryFootprintSpecBinding(repoRoot);
-    expect(binding.spec_path).toBe("tools/ember-cli/specs/liveness-watchdog-memory-v1.json");
+    expect(binding.spec_path).toBe("src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json");
     expect(binding.spec_sha256).toMatch(/^[0-9a-f]{64}$/);
 
     const events: string[] = [];

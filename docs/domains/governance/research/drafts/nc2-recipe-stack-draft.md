@@ -1,4 +1,4 @@
-> SUPERSEDED (2026-07-09): use docs/research/nc2-recipe-stack-2026-06-10.md — same scope, finalized version. Kept for history per issue #567.
+> SUPERSEDED (2026-07-09): use docs/domains/governance/research/nc2-recipe-stack-2026-06-10.md — same scope, finalized version. Kept for history per issue #567.
 
 # NC2 Recipe-Stack Pins — ember's owned-core technical stack (#28)
 

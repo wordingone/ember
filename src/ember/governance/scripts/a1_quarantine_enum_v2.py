@@ -43,7 +43,7 @@ the A1 declaration, the exclusion amendment, and any a1-prefreeze-quarantine-*
 receipt (v1 or this v2 output).
 
 Usage:
-  python scripts/a1_quarantine_enum_v2.py \\
+  python src/ember/governance/scripts/a1_quarantine_enum_v2.py \\
       --heldout-receipt receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json \\
       --freeze-receipt receipts/eval-suite-freeze/eval-suite-freeze-v1.json \\
       --declaration receipts/eval-suite-freeze/a1-freeze-declaration-20260709T233050Z.json \\

@@ -12,7 +12,7 @@ Issue: #1475 (operator directive 2026-08-05)
 
 Consumer: `tools/ember-cli/src/services/process-select.ts`
 Consumer: `src/ember/infrastructure/tools/ember-cli/src/components/start-parameters.ts`
-Consumer: `tools/ember-cli/src/services/operator-control-notice.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/operator-control-notice.ts`
 
 ## Operator mandate this node implements
 

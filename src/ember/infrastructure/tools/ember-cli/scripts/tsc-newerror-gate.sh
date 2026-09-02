@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-# tools/ember-cli/scripts/tsc-newerror-gate.sh
+# src/ember/infrastructure/tools/ember-cli/scripts/tsc-newerror-gate.sh
 #
 # Local pre-PR gate for ember-cli TypeScript type-debt (class-fix, PR #980
 # manifest-typing + mock-typing reduction: 61 -> 25 `error TS` lines).
@@ -12,7 +12,7 @@
 # (GREEN) otherwise. LOCAL gate only: no GitHub Actions workflow, no CI
 # billing surface; run this by hand or from a pre-PR checklist.
 #
-# Usage: tools/ember-cli/scripts/tsc-newerror-gate.sh   (from anywhere)
+# Usage: src/ember/infrastructure/tools/ember-cli/scripts/tsc-newerror-gate.sh   (from anywhere)
 
 set -euo pipefail
 

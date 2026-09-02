@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """c04_fp8_ab.py — C-1 per-shape fp8 A/B for c04 candidate grid (#353).
 
-For each candidate in docs/archive/pre-restart/c04-candidate-grid-v1.md, measures bf16 vs
+For each candidate in docs/domains/governance/archive/pre-restart/c04-candidate-grid-v1.md, measures bf16 vs
 weight-cache fp8 on the ACTUAL GEMM shapes (QKV proj, output proj,
 MLP up/down, LM head) at that candidate's widths.
 
@@ -45,7 +45,7 @@ def _ts() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Candidate grid — parsed from docs/archive/pre-restart/c04-candidate-grid-v1.md
+# Candidate grid — parsed from docs/domains/governance/archive/pre-restart/c04-candidate-grid-v1.md
 # ---------------------------------------------------------------------------
 
 def _parse_candidates() -> list[dict]:

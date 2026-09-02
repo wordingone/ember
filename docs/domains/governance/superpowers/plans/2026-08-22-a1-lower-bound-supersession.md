@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - The frozen v1 preregistration is append-only and remains byte-unchanged.
-- `docs/spec/ember02-preregistration-thresholds-v1.json` remains byte-unchanged.
+- `docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json` remains byte-unchanged.
 - Trigger only on the executed both-tiers-fail R1-E8 evidence at source `24decc312c771ec0e9309882f24f2a3ba82ea156`.
 - A1 receives no R2 funding and cannot carry dense-null, beaten-null, capability-credit, or result-credit claims.
 - `NO_THRESHOLD_CHANGE` and `NO_NEW_PARALLEL_AUTHORITY` are explicit closed fields.

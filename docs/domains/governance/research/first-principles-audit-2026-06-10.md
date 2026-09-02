@@ -671,7 +671,7 @@ mints fp-12.
 from parity once (a) sampling uncertainty and (b) the ext-FPR correction
 are applied?
 
-**Method (`scripts/fp9_parity.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp9_parity.py`, selftest PASS, receipt
 `fp9-parity-20260611T002323Z.json`):** task-level bootstrap (120 joint
 tasks, seed 16, 10k resamples) on the fp-7 ratio — both numerators valued
 by the 3B posterior, divided by their own receipted gen-minutes (6.06 /

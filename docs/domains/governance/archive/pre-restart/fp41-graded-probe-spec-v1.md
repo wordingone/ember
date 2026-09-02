@@ -7,7 +7,7 @@ powered run executes ONLY if the c04/pretrain outcome proves **density-sensitive
 ## The problem fp-40 found
 
 The density A/B verdict (DENSITY_CONFIRMED, +33.33pp) was **statistically
-underpowered via pseudoreplication** (`docs/research/fp40-density-power-audit.md`): the
+underpowered via pseudoreplication** (`docs/domains/governance/research/fp40-density-power-audit.md`): the
 wcode probe is **binary pass/fail per prompt**, and empirically every cell rate is
 exactly 0.0 or 1.0 (bimodal). So 400 prompts re-measure ONE trained model 400 times
 (correlated → 1); the real unit is the **seed** (n=3), and seed-level Fisher gives

@@ -47,7 +47,7 @@ function idleInput(): Issue1455MemoryReceiptInput {
     source: {
       source_commit: SOURCE_COMMIT,
       cockpit_binary_sha256: SHA_B,
-      memory_spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
+      memory_spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
       memory_spec_sha256: SHA_A,
     },
     cockpit_pid: 5100,
@@ -115,7 +115,7 @@ function real5MinCadenceIdleInput(
     source: {
       source_commit: SOURCE_COMMIT,
       cockpit_binary_sha256: SHA_B,
-      memory_spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
+      memory_spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
       memory_spec_sha256: SHA_A,
     },
     cockpit_pid: 35436,
@@ -208,7 +208,7 @@ describe("issue #1455 memory evidence receipt", () => {
       source: {
         source_commit: SOURCE_COMMIT,
         cockpit_binary_sha256: SHA_B,
-        memory_spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
+        memory_spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
         memory_spec_sha256: SHA_A,
       },
       cockpit_pid: 5100,
@@ -225,7 +225,7 @@ describe("issue #1455 memory evidence receipt", () => {
         commit_gb: 4.5,
         threshold: 4,
         action: "exit_cockpit_for_task_scheduler",
-        spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
+        spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
         spec_sha256: SHA_A,
       },
     });
@@ -251,7 +251,7 @@ describe("issue #1455 memory evidence receipt", () => {
       source: {
         source_commit: SOURCE_COMMIT,
         cockpit_binary_sha256: SHA_B,
-        memory_spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" as const,
+        memory_spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json" as const,
         memory_spec_sha256: SHA_A,
       },
       cockpit_pid: 5100,
@@ -268,7 +268,7 @@ describe("issue #1455 memory evidence receipt", () => {
         commit_gb: 4.5,
         threshold: 4,
         action: "exit_cockpit_for_task_scheduler" as const,
-        spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" as const,
+        spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json" as const,
         spec_sha256: SHA_A,
       },
     };

@@ -52,7 +52,7 @@ seed set respectively).
 
 ## Executable
 
-`scripts/fp34_band_owned.py` — `freeze` (round-1 receipts → band manifest),
+`src/ember/governance/scripts/fp34_band_owned.py` — `freeze` (round-1 receipts → band manifest),
 `verdict` (round-2 receipt + manifest → prong-A receipt), `--selftest`
 (pure-logic: predicate boundary cases, seed-19 determinism, shared-machinery
 import). Receipts: `receipts/fp34-band-manifest-<ts>.json`,

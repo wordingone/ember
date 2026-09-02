@@ -57,7 +57,7 @@ def _write_cert_manifest(tmp_path: Path, cert: dict, name: str = "cert-manifest.
 # / OWNED_ADMITTED-gap / cert-cross-check behaviors these helpers targeted
 # are verified directly against the bridge (bypassing contract.py Stage 1,
 # which is legitimate there since the bridge is unit-tested independently)
-# in scripts/ember_restart/test_seat_identity_bridge.py.
+# in src/ember/governance/scripts/ember_restart/test_seat_identity_bridge.py.
 
 
 def _approval(manifest: Path) -> Path:
@@ -139,7 +139,7 @@ def test_resolver_derives_owned_identity_from_cert_bridge_but_refuses_unadmitted
     every manifest that can pass Stage 1 admission multi-shard, and the
     corrected bridge refuses every multi-shard checkpoint. That downstream
     OWNED_ADMITTED gap is still real and still verified directly against the
-    bridge in scripts/ember_restart/test_seat_identity_bridge.py (which
+    bridge in src/ember/governance/scripts/ember_restart/test_seat_identity_bridge.py (which
     calls derive_seat_identity directly, bypassing contract.py Stage 1) --
     it is simply no longer observable end-to-end through cli_seat.py for
     any manifest shaped the way real production data is shaped. See the
@@ -239,7 +239,7 @@ def test_missing_shard_refused_through_production_path_naming_the_path(tmp_path:
     1). The bridge's OWN missing-shard handling (a single-shard index whose
     one shard is absent) is separately covered directly against
     derive_seat_identity in
-    scripts/ember_restart/test_seat_identity_bridge.py::
+    src/ember/governance/scripts/ember_restart/test_seat_identity_bridge.py::
     test_missing_shard_refused_naming_the_path -- contract.py's mandatory
     4-expert-bank architecture requirement (contract.py's
     _verify_architecture, "requires exactly vision/audio/reasoning/tool

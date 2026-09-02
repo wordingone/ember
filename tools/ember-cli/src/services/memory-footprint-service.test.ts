@@ -9,7 +9,7 @@ import {
 } from "./memory-footprint-service.ts";
 
 const binding: MemoryFootprintServiceSpecBinding = {
-  spec_path: "tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
+  spec_path: "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json",
   spec_sha256: "a".repeat(64),
   spec: {
     schema_version: "ember-liveness-watchdog-memory-v1",

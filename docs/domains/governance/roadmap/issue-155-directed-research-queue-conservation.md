@@ -14,7 +14,7 @@ Accepted owners:
 
 Bidirectional bridge: https://github.com/wordingone/ember/issues/155#issuecomment-5225763883
 
-Publication base: `9b54532f1712593bcc6d66f1e64ccfe22c5fd6a9`. The public PR body and terminal receipt must bind the frozen exact head, sole path `docs/roadmap/issue-155-directed-research-queue-conservation.md`, Git blob, file SHA-256, byte count, independent review URL, fresh CI and policy/guard job URLs, clean non-draft merge state, and immutable merge SHA. Stale or cancelled checks do not count.
+Publication base: `9b54532f1712593bcc6d66f1e64ccfe22c5fd6a9`. The public PR body and terminal receipt must bind the frozen exact head, sole path `docs/domains/governance/roadmap/issue-155-directed-research-queue-conservation.md`, Git blob, file SHA-256, byte count, independent review URL, fresh CI and policy/guard job URLs, clean non-draft merge state, and immutable merge SHA. Stale or cancelled checks do not count.
 
 ## Conserved queue
 
