@@ -210,7 +210,7 @@ INVENTORY: tuple[dict, ...] = (
          provenance="ember-owned-rung-v1 admission contract; the fail-closed "
                     "prerequisite of sec1."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/build_fixed_prior_manifest.py",
+         path="src/ember/governance/scripts/build_fixed_prior_manifest.py",
          provenance="This builder. Self-included so the manifest's own producer is "
                     "a pinned prior and cannot change unnoticed."),
 
@@ -482,8 +482,8 @@ def build_manifest() -> dict:
         "energy_method": energy_method_block(),
         "host_governor": host_governor_block(),
         "items": build_items(),
-        "builder": "scripts/build_fixed_prior_manifest.py",
-        "verification": ("python scripts/build_fixed_prior_manifest.py --verify "
+        "builder": "src/ember/governance/scripts/build_fixed_prior_manifest.py",
+        "verification": ("python src/ember/governance/scripts/build_fixed_prior_manifest.py --verify "
                          "recomputes every file and tree digest and fails closed "
                          "on drift."),
     }

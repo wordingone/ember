@@ -67,7 +67,7 @@ Pass `optimizer.finish_gradient_norm()` after `optimizer.step()` and before the 
 **Files:**
 - Create: `src/ember/governance/scripts/r1_e7_ratio_sigma.py`
 - Create: `tests/domain-governance/test_r1_e7_ratio_sigma.py`
-- Modify: `tests/test_r1_e8_validator.py`
+- Modify: `tests/domain-governance/test_r1_e8_validator.py`
 
 **Interfaces:**
 - Produces: `normalized_grad_norm_ratio_sigma(seed_series: dict[str, list[dict[str, Any]]]) -> dict[str, Any]`
@@ -93,11 +93,11 @@ Run the new test file. Its second identical compose call must raise `FileExistsE
 
 - [ ] **Step 5: Pin validator refusal behavior**
 
-In `tests/test_r1_e8_validator.py`, add a live-v1-shaped E7 fixture with only `{loss, grad_norm}` and assert `E7_SIGMA_MISSING`; retain the positive fixture with `{loss, grad_norm_ratio, grad_norm}`.
+In `tests/domain-governance/test_r1_e8_validator.py`, add a live-v1-shaped E7 fixture with only `{loss, grad_norm}` and assert `E7_SIGMA_MISSING`; retain the positive fixture with `{loss, grad_norm_ratio, grad_norm}`.
 
 - [ ] **Step 6: Verify validator GREEN unchanged**
 
-Run: `python -B -m pytest tests/test_r1_e8_validator.py -q`
+Run: `python -B -m pytest tests/domain-governance/test_r1_e8_validator.py -q`
 
 Expected: PASS with no diff in `src/ember/governance/scripts/r1_e8_validator.py`.
 
@@ -133,7 +133,7 @@ Reopen and validate all inputs, write both series first and the top-level receip
 
 - [ ] **Step 6: Verify producer and real validator GREEN**
 
-Run the producer tests and `tests/test_r1_e8_validator.py` together, including feeding the producer output to the real validator.
+Run the producer tests and `tests/domain-governance/test_r1_e8_validator.py` together, including feeding the producer output to the real validator.
 
 ### Task 4: Carrier verification, identity remint, and publication
 

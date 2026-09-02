@@ -122,7 +122,7 @@ for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
 checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SEED_CKPT = REPO / "models/cbase-grow-rung/rung1-20260703T155447Z/stabilize/checkpoints/step-00000766"
 EXPECTED_SHA = "58e8e98916823941381d9cf71cf3725148aa61cf106e8b46c4fa96e0c5e4659b"
 A19_ADAPTER = REPO / "receipts/ember-c14-owned-run/resident-adapter-20260703T154830Z.pt"

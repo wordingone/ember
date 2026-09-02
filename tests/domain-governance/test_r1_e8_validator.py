@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPTS = REPO_ROOT / "src" / "ember" / "governance" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 

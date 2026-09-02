@@ -165,7 +165,7 @@
       "error": "unknown alias GOALFORGE_ROOT"
     },
     {
-      "path": "scripts/ember_ind3_operate_capture.py",
+      "path": "src/ember/governance/scripts/ember_ind3_operate_capture.py",
       "line": 73,
       "target": "GOALFORGE_ROOT",
       "expression": "os.environ.get('EMBER_GOALFORGE_ROOT', os.path.join(os.path.dirname(EXEC_ROOT), 'ember-goalforge'))",
@@ -176,7 +176,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_ind3_operate_capture.py",
+      "path": "src/ember/governance/scripts/ember_ind3_operate_capture.py",
       "line": 83,
       "target": "SCRATCH_ROOT",
       "expression": "os.environ.get('EMBER_IND3_SCRATCH', os.path.join(EXEC_ROOT, 'scratch', 'ind3'))",
@@ -187,7 +187,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_ind3_operate_capture.py",
+      "path": "src/ember/governance/scripts/ember_ind3_operate_capture.py",
       "line": 89,
       "target": "GOALFORGE_RECEIPTS_DIR",
       "expression": "os.path.join(GOALFORGE_ROOT, 'receipts', 'ind3-operate-cure')",
@@ -539,7 +539,7 @@
       "error": "unknown alias EXTERNAL_STATE"
     },
     {
-      "path": "scripts/ember_totality/test_c5.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c5.py",
       "line": 86,
       "target": "RESIDENT_GATE_DIR",
       "expression": "os.path.join(EXTERNAL_STATE, 'receipts', 'ember-resident-training-gate')",
@@ -792,7 +792,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_legib.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_legib.py",
       "line": 60,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -803,7 +803,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_legib.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_legib.py",
       "line": 61,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",

@@ -29,7 +29,7 @@ EXPECTED_VERDICTS = {
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    return next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 
 
 def load_json(path: Path) -> dict[str, Any]:

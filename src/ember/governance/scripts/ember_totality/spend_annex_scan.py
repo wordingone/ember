@@ -808,7 +808,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
     (re.compile(r"^cold-read-reprobe-.*\.json$"), "manually_authored",
      "evidence (c) manually-authored by design: content is prose per_dir observations from a "
      "fresh manual re-read of the repo tree (a C-LEGIB 'cold read' exercise); "
-     "scripts/ember_totality/test_c_legib.py only READS receipts/cold-read-reprobe/, confirmed "
+     "src/ember/governance/scripts/ember_totality/test_c_legib.py only READS receipts/cold-read-reprobe/, confirmed "
      "never writes it -- the exercise is meant to be authored freshly by whoever performs it, "
      "not scriptable (a scripted writer would defeat the point of a cold read)."),
     (re.compile(r"^v0-live-import-edition-.*\.json$"), "manually_authored",

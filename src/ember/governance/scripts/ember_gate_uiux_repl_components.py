@@ -115,7 +115,7 @@ def ts() -> str:
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    return next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 
 
 def sha256(path: Path) -> str:

@@ -19,7 +19,7 @@ Prior art this reuses rather than reimplements:
     running; this guard catches that case, g_governor() does not.
   - Commit-charge 6GiB free floor == the visible-window-hygiene.md in-run
     commit governor ("margin < 6GB free commit at any phase boundary ->
-    checkpoint + clean abort") and scripts/build_fixed_prior_manifest.py's
+    checkpoint + clean abort") and src/ember/governance/scripts/build_fixed_prior_manifest.py's
     HOST_GOVERNOR_FLOOR_BYTES (6.0 GiB). That law governs mid-run; this
     module applies the identical floor PRE-dispatch, before the run starts.
   - GlobalMemoryStatusEx.ullAvailPageFile / ullTotalPageFile as the
