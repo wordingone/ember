@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 RECEIPT = ROOT / "manifests" / "ember-restart-eval-first-shared-raw-forward-v1.json"
 PREDICTIONS = ROOT / "manifests" / "ember-restart-eval-first-shared-raw-forward-v1-predictions.json"
 AUTHORITY = ROOT / "manifests" / "ember-restart-execution-authorities-v1.json"

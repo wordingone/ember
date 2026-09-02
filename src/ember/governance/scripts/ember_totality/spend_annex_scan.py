@@ -428,7 +428,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     out = root / "receipts" / "wheel" / f"wheel-heldout-{ts}.json"
 #   contamination-verbatim-*.json            scripts/proofs/contamination_verbatim_check.py:319,326
 #     out_path = RECEIPTS_DIR / f"contamination-verbatim-{receipt['ts']}.json"
-#   fp35c-weight-cache-ab-*.json             scripts/fp35c_weight_cache_ab.py:389
+#   fp35c-weight-cache-ab-*.json             src/ember/governance/scripts/fp35c_weight_cache_ab.py:389
 #     out_path = os.path.join(RECEIPTS, f"fp35c-weight-cache-ab-{ts}.json")
 #   placement-9p-bleed-*.json                scripts/proofs/placement_9p_bleed_probe.py:667
 #     out_path = RECEIPTS_DIR_WIN / f"placement-9p-bleed-{stamp}.json"
@@ -547,7 +547,7 @@ CONVENTION_MAP = [
     (re.compile(r"^wheel-real-.*\.json$"), "src/ember/governance/scripts/ember_wheel_harness.py"),
     (re.compile(r"^wheel-heldout-.*\.json$"), "src/ember/governance/scripts/ember_wheel_harness.py"),
     (re.compile(r"^contamination-verbatim-.*\.json$"), "scripts/proofs/contamination_verbatim_check.py"),
-    (re.compile(r"^fp35c-weight-cache-ab-.*\.json$"), "scripts/fp35c_weight_cache_ab.py"),
+    (re.compile(r"^fp35c-weight-cache-ab-.*\.json$"), "src/ember/governance/scripts/fp35c_weight_cache_ab.py"),
     (re.compile(r"^placement-9p-bleed-.*\.json$"), "scripts/proofs/placement_9p_bleed_probe.py"),
     (re.compile(r"^proof-verifier-surface-coverage-.*\.json$"), "scripts/proofs/verifier_surface_coverage.py"),
     # --- second pass (gh issue #17 follow-up, 2026-07-03) ---

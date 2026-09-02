@@ -15,7 +15,7 @@ import pytest
 import torch
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = ROOT / "scripts" / "ember_restart_eval_raw_forward.py"
 COUNTS = {
     "allocated_parameters": 3_839_161_856,

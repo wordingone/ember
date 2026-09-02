@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = REPO / "scripts" / "ember_restart_eval_contract.py"
 
 
