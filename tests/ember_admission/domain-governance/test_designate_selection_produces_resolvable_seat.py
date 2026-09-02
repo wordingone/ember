@@ -4,7 +4,7 @@
 """Proves the bytes /designate selects (the admitted candidate's
 restart_run_manifest role) are a genuine, resolvable OWNED_ADMITTED seat --
 not that /designate's own copy/receipt logic is correct (that is
-tools/ember-cli/src/commands/designate-fixture.test.ts's job, driven against
+src/ember/infrastructure/tools/ember-cli/src/commands/designate-fixture.test.ts's job, driven against
 the real admit.ts verifier), but that what /designate is handed by a real
 /admit run is authentic, non-corrupted, seat-resolvable content.
 
