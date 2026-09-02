@@ -53,7 +53,7 @@ python src/ember/governance/scripts/ember_gate_receipt_store_selftest.py
 python scripts/ember_gate_state_persistence_selftest.py
 python src/ember/governance/scripts/ember_gate_hook_runner_selftest.py
 python src/ember/governance/scripts/ember_gate_launch_packaging_selftest.py
-python scripts/ember_gate_rollback_rewind_selftest.py
+python src/ember/governance/scripts/ember_gate_rollback_rewind_selftest.py
 python src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
 python scripts/ember_gate_tool_dispatch_permissions_selftest.py
 python src/ember/governance/scripts/ember_gate_function_slash_commands_selftest.py

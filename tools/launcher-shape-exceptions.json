@@ -56,7 +56,7 @@
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {
-      "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
+      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
       "sha256": "c898df21988301f7def1251708104140d558fb29c0ac67bcd62edd785a0d1c98",
       "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
     },

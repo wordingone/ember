@@ -78,7 +78,7 @@ WORKTREE_LIFECYCLE = REPO_ROOT / "scripts" / "worktree_lifecycle.py"
 def _load_test_contract_helpers():
     """File-path load of test_contract.py's manifest scaffolding helpers.
 
-    A dotted ``tests.ember_restart.test_contract`` import is not reliable
+    A dotted ``tests.ember_restart.domain_governance.test_contract`` import is not reliable
     here: an unrelated installed package can occupy the top-level ``tests``
     name and shadow this repository's ``tests/`` directory before Python's
     namespace-package merge ever runs. File-path loading (precedent:

@@ -2332,7 +2332,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_consumer_validator_snapshot.py",
+      "path": "tests/ember_admission/domain-governance/test_consumer_validator_snapshot.py",
       "line": 17,
       "target": "PRODUCER_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2343,7 +2343,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_descriptor_snapshot.py",
+      "path": "tests/ember_admission/domain-governance/test_descriptor_snapshot.py",
       "line": 14,
       "target": "PRODUCER_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2354,7 +2354,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_designate_selection_produces_resolvable_seat.py",
+      "path": "tests/ember_admission/domain-governance/test_designate_selection_produces_resolvable_seat.py",
       "line": 52,
       "target": "ADMISSION_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2365,7 +2365,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_designate_selection_produces_resolvable_seat.py",
+      "path": "tests/ember_admission/domain-governance/test_designate_selection_produces_resolvable_seat.py",
       "line": 53,
       "target": "RESTART_ROOT",
       "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_restart'",
@@ -2376,7 +2376,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_final_path_consumption.py",
+      "path": "tests/ember_admission/domain-governance/test_final_path_consumption.py",
       "line": 18,
       "target": "PRODUCER_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2387,7 +2387,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_post_validation_drift.py",
+      "path": "tests/ember_admission/domain-governance/test_post_validation_drift.py",
       "line": 15,
       "target": "PRODUCER_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2398,7 +2398,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_producer_receipt.py",
+      "path": "tests/ember_admission/domain-governance/test_producer_receipt.py",
       "line": 15,
       "target": "PRODUCER_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2409,7 +2409,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_admission/test_restart_consumer.py",
+      "path": "tests/ember_admission/domain-governance/test_restart_consumer.py",
       "line": 15,
       "target": "PRODUCER_ROOT",
       "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
@@ -2420,7 +2420,7 @@
       "error": null
     },
     {
-      "path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
+      "path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/build_fixture.py",
       "line": 19,
       "target": "MODEL_ROOT",
       "expression": "ROOT / 'tools' / 'ember-restart-3b'",
