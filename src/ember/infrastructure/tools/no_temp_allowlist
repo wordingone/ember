@@ -7,7 +7,7 @@
 # current, past, or future should live in temp. none." This file is a TRACKED,
 # SHRINKING debt list of known system-temp usage sites, seeded from the
 # 2026-07-20 repository-wide audit minus the launch-blocker site
-# (tools/ember-cli/src/entrypoints/owned-seat-loader.ts), which this PR fixed
+# (src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-seat-loader.ts), which this PR fixed
 # by routing through emberScratchDir().
 #
 # THE ALLOWLIST MUST SHRINK TO ZERO. Every entry below is a purge target for a
@@ -232,13 +232,13 @@ src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts
 src/ember/infrastructure/tools/ember-cli/src/commands/world-state.test.ts
 src/ember/infrastructure/tools/ember-cli/src/core/ember-world-state.test.ts
 src/ember/infrastructure/tools/ember-cli/src/core/watch-render.test.ts
-tools/ember-cli/src/entrypoints/model-identity-contract-wiring.test.ts
-tools/ember-cli/src/entrypoints/model-seat-integration.test.ts
-tools/ember-cli/src/entrypoints/owned-seat-loader.test.ts
-tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts
-tools/ember-cli/src/entrypoints/process-entry.test.ts
-tools/ember-cli/src/entrypoints/session-init.test.ts
-tools/ember-cli/src/hardening/hardening-receipts.test.ts
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-identity-contract-wiring.test.ts
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat-integration.test.ts
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-seat-loader.test.ts
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-server-supervisor.test.ts
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/process-entry.test.ts
+src/ember/infrastructure/tools/ember-cli/src/entrypoints/session-init.test.ts
+src/ember/infrastructure/tools/ember-cli/src/hardening/hardening-receipts.test.ts
 tools/ember-cli/src/mcp-config.test.ts
 tools/ember-cli/src/memory-operations.test.ts
 tools/ember-cli/src/native-installer.test.ts

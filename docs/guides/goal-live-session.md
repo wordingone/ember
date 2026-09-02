@@ -18,7 +18,7 @@ Remove-Item -LiteralPath $exe -Force
 
 The command emits one path-free JSON object with schema
 `ember-goal-live-session-receipt-v1`. The checked-in deterministic fixture is
-`tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json`.
+`src/ember/infrastructure/tools/ember-cli/src/fixtures/goal-live-session-receipt-v1.json`.
 
 The receipt contains three rendered, fixed-dimension frame captures from the compiled session. Each frame binds UTF-8 bytes, width/height, sequence,
 receipt range, the exact frame-source SHA, and the compiled executable SHA;

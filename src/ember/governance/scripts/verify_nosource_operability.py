@@ -165,7 +165,7 @@ bytes the artifact does not control):
 
       Round 7 (2026-07-25) amendment. Round 6's own defeat: a launcher that
       COPIES the CLI entry's substituted bytes out of the tree (`copy
-      tools\ember-cli\src\entrypoints\main.ts %TEMP%\stolen-entry.ts`) and
+      src\ember\infrastructure\tools\ember-cli\src\entrypoints\main.ts %TEMP%\stolen-entry.ts`) and
       then genuinely delegates `run` on the COPY. The entry marker fires --
       the bytes really did execute, that observation is not false -- but it
       answers the wrong question: L1 asks whether the launcher invokes the

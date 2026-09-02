@@ -35,7 +35,7 @@ Fisher exact (hypergeometric) one-sided p for "arm_b ≥ observed crossings":
 
 With 3 seeds and a binary probe the experiment is **structurally underpowered**: the
 prompt count manufactured an illusion of power. (Receipt:
-`fp39-density-power-audit-20260613T051216Z.json`; computation `scripts/fp39_density_power_audit.py`,
+`fp39-density-power-audit-20260613T051216Z.json`; computation `src/ember/governance/scripts/fp39_density_power_audit.py`,
 selftest `FP39_POWER_AUDIT_SELFTEST_PASS` validates the hypergeometric on 4 known cases.)
 
 ## Consequence — does NOT rewrite the frozen rule
