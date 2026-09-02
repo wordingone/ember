@@ -332,5 +332,5 @@ finishes; the journey doesn't.
   currently supplied by founders as on-loan scaffolding. Open: does judgment
   transfer-emerge from enough verified-dense experience, or does it need its
   own mechanism? Until answered, the founders are a named un-retired organ —
-  the gap inventory (`docs/research/self-inventory-2026-06-10.md` §1) is the
+  the gap inventory (`docs/domains/governance/research/self-inventory-2026-06-10.md` §1) is the
   scaffolding contract.

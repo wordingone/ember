@@ -7,7 +7,7 @@ class): the c04-pick-decision-table-v1 routing as EXECUTABLE logic, tested
 against synthetic receipt fixtures BEFORE live receipts land. the engineer's verdict
 script imports route() so the doc and the code cannot drift.
 
-Cells quote docs/archive/pre-restart/c04-pick-decision-table-v1.md @0524545 verbatim-class.
+Cells quote docs/domains/governance/archive/pre-restart/c04-pick-decision-table-v1.md @0524545 verbatim-class.
 """
 import argparse, json, time
 

@@ -106,7 +106,7 @@ function _defaultIdentityRunner(executable: string, args: string[]): ResolveIden
  * A checkpoint file, if present alongside the manifest as `checkpoint`,
  * is passed via --checkpoint so byte-for-byte re-derivation is exercised;
  * this is the convention documented in
- * scripts/ember_01_identity/README-model-command-identity.md.
+ * src/ember/governance/scripts/ember_01_identity/README-model-command-identity.md.
  *
  * @internal exported (prefixed _) for unit tests to inject a mock runner.
  */

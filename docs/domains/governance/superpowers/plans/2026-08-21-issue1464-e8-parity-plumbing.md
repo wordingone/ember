@@ -105,7 +105,7 @@ Expected: PASS with no diff in `src/ember/governance/scripts/r1_e8_validator.py`
 
 **Files:**
 - Create: `tools/ember-restart-3b/a1_e8_parity.py`
-- Create: `tests/ember_restart_model/test_a1_e8_parity.py`
+- Create: `tests/ember_restart_model/domain-governance/test_a1_e8_parity.py`
 
 **Interfaces:**
 - Produces: `derive_parity_series(telemetry_path: Path, *, run_id: str, run_receipt_sha256: str, steps: int) -> dict[str, Any]`

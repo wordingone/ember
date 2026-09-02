@@ -21,7 +21,7 @@ still refuse on a genuine foreign duplicate.
 
 Real code under test (imported, never reimplemented), synthetic-only data
 (tempfile.TemporaryDirectory() per case, a tiny made-up token stream) -- same
-convention as scripts/w2_heldout/test_launch_gate.py. No real corpus or real
+convention as src/ember/governance/scripts/w2_heldout/test_launch_gate.py. No real corpus or real
 receipt is touched.
 """
 from __future__ import annotations

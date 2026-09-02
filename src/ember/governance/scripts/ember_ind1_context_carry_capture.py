@@ -61,7 +61,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-EXEC_ROOT = str(Path(__file__).resolve().parent.parent)
+EXEC_ROOT = str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()))
 GOALFORGE_ROOT = os.environ.get(
     "EMBER_GOALFORGE_ROOT", os.path.join(os.path.dirname(EXEC_ROOT), "ember-goalforge")
 )
@@ -381,7 +381,7 @@ def main() -> int:
                 "text in the SAME request, and (b) the rendered terminal frame literally "
                 "showing the context-carry-confirmed reply quoting turn 1."
             ),
-            "stub_server_script": "scripts/ember_ind1_context_carry_capture.py + scratch/ind1ctx/stub_chat_server.cjs (CPU-only node:http, no deps)",
+            "stub_server_script": "src/ember/governance/scripts/ember_ind1_context_carry_capture.py + scratch/ind1ctx/stub_chat_server.cjs (CPU-only node:http, no deps)",
             "stub_server_pid": stub_pid,
             "stub_server_kill_receipt": kill_receipt,
             "stub_request_log": stub_request_log,
@@ -426,7 +426,7 @@ def main() -> int:
         "geometries_detail": per_geometry,
         "live_process_touched": False,
         "gpu_used": False,
-        "generator": {"path": "scripts/ember_ind1_context_carry_capture.py", "sha256": sha256_of(THIS_SCRIPT)},
+        "generator": {"path": "src/ember/governance/scripts/ember_ind1_context_carry_capture.py", "sha256": sha256_of(THIS_SCRIPT)},
         "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
     }
 

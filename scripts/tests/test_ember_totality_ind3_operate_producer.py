@@ -29,7 +29,7 @@ def _load(name: str, relative: str):
 
 producer = _load(
     "ind3_operate_producer_under_test",
-    "scripts/ember_totality/ind3_operate_producer.py",
+    "src/ember/governance/scripts/ember_totality/ind3_operate_producer.py",
 )
 validator = _load(
     "test_c_ind_under_test",

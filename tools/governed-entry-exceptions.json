@@ -36,13 +36,13 @@
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
-      "path": "scripts/nativization_motion_trace.py",
+      "path": "src/ember/governance/scripts/nativization_motion_trace.py",
       "sha256": "1ee47fdaac359da9d42bfffb02171f06311019f55e59fb1bcad30ee2dfcbfc12",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "331f7b6862f80094d318b9ae743bf564a50d0e5c72ed764ce9fcaf6278fb2089",
+      "sha256": "e5fd6b45286d35fec2ee7e80504f3e8df7652bea0c177fe305d639c2a567fb75",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "path": "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
-      "sha256": "358f8fa328d97a8a568797ee60ee8dab4a815fa2f31c036afd7975369d3de6a8",
+      "sha256": "5f19a802d9030aa9cc3757bfe5006ba07bf8379d907ecfe8dffe07359cb42def",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {

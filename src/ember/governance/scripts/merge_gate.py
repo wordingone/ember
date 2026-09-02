@@ -5,7 +5,7 @@
 """
 Mechanical merge gate for ember PRs.
 
-Entrypoint: python scripts/merge_gate.py <PR> --class receipts|docs|code --title "..."
+Entrypoint: python src/ember/governance/scripts/merge_gate.py <PR> --class receipts|docs|code --title "..."
 
 Asserts (in order, each emitting checklist line):
 1. closingIssuesReferences count == 0 (lane PRs never carry close keywords)

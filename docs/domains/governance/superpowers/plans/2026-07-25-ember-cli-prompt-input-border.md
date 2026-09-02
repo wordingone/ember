@@ -229,7 +229,7 @@ git commit -m "fix(cli): anchor status inside prompt panel"
 ### Task 3: Prove real terminal paint at 80, 40, and restored 80 columns
 
 **Files:**
-- Create: `tools/ember-cli/src/components/prompt-input-paint.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts`
 
 **Interfaces:**
 - Consumes: production `PromptInput`, `Text`, `mountInk`, and the real rendering pipeline.
@@ -269,7 +269,7 @@ reusing the first frame.
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input-paint.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts
 ```
 
 Expected before Tasks 1-2: no closed rounded frame. After those tasks, any
@@ -286,7 +286,7 @@ element inspection.
 - [ ] **Step 4: Run the three focused suites**
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
+bun test tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts
 ```
 
 Expected: all pass, with the 40-column positive-viewport assertion executed.
@@ -294,7 +294,7 @@ Expected: all pass, with the 40-column positive-viewport assertion executed.
 - [ ] **Step 5: Commit the paint proof**
 
 ```powershell
-git add tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/components/prompt-input.ts
+git add src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts tools/ember-cli/src/components/prompt-input.ts
 git commit -m "test(cli): prove prompt border resize paint"
 ```
 
@@ -394,7 +394,7 @@ git commit -m "test(cli): add compiled prompt border capture"
 - [ ] **Step 1: Run the focused and adjacent regression suites**
 
 ```powershell
-bun test tools/ember-cli/src/components/prompt-input.test.ts tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
+bun test tools/ember-cli/src/components/prompt-input.test.ts src/ember/infrastructure/tools/ember-cli/src/components/prompt-input-paint.test.ts src/ember/infrastructure/tools/ember-cli/src/build-tools/capture-prompt-input-243.test.ts tools/ember-cli/src/screens/repl-operator-surface.test.ts tools/ember-cli/src/ink/border-rendering.test.ts tools/ember-cli/src/ink/app-resize.test.ts
 ```
 
 Expected: all pass.

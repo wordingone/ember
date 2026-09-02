@@ -8,11 +8,52 @@ import unittest
 
 import torch
 
-from src.ember.governance.scripts.preflight.update_survival import (
-    OptimizerSpec,
-    TensorProbe,
-    run_update_survival_preflight,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/preflight/update_survival.py
+import importlib.util as _ember_ab945664fa2baab1_importlib
+import sys as _ember_ab945664fa2baab1_sys
+from pathlib import Path as _ember_ab945664fa2baab1_Path
+_ember_ab945664fa2baab1_path = _ember_ab945664fa2baab1_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'preflight', 'update_survival.py')
+if not _ember_ab945664fa2baab1_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/preflight/update_survival.py')
+_ember_ab945664fa2baab1_aliases = ('_ember_issue2015_ab945664fa2baab1', 'scripts.preflight.update_survival', 'src.ember.governance.scripts.preflight.update_survival', 'update_survival')
+_ember_ab945664fa2baab1_existing = []
+for _ember_ab945664fa2baab1_alias in _ember_ab945664fa2baab1_aliases:
+    _ember_ab945664fa2baab1_candidate = _ember_ab945664fa2baab1_sys.modules.get(_ember_ab945664fa2baab1_alias)
+    if _ember_ab945664fa2baab1_candidate is not None and all(_ember_ab945664fa2baab1_candidate is not item for item in _ember_ab945664fa2baab1_existing):
+        _ember_ab945664fa2baab1_existing.append(_ember_ab945664fa2baab1_candidate)
+if len(_ember_ab945664fa2baab1_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/preflight/update_survival.py')
+if _ember_ab945664fa2baab1_existing:
+    _ember_ab945664fa2baab1_module = _ember_ab945664fa2baab1_existing[0]
+    _ember_ab945664fa2baab1_observed = getattr(_ember_ab945664fa2baab1_module, '__file__', None)
+    if _ember_ab945664fa2baab1_observed is None or _ember_ab945664fa2baab1_Path(_ember_ab945664fa2baab1_observed).resolve() != _ember_ab945664fa2baab1_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/preflight/update_survival.py')
+else:
+    _ember_ab945664fa2baab1_spec = _ember_ab945664fa2baab1_importlib.spec_from_file_location('_ember_issue2015_ab945664fa2baab1', _ember_ab945664fa2baab1_path)
+    if _ember_ab945664fa2baab1_spec is None or _ember_ab945664fa2baab1_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/preflight/update_survival.py')
+    _ember_ab945664fa2baab1_module = _ember_ab945664fa2baab1_importlib.module_from_spec(_ember_ab945664fa2baab1_spec)
+    for _ember_ab945664fa2baab1_alias in _ember_ab945664fa2baab1_aliases:
+        _ember_ab945664fa2baab1_prior = _ember_ab945664fa2baab1_sys.modules.get(_ember_ab945664fa2baab1_alias)
+        if _ember_ab945664fa2baab1_prior is not None and _ember_ab945664fa2baab1_prior is not _ember_ab945664fa2baab1_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/preflight/update_survival.py')
+        _ember_ab945664fa2baab1_sys.modules[_ember_ab945664fa2baab1_alias] = _ember_ab945664fa2baab1_module
+    try:
+        _ember_ab945664fa2baab1_spec.loader.exec_module(_ember_ab945664fa2baab1_module)
+    except BaseException:
+        for _ember_ab945664fa2baab1_alias in _ember_ab945664fa2baab1_aliases:
+            if _ember_ab945664fa2baab1_sys.modules.get(_ember_ab945664fa2baab1_alias) is _ember_ab945664fa2baab1_module:
+                _ember_ab945664fa2baab1_sys.modules.pop(_ember_ab945664fa2baab1_alias, None)
+        raise
+for _ember_ab945664fa2baab1_alias in _ember_ab945664fa2baab1_aliases:
+    _ember_ab945664fa2baab1_prior = _ember_ab945664fa2baab1_sys.modules.get(_ember_ab945664fa2baab1_alias)
+    if _ember_ab945664fa2baab1_prior is not None and _ember_ab945664fa2baab1_prior is not _ember_ab945664fa2baab1_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/preflight/update_survival.py')
+    _ember_ab945664fa2baab1_sys.modules[_ember_ab945664fa2baab1_alias] = _ember_ab945664fa2baab1_module
+OptimizerSpec = getattr(_ember_ab945664fa2baab1_module, 'OptimizerSpec')
+TensorProbe = getattr(_ember_ab945664fa2baab1_module, 'TensorProbe')
+run_update_survival_preflight = getattr(_ember_ab945664fa2baab1_module, 'run_update_survival_preflight')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/preflight/update_survival.py
 
 
 def _sgd_spec() -> OptimizerSpec:

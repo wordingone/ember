@@ -40,7 +40,7 @@ C-GROW — MEASURED function-preserving capacity growth (the 1T lever;
      size.
 
 Receipt hint: receipts/*grow*, src/ember/governance/scripts/ember_growth_harness.py,
-scripts/ember_scale_harness.py.
+src/ember/governance/scripts/ember_scale_harness.py.
 
 This is a STATUS PROBE. It ALWAYS exits 0 and prints exactly one line
 beginning with "RED " or "GREEN ". RED/GREEN is determined by really

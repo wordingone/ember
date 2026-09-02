@@ -82,7 +82,7 @@ EXPECTED_PATHS = {
     "src/ember/governance/scripts/r3_feasibility_probe.py",
     "scripts/ember_cbase_avir_augment.py",
     "scripts/ember_cbase_launch.py",
-    "scripts/ember_cbase_s6_acceptance.py",
+    "src/ember/governance/scripts/ember_cbase_s6_acceptance.py",
     "scripts/test_ember_cbase_avir_augment.py",
     "scripts/test_ember_cbase_launch.py",
     "scripts/test_ember_cbase_s6_acceptance.py",

@@ -22,7 +22,7 @@ script only READS src/ember/governance/scripts/ember_totality/test_c_grow.py as 
 Default invocation is read-only and never touches the probe file. The two explicit
 --write-*-receipt modes exclusively publish a stamped successor under
 receipts/cbase-grow-rung after the real probe and source checks pass.
-Usage: python -B scripts/cbase_grow_rung2_completion_audit.py
+Usage: python -B src/ember/governance/scripts/cbase_grow_rung2_completion_audit.py
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts" / "ember_totality"))
 import test_c_grow as probe  # noqa: E402  (read-only import of the frozen probe)
@@ -228,7 +228,7 @@ def build_completion_receipt(
         "goal_id": GOAL_ID,
         "workstream_id": WORKSTREAM_ID,
         "next_executed_outcome": NEXT_EXECUTED_OUTCOME,
-        "script": "scripts/cbase_grow_rung2_completion_audit.py",
+        "script": "src/ember/governance/scripts/cbase_grow_rung2_completion_audit.py",
         "mode": "READ_ONLY_REEXECUTION",
         "supersedes": _repo_relative(source_paths["historical_receipt"]),
         "scope": (
@@ -365,7 +365,7 @@ def main() -> int:
         "ticket": "C-GROW-CANDIDATE-AUDIT",
         "ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "issue": 626,
-        "script": "scripts/cbase_grow_rung2_completion_audit.py",
+        "script": "src/ember/governance/scripts/cbase_grow_rung2_completion_audit.py",
         "scope": (
             "Read-only enumeration of every file src/ember/governance/scripts/ember_totality/test_c_grow.py's own "
             "candidate_files() scans, tabled per the probe's four R-text requirements (grow_method, "
