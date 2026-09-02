@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -1332,6 +1332,8 @@ def test_train_partition_projection_dispatches_closed_schema_and_names_authority
         "canonical_url": "https://github.com/search?q=topic%3Acuda",
         "fetched_at": "2026-08-15T00:00:00Z",
     }))
+    alpha_sha = sha256(b"alpha")
+    charlie_sha = sha256(b"charlie")
     partition = {
         "source_id": "candidate-training_infrastructure-train-1",
         "domain": "training_infrastructure",
@@ -1341,10 +1343,13 @@ def test_train_partition_projection_dispatches_closed_schema_and_names_authority
         "source_connector_receipt_sha256": sha256(source_receipt.read_bytes()),
         "license_summary": ["Apache-2.0", "MIT"],
         "repositories": [{"files": [
-            {"path": "src/main.py", "bytes": 5, "sha256": "a" * 64},
-            {"path": "cmake/Modules/FindFAISS.cmake", "bytes": 7, "sha256": "c" * 64},
+            {"path": "src/main.py", "blob_path": "blobs/a", "bytes": 5, "sha256": alpha_sha},
+            {"path": "cmake/Modules/FindFAISS.cmake", "blob_path": "blobs/c", "bytes": 7, "sha256": charlie_sha},
         ]}],
     }
+    (tmp_path / "blobs").mkdir()
+    (tmp_path / "blobs" / "a").write_bytes(b"alpha")
+    (tmp_path / "blobs" / "c").write_bytes(b"charlie")
     monkeypatch.setattr(
         catalog_admission_module,
         "validate_partition_receipt",
@@ -1363,6 +1368,12 @@ def test_train_partition_projection_dispatches_closed_schema_and_names_authority
                 }
             }
         },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "_load_predecessor_media_type_table",
+        lambda: {"media_types_by_object_id": {"sha256:" + alpha_sha: "application/octet-stream"}},
         raising=False,
     )
     spec = canonical({
@@ -1387,12 +1398,13 @@ def test_train_partition_projection_dispatches_closed_schema_and_names_authority
         for row in manifest["records"]
         if row["kind"] == "immutable_object"
     }
-    assert media_types["a" * 64] == "text/x-python; charset=utf-8"
-    assert media_types["c" * 64] == "text/plain; charset=utf-8"
+    assert media_types[alpha_sha] == "application/octet-stream"
+    assert media_types[charlie_sha] == "text/plain; charset=utf-8"
 
     partition["repositories"][0]["files"].append(
-        {"path": "future/new.brandnew", "bytes": 3, "sha256": "d" * 64}
+        {"path": "future/new.brandnew", "blob_path": "blobs/d", "bytes": 3, "sha256": sha256(b"raw")}
     )
+    (tmp_path / "blobs" / "d").write_bytes(b"raw")
     with pytest.raises(ValueError, match="PARTITION_PROJECTION_MEDIA_CLASS_UNMAPPED:.brandnew"):
         project_catalog_spec(spec_raw=spec)
     partition["repositories"][0]["files"].pop()
@@ -1416,4 +1428,26 @@ def test_train_partition_media_table_is_goal_bound() -> None:
     assert table["workstream_id"] == "EMBER-02B"
     assert table["next_executed_outcome"] == (
         "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    )
+    predecessor = catalog_admission_module._load_predecessor_media_type_table()
+    assert predecessor["goal_id"] == "EMBER-02"
+    assert predecessor["workstream_id"] == "EMBER-02B"
+    assert predecessor["binding_count"] == 609
+    assert predecessor["binding_count"] == len(predecessor["media_types_by_object_id"])
+
+
+def test_content_sniff_is_path_independent_and_extension_is_only_a_binary_tiebreak(
+    tmp_path: Path,
+) -> None:
+    raw = b"same utf8 bytes\n"
+    first = tmp_path / "same.py"
+    second = tmp_path / "same.bin"
+    first.write_bytes(raw)
+    second.write_bytes(raw)
+    table = {"classes": {".bin": {"media_type": "application/octet-stream"}}}
+    assert catalog_admission_module._content_media_type(first, PurePosixPath("same.py"), table) == (
+        "text/plain; charset=utf-8"
+    )
+    assert catalog_admission_module._content_media_type(second, PurePosixPath("same.bin"), table) == (
+        "text/plain; charset=utf-8"
     )
