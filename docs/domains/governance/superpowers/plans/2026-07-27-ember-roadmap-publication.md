@@ -99,7 +99,7 @@ GitHub REST/GraphQL through the repository's safe wrappers, Git, pytest/unittest
 
 **Files:**
 - Create: `src/ember/governance/scripts/roadmap/validate_roadmap.py`
-- Create: `tests/roadmap/test_validate_roadmap.py`
+- Create: `tests/roadmap/domain-governance/test_validate_roadmap.py`
 
 **Interfaces:**
 - Produces: `validate_repository(root: Path) -> dict[str, object]` and a CLI

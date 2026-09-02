@@ -9,7 +9,7 @@ gain with receipts — without disturbing the G-shards → launch critical path.
 Nothing untagged is load-bearing. The receipt-side numbers are re-derived
 mechanically by `src/ember/governance/scripts/fp32_baseline_miner.py` (emits
 `receipts/fp32-baselines-*.json`); the intervention numbers come from
-`scripts/fp32_step_econ_bench.py` (emits `receipts/fp32-step-econ-*.json`).
+`src/ember/governance/scripts/fp32_step_econ_bench.py` (emits `receipts/fp32-step-econ-*.json`).
 
 Limit taxonomy used below — a row must name exactly which limit binds:
 **FLOP** (arithmetic throughput), **BW** (memory bandwidth), **IO** (disk),

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ember.internal/schemas/loop-graph/execution-graph-v1.schema.json",
+  "$id": "https://ember.internal/domains/governance/schemas/loop-graph/execution-graph-v1.schema.json",
   "title": "Ember execution graph v1 (loop/graph substrate, issue #1309)",
   "description": "Per-node execution record: one research-loop stage/run. Modeled on The Search's STAGE_MAP.md table, RESEARCH_WORKFLOW.md's per-stage sequence, and worktree_lifecycle.py's lease record. Matches the approved loop/graph substrate schema sketch, section 2 (workstream B, issue #1309). Engine-agnostic: command.argv is an opaque argv list, resource_class is a label not a lock implementation -- no field references any specific engine.",
   "type": "object",

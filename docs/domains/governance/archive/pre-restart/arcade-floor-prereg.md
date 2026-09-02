@@ -5,7 +5,7 @@ Issue #71 (spec). Frozen 2026-06-11 BEFORE any policy run, per formalization
 criterion is written down before the experiment exists. Deviations follow
 the audit-§6 registry rule (recorded, power-noted, gate may re-route).
 
-Infrastructure this rides on: `scripts/arcade.py` (#47, PR #66 — offline
+Infrastructure this rides on: `src/ember/governance/scripts/arcade.py` (#47, PR #66 — offline
 `arc_agi` + local `arcengine`, judge = engine verdict ONLY) and its random
 reference receipt `arcade-random-smoke-20260610T233807Z.json` (25/25 games,
 0 wins, 3 games with level progress @200 steps, seed 16).

@@ -12,8 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.collect_remote_branch_salvage import _citations
-from scripts.remote_branch_salvage import (
+from src.ember.governance.scripts.collect_remote_branch_salvage import _citations
+from src.ember.governance.scripts.remote_branch_salvage import (
     PacketError,
     build_packet,
     build_public_summary,
@@ -234,7 +234,7 @@ class RemoteBranchSalvageTests(unittest.TestCase):
             stdout=f"{master}:receipts/example.json:7:matched\n{master}:docs/example.md:9:matched\n",
             stderr="",
         )
-        with patch("scripts.collect_remote_branch_salvage._run_git", return_value=completed):
+        with patch("src.ember.governance.scripts.collect_remote_branch_salvage._run_git", return_value=completed):
             public, custody = _citations(Path("."), master, "feat/example", sha("b"))
         self.assertTrue(public["complete"])
         self.assertEqual(public["citations"], ["docs/example.md:9", "receipts/example.json:7"])
@@ -243,7 +243,7 @@ class RemoteBranchSalvageTests(unittest.TestCase):
     def test_collector_cli_imports_from_repository_root(self) -> None:
         root = Path(__file__).resolve().parents[1]
         result = subprocess.run(
-            [sys.executable, "-B", "scripts/collect_remote_branch_salvage.py", "--help"],
+            [sys.executable, "-B", "src/ember/governance/scripts/collect_remote_branch_salvage.py", "--help"],
             cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

@@ -9,11 +9,52 @@ from pathlib import Path
 
 import pytest
 
-from src.ember.governance.scripts.ember_cli_spec_policy import (
-    SpecPolicyError,
-    load_spec_nodes,
-    validate_added_component_coverage,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_cli_spec_policy.py
+import importlib.util as _ember_a59d77302a2b1faf_importlib
+import sys as _ember_a59d77302a2b1faf_sys
+from pathlib import Path as _ember_a59d77302a2b1faf_Path
+_ember_a59d77302a2b1faf_path = _ember_a59d77302a2b1faf_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_cli_spec_policy.py')
+if not _ember_a59d77302a2b1faf_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_cli_spec_policy.py')
+_ember_a59d77302a2b1faf_aliases = ('_ember_issue2015_a59d77302a2b1faf', 'ember_cli_spec_policy', 'scripts.ember_cli_spec_policy', 'src.ember.governance.scripts.ember_cli_spec_policy')
+_ember_a59d77302a2b1faf_existing = []
+for _ember_a59d77302a2b1faf_alias in _ember_a59d77302a2b1faf_aliases:
+    _ember_a59d77302a2b1faf_candidate = _ember_a59d77302a2b1faf_sys.modules.get(_ember_a59d77302a2b1faf_alias)
+    if _ember_a59d77302a2b1faf_candidate is not None and all(_ember_a59d77302a2b1faf_candidate is not item for item in _ember_a59d77302a2b1faf_existing):
+        _ember_a59d77302a2b1faf_existing.append(_ember_a59d77302a2b1faf_candidate)
+if len(_ember_a59d77302a2b1faf_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_cli_spec_policy.py')
+if _ember_a59d77302a2b1faf_existing:
+    _ember_a59d77302a2b1faf_module = _ember_a59d77302a2b1faf_existing[0]
+    _ember_a59d77302a2b1faf_observed = getattr(_ember_a59d77302a2b1faf_module, '__file__', None)
+    if _ember_a59d77302a2b1faf_observed is None or _ember_a59d77302a2b1faf_Path(_ember_a59d77302a2b1faf_observed).resolve() != _ember_a59d77302a2b1faf_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_cli_spec_policy.py')
+else:
+    _ember_a59d77302a2b1faf_spec = _ember_a59d77302a2b1faf_importlib.spec_from_file_location('_ember_issue2015_a59d77302a2b1faf', _ember_a59d77302a2b1faf_path)
+    if _ember_a59d77302a2b1faf_spec is None or _ember_a59d77302a2b1faf_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_cli_spec_policy.py')
+    _ember_a59d77302a2b1faf_module = _ember_a59d77302a2b1faf_importlib.module_from_spec(_ember_a59d77302a2b1faf_spec)
+    for _ember_a59d77302a2b1faf_alias in _ember_a59d77302a2b1faf_aliases:
+        _ember_a59d77302a2b1faf_prior = _ember_a59d77302a2b1faf_sys.modules.get(_ember_a59d77302a2b1faf_alias)
+        if _ember_a59d77302a2b1faf_prior is not None and _ember_a59d77302a2b1faf_prior is not _ember_a59d77302a2b1faf_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_cli_spec_policy.py')
+        _ember_a59d77302a2b1faf_sys.modules[_ember_a59d77302a2b1faf_alias] = _ember_a59d77302a2b1faf_module
+    try:
+        _ember_a59d77302a2b1faf_spec.loader.exec_module(_ember_a59d77302a2b1faf_module)
+    except BaseException:
+        for _ember_a59d77302a2b1faf_alias in _ember_a59d77302a2b1faf_aliases:
+            if _ember_a59d77302a2b1faf_sys.modules.get(_ember_a59d77302a2b1faf_alias) is _ember_a59d77302a2b1faf_module:
+                _ember_a59d77302a2b1faf_sys.modules.pop(_ember_a59d77302a2b1faf_alias, None)
+        raise
+for _ember_a59d77302a2b1faf_alias in _ember_a59d77302a2b1faf_aliases:
+    _ember_a59d77302a2b1faf_prior = _ember_a59d77302a2b1faf_sys.modules.get(_ember_a59d77302a2b1faf_alias)
+    if _ember_a59d77302a2b1faf_prior is not None and _ember_a59d77302a2b1faf_prior is not _ember_a59d77302a2b1faf_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_cli_spec_policy.py')
+    _ember_a59d77302a2b1faf_sys.modules[_ember_a59d77302a2b1faf_alias] = _ember_a59d77302a2b1faf_module
+SpecPolicyError = getattr(_ember_a59d77302a2b1faf_module, 'SpecPolicyError')
+load_spec_nodes = getattr(_ember_a59d77302a2b1faf_module, 'load_spec_nodes')
+validate_added_component_coverage = getattr(_ember_a59d77302a2b1faf_module, 'validate_added_component_coverage')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_cli_spec_policy.py
 
 
 def _repo(tmp_path: Path) -> Path:

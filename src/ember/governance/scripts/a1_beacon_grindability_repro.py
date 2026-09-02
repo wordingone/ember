@@ -21,7 +21,7 @@ Emits a receipt with the tries-to-cover-all-8 and the first nonce hitting each i
 Zero network, zero GPU.
 
 Usage:
-  python scripts/a1_beacon_grindability_repro.py \\
+  python src/ember/governance/scripts/a1_beacon_grindability_repro.py \\
       --out receipts/eval-suite-freeze/a1-beacon-grindability-repro-<UTCts>.json \\
       [--max-tries 500] [--pool-size 8]
 """

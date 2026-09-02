@@ -21,14 +21,14 @@
 
 **Files:**
 - Create: `src/ember/governance/scripts/ember_cli_spec_policy.py`
-- Create: `tests/test_ember_cli_spec_policy.py`
+- Create: `tests/domain-governance/test_ember_cli_spec_policy.py`
 
 **Interfaces:**
 - Produces: `load_spec_nodes(repo_root: Path) -> list[SpecNode]`
 - Produces: `validate_added_component_coverage(repo_root: Path, changed_files: Sequence[Mapping[str, str]]) -> list[str]`
 
 - [ ] Write tests using real temporary files for strict UTF-8, status cardinality, current-node consumer requirements, unsafe paths, missing files, and complete valid nodes.
-- [ ] Run `python -B -m pytest -q tests/test_ember_cli_spec_policy.py` and confirm failures because the module does not exist.
+- [ ] Run `python -B -m pytest -q tests/domain-governance/test_ember_cli_spec_policy.py` and confirm failures because the module does not exist.
 - [ ] Implement the minimal parser and validator.
 - [ ] Re-run the focused tests and require a clean pass.
 

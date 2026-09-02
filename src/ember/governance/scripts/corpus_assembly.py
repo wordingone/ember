@@ -17,7 +17,7 @@ Fail-closed verification BEFORE any receipt write (no partial artifacts):
 Token numbers stay HEURISTIC ONLY (tokenizer not frozen — fp-22):
 quoted as raw bytes/chars + bytes-per-token heuristic estimates.
 
-Run:  python scripts/corpus_assembly.py
+Run:  python src/ember/governance/scripts/corpus_assembly.py
       (after all 5 ENG36_ACQUIRE_DONE receipts exist)
 """
 import glob

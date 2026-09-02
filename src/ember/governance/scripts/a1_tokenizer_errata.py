@@ -27,7 +27,7 @@ amendment, recording:
     satisfied in the public repo without re-introducing scrubbed names.
 
 Usage:
-  python scripts/a1_tokenizer_errata.py \\
+  python src/ember/governance/scripts/a1_tokenizer_errata.py \\
       --published-scan receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json \\
       --published-amendment receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-20260709T234148Z.json \\
       --corrected-scan receipts/a1-predicate-scan/a1-predicate-scan-corrected-<ts>.json \\

@@ -319,7 +319,7 @@
       "error": "node outside closed grammar: Attribute"
     },
     {
-      "path": "scripts/ember_totality/spend_annex_scan.py",
+      "path": "src/ember/governance/scripts/ember_totality/spend_annex_scan.py",
       "line": 299,
       "target": "ROOT",
       "expression": "c_neg1.ROOT",
@@ -517,7 +517,7 @@
       "error": "unknown alias EXTERNAL_STATE"
     },
     {
-      "path": "scripts/ember_totality/test_c4.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c4.py",
       "line": 106,
       "target": "RESIDENT_GATE_DIR",
       "expression": "os.path.join(EXTERNAL_STATE, 'receipts', 'ember-resident-training-gate')",
@@ -528,7 +528,7 @@
       "error": "unknown alias EXTERNAL_STATE"
     },
     {
-      "path": "scripts/ember_totality/test_c4.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c4.py",
       "line": 107,
       "target": "CANDIDATE_DIR",
       "expression": "os.path.join(EXTERNAL_STATE, 'receipts', 'ember-resident-training-candidate')",
@@ -836,7 +836,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_neg1.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_neg1.py",
       "line": 89,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -847,7 +847,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_neg1.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_neg1.py",
       "line": 94,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",

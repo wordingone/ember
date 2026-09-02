@@ -448,7 +448,7 @@ does NOT intercept comparison dispatch. **This defeats V AND the MBPP+
 ext-verify layer**, because both verify by `==` asserts; ext-verify (the
 22.1%-FPR safety net, v-extended receipt) is fooled identically. It is
 the one path that is input-independent, so unlike test-hardcoding it
-cannot be caught by hidden tests. `scripts/v_soundness_probe.py` carries
+cannot be caught by hidden tests. `src/ember/governance/scripts/v_soundness_probe.py` carries
 both `__eq__`-dispatch probes (selftest PASS).
 
 **Finding 2 — live-leg RESULT (receipt ticket V-…-PROBE, ts 20260611T000301Z,

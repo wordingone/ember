@@ -130,7 +130,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from receipt_write import checked_write                       # noqa: E402
 from p5_ratio_audit.run_p5_audit import _muon_step_in_copy, rms  # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 SHA_CONVENTION = "sha256 over on-disk raw bytes (binary read, no line-ending normalization)"
 

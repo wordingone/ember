@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for scripts/c8_prelaunch/q2_rho_leg.py (issue #662; frozen
+"""Unit tests for src/ember/governance/scripts/c8_prelaunch/q2_rho_leg.py (issue #662; frozen
 spec: issue #449 comment 4932624437 section 4).
 
 Complements the module's own `--selftest` CLI mode (an integration smoke

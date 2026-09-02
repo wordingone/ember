@@ -12,7 +12,7 @@
 > CE+Muon) measured ~2× slower on the dead run — all tokens/day columns are
 > optimistic until the production-path cell lands (fp-39 recalibrates).
 
-Receipt: `receipts/c04-grid-20260612T220829Z.json` (`scripts/c04_grid.py`,
+Receipt: `receipts/c04-grid-20260612T220829Z.json` (`src/ember/governance/scripts/c04_grid.py`,
 selftest anchors reproduce c03: P=284.4M, 2.21G FLOP/tok, 69.3 TFLOPS
 sustained from the compiled-cell receipt, and the b16-nockpt OOM boundary).
 Projections are paced-sustained-FLOPS-anchored; the design bench (#353)

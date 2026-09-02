@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Execution-node state machine: create -> claim -> start -> (request_review) -> close.
 
-States (from schemas/loop-graph/execution-graph-v1.schema.json):
+States (from domains/governance/schemas/loop-graph/execution-graph-v1.schema.json):
     PENDING -> RUNNING -> AWAITING_REVIEW -> CLOSED_PASS | CLOSED_FLAT | CLOSED_REJECTED
     RUNNING may also close directly (no review stage required).
 

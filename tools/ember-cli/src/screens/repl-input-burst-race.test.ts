@@ -4,7 +4,7 @@
 // screens/repl-input-burst-race.test.ts — regression test for ember #251 ("Input race: full
 // line + Enter in one synchronous write burst is silently dropped").
 //
-// Root cause (docs/verification/receipts-20260706/chat-input-race-repro.md isolated the repro;
+// Root cause (docs/domains/governance/verification/receipts-20260706/chat-input-race-repro.md isolated the repro;
 // this test isolates the mechanism): a real terminal write() carrying a full line plus its
 // trailing Enter decodes, via readline's keypress parser in ink/stdin-bridge.ts, into several
 // `_deliverKeyEvent` calls -- one per character, then one for Enter -- that all fire
@@ -145,7 +145,7 @@ describe("ember #251 — a full line + Enter delivered as one synchronous burst 
       stdout: { columns: 80, rows: 24 },
     });
 
-    // The exact repro shape from docs/verification/receipts-20260706/chat-input-race-repro.md
+    // The exact repro shape from docs/domains/governance/verification/receipts-20260706/chat-input-race-repro.md
     // Test 2: a full line's characters plus the trailing Enter, all delivered with NO await
     // (no macrotask boundary, no React render) between any of them -- the same synchronous burst
     // a real ptyProcess.write("...text...\r") call produces via readline's keypress decoder.

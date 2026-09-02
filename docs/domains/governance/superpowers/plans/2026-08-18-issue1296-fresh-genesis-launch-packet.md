@@ -23,7 +23,7 @@
 ### Task 1: Packet contract and genuine RED
 
 **Files:**
-- Create: `tests/ember_restart/test_r1_launch_packet.py`
+- Create: `tests/ember_restart/domain-governance/test_r1_launch_packet.py`
 - Create: `src/ember/governance/scripts/ember_restart/r1_launch_packet.py`
 
 **Interfaces:**
@@ -36,7 +36,7 @@
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
-  Run `pytest -q tests/ember_restart/test_r1_launch_packet.py` through the repository hidden-Python wrapper. Expected: collection failure because `src.ember.governance.scripts.ember_restart.r1_launch_packet` does not exist.
+  Run `pytest -q tests/ember_restart/domain-governance/test_r1_launch_packet.py` through the repository hidden-Python wrapper. Expected: collection failure because `src.ember.governance.scripts.ember_restart.r1_launch_packet` does not exist.
 
 - [ ] **Step 3: Implement the minimal builder**
 
@@ -49,7 +49,7 @@
 ### Task 2: Refusal cases
 
 **Files:**
-- Modify: `tests/ember_restart/test_r1_launch_packet.py`
+- Modify: `tests/ember_restart/domain-governance/test_r1_launch_packet.py`
 - Modify: `src/ember/governance/scripts/ember_restart/r1_launch_packet.py`
 
 **Interfaces:**

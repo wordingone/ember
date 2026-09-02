@@ -24,7 +24,7 @@ src/ember/governance/scripts/c04_eager_bf16_throughput.py
 src/ember/governance/scripts/c04_pretrain_prestage.py
 src/ember/governance/scripts/c8_prelaunch/compute_mde.py
 src/ember/governance/scripts/c8_prelaunch/f2_schedule_generator.py
-scripts/c8_prelaunch/q2_rho_leg.py
+src/ember/governance/scripts/c8_prelaunch/q2_rho_leg.py
 src/ember/governance/scripts/c8_prelaunch/run_ledger.py
 src/ember/governance/scripts/cbase_grow_rung2_event.py
 src/ember/governance/scripts/check_docs_freshness.py
@@ -35,7 +35,7 @@ src/ember/governance/scripts/cockpit_watchdog.py
 src/ember/governance/scripts/corpus_acquire_selftest.py
 src/ember/governance/scripts/corpus_mix_selftest.py
 src/ember/governance/scripts/corpus_patch_encode.py
-scripts/e1b_pair_assemble.py
+src/ember/governance/scripts/e1b_pair_assemble.py
 src/ember/governance/scripts/ember_avir_harness.py
 src/ember/governance/scripts/ember_avir_tasks.py
 src/ember/governance/scripts/ember_c_e2b_founder_likeness.py
@@ -79,7 +79,7 @@ src/ember/governance/scripts/ember_mle_micro_harness.py
 src/ember/governance/scripts/ember_mle_micro_harness_selftest.py
 src/ember/governance/scripts/ember_mvp_cycle.py
 src/ember/governance/scripts/ember_mvp_cycle_selftest.py
-scripts/ember_mvp_readiness_selftest.py
+src/ember/governance/scripts/ember_mvp_readiness_selftest.py
 scripts/ember_mvp_wheel_runner_selftest.py
 scripts/ember_native_goal_organ_selftest.py
 scripts/ember_operator_harness_selftest.py
@@ -242,7 +242,7 @@ tools/ember-cli/src/hardening/hardening-receipts.test.ts
 tools/ember-cli/src/mcp-config.test.ts
 tools/ember-cli/src/memory-operations.test.ts
 tools/ember-cli/src/native-installer.test.ts
-tools/ember-cli/src/services/activity-feed.test.ts
+src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.test.ts
 tools/ember-cli/src/services/finetune-control.test.ts
 tools/ember-cli/src/services/github-receipts.test.ts
 tools/ember-cli/src/services/goal-persistence.test.ts
@@ -253,7 +253,7 @@ tools/ember-cli/src/services/outage-banner-poller.test.ts
 tools/ember-cli/src/services/receipt-landing-poller.test.ts
 tools/ember-cli/src/services/run-progress-scanner.test.ts
 tools/ember-cli/src/services/speculation.test.ts
-tools/ember-cli/src/services/speculation.ts
+src/ember/infrastructure/tools/ember-cli/src/services/speculation.ts
 tools/ember-cli/src/services/telemetry-watch.test.ts
 tools/ember-cli/src/skill-framework.test.ts
 tools/ember-cli/src/skill-framework.ts
