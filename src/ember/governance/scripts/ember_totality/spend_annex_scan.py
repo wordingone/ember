@@ -484,7 +484,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     is exactly "resident-training-gate-<timestamp>.json", matching this receipt.
 #   resume-drill-*.json                      scripts/train_multimodal_v0.py:3189
 #     receipt_path = receipts_dir / f"resume-drill-{ts}.json"
-#   selective-recompute-ab-*.json            scripts/selective_recompute_ab.py:444
+#   selective-recompute-ab-*.json            src/ember/governance/scripts/selective_recompute_ab.py:444
 #   v0-live-<digits>.json (excludes -import-edition, see below)  scripts/timeshare_pretrain.py:2092
 #     out = os.path.join(repo, "receipts", f"v0-live-{receipt['ts']}.json")
 #   v0ext-dryrun-*.json                      scripts/timeshare_pretrain.py:2049
@@ -579,7 +579,7 @@ CONVENTION_MAP = [
     (re.compile(r"^probe-meminfo-.*\.json$"), "src/ember/governance/scripts/probe_meminfo.py"),
     (re.compile(r"^resident-training-gate-.*\.json$"), "src/ember/governance/scripts/ember_resident_training_gate.py"),
     (re.compile(r"^resume-drill-.*\.json$"), "scripts/train_multimodal_v0.py"),
-    (re.compile(r"^selective-recompute-ab-.*\.json$"), "scripts/selective_recompute_ab.py"),
+    (re.compile(r"^selective-recompute-ab-.*\.json$"), "src/ember/governance/scripts/selective_recompute_ab.py"),
     # anchored to digits-only so it never swallows v0-live-import-edition-*.json
     (re.compile(r"^v0-live-\d{8}T\d{6}Z\.json$"), "scripts/timeshare_pretrain.py"),
     (re.compile(r"^v0ext-dryrun-.*\.json$"), "scripts/timeshare_pretrain.py"),
