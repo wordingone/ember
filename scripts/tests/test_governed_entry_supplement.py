@@ -87,6 +87,54 @@ def run_checker(
 
 
 class LauncherShapeSupplementTests(unittest.TestCase):
+    def test_canonical_launcher_policy_layout_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_fixture(pathlib.Path(directory))
+            legacy = repo / BASE_POLICY_RELATIVE
+            canonical = repo / "src/ember/infrastructure/tools/launcher-shape-exceptions.json"
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            legacy.replace(canonical)
+            result = run_checker(repo, "launcher-shape", "launcher_a.py")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_duplicate_launcher_policy_layout_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_fixture(pathlib.Path(directory))
+            canonical = repo / "src/ember/infrastructure/tools/launcher-shape-exceptions.json"
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(repo / BASE_POLICY_RELATIVE, canonical)
+            result = run_checker(repo, "launcher-shape", "launcher_a.py")
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("exactly one", result.stdout)
+
+    def test_canonical_governed_entry_policy_layout_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_fixture(pathlib.Path(directory))
+            legacy = repo / BASE_POLICY_RELATIVE
+            payload = json.loads(legacy.read_text(encoding="utf-8"))
+            payload["schema_version"] = "ember-governed-entry-exceptions-v1"
+            legacy.unlink()
+            write_text(
+                repo / "src/ember/infrastructure/tools/governed-entry-exceptions.json",
+                json.dumps(payload) + "\n",
+            )
+            result = run_checker(repo, "governed-entry", "launcher_a.py")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_duplicate_governed_entry_policy_layout_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = build_fixture(pathlib.Path(directory))
+            payload = json.loads((repo / BASE_POLICY_RELATIVE).read_text(encoding="utf-8"))
+            payload["schema_version"] = "ember-governed-entry-exceptions-v1"
+            write_text(repo / "tools/governed-entry-exceptions.json", json.dumps(payload) + "\n")
+            write_text(
+                repo / "src/ember/infrastructure/tools/governed-entry-exceptions.json",
+                json.dumps(payload) + "\n",
+            )
+            result = run_checker(repo, "governed-entry", "launcher_a.py")
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("exactly one", result.stdout)
+
     def test_absent_supplement_is_exactly_legacy_behavior(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = build_fixture(pathlib.Path(directory))

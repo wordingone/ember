@@ -76,15 +76,24 @@ import sys
 
 RULES = {
     "governed-entry": {
-        "policy": "tools/governed-entry-exceptions.json",
+        "policies": (
+            "tools/governed-entry-exceptions.json",
+            "src/ember/infrastructure/tools/governed-entry-exceptions.json",
+        ),
         "schema": "ember-governed-entry-exceptions-v1",
         "paths_env": "GOVERNED_ENTRY_PATHS",
         "uncovered": "references the governed training entry and is not enumerated",
     },
     "launcher-shape": {
-        "policy": "tools/launcher-shape-exceptions.json",
+        "policies": (
+            "tools/launcher-shape-exceptions.json",
+            "src/ember/infrastructure/tools/launcher-shape-exceptions.json",
+        ),
         "schema": "ember-launcher-shape-exceptions-v1",
-        "supplement": "tools/ember-restart-3b/launcher-shape-exceptions.json",
+        "supplements": (
+            "tools/ember-restart-3b/launcher-shape-exceptions.json",
+            "src/ember/infrastructure/tools/ember-restart-3b/launcher-shape-exceptions.json",
+        ),
         "paths_env": "LAUNCHER_SHAPE_PATHS",
         "uncovered": (
             "is directly runnable and starts a training child outside the daemon, "
@@ -136,6 +145,17 @@ def _fail(message: str) -> int:
     return 1
 
 
+def _resolve_exactly_one(candidates: tuple[str, ...], label: str) -> str | None:
+    present = [path for path in candidates if _exists(path)]
+    if len(present) != 1:
+        _fail(
+            f"{label} must exist at exactly one of {', '.join(candidates)} "
+            f"(found {len(present)})"
+        )
+        return None
+    return present[0]
+
+
 def main() -> int:
     argv = sys.argv[1:]
     if len(argv) > 1:
@@ -144,7 +164,9 @@ def main() -> int:
     rule = RULES.get(rule_name)
     if rule is None:
         return _fail(f"unknown rule {rule_name!r}; known: {', '.join(sorted(RULES))}")
-    EXCEPTIONS_PATH = rule["policy"]
+    EXCEPTIONS_PATH = _resolve_exactly_one(rule["policies"], f"{rule_name} policy")
+    if EXCEPTIONS_PATH is None:
+        return 1
     SCHEMA_VERSION = rule["schema"]
 
     def load_policy(policy_path: str) -> dict | str:
@@ -200,8 +222,15 @@ def main() -> int:
     # for an exact duplicate path, so a workstream can repin its own files
     # without editing the base registry.
     supplement_count = 0
-    SUPPLEMENT_PATH = rule.get("supplement")
-    if SUPPLEMENT_PATH and _exists(SUPPLEMENT_PATH):
+    supplement_candidates = rule.get("supplements", ())
+    present_supplements = [path for path in supplement_candidates if _exists(path)]
+    if len(present_supplements) > 1:
+        return _fail(
+            f"{rule_name} supplement must exist at at most one of "
+            f"{', '.join(supplement_candidates)} (found {len(present_supplements)})"
+        )
+    SUPPLEMENT_PATH = present_supplements[0] if present_supplements else None
+    if SUPPLEMENT_PATH:
         supplement = load_policy(SUPPLEMENT_PATH)
         if isinstance(supplement, str):
             return _fail(supplement)
