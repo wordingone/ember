@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -114,6 +115,7 @@ def execute(
     rows = spec.get("rows")
     if not isinstance(rows, list) or tuple(row.get("row_id") for row in rows if isinstance(row, dict)) != ROWS:
         raise ReleaseExecutionRefusal("MISSING_DUPLICATE_EXTRA_OR_REORDERED_MATRIX_ROW")
+    seen_result_paths: set[str] = set()
     for spec_row in rows:
         row_id = spec_row["row_id"]
         command = spec_row.get("command")
@@ -123,6 +125,13 @@ def execute(
             raise ReleaseExecutionRefusal(f"RUNNER_COMMAND_DRIFT:{row_id}")
         if not isinstance(result_path, str) or not result_path:
             raise ReleaseExecutionRefusal(f"ROW_RESULT_PATH_DRIFT:{row_id}")
+        resolved_result = Path(result_path).resolve()
+        result_key = os.path.normcase(str(resolved_result))
+        if result_key in seen_result_paths:
+            raise ReleaseExecutionRefusal(f"DUPLICATE_ROW_RESULT_PATH:{row_id}")
+        if resolved_result.exists():
+            raise ReleaseExecutionRefusal(f"ROW_RESULT_EXISTS_REFUSED:{row_id}")
+        seen_result_paths.add(result_key)
         if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
             raise ReleaseExecutionRefusal(f"THRESHOLD_DRIFT:{row_id}")
         if not math.isfinite(float(threshold)):
@@ -133,15 +142,17 @@ def execute(
         row_id = spec_row["row_id"]
         command = spec_row.get("command")
         result_path = Path(spec_row.get("result_path", ""))
-        if result_path.exists():
-            raise ReleaseExecutionRefusal(f"ROW_RESULT_EXISTS_REFUSED:{row_id}")
         completed = subprocess.run(
             command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             creationflags=NO_WINDOW, check=False,
         )
         if completed.returncode:
             raise ReleaseExecutionRefusal(f"ROW_EXECUTION_REFUSED:{row_id}:{completed.returncode}")
-        row = validate_row(load(result_path), row_id)
+        try:
+            loaded_row = load(result_path)
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ReleaseExecutionRefusal(f"ROW_RESULT_INVALID_JSON:{row_id}") from exc
+        row = validate_row(loaded_row, row_id)
         row["self_sha256"] = sha(canonical(row))
         raw = json.dumps(row, indent=2, sort_keys=True).encode() + b"\n"
         destination = output / f"{row_id}.json"
