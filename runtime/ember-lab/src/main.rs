@@ -4430,11 +4430,12 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let models = root.join("models");
-        let state = root.join("state");
+        let repository_root = root.join("immutable-source-worktree");
+        let models = root.join("external-storage").join("models");
+        let state = root.join("external-storage").join("state");
         fs::create_dir_all(&models).unwrap();
         fs::create_dir_all(&state).unwrap();
-        let remote_master = root.join(".git/refs/remotes/origin/master");
+        let remote_master = repository_root.join(".git/refs/remotes/origin/master");
         fs::create_dir_all(remote_master.parent().unwrap()).unwrap();
         fs::write(&remote_master, format!("{}\n", "b".repeat(40))).unwrap();
         fs::write(models.join("kept.bin"), b"m").unwrap();
@@ -4493,7 +4494,7 @@ mod tests {
         .unwrap();
         let custody = root.join("custody");
         let make_request = || ember_lab::storage_retention::StorageReconcileRequest {
-            repository_root: root.clone(),
+            repository_root: repository_root.clone(),
             policy: policy.clone(),
             declarations: declarations.clone(),
             models_root: models.clone(),
@@ -4508,11 +4509,21 @@ mod tests {
             operation: ember_lab::storage_retention::ReconcileOperation::DryRun,
         };
         let first = ember_lab::storage_retention::run_storage_reconcile(&make_request()).unwrap();
+        fs::write(&remote_master, format!("{}\n", "c".repeat(40))).unwrap();
         let second = ember_lab::storage_retention::run_storage_reconcile(&make_request()).unwrap();
         assert_eq!(first, second);
         assert_eq!(first.result, "DRY_RUN_PASS");
         assert_eq!(fs::read(models.join("kept.bin")).unwrap(), b"m");
         assert_eq!(fs::read(state.join("kept.bin")).unwrap(), b"s");
+
+        let mut changed_root = make_request();
+        changed_root.models_root = root.join("substituted-storage").join("models");
+        fs::create_dir_all(&changed_root.models_root).unwrap();
+        fs::write(changed_root.models_root.join("kept.bin"), b"m").unwrap();
+        assert!(ember_lab::storage_retention::run_storage_reconcile(&changed_root).is_err());
+        let mut changed_operation = make_request();
+        changed_operation.operation = ember_lab::storage_retention::ReconcileOperation::Commit;
+        assert!(ember_lab::storage_retention::run_storage_reconcile(&changed_operation).is_err());
     }
 
     #[test]
