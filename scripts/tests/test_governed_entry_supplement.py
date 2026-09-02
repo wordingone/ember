@@ -90,10 +90,6 @@ class LauncherShapeSupplementTests(unittest.TestCase):
     def test_canonical_launcher_policy_layout_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = build_fixture(pathlib.Path(directory))
-            legacy = repo / BASE_POLICY_RELATIVE
-            canonical = repo / "src/ember/infrastructure/tools/launcher-shape-exceptions.json"
-            canonical.parent.mkdir(parents=True, exist_ok=True)
-            legacy.replace(canonical)
             result = run_checker(repo, "launcher-shape", "launcher_a.py")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -101,8 +97,9 @@ class LauncherShapeSupplementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo = build_fixture(pathlib.Path(directory))
             canonical = repo / "src/ember/infrastructure/tools/launcher-shape-exceptions.json"
-            canonical.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(repo / BASE_POLICY_RELATIVE, canonical)
+            legacy = repo / "tools/launcher-shape-exceptions.json"
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(canonical, legacy)
             result = run_checker(repo, "launcher-shape", "launcher_a.py")
             self.assertEqual(result.returncode, 1, result.stdout)
             self.assertIn("exactly one", result.stdout)

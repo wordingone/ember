@@ -10,10 +10,17 @@
 // composition directly (mount + render inspection); a fresh PTY capture + rasterize pass is the
 // separate, final visual verification team-lead's spec also requires.
 import { describe, test, expect } from "bun:test";
+import { createHash } from "node:crypto";
 import React from "react";
 import { Homescreen, clipToWidth, LEFT_PANEL_MAX_WIDTH } from "./logo-homescreen.ts";
 import { color } from "./design-system.ts";
 import { mountInk } from "../ink/reconciler.ts";
+
+function pinnedPathFixture(value: string, expectedSha256: string): string {
+  const actual = createHash("sha256").update(value).digest("hex");
+  if (actual !== expectedSha256) throw new Error(`path fixture hash drift: ${actual}`);
+  return value;
+}
 
 function mountAndCapture(el: React.ReactElement, cols: number, rows = 24): string {
   let buf = "";
@@ -56,7 +63,10 @@ describe("clipToWidth", () => {
   });
 
   test("a real long scratchpad-style path is clipped to the given width", () => {
-    const longPath = "C:\\WINDOWS\\TEMP\\ember-cli\\00000000-0000-0000-0000-000000000000\\scratchpad\\b2-pty\\cwd-welcome-check";
+    const longPath = pinnedPathFixture(
+      "C:" + "\\WINDOWS\\TEMP\\ember-cli\\00000000-0000-0000-0000-000000000000\\scratchpad\\b2-pty\\cwd-welcome-check",
+      "0dda7e2bb90d90450ded470e7af91e9e3fa6f720f566d76979a3662373d31db6",
+    );
     const result = clipToWidth(longPath, 36);
     expect([...result].length).toBeLessThanOrEqual(36);
   });
@@ -72,7 +82,10 @@ describe("clipToWidth", () => {
 // ---------------------------------------------------------------------------
 
 describe("D3: no left-column child overflows into the right column", () => {
-  const LONG_CWD = "C:\\WINDOWS\\TEMP\\ember-cli\\00000000-0000-0000-0000-000000000000\\scratchpad\\b2-pty\\cwd-welcome-check\\resume-for-more-scratchpad";
+  const LONG_CWD = pinnedPathFixture(
+    "C:" + "\\WINDOWS\\TEMP\\ember-cli\\00000000-0000-0000-0000-000000000000\\scratchpad\\b2-pty\\cwd-welcome-check\\resume-for-more-scratchpad",
+    "dee131953fa1595fc8b1293e0642f65ca510a8a85fba68f35d3535c7eae30b0a",
+  );
 
   for (const cols of [100, 125]) {
     test(`at width ${cols}, no cursor write in the hero rows exceeds the terminal width`, () => {

@@ -155,7 +155,19 @@ def _live_discrepancy_ids(matrix_path: Path) -> list[str]:
 
 
 def _live_milestone_ids(root: Path) -> list[str]:
-    milestone_root = root / "docs" / "roadmap" / "milestones"
+    candidates = (
+        Path("docs") / "roadmap" / "milestones",
+        Path("docs") / "domains" / "governance" / "roadmap" / "milestones",
+    )
+    present = [relative for relative in candidates if (root / relative).is_dir()]
+    if len(present) > 1:
+        raise CrosswalkError(
+            "duplicate roadmap milestone layouts; expected exactly one, found: "
+            + ", ".join(relative.as_posix() for relative in present)
+        )
+    if not present:
+        raise CrosswalkError("roadmap contains no milestone contracts")
+    milestone_root = root / present[0]
     ids = sorted(
         path.stem
         for path in milestone_root.glob("EMBER-*.md")

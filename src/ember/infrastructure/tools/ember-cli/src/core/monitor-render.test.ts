@@ -8,6 +8,7 @@
 // ordering with evidence-index consistency, and the full renderMonitor() composition.
 
 import { describe, it, expect } from "bun:test";
+import { createHash } from "node:crypto";
 import type { Claim, EmberWorldState } from "./ember-world-state.ts";
 import {
   ANSI,
@@ -27,6 +28,12 @@ import {
   visiblePanelWidth,
   truncateAnsiLineToWidth,
 } from "./monitor-render.ts";
+
+function pinnedPathFixture(value: string, expectedSha256: string): string {
+  const actual = createHash("sha256").update(value).digest("hex");
+  if (actual !== expectedSha256) throw new Error(`path fixture hash drift: ${actual}`);
+  return value;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -311,7 +318,7 @@ describe("buildTopAttentionLines (B7 item 2: welcome-screen ambient board snapsh
   // shell/path fragment. Two-part cure: (a) drop everything from the first raw-internals marker
   // before truncating, (b) truncate at the last WORD boundary that fits, never mid-token.
   it("drops raw shell/path internals (' >&...') before truncating, showing only the human clause", () => {
-    const raw = [claim("C0", "AUDIT-INCIDENT", "4 Ember loop receipt(s) cited in window >&Z:\\M\\ember\\tools\\ember-cli\\scratchpad\\somefile.log for review")];
+    const raw = [claim("C0", "AUDIT-INCIDENT", pinnedPathFixture("4 Ember loop receipt(s) cited in window >&Z:" + "\\M\\ember\\tools\\ember-cli\\scratchpad\\somefile.log for review", "8a7eb63d1aa1f9f5d09193547a56b47e787dccedc09772890648214683aea8ce"))];
     const lines = buildTopAttentionLines(raw, 1);
     expect(lines[0]).toBe("C0: AUDIT-INCIDENT — 4 Ember loop receipt(s) cited in window");
     expect(lines[0]).not.toContain(">&");
@@ -319,7 +326,7 @@ describe("buildTopAttentionLines (B7 item 2: welcome-screen ambient board snapsh
   });
 
   it("drops raw internals introduced by an arrow ('-> Z:\\...') before truncating", () => {
-    const raw = [claim("C0", "AUDIT-INCIDENT", "board write failed -> Z:\\M\\ember\\tools\\ember-cli\\scratchpad\\out.json permission denied")];
+    const raw = [claim("C0", "AUDIT-INCIDENT", pinnedPathFixture("board write failed -> Z:" + "\\M\\ember\\tools\\ember-cli\\scratchpad\\out.json permission denied", "657cc811e2a05747da6430ad1678723bc5ef2be9d68dc9a5536b7b9f5329d308"))];
     const lines = buildTopAttentionLines(raw, 1);
     expect(lines[0]).toBe("C0: AUDIT-INCIDENT — board write failed");
     expect(lines[0]).not.toContain("Z:\\");

@@ -1,10 +1,10 @@
 {
   "schema_version": "ember-authority-supersession-crosswalk-v1",
   "repository": "wordingone/ember",
-  "source_commit": "4422d9d33fd3ea6274e1f608bd8c56ed7f6a2246",
+  "source_commit": "618005c5fcbdc39a7911b026ddd46b7933649554",
   "current_authority": {
-    "matrix_path": "docs/authority/ember-authority-matrix.md",
-    "matrix_sha256": "cacb09b1cd16b3272dbe0eb0d35dc0b5b334b74f791d1ade4bfc651f93c9f4db",
+    "matrix_path": "docs/domains/governance/authority/ember-authority-matrix.md",
+    "matrix_sha256": "4032a7c488b1ac495fdddfb3aa439c9b94ee62d1a7f429d1eb684fedf6080b25",
     "discrepancy_ids": [
       "D-001",
       "D-002",
@@ -194,16 +194,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         }
       ]
     },
@@ -226,16 +226,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ]
     },
@@ -271,12 +271,12 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ]
     },
@@ -293,20 +293,20 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/operator/README.md",
+          "path": "docs/domains/governance/operator/README.md",
           "sha256": "4d03b4ca57dfc13f568fc2d3247a41f6552692f76649de1e0909de4eaf3e524d"
         },
         {
-          "path": "docs/operator/commands.md",
-          "sha256": "5df9c20e099082d30dd44844c81fd11e3309beecb598d418fe9a10c0d4aab2ed"
+          "path": "docs/domains/governance/operator/commands.md",
+          "sha256": "dfd36eb51058fcf0bb50227ce43d5507ef92f9a298368790287c41f5c8facc6f"
         },
         {
-          "path": "docs/operator/operate.md",
-          "sha256": "dbd5548a95ed5478aee982425dc8ae2f4f08b4c2bf976a9b5c156f97bde7976a"
+          "path": "docs/domains/governance/operator/operate.md",
+          "sha256": "df6805df431a644e20cb3f77467345a2c3cb8ff9b5ed36be882ec3f3738ad09d"
         }
       ]
     },
@@ -323,16 +323,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ]
     },
@@ -398,7 +398,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ]
     },
@@ -450,7 +450,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ]
     }
@@ -465,12 +465,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -484,12 +484,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -503,12 +503,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -522,12 +522,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -541,12 +541,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -560,12 +560,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -579,12 +579,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -598,12 +598,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -617,12 +617,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -636,12 +636,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -655,12 +655,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -674,12 +674,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -693,12 +693,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -712,12 +712,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -731,12 +731,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -750,12 +750,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -769,12 +769,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -788,12 +788,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -807,12 +807,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -826,12 +826,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -845,12 +845,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -864,12 +864,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -883,12 +883,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -902,12 +902,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -921,12 +921,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -940,12 +940,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -959,12 +959,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -978,12 +978,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -997,12 +997,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1016,12 +1016,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1035,12 +1035,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1054,12 +1054,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1073,12 +1073,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1092,12 +1092,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1111,12 +1111,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1130,12 +1130,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1149,12 +1149,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1168,12 +1168,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1187,12 +1187,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1206,12 +1206,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1225,12 +1225,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1244,12 +1244,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1263,12 +1263,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1282,12 +1282,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1301,12 +1301,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1320,12 +1320,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1339,12 +1339,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1358,12 +1358,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1377,12 +1377,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1396,12 +1396,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1415,12 +1415,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1434,12 +1434,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1453,12 +1453,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1472,12 +1472,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1491,12 +1491,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1510,12 +1510,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1529,12 +1529,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1548,12 +1548,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1567,12 +1567,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1586,12 +1586,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1605,12 +1605,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1624,12 +1624,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1643,12 +1643,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1662,12 +1662,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1681,12 +1681,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1700,12 +1700,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1719,12 +1719,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1738,12 +1738,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1757,12 +1757,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1776,12 +1776,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1795,12 +1795,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1814,12 +1814,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1833,12 +1833,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1852,12 +1852,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1871,12 +1871,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1890,12 +1890,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1909,12 +1909,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1928,12 +1928,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1947,12 +1947,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1966,12 +1966,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -1985,12 +1985,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2004,12 +2004,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2023,12 +2023,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2042,12 +2042,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2061,12 +2061,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2080,12 +2080,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2099,12 +2099,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2118,12 +2118,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2137,12 +2137,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2156,12 +2156,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2175,12 +2175,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2194,12 +2194,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2213,12 +2213,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2232,12 +2232,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2251,12 +2251,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2270,12 +2270,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2289,12 +2289,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2308,12 +2308,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2327,12 +2327,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2346,12 +2346,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2365,12 +2365,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2384,12 +2384,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2405,16 +2405,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2430,16 +2430,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2455,16 +2455,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2480,16 +2480,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2505,16 +2505,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2530,16 +2530,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2555,16 +2555,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2580,16 +2580,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2605,16 +2605,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2630,16 +2630,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2655,16 +2655,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2680,16 +2680,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/authority/GOAL.md",
-          "sha256": "ba1c19237990be77da8a1e62a94ae0781348e8f2fd38223bcd41888838567653"
+          "path": "docs/domains/governance/authority/GOAL.md",
+          "sha256": "eb0daf72ef290a76f48da6fa6ad5b2b479b053e11132d9ad6d830efe898fd858"
         },
         {
           "path": "docs/domains/governance/spec/publishability-adjudication-v1.md",
-          "sha256": "0a26c0c96653291aecdbd21eb6b05144763e7bc725a120772776a529be57bfa6"
+          "sha256": "8296a8b1de96f88bb2e1a258c34879684c9091dabb26d1e38181dcace7e51cd8"
         }
       ],
       "completion_credit": false
@@ -2703,12 +2703,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2724,16 +2724,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -2749,16 +2749,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -2774,16 +2774,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -2799,16 +2799,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -2824,16 +2824,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -2849,16 +2849,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -2872,12 +2872,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2891,12 +2891,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2910,12 +2910,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2929,12 +2929,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2948,12 +2948,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2967,12 +2967,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -2986,12 +2986,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3005,12 +3005,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3024,12 +3024,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3043,12 +3043,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3062,12 +3062,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3081,12 +3081,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3100,12 +3100,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3119,12 +3119,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3138,12 +3138,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3157,12 +3157,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3176,12 +3176,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3195,12 +3195,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3214,12 +3214,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3233,12 +3233,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3254,20 +3254,20 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/operator/README.md",
+          "path": "docs/domains/governance/operator/README.md",
           "sha256": "4d03b4ca57dfc13f568fc2d3247a41f6552692f76649de1e0909de4eaf3e524d"
         },
         {
-          "path": "docs/operator/commands.md",
-          "sha256": "5df9c20e099082d30dd44844c81fd11e3309beecb598d418fe9a10c0d4aab2ed"
+          "path": "docs/domains/governance/operator/commands.md",
+          "sha256": "dfd36eb51058fcf0bb50227ce43d5507ef92f9a298368790287c41f5c8facc6f"
         },
         {
-          "path": "docs/operator/operate.md",
-          "sha256": "dbd5548a95ed5478aee982425dc8ae2f4f08b4c2bf976a9b5c156f97bde7976a"
+          "path": "docs/domains/governance/operator/operate.md",
+          "sha256": "df6805df431a644e20cb3f77467345a2c3cb8ff9b5ed36be882ec3f3738ad09d"
         }
       ],
       "completion_credit": false
@@ -3283,20 +3283,20 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/operator/README.md",
+          "path": "docs/domains/governance/operator/README.md",
           "sha256": "4d03b4ca57dfc13f568fc2d3247a41f6552692f76649de1e0909de4eaf3e524d"
         },
         {
-          "path": "docs/operator/commands.md",
-          "sha256": "5df9c20e099082d30dd44844c81fd11e3309beecb598d418fe9a10c0d4aab2ed"
+          "path": "docs/domains/governance/operator/commands.md",
+          "sha256": "dfd36eb51058fcf0bb50227ce43d5507ef92f9a298368790287c41f5c8facc6f"
         },
         {
-          "path": "docs/operator/operate.md",
-          "sha256": "dbd5548a95ed5478aee982425dc8ae2f4f08b4c2bf976a9b5c156f97bde7976a"
+          "path": "docs/domains/governance/operator/operate.md",
+          "sha256": "df6805df431a644e20cb3f77467345a2c3cb8ff9b5ed36be882ec3f3738ad09d"
         }
       ],
       "completion_credit": false
@@ -3312,20 +3312,20 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/operator/README.md",
+          "path": "docs/domains/governance/operator/README.md",
           "sha256": "4d03b4ca57dfc13f568fc2d3247a41f6552692f76649de1e0909de4eaf3e524d"
         },
         {
-          "path": "docs/operator/commands.md",
-          "sha256": "5df9c20e099082d30dd44844c81fd11e3309beecb598d418fe9a10c0d4aab2ed"
+          "path": "docs/domains/governance/operator/commands.md",
+          "sha256": "dfd36eb51058fcf0bb50227ce43d5507ef92f9a298368790287c41f5c8facc6f"
         },
         {
-          "path": "docs/operator/operate.md",
-          "sha256": "dbd5548a95ed5478aee982425dc8ae2f4f08b4c2bf976a9b5c156f97bde7976a"
+          "path": "docs/domains/governance/operator/operate.md",
+          "sha256": "df6805df431a644e20cb3f77467345a2c3cb8ff9b5ed36be882ec3f3738ad09d"
         }
       ],
       "completion_credit": false
@@ -3341,20 +3341,20 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
-          "path": "docs/operator/README.md",
+          "path": "docs/domains/governance/operator/README.md",
           "sha256": "4d03b4ca57dfc13f568fc2d3247a41f6552692f76649de1e0909de4eaf3e524d"
         },
         {
-          "path": "docs/operator/commands.md",
-          "sha256": "5df9c20e099082d30dd44844c81fd11e3309beecb598d418fe9a10c0d4aab2ed"
+          "path": "docs/domains/governance/operator/commands.md",
+          "sha256": "dfd36eb51058fcf0bb50227ce43d5507ef92f9a298368790287c41f5c8facc6f"
         },
         {
-          "path": "docs/operator/operate.md",
-          "sha256": "dbd5548a95ed5478aee982425dc8ae2f4f08b4c2bf976a9b5c156f97bde7976a"
+          "path": "docs/domains/governance/operator/operate.md",
+          "sha256": "df6805df431a644e20cb3f77467345a2c3cb8ff9b5ed36be882ec3f3738ad09d"
         }
       ],
       "completion_credit": false
@@ -3368,12 +3368,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3387,12 +3387,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3406,12 +3406,12 @@
       "targets": [],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/audit/class2-unwatched-mandates-recon-20260704.md",
-          "sha256": "ac72d51123f196e92dc8afa885a33daac67f96cc62aea2ae28701c8f8687ce76"
+          "sha256": "cd96a4eaf88c74aa7bd53f5d41d8f3a95f5ea7326cc7aa9ae77210db8304c273"
         }
       ],
       "completion_credit": false
@@ -3427,16 +3427,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3452,16 +3452,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3477,16 +3477,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3502,16 +3502,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3527,16 +3527,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3552,16 +3552,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3577,16 +3577,16 @@
       ],
       "evidence": [
         {
-          "path": "docs/audit/issue-35-authority-supersession-crosswalk.md",
-          "sha256": "2d8e51e906ab0c548eb96c8400b8ab3172bb7a2dbdc0290bed961eaf63fc3652"
+          "path": "docs/domains/governance/audit/issue-35-authority-supersession-crosswalk.md",
+          "sha256": "39e3389a90f17bf5592489583d0f5672594b5412801e98dadf52e322413f75b4"
         },
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         },
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -3603,7 +3603,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3620,7 +3620,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3637,7 +3637,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3654,7 +3654,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3671,7 +3671,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3688,7 +3688,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3705,7 +3705,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3722,7 +3722,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3739,7 +3739,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3756,7 +3756,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3773,7 +3773,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3790,7 +3790,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3807,7 +3807,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3824,7 +3824,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3841,7 +3841,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3858,7 +3858,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3875,7 +3875,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3892,7 +3892,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3909,7 +3909,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3926,7 +3926,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3943,7 +3943,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3960,7 +3960,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3977,7 +3977,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -3994,7 +3994,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4011,7 +4011,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4028,7 +4028,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4045,7 +4045,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4062,7 +4062,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4079,7 +4079,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4096,7 +4096,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4113,7 +4113,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4130,7 +4130,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4147,7 +4147,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4164,7 +4164,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4181,7 +4181,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4198,7 +4198,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4215,7 +4215,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4232,7 +4232,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4249,7 +4249,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4266,7 +4266,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4283,7 +4283,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4300,7 +4300,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4317,7 +4317,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4334,7 +4334,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4351,7 +4351,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4368,7 +4368,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4385,7 +4385,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4402,7 +4402,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4419,7 +4419,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4436,7 +4436,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4453,7 +4453,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4470,7 +4470,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4487,7 +4487,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4504,7 +4504,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4521,7 +4521,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/contracts/ember-completeness.md",
-          "sha256": "221f9fa9f903aaa27362dfcab5b24d76b9ae5679b1d87e66fc387e77bc7c9cf5"
+          "sha256": "c635d0310a35a80108912b78031cdb1e3421ced15ad6dd5e391384413cbbd5e3"
         }
       ],
       "completion_credit": false
@@ -4538,7 +4538,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4555,7 +4555,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4572,7 +4572,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4589,7 +4589,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4606,7 +4606,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4623,7 +4623,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4640,7 +4640,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4657,7 +4657,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4674,7 +4674,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4691,7 +4691,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4708,7 +4708,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4725,7 +4725,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4742,7 +4742,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4759,7 +4759,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4776,7 +4776,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4793,7 +4793,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4810,7 +4810,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4827,7 +4827,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4844,7 +4844,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4861,7 +4861,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4878,7 +4878,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4895,7 +4895,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4912,7 +4912,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4929,7 +4929,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4946,7 +4946,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4963,7 +4963,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4980,7 +4980,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -4997,7 +4997,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5014,7 +5014,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5031,7 +5031,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5048,7 +5048,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5065,7 +5065,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5082,7 +5082,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5099,7 +5099,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5116,7 +5116,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5133,7 +5133,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5150,7 +5150,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5167,7 +5167,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5184,7 +5184,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5201,7 +5201,7 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
@@ -5218,11 +5218,11 @@
       "evidence": [
         {
           "path": "docs/domains/governance/spec/conditions-v1.md",
-          "sha256": "363b1a0e1d952eca1b1dd70cc2239685ebc02a67816a3697872171e8d8256b37"
+          "sha256": "132813aa959d4e03e3c4a4c8aae7470fc8f12acf4375ecc427b6209fec11fc18"
         }
       ],
       "completion_credit": false
     }
   ],
-  "crosswalk_sha256": "87f4937aa9b2562a5cdb8d66153e8bb289087b1cc20127f90998e92c3af77cb1"
+  "crosswalk_sha256": "245d43e03a61512cd416e4bac5f57ff07127bdc95d099dd0c38a3a9002012e20"
 }
