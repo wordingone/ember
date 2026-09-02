@@ -380,7 +380,7 @@ def test_live_ledger_closed_guarded_rows_resolve() -> None:
 # This fixture is OWNED by this test (tests/ember_01_custody/fixtures/) rather
 # than borrowing a production file's incidental dead-on-import behavior -- the
 # prior version of this constant pointed at
-# scripts/tests/test_screen792_bf16_momentum.py, which became collectable
+# src/ember/governance/scripts/tests/test_screen792_bf16_momentum.py, which became collectable
 # again once commit cc84936 (#1637, 2026-08-10) legitimately fixed that
 # production file's import path, silently breaking this negative test (#1751).
 # A negative fixture bound to production brokenness fails the moment someone

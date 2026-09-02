@@ -59,7 +59,7 @@ The C-SCALE checker (test_c_scale.py, not exported to public repo) defines the f
 
 - **Blocks:** Every C-SCALE field that references a checkpoint or lineage.
 - **Status:** GREEN (2026-07-03 totality receipt). Owned cbase checkpoint `<private-lineage>/models/cbase-smoke-run/checkpoints/step-00000610` (goalforge ref) exists, hash-verified, grow-dryrun receipt `cbase-grow-dryrun-20260702T190532Z.json` passes (no invalid-token, four CHK clauses pass).
-- **Citation:** `scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json`, condition C-BASE.
+- **Citation:** `src/ember/governance/scripts/ember_totality/receipts-totality/ember-totality-20260705T081932Z.json`, condition C-BASE.
 
 ### W1 Precondition (W1 collapse test, blocking W1 fields)
 

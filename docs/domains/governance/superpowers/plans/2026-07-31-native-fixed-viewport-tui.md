@@ -87,7 +87,7 @@
 - Modify: `tools/ember-cli/src/components/operator-surface-pane.ts`
 - Modify: `tools/ember-cli/src/components/operator-surface-pane-responsive-cards.test.ts`
 - Modify: `tools/ember-cli/src/components/fireball.ts`
-- Modify: `tools/ember-cli/src/components/fireball.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/fireball.test.ts`
 
 **Interfaces:**
 - `operatorGraphColumnCount()` returns `1` for all valid widths.

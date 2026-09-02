@@ -373,7 +373,7 @@ def test_dirty_authority_file_committed_content_governs():
             json.dump(permissive_allowlist, f)
 
         status = subprocess.run(
-            ["git", "status", "--porcelain", "--", "scripts/ember_totality/custody-allowlist.json"],
+            ["git", "status", "--porcelain", "--", "src/ember/governance/scripts/ember_totality/custody-allowlist.json"],
             cwd=tmpdir, capture_output=True, text=True,
         ).stdout
         assert status.strip(), "test setup bug: authority file is not actually dirty"

@@ -20,7 +20,7 @@ Three failure shapes (issue #381):
                           or board receipt that doesn't exist on disk
 
 Allowlist authority: any exception for an untracked staging receipt must come
-from the separately tracked scripts/ember_totality/custody-allowlist.json
+from the separately tracked src/ember/governance/scripts/ember_totality/custody-allowlist.json
 surface. A receipt's own "__allowlist_untracked" field is disclosure only and
 never grants authority.
 
@@ -592,7 +592,7 @@ def _load_all_spend_annex_rows(root):
     return by_path
 
 
-ALLOWLIST_AUTHORITY_REL = "scripts/ember_totality/custody-allowlist.json"
+ALLOWLIST_AUTHORITY_REL = "src/ember/governance/scripts/ember_totality/custody-allowlist.json"
 ALLOWLIST_SCHEMA_VERSION = "ember-c-custody-allowlist-v1"
 
 # This probe is bound to exactly one goal/workstream (see the file header).

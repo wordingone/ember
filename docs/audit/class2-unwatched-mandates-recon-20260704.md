@@ -34,7 +34,7 @@ but were manually-invoked only; the totality board tamper-hashed them without ex
 so a regression in either checker would never turn a board row RED.
 
 **TODAY'S status: CURED, board-wired, confirmed present.** Issue #38 landed the fix:
-`scripts/ember_totality/test_c_enf.py` implements condition **C-ENF**, present in
+`src/ember/governance/scripts/ember_totality/test_c_enf.py` implements condition **C-ENF**, present in
 `ember_totality_spec.py`'s `ORDER` list (line 149) and `FILENAME_ID` map (line 135). Verified by
 reading the file directly: `test_c_enf.py` calls `enforcement_leg.run_enforcement_leg` over
 `DEFAULT_CHECKERS` (both real checkers), GREEN iff every dual-source verdict is PASS — FAIL,

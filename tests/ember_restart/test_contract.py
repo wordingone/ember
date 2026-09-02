@@ -1233,7 +1233,7 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["source_commit"] = _current_source_commit()
     _write_json(manifest_path, manifest)
-    dirty_path = REPO_ROOT / "docs/ember-restart/r1-warm100-entry-v1.md"
+    dirty_path = REPO_ROOT / "docs/domains/governance/ember-restart/r1-warm100-entry-v1.md"
     original = dirty_path.read_bytes()
     try:
         dirty_path.write_bytes(original + b"\nlocal-dirty-source\n")

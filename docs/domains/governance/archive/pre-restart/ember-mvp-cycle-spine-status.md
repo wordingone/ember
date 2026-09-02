@@ -65,7 +65,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   id. Fixture mode explicitly records `gpu_preflight_called=false`. It also
   has a real governed CUDA smoke path that calls `governor.preflight()`, runs
   two optimizer steps on GPU, and hashes a checkpoint artifact.
-- `scripts/ember_governor_binding_selftest.py` verifies governor rail limits,
+- `src/ember/governance/scripts/ember_governor_binding_selftest.py` verifies governor rail limits,
   checkpoint hash presence, refuses fixture receipts that claim GPU preflight,
   and verifies the real governed CUDA receipt shape when CUDA is available.
 - `src/ember/governance/scripts/ember_wheel_harness.py` records the first A/B/C wheel contract:
@@ -822,7 +822,7 @@ python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_governor_binding_selftest.py
+python src\ember\governance\scripts\ember_governor_binding_selftest.py
 python src\ember\governance\scripts\ember_governor_binding.py --selftest
 python scripts\ember_wheel_harness_selftest.py
 python src\ember\governance\scripts\ember_wheel_harness.py --selftest

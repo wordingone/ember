@@ -75,7 +75,7 @@ GitHub REST/GraphQL through the repository's safe wrappers, Git, pytest/unittest
 ### Task 3: Define desired GitHub state
 
 **Files:**
-- Create: `docs/roadmap/execution-graph.json`
+- Create: `docs/domains/governance/roadmap/execution-graph.json`
 - Create: `manifests/roadmap/github-projection-v1.json`
 - Create: `manifests/roadmap/issue-reconciliation-v1.json`
 

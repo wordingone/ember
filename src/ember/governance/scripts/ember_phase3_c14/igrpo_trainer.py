@@ -9,7 +9,7 @@ This is the SINGLE trainable-update authority for the C arm: all gradient flow
 for the C arm in abc_deleted_harness.py routes through train_one_step() here.
 
 Architecture:
-  - Builds on banked primitives in scripts/ember_resident_igrpo.py:
+  - Builds on banked primitives in src/ember/governance/scripts/ember_resident_igrpo.py:
       igrpo_stage1, igrpo_stage2, igrpo_loss, compute_advantages,
       Stage1Result, Stage2Result, TinyPolicyTransformer, executing_verifier
   - Adds: StepReceipt dataclass, train_one_step(), assert_weights_changed()

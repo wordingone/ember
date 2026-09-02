@@ -314,7 +314,7 @@ def run_audit(nc=NC):
         "ticket": "SP3-TERMINAL-AUDIT",
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "issue": 206,
-        "table": "docs/research/june22-critical-path.md section 1 (+ 8a/8b split)",
+        "table": "docs/domains/governance/research/june22-critical-path.md section 1 (+ 8a/8b split)",
         "rows": rows,
         "result": {
             "verdict": ("ALL-RECEIPTED"

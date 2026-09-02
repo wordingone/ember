@@ -25,7 +25,7 @@ undocumented, mid-run OS tuning is never an accepted path under any of those
 four. This document and its companion module are (b) and (d) for the
 host-commit-capacity dimension specifically. Redesigning the mechanism itself
 (c) is addressed separately in
-`docs/spec/optimizer-state-mmap-arena-spec.md`, which this contract is
+`docs/domains/governance/spec/optimizer-state-mmap-arena-spec.md`, which this contract is
 compared against.
 
 ## Operator scoping ruling (2026-08-21) — binds everything below
@@ -35,7 +35,7 @@ intervention and technical debt**, acceptable only to finish the current
 dense control run — it is **not** formalized here as a repeatable Ember
 setup requirement, and declining the mmap-arena redesign (which would dirty
 ~42.9 GiB of optimizer state per step, see
-`docs/spec/optimizer-state-mmap-arena-spec.md`) does not by itself establish
+`docs/domains/governance/spec/optimizer-state-mmap-arena-spec.md`) does not by itself establish
 a privileged pagefile configuration as the durable answer; those are
 independent claims. The dense A1 control's elevated commit footprint is a
 property of *that control experiment's own declared profile*
@@ -138,7 +138,7 @@ packet on #898 should claim otherwise.
 
 ## Relationship to the mmap arena alternative
 
-`docs/spec/optimizer-state-mmap-arena-spec.md` designs a different cure for
+`docs/domains/governance/spec/optimizer-state-mmap-arena-spec.md` designs a different cure for
 the same root problem: backing the optimizer's three fp32 state tensors with
 ember-custody memory-mapped files instead of anonymous CPU memory, which
 would drop the host commit charge from ~57 GiB to working-set scale and make

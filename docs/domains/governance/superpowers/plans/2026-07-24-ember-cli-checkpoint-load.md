@@ -146,7 +146,7 @@ git commit -m "feat: verify modern checkpoint bundles"
 ### Task 2: Command authorization and lifecycle wiring
 
 **Files:**
-- Modify: `tools/ember-cli/src/commands/model.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/commands/model.ts`
 - Modify: `tools/ember-cli/src/commands/model.test.ts`
 
 **Interfaces:**
