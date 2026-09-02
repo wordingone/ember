@@ -31,24 +31,6 @@ from train import run_launch as live_run_launch
 from verify_capability_record import expected_receipt
 
 
-def _capacity_stable_disk_budget_runner(parent: Path, runner: Path) -> Path:
-    """Execute the real runner with deterministic free-space inputs in unit tests."""
-
-    shim = parent / "disk-budget-runner-capacity-fixture.py"
-    shim.write_text(
-        "import importlib.util, pathlib, sys\n"
-        f"runner_path = pathlib.Path({str(runner)!r})\n"
-        "spec = importlib.util.spec_from_file_location('_tested_disk_budget_runner', runner_path)\n"
-        "module = importlib.util.module_from_spec(spec)\n"
-        "spec.loader.exec_module(module)\n"
-        "module.current_free_gib = lambda: {'C': 1000.0, 'B': 1000.0}\n"
-        "sys.argv = [str(runner_path), *sys.argv[1:]]\n"
-        "raise SystemExit(module.main())\n",
-        encoding="utf-8",
-    )
-    return shim
-
-
 class RunnerPreflightTests(unittest.TestCase):
     def test_training_acceleration_config_is_closed_and_stage1_disabled(self) -> None:
         policy = run_vertical_slice.load_training_acceleration_policy()
@@ -1792,7 +1774,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(specialist.call_args.kwargs["resume_optimizer_transition_registry_sha256"], expected_sha256)
 
     def test_c_custody_resume_bundle_requires_the_declared_disk_runner_root(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir="C:/tmp") as directory:
             custody = Path(directory)
             checkpoint = custody / "checkpoint"
             checkpoint.mkdir()
@@ -2111,17 +2093,13 @@ class RunnerPreflightTests(unittest.TestCase):
             with patch.dict(os.environ, {"GOVERNED_LAUNCH_CAPTURE": str(capture)}, clear=False):
                 completed = subprocess.run(
                     [
-                        sys.executable, "-I", str(_capacity_stable_disk_budget_runner(Path(directory), runner)), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
+                        sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
                         "--receipt", str(receipt), "--write-root", f"custody={custody}",
                         "--write-root", f"artifacts={artifact_root}", "--", sys.executable, str(child),
                     ],
                     text=True, capture_output=True, check=False,
                 )
-            self.assertEqual(
-                completed.returncode,
-                0,
-                completed.stderr + (receipt.read_text(encoding="utf-8") if receipt.is_file() else ""),
-            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
             observed = json.loads(capture.read_text(encoding="utf-8"))
             runner_receipt = json.loads(receipt.read_text(encoding="utf-8"))
         self.assertEqual(observed["payload"]["schema_version"], 1)
@@ -2146,7 +2124,7 @@ class RunnerPreflightTests(unittest.TestCase):
             custody.mkdir()
             receipt = custody / "runner-receipt.json"
             completed = subprocess.run(
-                [sys.executable, str(_capacity_stable_disk_budget_runner(Path(directory), runner)), "--max-c-write-gib", "99999", "--max-b-write-gib", "0.001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "raise AssertionError('child')"],
+                [sys.executable, str(runner), "--max-c-write-gib", "99999", "--max-b-write-gib", "0.001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "raise AssertionError('child')"],
                 text=True, capture_output=True, check=False,
             )
             payload = json.loads(receipt.read_text(encoding="utf-8"))
@@ -2165,7 +2143,7 @@ class RunnerPreflightTests(unittest.TestCase):
             receipt = custody / "runner-receipt.json"
             completed = subprocess.run(
                 [
-                    sys.executable, "-I", str(_capacity_stable_disk_budget_runner(Path(directory), runner)), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
+                    sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01",
                     "--receipt", str(receipt), "--write-root", f"custody={custody}", "--write-root", f"artifacts={artifact_root}", "--",
                     sys.executable, str(child), "governed-vertical-preflight", "--seed", "83", "--artifact-root", str(artifact_root),
                     "--write-budget-bytes", str(17 * 1024**3), "--max-records", "1",
@@ -2184,7 +2162,7 @@ class RunnerPreflightTests(unittest.TestCase):
             custody.mkdir()
             receipt = custody / "runner-receipt.json"
             completed = subprocess.run(
-                [sys.executable, "-I", str(_capacity_stable_disk_budget_runner(Path(directory), runner)), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "pass"],
+                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.01", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", "pass"],
                 text=True, capture_output=True, check=False,
             )
             payload = json.loads(receipt.read_text(encoding="utf-8"))
@@ -2200,7 +2178,7 @@ class RunnerPreflightTests(unittest.TestCase):
             marker = custody / "child-ran"
             receipt = custody / "runner-receipt.json"
             completed = subprocess.run(
-                [sys.executable, "-I", str(_capacity_stable_disk_budget_runner(Path(directory), runner)), "--max-c-write-gib", "0", "--max-b-write-gib", "0.00001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{marker}', 'w').write('ran')"],
+                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.00001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{marker}', 'w').write('ran')"],
                 text=True, capture_output=True, check=False,
             )
         self.assertNotEqual(completed.returncode, 0)
@@ -2215,7 +2193,7 @@ class RunnerPreflightTests(unittest.TestCase):
             receipt = custody / "runner-receipt.json"
             child_file = custody / "child.bin"
             completed = subprocess.run(
-                [sys.executable, "-I", str(_capacity_stable_disk_budget_runner(Path(directory), runner)), "--max-c-write-gib", "0", "--max-b-write-gib", "0.0001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{child_file}', 'wb').write(b'x' * 60000)"],
+                [sys.executable, "-I", str(runner), "--max-c-write-gib", "0", "--max-b-write-gib", "0.0001", "--receipt", str(receipt), "--write-root", f"custody={custody}", "--", sys.executable, "-c", f"open(r'{child_file}', 'wb').write(b'x' * 60000)"],
                 text=True, capture_output=True, check=False,
             )
             payload = json.loads(receipt.read_text(encoding="utf-8"))
