@@ -10,7 +10,7 @@
       "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
-      "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
+      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
       "sha256": "c898df21988301f7def1251708104140d558fb29c0ac67bcd62edd785a0d1c98",
       "reason": "02B-owned certified-launch custody suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
