@@ -7,7 +7,7 @@ Issue #1296's P1 defect: ``contract.py r1-entry`` mints a green
 ``ember-r1-warm100-entry-v1`` receipt for ANY git repository whose HEAD matches
 the claimed ``source_commit`` and whose tree is clean -- including a completely
 foreign, attacker-authored repository. This suite proves that with real git
-repositories only (precedent: ``scripts/ember_totality/tree_provenance_test.py``)
+repositories only (precedent: ``src/ember/governance/scripts/ember_totality/tree_provenance_test.py``)
 -- no mocked git, no monkeypatched identity checks, no renamed ``origin``.
 
 Keeps ``test_contract.py``'s live-repo suite intact; this file owns the

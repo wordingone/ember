@@ -27,7 +27,7 @@
 ### Task 1: RED happy-path join contract
 
 **Files:**
-- Create: `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
+- Create: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
 - Create after RED only: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 
 **Interfaces:**
@@ -77,7 +77,7 @@ test("joins by prior renderer row and retains zero-advance positive-commit inter
 Run:
 
 ```powershell
-bun test tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts
 ```
 
 Expected: FAIL because `issue898-renderer-census-evidence.ts` does not exist. This
@@ -95,7 +95,7 @@ required.
 
 **Files:**
 - Create: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
-- Modify: `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
 
 **Interfaces:**
 - Consumes: paths and pins in `Issue898RendererCensusEvidenceInput`.
@@ -261,7 +261,7 @@ warnings or errors.
 ### Task 3: Family-batched RED/GREEN refusal and tamper coverage
 
 **Files:**
-- Modify: `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 
 **Interfaces:**
@@ -419,7 +419,7 @@ Run both focused test files together and require pristine output.
 - [ ] **Step 1: Run focused and neighboring suites**
 
 ```powershell
-bun test tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 bun test src/ember/infrastructure/tools/ember-cli/src/services/issue898-installed-cockpit-soak.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline-diagnostic.test.ts
 ```
 
@@ -434,7 +434,7 @@ never relabel baseline failures as GREEN.
 ```powershell
 git diff --check
 git status --short
-git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
+git diff -- src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
 ```
 
 Confirm no runtime producer, existing receipt schema, or arm custody path changed.

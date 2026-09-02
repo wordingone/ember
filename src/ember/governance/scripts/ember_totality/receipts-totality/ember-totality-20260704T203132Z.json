@@ -569,12 +569,12 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c1.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c1.py",
             "sha256": "fab6a564115271cfffb758ba2627fbc02b6f2819e2064e4cf40aba9c74ca8b4a",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c10.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c10.py",
             "sha256": "56d38d9608bf3e7f97bf26d792a694576d4492d7da30d86fde735267b75d16c6",
             "present": true
           },
@@ -584,32 +584,32 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c12.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c12.py",
             "sha256": "0778be0697cd9cc1cfd777b23b364c0cf62cdb655787db7860d5b8e00cf75e5d",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c13.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c13.py",
             "sha256": "9ec978464d4f206e5d5b3b5edfd9da531f8fb76d0a14f64a8835d2d9511f6baa",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c14.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c14.py",
             "sha256": "7d4b8bf329ab1492277a73d25b5b5559b91ec767098cade21e50e606bb84884f",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c15.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c15.py",
             "sha256": "dc40401934268e1fc8422aa0ff7192b2f9ab50e83a62e35ad1e11ee02a1596bb",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c2.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c2.py",
             "sha256": "6b31db849d59dcf30b1c8ee881ebb2ae20d9f14004e5c473bbbfc9bd9e58d86d",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c3.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c3.py",
             "sha256": "505ebcdb53089963950a8137b4797a8d8d3052f8b9c3ed2864af21a7c8af5024",
             "present": true
           },
@@ -624,22 +624,22 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c6.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c6.py",
             "sha256": "bd38eedd5ba89e967580f39414a465a307cf0db17746d029a3b79f8eb53fae2d",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c7.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c7.py",
             "sha256": "6532b087c55e332da9867dcb4b70981372ba60a0d8a8066f83b2cb80abaefbe7",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c8.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c8.py",
             "sha256": "5d7038b69ce19e9142401d01934d8057d1de05872e0b267c789215eb99af4723",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c9.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c9.py",
             "sha256": "bcd622e3423f991b51f9d38a219cc129ef0dc685c1e3e8ae0cfedda8513598a6",
             "present": true
           },
@@ -649,17 +649,17 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_auto.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_auto.py",
             "sha256": "4605b87450d0865baf5b277f5f023cdb325dba11c33ad87dd943c6f139f0172a",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_base.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_base.py",
             "sha256": "ac904d0f1e16cb0ff6763c1815452bd953633f44a89d4904a252bdfe6cdb9f5f",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_disc.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_disc.py",
             "sha256": "994c121d06a4fecaf279184606256b30557fc756aa64cd718e2f7123a13503c7",
             "present": true
           },
@@ -679,7 +679,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_fed.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_fed.py",
             "sha256": "545a7d1bd08d4bc9cecf2da97bb679aab17e5e34b19a87a6afa3b7b69c3a7475",
             "present": true
           },
@@ -694,7 +694,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_ladm.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_ladm.py",
             "sha256": "3e32ff2ae10326535054ceab1a09a44c570e1a5d4d9fdb975271290c10fcf889",
             "present": true
           },
@@ -709,7 +709,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_mile.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_mile.py",
             "sha256": "195bdaea27d2ffade77c3285cb09cbba6f6c140534010e9a0cc6cef2ba812638",
             "present": true
           },
@@ -724,7 +724,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_organism.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_organism.py",
             "sha256": "c3bde14dbc1e846e910037042363d99ee1f2097519b152b6f81be22e09f90d10",
             "present": true
           },
@@ -744,7 +744,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_tally.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_tally.py",
             "sha256": "2a6cbdc0367cb63e55c70f70db9070ab266379719af1cea2c7c203197daee928",
             "present": true
           },

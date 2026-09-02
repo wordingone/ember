@@ -20,7 +20,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   state-substrate v0 surface without GitHub dependency. It emits receipts for
   observation, latent branch, diff-backed state commit, replay from commit
   receipt, rollback restoration, and rejected-branch GC.
-- `scripts/ember_state_substrate_selftest.py` verifies branch creation, diff
+- `src/ember/governance/scripts/ember_state_substrate_selftest.py` verifies branch creation, diff
   materialization, commit receipt validation, revert restoration, receipt-backed
   deletion of rejected-branch deltas, and deterministic replay from the commit
   receipt.

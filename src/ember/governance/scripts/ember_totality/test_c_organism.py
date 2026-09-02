@@ -55,7 +55,7 @@ import os
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
 ROOT = next(
     (p for p in (Path(_env_root) if _env_root else None, REPO_ROOT,

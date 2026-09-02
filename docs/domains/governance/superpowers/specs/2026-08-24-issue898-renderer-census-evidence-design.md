@@ -35,7 +35,7 @@ same identity checks, join rule, windows, regressions, ratios, and receipt hash.
 - `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts` owns parsing,
   validation, anchoring, fits, receipt construction, exclusive writing, and receipt
   verification.
-- `tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts` owns the
+- `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts` owns the
   focused behavioral and refusal tests.
 - `src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.ts` is a thin Bun
   entrypoint over the service. It accepts exact input, identity, and output paths;

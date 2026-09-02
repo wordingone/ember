@@ -330,7 +330,7 @@
       "error": "node outside closed grammar: Attribute"
     },
     {
-      "path": "scripts/ember_totality/test_c1.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c1.py",
       "line": 55,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -341,7 +341,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c1.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c1.py",
       "line": 60,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -352,7 +352,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c10.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c10.py",
       "line": 49,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -363,7 +363,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c10.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c10.py",
       "line": 54,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -396,7 +396,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c12.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c12.py",
       "line": 55,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -407,7 +407,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c12.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c12.py",
       "line": 60,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -418,7 +418,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c13.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c13.py",
       "line": 66,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -429,7 +429,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c13.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c13.py",
       "line": 71,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -440,7 +440,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c14.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c14.py",
       "line": 94,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -451,7 +451,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c14.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c14.py",
       "line": 95,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -462,7 +462,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c15.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c15.py",
       "line": 67,
       "target": "_ROOT_CANDIDATES",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -473,7 +473,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c2.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c2.py",
       "line": 93,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -484,7 +484,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c2.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c2.py",
       "line": 94,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -495,7 +495,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c3.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c3.py",
       "line": 73,
       "target": "D3_LOOP_DIR",
       "expression": "os.path.join(EXTERNAL_STATE, 'receipts', 'ember-d3-native-loop')",
@@ -506,7 +506,7 @@
       "error": "unknown alias EXTERNAL_STATE"
     },
     {
-      "path": "scripts/ember_totality/test_c3.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c3.py",
       "line": 74,
       "target": "RESIDENT_GATE_DIR",
       "expression": "os.path.join(EXTERNAL_STATE, 'receipts', 'ember-resident-training-gate')",
@@ -550,7 +550,7 @@
       "error": "unknown alias EXTERNAL_STATE"
     },
     {
-      "path": "scripts/ember_totality/test_c7.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c7.py",
       "line": 77,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -561,7 +561,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c7.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c7.py",
       "line": 82,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -572,7 +572,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c8.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c8.py",
       "line": 58,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -583,7 +583,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c8.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c8.py",
       "line": 63,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -594,7 +594,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c9.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c9.py",
       "line": 53,
       "target": "_CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -605,7 +605,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_auto.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_auto.py",
       "line": 38,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -616,7 +616,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_auto.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_auto.py",
       "line": 39,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -627,7 +627,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_base.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_base.py",
       "line": 78,
       "target": "_env_root",
       "expression": "os.environ.get('EMBER_TOTALITY_ROOT')",
@@ -638,7 +638,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_totality/test_c_base.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_base.py",
       "line": 79,
       "target": "ROOT",
       "expression": "next((p for p in (Path(_env_root) if _env_root else None, REPO_ROOT, REPO_ROOT / '<external-state>') if p is not None and p.is_dir()), REPO_ROOT / '<external-state>')",
@@ -649,7 +649,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_base.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_base.py",
       "line": 94,
       "target": "_artifact_root_env",
       "expression": "os.environ.get('EMBER_ARTIFACT_ROOT')",
@@ -682,7 +682,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_disc.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_disc.py",
       "line": 47,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -693,7 +693,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_disc.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_disc.py",
       "line": 48,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -748,7 +748,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_fed.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_fed.py",
       "line": 51,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -759,7 +759,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_fed.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_fed.py",
       "line": 56,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -770,7 +770,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_ladm.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_ladm.py",
       "line": 96,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -781,7 +781,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_ladm.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_ladm.py",
       "line": 97,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -814,7 +814,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_mile.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_mile.py",
       "line": 77,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -825,7 +825,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_mile.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_mile.py",
       "line": 78,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",
@@ -858,7 +858,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_organism.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_organism.py",
       "line": 59,
       "target": "_env_root",
       "expression": "os.environ.get('EMBER_TOTALITY_ROOT')",
@@ -869,7 +869,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_totality/test_c_organism.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_organism.py",
       "line": 60,
       "target": "ROOT",
       "expression": "next((p for p in (Path(_env_root) if _env_root else None, REPO_ROOT, REPO_ROOT / '<external-state>') if p is not None and p.is_dir()), REPO_ROOT / '<external-state>')",
@@ -902,7 +902,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_tally.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_tally.py",
       "line": 82,
       "target": "BOARD_DIR",
       "expression": "next((d for d in _BOARD_DIR_CANDIDATES if os.path.isdir(d)), _BOARD_DIR_CANDIDATES[-1])",

@@ -57,7 +57,7 @@ src/ember/governance/scripts/ember_gate_cleanroom_inventory_selftest.py
 src/ember/governance/scripts/ember_gate_cleanroom_legal_boundary.py
 src/ember/governance/scripts/ember_gate_cleanroom_legal_boundary_selftest.py
 src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use.py
-scripts/ember_gate_communication_mailbox_computer_use_selftest.py
+src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use_selftest.py
 scripts/ember_gate_full_parity_harness_selftest.py
 scripts/ember_gate_function_slash_commands_selftest.py
 scripts/ember_gate_goal_mode_parity_adapter_selftest.py
@@ -104,7 +104,7 @@ src/ember/governance/scripts/ember_scienceagentbench_admission_selftest.py
 src/ember/governance/scripts/ember_scienceagentbench_artifact_intake_selftest.py
 src/ember/governance/scripts/ember_scienceagentbench_artifact_materialization_selftest.py
 src/ember/governance/scripts/ember_state_substrate.py
-scripts/ember_state_substrate_selftest.py
+src/ember/governance/scripts/ember_state_substrate_selftest.py
 scripts/ember_tiny_bitnet_comparison_selftest.py
 src/ember/governance/scripts/ember_totality/c_comprehensive_receipts_custody_test.py
 src/ember/governance/scripts/ember_totality/c_custody_dictkey_citations_test.py
@@ -124,14 +124,14 @@ src/ember/governance/scripts/ember_totality/chk_controls/test_preflight.py
 src/ember/governance/scripts/ember_totality/chk_controls/test_run_controls_receipt_test.py
 src/ember/governance/scripts/ember_totality/disconfirmation_leg_test.py
 src/ember/governance/scripts/ember_totality/milestone_leg_test.py
-scripts/ember_totality/test_c_ladm.py
+src/ember/governance/scripts/ember_totality/test_c_ladm.py
 scripts/ember_train_multimodal_resident_adapter.py
-scripts/ember_train_multimodal_resident_adapter_cli_selftest.py
+src/ember/governance/scripts/ember_train_multimodal_resident_adapter_cli_selftest.py
 src/ember/governance/scripts/ember_wheel_harness.py
 scripts/ember_wheel_harness_selftest.py
 src/ember/governance/scripts/ember_windows_sandbox.py
 scripts/ember_windows_sandbox_selftest.py
-scripts/eng45_backfill_sha_convention.py
+src/ember/governance/scripts/eng45_backfill_sha_convention.py
 scripts/exp711_permute.py
 scripts/exp711_sensitivity.py
 src/ember/governance/scripts/fp21b_prereg.py

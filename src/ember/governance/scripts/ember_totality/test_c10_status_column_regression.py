@@ -28,7 +28,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 PROBE = REPO_ROOT / "scripts" / "ember_totality" / "test_c10.py"
 
 
