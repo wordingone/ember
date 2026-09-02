@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 
-REPO = Path(__file__).resolve().parents[2]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT = REPO / "scripts" / "roadmap" / "publish_contracts.py"
 
 
