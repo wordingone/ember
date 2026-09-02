@@ -11,7 +11,7 @@ Status: CURRENT
 Issue: #898 packet-2 J
 
 Consumer: `tools/ember-cli/src/services/issue898-installed-cockpit-soak.ts`, `tools/ember-cli/src/services/issue898-cockpit-negative-harness.ts`
-Consumer: `tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-renderer-census-evidence.ts`
 
 ## Contract
 

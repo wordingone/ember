@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT_ROOT = REPO_ROOT / "scripts" / "ember_01_custody"
 sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -482,7 +482,7 @@ def test_check_collectability_direct_on_live_guard() -> None:
 
 # A dependency-light checked-in test file whose tests are class methods. This retains
 # the symbol-leaf contract without importing the full Torch model stack in policy CI.
-_CLASS_METHOD_TEST_FILE = "tests/ember_restart_model/test_checkpoint_scratch_cap.py"
+_CLASS_METHOD_TEST_FILE = "tests/ember_restart_model/domain-governance/test_checkpoint_scratch_cap.py"
 # A real collectable test that is a method on the class (leaf == this symbol).
 _REAL_CLASS_METHOD_SYMBOL = (
     "test_rejects_before_an_over_cap_write_changes_the_destination"

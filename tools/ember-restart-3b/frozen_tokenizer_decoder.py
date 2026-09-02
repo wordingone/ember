@@ -1,50 +1,22 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-
-"""Fail-closed in-memory decoder wiring for Ember's frozen ByteLevel tokenizer."""
-
+# disposition: ADAPTER
+# issue1949 old_path: tools/ember-restart-3b/frozen_tokenizer_decoder.py
+# issue1949 new_path: src/ember/infrastructure/tools/ember-restart-3b/frozen_tokenizer_decoder.py
 from __future__ import annotations
-
-import json
-from collections.abc import Mapping
-from typing import Any
-
-
-def attach_frozen_bytelevel_decoder(
-    tokenizer: Any,
-    tokenizer_json_bytes: bytes,
-) -> dict[str, object]:
-    """Attach ByteLevel decoding only when exact tokenizer bytes require it."""
-
-    try:
-        decoded = tokenizer_json_bytes.decode("utf-8", errors="strict")
-    except UnicodeDecodeError as error:
-        raise ValueError("tokenizer bytes must be strict UTF-8") from error
-    try:
-        document = json.loads(decoded)
-    except json.JSONDecodeError as error:
-        raise ValueError("tokenizer bytes must contain a valid JSON object") from error
-    if not isinstance(document, Mapping):
-        raise ValueError("tokenizer bytes must contain a valid JSON object")
-
-    pre_tokenizer = document.get("pre_tokenizer")
-    if (
-        not isinstance(pre_tokenizer, Mapping)
-        or pre_tokenizer.get("type") != "ByteLevel"
-    ):
-        raise ValueError("tokenizer pre_tokenizer.type must be ByteLevel")
-
-    if document.get("decoder") is not None:
-        return {
-            "attached": False,
-            "reason": "explicit on-disk decoder preserved",
-        }
-
-    from tokenizers import decoders
-
-    tokenizer.decoder = decoders.ByteLevel()
-    return {
-        "attached": True,
-        "reason": "attached ByteLevel decoder in memory",
-    }
+import importlib.util as _issue1949_importlib
+import sys as _issue1949_sys
+from pathlib import Path as _issue1949_Path
+_issue1949_root = next(parent for parent in _issue1949_Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
+_issue1949_target = _issue1949_root.joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'frozen_tokenizer_decoder.py')
+if not _issue1949_target.is_file():
+    raise ImportError("ISSUE1949_ADAPTER_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/frozen_tokenizer_decoder.py")
+_issue1949_name = "_ember_issue1949_6b18f94e6b69f9bc"
+_issue1949_spec = _issue1949_importlib.spec_from_file_location(_issue1949_name, _issue1949_target)
+if _issue1949_spec is None or _issue1949_spec.loader is None:
+    raise ImportError("ISSUE1949_ADAPTER_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/frozen_tokenizer_decoder.py")
+_issue1949_module = _issue1949_importlib.module_from_spec(_issue1949_spec)
+_issue1949_sys.modules[_issue1949_name] = _issue1949_module
+_issue1949_spec.loader.exec_module(_issue1949_module)
+globals().update({name: value for name, value in vars(_issue1949_module).items() if name not in {"__name__", "__loader__", "__package__", "__spec__"}})

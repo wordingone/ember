@@ -23,7 +23,7 @@ import struct
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 # tests/ (not tools/scripts/receipts/... control paths) -- a raw binary
 # checkpoint fixture cannot carry the goal_id/workstream_id/next_executed_outcome
 # comment-marker binding the authority-conservation gate requires of files
@@ -53,7 +53,7 @@ EVIDENCE: dict[str, str] = {
     "data.verifier": "cond3-artifact-b-verifier-fixture: accepted-input verifier v1 stub",
     "data.accepted_input.authority_record": "cond3-artifact-b: accepted-training-input authority record, github-issue-1015",
     "data.accepted_input.shard_manifest": "cond3-artifact-b: shard manifest, 1 shard, 0 rows dropped",
-    "data.accepted_input.caller": "cond3-artifact-b: forwarding caller identity, scripts/ember_restart/build_cond3_artifact_b_fixture.py",
+    "data.accepted_input.caller": "cond3-artifact-b: forwarding caller identity, src/ember/governance/scripts/ember_restart/build_cond3_artifact_b_fixture.py",
     "data.accepted_input.gate": "cond3-artifact-b: accepted-input gate decision, PASS",
     "data.accepted_input.validator": "cond3-artifact-b: accepted-input validator program v1",
     "data.accepted_input.forwarding_receipt": "cond3-artifact-b: forwarding receipt, input accepted 2026-07-23",
@@ -96,7 +96,7 @@ def build_manifest(checkpoint_bytes: bytes) -> dict[str, Any]:
             "selected_as_owned_ember": False,
         },
         "architecture": {
-            "source": "scripts/ember_restart/build_cond3_artifact_b_fixture.py:EVIDENCE['architecture']",
+            "source": "src/ember/governance/scripts/ember_restart/build_cond3_artifact_b_fixture.py:EVIDENCE['architecture']",
             "sha256": evidence_sha["architecture"],
         },
         "checkpoint": {

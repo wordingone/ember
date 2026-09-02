@@ -2,7 +2,7 @@
 
 Frozen 2026-06-11, BEFORE any v0 token shard exists, so no loss number can
 shape the rule (same discipline as fp-26/fp-27: the decision rule precedes
-the data). Carrier: #225. Companion: docs/research/fp32-bottleneck-ledger.json
+the data). Carrier: #225. Companion: docs/domains/governance/research/fp32-bottleneck-ledger.json
 row R1; gain receipt receipts/fp32-step-econ-20260611T142831Z.json.
 
 ## Question

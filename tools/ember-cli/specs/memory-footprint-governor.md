@@ -22,7 +22,7 @@ Consumer: `tools/ember-cli/src/services/memory-footprint-cockpit.ts`
 
 Consumer: `tools/ember-cli/src/services/issue1455-memory-soak-receipt.ts`
 
-Consumer: `tools/ember-cli/src/services/poll-failure-status.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/poll-failure-status.ts`
 
 ## Authority and custody
 

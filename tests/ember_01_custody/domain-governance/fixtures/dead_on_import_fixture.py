@@ -2,7 +2,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Deliberately dead-on-import fixture, owned by
-tests/ember_01_custody/test_verify_c0_failure_class_ledger.py's collectability-gate
+tests/ember_01_custody/domain-governance/test_verify_c0_failure_class_ledger.py's collectability-gate
 negative test.
 
 This file exists ONLY to be permanently uncollectable by `pytest --collect-only`.

@@ -11,7 +11,7 @@ independent-audit disposition on issue #123, "Tighten-only clearance"
 section, refs #582 #592):
 
 Independent-audit finding (CONFIRMED, reproduced in
-tests/test_f2_instance_commitment.py): the original `--commit` receipt binds
+tests/domain-governance/test_f2_instance_commitment.py): the original `--commit` receipt binds
 only `code_sha` + the convention TEXT -- an algorithm-family commitment, not
 an instance commitment. `generate_schedule(k=1, phi_star=.10, C=1e21,
 N=368000000)` and the same call with `phi_star=.40` both carry the IDENTICAL
@@ -31,7 +31,7 @@ assert the derived config_hash matches the pre-committed per-k fixture).
 values and REJECTS any mismatch on any bound field -- this is what closes
 the .10/.40 collision: two different phi_star values now hash to two
 different commitments, so a receipt committed at phi_star=.10 rejects a
-later claim of phi_star=.40 (see tests/test_f2_instance_commitment.py
+later claim of phi_star=.40 (see tests/domain-governance/test_f2_instance_commitment.py
 ::TestVerifierRejectsUncommittedInputs).
 
 `map_events_to_steps()` (issue #629 deliverable 4) converts the continuous
@@ -226,7 +226,7 @@ def map_events_to_steps(events, c_claim: float, flops_per_step_val: float) -> di
     realized budget error against BUDGET_LIMIT_PCT.
 
     Pure function, zero file I/O, deterministic (see
-    tests/test_f2_instance_commitment.py::TestIntegerStepBoundaryBudgetCheck).
+    tests/domain-governance/test_f2_instance_commitment.py::TestIntegerStepBoundaryBudgetCheck).
     """
     if not (flops_per_step_val > 0):
         raise ValueError(f"map_events_to_steps: flops_per_step_val must be > 0, got {flops_per_step_val!r}")

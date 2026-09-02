@@ -47,7 +47,7 @@ time.**
 
 ## Resolver
 
-`scripts/nck/b_run_designation.py` — pure function of the named checkpoint
+`src/ember/governance/scripts/nck/b_run_designation.py` — pure function of the named checkpoint
 dirs + clock; `--now` injectable for the selftest, defaults to system UTC;
 `--write` emits the receipt; bare invocation = staged exit 1 (evidence-
 promotion gate, house pattern). Selftest

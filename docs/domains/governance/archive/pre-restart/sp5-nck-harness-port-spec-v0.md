@@ -7,7 +7,7 @@ communicate and interact via computer use."
 
 This spec is the clean-room boundary document: the port is written FRESH
 against this spec. It binds WHAT the harness must do; the heartbeat-runner
-spec (#254, docs/archive/pre-restart/heartbeat-runner-spec-v0.md) is the execution-side seed for
+spec (#254, docs/domains/governance/archive/pre-restart/heartbeat-runner-spec-v0.md) is the execution-side seed for
 HOW the inner run-loop breathes.
 
 ## 1. Clean-room rule (binding)

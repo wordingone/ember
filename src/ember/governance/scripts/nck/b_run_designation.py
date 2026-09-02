@@ -37,8 +37,8 @@ except ImportError:
     from seat_adapter import TEMPLATE_HASH  # type: ignore[no-redef]
 
 RULE_VERSION = "sp6b-designation-rule-v0"
-RULE_DOC = Path(__file__).resolve().parent.parent.parent / "docs" / "archive" / "pre-restart" / "sp6b-designation-rule-v0.md"
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+RULE_DOC = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "docs" / "archive" / "pre-restart" / "sp6b-designation-rule-v0.md"
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 
 # Frozen resolution window (UTC) — refusal outside unless registered deviation
 WINDOW_START = datetime(2026, 6, 20, 0, 0, 0, tzinfo=timezone.utc)

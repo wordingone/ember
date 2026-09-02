@@ -71,7 +71,7 @@ python src/ember/governance/scripts/ember_candidate_generator_selftest.py
 ### D3 loop selftests
 
 ```bash
-python scripts/ember_d3_broader_multifamily_admission_selftest.py
+python src/ember/governance/scripts/ember_d3_broader_multifamily_admission_selftest.py
 python scripts/ember_d3_broader_multifamily_loop_selftest.py
 python src/ember/governance/scripts/ember_d3_generalized_candidate_exec_selftest.py
 ```

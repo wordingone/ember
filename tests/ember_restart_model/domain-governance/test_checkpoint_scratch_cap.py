@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ember-restart-3b"))
 
 from checkpoint_scratch import ScratchCappedWriter  # noqa: E402

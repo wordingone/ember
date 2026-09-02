@@ -4,7 +4,7 @@
   "backend.executable": "cond3-artifact-b: backend executable identity stub, ember-serve-fixture v1",
   "backend.process_receipt": "cond3-artifact-b: process receipt, candidate not currently running",
   "data.accepted_input.authority_record": "cond3-artifact-b: accepted-training-input authority record, github-issue-1015",
-  "data.accepted_input.caller": "cond3-artifact-b: forwarding caller identity, scripts/ember_restart/build_cond3_artifact_b_fixture.py",
+  "data.accepted_input.caller": "cond3-artifact-b: forwarding caller identity, src/ember/governance/scripts/ember_restart/build_cond3_artifact_b_fixture.py",
   "data.accepted_input.forwarding_receipt": "cond3-artifact-b: forwarding receipt, input accepted 2026-07-23",
   "data.accepted_input.gate": "cond3-artifact-b: accepted-input gate decision, PASS",
   "data.accepted_input.shard_manifest": "cond3-artifact-b: shard manifest, 1 shard, 0 rows dropped",

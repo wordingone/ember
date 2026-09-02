@@ -159,35 +159,35 @@ stamp = getattr(_ember_2560a87c017c05b0_module, 'stamp')
 INVARIANT_SHA256 = getattr(_ember_2560a87c017c05b0_module, 'INVARIANT_SHA256')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/lib/invariant.py
 from scripts.ember_totality import receipt_chain_verify
-# issue2015 exact-local-import:scripts/redact_local_paths.py
+# issue2015 exact-local-import:src/ember/governance/scripts/redact_local_paths.py
 import importlib.util as _ember_39e1b9f43e5ffbf4_importlib
 import sys as _ember_39e1b9f43e5ffbf4_sys
 from pathlib import Path as _ember_39e1b9f43e5ffbf4_Path
 _ember_39e1b9f43e5ffbf4_path = _ember_39e1b9f43e5ffbf4_Path(__file__).resolve().parents[5].joinpath('scripts', 'redact_local_paths.py')
 if not _ember_39e1b9f43e5ffbf4_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/redact_local_paths.py')
-_ember_39e1b9f43e5ffbf4_aliases = ('_ember_issue2015_39e1b9f43e5ffbf4', 'redact_local_paths', 'scripts.redact_local_paths')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/redact_local_paths.py')
+_ember_39e1b9f43e5ffbf4_aliases = ('_ember_issue2015_39e1b9f43e5ffbf4', 'redact_local_paths', 'src.ember.governance.scripts.redact_local_paths')
 _ember_39e1b9f43e5ffbf4_existing = []
 for _ember_39e1b9f43e5ffbf4_alias in _ember_39e1b9f43e5ffbf4_aliases:
     _ember_39e1b9f43e5ffbf4_candidate = _ember_39e1b9f43e5ffbf4_sys.modules.get(_ember_39e1b9f43e5ffbf4_alias)
     if _ember_39e1b9f43e5ffbf4_candidate is not None and all(_ember_39e1b9f43e5ffbf4_candidate is not item for item in _ember_39e1b9f43e5ffbf4_existing):
         _ember_39e1b9f43e5ffbf4_existing.append(_ember_39e1b9f43e5ffbf4_candidate)
 if len(_ember_39e1b9f43e5ffbf4_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/redact_local_paths.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/redact_local_paths.py')
 if _ember_39e1b9f43e5ffbf4_existing:
     _ember_39e1b9f43e5ffbf4_module = _ember_39e1b9f43e5ffbf4_existing[0]
     _ember_39e1b9f43e5ffbf4_observed = getattr(_ember_39e1b9f43e5ffbf4_module, '__file__', None)
     if _ember_39e1b9f43e5ffbf4_observed is None or _ember_39e1b9f43e5ffbf4_Path(_ember_39e1b9f43e5ffbf4_observed).resolve() != _ember_39e1b9f43e5ffbf4_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/redact_local_paths.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/redact_local_paths.py')
 else:
     _ember_39e1b9f43e5ffbf4_spec = _ember_39e1b9f43e5ffbf4_importlib.spec_from_file_location('_ember_issue2015_39e1b9f43e5ffbf4', _ember_39e1b9f43e5ffbf4_path)
     if _ember_39e1b9f43e5ffbf4_spec is None or _ember_39e1b9f43e5ffbf4_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/redact_local_paths.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/redact_local_paths.py')
     _ember_39e1b9f43e5ffbf4_module = _ember_39e1b9f43e5ffbf4_importlib.module_from_spec(_ember_39e1b9f43e5ffbf4_spec)
     for _ember_39e1b9f43e5ffbf4_alias in _ember_39e1b9f43e5ffbf4_aliases:
         _ember_39e1b9f43e5ffbf4_prior = _ember_39e1b9f43e5ffbf4_sys.modules.get(_ember_39e1b9f43e5ffbf4_alias)
         if _ember_39e1b9f43e5ffbf4_prior is not None and _ember_39e1b9f43e5ffbf4_prior is not _ember_39e1b9f43e5ffbf4_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/redact_local_paths.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/redact_local_paths.py')
         _ember_39e1b9f43e5ffbf4_sys.modules[_ember_39e1b9f43e5ffbf4_alias] = _ember_39e1b9f43e5ffbf4_module
     try:
         _ember_39e1b9f43e5ffbf4_spec.loader.exec_module(_ember_39e1b9f43e5ffbf4_module)
@@ -199,10 +199,10 @@ else:
 for _ember_39e1b9f43e5ffbf4_alias in _ember_39e1b9f43e5ffbf4_aliases:
     _ember_39e1b9f43e5ffbf4_prior = _ember_39e1b9f43e5ffbf4_sys.modules.get(_ember_39e1b9f43e5ffbf4_alias)
     if _ember_39e1b9f43e5ffbf4_prior is not None and _ember_39e1b9f43e5ffbf4_prior is not _ember_39e1b9f43e5ffbf4_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/redact_local_paths.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/redact_local_paths.py')
     _ember_39e1b9f43e5ffbf4_sys.modules[_ember_39e1b9f43e5ffbf4_alias] = _ember_39e1b9f43e5ffbf4_module
 normalize_json_paths = getattr(_ember_39e1b9f43e5ffbf4_module, 'normalize_json_paths')
-# issue2015 exact-local-import-end:scripts/redact_local_paths.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/redact_local_paths.py
 from scripts.ember_totality import quarantine_sweep
 from scripts.ember_totality import receipt_surface_integrity
 from scripts.ember_totality import tree_provenance

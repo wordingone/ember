@@ -9,14 +9,14 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
 
 ## Implemented
 
-- `scripts/ember_mvp_cycle.py` defines the v0 cycle objects from
+- `src/ember/governance/scripts/ember_mvp_cycle.py` defines the v0 cycle objects from
   `docs/domains/governance/archive/pre-restart/ember-mvp-v0.md`: observation, latent branch, state commit, component
   receipts, and top-level cycle receipt.
 - `scripts/ember_mvp_cycle_selftest.py` tests the local spine contract:
   cycle-id linkage, required receipt presence, hypothesis/evidence separation,
   rejected-branch GC eligibility after replay and rollback, and rollback state
   restoration.
-- `scripts/ember_state_substrate.py` implements the local, inspectable
+- `src/ember/governance/scripts/ember_state_substrate.py` implements the local, inspectable
   state-substrate v0 surface without GitHub dependency. It emits receipts for
   observation, latent branch, diff-backed state commit, replay from commit
   receipt, rollback restoration, and rejected-branch GC.
@@ -24,7 +24,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   materialization, commit receipt validation, revert restoration, receipt-backed
   deletion of rejected-branch deltas, and deterministic replay from the commit
   receipt.
-- `scripts/ember_windows_sandbox.py` runs the first Windows-native sandbox
+- `src/ember/governance/scripts/ember_windows_sandbox.py` runs the first Windows-native sandbox
   probe battery. It creates a fresh probe root per candidate, assigns each
   candidate process to a Windows Job Object, records deterministic receipts,
   and covers legitimate solve, eq-dispatch, removed builtin, object
@@ -805,12 +805,12 @@ the official A/B/C wheel.
 
 ```powershell
 python scripts\ember_mvp_cycle_selftest.py
-python scripts\ember_mvp_cycle.py --selftest
+python src\ember\governance\scripts\ember_mvp_cycle.py --selftest
 python scripts\ember_windows_sandbox_selftest.py
-python scripts\ember_windows_sandbox.py --selftest
-python scripts\ember_windows_sandbox.py --out <local-path>
+python src\ember\governance\scripts\ember_windows_sandbox.py --selftest
+python src\ember\governance\scripts\ember_windows_sandbox.py --out <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
@@ -830,7 +830,7 @@ python scripts\ember_mvp_wheel_runner_selftest.py
 python src\ember\governance\scripts\ember_mvp_wheel_runner.py --fixture-out <local-path> --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
@@ -840,7 +840,7 @@ python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <lo
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --auto-sample-submission --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --raw-data-audit --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
@@ -864,13 +864,13 @@ python src\ember\governance\scripts\ember_wheel_harness.py --fixture-out <local-
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_mvp_readiness_selftest.py
 python scripts\ember_mvp_readiness.py --selftest
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --benchmark-receipt <local-path> --wheel-receipt <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\v_soundness_probe.py --selftest
@@ -1197,7 +1197,7 @@ Repo-preserved core-loop attempt:
 Command:
 
 ```powershell
-python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
+python src\ember\governance\scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
 ```
 
 Top-level receipt:

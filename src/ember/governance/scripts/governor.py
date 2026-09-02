@@ -35,7 +35,7 @@ three), plus the in-run commit governor (commit_env_limit /
 estimate_checkpoint_mapped_bytes / _commit_status / commit_margin_preflight
 -- also pure Python, ctypes only on win32). fp8_matmul_with_fallback is
 torch-importing (CPU or GPU tensors) and is covered separately by
-scripts/test_governor.py (pytest).
+src/ember/governance/scripts/test_governor.py (pytest).
 """
 
 import os

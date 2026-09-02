@@ -28,7 +28,7 @@
 - Modify: `src/ember/infrastructure/tools/ember-restart-3b/a1_optimizer.py`
 - Modify: `tools/ember-restart-3b/a1_execution.py`
 - Modify: `tests/ember_restart_model/test_a1_fused_backward.py`
-- Modify: `tests/ember_restart_model/test_a1_execution_e8_telemetry.py`
+- Modify: `tests/ember_restart_model/domain-governance/test_a1_execution_e8_telemetry.py`
 
 **Interfaces:**
 - Produces: `FullGradientNormAccumulator.accumulate(gradient: torch.Tensor) -> None`

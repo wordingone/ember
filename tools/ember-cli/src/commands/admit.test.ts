@@ -10,7 +10,7 @@ describe("/admit command", () => {
   it("constructs a candidate without selecting, loading, or training", async () => {
     const calls: Array<{ executable: string; args: string[]; cwd: string }> = [];
     const command = createAdmitCommand({
-      producerPath: "C:/ember/scripts/ember_admission/produce_candidate.py",
+      producerPath: "C:/ember/src/ember/governance/scripts/ember_admission/produce_candidate.py",
       pythonExecutable: "python",
       verifyReceipt: () => "a".repeat(64),
       runProducer(executable, args, cwd) {
@@ -40,7 +40,7 @@ describe("/admit command", () => {
     expect(command.description).toContain("without selecting or loading");
     expect(calls).toHaveLength(1);
     expect(calls[0]?.args).toEqual([
-      "C:/ember/scripts/ember_admission/produce_candidate.py",
+      "C:/ember/src/ember/governance/scripts/ember_admission/produce_candidate.py",
       "--workspace", "C:/operator",
       "--descriptor", "C:/operator/admission.json",
       "--output-root", "C:/candidates",

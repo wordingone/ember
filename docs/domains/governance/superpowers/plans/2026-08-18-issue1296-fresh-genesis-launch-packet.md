@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, pytest, existing Ember restart contract and certified launch modules.
 
-**Spec:** `docs/ember-restart/issue1296-fresh-genesis-launch-packet-design.md`
+**Spec:** `docs/domains/governance/ember-restart/issue1296-fresh-genesis-launch-packet-design.md`
 
 ## Global Constraints
 

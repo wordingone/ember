@@ -12,7 +12,7 @@ Issue: #561
 
 Consumer: `tools/ember-cli/src/screens/activity-flood-render-integrity.test.ts`
 Consumer: `tools/ember-cli/src/services/activity-feed.test.ts`
-Consumer: `tools/ember-cli/src/ink/welcome-top-anchor.test.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/ink/welcome-top-anchor.test.ts`
 
 The ember-cli body has three invariant regions: the welcome/banner region remains locked at the
 top, the conversation and activity stream owns the scrollable middle, and input/status chrome
