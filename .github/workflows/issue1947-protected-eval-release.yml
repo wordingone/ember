@@ -36,12 +36,17 @@ jobs:
         with:
           python-version: "3.10"
       - name: Independent raw-row recomputation
+        env:
+          BUNDLE_PATH: "${{ inputs.bundle_path }}"
+          DESIGNATION_MANIFEST_SHA256: "${{ inputs.designation_receipt_raw_sha256 }}"
+          MATRIX_SELF_SHA256: "${{ inputs.matrix_self_sha256 }}"
+          ANALYSIS_SELF_SHA256: "${{ inputs.analysis_self_sha256 }}"
         run: >-
           python src/ember/governance/scripts/issue1947_release_recompute.py
-          --bundle "${{ inputs.bundle_path }}"
-          --expected-designation-manifest-sha256 "${{ inputs.designation_receipt_raw_sha256 }}"
-          --expected-matrix-self-sha256 "${{ inputs.matrix_self_sha256 }}"
-          --expected-analysis-self-sha256 "${{ inputs.analysis_self_sha256 }}"
+          --bundle "$BUNDLE_PATH"
+          --expected-designation-manifest-sha256 "$DESIGNATION_MANIFEST_SHA256"
+          --expected-matrix-self-sha256 "$MATRIX_SELF_SHA256"
+          --expected-analysis-self-sha256 "$ANALYSIS_SELF_SHA256"
           --receipt "issue1947-release-recompute-${{ github.run_id }}.json"
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
