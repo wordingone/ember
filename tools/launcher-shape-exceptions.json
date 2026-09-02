@@ -21,8 +21,8 @@
       "reason": "run body, same standing as run_vertical_slice.py: dispatched by the daemon, spawns only its own workers inside the cage."
     },
     {
-      "path": "scripts/ember_gate_launch_packaging.py",
-      "sha256": "ac2cd2658a12a3fcbad5890774210ce3bdad8fc93fd2c4f6c51b21c49520ebd4",
+      "path": "src/ember/governance/scripts/ember_gate_launch_packaging.py",
+      "sha256": "2c23b9a8a4fdfeae363342a882d53d4a9a5bc32a9601d9aa3132dc186ffe1dcb",
       "reason": "matched on its name, not its behaviour. It is a CLI parity harness: the child it creates is the packaged CLI under test with a 20-second timeout, never a training run."
     },
     {

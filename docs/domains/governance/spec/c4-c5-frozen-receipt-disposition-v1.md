@@ -33,7 +33,7 @@ The 11 rows above exhaust the redacted/unresolved path/hash pairs described by
 ## Consumer and rollback contract
 
 Consumers `src/ember/governance/scripts/ember_totality/test_c4.py` and
-`scripts/ember_totality/test_c5.py` continue to read the frozen receipt
+`src/ember/governance/scripts/ember_totality/test_c5.py` continue to read the frozen receipt
 directly and call `_lane14_common.check_path_sha_pairs`. They must not load or
 merge an issue-1267 overlay. The existing closed content-locator schema remains
 available only for evidence written into a receipt at creation time.

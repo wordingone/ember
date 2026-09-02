@@ -121,7 +121,7 @@ def test_every_direct_package_entrypoint_has_nonshadowing_root_preamble() -> Non
         "src/ember/governance/scripts/ember_admission/produce_candidate.py",
         "src/ember/infrastructure/tools/corpus_connectors/arxiv_fetch.py",
         "src/ember/infrastructure/tools/corpus_connectors/bulk_fetch.py",
-        "tools/corpus_connectors/github_fetch.py",
+        "src/ember/infrastructure/tools/corpus_connectors/github_fetch.py",
         "tools/corpus_connectors/hf_fetch.py",
         "tools/corpus_connectors/http_fetch.py",
         "tools/corpus_connectors/kaggle_fetch.py",

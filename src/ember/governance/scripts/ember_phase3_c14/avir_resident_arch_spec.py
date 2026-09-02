@@ -128,7 +128,7 @@ AVIR_SURFACE_MANIFEST: List[AvirSurface] = [
         ),
         adapter_surface="ember_c14_contract_rig.py:Task.prompt (optional field stubbed)",
         next_command=(
-            "python scripts/ember_phase3_c14/avir_resident_arch_spec.py --check && "
+            "python src/ember/governance/scripts/ember_phase3_c14/avir_resident_arch_spec.py --check && "
             "extend Task to carry session_history: list[str]; implement repl_loop() "
             "iterating over session_history tokens before dispatching igrpo_step."
         ),

@@ -11,8 +11,8 @@
   ],
   "exceptions": [
     {
-      "path": "scripts/build_fixed_prior_manifest.py",
-      "sha256": "9b9cbb96c7150796e10fd9e0ed9b68ae1b66d4eb447b0c81e49aa7617a0939a9",
+      "path": "src/ember/governance/scripts/build_fixed_prior_manifest.py",
+      "sha256": "5cfd8523d5dd753b09d125f43399f95305ddf88f6505446746c38c06cc026cd2",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {

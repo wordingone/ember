@@ -37,7 +37,7 @@
 **Files:**
 - Modify: `src/ember/governance/scripts/check_docs_freshness.py`
 - Modify: `tests/domain-governance/test_docs_freshness_observational.py`
-- Modify: `tools/ember-cli/specs/services-prompt-suggestion.md`
+- Modify: `src/ember/infrastructure/tools/ember-cli/specs/services-prompt-suggestion.md`
 
 **Interfaces:**
 - Consumes: `load_spec_nodes`

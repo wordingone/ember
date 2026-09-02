@@ -69,7 +69,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-EXEC_ROOT = str(Path(__file__).resolve().parent.parent)
+EXEC_ROOT = str(next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()))
 GOALFORGE_ROOT = os.environ.get(
     "EMBER_GOALFORGE_ROOT", os.path.join(os.path.dirname(EXEC_ROOT), "ember-goalforge")
 )
@@ -465,7 +465,7 @@ def main() -> int:
 
     written_paths = {}
     for leg_name, receipt in all_three.items():
-        receipt["generator"] = {"path": "scripts/ember_ind3_operate_capture.py", "sha256": sha256_of(THIS_SCRIPT)}
+        receipt["generator"] = {"path": "src/ember/governance/scripts/ember_ind3_operate_capture.py", "sha256": sha256_of(THIS_SCRIPT)}
         receipt["sha_convention"] = "bytes on disk as-is (binary read, no line-ending normalization)"
         p = os.path.join(exec_receipt_dir, f"{leg_name}.json")
         with open(p, "w", encoding="utf-8") as fh:
