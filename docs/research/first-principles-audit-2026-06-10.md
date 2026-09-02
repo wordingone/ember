@@ -500,7 +500,7 @@ The consolidator that burns those episodes is the 3B. Re-score the 1.5B's
 verified episodes under the 3B's own receipted per-task P̂: does the
 cheap-sampler advantage survive the honest denominator?
 
-**Method (`scripts/fp7_revalue.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp7_revalue.py`, selftest PASS, receipt
 `fp7-revalue-20260610T233935Z.json`):** mirrors fp-1 exactly (stratified
 Laplace P̂, uncapped/undeduped passed rows, ext-FPR uncorrected — flagged)
 with ONE change: bits = −log₂ P̂_3B(t) per 1.5B episode instead of
@@ -834,7 +834,7 @@ being a CONJUNCTION: either coordinate being noise kills the band
 outright, so a NOISE verdict here is decisive; a STABLE verdict is
 CONDITIONAL on the untested half.
 
-**Method (`scripts/fp12_band.py`, selftest PASS, receipt
+**Method (`src/ember/governance/scripts/fp12_band.py`, selftest PASS, receipt
 `fp12-band-20260611T010835Z.json`, CPU-from-receipts):** band membership
 computed twice — q15×q3-k8 vs q15×q3focus-k24 — over the 59 joint tasks,
 using fp-7's exact predicate (s15>0 AND laplace_phat(3B) <

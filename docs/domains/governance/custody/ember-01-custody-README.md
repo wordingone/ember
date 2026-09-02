@@ -108,7 +108,7 @@ execution ID, canonical identity, summary, validation state, and torn-snapshot c
 
 After two unchanged runs, bind them without loading the giant JSON bodies:
 
-    python -B scripts/ember_01_custody/compact_receipt.py
+    python -B src/ember/governance/scripts/ember_01_custody/compact_receipt.py
       --run-one-sidecar <run1.sidecar.json>
       --run-two-sidecar <run2.sidecar.json>
       --publication-sha <40-hex-sha>

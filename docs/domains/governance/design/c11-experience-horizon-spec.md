@@ -3,7 +3,7 @@
 Canonical spec for totality condition **C11** as defined in
 `docs/domains/governance/spec/conditions-v1.md` (C11 row). `conditions-v1.md` names this file and
 sets the contract; this file makes the contract machine-checkable and is the
-authority `scripts/ember_totality/test_c11.py` implements.
+authority `src/ember/governance/scripts/ember_totality/test_c11.py` implements.
 
 **The lever is experience, not the clock.** Wall-clock duration is a timer that
 runs while learning happens; it is never the thing being earned. A run that sat

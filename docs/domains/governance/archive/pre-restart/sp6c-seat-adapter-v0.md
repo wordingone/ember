@@ -4,7 +4,7 @@ The B3 instrument's seat-facing half. The rig (#290) replays the frozen
 battery (#269) through `core(event, registry)`; this contract defines how a
 TEXT MODEL becomes such a core, identically for both seats (ember core,
 Gemma E2B), per the fp33 prereg B3 replay-identical rule. Module:
-`src/ember/governance/scripts/nck/seat_adapter.py`; selftest `scripts/nck/selftest_seat_adapter.py`.
+`src/ember/governance/scripts/nck/seat_adapter.py`; selftest `src/ember/governance/scripts/nck/selftest_seat_adapter.py`.
 
 **Freeze semantics:** every prompt/grammar constant feeds `TEMPLATE_HASH`
 (sha256), pinned in the selftest: `0a085406cff23321…b480f9`. Editing any

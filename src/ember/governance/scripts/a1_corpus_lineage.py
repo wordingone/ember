@@ -26,7 +26,7 @@ Emits an append-only lineage receipt chained by sha256 to the published scan rec
 (never edited).
 
 Usage:
-  python scripts/a1_corpus_lineage.py \\
+  python src/ember/governance/scripts/a1_corpus_lineage.py \\
       --published-scan receipts/a1-predicate-scan/a1-predicate-scan-20260709T231932Z.json \\
       --counterexample receipts/t2-r1w-q3-20260610T211509Z.json \\
       --bmulti1-scan receipts/a1-predicate-scan/a1-bmulti1-scan-<ts>.json \\

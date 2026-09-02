@@ -125,35 +125,35 @@ def _exact_paired_ci(vec_a: list, vec_b: list, conf: float = 0.95) -> dict:
     scripts_dir = str(_HERE)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    # issue2015 exact-local-import:scripts/stats_exact.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/stats_exact.py
     import importlib.util as _ember_0ad50f51eb437c22_importlib
     import sys as _ember_0ad50f51eb437c22_sys
     from pathlib import Path as _ember_0ad50f51eb437c22_Path
     _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parents[4].joinpath('scripts', 'stats_exact.py')
     if not _ember_0ad50f51eb437c22_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/stats_exact.py')
-    _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'scripts.stats_exact', 'stats_exact')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/stats_exact.py')
+    _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'src.ember.governance.scripts.stats_exact', 'stats_exact')
     _ember_0ad50f51eb437c22_existing = []
     for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
         _ember_0ad50f51eb437c22_candidate = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
         if _ember_0ad50f51eb437c22_candidate is not None and all(_ember_0ad50f51eb437c22_candidate is not item for item in _ember_0ad50f51eb437c22_existing):
             _ember_0ad50f51eb437c22_existing.append(_ember_0ad50f51eb437c22_candidate)
     if len(_ember_0ad50f51eb437c22_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/stats_exact.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/stats_exact.py')
     if _ember_0ad50f51eb437c22_existing:
         _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_existing[0]
         _ember_0ad50f51eb437c22_observed = getattr(_ember_0ad50f51eb437c22_module, '__file__', None)
         if _ember_0ad50f51eb437c22_observed is None or _ember_0ad50f51eb437c22_Path(_ember_0ad50f51eb437c22_observed).resolve() != _ember_0ad50f51eb437c22_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/stats_exact.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/stats_exact.py')
     else:
         _ember_0ad50f51eb437c22_spec = _ember_0ad50f51eb437c22_importlib.spec_from_file_location('_ember_issue2015_0ad50f51eb437c22', _ember_0ad50f51eb437c22_path)
         if _ember_0ad50f51eb437c22_spec is None or _ember_0ad50f51eb437c22_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/stats_exact.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/stats_exact.py')
         _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_importlib.module_from_spec(_ember_0ad50f51eb437c22_spec)
         for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
             _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
             if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/stats_exact.py')
             _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
         try:
             _ember_0ad50f51eb437c22_spec.loader.exec_module(_ember_0ad50f51eb437c22_module)
@@ -165,10 +165,10 @@ def _exact_paired_ci(vec_a: list, vec_b: list, conf: float = 0.95) -> dict:
     for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
         _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
         if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/stats_exact.py')
         _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
     newcombe_paired_ci = getattr(_ember_0ad50f51eb437c22_module, 'newcombe_paired_ci')
-    # issue2015 exact-local-import-end:scripts/stats_exact.py  # noqa: E402
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/stats_exact.py  # noqa: E402
 
     n = len(vec_a)
     b = sum(1 for a_, b_ in zip(vec_a, vec_b) if a_ and not b_)
@@ -571,35 +571,35 @@ def _selftest():
     scripts_dir = str(_HERE)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    # issue2015 exact-local-import:scripts/stats_exact.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/stats_exact.py
     import importlib.util as _ember_0ad50f51eb437c22_importlib
     import sys as _ember_0ad50f51eb437c22_sys
     from pathlib import Path as _ember_0ad50f51eb437c22_Path
     _ember_0ad50f51eb437c22_path = _ember_0ad50f51eb437c22_Path(__file__).resolve().parents[4].joinpath('scripts', 'stats_exact.py')
     if not _ember_0ad50f51eb437c22_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/stats_exact.py')
-    _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'scripts.stats_exact', 'stats_exact')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/stats_exact.py')
+    _ember_0ad50f51eb437c22_aliases = ('_ember_issue2015_0ad50f51eb437c22', 'src.ember.governance.scripts.stats_exact', 'stats_exact')
     _ember_0ad50f51eb437c22_existing = []
     for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
         _ember_0ad50f51eb437c22_candidate = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
         if _ember_0ad50f51eb437c22_candidate is not None and all(_ember_0ad50f51eb437c22_candidate is not item for item in _ember_0ad50f51eb437c22_existing):
             _ember_0ad50f51eb437c22_existing.append(_ember_0ad50f51eb437c22_candidate)
     if len(_ember_0ad50f51eb437c22_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/stats_exact.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/stats_exact.py')
     if _ember_0ad50f51eb437c22_existing:
         _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_existing[0]
         _ember_0ad50f51eb437c22_observed = getattr(_ember_0ad50f51eb437c22_module, '__file__', None)
         if _ember_0ad50f51eb437c22_observed is None or _ember_0ad50f51eb437c22_Path(_ember_0ad50f51eb437c22_observed).resolve() != _ember_0ad50f51eb437c22_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/stats_exact.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/stats_exact.py')
     else:
         _ember_0ad50f51eb437c22_spec = _ember_0ad50f51eb437c22_importlib.spec_from_file_location('_ember_issue2015_0ad50f51eb437c22', _ember_0ad50f51eb437c22_path)
         if _ember_0ad50f51eb437c22_spec is None or _ember_0ad50f51eb437c22_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/stats_exact.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/stats_exact.py')
         _ember_0ad50f51eb437c22_module = _ember_0ad50f51eb437c22_importlib.module_from_spec(_ember_0ad50f51eb437c22_spec)
         for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
             _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
             if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/stats_exact.py')
             _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
         try:
             _ember_0ad50f51eb437c22_spec.loader.exec_module(_ember_0ad50f51eb437c22_module)
@@ -611,11 +611,11 @@ def _selftest():
     for _ember_0ad50f51eb437c22_alias in _ember_0ad50f51eb437c22_aliases:
         _ember_0ad50f51eb437c22_prior = _ember_0ad50f51eb437c22_sys.modules.get(_ember_0ad50f51eb437c22_alias)
         if _ember_0ad50f51eb437c22_prior is not None and _ember_0ad50f51eb437c22_prior is not _ember_0ad50f51eb437c22_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/stats_exact.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/stats_exact.py')
         _ember_0ad50f51eb437c22_sys.modules[_ember_0ad50f51eb437c22_alias] = _ember_0ad50f51eb437c22_module
     newcombe_paired_ci = getattr(_ember_0ad50f51eb437c22_module, 'newcombe_paired_ci')
     wilson_ci = getattr(_ember_0ad50f51eb437c22_module, 'wilson_ci')
-    # issue2015 exact-local-import-end:scripts/stats_exact.py  # noqa: E402
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/stats_exact.py  # noqa: E402
 
     # Pin: newcombe_paired_ci(b=0, c=10, n=20) — all discordant pairs favor base
     # Expected: both bounds negative (base strictly dominated arm2)

@@ -385,7 +385,7 @@ def test_live_ledger_closed_guarded_rows_resolve() -> None:
 # production file's import path, silently breaking this negative test (#1751).
 # A negative fixture bound to production brokenness fails the moment someone
 # fixes the production file; it must own its dead subject, not borrow one.
-_DEAD_GUARD_REL_PATH = "tests/ember_01_custody/fixtures/dead_on_import_fixture.py"
+_DEAD_GUARD_REL_PATH = "tests/ember_01_custody/domain-governance/fixtures/dead_on_import_fixture.py"
 
 # A KNOWN collectable guard, for the positive control (must NOT be falsely flagged).
 _LIVE_GUARD_REL_PATH = "src/ember/governance/scripts/test_v0_launch_gate_shard_dir_override.py"

@@ -46,7 +46,7 @@ evidence-of-presence only.
 
 ## 4. Helper script (eng-tracker mint)
 
-`scripts/power_helper.py` — inputs (n, p0, alpha, power) → MDE table for
+`src/ember/governance/scripts/power_helper.py` — inputs (n, p0, alpha, power) → MDE table for
 Wilson/Newcombe/McNemar; selftest fixtures pin the anchor cases (0/100 →
 3.6993% Wilson upper (receipt-pinned); rule-of-three parity; McNemar b+c minimum at p<0.05).
 All gate receipts citing power MUST cite a helper receipt, never hand

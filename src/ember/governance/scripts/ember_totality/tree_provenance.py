@@ -25,7 +25,50 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from scripts.git_env_hardening import hardened_git_env
+# issue2015 exact-local-import:src/ember/governance/scripts/git_env_hardening.py
+import importlib.util as _ember_d94be5c5b3bbfddb_importlib
+import sys as _ember_d94be5c5b3bbfddb_sys
+from pathlib import Path as _ember_d94be5c5b3bbfddb_Path
+_ember_d94be5c5b3bbfddb_path = _ember_d94be5c5b3bbfddb_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'git_env_hardening.py')
+if not _ember_d94be5c5b3bbfddb_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/git_env_hardening.py')
+_ember_d94be5c5b3bbfddb_aliases = ('_ember_issue2015_d94be5c5b3bbfddb', 'git_env_hardening', 'scripts.git_env_hardening', 'src.ember.governance.scripts.git_env_hardening')
+_ember_d94be5c5b3bbfddb_existing = []
+for _ember_d94be5c5b3bbfddb_alias in _ember_d94be5c5b3bbfddb_aliases:
+    _ember_d94be5c5b3bbfddb_candidate = _ember_d94be5c5b3bbfddb_sys.modules.get(_ember_d94be5c5b3bbfddb_alias)
+    if _ember_d94be5c5b3bbfddb_candidate is not None and all(_ember_d94be5c5b3bbfddb_candidate is not item for item in _ember_d94be5c5b3bbfddb_existing):
+        _ember_d94be5c5b3bbfddb_existing.append(_ember_d94be5c5b3bbfddb_candidate)
+if len(_ember_d94be5c5b3bbfddb_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/git_env_hardening.py')
+if _ember_d94be5c5b3bbfddb_existing:
+    _ember_d94be5c5b3bbfddb_module = _ember_d94be5c5b3bbfddb_existing[0]
+    _ember_d94be5c5b3bbfddb_observed = getattr(_ember_d94be5c5b3bbfddb_module, '__file__', None)
+    if _ember_d94be5c5b3bbfddb_observed is None or _ember_d94be5c5b3bbfddb_Path(_ember_d94be5c5b3bbfddb_observed).resolve() != _ember_d94be5c5b3bbfddb_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/git_env_hardening.py')
+else:
+    _ember_d94be5c5b3bbfddb_spec = _ember_d94be5c5b3bbfddb_importlib.spec_from_file_location('_ember_issue2015_d94be5c5b3bbfddb', _ember_d94be5c5b3bbfddb_path)
+    if _ember_d94be5c5b3bbfddb_spec is None or _ember_d94be5c5b3bbfddb_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/git_env_hardening.py')
+    _ember_d94be5c5b3bbfddb_module = _ember_d94be5c5b3bbfddb_importlib.module_from_spec(_ember_d94be5c5b3bbfddb_spec)
+    for _ember_d94be5c5b3bbfddb_alias in _ember_d94be5c5b3bbfddb_aliases:
+        _ember_d94be5c5b3bbfddb_prior = _ember_d94be5c5b3bbfddb_sys.modules.get(_ember_d94be5c5b3bbfddb_alias)
+        if _ember_d94be5c5b3bbfddb_prior is not None and _ember_d94be5c5b3bbfddb_prior is not _ember_d94be5c5b3bbfddb_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/git_env_hardening.py')
+        _ember_d94be5c5b3bbfddb_sys.modules[_ember_d94be5c5b3bbfddb_alias] = _ember_d94be5c5b3bbfddb_module
+    try:
+        _ember_d94be5c5b3bbfddb_spec.loader.exec_module(_ember_d94be5c5b3bbfddb_module)
+    except BaseException:
+        for _ember_d94be5c5b3bbfddb_alias in _ember_d94be5c5b3bbfddb_aliases:
+            if _ember_d94be5c5b3bbfddb_sys.modules.get(_ember_d94be5c5b3bbfddb_alias) is _ember_d94be5c5b3bbfddb_module:
+                _ember_d94be5c5b3bbfddb_sys.modules.pop(_ember_d94be5c5b3bbfddb_alias, None)
+        raise
+for _ember_d94be5c5b3bbfddb_alias in _ember_d94be5c5b3bbfddb_aliases:
+    _ember_d94be5c5b3bbfddb_prior = _ember_d94be5c5b3bbfddb_sys.modules.get(_ember_d94be5c5b3bbfddb_alias)
+    if _ember_d94be5c5b3bbfddb_prior is not None and _ember_d94be5c5b3bbfddb_prior is not _ember_d94be5c5b3bbfddb_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/git_env_hardening.py')
+    _ember_d94be5c5b3bbfddb_sys.modules[_ember_d94be5c5b3bbfddb_alias] = _ember_d94be5c5b3bbfddb_module
+hardened_git_env = getattr(_ember_d94be5c5b3bbfddb_module, 'hardened_git_env')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/git_env_hardening.py
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 

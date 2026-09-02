@@ -65,7 +65,7 @@ python scripts/ember_gate_backend_coordinator_agents_selftest.py
 ### Candidate generator selftest
 
 ```bash
-python scripts/ember_candidate_generator_selftest.py
+python src/ember/governance/scripts/ember_candidate_generator_selftest.py
 ```
 
 ### D3 loop selftests

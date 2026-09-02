@@ -640,7 +640,7 @@ def load_run_import_manifest(
     if not _source_commit_is_usable(root, source):
         raise ValueError("run import manifest source commit is not an exact governed Git ancestor")
     producer_sha = _require_hex(document["producer_sha256"], length=64, label="producer_sha256")
-    producer_relative = "scripts/nativization_motion_trace.py"
+    producer_relative = "src/ember/governance/scripts/nativization_motion_trace.py"
     producer_path = root / producer_relative
     if producer_path.is_file():
         current_producer_sha = git_blob_sha256(root, source, producer_relative)

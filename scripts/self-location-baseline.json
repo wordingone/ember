@@ -132,7 +132,7 @@
       "error": "call outside closed grammar: PurePosixPath"
     },
     {
-      "path": "scripts/ember_ind1_context_carry_capture.py",
+      "path": "src/ember/governance/scripts/ember_ind1_context_carry_capture.py",
       "line": 65,
       "target": "GOALFORGE_ROOT",
       "expression": "os.environ.get('EMBER_GOALFORGE_ROOT', os.path.join(os.path.dirname(EXEC_ROOT), 'ember-goalforge'))",
@@ -143,7 +143,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_ind1_context_carry_capture.py",
+      "path": "src/ember/governance/scripts/ember_ind1_context_carry_capture.py",
       "line": 75,
       "target": "SCRATCH_ROOT",
       "expression": "os.environ.get('EMBER_IND1CTX_SCRATCH', os.path.join(EXEC_ROOT, 'scratch', 'ind1ctx'))",
@@ -154,7 +154,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_ind1_context_carry_capture.py",
+      "path": "src/ember/governance/scripts/ember_ind1_context_carry_capture.py",
       "line": 81,
       "target": "GOALFORGE_RECEIPTS_DIR",
       "expression": "os.path.join(GOALFORGE_ROOT, 'receipts', 'ind1-context-carry-cure')",
@@ -374,7 +374,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c11.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
       "line": 48,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT) if p]",
@@ -385,7 +385,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c11.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
       "line": 52,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",

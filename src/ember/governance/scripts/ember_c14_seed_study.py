@@ -70,8 +70,8 @@ CPU-ONLY. No .cuda() call anywhere in this file; the wrapped runner's
 kwarg). No git commits. No founder/user names in any receipt.
 
 Run:
-  python scripts/ember_c14_seed_study.py --seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
-  python scripts/ember_c14_seed_study.py --seeds 1-16 --wall-budget-s 9000
+  python src/ember/governance/scripts/ember_c14_seed_study.py --seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
+  python src/ember/governance/scripts/ember_c14_seed_study.py --seeds 1-16 --wall-budget-s 9000
 """
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 RUNNER = REPO / "scripts" / "ember_c14_owned_run.py"
 OUT_DIR = REPO / "receipts" / "ember-c14-seed-study"
 
@@ -308,7 +308,7 @@ def main() -> int:
             "ticket": TICKET,
             "ts": _ts_iso(),
             "sha_convention": SHA_CONVENTION,
-            "script": "scripts/ember_c14_seed_study.py",
+            "script": "src/ember/governance/scripts/ember_c14_seed_study.py",
             "seed": seed,
             "invocation_argv": run["argv"],
             "code_path": (
@@ -360,7 +360,7 @@ def main() -> int:
         "ticket": TICKET,
         "ts": _ts_iso(),
         "sha_convention": SHA_CONVENTION,
-        "script": "scripts/ember_c14_seed_study.py",
+        "script": "src/ember/governance/scripts/ember_c14_seed_study.py",
         "purpose": (
             "Pre-registered follow-up (issue #4 comment 8j) to C14 attempt "
             "19 (receipts/ember-c14-owned-run/live-20260703T154830Z.json, "

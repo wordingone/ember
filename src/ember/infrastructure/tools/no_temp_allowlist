@@ -39,13 +39,13 @@ scripts/e1b_pair_assemble.py
 src/ember/governance/scripts/ember_avir_harness.py
 src/ember/governance/scripts/ember_avir_tasks.py
 src/ember/governance/scripts/ember_c_e2b_founder_likeness.py
-scripts/ember_candidate_generator_selftest.py
+src/ember/governance/scripts/ember_candidate_generator_selftest.py
 scripts/ember_cbase_avir_augment.py
 src/ember/governance/scripts/ember_cbase_avir_data.py
 src/ember/governance/scripts/ember_cbase_avir_data_v2.py
 scripts/ember_cbase_launch.py
 scripts/ember_cbase_mixture.py
-scripts/ember_cbase_s6_acceptance.py
+src/ember/governance/scripts/ember_cbase_s6_acceptance.py
 scripts/ember_ceff_closure_confirmation.py
 src/ember/governance/scripts/ember_ceff_composition_ab.py
 scripts/ember_d3_broader_multifamily_admission_selftest.py
@@ -76,7 +76,7 @@ src/ember/governance/scripts/ember_governor_binding.py
 src/ember/governance/scripts/ember_governor_binding_selftest.py
 src/ember/governance/scripts/ember_growth_harness_selftest.py
 src/ember/governance/scripts/ember_mle_micro_harness.py
-scripts/ember_mle_micro_harness_selftest.py
+src/ember/governance/scripts/ember_mle_micro_harness_selftest.py
 scripts/ember_mvp_cycle.py
 scripts/ember_mvp_cycle_selftest.py
 scripts/ember_mvp_readiness_selftest.py
@@ -97,9 +97,9 @@ scripts/ember_rebench_admission_selftest.py
 scripts/ember_rebench_first_loop_selftest.py
 src/ember/governance/scripts/ember_research_benchmark_harness_selftest.py
 scripts/ember_research_loop_harness_selftest.py
-scripts/ember_resident_training_candidate.py
+src/ember/governance/scripts/ember_resident_training_candidate.py
 src/ember/governance/scripts/ember_resident_training_gate.py
-scripts/ember_scale_harness_selftest.py
+src/ember/governance/scripts/ember_scale_harness_selftest.py
 scripts/ember_scienceagentbench_admission_selftest.py
 scripts/ember_scienceagentbench_artifact_intake_selftest.py
 scripts/ember_scienceagentbench_artifact_materialization_selftest.py
@@ -134,7 +134,7 @@ scripts/ember_windows_sandbox_selftest.py
 scripts/eng45_backfill_sha_convention.py
 scripts/exp711_permute.py
 scripts/exp711_sensitivity.py
-scripts/fp21b_prereg.py
+src/ember/governance/scripts/fp21b_prereg.py
 scripts/fp21b_scope_132.py
 src/ember/governance/scripts/fp26_prereg.py
 scripts/fp30_total_consistency.py
@@ -155,7 +155,7 @@ src/ember/governance/scripts/legb_inprocess_scorer.py
 src/ember/governance/scripts/lib/invariant.py
 scripts/loop_launch_guard_selftest.py
 scripts/manifest_sha.py
-scripts/nck/checkpoint_probe.py
+src/ember/governance/scripts/nck/checkpoint_probe.py
 scripts/nck/e2b_shakedown.py
 scripts/nck/ember_shakedown.py
 src/ember/governance/scripts/nck/nck_e2e_proof.py
@@ -166,7 +166,7 @@ scripts/nck/selftest_cu_console.py
 src/ember/governance/scripts/nck/selftest_event_loop.py
 scripts/nck/selftest_invariants.py
 src/ember/governance/scripts/nck/selftest_replay_rig.py
-scripts/nck/selftest_seat_adapter.py
+src/ember/governance/scripts/nck/selftest_seat_adapter.py
 scripts/paper/contamination_scan.py
 src/ember/governance/scripts/receipt_write.py
 src/ember/governance/scripts/registry_gate_selftest.py
@@ -223,7 +223,7 @@ scripts/w2_heldout/test_build_decontam_batch.py
 scripts/w2_heldout/test_certify_heldout_batch.py
 scripts/w2_heldout/test_corpus_boilerplate_bloom.py
 scripts/w2_heldout/test_fcalib_default_mode_equivalence.py
-scripts/w2_heldout/test_launch_gate.py
+src/ember/governance/scripts/w2_heldout/test_launch_gate.py
 scripts/w2_heldout/w1c_certification_e2e.py
 scripts/w4_control_selftest.py
 tools/ember-cli/src/agent-management.test.ts
