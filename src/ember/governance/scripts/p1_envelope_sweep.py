@@ -681,7 +681,7 @@ def run_point_live(args: argparse.Namespace, point_info: dict, ts: str,
             "gpu": gpu_name,
             "governor_preflight": {"ram": ram_receipt, "vram": vram_receipt},
             "corpus_manifest_sha256": shard_manifest.get("combined_sha256"),
-            "corpus_manifest_ref": "scripts/manifest_sha.py",
+            "corpus_manifest_ref": "src/ember/governance/scripts/manifest_sha.py",
             "corpus_loader": loader.mmap_cache_report,
             "corpus_loader_equivalence_check": equivalence_report,
             "held_out_batch": {

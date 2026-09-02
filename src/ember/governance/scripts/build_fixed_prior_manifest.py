@@ -20,7 +20,7 @@ Item kinds:
   file      one tracked file            -> sha256 of its bytes
   tree      a tracked path prefix       -> per-file sha256s + a combined_sha256
                                            over sorted "<name>\\t<sha>\\t<size>\\n"
-                                           lines (the scripts/manifest_sha.py
+                                           lines (the src/ember/governance/scripts/manifest_sha.py
                                            convention, reused so tree digests are
                                            comparable across the repo)
   version   an executed probe           -> the command, its exact output, and
@@ -192,7 +192,7 @@ INVENTORY: tuple[dict, ...] = (
          path="src/ember/governance/scripts/receipt_check.py",
          provenance="Frozen receipt validator behind the writer."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/manifest_sha.py",
+         path="src/ember/governance/scripts/manifest_sha.py",
          provenance="Corpus combined-sha tool; supplies the tree-digest convention "
                     "reused by this manifest."),
     dict(category="deterministic_tools", kind="file",
@@ -471,7 +471,7 @@ def build_manifest() -> dict:
         "sha_convention": SHA_CONVENTION,
         "tree_digest_convention": ("combined_sha256 = sha256 over sorted "
                                    "'<name>\\t<sha256>\\t<size_bytes>\\n' lines "
-                                   "(scripts/manifest_sha.py convention); "
+                                   "(src/ember/governance/scripts/manifest_sha.py convention); "
                                    "git-tracked files only"),
         "repo": repo_commit(),
         "learned_import_attestation": (

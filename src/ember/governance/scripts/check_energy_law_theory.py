@@ -6,7 +6,7 @@
 
 Contract (sec6b, v1.1 as of commit ea859d0, read in full before writing this): "Every receipt
 claiming under this document carries: adm_fingerprint {hardware id, corpus manifest combined-sha
-(per scripts/manifest_sha.py), val-shard sha, eval-harness sha, governor env}, c_functional_id +
+(per src/ember/governance/scripts/manifest_sha.py), val-shard sha, eval-harness sha, governor env}, c_functional_id +
 value, e_gpu_hours + power_qualifier (fixed|measured|unqualified), lever_class
 (trajectory-preserving | trajectory-altering | conditional-L3-met | conditional-L3-unmet),
 claim_type (rate | frontier-shift | matched-capability | triage), h_mli_receipt path (for any

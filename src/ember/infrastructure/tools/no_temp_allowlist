@@ -154,7 +154,7 @@ src/ember/governance/scripts/kernel_replay.py
 src/ember/governance/scripts/legb_inprocess_scorer.py
 src/ember/governance/scripts/lib/invariant.py
 src/ember/governance/scripts/loop_launch_guard_selftest.py
-scripts/manifest_sha.py
+src/ember/governance/scripts/manifest_sha.py
 src/ember/governance/scripts/nck/checkpoint_probe.py
 src/ember/governance/scripts/nck/e2b_shakedown.py
 src/ember/governance/scripts/nck/ember_shakedown.py
@@ -254,12 +254,12 @@ src/ember/infrastructure/tools/ember-cli/src/services/receipt-landing-poller.tes
 src/ember/infrastructure/tools/ember-cli/src/services/run-progress-scanner.test.ts
 src/ember/infrastructure/tools/ember-cli/src/services/speculation.test.ts
 src/ember/infrastructure/tools/ember-cli/src/services/speculation.ts
-tools/ember-cli/src/services/telemetry-watch.test.ts
-tools/ember-cli/src/skill-framework.test.ts
-tools/ember-cli/src/skill-framework.ts
-tools/ember-cli/src/terminal-setup.test.ts
-tools/ember-cli/src/tools/file-read.test.ts
-tools/ember-cli/src/tools/file-write.test.ts
+src/ember/infrastructure/tools/ember-cli/src/services/telemetry-watch.test.ts
+src/ember/infrastructure/tools/ember-cli/src/skill-framework.test.ts
+src/ember/infrastructure/tools/ember-cli/src/skill-framework.ts
+src/ember/infrastructure/tools/ember-cli/src/terminal-setup.test.ts
+src/ember/infrastructure/tools/ember-cli/src/tools/file-read.test.ts
+src/ember/infrastructure/tools/ember-cli/src/tools/file-write.test.ts
 tools/ember-cli/src/utils/config-persistence.test.ts
 tools/ember-cli/src/utils/repo-root.test.ts
 tools/ember-restart-3b/launch_packet.py
