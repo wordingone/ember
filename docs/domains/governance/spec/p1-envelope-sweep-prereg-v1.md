@@ -21,7 +21,7 @@ as the variance anchor for CI width and as the H-MLI null-control's second repli
 ## 2. Frozen run protocol (every sweep point)
 
 - **ADM pin**: c03 shape, pinned hardware (RTX 4090 sm89), corpus manifest sha via
-  scripts/manifest_sha.py at launch, DECONTAMINATED held-out eval batch (the #115-cured
+  src/ember/governance/scripts/manifest_sha.py at launch, DECONTAMINATED held-out eval batch (the #115-cured
   builder's sha-pinned output; contamination_recheck=0 echoed in every receipt), governor 0.80 +
   margin assert + orphan sweep, one GPU job at a time.
 - **LR-schedule matching rule (the §1 "LR-matched-to-budget" requirement, made concrete)**:
