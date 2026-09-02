@@ -58,7 +58,7 @@
 # reporting labels:*-cardinality and milestone:required-or-exception — rules
 # neither earlier step looks at. Step C delegates to the same
 # validate_live_pull_request() the CI gate calls, via
-# scripts/github/pr_intent_policy.py, so the contract is not restated here. To
+# src/ember/governance/scripts/github/pr_intent_policy.py, so the contract is not restated here. To
 # check a PR that does not exist yet, use src/ember/infrastructure/tools/pr_intent_preflight.sh.
 
 set -u
@@ -213,7 +213,7 @@ fi
 
 echo
 echo "== Step B: check_pr_authority_binding.py (live body, in merge-ref worktree) =="
-if (cd "$TMPWT" && python scripts/check_pr_authority_binding.py --body-file "$BODY_FILE" --changed-range origin/master..HEAD); then
+if (cd "$TMPWT" && python src/ember/governance/scripts/check_pr_authority_binding.py --body-file "$BODY_FILE" --changed-range origin/master..HEAD); then
   echo "Step B: PASS"
 else
   echo "Step B: FAIL"; RC=1
@@ -246,8 +246,8 @@ step_c() {
     cd "$TMPWT" || exit 2
     PR_C_DIR="$WORK_C" PR_C_BASE="$AUTH_BASE_SHA" PR_C_HEAD="$PUBLIC_HEAD" python -c '
 import json, os, pathlib
-from scripts.github.live_pr_policy import build_snapshot
-from scripts.github.pr_intent_policy import DERIVED_FIELDS
+from src.ember.governance.scripts.github.live_pr_policy import build_snapshot
+from src.ember.governance.scripts.github.pr_intent_policy import DERIVED_FIELDS
 work = pathlib.Path(os.environ["PR_C_DIR"])
 snapshot = build_snapshot(
     json.loads((work / "pr.json").read_text(encoding="utf-8")),
@@ -259,7 +259,7 @@ snapshot = build_snapshot(
 intent = {k: v for k, v in snapshot.items() if k not in DERIVED_FIELDS}
 (work / "intent.json").write_text(json.dumps(intent), encoding="utf-8")
 ' || exit 2
-    python -m scripts.github.pr_intent_policy \
+    python -m src.ember.governance.scripts.github.pr_intent_policy \
       --root . \
       --intent-json "$WORK_C/intent.json" \
       --labels-json "$WORK_C/labels.json" \

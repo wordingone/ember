@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """ember_model_v0_multimodal.py — architecture extension for ember-multimodal-v0.
 
 Implements NC2-own §8 architecture locks for the multimodal config
@@ -433,7 +436,7 @@ def _rope_1d(seq_len: int, head_dim: int, base: float = 10000.0, device=None):
 class VisionEmbedder:
     """48×48px patch → 6912-float → Linear(6912, 1024) + LayerNorm + factorized XY pos.
 
-    Spec: configs/v0-multimodal-config.json vision_embedder:
+    Spec: domains/model/configs/v0-multimodal-config.json vision_embedder:
       patch_px=48, in_dim=6912, out_dim=1024, pos_type=xy_factorized.
 
     Style: Fuyu-style continuous soft tokens (NOT discrete codes). Each 48×48 RGB

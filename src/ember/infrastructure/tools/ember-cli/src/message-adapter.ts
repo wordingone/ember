@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // message-adapter.ts — converts raw SDK protocol messages to internal display types.
 // CONTRACT-GAP: message-adapter.test.ts imports EmberMessage from "../types/message-types.ts"
 // which resolves to the repo-level src/ember/infrastructure/tools/ember-cli/types/message-types.ts shim (outside src/).

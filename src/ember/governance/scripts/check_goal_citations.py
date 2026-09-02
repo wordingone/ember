@@ -5,7 +5,7 @@
 """check_goal_citations.py — standing citation gate for the goalforge rebuild.
 
 Extracts every path-like reference to docs/, scripts/, receipts/, configs/,
-config/, or paper/ found in docs/domains/governance/authority/GOAL.md, docs/roadmap/PROBLEMS.md, and every file in
+config/, or paper/ found in docs/domains/governance/authority/GOAL.md, docs/domains/governance/roadmap/PROBLEMS.md, and every file in
 docs/spec/, then verifies each one exists under the repo root.
 
 Reference shapes recognized (per spec):
@@ -108,7 +108,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "citation_allowlist.txt"
 RECEIPTS_DIR = REPO_ROOT / "receipts"
 
-SOURCE_FILES = ["docs/domains/governance/authority/GOAL.md", "docs/roadmap/PROBLEMS.md"]
+SOURCE_FILES = ["docs/domains/governance/authority/GOAL.md", "docs/domains/governance/roadmap/PROBLEMS.md"]
 SOURCE_GLOB_DIRS = ["docs/spec"]
 
 PREFIXES = ("baseline/", "docs/", "scripts/", "receipts/", "configs/", "config/", "paper/")

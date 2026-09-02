@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Subprocess worker for the cross-process custody ledger regression suite
 (tests/ember_restart_model/domain-governance/test_custody_process_scope.py).

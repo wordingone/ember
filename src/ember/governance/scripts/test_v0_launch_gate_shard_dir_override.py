@@ -38,7 +38,7 @@ if HERE not in sys.path:
 import importlib.util as _ember_0c6ba95c4d327f51_importlib
 import sys as _ember_0c6ba95c4d327f51_sys
 from pathlib import Path as _ember_0c6ba95c4d327f51_Path
-_ember_0c6ba95c4d327f51_path = _ember_0c6ba95c4d327f51_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'token_shards_v0.py')
+_ember_0c6ba95c4d327f51_path = _ember_0c6ba95c4d327f51_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'token_shards_v0.py')
 if not _ember_0c6ba95c4d327f51_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/token_shards_v0.py')
 _ember_0c6ba95c4d327f51_aliases = ('_ember_issue2015_0c6ba95c4d327f51', 'scripts.token_shards_v0', 'token_shards_v0')
@@ -82,7 +82,7 @@ tsv0 = _ember_0c6ba95c4d327f51_module
 import importlib.util as _ember_fbb2699a8f4bfd8b_importlib
 import sys as _ember_fbb2699a8f4bfd8b_sys
 from pathlib import Path as _ember_fbb2699a8f4bfd8b_Path
-_ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
+_ember_fbb2699a8f4bfd8b_path = _ember_fbb2699a8f4bfd8b_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'v0_pretrain_launch_gate.py')
 if not _ember_fbb2699a8f4bfd8b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v0_pretrain_launch_gate.py')
 _ember_fbb2699a8f4bfd8b_aliases = ('_ember_issue2015_fbb2699a8f4bfd8b', 'scripts.v0_pretrain_launch_gate', 'v0_pretrain_launch_gate')

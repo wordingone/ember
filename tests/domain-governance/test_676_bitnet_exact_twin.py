@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Pytest coverage for ember_bitnet_exact_twin.py (issue #676, prereg #674).
 
 CPU-only, fast. Runs the module's embedded selftest suite (18 checks) as

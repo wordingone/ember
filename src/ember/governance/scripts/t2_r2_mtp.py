@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t2_r2_mtp.py — Round-2 MTP-aux SFT arm wrapper (eng #30, issue #106).
 
 MTP-aux SFT arm for round-2. Delegates to t2_mtp.py (eng #4) via import.

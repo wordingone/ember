@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/notebook-edit.ts — NotebookEdit tool: replace/insert/delete Jupyter cells.
 // De-transpiled from bundle (lines 305898–306150). Operates on .ipynb JSON files.
 // bundle=Y

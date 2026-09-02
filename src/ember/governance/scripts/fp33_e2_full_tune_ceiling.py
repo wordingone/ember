@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_e2_full_tune_ceiling.py — E2 full-tune ceiling OOM probe on 24GB.
 
 E2 leg of fp-33 (fp33-e2b-surpass-envelope.md). Measures the maximum

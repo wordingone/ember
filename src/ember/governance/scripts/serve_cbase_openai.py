@@ -12,7 +12,7 @@ Usage:
 
 Startup requirements:
   - Checkpoint keys are ember's training-wrapper naming (backbone_model.*/head.weight/
-    mtp_heads.N.weight, per scripts/timeshare_pretrain.py's _V0Real) and are remapped to
+    mtp_heads.N.weight, per src/ember/governance/scripts/timeshare_pretrain.py's _V0Real) and are remapped to
     standard HF LlamaForCausalLM names (model.*/lm_head.weight) before loading; the MTP
     auxiliary heads are training-only and are dropped, not served.
   - Config is INFERRED from checkpoint tensor shapes (post-grow; intermediate_size differs from seed).
@@ -174,7 +174,7 @@ def remap_ember_state_dict(
 ) -> tuple[dict[str, "torch.Tensor"], list[str]]:
     """Remap ember's training-wrapper state_dict keys to standard HF LlamaForCausalLM names.
 
-    The training wrapper (scripts/timeshare_pretrain.py's _V0Real) saves checkpoints under
+    The training wrapper (src/ember/governance/scripts/timeshare_pretrain.py's _V0Real) saves checkpoints under
     its own module names: self.backbone_model = LlamaModel(conf), self.head (output
     projection, tied to backbone_model.embed_tokens.weight when the contract's
     tied_embeddings is set), and self.mtp_heads (ModuleList of auxiliary multi-token-

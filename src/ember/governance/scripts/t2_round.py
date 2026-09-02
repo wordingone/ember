@@ -7,7 +7,7 @@ GOVERNOR NOTE (an agent S5-A 14589): LEGACY round-execution script — NOT a gov
 v0 launch surface. Dispatched THROUGH the train-daemon, which applies the
 resource governor at the dispatch layer (EMBER_VRAM_FRACTION / EMBER_VRAM_MARGIN_GB
 in the daemon env, not inline). The inline-governed v0 launch surface is
-scripts/timeshare_pretrain.py. A missing-inline-marker flag here is expected,
+src/ember/governance/scripts/timeshare_pretrain.py. A missing-inline-marker flag here is expected,
 not a launch-surface defect.
 
 Phases: (1) acquire episodes — either ingest a T1 samples JSONL (round 1,
@@ -54,7 +54,7 @@ from ledger_license import effective_class, parse_allow, stamp  # noqa: E402 (en
 import importlib.util as _ember_66ee9e91637922dc_importlib
 import sys as _ember_66ee9e91637922dc_sys
 from pathlib import Path as _ember_66ee9e91637922dc_Path
-_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
 if not _ember_66ee9e91637922dc_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
 _ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
@@ -257,7 +257,7 @@ def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):
     import importlib.util as _ember_86cfcf0844b5c48e_importlib
     import sys as _ember_86cfcf0844b5c48e_sys
     from pathlib import Path as _ember_86cfcf0844b5c48e_Path
-    _ember_86cfcf0844b5c48e_path = _ember_86cfcf0844b5c48e_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'governor.py')
+    _ember_86cfcf0844b5c48e_path = _ember_86cfcf0844b5c48e_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'governor.py')
     if not _ember_86cfcf0844b5c48e_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/governor.py')
     _ember_86cfcf0844b5c48e_aliases = ('_ember_issue2015_86cfcf0844b5c48e', 'governor', 'scripts.governor')
@@ -407,7 +407,7 @@ def main():
         import importlib.util as _ember_341a7292e44a83b4_importlib
         import sys as _ember_341a7292e44a83b4_sys
         from pathlib import Path as _ember_341a7292e44a83b4_Path
-        _ember_341a7292e44a83b4_path = _ember_341a7292e44a83b4_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ledger_dedup.py')
+        _ember_341a7292e44a83b4_path = _ember_341a7292e44a83b4_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'ledger_dedup.py')
         if not _ember_341a7292e44a83b4_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ledger_dedup.py')
         _ember_341a7292e44a83b4_aliases = ('_ember_issue2015_341a7292e44a83b4', 'ledger_dedup', 'scripts.ledger_dedup')

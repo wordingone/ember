@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp35g_width_cond_fp8_ab.py — width-conditional fp8 dispatch A/B bench (Closes #305).
 
 End-to-end step A/B for replacing only K>=4096 linear sites (c03: MLP down_proj,

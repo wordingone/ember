@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Generic reactive store primitive and React bindings for AppState.
 // The pure Store<T> (createStore, onChangeAppState) has no React dependency
 // and is fully tested. The React hooks (useAppState, useSetAppState,

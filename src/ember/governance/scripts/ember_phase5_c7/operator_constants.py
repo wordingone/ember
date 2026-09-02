@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """operator_constants.py — C7 self-growth operator frozen hyperparameters.
 
 Writes and hashes the operator hyperparameters to state/operator-constants.json

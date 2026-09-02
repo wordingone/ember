@@ -29,7 +29,7 @@ import torch.nn as nn
 import importlib.util as _ember_3b1bc4dfed504b7e_importlib
 import sys as _ember_3b1bc4dfed504b7e_sys
 from pathlib import Path as _ember_3b1bc4dfed504b7e_Path
-_ember_3b1bc4dfed504b7e_path = _ember_3b1bc4dfed504b7e_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'growth_refutation', 'capacity.py')
+_ember_3b1bc4dfed504b7e_path = _ember_3b1bc4dfed504b7e_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'growth_refutation', 'capacity.py')
 if not _ember_3b1bc4dfed504b7e_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/growth_refutation/capacity.py')
 _ember_3b1bc4dfed504b7e_aliases = ('_ember_issue2015_3b1bc4dfed504b7e', 'capacity', 'scripts.growth_refutation.capacity')
@@ -213,7 +213,7 @@ def test_net2net_on_real_model_gpu():
     import importlib.util as _ember_3b1bc4dfed504b7e_importlib
     import sys as _ember_3b1bc4dfed504b7e_sys
     from pathlib import Path as _ember_3b1bc4dfed504b7e_Path
-    _ember_3b1bc4dfed504b7e_path = _ember_3b1bc4dfed504b7e_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'growth_refutation', 'capacity.py')
+    _ember_3b1bc4dfed504b7e_path = _ember_3b1bc4dfed504b7e_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'growth_refutation', 'capacity.py')
     if not _ember_3b1bc4dfed504b7e_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/growth_refutation/capacity.py')
     _ember_3b1bc4dfed504b7e_aliases = ('_ember_issue2015_3b1bc4dfed504b7e', 'capacity', 'scripts.growth_refutation.capacity')

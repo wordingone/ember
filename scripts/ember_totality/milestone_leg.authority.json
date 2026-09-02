@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/ember_totality/milestone_leg.py",
-  "artifact_sha256": "639f2a0531f1fecd10aea9dfa9e58ee30b5ff645e680468b65336cb7c486d0e7",
+  "artifact_sha256": "8fa323905b72ef0ae236f48942207451145a3c6dffff0f1e372b4e1f95faf802",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

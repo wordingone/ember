@@ -49,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ember_43fbe346bdd606d4_importlib
 import sys as _ember_43fbe346bdd606d4_sys
 from pathlib import Path as _ember_43fbe346bdd606d4_Path
-_ember_43fbe346bdd606d4_path = _ember_43fbe346bdd606d4_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_totality', '_lane14_common.py')
+_ember_43fbe346bdd606d4_path = _ember_43fbe346bdd606d4_Path(__file__).resolve().parent.joinpath('_lane14_common.py')
 if not _ember_43fbe346bdd606d4_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/_lane14_common.py')
 _ember_43fbe346bdd606d4_aliases = ('_ember_issue2015_43fbe346bdd606d4', '_lane14_common', 'src.ember.governance.scripts.ember_totality._lane14_common')

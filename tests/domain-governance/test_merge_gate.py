@@ -270,13 +270,13 @@ class TestMergeGatePathClassification:
         assert not verify_paths_match_class(paths, "receipts")
 
     def test_docs_class_allows_doc_paths(self):
-        """docs class allows docs/**, README.md, docs/authority/GOVERNANCE.md, .github/**."""
+        """docs class allows docs/**, README.md, docs/domains/governance/authority/GOVERNANCE.md, .github/**."""
         from merge_gate import verify_paths_match_class
 
         paths = [
             "docs/api/reference.md",
             "README.md",
-            "docs/authority/GOVERNANCE.md",
+            "docs/domains/governance/authority/GOVERNANCE.md",
             ".github/workflows/test.yml"
         ]
 

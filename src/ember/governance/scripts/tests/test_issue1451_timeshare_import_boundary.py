@@ -237,7 +237,7 @@ def test_execution_only_manifest_binds_source_and_historical_importers() -> None
     manifest = json.loads(
         (
             REPO_ROOT
-            / "docs/ember-restart/timeshare-importer-classification-1451-v1.json"
+            / "docs/domains/governance/ember-restart/timeshare-importer-classification-1451-v1.json"
         ).read_text(encoding="utf-8")
     )
     source = PATCHED_SCRIPTS / "timeshare_pretrain.py"

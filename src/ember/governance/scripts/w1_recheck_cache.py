@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w1_recheck_cache.py -- Content-addressed contamination recheck cache (issue #351).
 
 Implements a content-addressed cache for contamination recheck results, keyed by:

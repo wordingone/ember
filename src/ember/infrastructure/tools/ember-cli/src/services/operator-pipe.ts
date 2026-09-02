@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // operator-pipe.ts — Windows named-pipe transport for the operator input channel
 // (ember issue #165 / #154). Reads newline-delimited lines from
 // \\.\pipe\ember-operator-<pid> and hands complete lines to a callback.

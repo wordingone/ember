@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // api-backend.ts — HTTP retry logic, error classification, and request-level utilities.
 // W2-B: local-only adapter. Cloud-specific concepts (privileged user, overage credit)
 // are stripped. shouldUseOpenAIAdapter always returns true; isPrivilegedUser always false.

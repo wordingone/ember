@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ember_4f6e4e71fb94cfc4_importlib
 import sys as _ember_4f6e4e71fb94cfc4_sys
 from pathlib import Path as _ember_4f6e4e71fb94cfc4_Path
-_ember_4f6e4e71fb94cfc4_path = _ember_4f6e4e71fb94cfc4_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'conv_c03_muon_split.py')
+_ember_4f6e4e71fb94cfc4_path = _ember_4f6e4e71fb94cfc4_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'conv_c03_muon_split.py')
 if not _ember_4f6e4e71fb94cfc4_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/conv_c03_muon_split.py')
 _ember_4f6e4e71fb94cfc4_aliases = ('_ember_issue2015_4f6e4e71fb94cfc4', 'conv_c03_muon_split', 'scripts.conv_c03_muon_split')

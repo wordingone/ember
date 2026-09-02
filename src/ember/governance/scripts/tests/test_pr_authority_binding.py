@@ -27,7 +27,7 @@ WORKSTREAMS = ("EMBER-01A", "EMBER-01B", "EMBER-01C")
 def test_imports_as_scripts_namespace_package() -> None:
     repo_root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     result = subprocess.run(
-        [sys.executable, "-B", "-c", "import scripts.check_pr_authority_binding"],
+        [sys.executable, "-B", "-c", "import src.ember.governance.scripts.check_pr_authority_binding"],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -175,9 +175,9 @@ def test_pr_workstream_must_match_every_changed_control_artifact() -> None:
         "EMBER-01B",
     ) == []
     errors = validate_changed_workstreams(
-        {"scripts/verify_authority_conservation.py": {"EMBER-01A"}},
+        {"src/ember/governance/scripts/verify_authority_conservation.py": {"EMBER-01A"}},
         "EMBER-01B",
     )
     assert errors == [
-        "scripts/verify_authority_conservation.py is bound to EMBER-01A, not PR workstream EMBER-01B"
+        "src/ember/governance/scripts/verify_authority_conservation.py is bound to EMBER-01A, not PR workstream EMBER-01B"
     ]

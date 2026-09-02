@@ -37,7 +37,7 @@ try {
     foreach ($name in @("install-ember-desktop.ps1", "ember-window-placement.ps1")) {
         Copy-Item -LiteralPath (Join-Path $sourceRepository "scripts\$name") -Destination (Join-Path $repository "scripts\$name")
     }
-    $script:Installer = Join-Path $repository "scripts\install-ember-desktop.ps1"
+    $script:Installer = Join-Path $repository "src\ember\governance\scripts\install-ember-desktop.ps1"
     $env:EMBER_SELFTEST_APPLICATION = $fakeApplication
     $env:EMBER_SELFTEST_RUNTIME = $fakeRuntime
     @'

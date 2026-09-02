@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/message-renderers-operator-tag.test.ts — ember #165 acceptance:
 // a prompt injected via the operator pipe renders with a visible [operator] tag
 // in the transcript row, distinguishing it from keyboard-typed input.

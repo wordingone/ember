@@ -1,6 +1,6 @@
 {
   "schema": "autonomy-ladder-state-v1",
-  "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+  "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
   "current_rung": null,
   "rungs": {},
   "reversion_log": [],

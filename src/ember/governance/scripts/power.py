@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """power — exact intervals + power/MDE helpers for gate statistics (eng #2).
 
 Why: the gate's bootstrap percentile CIs UNDERCOVER at zero-inflated counts —

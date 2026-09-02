@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // install-github-app.ts — /install-github-app slash command.
 
 import type { CommandContext } from './types/command-types.ts';

@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/compaction.edge.test.ts — edge/boundary hardening for the compaction
 // service, complementing compaction.test.ts. Every assertion is pinned to the ACTUAL
 // implementation behavior (read from compaction.ts), not assumed behavior: the goal is

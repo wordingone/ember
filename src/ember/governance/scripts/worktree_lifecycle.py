@@ -1717,35 +1717,35 @@ if __name__ == "__main__":
     # verify_authority_conservation.py, and widening its output format would change
     # their banners too. This composes the shared banner with the tool-specific field
     # instead.
-    # issue2015 exact-local-import:scripts/gate_provenance.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/gate_provenance.py
     import importlib.util as _ember_bd2948cfdca26879_importlib
     import sys as _ember_bd2948cfdca26879_sys
     from pathlib import Path as _ember_bd2948cfdca26879_Path
-    _ember_bd2948cfdca26879_path = _ember_bd2948cfdca26879_Path(__file__).resolve().parents[4].joinpath('scripts', 'gate_provenance.py')
+    _ember_bd2948cfdca26879_path = _ember_bd2948cfdca26879_Path(__file__).resolve().parent.joinpath('gate_provenance.py')
     if not _ember_bd2948cfdca26879_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/gate_provenance.py')
-    _ember_bd2948cfdca26879_aliases = ('_ember_issue2015_bd2948cfdca26879', 'gate_provenance', 'scripts.gate_provenance')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/gate_provenance.py')
+    _ember_bd2948cfdca26879_aliases = ('_ember_issue2015_bd2948cfdca26879', 'gate_provenance', 'src.ember.governance.scripts.gate_provenance')
     _ember_bd2948cfdca26879_existing = []
     for _ember_bd2948cfdca26879_alias in _ember_bd2948cfdca26879_aliases:
         _ember_bd2948cfdca26879_candidate = _ember_bd2948cfdca26879_sys.modules.get(_ember_bd2948cfdca26879_alias)
         if _ember_bd2948cfdca26879_candidate is not None and all(_ember_bd2948cfdca26879_candidate is not item for item in _ember_bd2948cfdca26879_existing):
             _ember_bd2948cfdca26879_existing.append(_ember_bd2948cfdca26879_candidate)
     if len(_ember_bd2948cfdca26879_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/gate_provenance.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/gate_provenance.py')
     if _ember_bd2948cfdca26879_existing:
         _ember_bd2948cfdca26879_module = _ember_bd2948cfdca26879_existing[0]
         _ember_bd2948cfdca26879_observed = getattr(_ember_bd2948cfdca26879_module, '__file__', None)
         if _ember_bd2948cfdca26879_observed is None or _ember_bd2948cfdca26879_Path(_ember_bd2948cfdca26879_observed).resolve() != _ember_bd2948cfdca26879_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/gate_provenance.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/gate_provenance.py')
     else:
         _ember_bd2948cfdca26879_spec = _ember_bd2948cfdca26879_importlib.spec_from_file_location('_ember_issue2015_bd2948cfdca26879', _ember_bd2948cfdca26879_path)
         if _ember_bd2948cfdca26879_spec is None or _ember_bd2948cfdca26879_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/gate_provenance.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/gate_provenance.py')
         _ember_bd2948cfdca26879_module = _ember_bd2948cfdca26879_importlib.module_from_spec(_ember_bd2948cfdca26879_spec)
         for _ember_bd2948cfdca26879_alias in _ember_bd2948cfdca26879_aliases:
             _ember_bd2948cfdca26879_prior = _ember_bd2948cfdca26879_sys.modules.get(_ember_bd2948cfdca26879_alias)
             if _ember_bd2948cfdca26879_prior is not None and _ember_bd2948cfdca26879_prior is not _ember_bd2948cfdca26879_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/gate_provenance.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/gate_provenance.py')
             _ember_bd2948cfdca26879_sys.modules[_ember_bd2948cfdca26879_alias] = _ember_bd2948cfdca26879_module
         try:
             _ember_bd2948cfdca26879_spec.loader.exec_module(_ember_bd2948cfdca26879_module)
@@ -1757,10 +1757,10 @@ if __name__ == "__main__":
     for _ember_bd2948cfdca26879_alias in _ember_bd2948cfdca26879_aliases:
         _ember_bd2948cfdca26879_prior = _ember_bd2948cfdca26879_sys.modules.get(_ember_bd2948cfdca26879_alias)
         if _ember_bd2948cfdca26879_prior is not None and _ember_bd2948cfdca26879_prior is not _ember_bd2948cfdca26879_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/gate_provenance.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/gate_provenance.py')
         _ember_bd2948cfdca26879_sys.modules[_ember_bd2948cfdca26879_alias] = _ember_bd2948cfdca26879_module
     render_gate_provenance = getattr(_ember_bd2948cfdca26879_module, 'render_gate_provenance')
-    # issue2015 exact-local-import-end:scripts/gate_provenance.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/gate_provenance.py
 
     _self_integrity = self_integrity_report(Path(__file__))
     print(

@@ -52,8 +52,8 @@ class Land210gPublicRevalidationTests(unittest.TestCase):
         self.assertEqual(
             [row["path"] for row in result["traceable_later_changes"]],
             [
-                "scripts/conv_c03_muon_ns3_live.py",
-                "scripts/ember_cbase_mixture.py",
+                "src/ember/governance/scripts/conv_c03_muon_ns3_live.py",
+                "src/ember/governance/scripts/ember_cbase_mixture.py",
             ],
         )
         self.assertEqual(

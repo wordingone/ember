@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/model-metrics-poller.ts — Polls a local model server for live inference metrics.
 // Feeds the ModelMetricsBar in status-bar.ts with context usage, throughput, and VRAM data.
 // AC9 spec: parsePrometheusLine, extractMetric, parseMetricsBody, fetchModelMetrics,

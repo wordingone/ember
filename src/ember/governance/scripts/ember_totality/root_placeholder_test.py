@@ -22,7 +22,7 @@ sys.path.insert(0, REPO_ROOT)
 import importlib.util as _ember_a8376424dcb1abdf_importlib
 import sys as _ember_a8376424dcb1abdf_sys
 from pathlib import Path as _ember_a8376424dcb1abdf_Path
-_ember_a8376424dcb1abdf_path = _ember_a8376424dcb1abdf_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'ember_totality_spec.py')
+_ember_a8376424dcb1abdf_path = _ember_a8376424dcb1abdf_Path(__file__).resolve().parents[5].joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'ember_totality_spec.py')
 if not _ember_a8376424dcb1abdf_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
 _ember_a8376424dcb1abdf_aliases = ('_ember_issue2015_a8376424dcb1abdf', 'ember_totality_spec', 'scripts.ember_totality.ember_totality_spec')

@@ -10,7 +10,7 @@ a concrete plan rather than a bare "TODO", per the operator's slicing instructio
 Each of the nine legs in `verify_ember01_completion.py` needs a fingerprint key made of:
 
 - verifier code identity: sha256 of the leg's own source file(s) at the pinned commit
-  (e.g. leg 8 -> `scripts/verify_authority_conservation.py`; legs 1/2/6/9 ->
+  (e.g. leg 8 -> `src/ember/governance/scripts/verify_authority_conservation.py`; legs 1/2/6/9 ->
   `scripts/ember_01_custody/census.py` + `issue_census.py`; legs 3/4 ->
   `scripts/ember_01_identity/*.py`). Cheapest to get: `git show <pinned_commit>:<path> |
   sha256sum` inside the pinned worktree, no working-tree read needed.

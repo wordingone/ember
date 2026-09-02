@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """w2_r2_sample.py — round-2 W-code sampling dispatch wrapper.
 
 Pinned to docs/domains/governance/research/round2-prereg.md §1.1 verbatim (pre-launch amendment

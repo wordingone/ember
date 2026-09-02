@@ -23,8 +23,95 @@ from typing import Any, Callable, Literal, Mapping, Protocol
 import torch
 
 from infer import FrozenTokenizer, frozen_split_prompt, greedy_generate, load_frozen_tokenizer, sha
-import model as model_module
-from model import RestartDecoderConfig, UnifiedDecoder
+# issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/model.py
+import importlib.util as _ember_4108d33796031947_importlib
+import sys as _ember_4108d33796031947_sys
+from pathlib import Path as _ember_4108d33796031947_Path
+_ember_4108d33796031947_path = _ember_4108d33796031947_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'model.py')
+if not _ember_4108d33796031947_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+_ember_4108d33796031947_aliases = ('_ember_issue2015_4108d33796031947', 'model', 'tools.ember-restart-3b.model')
+_ember_4108d33796031947_existing = []
+for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+    _ember_4108d33796031947_candidate = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
+    if _ember_4108d33796031947_candidate is not None and all(_ember_4108d33796031947_candidate is not item for item in _ember_4108d33796031947_existing):
+        _ember_4108d33796031947_existing.append(_ember_4108d33796031947_candidate)
+if len(_ember_4108d33796031947_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+if _ember_4108d33796031947_existing:
+    _ember_4108d33796031947_module = _ember_4108d33796031947_existing[0]
+    _ember_4108d33796031947_observed = getattr(_ember_4108d33796031947_module, '__file__', None)
+    if _ember_4108d33796031947_observed is None or _ember_4108d33796031947_Path(_ember_4108d33796031947_observed).resolve() != _ember_4108d33796031947_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+else:
+    _ember_4108d33796031947_spec = _ember_4108d33796031947_importlib.spec_from_file_location('_ember_issue2015_4108d33796031947', _ember_4108d33796031947_path)
+    if _ember_4108d33796031947_spec is None or _ember_4108d33796031947_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+    _ember_4108d33796031947_module = _ember_4108d33796031947_importlib.module_from_spec(_ember_4108d33796031947_spec)
+    for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+        _ember_4108d33796031947_prior = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
+        if _ember_4108d33796031947_prior is not None and _ember_4108d33796031947_prior is not _ember_4108d33796031947_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+        _ember_4108d33796031947_sys.modules[_ember_4108d33796031947_alias] = _ember_4108d33796031947_module
+    try:
+        _ember_4108d33796031947_spec.loader.exec_module(_ember_4108d33796031947_module)
+    except BaseException:
+        for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+            if _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias) is _ember_4108d33796031947_module:
+                _ember_4108d33796031947_sys.modules.pop(_ember_4108d33796031947_alias, None)
+        raise
+for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+    _ember_4108d33796031947_prior = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
+    if _ember_4108d33796031947_prior is not None and _ember_4108d33796031947_prior is not _ember_4108d33796031947_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+    _ember_4108d33796031947_sys.modules[_ember_4108d33796031947_alias] = _ember_4108d33796031947_module
+model_module = _ember_4108d33796031947_module
+# issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/model.py
+# issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/model.py
+import importlib.util as _ember_4108d33796031947_importlib
+import sys as _ember_4108d33796031947_sys
+from pathlib import Path as _ember_4108d33796031947_Path
+_ember_4108d33796031947_path = _ember_4108d33796031947_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'model.py')
+if not _ember_4108d33796031947_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+_ember_4108d33796031947_aliases = ('_ember_issue2015_4108d33796031947', 'model', 'tools.ember-restart-3b.model')
+_ember_4108d33796031947_existing = []
+for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+    _ember_4108d33796031947_candidate = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
+    if _ember_4108d33796031947_candidate is not None and all(_ember_4108d33796031947_candidate is not item for item in _ember_4108d33796031947_existing):
+        _ember_4108d33796031947_existing.append(_ember_4108d33796031947_candidate)
+if len(_ember_4108d33796031947_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+if _ember_4108d33796031947_existing:
+    _ember_4108d33796031947_module = _ember_4108d33796031947_existing[0]
+    _ember_4108d33796031947_observed = getattr(_ember_4108d33796031947_module, '__file__', None)
+    if _ember_4108d33796031947_observed is None or _ember_4108d33796031947_Path(_ember_4108d33796031947_observed).resolve() != _ember_4108d33796031947_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+else:
+    _ember_4108d33796031947_spec = _ember_4108d33796031947_importlib.spec_from_file_location('_ember_issue2015_4108d33796031947', _ember_4108d33796031947_path)
+    if _ember_4108d33796031947_spec is None or _ember_4108d33796031947_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+    _ember_4108d33796031947_module = _ember_4108d33796031947_importlib.module_from_spec(_ember_4108d33796031947_spec)
+    for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+        _ember_4108d33796031947_prior = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
+        if _ember_4108d33796031947_prior is not None and _ember_4108d33796031947_prior is not _ember_4108d33796031947_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+        _ember_4108d33796031947_sys.modules[_ember_4108d33796031947_alias] = _ember_4108d33796031947_module
+    try:
+        _ember_4108d33796031947_spec.loader.exec_module(_ember_4108d33796031947_module)
+    except BaseException:
+        for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+            if _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias) is _ember_4108d33796031947_module:
+                _ember_4108d33796031947_sys.modules.pop(_ember_4108d33796031947_alias, None)
+        raise
+for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
+    _ember_4108d33796031947_prior = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
+    if _ember_4108d33796031947_prior is not None and _ember_4108d33796031947_prior is not _ember_4108d33796031947_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/model.py')
+    _ember_4108d33796031947_sys.modules[_ember_4108d33796031947_alias] = _ember_4108d33796031947_module
+RestartDecoderConfig = getattr(_ember_4108d33796031947_module, 'RestartDecoderConfig')
+UnifiedDecoder = getattr(_ember_4108d33796031947_module, 'UnifiedDecoder')
+# issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/model.py
 _SERVE_MODULE_DIRECTORY = Path(__file__).resolve().parent
 if str(_SERVE_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_SERVE_MODULE_DIRECTORY))
@@ -32,9 +119,50 @@ from repository_layout import resolve_repository_authority  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from tokenizer.reconstruct_frozen_tokenizer import (  # noqa: E402
-    ensure_serving_tokenizer,
-)
+# issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py
+import importlib.util as _ember_eeb5f5eab9d46a80_importlib
+import sys as _ember_eeb5f5eab9d46a80_sys
+from pathlib import Path as _ember_eeb5f5eab9d46a80_Path
+_ember_eeb5f5eab9d46a80_path = _ember_eeb5f5eab9d46a80_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'tokenizer', 'reconstruct_frozen_tokenizer.py')
+if not _ember_eeb5f5eab9d46a80_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py')
+_ember_eeb5f5eab9d46a80_aliases = ('_ember_issue2015_eeb5f5eab9d46a80', 'reconstruct_frozen_tokenizer', 'tokenizer.reconstruct_frozen_tokenizer', 'tools.ember-restart-3b.tokenizer.reconstruct_frozen_tokenizer')
+_ember_eeb5f5eab9d46a80_existing = []
+for _ember_eeb5f5eab9d46a80_alias in _ember_eeb5f5eab9d46a80_aliases:
+    _ember_eeb5f5eab9d46a80_candidate = _ember_eeb5f5eab9d46a80_sys.modules.get(_ember_eeb5f5eab9d46a80_alias)
+    if _ember_eeb5f5eab9d46a80_candidate is not None and all(_ember_eeb5f5eab9d46a80_candidate is not item for item in _ember_eeb5f5eab9d46a80_existing):
+        _ember_eeb5f5eab9d46a80_existing.append(_ember_eeb5f5eab9d46a80_candidate)
+if len(_ember_eeb5f5eab9d46a80_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py')
+if _ember_eeb5f5eab9d46a80_existing:
+    _ember_eeb5f5eab9d46a80_module = _ember_eeb5f5eab9d46a80_existing[0]
+    _ember_eeb5f5eab9d46a80_observed = getattr(_ember_eeb5f5eab9d46a80_module, '__file__', None)
+    if _ember_eeb5f5eab9d46a80_observed is None or _ember_eeb5f5eab9d46a80_Path(_ember_eeb5f5eab9d46a80_observed).resolve() != _ember_eeb5f5eab9d46a80_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py')
+else:
+    _ember_eeb5f5eab9d46a80_spec = _ember_eeb5f5eab9d46a80_importlib.spec_from_file_location('_ember_issue2015_eeb5f5eab9d46a80', _ember_eeb5f5eab9d46a80_path)
+    if _ember_eeb5f5eab9d46a80_spec is None or _ember_eeb5f5eab9d46a80_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py')
+    _ember_eeb5f5eab9d46a80_module = _ember_eeb5f5eab9d46a80_importlib.module_from_spec(_ember_eeb5f5eab9d46a80_spec)
+    for _ember_eeb5f5eab9d46a80_alias in _ember_eeb5f5eab9d46a80_aliases:
+        _ember_eeb5f5eab9d46a80_prior = _ember_eeb5f5eab9d46a80_sys.modules.get(_ember_eeb5f5eab9d46a80_alias)
+        if _ember_eeb5f5eab9d46a80_prior is not None and _ember_eeb5f5eab9d46a80_prior is not _ember_eeb5f5eab9d46a80_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py')
+        _ember_eeb5f5eab9d46a80_sys.modules[_ember_eeb5f5eab9d46a80_alias] = _ember_eeb5f5eab9d46a80_module
+    try:
+        _ember_eeb5f5eab9d46a80_spec.loader.exec_module(_ember_eeb5f5eab9d46a80_module)
+    except BaseException:
+        for _ember_eeb5f5eab9d46a80_alias in _ember_eeb5f5eab9d46a80_aliases:
+            if _ember_eeb5f5eab9d46a80_sys.modules.get(_ember_eeb5f5eab9d46a80_alias) is _ember_eeb5f5eab9d46a80_module:
+                _ember_eeb5f5eab9d46a80_sys.modules.pop(_ember_eeb5f5eab9d46a80_alias, None)
+        raise
+for _ember_eeb5f5eab9d46a80_alias in _ember_eeb5f5eab9d46a80_aliases:
+    _ember_eeb5f5eab9d46a80_prior = _ember_eeb5f5eab9d46a80_sys.modules.get(_ember_eeb5f5eab9d46a80_alias)
+    if _ember_eeb5f5eab9d46a80_prior is not None and _ember_eeb5f5eab9d46a80_prior is not _ember_eeb5f5eab9d46a80_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py')
+    _ember_eeb5f5eab9d46a80_sys.modules[_ember_eeb5f5eab9d46a80_alias] = _ember_eeb5f5eab9d46a80_module
+ensure_serving_tokenizer = getattr(_ember_eeb5f5eab9d46a80_module, 'ensure_serving_tokenizer')
+# issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py
 
 from ember_restart_eval_raw_forward import (  # noqa: E402
     canonicalize_tied_embedding_state,
@@ -775,7 +903,51 @@ class LoadedOwnedRuntime:
         finally:
             config_snapshot.unlink(missing_ok=True)
         model = UnifiedDecoder(config, device=device, allow_production_allocation=True).eval()
-        from checkpoint_artifacts import load_checkpoint_artifacts, published_checkpoint_receipt
+        # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py
+        import importlib.util as _ember_f5951795c08a31e2_importlib
+        import sys as _ember_f5951795c08a31e2_sys
+        from pathlib import Path as _ember_f5951795c08a31e2_Path
+        _ember_f5951795c08a31e2_path = _ember_f5951795c08a31e2_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'checkpoint_artifacts.py')
+        if not _ember_f5951795c08a31e2_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py')
+        _ember_f5951795c08a31e2_aliases = ('_ember_issue2015_f5951795c08a31e2', 'checkpoint_artifacts', 'tools.ember-restart-3b.checkpoint_artifacts')
+        _ember_f5951795c08a31e2_existing = []
+        for _ember_f5951795c08a31e2_alias in _ember_f5951795c08a31e2_aliases:
+            _ember_f5951795c08a31e2_candidate = _ember_f5951795c08a31e2_sys.modules.get(_ember_f5951795c08a31e2_alias)
+            if _ember_f5951795c08a31e2_candidate is not None and all(_ember_f5951795c08a31e2_candidate is not item for item in _ember_f5951795c08a31e2_existing):
+                _ember_f5951795c08a31e2_existing.append(_ember_f5951795c08a31e2_candidate)
+        if len(_ember_f5951795c08a31e2_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py')
+        if _ember_f5951795c08a31e2_existing:
+            _ember_f5951795c08a31e2_module = _ember_f5951795c08a31e2_existing[0]
+            _ember_f5951795c08a31e2_observed = getattr(_ember_f5951795c08a31e2_module, '__file__', None)
+            if _ember_f5951795c08a31e2_observed is None or _ember_f5951795c08a31e2_Path(_ember_f5951795c08a31e2_observed).resolve() != _ember_f5951795c08a31e2_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py')
+        else:
+            _ember_f5951795c08a31e2_spec = _ember_f5951795c08a31e2_importlib.spec_from_file_location('_ember_issue2015_f5951795c08a31e2', _ember_f5951795c08a31e2_path)
+            if _ember_f5951795c08a31e2_spec is None or _ember_f5951795c08a31e2_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py')
+            _ember_f5951795c08a31e2_module = _ember_f5951795c08a31e2_importlib.module_from_spec(_ember_f5951795c08a31e2_spec)
+            for _ember_f5951795c08a31e2_alias in _ember_f5951795c08a31e2_aliases:
+                _ember_f5951795c08a31e2_prior = _ember_f5951795c08a31e2_sys.modules.get(_ember_f5951795c08a31e2_alias)
+                if _ember_f5951795c08a31e2_prior is not None and _ember_f5951795c08a31e2_prior is not _ember_f5951795c08a31e2_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py')
+                _ember_f5951795c08a31e2_sys.modules[_ember_f5951795c08a31e2_alias] = _ember_f5951795c08a31e2_module
+            try:
+                _ember_f5951795c08a31e2_spec.loader.exec_module(_ember_f5951795c08a31e2_module)
+            except BaseException:
+                for _ember_f5951795c08a31e2_alias in _ember_f5951795c08a31e2_aliases:
+                    if _ember_f5951795c08a31e2_sys.modules.get(_ember_f5951795c08a31e2_alias) is _ember_f5951795c08a31e2_module:
+                        _ember_f5951795c08a31e2_sys.modules.pop(_ember_f5951795c08a31e2_alias, None)
+                raise
+        for _ember_f5951795c08a31e2_alias in _ember_f5951795c08a31e2_aliases:
+            _ember_f5951795c08a31e2_prior = _ember_f5951795c08a31e2_sys.modules.get(_ember_f5951795c08a31e2_alias)
+            if _ember_f5951795c08a31e2_prior is not None and _ember_f5951795c08a31e2_prior is not _ember_f5951795c08a31e2_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py')
+            _ember_f5951795c08a31e2_sys.modules[_ember_f5951795c08a31e2_alias] = _ember_f5951795c08a31e2_module
+        load_checkpoint_artifacts = getattr(_ember_f5951795c08a31e2_module, 'load_checkpoint_artifacts')
+        published_checkpoint_receipt = getattr(_ember_f5951795c08a31e2_module, 'published_checkpoint_receipt')
+        # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py
         checkpoint_receipt = published_checkpoint_receipt(checkpoint)
         if checkpoint_receipt["checkpoint_manifest_sha256"] != checkpoint_sha256:
             raise ValueError("checkpoint manifest changed during owned runtime construction")

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp31_l2_grammar.py — L2 composition grammar typing freeze (#220),
 FROZEN BEFORE ANY L2 MATERIALIZATION EXISTS.
 
@@ -54,7 +57,7 @@ import fp23_probe_prereg as fp23                       # noqa: E402
 import importlib.util as _ember_0fe497804b6560b7_importlib
 import sys as _ember_0fe497804b6560b7_sys
 from pathlib import Path as _ember_0fe497804b6560b7_Path
-_ember_0fe497804b6560b7_path = _ember_0fe497804b6560b7_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fp28_v0_coverage.py')
+_ember_0fe497804b6560b7_path = _ember_0fe497804b6560b7_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'fp28_v0_coverage.py')
 if not _ember_0fe497804b6560b7_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp28_v0_coverage.py')
 _ember_0fe497804b6560b7_aliases = ('_ember_issue2015_0fe497804b6560b7', 'fp28_v0_coverage', 'scripts.fp28_v0_coverage')

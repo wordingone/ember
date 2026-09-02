@@ -176,7 +176,7 @@ def _receipt(ticket: str, body: dict[str, Any]) -> dict[str, Any]:
     NAME matches the sha256 pattern anywhere in the first three levels of nesting -- which
     ``invariant_sha256`` itself always does, so every receipt carrying it needs
     ``sha_convention`` unconditionally, not only the ones with a content hash of their own.
-    ``scripts/verify_authority_conservation.py`` separately requires a top-level ``authority``
+    ``src/ember/governance/scripts/verify_authority_conservation.py`` separately requires a top-level ``authority``
     binding with the current goal/workstream/outcome. All four are satisfied here, once, so
     every caller gets a passing receipt instead of re-deriving the floor per output.
     """

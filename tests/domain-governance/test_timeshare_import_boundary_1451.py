@@ -22,7 +22,7 @@ ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / '
 SCRIPTS = ROOT / "scripts"
 TIMESHARE = SCRIPTS / "timeshare_pretrain.py"
 VERIFIER = SCRIPTS / "verify_authority_conservation.py"
-MANIFEST_REL = Path("docs/ember-restart/timeshare-importer-classification-1451-v1.json")
+MANIFEST_REL = Path("docs/domains/governance/ember-restart/timeshare-importer-classification-1451-v1.json")
 
 
 def _first_executable(body: list[ast.stmt]) -> ast.stmt | None:
@@ -70,7 +70,7 @@ def _write_stage1_fixture(root: Path) -> dict:
     )
     manifest = {
         "schema": "ember-timeshare-importer-classification-v1",
-        "source": "scripts/timeshare_pretrain.py",
+        "source": "src/ember/governance/scripts/timeshare_pretrain.py",
         "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "import_denial": "execution_only",
         "importers": [
@@ -109,7 +109,7 @@ def _write_future_stage_fixture(root: Path, variant: str = "valid") -> dict:
     else:
         source_text += "if __name__ == '__main__':\n    main()\n"
     source.write_text(source_text, encoding="utf-8", newline="\n")
-    for relative in ("scripts/conv_c03_muon_ns3_live.py", "scripts/train_multimodal_v0.py"):
+    for relative in ("src/ember/governance/scripts/conv_c03_muon_ns3_live.py", "src/ember/governance/scripts/train_multimodal_v0.py"):
         historical = root / relative
         historical.parent.mkdir(parents=True, exist_ok=True)
         historical.write_text(
@@ -124,7 +124,7 @@ def _write_future_stage_fixture(root: Path, variant: str = "valid") -> dict:
     )
     manifest = {
         "schema": "ember-timeshare-importer-classification-v1",
-        "source": "scripts/timeshare_pretrain.py",
+        "source": "src/ember/governance/scripts/timeshare_pretrain.py",
         "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "import_denial": "execution_only",
         "execution_boundary": {

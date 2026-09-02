@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/highlight-cache.ts — Shared highlight-cache singleton.
 // Extracted from markdown-and-code.ts so that syntax-highlight.ts can import it
 // without creating a circular dependency with markdown-and-code.ts.

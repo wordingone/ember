@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Tests for the /plugin command: arg parsing (AC1, AC2, AC5) and
 // routing (AC3) and pagination helper (AC4).
 

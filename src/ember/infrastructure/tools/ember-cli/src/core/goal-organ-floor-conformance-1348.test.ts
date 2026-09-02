@@ -24,11 +24,11 @@ describe("issue #1348 bounded-exception audit record", () => {
   });
 
   it("binds citations to the current unnumbered mechanism sections", () => {
-    expect(audit).toContain("docs/contracts/goal-mode-mechanism.md");
+    expect(audit).toContain("docs/domains/governance/contracts/goal-mode-mechanism.md");
     expect(audit).toContain("Selection and persistence");
     expect(audit).toContain("Continuation loop");
     expect(audit).toContain("Artifact binding");
     expect(audit).toContain("Operator relationship");
-    expect(audit).not.toContain("docs/contracts/goal-mode-mechanism.md §");
+    expect(audit).not.toContain("docs/domains/governance/contracts/goal-mode-mechanism.md §");
   });
 });

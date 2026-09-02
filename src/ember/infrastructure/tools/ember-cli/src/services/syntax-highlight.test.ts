@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // syntax-highlight.test.ts — AC1–AC4 for the ANSI syntax-highlight service.
 //
 // AC1: htmlToAnsi — keyword/string/comment/number/built_in classes → correct ANSI codes

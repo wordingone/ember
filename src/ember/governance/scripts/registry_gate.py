@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Technique-registry dispatch gate — reference implementation (#256, sp-7).
 
-Contract: docs/contracts/registry-dispatch-gate-spec-v0.md. The daemon calls this as a
+Contract: docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md. The daemon calls this as a
 dispatch precondition (`python src/ember/governance/scripts/registry_gate.py --config <path>`);
 exit 0 = dispatch may proceed, exit 1 = refused with rows named. Fail-closed:
 unreadable registry or config refuses dispatch.

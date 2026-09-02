@@ -604,7 +604,7 @@ def replace_continuity_block(text: str, block: str) -> str:
     pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
     matches = pattern.findall(text)
     if len(matches) > 1:
-        raise InventoryError("docs/authority/CONTINUITY.md contains duplicate branch inventory blocks")
+        raise InventoryError("docs/domains/governance/authority/CONTINUITY.md contains duplicate branch inventory blocks")
     if matches:
         return pattern.sub(lambda _: block, text, count=1)
     suffix = "" if text.endswith("\n") else "\n"
@@ -666,12 +666,12 @@ def check_inventory(
             repository_root = continuity_parent
         relative = manifest_path.resolve().relative_to(repository_root).as_posix()
     except ValueError as exc:
-        raise InventoryError("manifest must be inside the repository containing docs/authority/CONTINUITY.md") from exc
+        raise InventoryError("manifest must be inside the repository containing docs/domains/governance/authority/CONTINUITY.md") from exc
     expected = render_continuity_block(receipt, relative)
     pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
     matches = pattern.findall(continuity)
     if matches != [expected]:
-        raise InventoryError("docs/authority/CONTINUITY.md branch inventory block is missing or stale")
+        raise InventoryError("docs/domains/governance/authority/CONTINUITY.md branch inventory block is missing or stale")
     return receipt
 
 

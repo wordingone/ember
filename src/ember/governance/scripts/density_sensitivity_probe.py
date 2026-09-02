@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """density_sensitivity_probe.py — non-degenerate downstream density-sensitivity probe.
 
 Closes ember #415. Replaces the rejected wcode_100pct verdict (#225):

@@ -63,7 +63,7 @@ def valid_payload(root: Path) -> dict:
         "repository": "wordingone/ember",
         "source_commit": "a" * 40,
         "current_authority": {
-            "matrix_path": "docs/authority/ember-authority-matrix.md",
+            "matrix_path": "docs/domains/governance/authority/ember-authority-matrix.md",
             "matrix_sha256": matrix_sha,
             "discrepancy_ids": ["D-001", "D-002"],
             "milestone_ids": ["EMBER-00"],

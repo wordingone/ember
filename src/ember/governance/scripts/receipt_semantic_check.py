@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """receipt_semantic_check.py — semantic receipt validator (complements receipt_check.py).
 
 receipt_check.py is the SCHEMA floor: "is this a well-formed receipt?" (ticket/ts present,

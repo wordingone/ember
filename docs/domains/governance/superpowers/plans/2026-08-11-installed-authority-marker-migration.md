@@ -24,7 +24,7 @@
 
 **Files:**
 - Modify: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
-- Modify: `scripts/install-ember-desktop.ps1`
+- Modify: `src/ember/governance/scripts/install-ember-desktop.ps1`
 
 **Interfaces:**
 - Consumes: `Install-StableFiles([string]$Root)` and the self-test's real `Invoke-Deploy` boundary.

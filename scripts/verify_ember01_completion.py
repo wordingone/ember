@@ -52,27 +52,109 @@ sys.path.insert(
 from issue_census import canonical_open_issue_source_snapshot
 
 # Leg 8 imports the SAME authority function verify_ember00_completion.py uses.
-from verify_authority_conservation import (
-    ACTIVE_GOAL_ID,
-    ACTIVE_WORKSTREAM_IDS,
-    NEXT_EXECUTED_OUTCOME,
-    verify,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/verify_authority_conservation.py
+import importlib.util as _ember_24b81ae3cc54e364_importlib
+import sys as _ember_24b81ae3cc54e364_sys
+from pathlib import Path as _ember_24b81ae3cc54e364_Path
+_ember_24b81ae3cc54e364_path = _ember_24b81ae3cc54e364_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'verify_authority_conservation.py')
+if not _ember_24b81ae3cc54e364_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/verify_authority_conservation.py')
+_ember_24b81ae3cc54e364_aliases = ('_ember_issue2015_24b81ae3cc54e364', 'scripts.verify_authority_conservation', 'verify_authority_conservation')
+_ember_24b81ae3cc54e364_existing = []
+for _ember_24b81ae3cc54e364_alias in _ember_24b81ae3cc54e364_aliases:
+    _ember_24b81ae3cc54e364_candidate = _ember_24b81ae3cc54e364_sys.modules.get(_ember_24b81ae3cc54e364_alias)
+    if _ember_24b81ae3cc54e364_candidate is not None and all(_ember_24b81ae3cc54e364_candidate is not item for item in _ember_24b81ae3cc54e364_existing):
+        _ember_24b81ae3cc54e364_existing.append(_ember_24b81ae3cc54e364_candidate)
+if len(_ember_24b81ae3cc54e364_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/verify_authority_conservation.py')
+if _ember_24b81ae3cc54e364_existing:
+    _ember_24b81ae3cc54e364_module = _ember_24b81ae3cc54e364_existing[0]
+    _ember_24b81ae3cc54e364_observed = getattr(_ember_24b81ae3cc54e364_module, '__file__', None)
+    if _ember_24b81ae3cc54e364_observed is None or _ember_24b81ae3cc54e364_Path(_ember_24b81ae3cc54e364_observed).resolve() != _ember_24b81ae3cc54e364_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/verify_authority_conservation.py')
+else:
+    _ember_24b81ae3cc54e364_spec = _ember_24b81ae3cc54e364_importlib.spec_from_file_location('_ember_issue2015_24b81ae3cc54e364', _ember_24b81ae3cc54e364_path)
+    if _ember_24b81ae3cc54e364_spec is None or _ember_24b81ae3cc54e364_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/verify_authority_conservation.py')
+    _ember_24b81ae3cc54e364_module = _ember_24b81ae3cc54e364_importlib.module_from_spec(_ember_24b81ae3cc54e364_spec)
+    for _ember_24b81ae3cc54e364_alias in _ember_24b81ae3cc54e364_aliases:
+        _ember_24b81ae3cc54e364_prior = _ember_24b81ae3cc54e364_sys.modules.get(_ember_24b81ae3cc54e364_alias)
+        if _ember_24b81ae3cc54e364_prior is not None and _ember_24b81ae3cc54e364_prior is not _ember_24b81ae3cc54e364_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/verify_authority_conservation.py')
+        _ember_24b81ae3cc54e364_sys.modules[_ember_24b81ae3cc54e364_alias] = _ember_24b81ae3cc54e364_module
+    try:
+        _ember_24b81ae3cc54e364_spec.loader.exec_module(_ember_24b81ae3cc54e364_module)
+    except BaseException:
+        for _ember_24b81ae3cc54e364_alias in _ember_24b81ae3cc54e364_aliases:
+            if _ember_24b81ae3cc54e364_sys.modules.get(_ember_24b81ae3cc54e364_alias) is _ember_24b81ae3cc54e364_module:
+                _ember_24b81ae3cc54e364_sys.modules.pop(_ember_24b81ae3cc54e364_alias, None)
+        raise
+for _ember_24b81ae3cc54e364_alias in _ember_24b81ae3cc54e364_aliases:
+    _ember_24b81ae3cc54e364_prior = _ember_24b81ae3cc54e364_sys.modules.get(_ember_24b81ae3cc54e364_alias)
+    if _ember_24b81ae3cc54e364_prior is not None and _ember_24b81ae3cc54e364_prior is not _ember_24b81ae3cc54e364_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/verify_authority_conservation.py')
+    _ember_24b81ae3cc54e364_sys.modules[_ember_24b81ae3cc54e364_alias] = _ember_24b81ae3cc54e364_module
+ACTIVE_GOAL_ID = getattr(_ember_24b81ae3cc54e364_module, 'ACTIVE_GOAL_ID')
+ACTIVE_WORKSTREAM_IDS = getattr(_ember_24b81ae3cc54e364_module, 'ACTIVE_WORKSTREAM_IDS')
+NEXT_EXECUTED_OUTCOME = getattr(_ember_24b81ae3cc54e364_module, 'NEXT_EXECUTED_OUTCOME')
+verify = getattr(_ember_24b81ae3cc54e364_module, 'verify')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/verify_authority_conservation.py
 from ember_01_identity import validate_identity as identity_validator
 from ember_01_identity.parameter_identity_binding import (
     ParameterIdentityMismatch,
     measure_live_checkpoint,
     verify_parameter_identity_binding,
 )
-from cond4_behavior_surface import (
-    COND4_AXES,
-    EXECUTION_SCHEMA as COND4_EXECUTION_SCHEMA,
-    SurfaceRefusal as Cond4SurfaceRefusal,
-    build_surface_manifest,
-    validate_execution_evidence,
-    validate_execution_packet,
-    validate_surface_manifest,
-)
+# issue2015 exact-local-import:src/ember/governance/scripts/cond4_behavior_surface.py
+import importlib.util as _ember_fb803101a82ee38f_importlib
+import sys as _ember_fb803101a82ee38f_sys
+from pathlib import Path as _ember_fb803101a82ee38f_Path
+_ember_fb803101a82ee38f_path = _ember_fb803101a82ee38f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'cond4_behavior_surface.py')
+if not _ember_fb803101a82ee38f_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/cond4_behavior_surface.py')
+_ember_fb803101a82ee38f_aliases = ('_ember_issue2015_fb803101a82ee38f', 'cond4_behavior_surface', 'scripts.cond4_behavior_surface')
+_ember_fb803101a82ee38f_existing = []
+for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
+    _ember_fb803101a82ee38f_candidate = _ember_fb803101a82ee38f_sys.modules.get(_ember_fb803101a82ee38f_alias)
+    if _ember_fb803101a82ee38f_candidate is not None and all(_ember_fb803101a82ee38f_candidate is not item for item in _ember_fb803101a82ee38f_existing):
+        _ember_fb803101a82ee38f_existing.append(_ember_fb803101a82ee38f_candidate)
+if len(_ember_fb803101a82ee38f_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/cond4_behavior_surface.py')
+if _ember_fb803101a82ee38f_existing:
+    _ember_fb803101a82ee38f_module = _ember_fb803101a82ee38f_existing[0]
+    _ember_fb803101a82ee38f_observed = getattr(_ember_fb803101a82ee38f_module, '__file__', None)
+    if _ember_fb803101a82ee38f_observed is None or _ember_fb803101a82ee38f_Path(_ember_fb803101a82ee38f_observed).resolve() != _ember_fb803101a82ee38f_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/cond4_behavior_surface.py')
+else:
+    _ember_fb803101a82ee38f_spec = _ember_fb803101a82ee38f_importlib.spec_from_file_location('_ember_issue2015_fb803101a82ee38f', _ember_fb803101a82ee38f_path)
+    if _ember_fb803101a82ee38f_spec is None or _ember_fb803101a82ee38f_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/cond4_behavior_surface.py')
+    _ember_fb803101a82ee38f_module = _ember_fb803101a82ee38f_importlib.module_from_spec(_ember_fb803101a82ee38f_spec)
+    for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
+        _ember_fb803101a82ee38f_prior = _ember_fb803101a82ee38f_sys.modules.get(_ember_fb803101a82ee38f_alias)
+        if _ember_fb803101a82ee38f_prior is not None and _ember_fb803101a82ee38f_prior is not _ember_fb803101a82ee38f_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cond4_behavior_surface.py')
+        _ember_fb803101a82ee38f_sys.modules[_ember_fb803101a82ee38f_alias] = _ember_fb803101a82ee38f_module
+    try:
+        _ember_fb803101a82ee38f_spec.loader.exec_module(_ember_fb803101a82ee38f_module)
+    except BaseException:
+        for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
+            if _ember_fb803101a82ee38f_sys.modules.get(_ember_fb803101a82ee38f_alias) is _ember_fb803101a82ee38f_module:
+                _ember_fb803101a82ee38f_sys.modules.pop(_ember_fb803101a82ee38f_alias, None)
+        raise
+for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
+    _ember_fb803101a82ee38f_prior = _ember_fb803101a82ee38f_sys.modules.get(_ember_fb803101a82ee38f_alias)
+    if _ember_fb803101a82ee38f_prior is not None and _ember_fb803101a82ee38f_prior is not _ember_fb803101a82ee38f_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cond4_behavior_surface.py')
+    _ember_fb803101a82ee38f_sys.modules[_ember_fb803101a82ee38f_alias] = _ember_fb803101a82ee38f_module
+COND4_AXES = getattr(_ember_fb803101a82ee38f_module, 'COND4_AXES')
+COND4_EXECUTION_SCHEMA = getattr(_ember_fb803101a82ee38f_module, 'EXECUTION_SCHEMA')
+Cond4SurfaceRefusal = getattr(_ember_fb803101a82ee38f_module, 'SurfaceRefusal')
+build_surface_manifest = getattr(_ember_fb803101a82ee38f_module, 'build_surface_manifest')
+validate_execution_evidence = getattr(_ember_fb803101a82ee38f_module, 'validate_execution_evidence')
+validate_execution_packet = getattr(_ember_fb803101a82ee38f_module, 'validate_execution_packet')
+validate_surface_manifest = getattr(_ember_fb803101a82ee38f_module, 'validate_surface_manifest')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/cond4_behavior_surface.py
 
 RESOLVED_TRUE = "resolved-true"
 RESOLVED_FALSE = "resolved-false"

@@ -1,6 +1,6 @@
 # repo-guard hashed name denylist — GENERATED, committed, contains NO names.
 # One sha256(lowercase-name) per line. Regenerate with:
-#   python tools/check_names_hashed.py --generate --denylist-plain <local-plaintext-file> --out src/ember/infrastructure/tools/repo-guard-denylist.sha256
+#   python src/ember/infrastructure/tools/check_names_hashed.py --generate --denylist-plain <local-plaintext-file> --out src/ember/infrastructure/tools/repo-guard-denylist.sha256
 #
 # Term classes (zero-FP coverage per #164 measurement):
 # - Bare-name terms t1..t13 (each measured 0 matches on master; raw terms live ONLY in the untracked plaintext source)

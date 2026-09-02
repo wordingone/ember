@@ -59,7 +59,7 @@ if str(_IDENTITY_DIR) not in sys.path:
 import importlib.util as _ember_21106b7bc55d9483_importlib
 import sys as _ember_21106b7bc55d9483_sys
 from pathlib import Path as _ember_21106b7bc55d9483_Path
-_ember_21106b7bc55d9483_path = _ember_21106b7bc55d9483_Path(__file__).resolve().parents[2].joinpath('scripts', 'ember_01_identity', 'census_consumers.py')
+_ember_21106b7bc55d9483_path = _ember_21106b7bc55d9483_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_01_identity', 'census_consumers.py')
 if not _ember_21106b7bc55d9483_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_01_identity/census_consumers.py')
 _ember_21106b7bc55d9483_aliases = ('_ember_issue2015_21106b7bc55d9483', 'census_consumers', 'scripts.ember_01_identity.census_consumers')

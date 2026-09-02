@@ -22,4 +22,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate issue structure
-        run: python -B scripts/github/issue_intake.py --event "$GITHUB_EVENT_PATH"
+        run: python -B src/ember/governance/scripts/github/issue_intake.py --event "$GITHUB_EVENT_PATH"

@@ -113,19 +113,19 @@ they cannot reduce, defer, replace, or reinterpret it.
     "unrecovered_direct_names_minimum": 2
   },
   "conservation_hashes": {
-    "authority_matrix_sha256": "D7E2AD4401CA11FAAAF289892838450842325516C9A08CA2AEA96FC1D4AF2D2F",
+    "authority_matrix_sha256": "4032A7C488B1AC495FDDDFB3AA439C9B94EE62D1A7F429D1EB684FEDF6080B25",
     "governing_surfaces_sha256": {
-      "docs/authority/CONTINUITY.md": "756F55C5D2D16C867E701B32E1E6C9B2A00533D50860690D5F926FAE22BBFD75",
-      "docs/authority/GOVERNANCE.md": "186CDC1E2DCBD34F0DEA1421E70CC8F70B7E9B906F3D04B2B2BEFDC5C69E980C",
-      "README.md": "7B85E47387A0F24963B9A73021EF4A9C869CEA1A15D93F31558C09D6AB8E7F0D",
-      "docs/authority/ember-authority-matrix.md": "D7E2AD4401CA11FAAAF289892838450842325516C9A08CA2AEA96FC1D4AF2D2F",
+      "docs/domains/governance/authority/CONTINUITY.md": "E035EC445170374446530037BA9115B72B0464DE15A9262B4F7BD1D9CD2D6507",
+      "docs/domains/governance/authority/GOVERNANCE.md": "E46CA8F60BA2686D509A13BF42B0A51B4FB339B2D9627F98786F953EAD1E53EA",
+      "README.md": "828B316BA1E88F722E81AA7CF7DEF92B7CB037F2A69E8C16C4F3E7EDBC68399A",
+      "docs/domains/governance/authority/ember-authority-matrix.md": "4032A7C488B1AC495FDDDFB3AA439C9B94EE62D1A7F429D1EB684FEDF6080B25",
       "docs/contracts/ember-floor-contract.md": "83816F1DE862F9DC4BBE90E73474F4E50F0E1AEF7C1A191F31C40683D0493AD1",
-      "docs/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
-      "docs/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
+      "docs/domains/governance/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
+      "docs/domains/governance/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
-      "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
-      "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/domains/governance/spec/conditions-v1.md": "FCE21A3CED04320D26769F7F1DB30425B49B0B43416D55E7E06B832F13C1E14D"
+      "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
+      "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
+      "docs/domains/governance/spec/conditions-v1.md": "FC0397870DC78CDEA995B9F31D5F209BFC91799769D8EABCDA67689BE6AB7187"
     }
   },
   "authority_only_goal": false,
@@ -236,17 +236,17 @@ they cannot reduce, defer, replace, or reinterpret it.
     "next_executed_outcome"
   ],
   "required_governing_surfaces": [
-    "docs/contracts/goal-clear-protocol.md",
+    "docs/domains/governance/contracts/goal-clear-protocol.md",
     "docs/contracts/nc2-own-technique-contract.md",
     "docs/contracts/ember-floor-contract.md",
-    "docs/contracts/goal-mode-mechanism.md",
-    "docs/contracts/registry-dispatch-gate-spec-v0.md",
-    "docs/spec/autonomy-relinquishment-ladder-v1.md",
+    "docs/domains/governance/contracts/goal-mode-mechanism.md",
+    "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md",
+    "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/domains/governance/spec/conditions-v1.md",
-    "docs/authority/ember-authority-matrix.md",
-    "docs/authority/GOVERNANCE.md",
+    "docs/domains/governance/authority/ember-authority-matrix.md",
+    "docs/domains/governance/authority/GOVERNANCE.md",
     "README.md",
-    "docs/authority/CONTINUITY.md"
+    "docs/domains/governance/authority/CONTINUITY.md"
   ],
   "schema": "ember-authority-v1",
   "totality": [
@@ -484,7 +484,7 @@ machinery are not progress without that link.
 
 ## 12. Completion and precedence
 
-docs/contracts/goal-clear-protocol.md defines the executable completion audit without
+docs/domains/governance/contracts/goal-clear-protocol.md defines the executable completion audit without
 changing this goal. docs/authority/ember-authority-matrix.md maps D-001 through D-062 to
 enforcement, historical evidence, and explicit open research. docs/domains/governance/authority/STATE.md resolves
 every current model, checkpoint, backend, and benchmark class.

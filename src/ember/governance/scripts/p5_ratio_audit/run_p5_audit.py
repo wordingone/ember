@@ -27,7 +27,7 @@ GROUNDING PASS (this authoring session, direct code reads, file:line cited
 so every pin below is either CONFIRMED-BY-CODE or an honest structural
 N/A -- never assumed):
   - Live QUANTIZER used for the grid step (Delta): the production QAT
-    fake-quant transform is scripts/timeshare_pretrain.py::_apply_fake_quant
+    fake-quant transform is src/ember/governance/scripts/timeshare_pretrain.py::_apply_fake_quant
     (mode="qat"), PER-CHANNEL granularity: for a torch.nn.Linear weight
     W (out_features, in_features), s = W.abs().amax(dim=1, keepdim=True)
     .clamp(min=1e-8) / 127.0 -- one scale per OUTPUT ROW (a "channel" =
@@ -41,7 +41,7 @@ N/A -- never assumed):
     targets, so it is the live quantizer this harness reads. Granularity
     pin = "per-channel (per-output-row), int8 grid, 127-level symmetric" --
     stamped every run, never assumed to be per-tensor or per-block.
-  - Muon optimizer: scripts/timeshare_pretrain.py::_muon_class/_Muon
+  - Muon optimizer: src/ember/governance/scripts/timeshare_pretrain.py::_muon_class/_Muon
     (line ~742-798). ns_steps default 5, coefficients (a,b,c) =
     (3.4445, -4.7750, 2.0315) -- the quintic Newton-Schulz iteration,
     copied verbatim below (same discipline as scripts/expc1/
@@ -52,7 +52,7 @@ N/A -- never assumed):
     a 2D weight that is not an embedding and not a head goes to Muon;
     everything else (embeddings, 1D norms/biases, heads) goes to AdamW.
   - optimizer_reset_on_resume: a REAL parameter name --
-    scripts/timeshare_pretrain.py::run_v0_segment(reset_optimizer_on_resume:
+    src/ember/governance/scripts/timeshare_pretrain.py::run_v0_segment(reset_optimizer_on_resume:
     bool = False, ...) (line ~1229). Ordinary continuation segments default
     False (optimizer state warm-loaded/carried on resume). The net2net
     grow-chain callers (scripts/cbase_grow_rung.py, scripts/
@@ -75,7 +75,7 @@ N/A -- never assumed):
     by diffing the two realized duplicate copies post-widen.
   - Rank projection (rho_rank / rho_grow): no production code path
     projects a Muon-eligible tensor into a rank-r subspace anywhere in
-    scripts/timeshare_pretrain.py or the cbase_grow_* family (grep-
+    src/ember/governance/scripts/timeshare_pretrain.py or the cbase_grow_* family (grep-
     confirmed). src/ember/governance/scripts/expc1/run_expc1_rank_sweep.py is a SEPARATE
     research harness exploring a hypothetical design; it is not wired into
     production. rho_rank / rho_grow are therefore N/A-by-construction
@@ -472,7 +472,7 @@ PRE_REGISTRATION = {
     "no_pass_bar_metrics": ["d_comm"],
     "scope_disclosures": [
         "quantizer granularity is PER-CHANNEL (per-output-row int8), "
-        "confirmed at scripts/timeshare_pretrain.py::_apply_fake_quant "
+        "confirmed at src/ember/governance/scripts/timeshare_pretrain.py::_apply_fake_quant "
         "mode='qat' -- NOT per-tensor and NOT genuinely sub-channel "
         "per-block; 'block' in this harness means one output-row scale.",
         "rho_rank/rho_grow are N/A-by-construction for all three "
@@ -615,7 +615,7 @@ def _read_e2b_paired_receipt():
 
 
 def _import_timeshare_pretrain():
-    """Reuse discipline (no duplicated math): scripts/timeshare_pretrain.py
+    """Reuse discipline (no duplicated math): src/ember/governance/scripts/timeshare_pretrain.py
     already implements fail-closed checkpoint read/load (read_manifest --
     manifest.json only, no tensor load; load_checkpoint -- sha256-verifies
     EVERY file in manifest['files'] before trusting any tensor) -- imported
@@ -642,7 +642,7 @@ def discover_checkpoints(models_root: str | None = None) -> dict:
     """v1.2 ground-truth discovery (team-lead ruling, 2026-07-06) against
     RUNG1_LINEAGE: the real, verified rung-1 pre-grow/post-grow pair.
     LIGHTWEIGHT -- reads only manifest.json via
-    scripts/timeshare_pretrain.py::read_manifest (no tensor load, no
+    src/ember/governance/scripts/timeshare_pretrain.py::read_manifest (no tensor load, no
     per-file sha verification beyond the manifest's own model.pt claim;
     the FULL per-file sha256 verification + ff-shape naming-collision guard
     happens in load_real_checkpoint() below, which reuses ::load_checkpoint
@@ -741,7 +741,7 @@ def discover_checkpoints(models_root: str | None = None) -> dict:
 
 def load_real_checkpoint(discovery_entry: dict, mmap_optimize: bool = False):
     """Full, fail-closed load of a real rung-1 checkpoint -- reuses
-    scripts/timeshare_pretrain.py::load_checkpoint (sha256-verifies EVERY
+    src/ember/governance/scripts/timeshare_pretrain.py::load_checkpoint (sha256-verifies EVERY
     file named in the checkpoint's OWN manifest.json['files'] dict --
     model.pt, optimizer.pt, rng.pt -- raising on any mismatch; "fail-closed
     if the shas on disk mismatch the manifests" per the v1.2 ruling item 4).
@@ -820,7 +820,7 @@ def load_real_checkpoint(discovery_entry: dict, mmap_optimize: bool = False):
 
 def _find_reset_flag(obj, depth: int = 5):
     """Recursively search for an 'optimizer_reset_on_resume' field
-    (verbatim key name, scripts/timeshare_pretrain.py::run_v0_segment
+    (verbatim key name, src/ember/governance/scripts/timeshare_pretrain.py::run_v0_segment
     parameter, receipted verbatim by scripts/cbase_grow_rung.py and
     src/ember/governance/scripts/cbase_grow_live.py). Returns bool or None if absent."""
     if depth <= 0 or not isinstance(obj, dict):
@@ -957,14 +957,14 @@ def verify_probe_batch_sha(path: str, expected_sha: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Live quantizer -- byte-identical copy of scripts/timeshare_pretrain.py
+# Live quantizer -- byte-identical copy of src/ember/governance/scripts/timeshare_pretrain.py
 # ::_apply_fake_quant(mode="qat") grid-step math (see module docstring
 # grounding pass). Per-channel (per-output-row) int8 grid.
 # ---------------------------------------------------------------------------
 
 def quant_delta_per_channel(weight):
     """Delta_b per output row (channel) for a 2D weight tensor (out, in),
-    IDENTICAL formula to scripts/timeshare_pretrain.py::_apply_fake_quant
+    IDENTICAL formula to src/ember/governance/scripts/timeshare_pretrain.py::_apply_fake_quant
     mode='qat': s = |W|.amax(dim=1, keepdim=True).clamp(min=1e-8) / 127.
     Returns a (out, 1) tensor -- the live grid step per channel."""
     import torch
@@ -1465,7 +1465,7 @@ def compute_d_comm_real_run(discovery: dict, grad_pre_gate, grad_post_gate,
     the rung-1 grow event. theta_k = the FF gate/up/down weights for
     `layer_index` from the real pre-grow checkpoint (step-00000730,
     production key convention, per build_v0_model's real-architecture
-    LlamaModel wrapper in scripts/timeshare_pretrain.py). G = the REAL
+    LlamaModel wrapper in src/ember/governance/scripts/timeshare_pretrain.py). G = the REAL
     production widen_state_dict. U_k / U_{k+1} = one Muon step in-copy,
     using each checkpoint's own LR and own momentum_buffer (pre-grow:
     parent-carried; post-grow: own -- both admissible per
@@ -2164,7 +2164,7 @@ def _muon_step_in_copy(weight, grad, momentum_buffer, lr, momentum=0.95,
                        nesterov=True, ns_steps=5):
     """One Muon step, IN COPY (returns a new weight tensor + new momentum
     buffer; never mutates the inputs). Byte-identical math to
-    scripts/timeshare_pretrain.py::_muon_class (self-contained copy, same
+    src/ember/governance/scripts/timeshare_pretrain.py::_muon_class (self-contained copy, same
     discipline as scripts/expc1). Generic over plain tensors -- reused by
     both the toy dry-run path below AND build_real_d_comm_closures() above
     (the real-checkpoint commutation-defect wiring); not toy-specific."""
@@ -2453,7 +2453,7 @@ def run_and_emit_live() -> Path:
     # authoring session (no real checkpoint file exists in this worktree).
     #
     # load_real_checkpoint() (real: full per-file sha256 verification via
-    # scripts/timeshare_pretrain.py::load_checkpoint + the ff-shape naming-
+    # src/ember/governance/scripts/timeshare_pretrain.py::load_checkpoint + the ff-shape naming-
     # collision guard) and compute_d_comm_real_run() (real: the v1.2-
     # upgraded headline commutation-defect wiring, reusing the already-
     # selftested compute_d_comm core) are both fully authored and ready.
@@ -2488,35 +2488,35 @@ def run_and_emit_live() -> Path:
     # write metrics artifact.
     try:
         import torch
-        # issue2015 exact-local-import:scripts/timeshare_pretrain.py
+        # issue2015 exact-local-import:src/ember/governance/scripts/timeshare_pretrain.py
         import importlib.util as _ember_d9c5c82c124e1dc8_importlib
         import sys as _ember_d9c5c82c124e1dc8_sys
         from pathlib import Path as _ember_d9c5c82c124e1dc8_Path
-        _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parents[5].joinpath('scripts', 'timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_path = _ember_d9c5c82c124e1dc8_Path(__file__).resolve().parent.joinpath('..', 'timeshare_pretrain.py')
         if not _ember_d9c5c82c124e1dc8_path.is_file():
-            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/timeshare_pretrain.py')
-        _ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'scripts.timeshare_pretrain', 'timeshare_pretrain')
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/timeshare_pretrain.py')
+        _ember_d9c5c82c124e1dc8_aliases = ('_ember_issue2015_d9c5c82c124e1dc8', 'src.ember.governance.scripts.timeshare_pretrain', 'timeshare_pretrain')
         _ember_d9c5c82c124e1dc8_existing = []
         for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
             _ember_d9c5c82c124e1dc8_candidate = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
             if _ember_d9c5c82c124e1dc8_candidate is not None and all(_ember_d9c5c82c124e1dc8_candidate is not item for item in _ember_d9c5c82c124e1dc8_existing):
                 _ember_d9c5c82c124e1dc8_existing.append(_ember_d9c5c82c124e1dc8_candidate)
         if len(_ember_d9c5c82c124e1dc8_existing) > 1:
-            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/timeshare_pretrain.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
         if _ember_d9c5c82c124e1dc8_existing:
             _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_existing[0]
             _ember_d9c5c82c124e1dc8_observed = getattr(_ember_d9c5c82c124e1dc8_module, '__file__', None)
             if _ember_d9c5c82c124e1dc8_observed is None or _ember_d9c5c82c124e1dc8_Path(_ember_d9c5c82c124e1dc8_observed).resolve() != _ember_d9c5c82c124e1dc8_path:
-                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/timeshare_pretrain.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/timeshare_pretrain.py')
         else:
             _ember_d9c5c82c124e1dc8_spec = _ember_d9c5c82c124e1dc8_importlib.spec_from_file_location('_ember_issue2015_d9c5c82c124e1dc8', _ember_d9c5c82c124e1dc8_path)
             if _ember_d9c5c82c124e1dc8_spec is None or _ember_d9c5c82c124e1dc8_spec.loader is None:
-                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/timeshare_pretrain.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/timeshare_pretrain.py')
             _ember_d9c5c82c124e1dc8_module = _ember_d9c5c82c124e1dc8_importlib.module_from_spec(_ember_d9c5c82c124e1dc8_spec)
             for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
                 _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
                 if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
-                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
                 _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
             try:
                 _ember_d9c5c82c124e1dc8_spec.loader.exec_module(_ember_d9c5c82c124e1dc8_module)
@@ -2528,11 +2528,11 @@ def run_and_emit_live() -> Path:
         for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
             _ember_d9c5c82c124e1dc8_prior = _ember_d9c5c82c124e1dc8_sys.modules.get(_ember_d9c5c82c124e1dc8_alias)
             if _ember_d9c5c82c124e1dc8_prior is not None and _ember_d9c5c82c124e1dc8_prior is not _ember_d9c5c82c124e1dc8_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/timeshare_pretrain.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/timeshare_pretrain.py')
             _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
         build_v0_model = getattr(_ember_d9c5c82c124e1dc8_module, 'build_v0_model')
         load_contract = getattr(_ember_d9c5c82c124e1dc8_module, 'load_contract')
-        # issue2015 exact-local-import-end:scripts/timeshare_pretrain.py
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/timeshare_pretrain.py
 
         # Performance mitigation: CPU contention from 8 scan workers + faulthandler for crashes
         torch.set_num_threads(2)

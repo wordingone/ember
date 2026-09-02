@@ -1028,7 +1028,7 @@ def run_working_set_dry_run(args) -> int:
         "device_working_set_floor_bytes": "UNPRODUCIBLE_DRY_RUN_ONLY",
         "device_working_set_floor_formula": ("cap_fraction * device_vram_total_bytes "
                                              "(torch.cuda.mem_get_info(), governor.env_limits() "
-                                             "convention -- scripts/timeshare_pretrain.py "
+                                             "convention -- src/ember/governance/scripts/timeshare_pretrain.py "
                                              "_apply_governor()) -- formula only, never computed "
                                              "here (no device touched)"),
         "governor_config_citation": governor_note,
@@ -1077,7 +1077,7 @@ def _verify_config_and_governor(cross_root: str):
 def run_working_set_live(args) -> int:
     """The real leg (spec section 3, issue #83). Loads the terminal rung
     checkpoint via the SAME model-build path as training (cross-repo
-    scripts/timeshare_pretrain.py's build_v0_model + _apply_governor,
+    src/ember/governance/scripts/timeshare_pretrain.py's build_v0_model + _apply_governor,
     imported, never reimplemented), runs ONE governed no_grad forward pass
     at the operating point, and measures CUDA peak-allocated bytes.
 
@@ -1607,7 +1607,7 @@ def _selftest() -> int:
         else:
             print("(9b) PASS: checkpoint sha mismatch -> S3_WORKING_SET_LIVE_CHECKPOINT_INVALID")
 
-        # (9c) valid checkpoint, missing configs/v0-pretrain-config.json
+        # (9c) valid checkpoint, missing domains/model/configs/v0-pretrain-config.json
         noconfig_root = os.path.join(ws_live_base, "no-config")
         ckpt_dir_c = os.path.join(noconfig_root, "models", "ckpt")
         _write_fixture_checkpoint(ckpt_dir_c, sha_ok=True)
@@ -1617,7 +1617,7 @@ def _selftest() -> int:
         if not (raised and "S3_WORKING_SET_LIVE_CONFIG_MISSING" in msg):
             failures.append(f"(9c) FAIL: missing config should refuse named wall, got raised={raised} msg={msg!r}")
         else:
-            print("(9c) PASS: missing configs/v0-pretrain-config.json -> S3_WORKING_SET_LIVE_CONFIG_MISSING")
+            print("(9c) PASS: missing domains/model/configs/v0-pretrain-config.json -> S3_WORKING_SET_LIVE_CONFIG_MISSING")
 
         # (9d) valid checkpoint + valid config, but no CUDA device reachable --
         # forced via monkeypatch (never relies on this machine's real GPU state),

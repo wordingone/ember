@@ -99,7 +99,7 @@ def update_state(repo_root: str, window_refs: list[str], claim_ts: str) -> bool:
         # Initialize state if it doesn't exist
         state = {
             "schema": "autonomy-relinquishment-ladder-v1",
-            "contract": "docs/spec/autonomy-relinquishment-ladder-v1.md",
+            "contract": "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
             "current_rung": None,
             "rungs": {
                 "R0": {"claimed": False, "windows": []},

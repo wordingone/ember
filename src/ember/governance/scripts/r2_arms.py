@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """r2_arms.py — Round-2 arm registry and shared helpers (eng #30, issue #106).
 
 Three pre-registered arms:
@@ -147,7 +150,7 @@ def brier(predicted_by_task, outcomes_by_task):
     import importlib.util as _ember_20ff095fccbc3bd0_importlib
     import sys as _ember_20ff095fccbc3bd0_sys
     from pathlib import Path as _ember_20ff095fccbc3bd0_Path
-    _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
+    _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
     if not _ember_20ff095fccbc3bd0_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/calibrate.py')
     _ember_20ff095fccbc3bd0_aliases = ('_ember_issue2015_20ff095fccbc3bd0', 'calibrate', 'scripts.calibrate')
@@ -370,7 +373,7 @@ def _selftest():
     import importlib.util as _ember_20ff095fccbc3bd0_importlib
     import sys as _ember_20ff095fccbc3bd0_sys
     from pathlib import Path as _ember_20ff095fccbc3bd0_Path
-    _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
+    _ember_20ff095fccbc3bd0_path = _ember_20ff095fccbc3bd0_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'calibrate.py')
     if not _ember_20ff095fccbc3bd0_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/calibrate.py')
     _ember_20ff095fccbc3bd0_aliases = ('_ember_issue2015_20ff095fccbc3bd0', 'calibrate', 'scripts.calibrate')

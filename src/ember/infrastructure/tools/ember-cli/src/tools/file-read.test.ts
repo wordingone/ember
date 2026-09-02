@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // tools/file-read.test.ts — issue #192: the Read tool's "File unchanged since last
 // read" cross-turn stub blinded models whose context never actually received the
 // content (a turn can be abandoned or compacted away between reads). The stub

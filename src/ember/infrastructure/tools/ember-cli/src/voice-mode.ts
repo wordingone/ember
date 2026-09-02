@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // voice-mode.ts — Voice-mode availability checks.
 // Voice mode requires: (a) cloud auth with a valid access token, and
 // (b) the VOICE_MODE feature flag enabled without the kill-switch active.

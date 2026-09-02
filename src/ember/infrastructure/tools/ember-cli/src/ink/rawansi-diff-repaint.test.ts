@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // rawansi-diff-repaint.test.ts — probe for a suspected rendering-pipeline gap found while
 // verifying the fireball's live-binary animation (increment 6 step B, operator regrade
 // 2026-07-03). PTY capture on the compiled binary showed the fireball's rendered rows IDENTICAL

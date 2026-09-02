@@ -19,7 +19,7 @@ machine-readable replay set is
 2. Verify authority conservation:
 
    ```text
-   python scripts/verify_authority_conservation.py --root .
+   python src/ember/governance/scripts/verify_authority_conservation.py --root .
    ```
 
    Requires CPU only and should report a passing authority certificate.

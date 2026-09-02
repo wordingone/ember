@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // feedback.ts — /feedback slash command.
 // Submits product feedback. Disabled on managed cloud platforms, for internal
 // users, in essential-traffic mode, and when the relevant policy is denied.

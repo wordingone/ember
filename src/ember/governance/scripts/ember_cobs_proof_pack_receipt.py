@@ -131,7 +131,7 @@ def main() -> int:
         "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         "ticket": "C-OBS-PROOF-PACK",
         "kind": "ember-c-obs-proof-pack-receipt",
-        # Authority binding (scripts/verify_authority_conservation.py leg 4,
+        # Authority binding (src/ember/governance/scripts/verify_authority_conservation.py leg 4,
         # artifact.goal_binding) and the sha-claim convention every hash field in
         # this receipt is computed under (src/ember/governance/scripts/receipt_check.py R2).
         "goal_id": "EMBER-02",

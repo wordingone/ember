@@ -163,7 +163,7 @@ from scripts.ember_totality import receipt_chain_verify
 import importlib.util as _ember_39e1b9f43e5ffbf4_importlib
 import sys as _ember_39e1b9f43e5ffbf4_sys
 from pathlib import Path as _ember_39e1b9f43e5ffbf4_Path
-_ember_39e1b9f43e5ffbf4_path = _ember_39e1b9f43e5ffbf4_Path(__file__).resolve().parents[5].joinpath('scripts', 'redact_local_paths.py')
+_ember_39e1b9f43e5ffbf4_path = _ember_39e1b9f43e5ffbf4_Path(__file__).resolve().parent.joinpath('..', 'redact_local_paths.py')
 if not _ember_39e1b9f43e5ffbf4_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/redact_local_paths.py')
 _ember_39e1b9f43e5ffbf4_aliases = ('_ember_issue2015_39e1b9f43e5ffbf4', 'redact_local_paths', 'src.ember.governance.scripts.redact_local_paths')
@@ -1026,7 +1026,7 @@ def run_probe(path, env):
 
 
 def compute_working_set(repo_root=None, *, tracked_override=None, include_open_issues=True):
-    """Repo hygiene working-set metric (docs/authority/GOVERNANCE.md §9 / issue #488).
+    """Repo hygiene working-set metric (docs/domains/governance/authority/GOVERNANCE.md §9 / issue #488).
 
     Cheap git/glob-only counts appended to each board receipt's summary so
     the SIM/review can watch working-set size trend against battery-grade

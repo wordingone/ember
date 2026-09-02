@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // chrome-stack.test.ts — B6 W4': the bottom fixed-chrome stack (fireball, prompt, status bar)
 // must obey a strict compression contract under a tall-transcript / vertical-space-starved
 // scenario: status bar pinned to the TRUE last row; prompt row NEVER absent; fireball is the

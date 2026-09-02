@@ -65,7 +65,7 @@
 ### Task 4: Versioned deployment lifecycle
 
 **Files:**
-- Create: `scripts/install-ember-desktop.ps1`
+- Create: `src/ember/governance/scripts/install-ember-desktop.ps1`
 - Modify: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**
@@ -79,7 +79,7 @@
 ### Task 5: Real Windows shortcut adapter
 
 **Files:**
-- Modify: `scripts/install-ember-desktop.ps1`
+- Modify: `src/ember/governance/scripts/install-ember-desktop.ps1`
 - Modify: `src/ember/governance/scripts/ember-desktop-deployment-selftest.ps1`
 
 **Interfaces:**

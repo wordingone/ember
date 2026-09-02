@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 # wall-audit.sh — clean-room wall enforcement for ember-cli implementers.
 #
 # A WALLED implementer must NEVER read avir-cli source. This script greps an agent's

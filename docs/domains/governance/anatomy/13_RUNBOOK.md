@@ -41,7 +41,7 @@ committing, per 10_RECEIPTS_PROVENANCE.md.
 ## Verify authority conservation
 
 ```bash
-python scripts/verify_authority_conservation.py --root .
+python src/ember/governance/scripts/verify_authority_conservation.py --root .
 ```
 Prints `EMBER_AUTHORITY_CONSERVATION PASS` or `FAIL <leg> <finding>`. Also
 runs automatically inside the repo-guard commit/push hooks.

@@ -22,7 +22,7 @@ if SCRIPTS not in sys.path:
 import importlib.util as _ember_2cfe4d529b68f0f8_importlib
 import sys as _ember_2cfe4d529b68f0f8_sys
 from pathlib import Path as _ember_2cfe4d529b68f0f8_Path
-_ember_2cfe4d529b68f0f8_path = _ember_2cfe4d529b68f0f8_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_model_v0_multimodal.py')
+_ember_2cfe4d529b68f0f8_path = _ember_2cfe4d529b68f0f8_Path(__file__).resolve().parent.joinpath('ember_model_v0_multimodal.py')
 if not _ember_2cfe4d529b68f0f8_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_model_v0_multimodal.py')
 _ember_2cfe4d529b68f0f8_aliases = ('_ember_issue2015_2cfe4d529b68f0f8', 'ember_model_v0_multimodal', 'src.ember.governance.scripts.ember_model_v0_multimodal')

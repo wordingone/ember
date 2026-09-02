@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // in-process-teammate-task.ts — task and message-delivery for an in-process teammate agent.
 // The factory returns { task, delivery } so the runtime layer can push messages into
 // the task's inbox without the task holding a direct reference to the runner.

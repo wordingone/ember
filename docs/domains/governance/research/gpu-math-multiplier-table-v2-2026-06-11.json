@@ -3,7 +3,7 @@
  "ts": "2026-06-11T06:30Z",
  "run": "wxgtzfcg1",
  "agents": 127,
- "version_status": "VERSION-ACTIVE (issue #248 item 4, 2026-07-06) — this 127-agent pass is the live gpu-math-multiplier-table; it supersedes docs/domains/governance/research/gpu-math-multiplier-table-2026-06-11.json (the 24-agent first pass). configs/v0-pretrain-config.json's basis field and every baseline/ citation of this table already treat this file as the survivor stack. Cite this file, not the non-v2 one, for current multiplier values.",
+ "version_status": "VERSION-ACTIVE (issue #248 item 4, 2026-07-06) — this 127-agent pass is the live gpu-math-multiplier-table; it supersedes docs/domains/governance/research/gpu-math-multiplier-table-2026-06-11.json (the 24-agent first pass). domains/model/configs/v0-pretrain-config.json's basis field and every baseline/ citation of this table already treat this file as the survivor stack. Cite this file, not the non-v2 one, for current multiplier values.",
  "multiplier_table": [
   {
    "technique": "int4 weight-only W4A16 decode kernels (Marlin / AWQ-Marlin / GPTQ-Marlin) in vLLM for the batch-1 episode sampler",

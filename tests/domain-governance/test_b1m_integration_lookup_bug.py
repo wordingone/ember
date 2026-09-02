@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Integration test: phase_b1m momentum lookup bug demonstration.
 
 This test demonstrates the actual bug: phase_b1m tries to look up momentum

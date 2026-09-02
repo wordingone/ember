@@ -16,7 +16,7 @@ the function's own math is unchanged (same tolerance, same comparison set,
 still passes) so the memory fix did not alter the deterministic proof.
 
 NOTE on module reachability (see PR body / issue #406 closing comment for
-the full finding): scripts/timeshare_pretrain.py was locked to
+the full finding): src/ember/governance/scripts/timeshare_pretrain.py was locked to
 EMBER_ARTIFACT_CLASS=historical_only (unconditional `raise SystemExit(...)`
 at import time) by 4f758db "fix: lock Ember authority and totality"
 (2026-07-12), four days after this issue was filed. cbase_grow_live.py does
@@ -64,7 +64,7 @@ live_mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(live_mod)
 for _alias in (
     "timeshare_pretrain",
-    "scripts.timeshare_pretrain",
+    "src.ember.governance.scripts.timeshare_pretrain",
     "_ember_issue2015_d9c5c82c124e1dc8",
 ):
     if sys.modules.get(_alias) is _STUB:

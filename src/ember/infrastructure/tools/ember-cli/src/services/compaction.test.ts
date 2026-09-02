@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // services/compaction.test.ts — behavioral tests for the real compaction service.
 // Asserts micro-compaction actually trims (and only when over budget) and that
 // auto-compaction summarizes-and-replaces while failing safe on model errors.

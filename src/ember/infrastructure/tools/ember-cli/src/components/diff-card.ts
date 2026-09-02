@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // components/diff-card.ts — Word-level diff visual component.
 // Renders a unified diff with word-level red/green coloring (word-level, not
 // raw line-level ●/└ or plain-text unified diff string).

@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-CHECKER = REPO / "scripts" / "check_changed_receipts.py"
+CHECKER = REPO / "src" / "ember" / "governance" / "scripts" / "check_changed_receipts.py"
 INVARIANT = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 
@@ -67,7 +67,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
         root = Path(td)
         self.write_json(
             root,
-            "tools/frozen-receipt-exceptions.json",
+            "src/ember/infrastructure/tools/frozen-receipt-exceptions.json",
             {"schema": "frozen-receipt-exceptions-v1", "entries": list(entries)},
         )
         return root
@@ -212,7 +212,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
             relative, digest = self.frozen_fixture(root)
             self.write_json(
                 root,
-                "tools/frozen-receipt-exceptions.json",
+                "src/ember/infrastructure/tools/frozen-receipt-exceptions.json",
                 {
                     "schema": "frozen-receipt-exceptions-v1",
                     "entries": [
@@ -236,7 +236,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
             relative, _ = self.frozen_fixture(root)
             self.write_json(
                 root,
-                "tools/frozen-receipt-exceptions.json",
+                "src/ember/infrastructure/tools/frozen-receipt-exceptions.json",
                 {
                     "schema": "frozen-receipt-exceptions-v1",
                     "entries": [
@@ -292,7 +292,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
             relative, digest = self.frozen_jsonl_fixture(root)
             self.write_json(
                 root,
-                "tools/frozen-receipt-exceptions.json",
+                "src/ember/infrastructure/tools/frozen-receipt-exceptions.json",
                 {
                     "schema": "frozen-receipt-exceptions-v1",
                     "entries": [
@@ -316,7 +316,7 @@ class ChangedReceiptGateTests(unittest.TestCase):
             relative, _ = self.frozen_jsonl_fixture(root)
             self.write_json(
                 root,
-                "tools/frozen-receipt-exceptions.json",
+                "src/ember/infrastructure/tools/frozen-receipt-exceptions.json",
                 {
                     "schema": "frozen-receipt-exceptions-v1",
                     "entries": [

@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """t2_r2_sft.py — Round-2 SFT arm wrapper (eng #30, issue #106).
 
 Plain SFT baseline arm for round-2. Matches the daemon-wrapper shape of

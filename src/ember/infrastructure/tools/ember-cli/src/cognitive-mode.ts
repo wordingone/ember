@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // cognitive-mode.ts — pure module: CognitiveMode/LoopPhase types, derivation, and glyph table.
 // No intra-project imports (L2 leaf). No side effects at module load.
 

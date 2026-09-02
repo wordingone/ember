@@ -42,10 +42,10 @@ one into another.
   `manifests/python-environment-v1.json`; Rust uses `runtime/ember-lab/Cargo.toml`; `ember-cli` uses
   `tools/ember-cli/src/package.json`.
 - The smallest safe executable check is CPU-only authority verification from the repository root:
-  `python scripts/verify_authority_conservation.py --root .`. Success reports authority
+  `python src/ember/governance/scripts/verify_authority_conservation.py --root .`. Success reports authority
   conservation; it requires no credentials, weights, or GPU and grants no model capability.
 - Exact mutable current truth lives only in
-  [`docs/authority/CONTINUITY.md`](docs/authority/CONTINUITY.md); this README links rather than
+  [`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md); this README links rather than
   copying it. Public roadmap certificates, not prose or progress bars, carry completion.
 - Contribution and independent reproduction start at
   [`docs/contributing.md`](docs/contributing.md) and the public
@@ -53,7 +53,7 @@ one into another.
   documented commands, and verify source identities and receipts without hidden or local evidence.
 
 Start with the [first-reader route](docs/domains/governance/guides/START-HERE.md), or use the
-[documentation map](docs/DOCS-README.md) to choose a route by task, audience, or technical domain.
+[documentation map](docs/domains/governance/DOCS-README.md) to choose a route by task, audience, or technical domain.
 
 ## Architecture
 
@@ -61,7 +61,7 @@ The adopted domains are Model, Data, Training, Evaluation, Runtime, Lab, Infrast
 Governance. Lab integrates experiments across the declared domain interfaces; it does not replace
 their authority. Infrastructure and Governance are cross-cutting. The
 [system overview](docs/architecture/system-overview.md) explains the boundaries, dependencies, and
-implemented-versus-designed state, and the [domain index](docs/DOCS-README.md#technical-domains)
+implemented-versus-designed state, and the [domain index](docs/domains/governance/DOCS-README.md#technical-domains)
 links each canonical overview.
 
 ## Inspect or install
@@ -91,7 +91,7 @@ operator or training surfaces.
 The smallest safe default is CPU-only authority verification from the repository root:
 
 ```text
-python scripts/verify_authority_conservation.py --root .
+python src/ember/governance/scripts/verify_authority_conservation.py --root .
 ```
 
 For a smaller demonstration of receipt semantics, run:
@@ -108,7 +108,7 @@ public replay set.
 
 <a id="ember.claim.mutable-state-owner"></a>
 Exact mutable state lives in
-[`docs/authority/CONTINUITY.md`](docs/authority/CONTINUITY.md). This README links to that owner and
+[`docs/domains/governance/authority/CONTINUITY.md`](docs/domains/governance/authority/CONTINUITY.md). This README links to that owner and
 does not duplicate its rapidly changing identities. Public milestone contracts and certificates
 live under the [roadmap](docs/domains/governance/roadmap/README.md); a certificate, not a progress bar, carries a
 completion claim.
@@ -121,9 +121,9 @@ completion claim.
 - Verify evidence: [verification guide](docs/guides/VERIFY.md) and
   [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md).
 - Operate it: [operator documentation](docs/domains/governance/operator/README.md).
-- Audit authority: [continuity](docs/authority/CONTINUITY.md),
+- Audit authority: [continuity](docs/domains/governance/authority/CONTINUITY.md),
   [invariant](docs/authority/INVARIANT.md), and
-  [governance](docs/authority/GOVERNANCE.md).
+  [governance](docs/domains/governance/authority/GOVERNANCE.md).
 - Browse every current entry document: [generated canonical index](docs/INDEX.md).
 
 ## Contributing

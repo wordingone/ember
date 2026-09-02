@@ -43,7 +43,7 @@ const TRAINING_CONFIG_RELATIVE_PATH: &str = "configs/ember-restart-3b.json";
 const TOKENIZER_RELATIVE_PATH: &str = "domains/model/tokenizer/tokenizer.json";
 const INPUT_IDENTITY_SCHEMA_VERSION: &str = "ember-input-identity-v1";
 const PRODUCTION_RUNG_ARTIFACT_ID: &str = "owned-four-domain-production-rung-v1";
-// Mirrors tools/ember-restart-3b/production_rung.py's SHARD_RELATIVE/RECEIPT_RELATIVE
+// Mirrors src/ember/infrastructure/tools/ember-restart-3b/production_rung.py's SHARD_RELATIVE/RECEIPT_RELATIVE
 // constants -- ported by literal value, not by executing Python, exactly as this module's
 // docstring above scopes the port (declaration+hash half only, no Python execution).
 const PRODUCTION_RUNG_SHARD_RELATIVE: &str =

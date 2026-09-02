@@ -3,7 +3,7 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 // core/goal-store.ts — persisted goal state machine (ember issue #211, spec:
-// docs/contracts/goal-mode-mechanism.md "Selection and persistence"). Data model:
+// docs/domains/governance/contracts/goal-mode-mechanism.md "Selection and persistence"). Data model:
 // goal_id, objective (max 4000
 // chars, immutable to the model), status machine, optional token_budget,
 // system-tallied usage. Objective immutability is enforced AT THE API LAYER

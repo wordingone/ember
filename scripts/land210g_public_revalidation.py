@@ -89,13 +89,13 @@ LINEAGE_COMMITS = {
 }
 
 EXPECTED_LATER_CHANGES = {
-    "scripts/conv_c03_muon_ns3_live.py": {
+    "src/ember/governance/scripts/conv_c03_muon_ns3_live.py": {
         "sha256": "d45f8ac529a3d4febf3ae7253093e4d357dcc6708f032b1d6fd6f7fc2c324204",
         "last_change_commit": "4f758db0ec11b5089698d80215a1145d48ef7537",
         "public_pr": "https://github.com/wordingone/ember/pull/807",
         "disposition": "later authority-and-totality lock",
     },
-    "scripts/ember_cbase_mixture.py": {
+    "src/ember/governance/scripts/ember_cbase_mixture.py": {
         "sha256": "2b74e18b585d50c4b092a21c3bbeb18694bcabd37b1d20a580dd3742221fda36",
         "last_change_commit": "7ea8b38b3ea727495e392884ee53c49a3697113e",
         "public_pr": "https://github.com/wordingone/ember/pull/1132",

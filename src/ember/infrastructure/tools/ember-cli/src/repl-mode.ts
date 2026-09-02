@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // repl-mode.ts — REPL mode detection and primitive-tool filtering.
 // Covers AC1–AC6.
 

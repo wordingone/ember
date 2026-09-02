@@ -11,7 +11,7 @@
     "the_prior_evidence_is_pinned_to_a_tree_that_no_longer_exists": "The resident-training gate receipts report component_status values that would, read naively, discharge several of these rows: paper_source_preflight PASS, train_multimodal_adapter PASS, train_multimodal_floor_contract PASS, native_goal_organ PASS, recursive_query_policy PASS, verifier_conditioned_update PASS. Every one of those verdicts is bound to artifact hashes that have since drifted from master, so none of them can be inherited as current.",
     "measured_drift": [
       {
-        "path": "scripts/train_multimodal_v0.py",
+        "path": "src/ember/governance/scripts/train_multimodal_v0.py",
         "hash_pinned_by_gate_receipts": "89283f362778c7072bab81f4d5bbbd3d4b6393788c2a504469232d073cf49e90",
         "hash_at_master": "af4cb2159c0e9b6413d1e287a209c2a5ee6f61496f66832bb19950590f2a5ba9",
         "state": "DRIFTED"
@@ -63,7 +63,7 @@
     },
     "DEBT-008": {
       "status": "OPEN",
-      "blocker": "The row requires a gate receipt pinning scripts/train_multimodal_v0.py's hash plus A/B/C/deleted neural evidence. The only receipts pinning that hash pin 89283f36..., which is not the file at master (af4cb215...), so the integration evidence no longer describes the tree. Re-establishing it requires a fresh gate run, which the selftest blocker prevents, and neural evidence, which requires training."
+      "blocker": "The row requires a gate receipt pinning src/ember/governance/scripts/train_multimodal_v0.py's hash plus A/B/C/deleted neural evidence. The only receipts pinning that hash pin 89283f36..., which is not the file at master (af4cb215...), so the integration evidence no longer describes the tree. Re-establishing it requires a fresh gate run, which the selftest blocker prevents, and neural evidence, which requires training."
     },
     "DEBT-010": {
       "status": "OPEN",

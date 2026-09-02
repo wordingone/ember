@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // commit-push-pr.ts — /commit-push-pr slash command.
 // Builds a prompt that instructs the model to stage, commit, push, and open a
 // PR, pre-seeded with the current git context gathered via shell commands.

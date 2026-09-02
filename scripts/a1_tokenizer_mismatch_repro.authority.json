@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/a1_tokenizer_mismatch_repro.py",
-  "artifact_sha256": "182c55f1c37a1632d2cb4d10cb31337e248187f10f293d64d9197884192955df",
+  "artifact_sha256": "0e0eff44cd68722bf1f82816563414a2ce0ef88f58255fe29b59444d3cc29307",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

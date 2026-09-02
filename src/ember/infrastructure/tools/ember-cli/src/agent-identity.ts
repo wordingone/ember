@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // agent-identity.ts — product identity constants for the Ember CLI.
 // L1 leaf: no intra-ember dependencies.
 

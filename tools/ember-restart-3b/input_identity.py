@@ -126,7 +126,53 @@ def resolve_input_identity(
     receipt_relative: str | None = None
     receipt_sha256: str | None = None
     if artifact_id == "owned-four-domain-production-rung-v1":
-        from production_rung import ARTIFACT_ID, RECEIPT_RELATIVE, SHARD_RELATIVE, verify_bound_rung
+        # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py
+        import importlib.util as _ember_3829b656d5b6642f_importlib
+        import sys as _ember_3829b656d5b6642f_sys
+        from pathlib import Path as _ember_3829b656d5b6642f_Path
+        _ember_3829b656d5b6642f_path = _ember_3829b656d5b6642f_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'production_rung.py')
+        if not _ember_3829b656d5b6642f_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py')
+        _ember_3829b656d5b6642f_aliases = ('_ember_issue2015_3829b656d5b6642f', 'production_rung', 'tools.ember-restart-3b.production_rung')
+        _ember_3829b656d5b6642f_existing = []
+        for _ember_3829b656d5b6642f_alias in _ember_3829b656d5b6642f_aliases:
+            _ember_3829b656d5b6642f_candidate = _ember_3829b656d5b6642f_sys.modules.get(_ember_3829b656d5b6642f_alias)
+            if _ember_3829b656d5b6642f_candidate is not None and all(_ember_3829b656d5b6642f_candidate is not item for item in _ember_3829b656d5b6642f_existing):
+                _ember_3829b656d5b6642f_existing.append(_ember_3829b656d5b6642f_candidate)
+        if len(_ember_3829b656d5b6642f_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py')
+        if _ember_3829b656d5b6642f_existing:
+            _ember_3829b656d5b6642f_module = _ember_3829b656d5b6642f_existing[0]
+            _ember_3829b656d5b6642f_observed = getattr(_ember_3829b656d5b6642f_module, '__file__', None)
+            if _ember_3829b656d5b6642f_observed is None or _ember_3829b656d5b6642f_Path(_ember_3829b656d5b6642f_observed).resolve() != _ember_3829b656d5b6642f_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py')
+        else:
+            _ember_3829b656d5b6642f_spec = _ember_3829b656d5b6642f_importlib.spec_from_file_location('_ember_issue2015_3829b656d5b6642f', _ember_3829b656d5b6642f_path)
+            if _ember_3829b656d5b6642f_spec is None or _ember_3829b656d5b6642f_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py')
+            _ember_3829b656d5b6642f_module = _ember_3829b656d5b6642f_importlib.module_from_spec(_ember_3829b656d5b6642f_spec)
+            for _ember_3829b656d5b6642f_alias in _ember_3829b656d5b6642f_aliases:
+                _ember_3829b656d5b6642f_prior = _ember_3829b656d5b6642f_sys.modules.get(_ember_3829b656d5b6642f_alias)
+                if _ember_3829b656d5b6642f_prior is not None and _ember_3829b656d5b6642f_prior is not _ember_3829b656d5b6642f_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py')
+                _ember_3829b656d5b6642f_sys.modules[_ember_3829b656d5b6642f_alias] = _ember_3829b656d5b6642f_module
+            try:
+                _ember_3829b656d5b6642f_spec.loader.exec_module(_ember_3829b656d5b6642f_module)
+            except BaseException:
+                for _ember_3829b656d5b6642f_alias in _ember_3829b656d5b6642f_aliases:
+                    if _ember_3829b656d5b6642f_sys.modules.get(_ember_3829b656d5b6642f_alias) is _ember_3829b656d5b6642f_module:
+                        _ember_3829b656d5b6642f_sys.modules.pop(_ember_3829b656d5b6642f_alias, None)
+                raise
+        for _ember_3829b656d5b6642f_alias in _ember_3829b656d5b6642f_aliases:
+            _ember_3829b656d5b6642f_prior = _ember_3829b656d5b6642f_sys.modules.get(_ember_3829b656d5b6642f_alias)
+            if _ember_3829b656d5b6642f_prior is not None and _ember_3829b656d5b6642f_prior is not _ember_3829b656d5b6642f_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py')
+            _ember_3829b656d5b6642f_sys.modules[_ember_3829b656d5b6642f_alias] = _ember_3829b656d5b6642f_module
+        ARTIFACT_ID = getattr(_ember_3829b656d5b6642f_module, 'ARTIFACT_ID')
+        RECEIPT_RELATIVE = getattr(_ember_3829b656d5b6642f_module, 'RECEIPT_RELATIVE')
+        SHARD_RELATIVE = getattr(_ember_3829b656d5b6642f_module, 'SHARD_RELATIVE')
+        verify_bound_rung = getattr(_ember_3829b656d5b6642f_module, 'verify_bound_rung')
+        # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/production_rung.py
 
         if artifact_id != ARTIFACT_ID or shard_relative != SHARD_RELATIVE:
             raise InputIdentityError("wrong_identity", "production rung identity does not bind the canonical owned shard")

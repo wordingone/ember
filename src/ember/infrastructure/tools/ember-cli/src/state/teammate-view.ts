@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Teammate view state and helpers for multi-agent coordinator mode.
 // One panel visible at a time; entering B while A is shown exits A first.
 

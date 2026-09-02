@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """verifier_interface.py — Verifier-conditioning contract layer for C14.
 
 Defines the VerifierProtocol ABC (scalar and generative-judge variants),

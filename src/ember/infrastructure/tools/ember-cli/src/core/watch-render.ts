@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // core/watch-render.ts — small receipts-tail helpers used by commands/world-state.ts's /cockpit
 // (/board) "monitor" turn: scans the goalforge root's receipts/ tree for the newest N files and
 // renders a short "<path> (<age>)" tail alongside the board panel.

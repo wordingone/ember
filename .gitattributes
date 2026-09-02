@@ -26,11 +26,12 @@ probes/** -text
 docs/domains/governance/authority/GOAL.md -text
 docs/domains/governance/archive/pre-restart/formalization-v0.md -text
 # Updated 2026-07-06 (#230): #219 renamed config/ -> configs/ but missed these
-# three exact-path pins, silently exposing configs/v0-pretrain-config.json (the
+# three exact-path pins, silently exposing domains/model/configs/v0-pretrain-config.json (the
 # NC-K governor-headroom-config manifest entry) to LF normalization.
-configs/v0-pretrain-config.json -text
-configs/nck-invariants.json -text
+domains/model/configs/v0-pretrain-config.json -text
+domains/model/configs/nck-invariants.json -text
 configs/nck-baseline/** -text
+domains/model/configs/nck-baseline/** -text
 # scripts and hooks: enforce LF (prevents CRLF creep on Windows checkouts)
 *.sh text eol=lf
 *.py text eol=lf

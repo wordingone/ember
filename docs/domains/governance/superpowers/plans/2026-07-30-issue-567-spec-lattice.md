@@ -52,8 +52,8 @@
 ### Task 3: Trusted live-PR enforcement
 
 **Files:**
-- Modify: `scripts/github/live_pr_policy.py`
-- Create: `scripts/github/test_live_pr_spec_floor.py`
+- Modify: `src/ember/governance/scripts/github/live_pr_policy.py`
+- Create: `src/ember/governance/scripts/github/test_live_pr_spec_floor.py`
 - Modify: `src/ember/governance/scripts/github/test_live_pr_workflow_integration.py`
 - Modify: `.github/workflows/repo-policy-gate.yml`
 
@@ -72,7 +72,7 @@
 **Files:**
 - Verify all changed files above.
 
-- [ ] Run focused tests, `python -B src/ember/governance/scripts/check_docs_freshness.py --repo .`, `python -B scripts/github/workflow_policy.py --root .`, and repository guard.
+- [ ] Run focused tests, `python -B src/ember/governance/scripts/check_docs_freshness.py --repo .`, `python -B src/ember/governance/scripts/github/workflow_policy.py --root .`, and repository guard.
 - [ ] Confirm `git diff --check`, exact scope, and clean generated state.
 - [ ] Commit, push, open the canonical self-review PR, obtain exact-head review, and require `guard`, `compiled-lifecycle`, and `ci-pr`.
 - [ ] Squash merge, verify trusted `ci-main`, recapture issue #567, execute the trusted close-half only if every issue clause is proven, and record rollback evidence.

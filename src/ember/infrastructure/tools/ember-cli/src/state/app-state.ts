@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // Central immutable application state tree. All mutable state changes flow
 // through the store; this module defines the shape and factory functions only.
 

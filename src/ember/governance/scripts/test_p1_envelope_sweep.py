@@ -6,7 +6,7 @@ src/ember/governance/scripts/p1_envelope_sweep.py (issue #118, this lane's froze
 
 Both tests are CPU-only and fast (no CUDA, no real corpus, no decontam
 gate, no network) -- matching the repo's existing pytest convention
-(scripts/test_w1_live_gates.py).
+(src/ember/governance/scripts/test_w1_live_gates.py).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ if HERE not in sys.path:
 import importlib.util as _ember_28f42e29e3fb41af_importlib
 import sys as _ember_28f42e29e3fb41af_sys
 from pathlib import Path as _ember_28f42e29e3fb41af_Path
-_ember_28f42e29e3fb41af_path = _ember_28f42e29e3fb41af_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'p1_envelope_sweep.py')
+_ember_28f42e29e3fb41af_path = _ember_28f42e29e3fb41af_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'p1_envelope_sweep.py')
 if not _ember_28f42e29e3fb41af_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/p1_envelope_sweep.py')
 _ember_28f42e29e3fb41af_aliases = ('_ember_issue2015_28f42e29e3fb41af', 'p1_envelope_sweep', 'scripts.p1_envelope_sweep')
@@ -69,7 +69,7 @@ sweep = _ember_28f42e29e3fb41af_module
 import importlib.util as _ember_85e76a5cb35a8ea2_importlib
 import sys as _ember_85e76a5cb35a8ea2_sys
 from pathlib import Path as _ember_85e76a5cb35a8ea2_Path
-_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
+_ember_85e76a5cb35a8ea2_path = _ember_85e76a5cb35a8ea2_Path(__file__).resolve().parents[4].joinpath('src', 'ember', 'governance', 'scripts', 'w1_collapse_control_run.py')
 if not _ember_85e76a5cb35a8ea2_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_collapse_control_run.py')
 _ember_85e76a5cb35a8ea2_aliases = ('_ember_issue2015_85e76a5cb35a8ea2', 'scripts.w1_collapse_control_run', 'w1_collapse_control_run')

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """
 Clean-corpus v1 assembly — ember #285 remediation lane.
 
@@ -9,7 +12,7 @@ Assembles v1 corpus by:
 4. Tracking L4 provenance in JSONL manifest
 5. Fail-closed on unknown provenance
 
-Execution: python src/ember/governance/scripts/corpus/assemble_v1.py --config configs/v1-pretrain-config.json --output-dir <path>
+Execution: python src/ember/governance/scripts/corpus/assemble_v1.py --config domains/model/configs/v1-pretrain-config.json --output-dir <path>
 """
 
 import json
@@ -247,7 +250,7 @@ def run_selftest():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Assemble v1 corpus (clean, tainted sources removed)')
-    parser.add_argument('--config', type=Path, default=Path('configs/v1-pretrain-config.json'),
+    parser.add_argument('--config', type=Path, default=Path('domains/model/configs/v1-pretrain-config.json'),
                         help='Configuration file path')
     parser.add_argument('--output-dir', type=Path, default=Path('corpus/v1-assembly'),
                         help='Output directory for v1 corpus')

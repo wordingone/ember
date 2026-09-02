@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """fp33_e3_gemma_e2b_smoke.py — E2B local eval harness smoke.
 
 E3 leg of fp-33 (fp33-e2b-surpass-envelope.md). Establishes the E2B

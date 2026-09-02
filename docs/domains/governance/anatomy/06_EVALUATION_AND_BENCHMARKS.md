@@ -2,7 +2,7 @@
 
 ## Operator-required benchmark set
 
-`scripts/verify_authority_conservation.py` pins the benchmark obligation
+`src/ember/governance/scripts/verify_authority_conservation.py` pins the benchmark obligation
 directly (`REQUIRED_OPERATOR_BENCHMARKS`): SWE-Bench Pro, FrontierCode
 Diamond, GDPval-AA, GDPpdf, Blueprint-Bench 2, AutomationBench,
 OSWorld-Verified, Legal Agent Benchmark, Humanity's Last Exam, Terminal-Bench

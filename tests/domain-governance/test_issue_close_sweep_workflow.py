@@ -47,9 +47,9 @@ def test_apply_consumes_only_checked_in_content_addressed_authorization() -> Non
         )
         == 2
     )
-    assert "python -B -m scripts.issue_close_sweep validate" in text
-    assert "python -B -m scripts.issue_close_sweep apply" in text
-    assert "python -B scripts/issue_close_sweep.py" not in text
+    assert "python -B -m src.ember.governance.scripts.issue_close_sweep validate" in text
+    assert "python -B -m src.ember.governance.scripts.issue_close_sweep apply" in text
+    assert "python -B src/ember/governance/scripts/issue_close_sweep.py" not in text
     assert '--expected-master-sha "${GITHUB_SHA}"' in text
     assert text.count("fetch-depth: 0") == 2
     assert (

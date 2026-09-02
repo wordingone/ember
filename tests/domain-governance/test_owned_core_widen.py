@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """test_owned_core_widen.py — TDD tests for owned-core LoRA rank expansion (issue #125).
 
 Tests cover:

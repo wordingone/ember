@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """g1_r2w_verdict.py — repaired round-2 G1 verdict (an agent HARD HOLD 14528).
 
 w4_eval emits `<arm>_minus_base_ci95` for every non-base arm, but it only

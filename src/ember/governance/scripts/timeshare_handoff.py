@@ -1,3 +1,6 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """timeshare_handoff.py — handoff state machine for GPU timeshare (#123, eng-33).
 
 Implements the serialization rule from docs/domains/governance/research/june22-critical-path.md §3:

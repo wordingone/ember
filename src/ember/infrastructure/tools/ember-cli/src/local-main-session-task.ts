@@ -1,3 +1,6 @@
+// goal_id: EMBER-02
+// workstream_id: EMBER-02A
+// next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 // local-main-session-task.ts — singleton task representing the active main session.
 // Enforces one-per-session invariant; unregisters itself on terminal state.
 
