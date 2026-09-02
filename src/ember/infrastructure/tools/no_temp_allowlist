@@ -230,8 +230,8 @@ src/ember/infrastructure/tools/ember-cli/src/agent-management.test.ts
 src/ember/infrastructure/tools/ember-cli/src/commands/finetune.test.ts
 src/ember/infrastructure/tools/ember-cli/src/commands/model.test.ts
 src/ember/infrastructure/tools/ember-cli/src/commands/world-state.test.ts
-tools/ember-cli/src/core/ember-world-state.test.ts
-tools/ember-cli/src/core/watch-render.test.ts
+src/ember/infrastructure/tools/ember-cli/src/core/ember-world-state.test.ts
+src/ember/infrastructure/tools/ember-cli/src/core/watch-render.test.ts
 tools/ember-cli/src/entrypoints/model-identity-contract-wiring.test.ts
 tools/ember-cli/src/entrypoints/model-seat-integration.test.ts
 tools/ember-cli/src/entrypoints/owned-seat-loader.test.ts
