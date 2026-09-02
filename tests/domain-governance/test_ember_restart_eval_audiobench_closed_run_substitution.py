@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib,json,subprocess,sys,tempfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];SCORER=ROOT/'scripts'/'ember_restart_eval_audiobench_bound.py';PREFLIGHT=ROOT/'scripts'/'ember_restart_eval_execution_preflight.py'
+ROOT=next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file());SCORER=ROOT/'scripts'/'ember_restart_eval_audiobench_bound.py';PREFLIGHT=ROOT/'scripts'/'ember_restart_eval_execution_preflight.py'
 def test_audio_preflight_rejects_substituted_closed_run():
  with tempfile.TemporaryDirectory()as tmp:
   r=Path(tmp);c=r/'c';s=r/'s';h=r/'h';p=r/'p';run=r/'run';wrong=r/'wrong';pred=r/'pred';score=r/'score';out=r/'out'

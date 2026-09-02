@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib,json,subprocess,sys,tempfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 def test_audio_and_reasoning_scorers_accept_central_json_list_predictions():
  with tempfile.TemporaryDirectory() as tmp:
   root=Path(tmp)

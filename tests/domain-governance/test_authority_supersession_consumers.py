@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 GATE_PATH = REPO / "scripts" / "authority_supersession_gate.py"
 SPEC = importlib.util.spec_from_file_location("authority_supersession_gate", GATE_PATH)
 assert SPEC and SPEC.loader
