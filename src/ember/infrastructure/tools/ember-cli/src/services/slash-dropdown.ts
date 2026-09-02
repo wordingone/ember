@@ -10,7 +10,7 @@
 // own style): the REPL wiring calls these from its existing useInput/render loop, never
 // re-derives the logic inline.
 
-import type { RegistryCommand } from "../../../../src/ember/infrastructure/tools/ember-cli/src/types/command-types.ts";
+import type { RegistryCommand } from "../types/command-types.ts";
 
 /** Cap on visible rows before an "+N more" overflow indicator — same pattern as
  * QUEUE_MAX_VISIBLE (prompt-input.ts) applied to the command list instead of the message queue. */

@@ -53,7 +53,7 @@ import {
   _resetRootForTests,
   _resetOnboardingForTests,
   _resetShouldShowCacheForTests,
-} from "../../../../../../../tools/ember-cli/src/core/frontend-shell.ts";
+} from "../core/frontend-shell.ts";
 
 describe("frontend-shell — AC1: render() wraps in ThemeProvider", () => {
   it("returns an InkInstance with unmount and waitUntilExit", () => {

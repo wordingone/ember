@@ -4,9 +4,9 @@
 import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { buildOperatorSurfaceGraphs, buildOperatorSurfaceSnapshot, getOperatorRunStatus, OperatorSurfacePane, PLOT_PREFIX_WIDTH, layoutControlRows } from "./operator-surface-pane.ts";
-import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import type { TelemetryState } from "../services/telemetry-watch.ts";
 import type { ActivityFeedLine } from "./activity-feed-pane.ts";
 
 const ellipsis = String.fromCodePoint(0x2026);

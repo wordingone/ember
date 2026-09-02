@@ -498,7 +498,7 @@ async function main(): Promise<void> {
     driver_runtime: "node --experimental-strip-types (see RUNTIME NOTE at top of driver source)",
     source_commit: sourceCommit,
     binary: {
-      artifact: "tools/ember-cli/src/ember.exe (built to a scratch path, not checked in)",
+      artifact: "src/ember/infrastructure/tools/ember-cli/src/ember.exe (built to a scratch path, not checked in)",
       sha256: binarySha256Before,
       reproducible_rebuild: {
         source_commit: sourceCommit,
@@ -530,7 +530,7 @@ async function main(): Promise<void> {
       expect_submission: outcome.expectSubmission,
       writes: outcome.writesPerformed,
       submission_observed_at_ms: outcome.submissionObservedAtMs,
-      final_frame_path: `tools/ember-cli/src/build-tools/verify-251-artifacts/${outcome.name}.frame.txt`,
+      final_frame_path: `src/ember/infrastructure/tools/ember-cli/src/build-tools/verify-251-artifacts/${outcome.name}.frame.txt`,
       final_frame_sha256: sha256(Buffer.from(outcome.finalFrameText, "utf8")),
       pass: outcome.pass,
       detail: outcome.detail,

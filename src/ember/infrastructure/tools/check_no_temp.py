@@ -46,7 +46,7 @@ ALLOWLIST_PATH = REPO_ROOT / "tools" / "no_temp_allowlist"
 # Directories scanned (relative to repo root) — the current + prior + future ember
 # stack surfaces named in the policy.
 SCAN_DIRS = [
-    "tools/ember-cli/src",
+    "src/ember/infrastructure/tools/ember-cli/src",
     "runtime/ember-lab/src",
     "tools/ember-restart-3b",
     "scripts",

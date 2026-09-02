@@ -34,10 +34,10 @@ import {
   type ServerSpawnOptions,
   type ServerHandle,
   main,
-} from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+} from "../entrypoints/process-entry.ts";
 import type { OutageMarker } from "../services/activity-feed.ts";
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
-import { _resetInitForTests } from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
+import { _resetInitForTests } from "../entrypoints/session-init.ts";
 import type { OwnedModelIdentity } from "./model-seat.ts";
 import { OwnedSeatStaleBindingError } from "./owned-seat-loader.ts";
 import type { LoopDeps, CallModelParams } from "../query/query-loop-support.ts";
@@ -2240,7 +2240,7 @@ describe("process-entry — dispatchFastPath('--watch') execution binding", () =
     return root;
   }
 
-  const SRC_DIR = join(import.meta.dir, ".."); // tools/ember-cli/src
+  const SRC_DIR = join(import.meta.dir, ".."); // src/ember/infrastructure/tools/ember-cli/src
 
   it(
     "fires repeated refresh cycles through the real render path and exits cleanly on SIGINT",

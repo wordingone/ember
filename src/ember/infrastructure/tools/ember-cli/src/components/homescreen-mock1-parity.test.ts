@@ -11,9 +11,9 @@
 // separate, final visual verification team-lead's spec also requires.
 import { describe, test, expect } from "bun:test";
 import React from "react";
-import { Homescreen, clipToWidth, LEFT_PANEL_MAX_WIDTH } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/logo-homescreen.ts";
-import { color } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/design-system.ts";
-import { mountInk } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts";
+import { Homescreen, clipToWidth, LEFT_PANEL_MAX_WIDTH } from "./logo-homescreen.ts";
+import { color } from "./design-system.ts";
+import { mountInk } from "../ink/reconciler.ts";
 
 function mountAndCapture(el: React.ReactElement, cols: number, rows = 24): string {
   let buf = "";

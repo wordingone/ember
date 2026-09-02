@@ -22,7 +22,10 @@ function makeRepoMarker(root: string): void {
     recursive: true,
   });
   fs.writeFileSync(path.join(root, "docs/domains/governance/authority/GOAL.md"), "# fixture goal\n");
-  fs.mkdirSync(path.join(root, "tools", "ember-cli"), { recursive: true });
+  fs.mkdirSync(
+    path.join(root, "src", "ember", "infrastructure", "tools", "ember-cli"),
+    { recursive: true },
+  );
 }
 
 beforeEach(() => {
@@ -36,7 +39,10 @@ afterEach(() => {
 describe("resolveEmberRepoRoot", () => {
   test("accepts one legacy GOAL marker during migration", () => {
     const repo = path.join(scratchDir, "legacy-repo");
-    fs.mkdirSync(path.join(repo, "tools", "ember-cli"), { recursive: true });
+    fs.mkdirSync(
+      path.join(repo, "src", "ember", "infrastructure", "tools", "ember-cli"),
+      { recursive: true },
+    );
     fs.writeFileSync(path.join(repo, "GOAL.md"), "# fixture goal\n");
     expect(
       resolveEmberRepoRoot({
@@ -49,7 +55,10 @@ describe("resolveEmberRepoRoot", () => {
 
   test("rejects duplicate legacy and migrated GOAL markers", () => {
     const repo = path.join(scratchDir, "duplicate-repo");
-    fs.mkdirSync(path.join(repo, "tools", "ember-cli"), { recursive: true });
+    fs.mkdirSync(
+      path.join(repo, "src", "ember", "infrastructure", "tools", "ember-cli"),
+      { recursive: true },
+    );
     makeRepoMarker(repo);
     fs.writeFileSync(path.join(repo, "GOAL.md"), "# duplicate goal\n");
     expect(() =>
@@ -84,7 +93,7 @@ describe("resolveEmberRepoRoot", () => {
 
   test("cwd upward walk finds the repo root from a nested directory", () => {
     const root = path.join(scratchDir, "repo");
-    const nested = path.join(root, "tools", "ember-cli", "src", "utils");
+    const nested = path.join(root, "src", "ember", "infrastructure", "tools", "ember-cli", "src", "utils");
     fs.mkdirSync(nested, { recursive: true });
     makeRepoMarker(root);
 
@@ -115,7 +124,7 @@ describe("resolveEmberRepoRoot", () => {
 
   test("execPath-relative walk finds the repo root regardless of an unrelated launch cwd", () => {
     const root = path.join(scratchDir, "repo");
-    const exeDir = path.join(root, "tools", "ember-cli");
+    const exeDir = path.join(root, "src", "ember", "infrastructure", "tools", "ember-cli");
     fs.mkdirSync(exeDir, { recursive: true });
     makeRepoMarker(root);
 
@@ -179,7 +188,7 @@ describe("issue #666 — worktree-vs-main-checkout convergence", () => {
 
   test("cwd inside a worktree resolves to the MAIN checkout root (the old behavior returned the worktree root)", () => {
     const { mainRoot, worktreeRoot } = makeMainAndWorktree();
-    const deepCwd = path.join(worktreeRoot, "tools", "ember-cli");
+    const deepCwd = path.join(worktreeRoot, "src", "ember", "infrastructure", "tools", "ember-cli");
     const resolved = resolveEmberRepoRoot({ startDir: deepCwd, envRepoRoot: "", execPath: path.join(scratchDir, "nowhere", "bin.exe") });
     expect(resolved).toBe(path.resolve(mainRoot));
   });
@@ -235,7 +244,7 @@ describe("source-byte authority in a linked worktree", () => {
       delete process.env["EMBER_SOURCE_ROOT"];
       expect(
         resolveEmberSourceRoot({
-          startDir: path.join(worktreeRoot, "tools", "ember-cli"),
+          startDir: path.join(worktreeRoot, "src", "ember", "infrastructure", "tools", "ember-cli"),
           execPath: path.join(scratchDir, "nowhere", "bin.exe"),
         }),
       ).toBe(path.resolve(worktreeRoot));

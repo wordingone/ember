@@ -175,7 +175,7 @@ CONFIG_REL = "configs/ember-restart-3b.json"
 LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
-SEAT_TEST_REL = "tools/ember-cli/src/entrypoints/model-seat.test.ts"
+SEAT_TEST_REL = "src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.test.ts"
 COND4_SURFACE_VALIDATOR_PATH = (
     next(
         parent

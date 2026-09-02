@@ -6,12 +6,12 @@
 // double-buffered diff, optimizer, and render entry point.
 // Cross-layer deps (event-system) are injected as optional interfaces.
 
-import type { Style, ColorValue } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/termio.ts";
-import { cursorPosition, applyAnsiCodes } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/termio.ts";
-import type { LayoutNode } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/layout-engine.ts";
-import { resolveBorderGlyphs, type BorderStyleName } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/border-glyphs.ts";
-import type { RendererDiagnostic } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/renderer-diagnostic.ts";
-import type { HeapAttributionDiagnostic } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/heap-attribution-diagnostic.ts";
+import type { Style, ColorValue } from "./termio.ts";
+import { cursorPosition, applyAnsiCodes } from "./termio.ts";
+import type { LayoutNode } from "./layout-engine.ts";
+import { resolveBorderGlyphs, type BorderStyleName } from "./border-glyphs.ts";
+import type { RendererDiagnostic } from "./renderer-diagnostic.ts";
+import type { HeapAttributionDiagnostic } from "./heap-attribution-diagnostic.ts";
 
 // ---------------------------------------------------------------------------
 // Types

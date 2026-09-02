@@ -12,9 +12,9 @@
 import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
 import { OperatorSurfacePane, SELECT_PROCESS_TOGGLE_HOVER } from "./operator-surface-pane.ts";
-import type { TelemetryState } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import type { TelemetryState } from "../services/telemetry-watch.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
 function telemetry(overrides: Partial<TelemetryState> = {}): TelemetryState {

@@ -8,7 +8,7 @@ import {
   ACTIVE_RUN_TTL_MS,
   type TelemetryEvent,
   type TelemetryState,
-} from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+} from "../services/telemetry-watch.ts";
 import {
   EMPTY_STATE_TEXT,
   formatActivityFeedLine,

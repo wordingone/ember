@@ -6,7 +6,7 @@
 
 Status: CURRENT
 
-Consumer: `tools/ember-cli/src/services/governed-dispatch.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/governed-dispatch.ts`
 
 `ember dispatch-governed --manifest <absolute-path>` is a noninteractive
 operator transport into the existing Ember Lab named-pipe authority. It does

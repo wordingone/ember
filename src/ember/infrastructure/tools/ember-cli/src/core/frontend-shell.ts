@@ -10,8 +10,8 @@
 
 import React from "react";
 import type { ReactElement } from "react";
-import type { MountHandle } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts";
-import { createTerminalSessionController, type TerminalSessionController } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.ts";
+import type { MountHandle } from "../ink/reconciler.ts";
+import { createTerminalSessionController, type TerminalSessionController } from "../ink/terminal-session.ts";
 
 // ---------------------------------------------------------------------------
 // issue #286: mountInk/createRenderer close over whatever `stdout` object is
@@ -50,11 +50,11 @@ export {
   useTheme,
   color,
   resolveTheme,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/design-system.ts";
-export type { ThemeMode, ResolvedTheme, ThemeContextValue, FeatureFlags } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/design-system.ts";
+} from "../components/design-system.ts";
+export type { ThemeMode, ResolvedTheme, ThemeContextValue, FeatureFlags } from "../components/design-system.ts";
 
 // Re-export useThemeSetting as a hook that returns the current theme setting
-export { useTheme as useThemeSetting } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/design-system.ts";
+export { useTheme as useThemeSetting } from "../components/design-system.ts";
 
 // ---------------------------------------------------------------------------
 // Ink primitive re-exports (AC10)
@@ -68,14 +68,14 @@ export {
   Spacer,
   Button,
   Link,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/components.ts";
-export type { BoxProps, TextProps } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/components.ts";
+} from "../ink/components.ts";
+export type { BoxProps, TextProps } from "../ink/components.ts";
 
 // BaseBox and BaseText aliases (AC10 — contract names)
-export { Box as BaseBox, Text as BaseText } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/components.ts";
+export { Box as BaseBox, Text as BaseText } from "../ink/components.ts";
 
 // Ansi is an alias for RawAnsi (interop name)
-export { RawAnsi as Ansi } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/components.ts";
+export { RawAnsi as Ansi } from "../ink/components.ts";
 
 // NoSelect — a pass-through wrapper that strips mouse selection
 export function NoSelect({ children }: { children?: React.ReactNode }): ReactElement {
@@ -92,16 +92,16 @@ export {
   InputEvent,
   TerminalFocusEvent,
   FocusManager,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/event-system.ts";
+} from "../ink/event-system.ts";
 
 // Key — keyboard key shape (re-exported from hooks)
-export type { KeyboardKey as Key } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/hooks.ts";
+export type { KeyboardKey as Key } from "../ink/hooks.ts";
 
 // EventEmitter — Node.js EventEmitter re-exported for consumers
 export { EventEmitter } from "node:events";
 
 // Event — alias for TerminalEvent
-export { TerminalEvent as Event } from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/event-system.ts";
+export { TerminalEvent as Event } from "../ink/event-system.ts";
 
 // ---------------------------------------------------------------------------
 // Hook re-exports (AC10)
@@ -119,7 +119,7 @@ export {
   useTerminalFocus,
   useTerminalTitle,
   useTerminalViewport,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/ink/hooks.ts";
+} from "../ink/hooks.ts";
 
 // ---------------------------------------------------------------------------
 // Utility exports (AC10)
@@ -171,7 +171,7 @@ export function supportsTabStatus(): boolean {
 // Ink render wrapper (AC1, AC2)
 // ---------------------------------------------------------------------------
 
-import { ThemeProvider } from "../../../../src/ember/infrastructure/tools/ember-cli/src/components/design-system.ts";
+import { ThemeProvider } from "../components/design-system.ts";
 
 /** Minimal InkInstance shape returned by render(). */
 export interface InkInstance {
@@ -198,7 +198,7 @@ let _inkRender: ((node: ReactElement, options?: RenderOptions) => InkInstance) |
 
 async function getInkRender(): Promise<(node: ReactElement, options?: RenderOptions) => InkInstance> {
   if (_inkRender) return _inkRender;
-  const { mountInk } = await import("../../../../src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts");
+  const { mountInk } = await import("../ink/reconciler.ts");
   _inkRender = (node: ReactElement, options?: RenderOptions): InkInstance => {
     const wrapped = React.createElement(ThemeProvider, null, node);
     const stream = (options?.stdout as { write?: (s: string) => void } | undefined)?.write
@@ -245,7 +245,7 @@ export function render(node: ReactElement, options?: RenderOptions): InkInstance
   terminalSession.enter();
 
   // Kick off the mount synchronously using a dynamic import cache
-  import("../../../../src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts").then(({ mountInk }) => {
+  import("../ink/reconciler.ts").then(({ mountInk }) => {
     handle = mountInk(wrapped, {
       stream,
       stdout: liveStdoutSize,
@@ -297,7 +297,7 @@ export function createRoot(options?: RenderOptions): FrontendRoot {
     render(node: ReactElement): void {
       _rootTerminalSession?.enter();
       const wrapped = React.createElement(ThemeProvider, null, node);
-      import("../../../../src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts").then(({ mountInk }) => {
+      import("../ink/reconciler.ts").then(({ mountInk }) => {
         if (_rootHandle) {
           // Update existing mount
           _rootHandle.update(wrapped);
@@ -372,7 +372,7 @@ export async function launchRepl(
 ): Promise<void> {
   // AC3: dynamic imports — components NOT imported at module load time
   const [appMod, replMod] = await Promise.all([
-    import("../../../../src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts"),
+    import("../components/app-shell.ts"),
     import("../screens/repl.ts"),
   ]);
 

@@ -21,8 +21,8 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
-import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
-import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
+import { resetCommandRegistryForTests } from "../command-registry.ts";
+import { ReplScreen } from "../screens/repl.ts";
 
 async function wait(ms: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, ms));

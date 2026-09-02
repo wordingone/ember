@@ -26,7 +26,7 @@ import {
   renderMonitorPanel,
   visiblePanelWidth,
   truncateAnsiLineToWidth,
-} from "../../../../src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.ts";
+} from "./monitor-render.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers

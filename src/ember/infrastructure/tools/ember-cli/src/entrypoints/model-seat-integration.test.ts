@@ -7,7 +7,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { main } from "../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts";
+import { main } from "../entrypoints/process-entry.ts";
 import { _resetConfigHomeMemo } from "../utils/env-detection.ts";
 import type { LoopDeps } from "../query/query-loop-support.ts";
 

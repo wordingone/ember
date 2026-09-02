@@ -56,7 +56,7 @@ test("visibleFrameLines clips stale xterm backing rows after a shrink", async ()
 function valid(): CaptureReceiptInput {
   return {
     sourceCommit: "a".repeat(40),
-    binaryArtifact: "tools/ember-cli/src/ember.exe",
+    binaryArtifact: "src/ember/infrastructure/tools/ember-cli/src/ember.exe",
     binarySha256Before: "b".repeat(64),
     binarySha256After: "b".repeat(64),
     rebuildBinarySha256: "b".repeat(64),
@@ -137,7 +137,7 @@ describe("buildCaptureReceipt", () => {
     expect(receipt["goal_id"]).toBe("EMBER-02");
     expect(receipt["workstream_id"]).toBe("EMBER-02A");
     expect(receipt["binary"]).toEqual({
-      artifact: "tools/ember-cli/src/ember.exe",
+      artifact: "src/ember/infrastructure/tools/ember-cli/src/ember.exe",
       sha256: "b".repeat(64),
       reproducible_rebuild: {
         source_commit: "a".repeat(40),
