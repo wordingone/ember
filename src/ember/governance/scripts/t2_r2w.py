@@ -141,35 +141,35 @@ def build_sft_examples(allow=None):
     ext_clean = getattr(_ember_d8c02810056e6c3d_module, 'ext_clean')
     load_ext_flags = getattr(_ember_d8c02810056e6c3d_module, 'load_ext_flags')
     # issue2015 exact-local-import-end:src/ember/governance/scripts/frontier.py
-    # issue2015 exact-local-import:scripts/r2_arms.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/r2_arms.py
     import importlib.util as _ember_5e42585fbe8bb3e8_importlib
     import sys as _ember_5e42585fbe8bb3e8_sys
     from pathlib import Path as _ember_5e42585fbe8bb3e8_Path
     _ember_5e42585fbe8bb3e8_path = _ember_5e42585fbe8bb3e8_Path(__file__).resolve().parents[4].joinpath('scripts', 'r2_arms.py')
     if not _ember_5e42585fbe8bb3e8_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/r2_arms.py')
-    _ember_5e42585fbe8bb3e8_aliases = ('_ember_issue2015_5e42585fbe8bb3e8', 'r2_arms', 'scripts.r2_arms')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/r2_arms.py')
+    _ember_5e42585fbe8bb3e8_aliases = ('_ember_issue2015_5e42585fbe8bb3e8', 'r2_arms', 'src.ember.governance.scripts.r2_arms')
     _ember_5e42585fbe8bb3e8_existing = []
     for _ember_5e42585fbe8bb3e8_alias in _ember_5e42585fbe8bb3e8_aliases:
         _ember_5e42585fbe8bb3e8_candidate = _ember_5e42585fbe8bb3e8_sys.modules.get(_ember_5e42585fbe8bb3e8_alias)
         if _ember_5e42585fbe8bb3e8_candidate is not None and all(_ember_5e42585fbe8bb3e8_candidate is not item for item in _ember_5e42585fbe8bb3e8_existing):
             _ember_5e42585fbe8bb3e8_existing.append(_ember_5e42585fbe8bb3e8_candidate)
     if len(_ember_5e42585fbe8bb3e8_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/r2_arms.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/r2_arms.py')
     if _ember_5e42585fbe8bb3e8_existing:
         _ember_5e42585fbe8bb3e8_module = _ember_5e42585fbe8bb3e8_existing[0]
         _ember_5e42585fbe8bb3e8_observed = getattr(_ember_5e42585fbe8bb3e8_module, '__file__', None)
         if _ember_5e42585fbe8bb3e8_observed is None or _ember_5e42585fbe8bb3e8_Path(_ember_5e42585fbe8bb3e8_observed).resolve() != _ember_5e42585fbe8bb3e8_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/r2_arms.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/r2_arms.py')
     else:
         _ember_5e42585fbe8bb3e8_spec = _ember_5e42585fbe8bb3e8_importlib.spec_from_file_location('_ember_issue2015_5e42585fbe8bb3e8', _ember_5e42585fbe8bb3e8_path)
         if _ember_5e42585fbe8bb3e8_spec is None or _ember_5e42585fbe8bb3e8_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/r2_arms.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/r2_arms.py')
         _ember_5e42585fbe8bb3e8_module = _ember_5e42585fbe8bb3e8_importlib.module_from_spec(_ember_5e42585fbe8bb3e8_spec)
         for _ember_5e42585fbe8bb3e8_alias in _ember_5e42585fbe8bb3e8_aliases:
             _ember_5e42585fbe8bb3e8_prior = _ember_5e42585fbe8bb3e8_sys.modules.get(_ember_5e42585fbe8bb3e8_alias)
             if _ember_5e42585fbe8bb3e8_prior is not None and _ember_5e42585fbe8bb3e8_prior is not _ember_5e42585fbe8bb3e8_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/r2_arms.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/r2_arms.py')
             _ember_5e42585fbe8bb3e8_sys.modules[_ember_5e42585fbe8bb3e8_alias] = _ember_5e42585fbe8bb3e8_module
         try:
             _ember_5e42585fbe8bb3e8_spec.loader.exec_module(_ember_5e42585fbe8bb3e8_module)
@@ -181,11 +181,11 @@ def build_sft_examples(allow=None):
     for _ember_5e42585fbe8bb3e8_alias in _ember_5e42585fbe8bb3e8_aliases:
         _ember_5e42585fbe8bb3e8_prior = _ember_5e42585fbe8bb3e8_sys.modules.get(_ember_5e42585fbe8bb3e8_alias)
         if _ember_5e42585fbe8bb3e8_prior is not None and _ember_5e42585fbe8bb3e8_prior is not _ember_5e42585fbe8bb3e8_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/r2_arms.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/r2_arms.py')
         _ember_5e42585fbe8bb3e8_sys.modules[_ember_5e42585fbe8bb3e8_alias] = _ember_5e42585fbe8bb3e8_module
     frontier_filter = getattr(_ember_5e42585fbe8bb3e8_module, 'frontier_filter')
     solve_rates_from_ledger = getattr(_ember_5e42585fbe8bb3e8_module, 'solve_rates_from_ledger')
-    # issue2015 exact-local-import-end:scripts/r2_arms.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/r2_arms.py
     # issue2015 exact-local-import:src/ember/governance/scripts/t2_round.py
     import importlib.util as _ember_aa123631425aaf0a_importlib
     import sys as _ember_aa123631425aaf0a_sys

@@ -1,7 +1,7 @@
 # Round-2 G1 power pre-registration (#29)
 
 Every number below is from the executed run `receipts/r2-power-prereg-20260610T223032Z.json`
-(`scripts/r2_power.py` on the EMPIRICAL per-task base rates of the G1 base
+(`src/ember/governance/scripts/r2_power.py` on the EMPIRICAL per-task base rates of the G1 base
 leg, `w1-floor-g1-base-20260610T215814Z-samples.jsonl`: 43 validation
 tasks, base mean per-sample rate 0.657; 2,000 sims/cell, seed 16;
 POWER_SELFTEST_PASS includes the new primitives).

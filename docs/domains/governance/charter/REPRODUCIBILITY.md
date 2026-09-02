@@ -56,7 +56,7 @@ python scripts/ember_gate_launch_packaging_selftest.py
 python scripts/ember_gate_rollback_rewind_selftest.py
 python src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
 python scripts/ember_gate_tool_dispatch_permissions_selftest.py
-python scripts/ember_gate_function_slash_commands_selftest.py
+python src/ember/governance/scripts/ember_gate_function_slash_commands_selftest.py
 python src/ember/governance/scripts/ember_gate_communication_mailbox_computer_use_selftest.py
 python scripts/ember_gate_goal_mode_parity_adapter_selftest.py
 python src/ember/governance/scripts/ember_gate_backend_coordinator_agents_selftest.py

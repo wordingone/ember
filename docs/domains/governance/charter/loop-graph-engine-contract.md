@@ -28,7 +28,7 @@ Nothing about the loop assumes who or what is running it.
    every `prereqs[]` entry is a node in a `CLOSED_PASS` state (or whatever
    closed states the engine's policy treats as satisfying a prerequisite —
    the schema doesn't decide this; the engine does).
-   `scripts/loop_graph/lifecycle.py:try_load_node` / a directory scan over
+   `src/ember/governance/scripts/loop_graph/lifecycle.py:try_load_node` / a directory scan over
    the node store is all that's needed; no engine-specific API.
 
 2. **Claim.** Call `lifecycle.claim(store_dir, node_id, owner)` to record

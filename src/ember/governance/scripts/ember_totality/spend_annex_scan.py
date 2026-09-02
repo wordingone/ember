@@ -406,7 +406,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     receipt_path = RECEIPTS_DIR / f"publication-gate-{receipt['ts']}.json"
 #   proof-judge-admission-*.json             scripts/proofs/judge_admission_sweep.py:686
 #     out_path = out_dir / f"proof-judge-admission-{stamp}.json"
-#   p-gate-*.json                            scripts/p_gate.py:299,430
+#   p-gate-*.json                            src/ember/governance/scripts/p_gate.py:299,430
 #     receipt_path = _RECEIPTS / f"p-gate-{ts}.json"
 #   training-throughput-anchor-check-all-*.json  scripts/proofs/training_throughput_anchor_check.py:223
 #     out_path = RECEIPTS_DIR / f"training-throughput-anchor-check-all-{ts}.json"
@@ -535,7 +535,7 @@ CONVENTION_MAP = [
     (re.compile(r"^citation-check-.*\.json$"), "src/ember/governance/scripts/check_goal_citations.py"),
     (re.compile(r"^publication-gate-.*\.json$"), "src/ember/governance/scripts/check_publication_gate.py"),
     (re.compile(r"^proof-judge-admission-.*\.json$"), "scripts/proofs/judge_admission_sweep.py"),
-    (re.compile(r"^p-gate-.*\.json$"), "scripts/p_gate.py"),
+    (re.compile(r"^p-gate-.*\.json$"), "src/ember/governance/scripts/p_gate.py"),
     (re.compile(r"^training-throughput-anchor-check-all-.*\.json$"),
      "scripts/proofs/training_throughput_anchor_check.py"),
     (re.compile(r"^official-abc-wheel-runner-.*\.json$"), "src/ember/governance/scripts/ember_mvp_wheel_runner.py"),
