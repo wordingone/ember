@@ -1134,7 +1134,7 @@ def _extract_script_tokens(value):
     """Extract script-path tokens from a candidate-field value. Handles the
     plain str/list[str] shapes plus one additional shape confirmed present in
     16+ generator scripts (e.g. scripts/econ_pass.py:387, src/ember/governance/scripts/joules.py:234,
-    scripts/manifest_sha.py:169): `"generator": {"path": "scripts/x.py",
+    src/ember/governance/scripts/manifest_sha.py:169): `"generator": {"path": "scripts/x.py",
     "sha256": "..."}`. Without this, a receipt using that widely-shared shape
     parks its own real script path unread and falls through to unresolvable
     even though the generating script is named right there in the JSON --

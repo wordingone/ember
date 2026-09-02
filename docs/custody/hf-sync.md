@@ -199,7 +199,7 @@ courtlistener, corpus-cache, specialist-v2-65536) are never
 would refuse the whole run rather than upload it unverified.
 
 `sync.compute_filelist_manifest` follows a similar convention to
-`scripts/manifest_sha.py` (sort by relative path, hash each file's bytes
+`src/ember/governance/scripts/manifest_sha.py` (sort by relative path, hash each file's bytes
 as-is, combine into a single digest over sorted `"<relpath>\t<sha256>\t
 <size_bytes>\n"` lines), but it is a distinct, independent implementation —
 recursive and all-file rather than flat and `*.bin`-only. It is now

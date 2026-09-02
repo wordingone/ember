@@ -1056,35 +1056,35 @@ def verify_shard_corpus(shard_dir: str,
     reimplemented. Raises SystemExit if shard_dir has zero shards, or if
     expected_combined_sha256 is given and the freshly-computed digest
     disagrees (a swapped, stale, or corrupted corpus directory)."""
-    # issue2015 exact-local-import:scripts/manifest_sha.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/manifest_sha.py
     import importlib.util as _ember_b5d7f3622ea07abe_importlib
     import sys as _ember_b5d7f3622ea07abe_sys
     from pathlib import Path as _ember_b5d7f3622ea07abe_Path
     _ember_b5d7f3622ea07abe_path = _ember_b5d7f3622ea07abe_Path(__file__).resolve().parents[4].joinpath('scripts', 'manifest_sha.py')
     if not _ember_b5d7f3622ea07abe_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/manifest_sha.py')
-    _ember_b5d7f3622ea07abe_aliases = ('_ember_issue2015_b5d7f3622ea07abe', 'manifest_sha', 'scripts.manifest_sha')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/manifest_sha.py')
+    _ember_b5d7f3622ea07abe_aliases = ('_ember_issue2015_b5d7f3622ea07abe', 'manifest_sha', 'src.ember.governance.scripts.manifest_sha')
     _ember_b5d7f3622ea07abe_existing = []
     for _ember_b5d7f3622ea07abe_alias in _ember_b5d7f3622ea07abe_aliases:
         _ember_b5d7f3622ea07abe_candidate = _ember_b5d7f3622ea07abe_sys.modules.get(_ember_b5d7f3622ea07abe_alias)
         if _ember_b5d7f3622ea07abe_candidate is not None and all(_ember_b5d7f3622ea07abe_candidate is not item for item in _ember_b5d7f3622ea07abe_existing):
             _ember_b5d7f3622ea07abe_existing.append(_ember_b5d7f3622ea07abe_candidate)
     if len(_ember_b5d7f3622ea07abe_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/manifest_sha.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/manifest_sha.py')
     if _ember_b5d7f3622ea07abe_existing:
         _ember_b5d7f3622ea07abe_module = _ember_b5d7f3622ea07abe_existing[0]
         _ember_b5d7f3622ea07abe_observed = getattr(_ember_b5d7f3622ea07abe_module, '__file__', None)
         if _ember_b5d7f3622ea07abe_observed is None or _ember_b5d7f3622ea07abe_Path(_ember_b5d7f3622ea07abe_observed).resolve() != _ember_b5d7f3622ea07abe_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/manifest_sha.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/manifest_sha.py')
     else:
         _ember_b5d7f3622ea07abe_spec = _ember_b5d7f3622ea07abe_importlib.spec_from_file_location('_ember_issue2015_b5d7f3622ea07abe', _ember_b5d7f3622ea07abe_path)
         if _ember_b5d7f3622ea07abe_spec is None or _ember_b5d7f3622ea07abe_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/manifest_sha.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/manifest_sha.py')
         _ember_b5d7f3622ea07abe_module = _ember_b5d7f3622ea07abe_importlib.module_from_spec(_ember_b5d7f3622ea07abe_spec)
         for _ember_b5d7f3622ea07abe_alias in _ember_b5d7f3622ea07abe_aliases:
             _ember_b5d7f3622ea07abe_prior = _ember_b5d7f3622ea07abe_sys.modules.get(_ember_b5d7f3622ea07abe_alias)
             if _ember_b5d7f3622ea07abe_prior is not None and _ember_b5d7f3622ea07abe_prior is not _ember_b5d7f3622ea07abe_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/manifest_sha.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/manifest_sha.py')
             _ember_b5d7f3622ea07abe_sys.modules[_ember_b5d7f3622ea07abe_alias] = _ember_b5d7f3622ea07abe_module
         try:
             _ember_b5d7f3622ea07abe_spec.loader.exec_module(_ember_b5d7f3622ea07abe_module)
@@ -1096,10 +1096,10 @@ def verify_shard_corpus(shard_dir: str,
     for _ember_b5d7f3622ea07abe_alias in _ember_b5d7f3622ea07abe_aliases:
         _ember_b5d7f3622ea07abe_prior = _ember_b5d7f3622ea07abe_sys.modules.get(_ember_b5d7f3622ea07abe_alias)
         if _ember_b5d7f3622ea07abe_prior is not None and _ember_b5d7f3622ea07abe_prior is not _ember_b5d7f3622ea07abe_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/manifest_sha.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/manifest_sha.py')
         _ember_b5d7f3622ea07abe_sys.modules[_ember_b5d7f3622ea07abe_alias] = _ember_b5d7f3622ea07abe_module
     manifest_sha = _ember_b5d7f3622ea07abe_module
-    # issue2015 exact-local-import-end:scripts/manifest_sha.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/manifest_sha.py
     if not os.path.isdir(shard_dir):
         raise SystemExit(f"W1_LIVE_SHARD_DIR_MISSING: {shard_dir!r} is not a directory")
     try:

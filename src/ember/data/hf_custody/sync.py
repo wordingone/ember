@@ -275,7 +275,7 @@ def compute_filelist_manifest(root: Path) -> dict[str, Any]:
     This is a CONTENT-based manifest: sort by relative POSIX path, hash each
     file's actual bytes as-is, combine into a single combined_sha256 over
     sorted "<relpath>\\t<sha256>\\t<size_bytes>\\n" lines. This is a distinct
-    construction from scripts/manifest_sha.py (which is flat, *.bin-only,
+    construction from src/ember/governance/scripts/manifest_sha.py (which is flat, *.bin-only,
     and keyed by bare filename) and, as of 2026-08-02, is ALSO confirmed
     distinct from the Workstream A census's own "sha256_filelist_manifest"
     label: the census construction never reads file content at all — see
