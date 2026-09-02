@@ -239,9 +239,9 @@ src/ember/infrastructure/tools/ember-cli/src/entrypoints/owned-server-supervisor
 src/ember/infrastructure/tools/ember-cli/src/entrypoints/process-entry.test.ts
 src/ember/infrastructure/tools/ember-cli/src/entrypoints/session-init.test.ts
 src/ember/infrastructure/tools/ember-cli/src/hardening/hardening-receipts.test.ts
-tools/ember-cli/src/mcp-config.test.ts
-tools/ember-cli/src/memory-operations.test.ts
-tools/ember-cli/src/native-installer.test.ts
+src/ember/infrastructure/tools/ember-cli/src/mcp-config.test.ts
+src/ember/infrastructure/tools/ember-cli/src/memory-operations.test.ts
+src/ember/infrastructure/tools/ember-cli/src/native-installer.test.ts
 src/ember/infrastructure/tools/ember-cli/src/services/activity-feed.test.ts
 tools/ember-cli/src/services/finetune-control.test.ts
 tools/ember-cli/src/services/github-receipts.test.ts
