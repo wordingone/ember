@@ -60,7 +60,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   non-leaderboard comparability, tiny fixture execution, and mean normalized
   improvement scoring. It also verifies hydration preflight `READY` and
   `BLOCKED` receipts, plus local execution `PASS` and `BLOCKED` receipts.
-- `scripts/ember_governor_binding.py` records governor rails from
+- `src/ember/governance/scripts/ember_governor_binding.py` records governor rails from
   `governor.env_limits()` plus a hashable checkpoint fixture tied to one cycle
   id. Fixture mode explicitly records `gpu_preflight_called=false`. It also
   has a real governed CUDA smoke path that calls `governor.preflight()`, runs
@@ -823,7 +823,7 @@ python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_governor_binding_selftest.py
-python scripts\ember_governor_binding.py --selftest
+python src\ember\governance\scripts\ember_governor_binding.py --selftest
 python scripts\ember_wheel_harness_selftest.py
 python scripts\ember_wheel_harness.py --selftest
 python scripts\ember_mvp_wheel_runner_selftest.py

@@ -1040,7 +1040,7 @@ def mint_successor(
             {
                 "schema_version": "ember-issue1719-tranche-admission-mint-log-v1",
                 "source_commit": source_commit,
-                "producer_path": "tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
+                "producer_path": "src/ember/infrastructure/tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
                 "producer_sha256": sha256_file(
                     repo / "tools" / "ember-restart-3b" / "mint_issue1719_tranche_admission.py"
                 ),

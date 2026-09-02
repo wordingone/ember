@@ -79,7 +79,7 @@ EXPECTED_RECORDED_VERDICT = (
     "2_PREEXISTING_DEFECT_CLASSES_DISCLOSED_6_RECEIPTS_BACKFILLED"
 )
 EXPECTED_PATHS = {
-    "scripts/r3_feasibility_probe.py",
+    "src/ember/governance/scripts/r3_feasibility_probe.py",
     "scripts/ember_cbase_avir_augment.py",
     "scripts/ember_cbase_launch.py",
     "scripts/ember_cbase_s6_acceptance.py",
@@ -201,7 +201,7 @@ def validate_public_lineage(
 
 
 def validate_current_sources(root: Path, historical_digests: dict[str, str]) -> dict[str, Any]:
-    repaired = "scripts/r3_feasibility_probe.py"
+    repaired = "src/ember/governance/scripts/r3_feasibility_probe.py"
     rows = []
     for candidate in sorted(EXPECTED_PATHS):
         path = root / candidate
@@ -302,7 +302,7 @@ def build_receipt(
         "current_source_revalidation": sources,
         "owned_synthetic_cpu_replay": dryrun,
         "replay_command": (
-            "CUDA_VISIBLE_DEVICES='' python -B scripts/r3_feasibility_probe.py "
+            "CUDA_VISIBLE_DEVICES='' python -B src/ember/governance/scripts/r3_feasibility_probe.py "
             "--dry-run --max-new-tokens 64"
         ),
         "claim_boundary": {

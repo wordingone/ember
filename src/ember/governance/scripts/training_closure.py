@@ -537,7 +537,7 @@ def _exec_edges(root: pathlib.Path, source: pathlib.Path, tree: ast.Module) -> s
 
     Covers the shapes the training chain actually uses to spawn siblings:
     ``Path(__file__).with_name("verify_training_data.py")`` and the
-    repo-relative ``"tools/ember-restart-3b/verify_capability_record.py"``.
+    repo-relative ``"src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py"``.
     Script targets remain closure edges across Python, PowerShell, cmd, and sh.
     """
 

@@ -399,7 +399,7 @@ RUNG1_LINEAGE = {
         "optimizer_state_provenance": "derived (inverse net2net from post-grow; "
             "no optimizer state carried)",
         "known_sha256_source": "receipts/reconstruct-pregrow/reconstruction-PASS-*.json "
-            "(script: scripts/reconstruct_pregrow.py, all guards + selftest PASS)",
+            "(script: src/ember/governance/scripts/reconstruct_pregrow.py, all guards + selftest PASS)",
     },
     "post_grow_rung1": {
         "label": "rung-1 POST-grow (stabilized)",

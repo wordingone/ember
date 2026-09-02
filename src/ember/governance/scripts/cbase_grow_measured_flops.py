@@ -178,7 +178,7 @@ for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
 checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py                          # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
 # --- Real lineage checkpoints (READ-ONLY reference into the live tree) -----
@@ -584,7 +584,7 @@ def main() -> int:
         "dtype_compute": "float32 (bf16 checkpoint upcast for the forward/backward flop measurement)",
         "measured_on_train_daemon": False,
         "measured_via_instrumented_flop_counter": True,
-        "script": "scripts/cbase_grow_measured_flops.py",
+        "script": "src/ember/governance/scripts/cbase_grow_measured_flops.py",
         "git_sha": git_sha,
         "args": {
             # measure_batch/prod_batch/seq/skip_batch_linearity_check/git_sha are

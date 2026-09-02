@@ -32,35 +32,35 @@ FILES = {"episodes": f"{NC_WIN}/receipts/ledger/episodes.jsonl",
 
 def class_stats(srcs):
     """Per-class composition block. srcs: list of program texts."""
-    # issue2015 exact-local-import:scripts/fp10_idiom.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/fp10_idiom.py
     import importlib.util as _ember_5026f78346847442_importlib
     import sys as _ember_5026f78346847442_sys
     from pathlib import Path as _ember_5026f78346847442_Path
     _ember_5026f78346847442_path = _ember_5026f78346847442_Path(__file__).resolve().parents[4].joinpath('scripts', 'fp10_idiom.py')
     if not _ember_5026f78346847442_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/fp10_idiom.py')
-    _ember_5026f78346847442_aliases = ('_ember_issue2015_5026f78346847442', 'fp10_idiom', 'scripts.fp10_idiom')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp10_idiom.py')
+    _ember_5026f78346847442_aliases = ('_ember_issue2015_5026f78346847442', 'fp10_idiom', 'src.ember.governance.scripts.fp10_idiom')
     _ember_5026f78346847442_existing = []
     for _ember_5026f78346847442_alias in _ember_5026f78346847442_aliases:
         _ember_5026f78346847442_candidate = _ember_5026f78346847442_sys.modules.get(_ember_5026f78346847442_alias)
         if _ember_5026f78346847442_candidate is not None and all(_ember_5026f78346847442_candidate is not item for item in _ember_5026f78346847442_existing):
             _ember_5026f78346847442_existing.append(_ember_5026f78346847442_candidate)
     if len(_ember_5026f78346847442_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/fp10_idiom.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/fp10_idiom.py')
     if _ember_5026f78346847442_existing:
         _ember_5026f78346847442_module = _ember_5026f78346847442_existing[0]
         _ember_5026f78346847442_observed = getattr(_ember_5026f78346847442_module, '__file__', None)
         if _ember_5026f78346847442_observed is None or _ember_5026f78346847442_Path(_ember_5026f78346847442_observed).resolve() != _ember_5026f78346847442_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/fp10_idiom.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/fp10_idiom.py')
     else:
         _ember_5026f78346847442_spec = _ember_5026f78346847442_importlib.spec_from_file_location('_ember_issue2015_5026f78346847442', _ember_5026f78346847442_path)
         if _ember_5026f78346847442_spec is None or _ember_5026f78346847442_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/fp10_idiom.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/fp10_idiom.py')
         _ember_5026f78346847442_module = _ember_5026f78346847442_importlib.module_from_spec(_ember_5026f78346847442_spec)
         for _ember_5026f78346847442_alias in _ember_5026f78346847442_aliases:
             _ember_5026f78346847442_prior = _ember_5026f78346847442_sys.modules.get(_ember_5026f78346847442_alias)
             if _ember_5026f78346847442_prior is not None and _ember_5026f78346847442_prior is not _ember_5026f78346847442_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/fp10_idiom.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fp10_idiom.py')
             _ember_5026f78346847442_sys.modules[_ember_5026f78346847442_alias] = _ember_5026f78346847442_module
         try:
             _ember_5026f78346847442_spec.loader.exec_module(_ember_5026f78346847442_module)
@@ -72,39 +72,39 @@ def class_stats(srcs):
     for _ember_5026f78346847442_alias in _ember_5026f78346847442_aliases:
         _ember_5026f78346847442_prior = _ember_5026f78346847442_sys.modules.get(_ember_5026f78346847442_alias)
         if _ember_5026f78346847442_prior is not None and _ember_5026f78346847442_prior is not _ember_5026f78346847442_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/fp10_idiom.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fp10_idiom.py')
         _ember_5026f78346847442_sys.modules[_ember_5026f78346847442_alias] = _ember_5026f78346847442_module
     trigram_bag = getattr(_ember_5026f78346847442_module, 'trigram_bag')
-    # issue2015 exact-local-import-end:scripts/fp10_idiom.py
-    # issue2015 exact-local-import:scripts/fp13_concentration.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/fp10_idiom.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/fp13_concentration.py
     import importlib.util as _ember_2bafe3e3885447e6_importlib
     import sys as _ember_2bafe3e3885447e6_sys
     from pathlib import Path as _ember_2bafe3e3885447e6_Path
     _ember_2bafe3e3885447e6_path = _ember_2bafe3e3885447e6_Path(__file__).resolve().parents[4].joinpath('scripts', 'fp13_concentration.py')
     if not _ember_2bafe3e3885447e6_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/fp13_concentration.py')
-    _ember_2bafe3e3885447e6_aliases = ('_ember_issue2015_2bafe3e3885447e6', 'fp13_concentration', 'scripts.fp13_concentration')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fp13_concentration.py')
+    _ember_2bafe3e3885447e6_aliases = ('_ember_issue2015_2bafe3e3885447e6', 'fp13_concentration', 'src.ember.governance.scripts.fp13_concentration')
     _ember_2bafe3e3885447e6_existing = []
     for _ember_2bafe3e3885447e6_alias in _ember_2bafe3e3885447e6_aliases:
         _ember_2bafe3e3885447e6_candidate = _ember_2bafe3e3885447e6_sys.modules.get(_ember_2bafe3e3885447e6_alias)
         if _ember_2bafe3e3885447e6_candidate is not None and all(_ember_2bafe3e3885447e6_candidate is not item for item in _ember_2bafe3e3885447e6_existing):
             _ember_2bafe3e3885447e6_existing.append(_ember_2bafe3e3885447e6_candidate)
     if len(_ember_2bafe3e3885447e6_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/fp13_concentration.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/fp13_concentration.py')
     if _ember_2bafe3e3885447e6_existing:
         _ember_2bafe3e3885447e6_module = _ember_2bafe3e3885447e6_existing[0]
         _ember_2bafe3e3885447e6_observed = getattr(_ember_2bafe3e3885447e6_module, '__file__', None)
         if _ember_2bafe3e3885447e6_observed is None or _ember_2bafe3e3885447e6_Path(_ember_2bafe3e3885447e6_observed).resolve() != _ember_2bafe3e3885447e6_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/fp13_concentration.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/fp13_concentration.py')
     else:
         _ember_2bafe3e3885447e6_spec = _ember_2bafe3e3885447e6_importlib.spec_from_file_location('_ember_issue2015_2bafe3e3885447e6', _ember_2bafe3e3885447e6_path)
         if _ember_2bafe3e3885447e6_spec is None or _ember_2bafe3e3885447e6_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/fp13_concentration.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/fp13_concentration.py')
         _ember_2bafe3e3885447e6_module = _ember_2bafe3e3885447e6_importlib.module_from_spec(_ember_2bafe3e3885447e6_spec)
         for _ember_2bafe3e3885447e6_alias in _ember_2bafe3e3885447e6_aliases:
             _ember_2bafe3e3885447e6_prior = _ember_2bafe3e3885447e6_sys.modules.get(_ember_2bafe3e3885447e6_alias)
             if _ember_2bafe3e3885447e6_prior is not None and _ember_2bafe3e3885447e6_prior is not _ember_2bafe3e3885447e6_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/fp13_concentration.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fp13_concentration.py')
             _ember_2bafe3e3885447e6_sys.modules[_ember_2bafe3e3885447e6_alias] = _ember_2bafe3e3885447e6_module
         try:
             _ember_2bafe3e3885447e6_spec.loader.exec_module(_ember_2bafe3e3885447e6_module)
@@ -116,7 +116,7 @@ def class_stats(srcs):
     for _ember_2bafe3e3885447e6_alias in _ember_2bafe3e3885447e6_aliases:
         _ember_2bafe3e3885447e6_prior = _ember_2bafe3e3885447e6_sys.modules.get(_ember_2bafe3e3885447e6_alias)
         if _ember_2bafe3e3885447e6_prior is not None and _ember_2bafe3e3885447e6_prior is not _ember_2bafe3e3885447e6_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/fp13_concentration.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/fp13_concentration.py')
         _ember_2bafe3e3885447e6_sys.modules[_ember_2bafe3e3885447e6_alias] = _ember_2bafe3e3885447e6_module
     row_normalize = getattr(_ember_2bafe3e3885447e6_module, 'row_normalize')
     near_dup_edges = getattr(_ember_2bafe3e3885447e6_module, 'near_dup_edges')
@@ -124,7 +124,7 @@ def class_stats(srcs):
     chaining_diagnostic = getattr(_ember_2bafe3e3885447e6_module, 'chaining_diagnostic')
     design_effect_ess = getattr(_ember_2bafe3e3885447e6_module, 'design_effect_ess')
     mean_pairwise_cosine = getattr(_ember_2bafe3e3885447e6_module, 'mean_pairwise_cosine')
-    # issue2015 exact-local-import-end:scripts/fp13_concentration.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/fp13_concentration.py
     n = len(srcs)
     if n < 2:
         return {"rows": n, "exact_unique": n, "clusters": n, "ess": float(n)}

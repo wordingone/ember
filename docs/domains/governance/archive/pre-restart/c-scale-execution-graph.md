@@ -72,7 +72,7 @@ The C-SCALE checker (test_c_scale.py, not exported to public repo) defines the f
 
 - **Blocks:** W2.per_update_cost_at_scale; active_working_set_bytes_vs_device_floor
 - **Status:** FIXTURE (no live run). Pre-planned but queued behind C-E2B endgame (issue #29, one-model queue). Fixture receipt `receipts/r3-feasibility/r3-feasibility-phaseb-fixture-20990101T000000Z.json` exists with schema. **GPU-gated, not live.**
-- **Citation:** `docs/design/scale-architecture-frontier-20260703.md` §2; `docs/domains/governance/spec/w2-scale-preregistration-v1.md` §4 (decontam precondition); scale-architecture §5 action 2.
+- **Citation:** `docs/domains/governance/design/scale-architecture-frontier-20260703.md` §2; `docs/domains/governance/spec/w2-scale-preregistration-v1.md` §4 (decontam precondition); scale-architecture §5 action 2.
 - **Consequence:** W2 cannot assemble until R3 feasibility receipt is live (regime-M move + observed co-residence).
 
 ### W2 Decontamination Gate (C-E2B-adjacent, blocking W2 launch)
@@ -128,7 +128,7 @@ These are the conditions a satisfying C-SCALE receipt **must NEVER match**. Quot
 **Predicate:** `operating_capability_point ≤ 3e+09 OR operating_capability_point is None`
 
 - **Rule:** The floor is non-negotiable. Sub-3B is a convenience benchmark, not C-SCALE evidence. Any receipt claiming operating_capability_point ≤ 3e+09 is RED, regardless of other fields. This is not a threshold to relax; it is the boundary between toy (C14) and apex (C-SCALE).
-- **Cited source:** `docs/design/scale-architecture-frontier-20260703.md` §1 table, scale-architecture §2 physics-envelope table (R1 ceiling ~1.3B, R2 floor ~3.4B; C-SCALE floor is 3B).
+- **Cited source:** `docs/domains/governance/design/scale-architecture-frontier-20260703.md` §1 table, scale-architecture §2 physics-envelope table (R1 ceiling ~1.3B, R2 floor ~3.4B; C-SCALE floor is 3B).
 
 ### Invalid Token Bill (unre-derivable ratio)
 
@@ -156,7 +156,7 @@ These are the conditions a satisfying C-SCALE receipt **must NEVER match**. Quot
 **Predicate:** `active_working_set_bytes_vs_device_floor["active"] > device_floor ("device_floor_bytes" = 24e9 on 4090 under 0.80 governor fraction)`
 
 - **Rule:** The model + optimizer state + activations must fit on the device. Exceeding the floor means the regime is broken (overflow to CPU, slower, or impossible). RED. This is not a soft constraint; the governor enforces it as a hard assert.
-- **Cited source:** `docs/design/scale-architecture-frontier-20260703.md` §2 physics-envelope; R3 design.
+- **Cited source:** `docs/domains/governance/design/scale-architecture-frontier-20260703.md` §2 physics-envelope; R3 design.
 
 ---
 

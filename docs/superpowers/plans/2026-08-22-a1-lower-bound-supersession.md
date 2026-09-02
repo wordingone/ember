@@ -24,7 +24,7 @@
 
 **Files:**
 - Create: `tests/ember_restart_model/test_a1_lower_bound_amendment.py`
-- Create: `docs/spec/ember02-a1-lower-bound-only-amendment-v2.json`
+- Create: `docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json`
 
 **Interfaces:**
 - Consumes: raw SHA-256 of the frozen preregistration, thresholds, contract, liveness, parity, battery, and public closure comment identity.
@@ -43,7 +43,7 @@ def test_amendment_binds_frozen_authority_and_executed_trigger(self):
 - [ ] **Step 2: Run the focused test and verify RED**
 
 Run through `src/ember/governance/scripts/owned_process.py` with `-p no:cacheprovider`.
-Expected: FAIL because `docs/spec/ember02-a1-lower-bound-only-amendment-v2.json` does not exist.
+Expected: FAIL because `docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json` does not exist.
 
 - [ ] **Step 3: Add the minimal closed amendment JSON**
 
@@ -62,7 +62,7 @@ Expected: PASS with no generated identity change because the amendment is outsid
 - [ ] **Step 6: Commit the frozen carrier**
 
 ```bash
-git add docs/spec/ember02-a1-lower-bound-only-amendment-v2.json tests/ember_restart_model/test_a1_lower_bound_amendment.py docs/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md
+git add docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json tests/ember_restart_model/test_a1_lower_bound_amendment.py docs/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md
 git commit -m "docs(ember-02): rescope failed A1 arm as lower bound"
 ```
 

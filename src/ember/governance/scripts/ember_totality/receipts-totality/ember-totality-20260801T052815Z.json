@@ -965,7 +965,7 @@
           "docs/spec/receipts-v1.md",
           "scripts/receipt_check.py",
           "scripts/receipt_write.py",
-          "scripts/receipt_semantic_check.py"
+          "src/ember/governance/scripts/receipt_semantic_check.py"
         ],
         "files": [
           {
@@ -984,7 +984,7 @@
             "present": true
           },
           {
-            "path": "scripts/receipt_semantic_check.py",
+            "path": "src/ember/governance/scripts/receipt_semantic_check.py",
             "sha256": "ec1ebd29c6882a583f141acf0d47235169acfe9ecd464db30befccc7982af403",
             "present": true
           }

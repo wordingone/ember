@@ -1,7 +1,7 @@
 {
   "schema_version": "ember-content-addressed-authority-binding/v1",
   "artifact_path": "src/ember/governance/scripts/cbase_grow_rung2_event.py",
-  "artifact_sha256": "e80ef6d7f3e49e3a59e028d3290d1d787a4a0fe7dee098d1f4111af8a81a65a0",
+  "artifact_sha256": "59669358e9abe328b55a7046a4f9e049e8d1842c634902cc151520af52326ebb",
   "authority": {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02A",

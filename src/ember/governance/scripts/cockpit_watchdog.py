@@ -854,7 +854,7 @@ def run_selftest() -> None:
 # #413/#1330 (review round 2): third resolution-point consumer, in lockstep with
 # tools/ember-cli/src/utils/ember-state-root.ts (emberStateRoot/repoStateKey) and
 # Get-EmberStateRoot/Get-EmberStateRootKey in the preparation-only cockpit helper. Guarded against
-# drift by scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS, which pins this
+# drift by src/ember/governance/scripts/tests/test_cockpit_watchdog.py's KEY_PARITY_VECTORS, which pins this
 # port's output against the SAME vectors the other two suites already share.
 #
 # The renderer heartbeat writer (services/liveness-heartbeat.ts) resolves through
@@ -877,7 +877,7 @@ def _repo_state_key(root: str) -> str:
     """Port of repoStateKey() in tools/ember-cli/src/utils/ember-state-root.ts. Filesystem-
     safe, case-stable key for a checkout root -- lowercased because Windows paths are
     case-insensitive, so two spellings of one checkout key to one state directory. Pinned
-    byte-for-byte against KEY_PARITY_VECTORS in scripts/tests/test_cockpit_watchdog.py."""
+    byte-for-byte against KEY_PARITY_VECTORS in src/ember/governance/scripts/tests/test_cockpit_watchdog.py."""
     resolved = os.path.abspath(root).rstrip("\\/")
     key = re.sub(r"[^a-z0-9]+", "-", resolved.lower()).strip("-")
     if not key:

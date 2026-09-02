@@ -25,7 +25,7 @@ WORKSTREAMS = ("EMBER-01A", "EMBER-01B", "EMBER-01C")
 
 
 def test_imports_as_scripts_namespace_package() -> None:
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     result = subprocess.run(
         [sys.executable, "-B", "-c", "import scripts.check_pr_authority_binding"],
         cwd=repo_root,

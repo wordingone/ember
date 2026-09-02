@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2021, `rusqlite`, `serde_json`, `windows-sys` 0.59 (`ProcessStatus`, `Threading`, `JobObjects`), existing NVIDIA SMI parser, Windows integration tests.
 
-**Spec:** `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
+**Spec:** `docs/domains/governance/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 ## Global Constraints
 
@@ -387,7 +387,7 @@ Send the receipt path, raw file SHA-256, self hash, exact JSON content, stdout/s
 - Verify: `runtime/ember-lab/src/lib.rs`
 - Verify: `runtime/ember-lab/Cargo.toml`
 - Verify: `runtime/ember-lab/tests/control_plane.rs`
-- Verify: `docs/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
+- Verify: `docs/domains/governance/superpowers/specs/2026-08-25-issue898-foreign-pressure-sentinel-design.md`
 
 **Interfaces:**
 - Consumes: Tasks 1–4.

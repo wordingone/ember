@@ -12,7 +12,7 @@ about a human mind, unfalsifiable by the system, and it parked a board RED
 on a person. This producer replaces the GREEN-path semantics of [A] with
 four machine-checkable comprehensibility legs, receipts-only:
 
-  1. entry_point_integrity -- docs/operator/README.md resolves and every doc
+  1. entry_point_integrity -- docs/domains/governance/operator/README.md resolves and every doc
      it DIRECTLY links exists on disk.
   2. completeness          -- every operator-facing surface the CLI's OWN
      command registry (execution tree) exposes is named somewhere in the
@@ -120,7 +120,7 @@ if not _exec_root:
 EXEC_ROOT_DEFAULT = Path(_exec_root)
 REGISTRY_DUMP_SCRIPT = Path(__file__).resolve().parent.parent.parent / \
     "scratch" / "ind5-registry-dump" / "dump_registry.ts"
-README_REL = "docs/operator/README.md"
+README_REL = "docs/domains/governance/operator/README.md"
 OPERATOR_DOCS_REL = "docs/operator"
 
 # A doc line describing an intentionally-nonexistent example command (e.g.

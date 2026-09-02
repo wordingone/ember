@@ -145,7 +145,7 @@ for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
 checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py                       # noqa: E402
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 RECEIPT_DIR = REPO / "receipts"
 INVARIANT_SHA256 = "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6"
 
@@ -324,7 +324,7 @@ def main() -> int:
         "invalid_tokens_present": [],
         "device": "cpu",
         "measured_on_train_daemon": False,
-        "script": "scripts/cbase_grow_rung2_offload_probe.py",
+        "script": "src/ember/governance/scripts/cbase_grow_rung2_offload_probe.py",
         "pass": verdict_pass,
         "verdict": "PASS" if verdict_pass else "FAIL",
         "kill_criterion": None if verdict_pass else "update_rule_tolerance_exceeded",

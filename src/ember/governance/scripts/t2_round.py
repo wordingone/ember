@@ -1,0 +1,494 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+"""t2_round.py — NC0 T2: one expert-iteration round.
+
+GOVERNOR NOTE (an agent S5-A 14589): LEGACY round-execution script — NOT a governed
+v0 launch surface. Dispatched THROUGH the train-daemon, which applies the
+resource governor at the dispatch layer (EMBER_VRAM_FRACTION / EMBER_VRAM_MARGIN_GB
+in the daemon env, not inline). The inline-governed v0 launch surface is
+scripts/timeshare_pretrain.py. A missing-inline-marker flag here is expected,
+not a launch-surface defect.
+
+Phases: (1) acquire episodes — either ingest a T1 samples JSONL (round 1,
+no resample) or sample k programs/task from base+adapter_{N-1}; verified
+episodes append to the ledger. (2) build SFT dataset from the full ledger.
+(3) QLoRA-train FROM BASE on it (adapter r_N reflects all episodes <= N).
+
+--control builds the MATCHED-SFT control arm instead: same per-task example
+counts, same training config, but programs that FAILED verification.
+
+Usage (via wrapper): t2_round.py --round N [--from-samples PATH] [--control]
+Artifacts: receipts/ledger/episodes.jsonl, adapters/r{N}[-control]/, receipts/t2-*.json
+"""
+
+import os
+
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ["UNSLOTH_USE_TRITON"] = "0"  # spec-forge-proven on this box
+# NOTE: unsloth's fused-CE guard raises "No or negligible GPU memory" when
+# driver-free VRAM ~= 0 at step 0. 4 identical crashes (0cb82c79/1fbfbb77/
+# 18b1fc3f/9ca1b8be) at bf16: 7B weights = 15.2GB leave too little margin on
+# 24GB for first-forward transients. The "spec-forge-proven" recipe was proven
+# on Qwen2.5-3B (~6GB) — margin, not seq/batch, was the variable. Fix below:
+# load_in_4bit=True (true QLoRA, ~5.3GB base). Probe: probe_meminfo (H-B).
+# Loop is local-only: weights cached in HF_HOME; network reach = loud failure.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+import argparse
+import hashlib
+import json
+import random
+import sys
+import time
+from datetime import datetime, timezone
+
+NC = "<local-path>"
+sys.path.insert(0, f"{NC}/scripts")
+from t1_probe import (ARC_TRAIN, extract_code, execute_batch, load_tasks,  # noqa: E402
+                      pacing_snapshot, sample_model, task_prompt)
+from ledger_license import effective_class, parse_allow, stamp  # noqa: E402 (eng #70)
+# issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
+import importlib.util as _ember_66ee9e91637922dc_importlib
+import sys as _ember_66ee9e91637922dc_sys
+from pathlib import Path as _ember_66ee9e91637922dc_Path
+_ember_66ee9e91637922dc_path = _ember_66ee9e91637922dc_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'receipt_write.py')
+if not _ember_66ee9e91637922dc_path.is_file():
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/receipt_write.py')
+_ember_66ee9e91637922dc_aliases = ('_ember_issue2015_66ee9e91637922dc', 'receipt_write', 'scripts.receipt_write')
+_ember_66ee9e91637922dc_existing = []
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_candidate = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_candidate is not None and all(_ember_66ee9e91637922dc_candidate is not item for item in _ember_66ee9e91637922dc_existing):
+        _ember_66ee9e91637922dc_existing.append(_ember_66ee9e91637922dc_candidate)
+if len(_ember_66ee9e91637922dc_existing) > 1:
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/receipt_write.py')
+if _ember_66ee9e91637922dc_existing:
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_existing[0]
+    _ember_66ee9e91637922dc_observed = getattr(_ember_66ee9e91637922dc_module, '__file__', None)
+    if _ember_66ee9e91637922dc_observed is None or _ember_66ee9e91637922dc_Path(_ember_66ee9e91637922dc_observed).resolve() != _ember_66ee9e91637922dc_path:
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/receipt_write.py')
+else:
+    _ember_66ee9e91637922dc_spec = _ember_66ee9e91637922dc_importlib.spec_from_file_location('_ember_issue2015_66ee9e91637922dc', _ember_66ee9e91637922dc_path)
+    if _ember_66ee9e91637922dc_spec is None or _ember_66ee9e91637922dc_spec.loader is None:
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_module = _ember_66ee9e91637922dc_importlib.module_from_spec(_ember_66ee9e91637922dc_spec)
+    for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+        _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+        if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+        _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+    try:
+        _ember_66ee9e91637922dc_spec.loader.exec_module(_ember_66ee9e91637922dc_module)
+    except BaseException:
+        for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+            if _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias) is _ember_66ee9e91637922dc_module:
+                _ember_66ee9e91637922dc_sys.modules.pop(_ember_66ee9e91637922dc_alias, None)
+        raise
+for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
+    _ember_66ee9e91637922dc_prior = _ember_66ee9e91637922dc_sys.modules.get(_ember_66ee9e91637922dc_alias)
+    if _ember_66ee9e91637922dc_prior is not None and _ember_66ee9e91637922dc_prior is not _ember_66ee9e91637922dc_module:
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/receipt_write.py')
+    _ember_66ee9e91637922dc_sys.modules[_ember_66ee9e91637922dc_alias] = _ember_66ee9e91637922dc_module
+checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
+# issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
+
+LEDGER = f"{NC}/receipts/ledger/episodes.jsonl"
+CONTROL_POOL = f"{NC}/receipts/ledger/control_pool.jsonl"
+ADAPTERS = f"{NC}/adapters"
+RECEIPTS = f"{NC}/receipts"
+MAX_PER_TASK = 4  # shortest distinct verified programs kept per task
+# max_seq 3072: seed prompts cap at ~2.8k tok; 4096 + fused-CE buffer OOM'd
+# on 24GB with the bf16 base (attempts 0cb82c79/1fbfbb77/18b1fc3f).
+LORA = {"r": 32, "alpha": 64, "dropout": 0.05, "lr": 2e-4, "epochs": 3,
+        "max_seq": 3072}
+
+
+def sha(s):
+    return hashlib.sha1(s.encode()).hexdigest()[:16]
+
+
+def append_jsonl(path, rows):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    seen = set()
+    if os.path.exists(path):
+        with open(path) as f:
+            seen = {json.loads(line)["key"] for line in f if line.strip()}
+    added = 0
+    with open(path, "a") as f:
+        for r in rows:
+            if r["key"] in seen:
+                continue
+            f.write(json.dumps(r) + "\n")
+            seen.add(r["key"])
+            added += 1
+    return added
+
+
+def ingest_samples(samples_path, round_n):
+    verified, failed = [], []
+    with open(samples_path) as f:
+        for line in f:
+            row = json.loads(line)
+            if "src" not in row:
+                continue
+            rec = {"key": f"{row['task']}:{sha(row['src'])}",
+                   "task": row["task"], "src": row["src"],
+                   "round": round_n, "solved": bool(row.get("solved"))}
+            for field in ("sampler", "origin"):  # provenance passthrough
+                if row.get(field):
+                    rec[field] = row[field]
+            stamp(rec)  # eng #70: license_class at ingest
+            (verified if row.get("verified") else failed).append(rec)
+    return verified, failed
+
+
+def sample_round(model_id, adapter, k, round_n, batch_size, seed):
+    tasks = load_tasks(ARC_TRAIN)
+    by_id = {t["id"]: t for t in tasks}
+    gen_meta, completions, _, gen_tokens, secs = sample_model(
+        model_id, tasks, k, batch_size, 768, 0.8, seed, adapter=adapter)
+    jobs, metas = [], []
+    for m, comp in zip(gen_meta, completions):
+        src = extract_code(comp)
+        if src is None:
+            continue
+        t = by_id[m["task"]]
+        jobs.append((src, t["train"], t["test"]))
+        metas.append((m["task"], src))
+    results = execute_batch(jobs)
+    verified, failed = [], []
+    for (task_id, src), r in zip(metas, results):
+        rec = {"key": f"{task_id}:{sha(src)}", "task": task_id, "src": src,
+               "round": round_n, "solved": bool(r.get("solved")),
+               # v3 provenance: origin = model[+adapter]; sampler kept as the
+               # passthrough field fp6_provenance's class mapping keys on.
+               "origin": model_id + (f"+{os.path.basename(adapter)}"
+                                     if adapter else ""),
+               "sampler": model_id}
+        stamp(rec)  # eng #70: license_class at ingest
+        (verified if r.get("verified") else failed).append(rec)
+    return verified, failed, {"gen_tokens": int(gen_tokens),
+                              "gen_secs": round(secs, 1),
+                              "programs": len(jobs)}
+
+
+def build_dataset(ledger_path, cap=MAX_PER_TASK, match_counts=None,
+                  license_allow=None):
+    """Returns chat examples. match_counts: {task: n} to mirror (control).
+
+    cap: int (flat ceiling) OR {task: n} dict (bits-weighted per-task caps
+    from frontier.caps_from_records, eng #5 — easy mass discounted, frontier
+    kept deep; tasks absent from the dict fall back to MAX_PER_TASK).
+
+    license_allow (eng #70): set of allowed license classes from
+    ledger_license.parse_allow, or None for no filter (default unchanged).
+    UNKNOWN-class records never pass an active filter (fail-closed).
+
+    Records carrying inline "pairs" (seed episodes from t3_seed, incl. re-arc
+    augmented variants like "tid#a2") render their prompt from those pairs;
+    others look up the task in ARC_TRAIN.
+    """
+    by_task = {}
+    with open(ledger_path) as f:
+        for line in f:
+            r = json.loads(line)
+            if license_allow is not None and \
+                    effective_class(r) not in license_allow:
+                continue
+            by_task.setdefault(r["task"], []).append(r)
+    tasks = {t["id"]: t for t in load_tasks(ARC_TRAIN)}
+    examples, counts = [], {}
+    rng = random.Random(7)
+    for task_id, recs in sorted(by_task.items()):
+        uniq = {}
+        for r in recs:
+            uniq.setdefault(r["src"], r)
+        recs = sorted(uniq.values(), key=lambda r: len(r["src"]))
+        task_cap = cap.get(task_id, MAX_PER_TASK) if isinstance(cap, dict) \
+            else cap
+        n = (match_counts or {}).get(task_id, task_cap) \
+            if match_counts is not None else task_cap
+        if match_counts is not None and task_id not in match_counts:
+            continue
+        if match_counts is not None:
+            rng.shuffle(recs)
+        for r in recs[:n]:
+            if r.get("prompt"):
+                # Non-ARC worlds (W-code mbpp:* via w2_ingest): the record
+                # carries the exact user text the sampler saw — render it
+                # verbatim; these task keys are not in ARC_TRAIN.
+                user = r["prompt"]
+            elif r.get("pairs"):
+                user = task_prompt({"id": task_id, "train": r["pairs"],
+                                    "test": r.get("test", [])})
+            elif task_id in tasks:
+                user = task_prompt(tasks[task_id])
+            else:
+                continue
+            examples.append({
+                "messages": [
+                    {"role": "user", "content": user},
+                    {"role": "assistant",
+                     "content": f"```python\n{r['src']}\n```"},
+                ]})
+            counts[task_id] = counts.get(task_id, 0) + 1
+    return examples, counts
+
+
+def train_lora(model_id, examples, out_dir, seed=3407, match_texts=None):
+    """Mirrors the spec-forge-proven unsloth invocation on this box.
+
+    match_texts: exact effective text count to replicate/truncate to —
+    matched-budget (G2) arms pass the mirrored arm's effective count."""
+    import torch  # noqa: F401 — cuda context for governor + trainer
+    from unsloth import FastLanguageModel
+    from trl import SFTTrainer
+    from transformers import TrainingArguments
+    from datasets import Dataset
+
+    # Resource governor (post-crash 2026-06-10, the user headroom rule):
+    # launch PRECONDITIONS + per-step throttle, canonical copy in
+    # governor.py since eng #14 (crash context 0670e3ec documented there).
+    # r1's 4-bit train peaked 16.4/24.5GB, well inside the cap.
+    # issue2015 exact-local-import:src/ember/governance/scripts/governor.py
+    import importlib.util as _ember_86cfcf0844b5c48e_importlib
+    import sys as _ember_86cfcf0844b5c48e_sys
+    from pathlib import Path as _ember_86cfcf0844b5c48e_Path
+    _ember_86cfcf0844b5c48e_path = _ember_86cfcf0844b5c48e_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'governor.py')
+    if not _ember_86cfcf0844b5c48e_path.is_file():
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/governor.py')
+    _ember_86cfcf0844b5c48e_aliases = ('_ember_issue2015_86cfcf0844b5c48e', 'governor', 'scripts.governor')
+    _ember_86cfcf0844b5c48e_existing = []
+    for _ember_86cfcf0844b5c48e_alias in _ember_86cfcf0844b5c48e_aliases:
+        _ember_86cfcf0844b5c48e_candidate = _ember_86cfcf0844b5c48e_sys.modules.get(_ember_86cfcf0844b5c48e_alias)
+        if _ember_86cfcf0844b5c48e_candidate is not None and all(_ember_86cfcf0844b5c48e_candidate is not item for item in _ember_86cfcf0844b5c48e_existing):
+            _ember_86cfcf0844b5c48e_existing.append(_ember_86cfcf0844b5c48e_candidate)
+    if len(_ember_86cfcf0844b5c48e_existing) > 1:
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/governor.py')
+    if _ember_86cfcf0844b5c48e_existing:
+        _ember_86cfcf0844b5c48e_module = _ember_86cfcf0844b5c48e_existing[0]
+        _ember_86cfcf0844b5c48e_observed = getattr(_ember_86cfcf0844b5c48e_module, '__file__', None)
+        if _ember_86cfcf0844b5c48e_observed is None or _ember_86cfcf0844b5c48e_Path(_ember_86cfcf0844b5c48e_observed).resolve() != _ember_86cfcf0844b5c48e_path:
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/governor.py')
+    else:
+        _ember_86cfcf0844b5c48e_spec = _ember_86cfcf0844b5c48e_importlib.spec_from_file_location('_ember_issue2015_86cfcf0844b5c48e', _ember_86cfcf0844b5c48e_path)
+        if _ember_86cfcf0844b5c48e_spec is None or _ember_86cfcf0844b5c48e_spec.loader is None:
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/governor.py')
+        _ember_86cfcf0844b5c48e_module = _ember_86cfcf0844b5c48e_importlib.module_from_spec(_ember_86cfcf0844b5c48e_spec)
+        for _ember_86cfcf0844b5c48e_alias in _ember_86cfcf0844b5c48e_aliases:
+            _ember_86cfcf0844b5c48e_prior = _ember_86cfcf0844b5c48e_sys.modules.get(_ember_86cfcf0844b5c48e_alias)
+            if _ember_86cfcf0844b5c48e_prior is not None and _ember_86cfcf0844b5c48e_prior is not _ember_86cfcf0844b5c48e_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/governor.py')
+            _ember_86cfcf0844b5c48e_sys.modules[_ember_86cfcf0844b5c48e_alias] = _ember_86cfcf0844b5c48e_module
+        try:
+            _ember_86cfcf0844b5c48e_spec.loader.exec_module(_ember_86cfcf0844b5c48e_module)
+        except BaseException:
+            for _ember_86cfcf0844b5c48e_alias in _ember_86cfcf0844b5c48e_aliases:
+                if _ember_86cfcf0844b5c48e_sys.modules.get(_ember_86cfcf0844b5c48e_alias) is _ember_86cfcf0844b5c48e_module:
+                    _ember_86cfcf0844b5c48e_sys.modules.pop(_ember_86cfcf0844b5c48e_alias, None)
+            raise
+    for _ember_86cfcf0844b5c48e_alias in _ember_86cfcf0844b5c48e_aliases:
+        _ember_86cfcf0844b5c48e_prior = _ember_86cfcf0844b5c48e_sys.modules.get(_ember_86cfcf0844b5c48e_alias)
+        if _ember_86cfcf0844b5c48e_prior is not None and _ember_86cfcf0844b5c48e_prior is not _ember_86cfcf0844b5c48e_module:
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/governor.py')
+        _ember_86cfcf0844b5c48e_sys.modules[_ember_86cfcf0844b5c48e_alias] = _ember_86cfcf0844b5c48e_module
+    make_headroom_callback = getattr(_ember_86cfcf0844b5c48e_module, 'make_headroom_callback')
+    preflight = getattr(_ember_86cfcf0844b5c48e_module, 'preflight')
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/governor.py
+    governor_block = preflight()
+
+    # unsloth pings the HF API even when weights are cached; under our
+    # offline flags that raises. Resolve the cached snapshot DIR offline and
+    # hand unsloth a local path — zero network, flags stay on.
+    try:
+        from huggingface_hub import snapshot_download
+        model_path = snapshot_download(model_id, local_files_only=True)
+    except Exception:  # noqa: BLE001 — fall back to repo id if no cache
+        model_path = model_id
+    model, tok = FastLanguageModel.from_pretrained(
+        model_name=model_path, max_seq_length=LORA["max_seq"],
+        dtype=torch.bfloat16, load_in_4bit=True)
+    model = FastLanguageModel.get_peft_model(
+        model, r=LORA["r"], lora_alpha=LORA["alpha"],
+        lora_dropout=LORA["dropout"], bias="none",
+        use_gradient_checkpointing="unsloth", random_state=seed,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                        "gate_proj", "up_proj", "down_proj"])
+    texts = [tok.apply_chat_template(e["messages"], tokenize=False)
+             for e in examples]
+    if match_texts:
+        # Matched-budget arm (G2): replicate/truncate to EXACTLY the
+        # mirrored arm's effective text count, so both arms see the same
+        # number of optimizer steps. Added 2026-06-10 after the W-code
+        # control (180 distinct fails) hit the <200 repeat rule while arm A
+        # (294) did not — 174 vs 57 planned steps, caught mid-run, killed.
+        rep = -(-match_texts // max(len(texts), 1))
+        texts = (texts * rep)[:match_texts]
+        random.Random(seed).shuffle(texts)
+    elif len(texts) < 200:  # spec-forge small-dataset repeat
+        rep = max(5, 200 // max(len(texts), 1))
+        texts = texts * rep
+        random.Random(seed).shuffle(texts)
+    ds = Dataset.from_list([{"text": t} for t in texts])
+    trainer = SFTTrainer(
+        model=model, tokenizer=tok, train_dataset=ds,
+        dataset_text_field="text", max_seq_length=LORA["max_seq"],
+        dataset_num_proc=4,  # headroom rule: don't peg all cores tokenizing
+        callbacks=[make_headroom_callback()],
+        args=TrainingArguments(
+            output_dir=out_dir + "-ckpt", per_device_train_batch_size=1,
+            gradient_accumulation_steps=16, num_train_epochs=LORA["epochs"],
+            learning_rate=LORA["lr"], lr_scheduler_type="cosine",
+            warmup_steps=10, logging_steps=5, save_strategy="no",
+            seed=seed, report_to="none", fp16=False, bf16=True))
+    stats = trainer.train()
+    model.save_pretrained(out_dir)
+    tok.save_pretrained(out_dir)
+    return {"train_loss": round(stats.training_loss, 4),
+            "steps": stats.global_step, "n_examples": len(examples),
+            "n_texts_after_repeat": len(texts),
+            "governor": governor_block}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--round", type=int, required=True)
+    ap.add_argument("--model", default="unsloth/Qwen2.5-Coder-7B-Instruct")
+    ap.add_argument("--from-samples", default=None)
+    ap.add_argument("--train-only", action="store_true",
+                    help="skip episode acquisition; train from existing ledger")
+    ap.add_argument("--control", action="store_true")
+    ap.add_argument("--k", type=int, default=32)
+    ap.add_argument("--batch-size", type=int, default=24)
+    ap.add_argument("--seed", type=int, default=14)
+    ap.add_argument("--tag-suffix", default=os.environ.get("EMBER_ADAPTER_TAG", ""),
+                    help="adapter/receipt tag suffix per core, e.g. '-q15' "
+                         "(small-core re-stage 2026-06-10; keeps 7B artifacts "
+                         "untouched)")
+    # NOTE: this flag shifts args_fp vs pre-#70 receipts (vars(args) gains
+    # the key) — args_fp is a schema fingerprint; comparisons pin tags, not
+    # fingerprints. Same acknowledged shift as eng #26's --reward.
+    ap.add_argument("--license-allow", default=None,
+                    help="comma list of license classes to keep at dataset "
+                         "build (eng #70); default = no filter; UNKNOWN is "
+                         "fail-closed (never allow-listable)")
+    args = ap.parse_args()
+    allow = parse_allow(args.license_allow) if args.license_allow else None
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    tag = f"r{args.round}{args.tag_suffix}" + ("-control" if args.control else "")
+    from receipt_fp import args_fingerprint  # eng #10
+    receipt = {"ticket": "NC0-T2", "round": args.round, "control": args.control,
+               "model": args.model, "ts": ts,
+               "args_fp": args_fingerprint(vars(args))}
+
+    if not args.control:
+        if args.train_only:
+            verified, failed = [], []
+            receipt["sampling"] = {"source": "ledger-only (--train-only)"}
+        elif args.from_samples:
+            verified, failed, receipt["sampling"] = \
+                (*ingest_samples(args.from_samples, args.round),
+                 {"source": args.from_samples})
+        else:
+            adapter = (f"{ADAPTERS}/r{args.round - 1}{args.tag_suffix}"
+                       if args.round > 1 else None)
+            verified, failed, receipt["sampling"] = sample_round(
+                args.model, adapter, args.k, args.round, args.batch_size,
+                args.seed + args.round)
+        receipt["episodes_verified_new"] = append_jsonl(LEDGER, verified)
+        receipt["control_pool_new"] = append_jsonl(CONTROL_POOL, failed)
+        # eng #97: dedup-cluster sidecar stamps — sidecar-only writes;
+        # LEDGER and CONTROL_POOL bytes above are completely untouched.
+        # issue2015 exact-local-import:src/ember/governance/scripts/ledger_dedup.py
+        import importlib.util as _ember_341a7292e44a83b4_importlib
+        import sys as _ember_341a7292e44a83b4_sys
+        from pathlib import Path as _ember_341a7292e44a83b4_Path
+        _ember_341a7292e44a83b4_path = _ember_341a7292e44a83b4_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'ledger_dedup.py')
+        if not _ember_341a7292e44a83b4_path.is_file():
+            raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ledger_dedup.py')
+        _ember_341a7292e44a83b4_aliases = ('_ember_issue2015_341a7292e44a83b4', 'ledger_dedup', 'scripts.ledger_dedup')
+        _ember_341a7292e44a83b4_existing = []
+        for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+            _ember_341a7292e44a83b4_candidate = _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias)
+            if _ember_341a7292e44a83b4_candidate is not None and all(_ember_341a7292e44a83b4_candidate is not item for item in _ember_341a7292e44a83b4_existing):
+                _ember_341a7292e44a83b4_existing.append(_ember_341a7292e44a83b4_candidate)
+        if len(_ember_341a7292e44a83b4_existing) > 1:
+            raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ledger_dedup.py')
+        if _ember_341a7292e44a83b4_existing:
+            _ember_341a7292e44a83b4_module = _ember_341a7292e44a83b4_existing[0]
+            _ember_341a7292e44a83b4_observed = getattr(_ember_341a7292e44a83b4_module, '__file__', None)
+            if _ember_341a7292e44a83b4_observed is None or _ember_341a7292e44a83b4_Path(_ember_341a7292e44a83b4_observed).resolve() != _ember_341a7292e44a83b4_path:
+                raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ledger_dedup.py')
+        else:
+            _ember_341a7292e44a83b4_spec = _ember_341a7292e44a83b4_importlib.spec_from_file_location('_ember_issue2015_341a7292e44a83b4', _ember_341a7292e44a83b4_path)
+            if _ember_341a7292e44a83b4_spec is None or _ember_341a7292e44a83b4_spec.loader is None:
+                raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ledger_dedup.py')
+            _ember_341a7292e44a83b4_module = _ember_341a7292e44a83b4_importlib.module_from_spec(_ember_341a7292e44a83b4_spec)
+            for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+                _ember_341a7292e44a83b4_prior = _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias)
+                if _ember_341a7292e44a83b4_prior is not None and _ember_341a7292e44a83b4_prior is not _ember_341a7292e44a83b4_module:
+                    raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ledger_dedup.py')
+                _ember_341a7292e44a83b4_sys.modules[_ember_341a7292e44a83b4_alias] = _ember_341a7292e44a83b4_module
+            try:
+                _ember_341a7292e44a83b4_spec.loader.exec_module(_ember_341a7292e44a83b4_module)
+            except BaseException:
+                for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+                    if _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias) is _ember_341a7292e44a83b4_module:
+                        _ember_341a7292e44a83b4_sys.modules.pop(_ember_341a7292e44a83b4_alias, None)
+                raise
+        for _ember_341a7292e44a83b4_alias in _ember_341a7292e44a83b4_aliases:
+            _ember_341a7292e44a83b4_prior = _ember_341a7292e44a83b4_sys.modules.get(_ember_341a7292e44a83b4_alias)
+            if _ember_341a7292e44a83b4_prior is not None and _ember_341a7292e44a83b4_prior is not _ember_341a7292e44a83b4_module:
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ledger_dedup.py')
+            _ember_341a7292e44a83b4_sys.modules[_ember_341a7292e44a83b4_alias] = _ember_341a7292e44a83b4_module
+        stamp_dedup_sidecar = getattr(_ember_341a7292e44a83b4_module, 'stamp_dedup_sidecar')
+        # issue2015 exact-local-import-end:src/ember/governance/scripts/ledger_dedup.py
+        _views = f"{NC}/receipts/ledger/views"
+        stamp_dedup_sidecar(LEDGER, f"{_views}/dedup-cluster.jsonl", verified)
+        stamp_dedup_sidecar(CONTROL_POOL,
+                            f"{_views}/dedup-cluster-control.jsonl", failed)
+
+    # dataset
+    if args.control:
+        _, verified_counts = build_dataset(LEDGER, license_allow=allow)
+        examples, counts = build_dataset(CONTROL_POOL,
+                                         match_counts=verified_counts,
+                                         license_allow=allow)
+    else:
+        examples, counts = build_dataset(LEDGER, license_allow=allow)
+    receipt["dataset"] = {"n_examples": len(examples),
+                          "n_tasks": len(counts)}
+    if allow:  # eng #70: filter visibility — never a silent cap
+        from ledger_license import census as license_census, load_jsonl
+        receipt["license_filter"] = {
+            "allow": sorted(allow),
+            "episodes_by_class": license_census(load_jsonl(LEDGER)),
+            "control_pool_by_class": license_census(load_jsonl(CONTROL_POOL)),
+        }
+
+    if not examples:
+        receipt["verdict"] = "EMPTY-DATASET (K1 territory — gate before training)"
+    else:
+        t0 = time.time()
+        receipt["training"] = train_lora(args.model, examples,
+                                         f"{ADAPTERS}/{tag}")
+        receipt["training"]["secs"] = round(time.time() - t0, 1)
+        receipt["adapter"] = f"{ADAPTERS}/{tag}"
+
+    os.makedirs(RECEIPTS, exist_ok=True)
+    # fp-14 (#88): measured governor pacing, whole-job accumulation — taken
+    # at WRITE time so sampling/eval sleeps are included.
+    receipt["pacing"] = pacing_snapshot()
+    path = f"{RECEIPTS}/t2-{tag}-{ts}.json"
+    checked_write(path, receipt)
+    print(json.dumps({k: v for k, v in receipt.items() if k != "ts"},
+                     indent=2, default=str))
+    print("T2_ROUND_DONE")
+
+
+if __name__ == "__main__":
+    main()

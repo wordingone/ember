@@ -251,7 +251,7 @@ def main() -> int:
     if crlf_lines:
         print(f"CRLF_DRIFT_DETECTED: t2_round.py has CRLF on {len(crlf_lines)} line(s): "
               f"{crlf_lines[:5]}{'...' if len(crlf_lines) > 5 else ''}")
-        print("  Fix: git checkout -- scripts/t2_round.py (or normalize CRLF→LF)")
+        print("  Fix: git checkout -- src/ember/governance/scripts/t2_round.py (or normalize CRLF→LF)")
         return 1
 
     # AC2+3: source-byte audit (eng-53 pattern — facts from bytes, not flags)

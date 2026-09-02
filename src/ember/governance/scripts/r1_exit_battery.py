@@ -76,7 +76,7 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     are different, undocumented-diff formats). Reusing a verifier that would
     reject the real artifact by construction is worse than a disclosed,
     narrow, purpose-built v5 byte-hash check. Also deliberately avoids
-    importing tools/ember-restart-3b/checkpoint_artifacts.py (torch at
+    importing src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py (torch at
     module scope) for a check that is pure hashlib -- no GPU/CUDA, no torch,
     ever, in this file.
   * R1-E7's sigma_seed computation method is NOT frozen anywhere in this
@@ -2315,7 +2315,7 @@ E6_FORECAST_SCHEMA = "ember02-r1-forecast/v1"
 # The ONE document a recalibration receipt may bind (rev-1490 round-2: without
 # this pin, any of the repo's 1,324 quantities-free JSON files was a valid-sha
 # decoy that silently disabled the whole value binding).
-E6_FORECAST_PATH = "docs/spec/ember02-r1-forecast-v1.json"
+E6_FORECAST_PATH = "docs/domains/governance/spec/ember02-r1-forecast-v1.json"
 E6_FORECAST_PATHS = {
     "R1": E6_FORECAST_PATH,
     "R2": "docs/spec/ember02-r2-forecast-v1.json",
@@ -2585,7 +2585,7 @@ def check_r1_e6(
             "detail": (
                 "no forecast document and no recalibration receipt found under this run root; "
                 "generate one with src/ember/governance/scripts/forecast_recalibration.py --forecast "
-                "docs/spec/ember02-r1-forecast-v1.json --run-root <this root> (it refuses, with the "
+                "docs/domains/governance/spec/ember02-r1-forecast-v1.json --run-root <this root> (it refuses, with the "
                 "quantity named, until the run root carries the evidence each quantity needs -- "
                 f"including a measured >= T-01={t01}-step baseline)"
             ),
@@ -4091,7 +4091,7 @@ def run_selftest() -> None:
         e6_receipt = {
             "schema_version": "ember02-forecast-recalibration/v1",
             "generator": "src/ember/governance/scripts/forecast_recalibration.py",
-            "forecast_path": "docs/spec/ember02-r1-forecast-v1.json",
+            "forecast_path": "docs/domains/governance/spec/ember02-r1-forecast-v1.json",
             "forecast_sha256": hashlib.sha256(e6_forecast_bytes).hexdigest(),
             "run_root": str(e6_met_root),
             "run_id": "SELFTEST_E6_run",

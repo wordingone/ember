@@ -138,7 +138,7 @@ dF/dround > 0 (now measurable in bits as dB/dround > 0) AND a positive G1
 held-out delta. A high-bits diet that doesn't convert is still a conversion
 failure; B replaces the count only on the feed side.
 
-Estimator: `scripts/vbits.py` (pure functions, unit-checked; consumed by w2
+Estimator: `src/ember/governance/scripts/vbits.py` (pure functions, unit-checked; consumed by w2
 ingest and the round-2 dataset builder).
 
 ## 4. The gain gate (three tests, formal)

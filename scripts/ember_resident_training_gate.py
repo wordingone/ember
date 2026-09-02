@@ -1214,7 +1214,7 @@ def build_gate_receipt(
     candidate, candidate_errors = _validate_candidate_manifest(candidate_manifest, floor_contracts)
     errors.extend(candidate_errors)
 
-    # DT-6 loop-economics conjunct (docs/archive/pre-restart/dt6-loop-economics-gate-amendment.md,
+    # DT-6 loop-economics conjunct (docs/domains/governance/archive/pre-restart/dt6-loop-economics-gate-amendment.md,
     # gh #128): check_econ_gate is invoked unconditionally here -- never only
     # inside an `if status == "PASS"` branch -- so a PASS with the econ leg
     # unevaluated is impossible by construction. A missing candidate or

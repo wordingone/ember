@@ -50,7 +50,7 @@
 
 **Files:**
 - Modify: `tools/ember-restart-3b/training_acceleration.py`
-- Modify: `tools/ember-restart-3b/model.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/model.py`
 - Modify: `tools/ember-restart-3b/pretrain.py`
 - Modify: `tools/ember-restart-3b/run_vertical_slice.py`
 - Test: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`

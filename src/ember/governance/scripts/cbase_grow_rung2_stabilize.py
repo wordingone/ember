@@ -132,35 +132,35 @@ for _ember_d9c5c82c124e1dc8_alias in _ember_d9c5c82c124e1dc8_aliases:
     _ember_d9c5c82c124e1dc8_sys.modules[_ember_d9c5c82c124e1dc8_alias] = _ember_d9c5c82c124e1dc8_module
 ts = _ember_d9c5c82c124e1dc8_module
 # issue2015 exact-local-import-end:scripts/timeshare_pretrain.py                                       # noqa: E402
-# issue2015 exact-local-import:scripts/cpu_offload_adamw.py
+# issue2015 exact-local-import:src/ember/governance/scripts/cpu_offload_adamw.py
 import importlib.util as _ember_af5148f80571f78d_importlib
 import sys as _ember_af5148f80571f78d_sys
 from pathlib import Path as _ember_af5148f80571f78d_Path
 _ember_af5148f80571f78d_path = _ember_af5148f80571f78d_Path(__file__).resolve().parents[4].joinpath('scripts', 'cpu_offload_adamw.py')
 if not _ember_af5148f80571f78d_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/cpu_offload_adamw.py')
-_ember_af5148f80571f78d_aliases = ('_ember_issue2015_af5148f80571f78d', 'cpu_offload_adamw', 'scripts.cpu_offload_adamw')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/cpu_offload_adamw.py')
+_ember_af5148f80571f78d_aliases = ('_ember_issue2015_af5148f80571f78d', 'cpu_offload_adamw', 'src.ember.governance.scripts.cpu_offload_adamw')
 _ember_af5148f80571f78d_existing = []
 for _ember_af5148f80571f78d_alias in _ember_af5148f80571f78d_aliases:
     _ember_af5148f80571f78d_candidate = _ember_af5148f80571f78d_sys.modules.get(_ember_af5148f80571f78d_alias)
     if _ember_af5148f80571f78d_candidate is not None and all(_ember_af5148f80571f78d_candidate is not item for item in _ember_af5148f80571f78d_existing):
         _ember_af5148f80571f78d_existing.append(_ember_af5148f80571f78d_candidate)
 if len(_ember_af5148f80571f78d_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/cpu_offload_adamw.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/cpu_offload_adamw.py')
 if _ember_af5148f80571f78d_existing:
     _ember_af5148f80571f78d_module = _ember_af5148f80571f78d_existing[0]
     _ember_af5148f80571f78d_observed = getattr(_ember_af5148f80571f78d_module, '__file__', None)
     if _ember_af5148f80571f78d_observed is None or _ember_af5148f80571f78d_Path(_ember_af5148f80571f78d_observed).resolve() != _ember_af5148f80571f78d_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/cpu_offload_adamw.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/cpu_offload_adamw.py')
 else:
     _ember_af5148f80571f78d_spec = _ember_af5148f80571f78d_importlib.spec_from_file_location('_ember_issue2015_af5148f80571f78d', _ember_af5148f80571f78d_path)
     if _ember_af5148f80571f78d_spec is None or _ember_af5148f80571f78d_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/cpu_offload_adamw.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/cpu_offload_adamw.py')
     _ember_af5148f80571f78d_module = _ember_af5148f80571f78d_importlib.module_from_spec(_ember_af5148f80571f78d_spec)
     for _ember_af5148f80571f78d_alias in _ember_af5148f80571f78d_aliases:
         _ember_af5148f80571f78d_prior = _ember_af5148f80571f78d_sys.modules.get(_ember_af5148f80571f78d_alias)
         if _ember_af5148f80571f78d_prior is not None and _ember_af5148f80571f78d_prior is not _ember_af5148f80571f78d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/cpu_offload_adamw.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cpu_offload_adamw.py')
         _ember_af5148f80571f78d_sys.modules[_ember_af5148f80571f78d_alias] = _ember_af5148f80571f78d_module
     try:
         _ember_af5148f80571f78d_spec.loader.exec_module(_ember_af5148f80571f78d_module)
@@ -172,12 +172,12 @@ else:
 for _ember_af5148f80571f78d_alias in _ember_af5148f80571f78d_aliases:
     _ember_af5148f80571f78d_prior = _ember_af5148f80571f78d_sys.modules.get(_ember_af5148f80571f78d_alias)
     if _ember_af5148f80571f78d_prior is not None and _ember_af5148f80571f78d_prior is not _ember_af5148f80571f78d_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/cpu_offload_adamw.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cpu_offload_adamw.py')
     _ember_af5148f80571f78d_sys.modules[_ember_af5148f80571f78d_alias] = _ember_af5148f80571f78d_module
 estimate_required_gib_offloaded = getattr(_ember_af5148f80571f78d_module, 'estimate_required_gib_offloaded')
 vram_preflight = getattr(_ember_af5148f80571f78d_module, 'vram_preflight')
 nvidia_smi_vram = getattr(_ember_af5148f80571f78d_module, 'nvidia_smi_vram')
-# issue2015 exact-local-import-end:scripts/cpu_offload_adamw.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/cpu_offload_adamw.py
 from rung_boundary_momentum_transplant import (                       # noqa: E402
     transplant_muon_ff_momentum, BOUNDARY_POLICY,
 )
@@ -565,35 +565,35 @@ _torch_for_patch.nn.Module.load_state_dict = _patched_load_state_dict
 # order... state indices align, so the resume is bit-exact" -- reused here,
 # not reinvented). Shape asserted (fail-closed); dtype reconciled with a
 # per-tensor .to() only (bounded, not the whole-state cast this replaces).
-# issue2015 exact-local-import:scripts/cpu_offload_adamw.py
+# issue2015 exact-local-import:src/ember/governance/scripts/cpu_offload_adamw.py
 import importlib.util as _ember_af5148f80571f78d_importlib
 import sys as _ember_af5148f80571f78d_sys
 from pathlib import Path as _ember_af5148f80571f78d_Path
 _ember_af5148f80571f78d_path = _ember_af5148f80571f78d_Path(__file__).resolve().parents[4].joinpath('scripts', 'cpu_offload_adamw.py')
 if not _ember_af5148f80571f78d_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/cpu_offload_adamw.py')
-_ember_af5148f80571f78d_aliases = ('_ember_issue2015_af5148f80571f78d', 'cpu_offload_adamw', 'scripts.cpu_offload_adamw')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/cpu_offload_adamw.py')
+_ember_af5148f80571f78d_aliases = ('_ember_issue2015_af5148f80571f78d', 'cpu_offload_adamw', 'src.ember.governance.scripts.cpu_offload_adamw')
 _ember_af5148f80571f78d_existing = []
 for _ember_af5148f80571f78d_alias in _ember_af5148f80571f78d_aliases:
     _ember_af5148f80571f78d_candidate = _ember_af5148f80571f78d_sys.modules.get(_ember_af5148f80571f78d_alias)
     if _ember_af5148f80571f78d_candidate is not None and all(_ember_af5148f80571f78d_candidate is not item for item in _ember_af5148f80571f78d_existing):
         _ember_af5148f80571f78d_existing.append(_ember_af5148f80571f78d_candidate)
 if len(_ember_af5148f80571f78d_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/cpu_offload_adamw.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/cpu_offload_adamw.py')
 if _ember_af5148f80571f78d_existing:
     _ember_af5148f80571f78d_module = _ember_af5148f80571f78d_existing[0]
     _ember_af5148f80571f78d_observed = getattr(_ember_af5148f80571f78d_module, '__file__', None)
     if _ember_af5148f80571f78d_observed is None or _ember_af5148f80571f78d_Path(_ember_af5148f80571f78d_observed).resolve() != _ember_af5148f80571f78d_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/cpu_offload_adamw.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/cpu_offload_adamw.py')
 else:
     _ember_af5148f80571f78d_spec = _ember_af5148f80571f78d_importlib.spec_from_file_location('_ember_issue2015_af5148f80571f78d', _ember_af5148f80571f78d_path)
     if _ember_af5148f80571f78d_spec is None or _ember_af5148f80571f78d_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/cpu_offload_adamw.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/cpu_offload_adamw.py')
     _ember_af5148f80571f78d_module = _ember_af5148f80571f78d_importlib.module_from_spec(_ember_af5148f80571f78d_spec)
     for _ember_af5148f80571f78d_alias in _ember_af5148f80571f78d_aliases:
         _ember_af5148f80571f78d_prior = _ember_af5148f80571f78d_sys.modules.get(_ember_af5148f80571f78d_alias)
         if _ember_af5148f80571f78d_prior is not None and _ember_af5148f80571f78d_prior is not _ember_af5148f80571f78d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/cpu_offload_adamw.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cpu_offload_adamw.py')
         _ember_af5148f80571f78d_sys.modules[_ember_af5148f80571f78d_alias] = _ember_af5148f80571f78d_module
     try:
         _ember_af5148f80571f78d_spec.loader.exec_module(_ember_af5148f80571f78d_module)
@@ -605,10 +605,10 @@ else:
 for _ember_af5148f80571f78d_alias in _ember_af5148f80571f78d_aliases:
     _ember_af5148f80571f78d_prior = _ember_af5148f80571f78d_sys.modules.get(_ember_af5148f80571f78d_alias)
     if _ember_af5148f80571f78d_prior is not None and _ember_af5148f80571f78d_prior is not _ember_af5148f80571f78d_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/cpu_offload_adamw.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cpu_offload_adamw.py')
     _ember_af5148f80571f78d_sys.modules[_ember_af5148f80571f78d_alias] = _ember_af5148f80571f78d_module
 _coa = _ember_af5148f80571f78d_module
-# issue2015 exact-local-import-end:scripts/cpu_offload_adamw.py  # noqa: E402
+# issue2015 exact-local-import-end:src/ember/governance/scripts/cpu_offload_adamw.py  # noqa: E402
 
 
 def _streamed_cpu_offload_load_state_dict(self, state_dict: dict) -> None:

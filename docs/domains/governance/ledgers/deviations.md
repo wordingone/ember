@@ -232,7 +232,7 @@ text and this deviation note describe the SAME three items from the two sides (f
 ruling).
 
 **Receipts:** PR #434 (`feat/p1-envelope-sweep-runner`, `src/ember/governance/scripts/p1_envelope_sweep.py` +
-`scripts/test_p1_envelope_sweep.py` + this warmup-override commit); no run receipt yet --
+`src/ember/governance/scripts/test_p1_envelope_sweep.py` + this warmup-override commit); no run receipt yet --
 point 3's gate probe has not completed clean (two unrelated environmental blockers,
 reported in the same PR: a 13GiB contiguous-allocation failure in the reused corpus loader,
 and a missing sha-pinned decontam receipt the banked W1 control run cites). Relates to
