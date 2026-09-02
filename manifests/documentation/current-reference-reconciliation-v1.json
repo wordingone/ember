@@ -7,10 +7,10 @@
   },
   "counts": {
     "contained_resolved_canonical_tokens": 9,
-    "corrected_classifier_current_unresolved": 379,
+    "corrected_classifier_current_unresolved": 380,
     "documents": 393,
-    "explicit_filing_dispositions": 443,
-    "filing_classifier_current_unresolved": 452
+    "explicit_filing_dispositions": 444,
+    "filing_classifier_current_unresolved": 453
   },
   "rows": [
     {
@@ -4488,6 +4488,19 @@
       "target": "data/seeds"
     },
     {
+      "document": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
+      "line": 37,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/domains/governance/spec/ember02-llmq-adoption-readiness-v1.md",
+        "source_line": 37,
+        "source_target": "runtime/ember-lab/target/release/ember-lab.exe",
+        "visible_classification": "reference"
+      },
+      "target": "runtime/ember-lab/target/release/ember-lab.exe"
+    },
+    {
       "document": "docs/domains/governance/spec/ember02-preregistration-v1.md",
       "line": 191,
       "resolution": {
@@ -5854,7 +5867,7 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "c7bb45b4eef01c942c314f09f050f3f351820f3c3edfede28cc6a8cb11c8c1b3",
+  "rows_sha256": "9bdead8a91472b7bd9e5c54c06b25dab802c2f327dcb0f2e45ff3890ee692ab5",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",
