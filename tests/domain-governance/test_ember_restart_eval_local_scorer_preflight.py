@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 import hashlib, importlib.util, json, subprocess, sys, tempfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];SCORER=ROOT/'scripts'/'ember_restart_eval_text_exact.py';PREFLIGHT=ROOT/'scripts'/'ember_restart_eval_execution_preflight.py'
+ROOT=next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file());SCORER=ROOT/'scripts'/'ember_restart_eval_text_exact.py';PREFLIGHT=ROOT/'scripts'/'ember_restart_eval_execution_preflight.py'
 def _load_text_scorer():
     sys.path.insert(0, str(SCORER.parent))
     specification = importlib.util.spec_from_file_location("text_scorer_single_read", SCORER)
