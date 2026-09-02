@@ -20,7 +20,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
-VERIFIER = REPO_ROOT / "scripts" / "verify_authority_conservation.py"
+VERIFIER = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py"
 INVARIANT_SHA256 = "08A0EB7418C09A8088BE4658E10785107ABBB7507FC2DBCDC789936AA54E02A6"
 
 
@@ -39,7 +39,7 @@ GOVERNING_SURFACES = [
     "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md",
     "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md",
     "docs/domains/governance/spec/conditions-v1.md",
-    "docs/domains/governance/authority/ember-authority-matrix.md",
+    "docs/authority/ember-authority-matrix.md",
     "GOVERNANCE.md",
     "README.md",
     "CONTINUITY.md",
@@ -331,10 +331,11 @@ def write_valid_crosswalk(root: Path, matrix_path: Path) -> None:
     to see. That rule only fires when the pins move across a diff, so a fixture
     that writes this packet once, identically, never trips it.
     """
-    (root / "scripts").mkdir(parents=True, exist_ok=True)
+    target = root / "src" / "ember" / "governance" / "scripts"
+    target.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(
-        REPO_ROOT / "scripts" / "verify_authority_supersession_crosswalk.py",
-        root / "scripts" / "verify_authority_supersession_crosswalk.py",
+        REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "verify_authority_supersession_crosswalk.py",
+        target / "verify_authority_supersession_crosswalk.py",
     )
 
     milestone_id = "EMBER-02"
@@ -426,7 +427,7 @@ def write_valid_fixture(root: Path) -> None:
     (root / "REDACTIONS.md").write_text("# Fixture redactions policy\n", encoding="utf-8")
 
     for rel in GOVERNING_SURFACES:
-        if rel == "docs/domains/governance/authority/ember-authority-matrix.md":
+        if rel == "docs/authority/ember-authority-matrix.md":
             continue
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -494,6 +495,8 @@ def write_valid_fixture(root: Path) -> None:
             "raise SystemExit('historical_only: fixture')\n",
             encoding="utf-8",
         )
+    # Several staged-diff fixtures deliberately create new legacy-path controls.
+    (root / "scripts").mkdir(parents=True, exist_ok=True)
 
     policy = copy.deepcopy(VALID_POLICY)
     policy["conservation_hashes"] = {
@@ -692,7 +695,7 @@ def migrate_authority_fixture(root: Path) -> None:
     hashes = policy["conservation_hashes"]["governing_surfaces_sha256"]
     for name in ("GOVERNANCE.md", "CONTINUITY.md"):
         hashes[f"docs/authority/{name}"] = hashes.pop(name)
-    hashes["docs/domains/governance/authority/ember-authority-matrix.md"] = matrix_digest.upper()
+    hashes["docs/authority/ember-authority-matrix.md"] = matrix_digest.upper()
     policy["conservation_hashes"]["authority_matrix_sha256"] = matrix_digest.upper()
     goal_path.write_text(render_goal(policy), encoding="utf-8")
 
@@ -856,7 +859,7 @@ def test_untracked_authority_shaped_scratch_is_not_part_of_git_guard(tmp_path: P
     """Only untracked scratch products are outside the commit-level scan."""
     (tmp_path / ".git").write_text("gitdir: fixture\n", encoding="utf-8")
     tracked = "scratch/tracked.md"
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(VERIFIER.parent))
     import verify_authority_conservation as verifier
 
     monkeypatch.setattr(
@@ -1484,7 +1487,7 @@ def test_borrowed_reference_requires_frozen_non_ingress_seat(tmp_path: Path) -> 
 
 def test_governing_surface_semantic_mutation_breaks_hash(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    surface = tmp_path / "docs" / "contracts" / "goal-clear-protocol.md"
+    surface = tmp_path / "docs" / "domains" / "governance" / "contracts" / "goal-clear-protocol.md"
     surface.write_text(
         surface.read_text(encoding="utf-8") + "\nAudio may be deferred.\n",
         encoding="utf-8",
@@ -1506,7 +1509,7 @@ def test_matrix_semantic_mutation_breaks_hash(tmp_path: Path) -> None:
 
 def test_historical_training_runner_cannot_be_reenabled(tmp_path: Path) -> None:
     write_valid_fixture(tmp_path)
-    runner = tmp_path / "scripts" / "train_multimodal_v0.py"
+    runner = tmp_path / "src" / "ember" / "governance" / "scripts" / "train_multimodal_v0.py"
     runner.write_text(
         "# EMBER_ARTIFACT_CLASS=historical_only\nprint('live again')\n",
         encoding="utf-8",
@@ -1515,7 +1518,7 @@ def test_historical_training_runner_cannot_be_reenabled(tmp_path: Path) -> None:
 
 
 def test_future_artifact_binding_parser_is_exact() -> None:
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(VERIFIER.parent))
     from verify_authority_conservation import validate_artifact_binding
 
     goal = "EMBER-00"
@@ -1606,7 +1609,7 @@ def test_future_artifact_binding_parser_is_exact() -> None:
 
 
 def test_future_artifact_binding_accepts_only_named_child_workstreams() -> None:
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(VERIFIER.parent))
     from verify_authority_conservation import validate_artifact_binding
 
     goal = "EMBER-02"
@@ -1628,7 +1631,7 @@ def test_future_artifact_binding_accepts_only_named_child_workstreams() -> None:
 
 
 def test_workstream_path_scope_prevents_parallel_authority_overlap() -> None:
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(VERIFIER.parent))
     from verify_authority_conservation import workstream_path_allowed
 
     scopes = {
@@ -1654,7 +1657,7 @@ def test_workstream_path_scope_prevents_parallel_authority_overlap() -> None:
 
 
 def test_source_annotations_are_not_authority_markers() -> None:
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(VERIFIER.parent))
     from verify_authority_conservation import validate_artifact_binding
 
     text = (
@@ -1704,7 +1707,7 @@ def test_staged_verification_reads_governing_bytes_from_index(tmp_path: Path) ->
         valid_working_copy.replace("ledger D-045", "staged semantic drift"),
         encoding="utf-8",
     )
-    git_fixture(tmp_path, "add", "docs/domains/governance/authority/ember-authority-matrix.md")
+    git_fixture(tmp_path, "add", "docs/authority/ember-authority-matrix.md")
     matrix.write_text(valid_working_copy, encoding="utf-8")
 
     result = run_verifier(tmp_path, extra_args=("--staged",))
@@ -2520,7 +2523,7 @@ def _crosswalk_fixture(
         "repository": "wordingone/ember",
         "source_commit": source_commit,
         "current_authority": {
-            "matrix_path": "docs/domains/governance/authority/ember-authority-matrix.md",
+            "matrix_path": "docs/authority/ember-authority-matrix.md",
             "matrix_sha256": matrix_sha,
         },
         "source_registries": [
