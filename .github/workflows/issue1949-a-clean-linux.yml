@@ -1,0 +1,65 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: issue1949-a-clean-linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      declared_head:
+        description: Exact merged commit to prove
+        required: true
+        type: string
+      plan_path:
+        description: Repository-relative immutable A-CLEAN plan
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  linux-clean-clone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact declared tip into arbitrary root
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.declared_head }}
+          path: fresh clone é
+          persist-credentials: false
+
+      - name: Refuse checkout identity drift
+        shell: bash
+        working-directory: fresh clone é
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "${{ inputs.declared_head }}"
+          test -z "$(git status --porcelain)"
+
+      - name: Run Linux CPU clean-clone plan outside checkout CWD
+        shell: bash
+        env:
+          CHECKOUT: ${{ github.workspace }}/fresh clone é
+          PLAN_RELATIVE: ${{ inputs.plan_path }}
+          RECEIPT: ${{ runner.temp }}/issue1949-a-clean-linux.json
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          python3 "$CHECKOUT/scripts/issue1949_a_clean.py" run \
+            --repo-root "$CHECKOUT" \
+            --plan "$CHECKOUT/$PLAN_RELATIVE" \
+            --output "$RECEIPT" \
+            --platform linux
+          python3 "$CHECKOUT/scripts/issue1949_a_clean.py" verify --receipt "$RECEIPT"
+
+      - name: Upload raw receipt and per-leg streams
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue1949-a-clean-linux-${{ inputs.declared_head }}
+          path: |
+            ${{ runner.temp }}/issue1949-a-clean-linux.json
+            ${{ runner.temp }}/issue1949-a-clean-linux.streams/**
+          if-no-files-found: error
