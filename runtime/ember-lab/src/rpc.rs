@@ -112,8 +112,6 @@ fn persist_storage_daemon_terminal(
 
 fn reopen_storage_daemon_terminal(
     request: &StorageReconcileRequest,
-    daemon_binary_sha256: &str,
-    execution: &ExecutionReceipt,
 ) -> Result<Option<StorageDaemonTerminalReceipt>, Box<dyn std::error::Error>> {
     let path = request.custody.join("daemon-terminal.json");
     if !path.is_file() {
@@ -127,13 +125,14 @@ fn reopen_storage_daemon_terminal(
         || receipt.self_sha256 != expected_self_sha256
         || !receipt.lease_released
         || receipt.lease_resource != "storage:state-models"
-        || receipt.daemon_binary_sha256 != daemon_binary_sha256
-        || receipt.policy_raw_sha256 != hash_file(&request.policy)?
-        || receipt.pin_set_sha256 != request.pin_set_sha256
-        || receipt.current_master != request.current_master
-        || receipt.execution_receipt_self_sha256 != execution.self_sha256
     {
         return Err(io::Error::other("storage daemon terminal receipt identity mismatch").into());
+    }
+    if receipt.policy_raw_sha256 != hash_file(&request.policy)?
+        || receipt.pin_set_sha256 != request.pin_set_sha256
+        || receipt.current_master != request.current_master
+    {
+        return Ok(None);
     }
     Ok(Some(receipt))
 }
@@ -681,6 +680,43 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                     false,
                 );
             }
+            let resource = "storage:state-models";
+            match reopen_storage_daemon_terminal(&params) {
+                Ok(Some(terminal)) => {
+                    let execution = match run_storage_reconcile(&params) {
+                        Ok(value) => value,
+                        Err(error) => return (operation_error(id, error), false),
+                    };
+                    if terminal.execution_receipt_self_sha256 != execution.self_sha256 {
+                        return (
+                            operation_error(
+                                id,
+                                "storage daemon terminal execution receipt identity mismatch",
+                            ),
+                            false,
+                        );
+                    }
+                    return (
+                        success(
+                            id,
+                            json!({
+                                "command_identity": terminal.command_identity,
+                                "authenticated_client_pid": terminal.authenticated_client_pid,
+                                "daemon_pid": terminal.daemon_pid,
+                                "daemon_binary_sha256": terminal.daemon_binary_sha256,
+                                "lease_resource": terminal.lease_resource,
+                                "lease_released": terminal.lease_released,
+                                "daemon_terminal_self_sha256": terminal.self_sha256,
+                                "reopened": true,
+                                "execution_receipt": execution,
+                            }),
+                        ),
+                        false,
+                    );
+                }
+                Ok(None) => {}
+                Err(error) => return (operation_error(id, error), false),
+            }
             let reopened_master = match reopen_remote_master(&params.repository_root) {
                 Ok(value) => value,
                 Err(error) => return (operation_error(id, error), false),
@@ -694,7 +730,6 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                     false,
                 );
             }
-            let resource = "storage:state-models";
             let executable = match std::env::current_exe() {
                 Ok(value) => value,
                 Err(error) => return (operation_error(id, error), false),
@@ -703,43 +738,6 @@ fn dispatch(daemon: &Daemon, request: WireRequest, client_pid: Option<u32>) -> (
                 Ok(value) => value,
                 Err(error) => return (operation_error(id, error), false),
             };
-            if params.custody.join("daemon-terminal.json").is_file() {
-                let execution = match run_storage_reconcile(&params) {
-                    Ok(value) => value,
-                    Err(error) => return (operation_error(id, error), false),
-                };
-                let terminal =
-                    match reopen_storage_daemon_terminal(&params, &executable_sha256, &execution) {
-                        Ok(Some(value)) => value,
-                        Ok(None) => {
-                            return (
-                                operation_error(
-                                    id,
-                                    "storage daemon terminal disappeared during reopen",
-                                ),
-                                false,
-                            )
-                        }
-                        Err(error) => return (operation_error(id, error), false),
-                    };
-                return (
-                    success(
-                        id,
-                        json!({
-                            "command_identity": terminal.command_identity,
-                            "authenticated_client_pid": terminal.authenticated_client_pid,
-                            "daemon_pid": terminal.daemon_pid,
-                            "daemon_binary_sha256": terminal.daemon_binary_sha256,
-                            "lease_resource": terminal.lease_resource,
-                            "lease_released": terminal.lease_released,
-                            "daemon_terminal_self_sha256": terminal.self_sha256,
-                            "reopened": true,
-                            "execution_receipt": execution,
-                        }),
-                    ),
-                    false,
-                );
-            }
             let operation_id = format!(
                 "storage-reconcile-{client_pid}-{}",
                 SystemTime::now()
@@ -1479,7 +1477,26 @@ mod tests {
                 persisted["self_sha256"],
                 response["result"]["daemon_terminal_self_sha256"]
             );
+            if id == 1 {
+                std::fs::write(&remote_master, format!("{}\n", "c".repeat(40))).unwrap();
+            }
         }
+        let mut different_identity = params.clone();
+        different_identity["current_master"] = serde_json::Value::String("c".repeat(40));
+        let (response, shutdown) = dispatch(
+            &daemon,
+            WireRequest {
+                jsonrpc: "2.0".into(),
+                id: serde_json::json!(3),
+                method: "storage_reconcile".into(),
+                params: different_identity,
+            },
+            Some(4242),
+        );
+        assert!(!shutdown);
+        assert!(response.get("error").is_some(), "{response}");
+        assert_eq!(daemon.lease_owner("storage:state-models").unwrap(), None);
+
         let daemon_terminal = root.join("custody").join("daemon-terminal.json");
         let mut tampered: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&daemon_terminal).unwrap()).unwrap();
@@ -1489,7 +1506,7 @@ mod tests {
             &daemon,
             WireRequest {
                 jsonrpc: "2.0".into(),
-                id: serde_json::json!(3),
+                id: serde_json::json!(4),
                 method: "storage_reconcile".into(),
                 params,
             },

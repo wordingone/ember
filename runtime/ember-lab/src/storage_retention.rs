@@ -2294,7 +2294,7 @@ fn read_bound_plan(
     Ok(plan)
 }
 
-fn verify_reconcile_authority(request: &StorageReconcileRequest) -> Result<(), PlanError> {
+fn verify_reconcile_pin_set(request: &StorageReconcileRequest) -> Result<(), PlanError> {
     let reopened_pin_set_sha256 = fs::read(&request.declarations)
         .map(|bytes| sha256_hex(&bytes))
         .map_err(|error| PlanError::InvalidIdentity(error.to_string()))?;
@@ -2303,6 +2303,11 @@ fn verify_reconcile_authority(request: &StorageReconcileRequest) -> Result<(), P
             "reopened declarations do not match the requested pin-set hash".into(),
         ));
     }
+    Ok(())
+}
+
+fn verify_reconcile_authority(request: &StorageReconcileRequest) -> Result<(), PlanError> {
+    verify_reconcile_pin_set(request)?;
     let reopened_master = reopen_remote_master(&request.repository_root)?;
     if reopened_master != request.current_master {
         return Err(PlanError::InvalidIdentity(
@@ -2315,7 +2320,10 @@ fn verify_reconcile_authority(request: &StorageReconcileRequest) -> Result<(), P
 pub fn run_storage_reconcile(
     request: &StorageReconcileRequest,
 ) -> Result<ExecutionReceipt, Box<dyn std::error::Error>> {
-    verify_reconcile_authority(request)?;
+    // A terminal receipt is immutable historical authority.  Reopen it from the exact
+    // request-bound plan before consulting mutable origin/master; otherwise an unrelated
+    // later merge makes a byte-identical command cease to be idempotent.
+    verify_reconcile_pin_set(request)?;
     let policy = parse_policy(&fs::read(&request.policy)?)?;
     let plan_path = request.custody.join("plan.json");
     let terminal_path = request.custody.join("terminal.json");
@@ -2336,8 +2344,28 @@ pub fn run_storage_reconcile(
         if receipt.plan_self_sha256 != plan.self_sha256 {
             return Err(PlanError::InvalidIdentity("terminal receipt plan mismatch".into()).into());
         }
+        // Storage roots are explicit command inputs and may intentionally live outside the
+        // immutable source worktree.  Bind them to the persisted plan's independently observed
+        // kept-row identities instead of deriving them from repository_root.  This is read-only
+        // and rejects a substituted root even when it contains byte-identical copies, because
+        // the plan also binds physical identity and modification time.
+        verify_kept_rows(&plan, &roots)?;
+        let operation_matches = matches!(
+            (receipt.result.as_str(), request.operation),
+            ("DRY_RUN_PASS", ReconcileOperation::DryRun)
+                | ("COMMITTED_PASS", ReconcileOperation::Commit)
+                | ("RECOVERED_COMMITTED_PASS", ReconcileOperation::Resume)
+                | ("RECOVERED_ROLLBACK_PASS", ReconcileOperation::Rollback)
+        );
+        if !operation_matches {
+            return Err(PlanError::InvalidIdentity(
+                "terminal receipt does not match the requested operation".into(),
+            )
+            .into());
+        }
         return Ok(receipt);
     }
+    verify_reconcile_authority(request)?;
     if matches!(
         request.operation,
         ReconcileOperation::Resume | ReconcileOperation::Rollback
