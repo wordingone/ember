@@ -199,35 +199,35 @@ def main():
         _ember_c32cf5e860218889_sys.modules[_ember_c32cf5e860218889_alias] = _ember_c32cf5e860218889_module
     execute_batch = getattr(_ember_c32cf5e860218889_module, 'execute_batch')
     # issue2015 exact-local-import-end:src/ember/governance/scripts/t1_probe.py
-    # issue2015 exact-local-import:scripts/w1_mbpp.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/w1_mbpp.py
     import importlib.util as _ember_53a439835d3991b4_importlib
     import sys as _ember_53a439835d3991b4_sys
     from pathlib import Path as _ember_53a439835d3991b4_Path
     _ember_53a439835d3991b4_path = _ember_53a439835d3991b4_Path(__file__).resolve().parents[4].joinpath('scripts', 'w1_mbpp.py')
     if not _ember_53a439835d3991b4_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/w1_mbpp.py')
-    _ember_53a439835d3991b4_aliases = ('_ember_issue2015_53a439835d3991b4', 'scripts.w1_mbpp', 'w1_mbpp')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/w1_mbpp.py')
+    _ember_53a439835d3991b4_aliases = ('_ember_issue2015_53a439835d3991b4', 'src.ember.governance.scripts.w1_mbpp', 'w1_mbpp')
     _ember_53a439835d3991b4_existing = []
     for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
         _ember_53a439835d3991b4_candidate = _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias)
         if _ember_53a439835d3991b4_candidate is not None and all(_ember_53a439835d3991b4_candidate is not item for item in _ember_53a439835d3991b4_existing):
             _ember_53a439835d3991b4_existing.append(_ember_53a439835d3991b4_candidate)
     if len(_ember_53a439835d3991b4_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/w1_mbpp.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/w1_mbpp.py')
     if _ember_53a439835d3991b4_existing:
         _ember_53a439835d3991b4_module = _ember_53a439835d3991b4_existing[0]
         _ember_53a439835d3991b4_observed = getattr(_ember_53a439835d3991b4_module, '__file__', None)
         if _ember_53a439835d3991b4_observed is None or _ember_53a439835d3991b4_Path(_ember_53a439835d3991b4_observed).resolve() != _ember_53a439835d3991b4_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/w1_mbpp.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/w1_mbpp.py')
     else:
         _ember_53a439835d3991b4_spec = _ember_53a439835d3991b4_importlib.spec_from_file_location('_ember_issue2015_53a439835d3991b4', _ember_53a439835d3991b4_path)
         if _ember_53a439835d3991b4_spec is None or _ember_53a439835d3991b4_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/w1_mbpp.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/w1_mbpp.py')
         _ember_53a439835d3991b4_module = _ember_53a439835d3991b4_importlib.module_from_spec(_ember_53a439835d3991b4_spec)
         for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
             _ember_53a439835d3991b4_prior = _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias)
             if _ember_53a439835d3991b4_prior is not None and _ember_53a439835d3991b4_prior is not _ember_53a439835d3991b4_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w1_mbpp.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_mbpp.py')
             _ember_53a439835d3991b4_sys.modules[_ember_53a439835d3991b4_alias] = _ember_53a439835d3991b4_module
         try:
             _ember_53a439835d3991b4_spec.loader.exec_module(_ember_53a439835d3991b4_module)
@@ -239,10 +239,10 @@ def main():
     for _ember_53a439835d3991b4_alias in _ember_53a439835d3991b4_aliases:
         _ember_53a439835d3991b4_prior = _ember_53a439835d3991b4_sys.modules.get(_ember_53a439835d3991b4_alias)
         if _ember_53a439835d3991b4_prior is not None and _ember_53a439835d3991b4_prior is not _ember_53a439835d3991b4_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/w1_mbpp.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/w1_mbpp.py')
         _ember_53a439835d3991b4_sys.modules[_ember_53a439835d3991b4_alias] = _ember_53a439835d3991b4_module
     load_split = getattr(_ember_53a439835d3991b4_module, 'load_split')
-    # issue2015 exact-local-import-end:scripts/w1_mbpp.py
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/w1_mbpp.py
 
     problems = {p["id"]: p for p in load_split("train")}
     eps = load_mbpp_episodes()

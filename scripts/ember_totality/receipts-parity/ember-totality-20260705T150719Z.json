@@ -195,7 +195,7 @@
       "condition": "C-SURFACE2",
       "status": "UNEVALUABLE",
       "is_process_invariant": false,
-      "reason": "PROBE CONTRACT VIOLATION: test_surface2.py emitted no recognized status line (exit=1); stderr[:300]='  File \"<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/scripts/ember_totality/test_surface2.py\", line 114\\n    DEFAULT_EXEC_ROOT = os.environ.get(\"EMBER_EXEC_ROOT\")\\\\nif not DEFAULT_EXEC_ROOT:\\\\n    raise ValueError(\"EMBER_EXEC_ROOT env var is required. Example: <local-exec-root>\")\\n                      '"
+      "reason": "PROBE CONTRACT VIOLATION: test_surface2.py emitted no recognized status line (exit=1); stderr[:300]='  File \"<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/src/ember/governance/scripts/ember_totality/test_surface2.py\", line 114\\n    DEFAULT_EXEC_ROOT = os.environ.get(\"EMBER_EXEC_ROOT\")\\\\nif not DEFAULT_EXEC_ROOT:\\\\n    raise ValueError(\"EMBER_EXEC_ROOT env var is required. Example: <local-exec-root>\")\\n                      '"
     },
     {
       "condition": "C-ENF",
@@ -213,7 +213,7 @@
       "condition": "C-DISC",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
+      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/src/ember/governance/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
     },
     {
       "condition": "C-LADM",
@@ -329,7 +329,7 @@
             "present": false
           },
           {
-            "path": "scripts/ember_totality/_lane14_common.py",
+            "path": "src/ember/governance/scripts/ember_totality/_lane14_common.py",
             "sha256": "89a202bb0f1e5bc2610fbfa077293e447e3101ad35497a1494977eba294f9e0e",
             "present": true
           },
@@ -349,7 +349,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg.py",
             "sha256": "795e3e9a785aff718c547eff60d14da1445d6e7c9aee6c276fbc792ac550ce05",
             "present": true
           },
@@ -359,7 +359,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
             "sha256": "6a24fefaf533e0a27ac3b3922ec2e4a71bcf995b394d6761729a0de2732be6a3",
             "present": true
           },
@@ -569,7 +569,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_surface2.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
             "sha256": "7ea46644d328393c9a03e23513d3eedf6cf3cf11d0a18f2615813e72e8ecbdbf",
             "present": true
           }

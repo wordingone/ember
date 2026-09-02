@@ -21,7 +21,7 @@ main tree from any worktree via
 checkout's ``.git`` is a real directory that IS the common dir; a worktree's
 ``.git`` is a file pointing elsewhere. This suite proves the same property for
 ``artifact_custody_gate.py``'s two functions using a real git worktree (no
-mocked git), precedent: ``tests/ember_restart/test_contract_source_binding.py``.
+mocked git), precedent: ``tests/ember_restart/domain-governance/test_contract_source_binding.py``.
 """
 from __future__ import annotations
 

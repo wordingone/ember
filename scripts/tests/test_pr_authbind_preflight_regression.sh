@@ -3,7 +3,7 @@
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 #
-# Regression test for tools/pr_authbind_preflight.sh.
+# Regression test for src/ember/infrastructure/tools/pr_authbind_preflight.sh.
 #
 # Proves, against throwaway scratch repos (never the live tree):
 #
@@ -32,7 +32,7 @@
 
 set -u
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PREFLIGHT="$REPO_ROOT/tools/pr_authbind_preflight.sh"
+PREFLIGHT="$REPO_ROOT/src/ember/infrastructure/tools/pr_authbind_preflight.sh"
 
 FAIL=0
 assert_eq() {

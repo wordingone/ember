@@ -13,7 +13,7 @@
 ### Task 1: Stage-1 Curation Tool
 
 **Files:**
-- Create: `scripts/stage1_first_words.py`
+- Create: `src/ember/governance/scripts/stage1_first_words.py`
 
 - [ ] **Step 1: Add deterministic curation script**
 
@@ -21,7 +21,7 @@ Create a script that reads `B-MULTI-1/raw/manifest.jsonl`, matches a fixed 20-no
 
 - [ ] **Step 2: Run script selftest**
 
-Run: `python scripts/stage1_first_words.py --selftest`
+Run: `python src/ember/governance/scripts/stage1_first_words.py --selftest`
 
 Expected: `STAGE1_FIRST_WORDS_SELFTEST_PASS`.
 

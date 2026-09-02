@@ -6,7 +6,7 @@
 diff-list area 1: "No producer function exists yet for 'train E2B's head-LoRA
 for N steps then eval' -- this is genuinely new code, not a parameter tweak").
 
-Per docs/spec/e2b-paired-protocol-v1.md v1.1 clause 1: the E2B arm of the
+Per docs/domains/governance/spec/e2b-paired-protocol-v1.md v1.1 clause 1: the E2B arm of the
 ember_work leg must receive the SAME iGRPO/LoRA training procedure fire-4's
 owned arm used (N=4, M=4, max_depth=1, epsilon=0.2, temperature=1.5, 1024
 steps, 16 checkpoint evals every 64 steps), at E2B's head linear via the

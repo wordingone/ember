@@ -614,7 +614,7 @@ def _make_floor_rows(floor_sha: str, native_engine_sha: str) -> List["FloorRow"]
                 "insufficient; requires resident_adapter receipt; "
                 "EMBER_GATE_AUTHORIZED interlock stays even for full-weights path"
             ),
-            evidence_path="scripts/ember_phase3_c14/resident_adapter.py",
+            evidence_path="src/ember/governance/scripts/ember_phase3_c14/resident_adapter.py",
         ),
         _row(
             key="floor_contract.phase3.EMBER_GATE_AUTHORIZED",

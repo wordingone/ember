@@ -25,7 +25,7 @@ Thresholds (T-01, T-06) are bound at runtime through r1_exit_battery
 Evidence inputs (all under the adjudicated run root unless noted):
 
   existing producers (bound, not re-invented):
-    *energy-proxy*.json            scripts/energy_proxy_logger.py -- the receipt's
+    *energy-proxy*.json            src/ember/governance/scripts/energy_proxy_logger.py -- the receipt's
                                    "energy" object is embedded VERBATIM (section 5.3
                                    block); path + sha256 recorded beside it.
     disk-budget-runner-receipt.json  certified launch chain (certified_train_launch
@@ -420,7 +420,7 @@ def leg_time(run_root: Path) -> dict[str, Any]:
 def leg_energy(run_root: Path, t06: float) -> dict[str, Any]:
     path = _find_one(
         run_root, "*energy-proxy*.json", "UNMEASURABLE_ENERGY",
-        "scripts/energy_proxy_logger.py was not invoked for this run",
+        "src/ember/governance/scripts/energy_proxy_logger.py was not invoked for this run",
     )
     doc = _read_json(path, "UNMEASURABLE_ENERGY")
     block = doc.get("energy")

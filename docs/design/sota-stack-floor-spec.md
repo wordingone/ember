@@ -53,7 +53,7 @@ external baseline, execution receipt, comparator, and deletion test.
 
 ## Deliverables
 
-- `docs/design/sota-stack-floor.md`: maintained per-layer gap table and evidence links.
+- `docs/domains/governance/design/sota-stack-floor.md`: maintained per-layer gap table and evidence links.
 - `docs/domains/governance/design/inference-to-training-translation-v1.md`: inference-to-training mapping.
 - `docs/ledgers/technique-registry.jsonl`: adopted technique registry.
 - `src/ember/governance/scripts/check_inference_training_translation.py`: deterministic structural

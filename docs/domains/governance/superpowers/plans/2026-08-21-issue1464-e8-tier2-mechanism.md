@@ -108,7 +108,7 @@ Steps:
 Files:
 
 - Create tools/ember-restart-3b/a1_tier2_execution.py
-- Create tests/ember_restart_model/test_a1_tier2_execution.py
+- Create tests/ember_restart_model/domain-governance/test_a1_tier2_execution.py
 - Modify tools/ember-restart-3b/input_identity.py
 - Modify tests/ember_restart_model/test_input_identity.py
 - Modify the canonical dependency-closure manifest through its repository

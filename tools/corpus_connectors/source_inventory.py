@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from tools.corpus_connectors.receipt import (
+from src.ember.infrastructure.tools.corpus_connectors.receipt import (
     L3_STATEMENT,
     SCHEMA_NAME,
     sha256_of_manifest,

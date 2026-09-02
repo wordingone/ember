@@ -26,8 +26,8 @@ PASS half (this fix):
      excluded range is never yielded -- the loader-integration contract
      PackedShardLoader.__init__ now delegates to.
 
-Run: pytest tests/test_1436_fineweb_edu_exclusion.py -v
-     (or python tests/test_1436_fineweb_edu_exclusion.py for the CLI runner)
+Run: pytest tests/domain-governance/test_1436_fineweb_edu_exclusion.py -v
+     (or python tests/domain-governance/test_1436_fineweb_edu_exclusion.py for the CLI runner)
 """
 from __future__ import annotations
 

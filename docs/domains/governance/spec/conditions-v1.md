@@ -167,7 +167,7 @@ pre-epoch history.
   slices degrades the cycle. Does NOT count: fixed equal-duration phases; `idle_think` without a
   bounded emitted artifact. ✗ `invalid_timer_artifact_modes`. CHK: deleted-mode-selector receipt
   degrades cycle/next-action/recipe.
-- **C13 — [STALE TEXT, dated amendment 2026-07-01: the live totality board (`docs/problems-meta.yaml` id C13) defines C13 as "Technique dissection (import / reject / make-native + ablation)", tier frontier — that definition is canonical per math-core §0. The text below is the RETIRED pre-reshuffle condition, preserved verbatim as extraction record only; see `docs/spec/milestones-v1.md` §A collision #5 (absent as of 2026-08-01 in this contract tree, unmerged to master).] Native goal-mode organ.** R: Ember internalizes goal-mode (parse goal → read receipts →
+- **C13 — [STALE TEXT, dated amendment 2026-07-01: the live totality board (`docs/domains/governance/problems-meta.yaml` id C13) defines C13 as "Technique dissection (import / reject / make-native + ablation)", tier frontier — that definition is canonical per math-core §0. The text below is the RETIRED pre-reshuffle condition, preserved verbatim as extraction record only; see `docs/spec/milestones-v1.md` §A collision #5 (absent as of 2026-08-01 in this contract tree, unmerged to master).] Native goal-mode organ.** R: Ember internalizes goal-mode (parse goal → read receipts →
   identify blocker → compile attempt → run/delegate → verify → write receipt → update next blocker),
   with progressive non-Ember ablation and a first-principles dissection of goal-mode itself. Does NOT
   count: Ember calling an external executor; non-Ember control beyond start/stop/inspect/resource-

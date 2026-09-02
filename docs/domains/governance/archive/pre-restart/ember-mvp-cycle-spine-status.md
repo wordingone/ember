@@ -40,7 +40,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   battery to a cycle id. The selftest now includes negative receipt cases for
   unassigned Job Objects in both the probe battery and production-candidate
   receipt.
-- `scripts/ember_mle_micro_harness.py` freezes the first MLE-bench Low
+- `src/ember/governance/scripts/ember_mle_micro_harness.py` freezes the first MLE-bench Low
   micro-subset metadata and proves the scoring path on a tiny fixture before
   any real MLE-bench task is run. It also has a local hydration preflight that
   checks the frozen task ids under an explicit `--mle-root` without broad disk
@@ -68,7 +68,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
 - `scripts/ember_governor_binding_selftest.py` verifies governor rail limits,
   checkpoint hash presence, refuses fixture receipts that claim GPU preflight,
   and verifies the real governed CUDA receipt shape when CUDA is available.
-- `scripts/ember_wheel_harness.py` records the first A/B/C wheel contract:
+- `src/ember/governance/scripts/ember_wheel_harness.py` records the first A/B/C wheel contract:
   A direct benchmark iteration, B dream-loop-only, and C full MVP loop all get
   the same 3600-second budget; fixture growth remains blocked unless repeated
   real external benchmark deltas later justify it. It also has a real wheel
@@ -617,7 +617,7 @@ Wheel receipt:
 
 `<local-path>`
 
-`scripts/ember_mvp_wheel_runner.py` now executes A, B, and C official-grade
+`src/ember/governance/scripts/ember_mvp_wheel_runner.py` now executes A, B, and C official-grade
 arms under one cycle id and binds the three arm receipts into the real wheel
 gate. The live run above records `verdict=BLOCKED`, not because the runner is
 missing, but because every frozen task is still missing prepared `answers` and
@@ -638,7 +638,7 @@ Readiness receipt:
 `<local-path>`
 
 This is now stronger than manually binding an external wheel receipt: the cycle
-command itself runs `scripts/ember_mvp_wheel_runner.py`, binds the C-arm
+command itself runs `src/ember/governance/scripts/ember_mvp_wheel_runner.py`, binds the C-arm
 official-grade benchmark receipt into `receipts/benchmark/cycle-...json`, binds
 the real wheel receipt into `receipts/wheel/cycle-...json`, and records the
 runner receipt under `receipts.wheel_runner`. The cycle also keeps the
@@ -672,7 +672,7 @@ Repo-preserved copy:
 That receipt records `candidate_submissions_ready=true`, `copied_count=5`,
 and `missing_sample_submissions=[]`. It still records
 `prepared_data_ready=false` because the private prepared `answers` files are
-absent for all five tasks. `scripts/ember_mle_micro_harness.py` also now has
+absent for all five tasks. `src/ember/governance/scripts/ember_mle_micro_harness.py` also now has
 `--auto-sample-submission` for official grade execution, so prepared samples
 can be copied into candidate `submission.csv` files automatically before
 grading preflight.
@@ -759,7 +759,7 @@ Raw-data import command and receipt:
 
 `<local-path>`
 
-`scripts\ember_mle_micro_harness.py --raw-data-import` now copies the exact
+`src\ember\governance\scripts\ember_mle_micro_harness.py --raw-data-import` now copies the exact
 required raw files from a local inbox into `<local-path>` only
 when the full micro-subset source set exists. It records source paths,
 destination paths, bytes, and SHA-256 hashes for every copied file. The current
@@ -789,7 +789,7 @@ Official prepare-run command and receipt:
 
 `<local-path>`
 
-`scripts\ember_mle_micro_harness.py --official-prepare-execution` now runs the
+`src\ember\governance\scripts\ember_mle_micro_harness.py --official-prepare-execution` now runs the
 official MLE-bench prepare command for each frozen micro-subset task after the
 raw-data audit passes:
 
@@ -816,18 +816,18 @@ python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_mle_micro_harness_selftest.py
-python scripts\ember_mle_micro_harness.py --selftest
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --sample-submission-bootstrap --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --selftest
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --sample-submission-bootstrap --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_governor_binding_selftest.py
 python src\ember\governance\scripts\ember_governor_binding.py --selftest
 python scripts\ember_wheel_harness_selftest.py
-python scripts\ember_wheel_harness.py --selftest
+python src\ember\governance\scripts\ember_wheel_harness.py --selftest
 python scripts\ember_mvp_wheel_runner_selftest.py
-python scripts\ember_mvp_wheel_runner.py --fixture-out <local-path> --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mvp_wheel_runner.py --fixture-out <local-path> --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
@@ -836,31 +836,31 @@ python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --sample-submission-bootstrap --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --auto-sample-submission --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --sample-submission-bootstrap --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --auto-sample-submission --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_mvp_cycle.py --fixture-out <local-path> --production-sandbox --real-governor --state-substrate --official-wheel-runner --source-root <local-path> --data-root <local-path> --submission-root <local-path>
 python scripts\ember_mvp_readiness.py --cycle-receipt <local-path> --out <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --raw-data-audit --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --raw-data-audit --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --kaggle-auth-preflight --live-auth --credential-path <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --kaggle-auth-preflight --live-auth --credential-path <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --acquisition-status --data-root <local-path> --credential-path <local-path> --live-auth --cycle-id cycle-20260617T000000Z-0001
-python scripts\receipt_check.py --file <local-path>
-python scripts\receipt_check.py --file <local-path>
-python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --raw-data-import --raw-source-root <local-path> --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --acquisition-status --data-root <local-path> --credential-path <local-path> --live-auth --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-prepare-execution --source-root <local-path> --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python scripts\receipt_check.py --file <local-path>
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --raw-data-import --raw-source-root <local-path> --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\receipt_check.py --file <local-path>
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm A --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm B --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
-python scripts\ember_wheel_harness.py --fixture-out <local-path> --real --arm-a <local-path> --arm-b <local-path> --arm-c <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-prepare-execution --source-root <local-path> --data-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python scripts\receipt_check.py --file <local-path>
+python scripts\receipt_check.py --file <local-path>
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm A --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm B --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-grade-execution --wheel-arm C --source-root <local-path> --data-root <local-path> --submission-root <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_wheel_harness.py --fixture-out <local-path> --real --arm-a <local-path> --arm-b <local-path> --arm-c <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path>
 python scripts\ember_mvp_readiness_selftest.py
 python scripts\ember_mvp_readiness.py --selftest
@@ -890,7 +890,7 @@ valid readiness receipt with the remaining benchmark and wheel failures.
 
 ## Kaggle Access Token Path
 
-`scripts\ember_mle_micro_harness.py --kaggle-sdk-raw-download` now bypasses the
+`src\ember\governance\scripts\ember_mle_micro_harness.py --kaggle-sdk-raw-download` now bypasses the
 legacy `kaggle.json` CLI path and uses the newer `kagglesdk` bearer-token path
 from `<local-path>`. The token is represented only by
 `token_sha256` in receipts.
@@ -909,7 +909,7 @@ competition download access, not token-file shape or the old CLI's stale
 Rerun command after joining/accepting Kaggle competition terms:
 
 ```powershell
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --kaggle-sdk-raw-download --data-root <local-path> --access-token-path <local-path> --cycle-id cycle-20260617T000000Z-0001
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --kaggle-sdk-raw-download --data-root <local-path> --access-token-path <local-path> --cycle-id cycle-20260617T000000Z-0001
 python scripts\receipt_check.py --file <local-path><new-download-receipt>.json
 ```
 
@@ -964,7 +964,7 @@ Repo-preserved frozen-heldout CLI receipt:
 `receipts\ember-mvp\kaggle-benchmarks-frozen-heldout-cli-20260618\`
 
 This directory preserves a receipt generated through
-`scripts\ember_mle_micro_harness.py --kaggle-benchmarks-livecodebench-frozen-heldout-delta`,
+`src\ember\governance\scripts\ember_mle_micro_harness.py --kaggle-benchmarks-livecodebench-frozen-heldout-delta`,
 proving the local LiveCodeBench heldout delta is addressable through the public
 harness CLI while keeping `external_benchmark_delta_claimed=false`.
 
@@ -1053,7 +1053,7 @@ Repo-preserved CLI receipt:
 `receipts\ember-mvp\kaggle-benchmarks-frozen-heldout-cli-20260618\kaggle-benchmarks-livecodebench-frozen-heldout-delta-20260618T144017Z.json`
 
 This receipt was generated through
-`scripts\ember_mle_micro_harness.py --kaggle-benchmarks-livecodebench-frozen-heldout-delta`.
+`src\ember\governance\scripts\ember_mle_micro_harness.py --kaggle-benchmarks-livecodebench-frozen-heldout-delta`.
 
 Heldout-bound readiness receipt:
 
@@ -1160,7 +1160,7 @@ the `.venv` interpreter, the first frozen official prepare command actually
 reaches MLE-bench dataset download:
 
 ```powershell
-python scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-prepare-execution --attempt-prepare-without-raw --python-executable <local-path> --source-root <local-path> --data-root <local-path> --cycle-id cycle-20260617T000000Z-0002
+python src\ember\governance\scripts\ember_mle_micro_harness.py --fixture-out <local-path> --official-prepare-execution --attempt-prepare-without-raw --python-executable <local-path> --source-root <local-path> --data-root <local-path> --cycle-id cycle-20260617T000000Z-0002
 ```
 
 The receipt records `raw_audit_blocking_bypassed=true`,
@@ -1273,7 +1273,7 @@ fallback evidence and does not allow growth.
   prepared answers before any MVP-ready or growth claim.
 - Run the first equal-budget `1h/1h/1h` A/B/C wheel and require external
   benchmark delta before any growth claim. Use
-  `scripts\ember_mvp_wheel_runner.py` for the first official A/B/C attempt.
+  `src\ember\governance\scripts\ember_mvp_wheel_runner.py` for the first official A/B/C attempt.
   Current one-command runner and real wheel gate are blocked for all three
   arms because prepared task answers are absent.
 - Require repeated positive real cycles before increasing beyond the fixture

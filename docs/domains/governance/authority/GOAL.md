@@ -125,7 +125,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
       "docs/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
       "docs/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
-      "docs/domains/governance/spec/conditions-v1.md": "64AC0995C2DF611709902984CA39C95E9823521AF74701CF55FCF3B119EBC8AE"
+      "docs/domains/governance/spec/conditions-v1.md": "FCE21A3CED04320D26769F7F1DB30425B49B0B43416D55E7E06B832F13C1E14D"
     }
   },
   "authority_only_goal": false,

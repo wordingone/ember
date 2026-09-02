@@ -62,7 +62,7 @@ Expected: PASS with no generated identity change because the amendment is outsid
 - [ ] **Step 6: Commit the frozen carrier**
 
 ```bash
-git add docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json tests/ember_restart_model/test_a1_lower_bound_amendment.py docs/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md
+git add docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json tests/ember_restart_model/test_a1_lower_bound_amendment.py docs/domains/governance/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md
 git commit -m "docs(ember-02): rescope failed A1 arm as lower bound"
 ```
 

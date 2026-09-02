@@ -28,7 +28,7 @@ import pytest
 import importlib.util as _ember_3cb9868455ee2567_importlib
 import sys as _ember_3cb9868455ee2567_sys
 from pathlib import Path as _ember_3cb9868455ee2567_Path
-_ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+_ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
 if not _ember_3cb9868455ee2567_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
 _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -70,7 +70,7 @@ R1_ENTRY_PINNED_FILES = getattr(_ember_3cb9868455ee2567_module, 'R1_ENTRY_PINNED
 R1_ENTRY_SOURCE_FILES = getattr(_ember_3cb9868455ee2567_module, 'R1_ENTRY_SOURCE_FILES')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/ember_restart/contract.py
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 VALIDATOR = REPO_ROOT / "scripts" / "ember_restart" / "contract.py"
 WORKTREE_LIFECYCLE = REPO_ROOT / "scripts" / "worktree_lifecycle.py"
 
@@ -230,7 +230,7 @@ def test_foreign_repo_is_refused(tmp_path: Path, foreign: Path):
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -296,7 +296,7 @@ def test_origin_url_spoof_is_refused(tmp_path: Path, foreign: Path):
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -361,7 +361,7 @@ def test_ancestry_severed_clone_is_refused_by_default_anchor(tmp_path: Path, gov
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -431,7 +431,7 @@ def test_ancestry_severed_clone_is_refused_by_unpublished_ancestry(tmp_path: Pat
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -508,7 +508,7 @@ def test_unmanaged_worktree_is_refused(tmp_path: Path, canonical: Path, managed_
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -575,7 +575,7 @@ def test_unpublished_commit_from_right_root_is_refused(tmp_path: Path, canonical
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -644,7 +644,7 @@ def test_receipt_tampering_of_source_binding_is_refused(tmp_path: Path, canonica
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -730,7 +730,7 @@ def test_missing_registry_refuses(tmp_path: Path, canonical: Path, managed_workt
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -801,7 +801,7 @@ def test_positive_control_main_and_managed_worktree_mint_green(
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -919,7 +919,7 @@ def test_self_invocation_from_ad_hoc_worktree_is_refused(
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -995,7 +995,7 @@ def test_canonical_on_feature_branch_or_detached_head_binds_correctly(
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -1255,7 +1255,7 @@ def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Pa
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -1299,7 +1299,7 @@ def test_identity_before_network_ordering_locked_by_sentinel_remote(tmp_path: Pa
     import importlib.util as _ember_e33bbd3b13c22910_importlib
     import sys as _ember_e33bbd3b13c22910_sys
     from pathlib import Path as _ember_e33bbd3b13c22910_Path
-    _ember_e33bbd3b13c22910_path = _ember_e33bbd3b13c22910_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'source_authority.py')
+    _ember_e33bbd3b13c22910_path = _ember_e33bbd3b13c22910_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'source_authority.py')
     if not _ember_e33bbd3b13c22910_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/source_authority.py')
     _ember_e33bbd3b13c22910_aliases = ('_ember_issue2015_e33bbd3b13c22910', 'scripts.ember_restart.source_authority', 'source_authority')

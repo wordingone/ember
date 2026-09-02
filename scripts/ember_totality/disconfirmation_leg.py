@@ -4,7 +4,7 @@ sec 4.2 (live authority; archived pre-2026-07-06 at goal-archive.md) (gh issue #
 phase 2; schema frozen by maintainer rulings R1-R7 on the phase-1 dossier).
 
 Thin, reuse-only wrapper -- the same C-ENF/C-MILE pattern (issue #38's enforcement_leg.py,
-issue #35's milestone_leg.py), scoped to the new scripts/check_disconfirmation_triggers.py.
+issue #35's milestone_leg.py), scoped to the new src/ember/governance/scripts/check_disconfirmation_triggers.py.
 Imports enforcement_leg's CheckerSpec and _run_one_checker UNMODIFIED -- the dual-source
 verdict resolution (subprocess exit code cross-checked against the checker's own printed
 verdict line) is not reimplemented here.
@@ -33,13 +33,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from enforcement_leg import CheckerSpec, _run_one_checker  # noqa: E402
 
 # Discovered canonical invocation (read-only source review of
-# scripts/check_disconfirmation_triggers.py's run(), 2026-07-04): bare invocation, no args; the
+# src/ember/governance/scripts/check_disconfirmation_triggers.py's run(), 2026-07-04): bare invocation, no args; the
 # module's own ROOT resolves from os.path.dirname(HERE), so pointing _run_one_checker's
-# cwd/contract_root at a sandbox copy containing its own scripts/check_disconfirmation_triggers.py
+# cwd/contract_root at a sandbox copy containing its own src/ember/governance/scripts/check_disconfirmation_triggers.py
 # is fully self-contained.
 DISCONFIRMATION_CHECKER = CheckerSpec(
     name="check_disconfirmation_triggers",
-    rel_path="scripts/check_disconfirmation_triggers.py",
+    rel_path="src/ember/governance/scripts/check_disconfirmation_triggers.py",
     args=(),
     verdict_regex=r"^hinges=\d+\s+fired=\d+\s+violations=\d+\s+exit=(PASS|FAIL)\b",
     pass_values=("PASS",),

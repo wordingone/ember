@@ -168,7 +168,7 @@ ROWS = (
                             "B-run designation rule, frozen episode spec v1",
      "requires": (("docs/domains/governance/archive/pre-restart/sp6-duty-battery.jsonl", 1),
                   ("docs/domains/governance/archive/pre-restart/sp6-duty-battery-encodings.jsonl", 1),
-                  ("docs/archive/pre-restart/sp6c-seat-adapter-v0.md", 1),
+                  ("docs/domains/governance/archive/pre-restart/sp6c-seat-adapter-v0.md", 1),
                   ("docs/domains/governance/archive/pre-restart/sp6b-designation-rule-v0.md", 1),
                   ("docs/domains/governance/archive/pre-restart/sp6b-duty-battery-spec-v1.md", 1))},
     {"id": 11, "condition": "B-leg seats bound: shakedown receipts for "

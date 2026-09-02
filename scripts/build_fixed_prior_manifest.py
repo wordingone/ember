@@ -199,7 +199,7 @@ INVENTORY: tuple[dict, ...] = (
          path="src/ember/governance/scripts/joules.py",
          provenance="GPU power sampler and trapezoidal integrator (energy-law sec4.2)."),
     dict(category="deterministic_tools", kind="file",
-         path="scripts/energy_proxy_logger.py",
+         path="src/ember/governance/scripts/energy_proxy_logger.py",
          provenance="The sec5.3 DEGRADED_PROXY energy logger; smoke-tested as an "
                     "R1 entry-gate item. Criterion receipted before first use."),
     dict(category="deterministic_tools", kind="file",
@@ -438,7 +438,7 @@ def energy_method_block() -> dict:
         "integration": "trapezoidal for the sampled leg; endpoint difference for "
                        "the cumulative leg. Never a TDP multiplication.",
         "sample_coverage_floor_t06": 0.95,
-        "logger": "scripts/energy_proxy_logger.py",
+        "logger": "src/ember/governance/scripts/energy_proxy_logger.py",
     }
 
 

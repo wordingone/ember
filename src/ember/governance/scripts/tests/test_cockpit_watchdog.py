@@ -738,12 +738,12 @@ def test_run_cycle_never_kills_or_closes_or_restores():
 # resolution-point consumer, in lockstep with tools/ember-cli/src/utils/ember-state-root.ts
 # (emberStateRoot/repoStateKey) and Get-EmberStateRoot/Get-EmberStateRootKey in
 # the preparation-only cockpit helper. KEY_PARITY_VECTORS below is the SAME set already shared by
-# ember-state-root.test.ts and tests/test_ember_root_launcher.py -- if this port drifts from
+# ember-state-root.test.ts and tests/domain-governance/test_ember_root_launcher.py -- if this port drifts from
 # either, this suite goes red.
 # ---------------------------------------------------------------------------
 
 #: [repo root, expected key] -- mirrored verbatim from KEY_PARITY_VECTORS in
-#: tools/ember-cli/src/utils/ember-state-root.test.ts and tests/test_ember_root_launcher.py.
+#: tools/ember-cli/src/utils/ember-state-root.test.ts and tests/domain-governance/test_ember_root_launcher.py.
 KEY_PARITY_VECTORS = [
     (r"C:\fixture\ember", "c-fixture-ember"),
     ("C:\\Fixture\\Ember\\", "c-fixture-ember"),

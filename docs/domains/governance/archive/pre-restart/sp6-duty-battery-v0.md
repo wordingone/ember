@@ -48,7 +48,7 @@ scored separately per the prereg.
 `docs/domains/governance/archive/pre-restart/sp6-duty-battery-encodings.jsonl` — one row per episode:
 `{id, events: [{source, kind, ts, payload}], fixtures: [{relpath,
 content_json|content_text, mtime_offset_s?}], notes}`. Selftest-enforced
-contract (scripts/sp6_battery_selftest.py):
+contract (src/ember/governance/scripts/sp6_battery_selftest.py):
 
 - **Events match the #260 shapes exactly** (src/ember/governance/scripts/nck/event_loop.py):
   `file_watch→file_new|file_changed {path,size}`, `schedule→tick_due

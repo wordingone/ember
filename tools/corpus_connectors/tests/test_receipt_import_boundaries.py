@@ -57,7 +57,7 @@ def test_connector_consumer_ignores_preloaded_admission_receipt(
     admission_receipt = _load_as_top_level_receipt(ADMISSION / "receipt.py")
 
     connector = importlib.import_module("tools.corpus_connectors.arxiv_fetch")
-    canonical = importlib.import_module("tools.corpus_connectors.receipt")
+    canonical = importlib.import_module("src.ember.infrastructure.tools.corpus_connectors.receipt")
 
     assert connector.rcpt is canonical
     assert connector.rcpt is not admission_receipt

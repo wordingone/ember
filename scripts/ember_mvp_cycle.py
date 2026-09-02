@@ -165,7 +165,7 @@ def _external_replacement_active(benchmark: dict[str, Any], wheel: dict[str, Any
 def _goal_doc_hashes() -> list[dict[str, str]]:
     repo_root = Path(__file__).resolve().parent.parent
     docs = [
-        repo_root / "docs/archive/pre-restart/20260617-maximally-viable-product.md",
+        repo_root / "docs/domains/governance/archive/pre-restart/20260617-maximally-viable-product.md",
         repo_root / "docs/domains/governance/archive/pre-restart/ember-mvp-v0.md",
     ]
     rows: list[dict[str, str]] = []

@@ -4258,7 +4258,7 @@ def _chained_specialist_prelaunch_refusal(
 def _start_energy_sidecar(
     repo_root: pathlib.Path, launch: ValidatedLaunch, child_env: dict[str, str]
 ) -> tuple[Any, pathlib.Path, dict[str, Any]]:
-    """Spawn the R1-E5 energy sidecar (scripts/energy_proxy_logger.py
+    """Spawn the R1-E5 energy sidecar (src/ember/governance/scripts/energy_proxy_logger.py
     --watch-pidfile) and hold until its idle baseline completes, so the
     baseline is measured with no Ember job resident. Every failure here is
     DISCLOSED and none is fatal: the sidecar exists to produce evidence, and

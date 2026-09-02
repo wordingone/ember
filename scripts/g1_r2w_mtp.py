@@ -10,4 +10,4 @@ sys.argv = ["w1_mbpp.py",
             "--split", "validation", "--k", "8", "--batch-size", "8",
             "--temp", "0.8", "--seed", "16", "--tag", "g1r2-mtp",
             "--adapter", "<local-path>"]
-runpy.run_path(f"{NC}/scripts/w1_mbpp.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/w1_mbpp.py", run_name="__main__")

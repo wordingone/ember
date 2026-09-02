@@ -4,7 +4,7 @@
 """R1-E8 A1-vs-A3 liveness evidence producer.
 
 Mints the closed `ember02-r1-e8-liveness-v1` packet
-(`docs/spec/ember02-r1-e8-receipts-v1.md`) that `scripts/r1_e8_validator.py`
+(`docs/domains/governance/spec/ember02-r1-e8-receipts-v1.md`) that `scripts/r1_e8_validator.py`
 consumes as its first real downstream call. This module never trains, never
 projects a charged budget, and never invents the R2 token forecast: DEV-008
 assigns that projection to a separately frozen `ember02-r2-charged-budget-
@@ -35,7 +35,7 @@ step duration), and `proxy_joules` (decimal >= 0, from `energy_proxy_logger`
 residual) emits `tokens` and `wall_seconds` honestly, measured per step.
 `proxy_joules` is derived by a distinct post-pass,
 `a1_energy_apportionment.enrich_telemetry_with_energy` (issue #1464's second
-residual, `docs/spec/ember02-r1-e8-receipts-v1.md`): it reopens the energy
+residual, `docs/domains/governance/spec/ember02-r1-e8-receipts-v1.md`): it reopens the energy
 sidecar's raw measured-window GPU samples and time-weight-integrates them
 over each step's `[ts - wall_seconds, ts]` interval, adding `proxy_joules`
 to the telemetry file in place only where a real sample record honestly

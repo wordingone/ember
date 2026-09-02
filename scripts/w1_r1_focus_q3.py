@@ -14,4 +14,4 @@ sys.argv = ["w1_mbpp.py",
             "--focus-from",
             f"{NC}/receipts/w1-floor-q3-20260610T203401Z-samples.jsonl",
             "--focus-max-rate", "0.75"]
-runpy.run_path(f"{NC}/scripts/w1_mbpp.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/w1_mbpp.py", run_name="__main__")

@@ -72,7 +72,7 @@ and `merge_blob` are equal for every changed path.
 
 | path | head_blob | merge_blob | master_blob |
 |---|---|---|---|
-| `scripts/ember_totality/c_custody_sidecar_agewindow_test.py` | `f5c8bd8c7e7ee5193b83573c1f202eccf1105967` | `f5c8bd8c7e7ee5193b83573c1f202eccf1105967` | `f5c8bd8c7e7ee5193b83573c1f202eccf1105967` |
+| `src/ember/governance/scripts/ember_totality/c_custody_sidecar_agewindow_test.py` | `f5c8bd8c7e7ee5193b83573c1f202eccf1105967` | `f5c8bd8c7e7ee5193b83573c1f202eccf1105967` | `f5c8bd8c7e7ee5193b83573c1f202eccf1105967` |
 | `scripts/ember_totality/test_c_custody.py` | `5499ecdda3aa09dab2bd6692fb09f6f324cfd80e` | `5499ecdda3aa09dab2bd6692fb09f6f324cfd80e` | `a92cc36c997359291778e30abd0e793a2d274ac6` |
 
 ## PR 403 intermediate-commit audit

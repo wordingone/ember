@@ -28,4 +28,4 @@ sys.argv = [
     "--tag", "q3-r2mtp",
 ]
 os.chdir(f"{NC}/scripts")
-runpy.run_path(f"{NC}/scripts/w1_mbpp.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/w1_mbpp.py", run_name="__main__")

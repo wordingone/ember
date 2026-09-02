@@ -5,7 +5,7 @@
 #
 # Pre-OPEN pull-request policy preflight.
 #
-# tools/pr_authbind_preflight.sh answers "would repo-guard and the authority
+# src/ember/infrastructure/tools/pr_authbind_preflight.sh answers "would repo-guard and the authority
 # binding pass for a PR that already exists". It deliberately reproduces only
 # those two CI steps, so a PR can pass it and still go red on ci-pr, guard, and
 # python together, all reporting the same thing: the live PR policy also demands
@@ -155,7 +155,7 @@ if python -m scripts.github.pr_intent_policy \
     --milestones-json "$WORK/milestones.json"; then
   echo
   echo "PRE-OPEN PREFLIGHT: PASS — this PR would satisfy the live policy at open time."
-  echo "   Still run tools/pr_authbind_preflight.sh <N> after opening: repo-guard and the"
+  echo "   Still run src/ember/infrastructure/tools/pr_authbind_preflight.sh <N> after opening: repo-guard and the"
   echo "   merge-ref authority binding are evaluated against the merge commit, which does"
   echo "   not exist until the PR does."
   exit 0

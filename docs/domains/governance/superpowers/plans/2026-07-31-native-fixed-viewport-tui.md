@@ -66,7 +66,7 @@
 
 **Files:**
 - Modify: `tools/ember-cli/src/ink/components.ts`
-- Modify: `tools/ember-cli/src/components/app-shell.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts`
 - Modify: `tools/ember-cli/src/components/operator-surface-pane.ts`
 - Modify: `tools/ember-cli/src/screens/repl.ts`
 - Create: `tools/ember-cli/src/screens/repl-scroll-containment.test.ts`

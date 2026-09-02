@@ -64,35 +64,35 @@ def build_harness(src, plus_test, imports=()):
     _scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)))
     if _scripts not in sys.path:
         sys.path.insert(0, _scripts)
-    # issue2015 exact-local-import:scripts/v_compare.py
+    # issue2015 exact-local-import:src/ember/governance/scripts/v_compare.py
     import importlib.util as _ember_a8d35c9fcd11d83e_importlib
     import sys as _ember_a8d35c9fcd11d83e_sys
     from pathlib import Path as _ember_a8d35c9fcd11d83e_Path
     _ember_a8d35c9fcd11d83e_path = _ember_a8d35c9fcd11d83e_Path(__file__).resolve().parents[4].joinpath('scripts', 'v_compare.py')
     if not _ember_a8d35c9fcd11d83e_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/v_compare.py')
-    _ember_a8d35c9fcd11d83e_aliases = ('_ember_issue2015_a8d35c9fcd11d83e', 'scripts.v_compare', 'v_compare')
+        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/v_compare.py')
+    _ember_a8d35c9fcd11d83e_aliases = ('_ember_issue2015_a8d35c9fcd11d83e', 'src.ember.governance.scripts.v_compare', 'v_compare')
     _ember_a8d35c9fcd11d83e_existing = []
     for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
         _ember_a8d35c9fcd11d83e_candidate = _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias)
         if _ember_a8d35c9fcd11d83e_candidate is not None and all(_ember_a8d35c9fcd11d83e_candidate is not item for item in _ember_a8d35c9fcd11d83e_existing):
             _ember_a8d35c9fcd11d83e_existing.append(_ember_a8d35c9fcd11d83e_candidate)
     if len(_ember_a8d35c9fcd11d83e_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/v_compare.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/v_compare.py')
     if _ember_a8d35c9fcd11d83e_existing:
         _ember_a8d35c9fcd11d83e_module = _ember_a8d35c9fcd11d83e_existing[0]
         _ember_a8d35c9fcd11d83e_observed = getattr(_ember_a8d35c9fcd11d83e_module, '__file__', None)
         if _ember_a8d35c9fcd11d83e_observed is None or _ember_a8d35c9fcd11d83e_Path(_ember_a8d35c9fcd11d83e_observed).resolve() != _ember_a8d35c9fcd11d83e_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/v_compare.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/v_compare.py')
     else:
         _ember_a8d35c9fcd11d83e_spec = _ember_a8d35c9fcd11d83e_importlib.spec_from_file_location('_ember_issue2015_a8d35c9fcd11d83e', _ember_a8d35c9fcd11d83e_path)
         if _ember_a8d35c9fcd11d83e_spec is None or _ember_a8d35c9fcd11d83e_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/v_compare.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/v_compare.py')
         _ember_a8d35c9fcd11d83e_module = _ember_a8d35c9fcd11d83e_importlib.module_from_spec(_ember_a8d35c9fcd11d83e_spec)
         for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
             _ember_a8d35c9fcd11d83e_prior = _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias)
             if _ember_a8d35c9fcd11d83e_prior is not None and _ember_a8d35c9fcd11d83e_prior is not _ember_a8d35c9fcd11d83e_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/v_compare.py')
+                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v_compare.py')
             _ember_a8d35c9fcd11d83e_sys.modules[_ember_a8d35c9fcd11d83e_alias] = _ember_a8d35c9fcd11d83e_module
         try:
             _ember_a8d35c9fcd11d83e_spec.loader.exec_module(_ember_a8d35c9fcd11d83e_module)
@@ -104,10 +104,10 @@ def build_harness(src, plus_test, imports=()):
     for _ember_a8d35c9fcd11d83e_alias in _ember_a8d35c9fcd11d83e_aliases:
         _ember_a8d35c9fcd11d83e_prior = _ember_a8d35c9fcd11d83e_sys.modules.get(_ember_a8d35c9fcd11d83e_alias)
         if _ember_a8d35c9fcd11d83e_prior is not None and _ember_a8d35c9fcd11d83e_prior is not _ember_a8d35c9fcd11d83e_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/v_compare.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/v_compare.py')
         _ember_a8d35c9fcd11d83e_sys.modules[_ember_a8d35c9fcd11d83e_alias] = _ember_a8d35c9fcd11d83e_module
     STRICT_SRC = getattr(_ember_a8d35c9fcd11d83e_module, 'STRICT_SRC')
-    # issue2015 exact-local-import-end:scripts/v_compare.py  # noqa: PLC0415
+    # issue2015 exact-local-import-end:src/ember/governance/scripts/v_compare.py  # noqa: PLC0415
     from fp8_vgate import split_assert  # noqa: PLC0415
 
     instrumented = []

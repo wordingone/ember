@@ -350,7 +350,7 @@
             "present": false
           },
           {
-            "path": "scripts/ember_totality/_lane14_common.py",
+            "path": "src/ember/governance/scripts/ember_totality/_lane14_common.py",
             "sha256": "5c5d133271344b620c8fb2b3af7f3bed5f41f768afbaf57dbc5ced1c6feefae0",
             "present": true
           },
@@ -375,7 +375,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
             "sha256": "4d7ae4e4b21abc6905be7d289a76be31495ac3739c93c690d2e862f95fbadda8",
             "present": true
           },
@@ -460,7 +460,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg.py",
             "sha256": "795e3e9a785aff718c547eff60d14da1445d6e7c9aee6c276fbc792ac550ce05",
             "present": true
           },
@@ -480,7 +480,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/ind5_comprehend_producer.py",
+            "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
             "sha256": "f220520ee6643cbf3815573d60cd6fd46858a8746226f0f456ce86fe9da00c2d",
             "present": true
           },
@@ -725,7 +725,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_surface2.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
             "sha256": "6017c24301129ca4184e90cf83b30d52b7b3069d292bc3b9c2e43c3913d1e45f",
             "present": true
           },

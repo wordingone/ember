@@ -9,4 +9,4 @@ sys.argv = ["w1_mbpp.py",
             "--model", "Qwen/Qwen2.5-Coder-3B-Instruct",
             "--split", "validation", "--k", "8", "--batch-size", "8",
             "--temp", "0.8", "--seed", "16", "--tag", "g1-base"]
-runpy.run_path(f"{NC}/scripts/w1_mbpp.py", run_name="__main__")
+runpy.run_path(f"{NC}/src/ember/governance/scripts/w1_mbpp.py", run_name="__main__")

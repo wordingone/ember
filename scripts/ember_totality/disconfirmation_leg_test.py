@@ -343,7 +343,7 @@ def test_h0_ceiling_one_unresolved_lever_blocks_fire():
 def test_missing_checker_script_is_unresolvable():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        # deliberately do NOT write scripts/check_disconfirmation_triggers.py
+        # deliberately do NOT write src/ember/governance/scripts/check_disconfirmation_triggers.py
         r = _run_one_checker(root, DISCONFIRMATION_CHECKER, timeout_s=30)
         assert r["executed"] is False
         assert r["verdict"] == "UNRESOLVABLE", r

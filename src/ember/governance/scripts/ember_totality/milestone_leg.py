@@ -7,7 +7,7 @@ docs/audit/class2-unwatched-mandates-recon-20260704.md #2; parent issue #35 DISP
 the recon's own text names this exact CHK build-out as "a separate later dispatch").
 
 Thin, reuse-only wrapper -- EXACTLY the C-ENF pattern (issue #38,
-scripts/ember_totality/enforcement_leg.py + test_c_enf.py), scoped to the ONE existing
+src/ember/governance/scripts/ember_totality/enforcement_leg.py + test_c_enf.py), scoped to the ONE existing
 checker docs/spec/milestones-v1.md's own "Validation hook" section names:
 src/ember/governance/scripts/check_milestone_reconciliation.py. Imports enforcement_leg's CheckerSpec and
 _run_one_checker UNMODIFIED -- the dual-source verdict resolution (subprocess exit code
@@ -55,35 +55,35 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-# issue2015 exact-local-import:scripts/ember_totality/enforcement_leg.py
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_totality/enforcement_leg.py
 import importlib.util as _ember_e1051383780249b3_importlib
 import sys as _ember_e1051383780249b3_sys
 from pathlib import Path as _ember_e1051383780249b3_Path
 _ember_e1051383780249b3_path = _ember_e1051383780249b3_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_totality', 'enforcement_leg.py')
 if not _ember_e1051383780249b3_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_totality/enforcement_leg.py')
-_ember_e1051383780249b3_aliases = ('_ember_issue2015_e1051383780249b3', 'enforcement_leg', 'scripts.ember_totality.enforcement_leg')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
+_ember_e1051383780249b3_aliases = ('_ember_issue2015_e1051383780249b3', 'enforcement_leg', 'src.ember.governance.scripts.ember_totality.enforcement_leg')
 _ember_e1051383780249b3_existing = []
 for _ember_e1051383780249b3_alias in _ember_e1051383780249b3_aliases:
     _ember_e1051383780249b3_candidate = _ember_e1051383780249b3_sys.modules.get(_ember_e1051383780249b3_alias)
     if _ember_e1051383780249b3_candidate is not None and all(_ember_e1051383780249b3_candidate is not item for item in _ember_e1051383780249b3_existing):
         _ember_e1051383780249b3_existing.append(_ember_e1051383780249b3_candidate)
 if len(_ember_e1051383780249b3_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_totality/enforcement_leg.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
 if _ember_e1051383780249b3_existing:
     _ember_e1051383780249b3_module = _ember_e1051383780249b3_existing[0]
     _ember_e1051383780249b3_observed = getattr(_ember_e1051383780249b3_module, '__file__', None)
     if _ember_e1051383780249b3_observed is None or _ember_e1051383780249b3_Path(_ember_e1051383780249b3_observed).resolve() != _ember_e1051383780249b3_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_totality/enforcement_leg.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
 else:
     _ember_e1051383780249b3_spec = _ember_e1051383780249b3_importlib.spec_from_file_location('_ember_issue2015_e1051383780249b3', _ember_e1051383780249b3_path)
     if _ember_e1051383780249b3_spec is None or _ember_e1051383780249b3_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_totality/enforcement_leg.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
     _ember_e1051383780249b3_module = _ember_e1051383780249b3_importlib.module_from_spec(_ember_e1051383780249b3_spec)
     for _ember_e1051383780249b3_alias in _ember_e1051383780249b3_aliases:
         _ember_e1051383780249b3_prior = _ember_e1051383780249b3_sys.modules.get(_ember_e1051383780249b3_alias)
         if _ember_e1051383780249b3_prior is not None and _ember_e1051383780249b3_prior is not _ember_e1051383780249b3_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_totality/enforcement_leg.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
         _ember_e1051383780249b3_sys.modules[_ember_e1051383780249b3_alias] = _ember_e1051383780249b3_module
     try:
         _ember_e1051383780249b3_spec.loader.exec_module(_ember_e1051383780249b3_module)
@@ -95,11 +95,11 @@ else:
 for _ember_e1051383780249b3_alias in _ember_e1051383780249b3_aliases:
     _ember_e1051383780249b3_prior = _ember_e1051383780249b3_sys.modules.get(_ember_e1051383780249b3_alias)
     if _ember_e1051383780249b3_prior is not None and _ember_e1051383780249b3_prior is not _ember_e1051383780249b3_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_totality/enforcement_leg.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/enforcement_leg.py')
     _ember_e1051383780249b3_sys.modules[_ember_e1051383780249b3_alias] = _ember_e1051383780249b3_module
 CheckerSpec = getattr(_ember_e1051383780249b3_module, 'CheckerSpec')
 _run_one_checker = getattr(_ember_e1051383780249b3_module, '_run_one_checker')
-# issue2015 exact-local-import-end:scripts/ember_totality/enforcement_leg.py  # noqa: E402
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_totality/enforcement_leg.py  # noqa: E402
 
 # Discovered canonical invocation (read-only source review of
 # src/ember/governance/scripts/check_milestone_reconciliation.py's run(), 2026-07-04): bare invocation

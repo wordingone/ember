@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 
-REPOSITORY = Path(__file__).resolve().parents[1]
+REPOSITORY = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 #: An 8.3 short-name component, e.g. the `RUNNER~1` GitHub's windows-latest puts in TEMP.
 SHORT_NAME_COMPONENT = re.compile(r"~\d")
 

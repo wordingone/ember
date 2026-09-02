@@ -33,7 +33,7 @@ a per-file findings table with exit code 0 (report mode).
 ### Corpus pipeline selftests
 
 ```bash
-python scripts/corpus_acquire_selftest.py
+python src/ember/governance/scripts/corpus_acquire_selftest.py
 python scripts/corpus_mix_selftest.py
 ```
 

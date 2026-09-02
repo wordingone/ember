@@ -104,7 +104,7 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     battery composes all exits on one root); E5 checks the receipt's
     steps_measured against T-01 only.
   * check_r1_e8 consumes only the closed receipt family frozen in
-    docs/spec/ember02-r1-e8-receipts-v1.md. It never infers an A1 result from
+    docs/domains/governance/spec/ember02-r1-e8-receipts-v1.md. It never infers an A1 result from
     marker words and never invents the missing charged-budget projection.
 
 Refusal reasons (R1ExitBatteryRefusal, always prefixed onto the message):

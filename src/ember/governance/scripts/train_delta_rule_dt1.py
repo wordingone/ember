@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """train_delta_rule_dt1.py — eng-DT1 (#444): delta-rule diagnostic.
 
-Pre-registered in docs/archive/pre-restart/delta-rule-diagnostic-prereg.md (frozen 2026-06-13, DT-1).
+Pre-registered in docs/domains/governance/archive/pre-restart/delta-rule-diagnostic-prereg.md (frozen 2026-06-13, DT-1).
 
 Question: Is autograd backward() + optimizer-step the exact blocking layer for
 ember's candidate local-update method? Can a local fused-update LM track
@@ -565,7 +565,7 @@ def _selftest() -> None:
         dummy_receipt = {
             "ticket": "DT1-DELTA-RULE-DIAGNOSTIC",
             "ts": datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-            "prereg": "docs/archive/pre-restart/delta-rule-diagnostic-prereg.md",
+            "prereg": "docs/domains/governance/archive/pre-restart/delta-rule-diagnostic-prereg.md",
             "model_size": "15M",
             "wall_clock_s": 120,
             "seeds": 2,
@@ -654,7 +654,7 @@ def _write_receipt(result: dict, args) -> Path:
     receipt = {
         "ticket": "DT1-DELTA-RULE-DIAGNOSTIC",
         "ts": ts,
-        "prereg": "docs/archive/pre-restart/delta-rule-diagnostic-prereg.md",
+        "prereg": "docs/domains/governance/archive/pre-restart/delta-rule-diagnostic-prereg.md",
         "model_size": args.model_size,
         "wall_clock_s": args.wall_clock_s,
         "seeds": args.seeds,
