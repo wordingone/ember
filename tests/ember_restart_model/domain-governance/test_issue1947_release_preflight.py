@@ -151,6 +151,33 @@ def _inputs(tmp_path: Path) -> tuple[dict, dict, dict, dict, dict]:
     }
     matrix_binding = {"path": str(matrix), "raw_sha256": _sha(matrix)}
     analysis_binding = {"path": str(analysis), "raw_sha256": _sha(analysis)}
+    execution_spec = tmp_path / "release-execution-spec.json"
+    _write_self_hashed(
+        execution_spec,
+        {
+            "schema_version": "ember-issue1947-release-execution-spec-v1",
+            "rows": [
+                {
+                    "row_id": row_id,
+                    "command": ["runner", row_id],
+                    "result_path": f"results/{row_id}.json",
+                    "threshold": 0.5,
+                }
+                for row_id in (
+                    "E-MATRIX-TEXT-LANGUAGE",
+                    "E-MATRIX-IMAGE",
+                    "E-MATRIX-AUDIO",
+                    "E-MATRIX-IMAGE-TEXT",
+                    "E-MATRIX-AUDIO-TEXT",
+                    "E-MATRIX-IMAGE-AUDIO-TEXT",
+                    "E-MATRIX-REASONING",
+                    "E-MATRIX-TOOL-USE",
+                    "E-MATRIX-ROUTING-PATHWAY",
+                )
+            ],
+        },
+    )
+    execution_spec_payload = json.loads(execution_spec.read_text(encoding="utf-8"))
     tiers = {}
     for tier, role in (
         ("pr", "mechanics_only"),
@@ -183,6 +210,11 @@ def _inputs(tmp_path: Path) -> tuple[dict, dict, dict, dict, dict]:
         }
     tiers["release"]["windows_loader_smoke_runner"] = "windows-latest"
     tiers["release"]["windows_loader_smoke_timeout_minutes"] = 25
+    tiers["release"]["execution_spec"] = {
+        "path": str(execution_spec),
+        "raw_sha256": _sha(execution_spec),
+        "self_sha256": execution_spec_payload["self_sha256"],
+    }
     return designation, composition_binding, matrix_binding, analysis_binding, tiers
 
 
@@ -194,6 +226,14 @@ def test_positive_binds_all_three_tiers_and_checkpoint(tmp_path: Path) -> None:
     assert len(receipt["checkpoint_shards"]) == 2
     assert receipt["designation_authority"] == {"integrator_mail_id": 12345, "verdict": "DESIGNATED"}
     assert all(row["checkpoint_manifest_raw_sha256"] == designation["manifest"]["raw_sha256"] for row in receipt["tiers"])
+    release = next(row for row in receipt["tiers"] if row["tier"] == "release")
+    assert release["execution_spec"] == {
+        "path": str(tmp_path / "release-execution-spec.json"),
+        "bytes": (tmp_path / "release-execution-spec.json").stat().st_size,
+        "raw_sha256": _sha(tmp_path / "release-execution-spec.json"),
+        "self_sha256": tiers["release"]["execution_spec"]["self_sha256"],
+        "schema_version": "ember-issue1947-release-execution-spec-v1",
+    }
     self_sha256 = receipt.pop("self_sha256")
     assert self_sha256 == hashlib.sha256(
         json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
@@ -220,6 +260,38 @@ def test_missing_or_corrupt_bound_input_refuses(tmp_path: Path) -> None:
     with pytest.raises(ReleasePreflightRefusal, match="RAW_HASH_DRIFT:pr.workflow"):
         build_release_preflight(designation, composition, matrix, analysis, tiers)
 
+
+def test_release_execution_spec_raw_and_self_hashes_are_required(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    tiers["release"]["execution_spec"]["raw_sha256"] = "f" * 64
+    with pytest.raises(ReleasePreflightRefusal, match="RAW_HASH_DRIFT:release.execution_spec"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path / "self")
+    path = Path(tiers["release"]["execution_spec"]["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["self_sha256"] = "0" * 64
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    tiers["release"]["execution_spec"]["raw_sha256"] = _sha(path)
+    with pytest.raises(ReleasePreflightRefusal, match="SELF_HASH_DRIFT:release.execution_spec"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_release_workflow_routes_dispatch_inputs_through_step_environment() -> None:
+    workflow = (
+        ROOT / ".github/workflows/issue1947-protected-eval-release.yml"
+    ).read_text(encoding="utf-8")
+    for variable, input_name in (
+        ("BUNDLE_PATH", "bundle_path"),
+        ("DESIGNATION_MANIFEST_SHA256", "designation_receipt_raw_sha256"),
+        ("MATRIX_SELF_SHA256", "matrix_self_sha256"),
+        ("ANALYSIS_SELF_SHA256", "analysis_self_sha256"),
+    ):
+        assert f'{variable}: "${{{{ inputs.{input_name} }}}}"' in workflow
+    assert '--bundle "$BUNDLE_PATH"' in workflow
+    assert '${{ inputs.bundle_path }}' not in workflow.replace(
+        'BUNDLE_PATH: "${{ inputs.bundle_path }}"', ""
+    )
 
 def test_tier_role_and_fail_closed_semantics_are_exact(tmp_path: Path) -> None:
     designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
