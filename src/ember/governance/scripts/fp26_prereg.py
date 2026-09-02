@@ -34,7 +34,7 @@ from receipt_check import validate_receipt        # noqa: E402
 ROUND = 3
 
 # ---- pinned premises (tamper guard: sha must match at freeze time) -------
-DECISION_ARTIFACT = "docs/research/fp26-round3-shape-decision.md"
+DECISION_ARTIFACT = "docs/domains/governance/research/fp26-round3-shape-decision.md"
 DECISION_SHA = ("4ca49a27059fb2db0e1f5a0b2f4d538c473e3a0e"
                 "853d6488eb4dca7d51933a74")
 # the two load-bearing fp-25 premise receipts (Surface-A learn, Surface-B

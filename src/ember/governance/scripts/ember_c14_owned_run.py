@@ -93,35 +93,35 @@ for _p in (_SCRIPT_DIR, _PHASE3_DIR):
 
 REPO = Path(__file__).resolve().parents[4]
 
-# issue2015 exact-local-import:scripts/ember_c14_contract_rig.py
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_c14_contract_rig.py
 import importlib.util as _ember_a15ae7b5497c49d1_importlib
 import sys as _ember_a15ae7b5497c49d1_sys
 from pathlib import Path as _ember_a15ae7b5497c49d1_Path
 _ember_a15ae7b5497c49d1_path = _ember_a15ae7b5497c49d1_Path(__file__).resolve().parents[4].joinpath('scripts', 'ember_c14_contract_rig.py')
 if not _ember_a15ae7b5497c49d1_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_c14_contract_rig.py')
-_ember_a15ae7b5497c49d1_aliases = ('_ember_issue2015_a15ae7b5497c49d1', 'ember_c14_contract_rig', 'scripts.ember_c14_contract_rig')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_c14_contract_rig.py')
+_ember_a15ae7b5497c49d1_aliases = ('_ember_issue2015_a15ae7b5497c49d1', 'ember_c14_contract_rig', 'src.ember.governance.scripts.ember_c14_contract_rig')
 _ember_a15ae7b5497c49d1_existing = []
 for _ember_a15ae7b5497c49d1_alias in _ember_a15ae7b5497c49d1_aliases:
     _ember_a15ae7b5497c49d1_candidate = _ember_a15ae7b5497c49d1_sys.modules.get(_ember_a15ae7b5497c49d1_alias)
     if _ember_a15ae7b5497c49d1_candidate is not None and all(_ember_a15ae7b5497c49d1_candidate is not item for item in _ember_a15ae7b5497c49d1_existing):
         _ember_a15ae7b5497c49d1_existing.append(_ember_a15ae7b5497c49d1_candidate)
 if len(_ember_a15ae7b5497c49d1_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_c14_contract_rig.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_c14_contract_rig.py')
 if _ember_a15ae7b5497c49d1_existing:
     _ember_a15ae7b5497c49d1_module = _ember_a15ae7b5497c49d1_existing[0]
     _ember_a15ae7b5497c49d1_observed = getattr(_ember_a15ae7b5497c49d1_module, '__file__', None)
     if _ember_a15ae7b5497c49d1_observed is None or _ember_a15ae7b5497c49d1_Path(_ember_a15ae7b5497c49d1_observed).resolve() != _ember_a15ae7b5497c49d1_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_c14_contract_rig.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_c14_contract_rig.py')
 else:
     _ember_a15ae7b5497c49d1_spec = _ember_a15ae7b5497c49d1_importlib.spec_from_file_location('_ember_issue2015_a15ae7b5497c49d1', _ember_a15ae7b5497c49d1_path)
     if _ember_a15ae7b5497c49d1_spec is None or _ember_a15ae7b5497c49d1_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_c14_contract_rig.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_c14_contract_rig.py')
     _ember_a15ae7b5497c49d1_module = _ember_a15ae7b5497c49d1_importlib.module_from_spec(_ember_a15ae7b5497c49d1_spec)
     for _ember_a15ae7b5497c49d1_alias in _ember_a15ae7b5497c49d1_aliases:
         _ember_a15ae7b5497c49d1_prior = _ember_a15ae7b5497c49d1_sys.modules.get(_ember_a15ae7b5497c49d1_alias)
         if _ember_a15ae7b5497c49d1_prior is not None and _ember_a15ae7b5497c49d1_prior is not _ember_a15ae7b5497c49d1_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_c14_contract_rig.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_contract_rig.py')
         _ember_a15ae7b5497c49d1_sys.modules[_ember_a15ae7b5497c49d1_alias] = _ember_a15ae7b5497c49d1_module
     try:
         _ember_a15ae7b5497c49d1_spec.loader.exec_module(_ember_a15ae7b5497c49d1_module)
@@ -133,14 +133,14 @@ else:
 for _ember_a15ae7b5497c49d1_alias in _ember_a15ae7b5497c49d1_aliases:
     _ember_a15ae7b5497c49d1_prior = _ember_a15ae7b5497c49d1_sys.modules.get(_ember_a15ae7b5497c49d1_alias)
     if _ember_a15ae7b5497c49d1_prior is not None and _ember_a15ae7b5497c49d1_prior is not _ember_a15ae7b5497c49d1_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_c14_contract_rig.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_c14_contract_rig.py')
     _ember_a15ae7b5497c49d1_sys.modules[_ember_a15ae7b5497c49d1_alias] = _ember_a15ae7b5497c49d1_module
 run_rig = getattr(_ember_a15ae7b5497c49d1_module, 'run_rig')
 _rig_print_report = getattr(_ember_a15ae7b5497c49d1_module, 'print_report')
 RigResult = getattr(_ember_a15ae7b5497c49d1_module, 'RigResult')
 Corpus = getattr(_ember_a15ae7b5497c49d1_module, 'Corpus')
 Task = getattr(_ember_a15ae7b5497c49d1_module, 'Task')
-# issue2015 exact-local-import-end:scripts/ember_c14_contract_rig.py
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_c14_contract_rig.py
 # issue2015 exact-local-import:src/ember/governance/scripts/ember_resident_igrpo.py
 import importlib.util as _ember_d0a8f6627b10c41d_importlib
 import sys as _ember_d0a8f6627b10c41d_sys

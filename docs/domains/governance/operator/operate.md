@@ -56,4 +56,4 @@ having exited gracefully.
 
 Each of the three legs above (`launch`, `teardown`, `interrupted_resume`)
 writes a receipt under `receipts/ind3-operate/`, read by
-`scripts/ember_totality/test_c_ind.py`'s IND-3 OPERATE check.
+`src/ember/governance/scripts/ember_totality/test_c_ind.py`'s IND-3 OPERATE check.

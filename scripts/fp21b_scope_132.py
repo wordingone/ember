@@ -128,7 +128,7 @@ validate_receipt = getattr(_ember_2ad73f5df12b45ee_module, 'validate_receipt')
 from fp21b_prereg import check_sampling_world, WORLD_PIN  # noqa: E402
 
 # pin the frozen fp-26 decision so this scope can't drift from the freeze
-FP26_DECISION = "docs/research/fp26-round3-shape-decision.md"
+FP26_DECISION = "docs/domains/governance/research/fp26-round3-shape-decision.md"
 FP26_DECISION_SHA = ("5ef7cc20f22168878f139af00e6ac9a75d43c758"
                      "ffd2b3eb181372c50081c939")
 OWNED_CORE_MODEL = "ember-v0-0.37b"   # the (b) round-3 sampler (world-changed)

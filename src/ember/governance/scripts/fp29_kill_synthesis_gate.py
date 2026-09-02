@@ -64,7 +64,7 @@ from receipt_check import validate_receipt             # noqa: E402
 import fp23_probe_prereg as fp23                       # noqa: E402
 
 # ---- pins (drift = refuse) ------------------------------------------
-FP26_DECISION = "docs/research/fp26-round3-shape-decision.md"
+FP26_DECISION = "docs/domains/governance/research/fp26-round3-shape-decision.md"
 FP26_DECISION_SHA = ("5ef7cc20f22168878f139af00e6ac9a75d43c758"
                      "ffd2b3eb181372c50081c939")
 # the frozen protocol constants this gate must never move

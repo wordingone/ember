@@ -13,7 +13,7 @@ Binding: renderer source and executable hashes are checked in with the receipt f
 
 Consumer: `tools/ember-cli/src/services/goal-live-session.ts`
 Consumer: `tools/ember-cli/src/services/goal-live-session-frames.ts`
-Consumer: `tools/ember-cli/src/goal-live-session-compiled.test.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/goal-live-session-compiled.test.ts`
 Consumer: `tools/ember-cli/src/entrypoints/process-entry.ts`
 
 The compiled `goal-session-live` path exercises the production continuation

@@ -4,7 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """run_expc1_rank_sweep.py -- EXP-C1 rank-sweep harness + B0 8-bit-momentum arm
 (P3 memory-wall track, ember issue #207,
-docs/research/p3-memory-wall-ledger-20260706.md).
+docs/domains/governance/research/p3-memory-wall-ledger-20260706.md).
 
 WHAT THIS TESTS (the ledger's own framing, "EXP-A" in the pre-registered
 queue, "EXP-C1" as the tick-2 dispatch name):
@@ -716,7 +716,7 @@ def run_and_emit_live() -> Path:
         receipt = {
             "ticket": "EXPC1-RANK-SWEEP", "ts": ts, "mode": "live", "dry_run": False,
             "issue": "#207",
-            "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+            "spec_ref": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
             "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
             "harness_sha": _harness_sha(),
             "status": "BLOCKED",
@@ -742,7 +742,7 @@ def run_and_emit_live() -> Path:
         receipt = {
             "ticket": "EXPC1-RANK-SWEEP", "ts": ts, "mode": "live", "dry_run": False,
             "issue": "#207",
-            "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+            "spec_ref": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
             "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
             "harness_sha": _harness_sha(),
             "status": "FAILED",
@@ -779,7 +779,7 @@ def run_and_emit_live() -> Path:
     receipt = {
         "ticket": "EXPC1-RANK-SWEEP", "ts": ts, "mode": "live", "dry_run": False,
         "issue": "#207",
-        "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+        "spec_ref": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
         "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
         "harness_sha": _harness_sha(),
         "status": "OK",
@@ -828,7 +828,7 @@ def run_and_emit_dry() -> Path:
     receipt = {
         "ticket": "EXPC1-RANK-SWEEP", "ts": ts, "mode": "dry-run", "dry_run": True,
         "issue": "#207",
-        "spec_ref": "docs/research/p3-memory-wall-ledger-20260706.md",
+        "spec_ref": "docs/domains/governance/research/p3-memory-wall-ledger-20260706.md",
         "scope": "CPU plumbing proof only, toy H=64 shape, 2 warmup + 3 timed steps per arm "
                  "-- proves projection math, momentum quantization round-trip, rho/"
                  "identity_gap computation, kill-criteria + verdict logic, and receipt "

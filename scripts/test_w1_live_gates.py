@@ -444,7 +444,7 @@ def test_main_dryrun_manifest_mode_receipt_write_does_not_crash():
     DEFAULT_RUNG_RECEIPT's broken path at all.
 
     Fresh-clone fixture (issue #368): uses committed
-    scripts/tests/fixtures/w1-pricing-fixture-minimal.json so the test
+    src/ember/governance/scripts/tests/fixtures/w1-pricing-fixture-minimal.json so the test
     passes on any fresh clone without machine-local files."""
     assert not os.path.exists(DEFAULT_RUNG_RECEIPT), (
         "fixture assumption: DEFAULT_RUNG_RECEIPT must NOT exist in this "

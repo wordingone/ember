@@ -102,7 +102,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 def _find_state_root() -> Path | None:
-    _repo_root = Path(__file__).resolve().parent.parent.parent
+    _repo_root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     _env_root = os.environ.get("EMBER_TOTALITY_ROOT")
     candidates = [
         Path(_env_root) if _env_root else None,

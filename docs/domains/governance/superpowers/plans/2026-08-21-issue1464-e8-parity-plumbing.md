@@ -65,7 +65,7 @@ Pass `optimizer.finish_gradient_norm()` after `optimizer.step()` and before the 
 ### Task 2: E7 v2 dimensionless sigma composer
 
 **Files:**
-- Create: `scripts/r1_e7_ratio_sigma.py`
+- Create: `src/ember/governance/scripts/r1_e7_ratio_sigma.py`
 - Create: `tests/test_r1_e7_ratio_sigma.py`
 - Modify: `tests/test_r1_e8_validator.py`
 

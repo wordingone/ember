@@ -10,7 +10,7 @@ regression-guard anything. The row's own reopening bar (verbatim from
 manifests/ember-01-custody/c0-failure-class-ledger.json) is: "a LIVE guard on the
 current bf16-momentum path lands and is proven collectable + RED-first."
 
-scripts/preflight/update_survival.py (landed #1232, merged 2026-07-31, independent
+src/ember/governance/scripts/preflight/update_survival.py (landed #1232, merged 2026-07-31, independent
 of and postdating the dead #792 guard) IS that live guard: it distinguishes
 gradient-caused parameter movement from weight-decay movement under a treatment
 dtype (including bf16), and fails PREFLIGHT_FAIL when a tensor class's
@@ -43,7 +43,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-update_survival = importlib.import_module("scripts.preflight.update_survival")
+update_survival = importlib.import_module("src.ember.governance.scripts.preflight.update_survival")
 
 
 def _bitnet_freeze_probes(*, required_survival: bool) -> list:

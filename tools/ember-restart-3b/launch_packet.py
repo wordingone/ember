@@ -718,7 +718,7 @@ def named_launch_command(cfg: dict, identity: dict) -> dict:
     `raise SystemExit(...)` at module import time (locked in commit
     4f758db "fix: lock Ember authority and totality" -- ANY import of that
     module, including for the shard-dir interlock fix, fails immediately).
-    Naming it here would be a FALSE command. tools/ember-restart-3b/pretrain.py
+    Naming it here would be a FALSE command. src/ember/infrastructure/tools/ember-restart-3b/pretrain.py
     is a library (run_pretraining_segment/run_selection_pretraining_segment/
     run_manifest_bound_semantic_segment) with no CLI of its own.
 

@@ -4,7 +4,7 @@
 readiness mapping (15615): "first unlocker = multimodal config spec (the lead/the maintainer)."
 Unblocks #26 (the engineer builds the architecture extension + config against THIS), which
 unblocks #414/#415 → readiness. Grounding: NC2-own contract §8 +
-docs/research/gemma4-unified-architecture.md + v0-pretrain-config.json (carry envelope)
+docs/domains/governance/research/gemma4-unified-architecture.md + v0-pretrain-config.json (carry envelope)
 + survey verdicts (components 7/8) + residency design gate.
 
 ## I. The four v0 LOCKS — concrete, size-independent (what the engineer builds)

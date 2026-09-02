@@ -15,7 +15,7 @@ Pins:
   6. Fail-closed wiring (source asserts): freeze+assembly+tokenizer pins,
      band fail-closed, sha_convention, receipt via checked_write.
 
-Run: python scripts/corpus_mix_selftest.py
+Run: python src/ember/governance/scripts/corpus_mix_selftest.py
 """
 import json
 import os

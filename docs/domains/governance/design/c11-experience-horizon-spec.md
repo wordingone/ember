@@ -247,4 +247,4 @@ reported UNEVALUABLE because the checker was still looking for the retired
 1h/3h/24h duration receipts.
 
 Control fixtures exercising each check's sharp tooth live in
-`scripts/ember_totality/chk_controls/run_controls.py` (`build_c11_horizon`).
+`src/ember/governance/scripts/ember_totality/chk_controls/run_controls.py` (`build_c11_horizon`).

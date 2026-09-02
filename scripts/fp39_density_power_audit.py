@@ -100,7 +100,7 @@ checked_write = getattr(_ember_66ee9e91637922dc_module, 'checked_write')
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
 RECEIPTS = f"{NC}/receipts"
-SPEC_CLAIMED_MDE_PP = 3.85   # docs/archive/pre-restart/c04-token-budget-v1.md F-4: n=400 -> 3.85pp
+SPEC_CLAIMED_MDE_PP = 3.85   # docs/domains/governance/archive/pre-restart/c04-token-budget-v1.md F-4: n=400 -> 3.85pp
 EXTREME_TOL = 1e-9
 REAL_VERDICTS = {"DENSITY_CONFIRMED", "DENSITY_MARGINAL",
                  "DENSITY_REVERSED", "DENSITY_FLAT"}

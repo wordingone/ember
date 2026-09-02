@@ -57,7 +57,7 @@ The scope cannot drift from the freeze without breaking the gate.
 
 ## Cross-refs
 
-- `docs/research/fp26-round3-shape-decision.md` (sha `5ef7cc20…`) — the frozen
+- `docs/domains/governance/research/fp26-round3-shape-decision.md` (sha `5ef7cc20…`) — the frozen
   decision this scope is tied to; `binds.fp21b_132` = "retargets to the owned
   core's FIRST sampling round".
 - `scripts/fp21b_prereg.py` — `WORLD_PIN` + `check_sampling_world`; its selftest

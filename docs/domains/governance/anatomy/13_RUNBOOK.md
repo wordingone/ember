@@ -73,7 +73,7 @@ gh pr checks <n> --repo wordingone/ember
 ```
 Every label FAMILY (`affects:`/`area:`/`kind:`/`needs:`/`priority:`/
 `review:`/`state:`) needs exactly one label; the PR body needs every
-required section filled (see `docs/charter/probe-authoring-contract.md`-adjacent PR
+required section filled (see `docs/domains/governance/charter/probe-authoring-contract.md`-adjacent PR
 template conventions) with real content, `Exact base SHA` matching the LIVE
 `origin/master` tip at check-run time (not the branch's git merge-base if
 master has since moved), and `Affected milestones` containing the milestone

@@ -128,7 +128,7 @@ were checked for self-declared supersession/proxy/placeholder language.
 
 | File | Evidence |
 |---|---|
-| `src/ember/governance/scripts/fp33_e3_gemma_e2b_smoke.py` | Zero repo-wide references. Its own docstring self-identifies as a stand-in: *"PROXY (this run): Qwen/Qwen2.5-Coder-3B-Instruct... Establishes harness plumbing... until Gemma4 runs"* (blocked on a transformers-version gap). The sibling script `scripts/fp33_e3b_gemma_e2b_proper.py` (also zero-ref, same ticket) explicitly states in its own docstring: *"Ticket: FP33-E3-GEMMA-E2B-SMOKE (proper run, **supersedes E3-plumbing proxy**)"* and runs the real `google/gemma-4-E2B-it` model the proxy was standing in for. Superseded-by: `scripts/fp33_e3b_gemma_e2b_proper.py` (kept — it is the current, real-model evidence producer for the same ticket). |
+| `src/ember/governance/scripts/fp33_e3_gemma_e2b_smoke.py` | Zero repo-wide references. Its own docstring self-identifies as a stand-in: *"PROXY (this run): Qwen/Qwen2.5-Coder-3B-Instruct... Establishes harness plumbing... until Gemma4 runs"* (blocked on a transformers-version gap). The sibling script `src/ember/governance/scripts/fp33_e3b_gemma_e2b_proper.py` (also zero-ref, same ticket) explicitly states in its own docstring: *"Ticket: FP33-E3-GEMMA-E2B-SMOKE (proper run, **supersedes E3-plumbing proxy**)"* and runs the real `google/gemma-4-E2B-it` model the proxy was standing in for. Superseded-by: `src/ember/governance/scripts/fp33_e3b_gemma_e2b_proper.py` (kept — it is the current, real-model evidence producer for the same ticket). |
 
 No second case reached this bar. Every other zero-ref script either (a) is
 a distinct arm in a designed multi-arm comparison (deleting it destroys

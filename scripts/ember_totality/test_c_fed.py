@@ -89,7 +89,7 @@ APPROVAL_MARKER = re.compile(
     r"per[\s_-]*avenue.*approv|approv.*per[\s_-]*avenue|user[\s_-]*approv",
     re.IGNORECASE)
 
-# [ISSUE #749 cure, docs/charter/probe-authoring-contract.md checklist item 2] Every
+# [ISSUE #749 cure, docs/domains/governance/charter/probe-authoring-contract.md checklist item 2] Every
 # text/regex keyword check above operates on THIS FILE'S OWN raw bytes -- a
 # candidate could satisfy every keyword clause by simply being a freshly-dropped
 # untracked (or working-tree-only-edited) file that never went through this
