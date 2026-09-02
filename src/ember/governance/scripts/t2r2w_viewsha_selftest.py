@@ -19,7 +19,7 @@ Pins, with NO GPU and NO ledger access:
      t2-r2w receipt (sha256 keys present + top-level sha_convention —
      the receipt_check contract for sha-bearing receipts).
 
-Run: python scripts/t2r2w_viewsha_selftest.py
+Run: python src/ember/governance/scripts/t2r2w_viewsha_selftest.py
 """
 import hashlib
 import json

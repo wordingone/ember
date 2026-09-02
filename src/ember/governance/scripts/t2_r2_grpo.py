@@ -296,7 +296,7 @@ def main():
     sys.argv = grpo_argv
     print(f"[t2_r2_grpo] delegating: sys.argv={sys.argv}", flush=True)
     runpy.run_path(
-        f"{NC}/scripts/t2_grpo.py",
+        f"{NC}/src/ember/governance/scripts/t2_grpo.py",
         run_name="__main__",
     )
 

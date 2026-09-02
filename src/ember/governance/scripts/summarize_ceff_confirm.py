@@ -7,7 +7,7 @@ multiplier (the lever-stack vs baseline ratio) is NOT computed here: that lives 
 adjudication receipt (ceff-shatter-REPUDIATED-...), since a single run's manifests cannot
 establish a comparison ratio.
 
-Usage: python scripts/summarize_ceff_confirm.py
+Usage: python src/ember/governance/scripts/summarize_ceff_confirm.py
 Writes: receipts/ceff-confirm-summary-bf16ns5-20260628T044638Z/summary.json
 """
 import glob
@@ -49,7 +49,7 @@ def main() -> int:
         "schema_version": 1,
         "kind": "ceff-confirm-run-summary",
         "derived_from": f"{RUN_DIR}/checkpoints/step-*/manifest.json",
-        "provenance": "output of scripts/summarize_ceff_confirm.py over on-disk checkpoint manifests; not hand-authored from prose",
+        "provenance": "output of src/ember/governance/scripts/summarize_ceff_confirm.py over on-disk checkpoint manifests; not hand-authored from prose",
         "run_config": {
             "segment_id": sample.get("segment_id"),
             "ce_impl": sample.get("ce_impl"),

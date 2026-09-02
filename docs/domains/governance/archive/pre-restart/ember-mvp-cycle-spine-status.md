@@ -34,7 +34,7 @@ MLE-bench task result, real 1h/1h/1h wheel result, or Stage-1 PASS.
   matching normalized output hashes. The validator now rejects Windows receipts
   that only request Job Object limits but do not record
   `job_object.assigned=true`.
-- `scripts/ember_windows_sandbox_selftest.py` verifies the probe battery and
+- `src/ember/governance/scripts/ember_windows_sandbox_selftest.py` verifies the probe battery and
   receipt validation. It also verifies the first production-shaped candidate
   runner receipt, which binds one candidate execution and the required probe
   battery to a cycle id. The selftest now includes negative receipt cases for
@@ -806,7 +806,7 @@ the official A/B/C wheel.
 ```powershell
 python src\ember\governance\scripts\ember_mvp_cycle_selftest.py
 python src\ember\governance\scripts\ember_mvp_cycle.py --selftest
-python scripts\ember_windows_sandbox_selftest.py
+python src\ember\governance\scripts\ember_windows_sandbox_selftest.py
 python src\ember\governance\scripts\ember_windows_sandbox.py --selftest
 python src\ember\governance\scripts\ember_windows_sandbox.py --out <local-path>
 python scripts\receipt_check.py --file <local-path>
@@ -876,8 +876,8 @@ python scripts\receipt_check.py --file <local-path>
 python src\ember\governance\scripts\v_soundness_probe.py --selftest
 python scripts\nck\selftest_replay_rig.py
 python scripts\governor.py --selftest
-python scripts\t1_multimodal_selftest.py
-python scripts\selftest_b3_multimodal.py
+python src\ember\governance\scripts\t1_multimodal_selftest.py
+python src\ember\governance\scripts\selftest_b3_multimodal.py
 ```
 
 `selftest_b3_multimodal.py` required unsandboxed execution to write its receipt

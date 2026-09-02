@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-test for scripts/redact_for_landing.py (ember issue #538).
+"""Self-test for src/ember/governance/scripts/redact_for_landing.py (ember issue #538).
 
 Covers the AC5 corruption-class regression set at minimum:
   1. pinned-file refusal, pinning receipt named

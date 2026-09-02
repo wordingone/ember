@@ -107,7 +107,7 @@
   },
   "runner_extension": {
     "base": "scripts/timeshare_pretrain.py (eng-33 + eng-36 extension)",
-    "selftest_script": "scripts/t1_multimodal_selftest.py (eng-39 / eng-423)",
+    "selftest_script": "src/ember/governance/scripts/t1_multimodal_selftest.py (eng-39 / eng-423)",
     "selftest_rule": "t1_multimodal_selftest.py must exit 0 on CPU (<30s) before any GPU dispatch",
     "interlock": "EMBER_GATE_AUTHORIZED=1 + --live (unchanged from v0)"
   },

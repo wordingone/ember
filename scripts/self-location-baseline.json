@@ -1122,7 +1122,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/r2d_sft_dry.py",
+      "path": "src/ember/governance/scripts/r2d_sft_dry.py",
       "line": 12,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1133,7 +1133,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/roadmap/publish_contracts.py",
+      "path": "src/ember/governance/scripts/roadmap/publish_contracts.py",
       "line": 33,
       "target": "PRIVATE_ROOT",
       "expression": "'B:' + '\\\\M'",
@@ -1144,7 +1144,7 @@
       "error": "node outside closed grammar: BinOp"
     },
     {
-      "path": "scripts/t1_chunked.py",
+      "path": "src/ember/governance/scripts/t1_chunked.py",
       "line": 39,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1155,7 +1155,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t1c_contamination.py",
+      "path": "src/ember/governance/scripts/t1c_contamination.py",
       "line": 45,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",
@@ -1177,7 +1177,7 @@
       "error": "node outside closed grammar: JoinedStr"
     },
     {
-      "path": "scripts/t2_wcode_control.py",
+      "path": "src/ember/governance/scripts/t2_wcode_control.py",
       "line": 8,
       "target": "<sys.path.insert>",
       "expression": "f'{NC}/scripts'",

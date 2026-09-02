@@ -25,7 +25,7 @@
 **Files:**
 - Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.ts`
 - Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.test.ts`
-- Modify: `tools/ember-cli/src/ink/termio.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/termio.ts`
 - Modify: `tools/ember-cli/src/core/frontend-shell.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/core/frontend-shell.test.ts`
 
@@ -42,7 +42,7 @@
 ### Task 2: Pointer event protocol, hover, and scoped wheel dispatch
 
 **Files:**
-- Modify: `tools/ember-cli/src/ink/termio.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/termio.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/stdin-bridge.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/hooks.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts`
