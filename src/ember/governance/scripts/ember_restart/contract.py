@@ -170,7 +170,7 @@ R1_ENTRY_CLAIM_BOUNDARY = {
 # Issue #1721: same fixed-installation discipline as certified_train_launch.py's
 # ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH -- the gate is infrastructure loaded
 # from THIS file's own tree, independent of the checkpoint directory it verifies.
-ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "src/ember/governance/scripts/artifact_custody_gate.py"
+ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH = "artifact_custody_gate.py"
 
 R1_ENTRY_KEYS = {
     "schema",
@@ -208,7 +208,7 @@ def load_artifact_custody_gate_module():
     Same fixed-installation rationale as certified_train_launch.py's loader of the
     same module: infrastructure, loaded once from the tree this validator ships in.
     """
-    module_path = Path(__file__).resolve().parents[2] / ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH
+    module_path = Path(__file__).resolve().parents[1] / ARTIFACT_CUSTODY_GATE_MODULE_RELATIVE_PATH
     specification = importlib.util.spec_from_file_location(
         "ember_artifact_custody_gate", module_path
     )
@@ -220,6 +220,12 @@ def load_artifact_custody_gate_module():
     except OSError as error:
         raise ValueError("artifact custody gate module is unreadable") from error
     return module
+
+
+def governed_repository_root() -> Path:
+    """Return the repository root for this module's canonical governed path."""
+
+    return Path(__file__).resolve().parents[5]
 
 
 def _run_git(source_root: Path, *git_args: str, text: bool = False) -> subprocess.CompletedProcess:
@@ -1344,7 +1350,7 @@ def _verify_checkpoint(
     # custody refusal fails this validation closed exactly like any other check.
     if checkpoint_shards:
         custody_gate = load_artifact_custody_gate_module()
-        custody_repo_root = Path(__file__).resolve().parents[2]
+        custody_repo_root = governed_repository_root()
         if custody_gate.canonical_ember_lab_binary(custody_repo_root) is not None:
             try:
                 custody_gate.custody_verify(
