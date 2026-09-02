@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10, PyTorch, pytest, JSON/JSONL, SHA-256, `Decimal`, Ember durable I/O.
 
-**Spec:** `docs/superpowers/specs/2026-08-21-issue1464-e8-parity-plumbing-design.md`
+**Spec:** `docs/domains/governance/superpowers/specs/2026-08-21-issue1464-e8-parity-plumbing-design.md`
 
 ## Global Constraints
 

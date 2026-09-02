@@ -27,7 +27,7 @@
 #      Step B inside the merge-ref worktree (proven by touch-file markers,
 #      not just an exit code).
 #
-# Usage: bash scripts/tests/test_pr_authbind_preflight_regression.sh
+# Usage: bash src/ember/governance/scripts/tests/test_pr_authbind_preflight_regression.sh
 # Exit 0 on all assertions passing, non-zero + message on the first failure.
 
 set -u

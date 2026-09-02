@@ -7,7 +7,7 @@ Wires all four event sources (MailSource, FileWatchSource, JobReceiptSource,
 ScheduleSource) against the NCKEventLoop and runs forever.
 
 Usage:
-    python scripts/nck/c10_resident.py [--config <path>]
+    python src/ember/governance/scripts/nck/c10_resident.py [--config <path>]
 
 Default config: configs/nck-c10.json (relative to repo root).
 """

@@ -4,7 +4,7 @@
 
 // NO-TEMP policy (per operator direction): none of ember's stack, current, past, or
 // future, may live in system temp. This module is the Rust-side twin of
-// tools/ember-cli/src/utils/ember-scratch.ts (emberScratchDir) -- the one canonical
+// src/ember/infrastructure/tools/ember-cli/src/utils/ember-scratch.ts (emberScratchDir) -- the one canonical
 // ember-owned scratch root for ember-lab call sites. See src/ember/infrastructure/tools/no_temp_allowlist and
 // src/ember/infrastructure/tools/check_no_temp.py for the enforcement gate covering the rest of the stack.
 

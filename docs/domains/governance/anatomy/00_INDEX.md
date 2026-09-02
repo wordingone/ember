@@ -28,7 +28,7 @@ into prose that outruns the receipts.
 | 06 | EVALUATION_AND_BENCHMARKS | D3 native loop, the operator benchmark set, anti-gaming C1–C5 protocol |
 | 07 | GOVERNOR_AND_RESOURCE_MANAGEMENT | `src/ember/governance/scripts/governor.py` — VRAM/commit/device governance |
 | 08 | PROMPT_REGISTRY | **does not exist yet** — stated plainly, not invented |
-| 09 | TOOLING_AND_CLI | `tools/ember-cli/`, `scripts/ember_avir_cli_launch_entry.py` |
+| 09 | TOOLING_AND_CLI | `tools/ember-cli/`, `src/ember/governance/scripts/ember_avir_cli_launch_entry.py` |
 | 10 | RECEIPTS_PROVENANCE | `src/ember/governance/scripts/receipt_check.py`, `src/ember/governance/scripts/receipt_write.py`, the genesis invariant |
 | 11 | TOTALITY_BOARD_CONDITIONS | `src/ember/governance/scripts/ember_totality/ember_totality_spec.py`, the 41-condition registry |
 | 12 | COCKPIT_OBSERVATORY | `tools/ember-cli/src/core/ember-world-state.ts`, `src/ember/governance/scripts/ember_cobs_capture.py` |

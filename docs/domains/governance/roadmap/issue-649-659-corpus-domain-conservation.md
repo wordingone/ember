@@ -24,7 +24,7 @@ of this consolidation.
   `docs/domains/governance/charter/ai-lab-corpus-charter.md`, Git blob
   `3ed47e8047f9a67b37c220c99ba272e0fb377271`.
 - #1116 is the open EMBER-02 canonical contract. Its current carrier is
-  `docs/roadmap/milestones/EMBER-02.md`, Git blob
+  `docs/domains/governance/roadmap/milestones/EMBER-02.md`, Git blob
   `642db394892674f52007492e502b779321c5bd36`.
 - The merged #950 shared preflight bundle is
   `data/ember-restart-3b/text-lab-source-receipt-bundle-v2.json`, Git blob

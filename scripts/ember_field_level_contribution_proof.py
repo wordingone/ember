@@ -222,7 +222,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "primary_contribution_class": "agent self-improvement evaluation method",
             "candidate_name": "zero-cost native-operator external-transfer link with connected-cycle audit",
             "reusable_artifacts": [
-                "scripts/ember_connected_cycle_audit.py",
+                "src/ember/governance/scripts/ember_connected_cycle_audit.py",
                 "scripts/ember_native_operator_external_transfer_link.py",
                 "scripts/ember_field_level_contribution_proof.py",
                 "scripts/ember_d3_generalized_candidate_exec.py",
@@ -238,7 +238,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "closest_known_prior_or_baseline_present": bool(closest_prior),
             "material_difference_defined": bool(material_difference),
             "reusable_artifact_present": all((repo / p).exists() for p in [
-                "scripts/ember_connected_cycle_audit.py",
+                "src/ember/governance/scripts/ember_connected_cycle_audit.py",
                 "scripts/ember_native_operator_external_transfer_link.py",
                 "scripts/ember_field_level_contribution_proof.py",
                 "scripts/ember_d3_generalized_candidate_exec.py",

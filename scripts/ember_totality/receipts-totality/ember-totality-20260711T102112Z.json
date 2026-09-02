@@ -799,7 +799,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_enf.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_enf.py",
             "sha256": "05c794f0220089518680bbe61edffeb488dfac74fe24502467b5b9b26841508c",
             "present": true
           },

@@ -7,7 +7,7 @@
 import { describe, expect, it } from "bun:test";
 
 const auditPath = new URL(
-  "../../../../docs/archive/goal/goal-organ-floor-conformance-20260710.md",
+  "../../../../docs/domains/governance/archive/goal/goal-organ-floor-conformance-20260710.md",
   import.meta.url,
 );
 const audit = await Bun.file(auditPath).text();

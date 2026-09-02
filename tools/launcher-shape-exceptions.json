@@ -37,7 +37,7 @@
     },
     {
       "path": "scripts/prepare-ember-cockpit.ps1",
-      "sha256": "d100f6d8c9ae0c9910a5e6f4a905120cbfad0f72b7aca57e253d9081a2d11c52",
+      "sha256": "54687fd47750e8ff4918a585ae1f98ffe70db0112ec9389115ed8408806feec8",
       "reason": "preparation-only build helper. It may invoke the pinned Bun package/build commands and Cargo compiler, but it never starts Ember.exe, ember-lab serve, or any training run; its only production outputs are immutable application/runtime paths consumed by the governed cockpit command."
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "path": "tests/domain-governance/test_ember_root_launcher.py",
-      "sha256": "ba476f72a5ef0db70c21e29aeffd42b8bed5615f644419085f0d8e33aca20b54",
+      "sha256": "7e4af752ec7d22819b9955a27a24395bacb4fef0139caf76b929ca2c8a389247",
       "reason": "canonical-launcher hermetic acceptance suite. It copies tools/launchers/Ember.cmd and preparation scripts to a unique temporary repository, uses fake Bun/ember-lab command files, and asserts governed argv and refusals without starting a real cockpit or training run."
     },
     {

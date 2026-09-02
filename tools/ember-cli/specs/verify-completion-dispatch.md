@@ -71,7 +71,7 @@ implementation: `node:child_process.spawn`, buffered async, timeout-bounded at
 1. `gh issue list --repo wordingone/ember --state open --limit 1000 --json ...` — stdout
    written to `<jobDir>/issues.json`. Non-zero exit fails the job at phase
    `fetching-issues`; later legs never run.
-2. `python -B scripts/ember_01_custody/issue_census.py --repo-root <PINNED WORKTREE PATH>
+2. `python -B src/ember/governance/scripts/ember_01_custody/issue_census.py --repo-root <PINNED WORKTREE PATH>
    --public-ref refs/remotes/origin/master --issues-json <jobDir>/issues.json --output
    <jobDir>/issue-census.json`. Non-zero exit fails the job at phase `issue-census`.
    `--repo-root` targets the pinned worktree, never `repoRoot` — #1371's whole point.

@@ -1322,7 +1322,7 @@ operated" qualifier = governed wall is ~1.34× compute-only wall on
 sampling legs; any compute-only comparison divides by that, from a
 measured receipt field instead of fp-11's reconstruction bracket.
 Verdict receipt: `fp20b-settle-20260611T040647Z.json`
-(`scripts/fp20b_settle.py`, selftest PASS, fail-closed sanity band —
+(`src/ember/governance/scripts/fp20b_settle.py`, selftest PASS, fail-closed sanity band —
 zero-pacing or >50% pacing on a governed generation leg =
 INSTRUMENTATION-FLAG, never silently accepted).
 

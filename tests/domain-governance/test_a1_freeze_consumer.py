@@ -78,7 +78,7 @@ DECL = "receipts/eval-suite-freeze/a1-freeze-declaration-20260709T233050Z.json"
 POINTER = "receipts/eval-suite-freeze/EVAL-FREEZE-HASH"
 AMEND = "receipts/eval-suite-freeze/a1-freeze-exclusion-amendment-20260709T234148Z.json"
 FREEZE = "receipts/eval-suite-freeze/eval-suite-freeze-v1.json"
-LINEAGE = "tests/fixtures/a1-lineage-manifest-example.json"
+LINEAGE = "tests/fixtures/domain-governance/a1-lineage-manifest-example.json"
 
 
 def run(extra, out):

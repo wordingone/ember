@@ -24,7 +24,7 @@
 **Files:**
 - Create: `assets/ember.ico`
 - Modify: `tools/ember-cli/src/build-tools/build-cockpit.ts`
-- Modify: `tools/ember-cli/src/build-tools/build-cockpit.test.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/build-tools/build-cockpit.test.ts`
 
 **Interfaces:**
 - Produces: canonical `cockpitCompileArgs()` containing exactly one `--windows-icon` argument bound to the tracked icon.

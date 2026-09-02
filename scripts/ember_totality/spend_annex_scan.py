@@ -371,7 +371,7 @@ PAID_CLIENT_PATTERNS = {
 # A script that merely *mentions* "OPENAI_API_KEY" (e.g. to check whether some
 # OTHER document/README references it, as an admissibility gate would) is not
 # consuming a paid credential; matching on the bare token name over-triggers on
-# exactly that shape (confirmed false positive: scripts/ember_paperbench_admission.py
+# exactly that shape (confirmed false positive: src/ember/governance/scripts/ember_paperbench_admission.py
 # checks `"OPENAI_API_KEY" in readme` to detect a benchmark's OWN paid-key
 # requirement, never reads the env var itself).
 API_KEY_ENV_NAME_RE = re.compile(
@@ -476,7 +476,7 @@ SCRIPT_SCAN_EXTS = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh")
 #     return receipts_dir / f"native-smoke-{ts}.json"
 #   probe-meminfo-*.json                     scripts/probe_meminfo.py:37
 #     path = f"{NC}/receipts/probe-meminfo-{ts}.json"
-#   resident-training-gate-*.json            scripts/ember_resident_training_gate.py:945,1165,1172
+#   resident-training-gate-*.json            src/ember/governance/scripts/ember_resident_training_gate.py:945,1165,1172
 #     checked_write(str(out_path), receipt) where out_path comes from the REQUIRED
 #     --out CLI arg (ap.error(...) if missing) -- the script itself names no fixed
 #     timestamp convention (caller supplies the full filename), but the naming
@@ -577,7 +577,7 @@ CONVENTION_MAP = [
     (re.compile(r"^fp40-l10-optimizer-ab-.*\.json$"), "scripts/fp40_l10_optimizer_ab.py"),
     (re.compile(r"^native-smoke-.*\.json$"), "scripts/t_native_smoke.py"),
     (re.compile(r"^probe-meminfo-.*\.json$"), "scripts/probe_meminfo.py"),
-    (re.compile(r"^resident-training-gate-.*\.json$"), "scripts/ember_resident_training_gate.py"),
+    (re.compile(r"^resident-training-gate-.*\.json$"), "src/ember/governance/scripts/ember_resident_training_gate.py"),
     (re.compile(r"^resume-drill-.*\.json$"), "scripts/train_multimodal_v0.py"),
     (re.compile(r"^selective-recompute-ab-.*\.json$"), "scripts/selective_recompute_ab.py"),
     # anchored to digits-only so it never swallows v0-live-import-edition-*.json
@@ -863,7 +863,7 @@ GENERATOR_ABSENT_HISTORICAL_BASENAMES = [
      "and eng107-head-coverage-* above."),
 ]
 
-# resident-training-gate-*.json is resolved via CONVENTION_MAP (scripts/ember_resident_training_gate.py,
+# resident-training-gate-*.json is resolved via CONVENTION_MAP (src/ember/governance/scripts/ember_resident_training_gate.py,
 # confirmed --out-driven write site) -- the placeholder entry above is intentionally unreachable
 # (CONVENTION_MAP is always checked first) and documents that this basename was investigated and
 # is NOT an external-tree import despite one advisory field (next_command_if_blocked) mentioning a

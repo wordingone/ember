@@ -14,7 +14,7 @@ The public hierarchy has exactly four layers:
 1. `INVARIANT.md` and `GOAL.md` retain their existing authority.
 2. `docs/roadmap/milestones/EMBER-00.md` through `EMBER-11.md` are the
    authoritative milestone decomposition below `GOAL.md`.
-3. `docs/roadmap/execution-graph.json` describes current scheduling,
+3. `docs/domains/governance/roadmap/execution-graph.json` describes current scheduling,
    prerequisites, and parallel work; it does not redefine outcomes.
 4. GitHub issues and pull requests describe concrete work and evidence; they
    do not become independent roadmap authority.
