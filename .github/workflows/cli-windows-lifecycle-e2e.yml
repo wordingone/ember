@@ -39,26 +39,26 @@ jobs:
       - name: Install pinned validator dependencies
         run: python -m pip install "cryptography==49.0.0" "jsonschema==4.26.0"
       - name: Install lockfile-pinned CLI dependencies
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         run: bun install --frozen-lockfile
       - name: Run release-blocking CLI hardening matrix
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         run: >
           bun run build-tools/cli-hardening-matrix.ts
-          --receipt ../../../receipts/ember-cli-hardening/receipt.json
+          --receipt ../../../../../../receipts/ember-cli-hardening/receipt.json
       - name: Verify lifecycle refusal matrix
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         run: bun test build-tools/lifecycle-smoke.test.ts
       - name: Build exact compiled Ember CLI
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         run: bun run build
       - name: Drive real lifecycle through ConPTY
-        working-directory: tools/ember-cli/src
+        working-directory: src/ember/infrastructure/tools/ember-cli/src
         run: >
           node --experimental-strip-types build-tools/lifecycle-smoke-driver.ts
           --binary ember.exe
-          --out-dir ../../../receipts/ember-cli-lifecycle-smoke
-          --receipt-path ../../../receipts/ember-cli-lifecycle-smoke/receipt.json
+          --out-dir ../../../../../../receipts/ember-cli-lifecycle-smoke
+          --receipt-path ../../../../../../receipts/ember-cli-lifecycle-smoke/receipt.json
       - name: Retain lifecycle evidence and diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
