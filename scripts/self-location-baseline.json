@@ -880,7 +880,7 @@
       "error": "call outside closed grammar: next"
     },
     {
-      "path": "scripts/ember_totality/test_c_port.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_port.py",
       "line": 67,
       "target": "CANDIDATE_ROOTS",
       "expression": "[p for p in (os.environ.get('EMBER_TOTALITY_ROOT'), REPO_ROOT, os.path.join(REPO_ROOT, '<external-state>')) if p]",
@@ -891,7 +891,7 @@
       "error": "node outside closed grammar: ListComp"
     },
     {
-      "path": "scripts/ember_totality/test_c_port.py",
+      "path": "src/ember/governance/scripts/ember_totality/test_c_port.py",
       "line": 72,
       "target": "ROOT",
       "expression": "next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)",

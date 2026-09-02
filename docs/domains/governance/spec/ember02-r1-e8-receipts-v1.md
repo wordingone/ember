@@ -96,7 +96,7 @@ in the payload unchanged for the E4 receipt accumulator and battery, which
 still read them under their original names.
 
 `proxy_joules` is now derived, closing issue #1464's second residual, by
-`tools/ember-restart-3b/a1_energy_apportionment.py`. The energy sidecar
+`src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`. The energy sidecar
 (`energy_proxy_logger.py --watch-pidfile`, launched as an independent OS
 process that communicates with the training child only through a pidfile --
 so an evidence sampler can never block or crash certified training) now

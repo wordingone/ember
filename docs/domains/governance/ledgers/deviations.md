@@ -10,7 +10,7 @@ artifact + its freeze SHA/date, what changes, why, and who owns the call.
 
 **Date filed:** 2026-08-18, before any A1 liveness receipt or R1-E8 verdict.
 **Frozen artifacts:** `docs/domains/governance/spec/ember02-preregistration-v1.md` and
-`docs/spec/ember02-preregistration-thresholds-v1.json`.
+`docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json`.
 
 **Gap recorded, no formula amendment:** the preregistration freezes T-08 as
 `A1 equal-budget tokens / A3 tokens >= 0.33` and requires tokens/second plus

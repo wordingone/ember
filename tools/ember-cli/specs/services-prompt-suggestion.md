@@ -10,7 +10,7 @@ Status: SHIPPED — implemented as src/services/prompt-suggestion.ts (+ prompt-s
 11, speculation.ts: 18). This spec derives behavior from the behavioral mapping only —
 never from the predecessor source tree.
 
-Consumer: `tools/ember-cli/src/services/prompt-suggestion.ts`
+Consumer: `src/ember/infrastructure/tools/ember-cli/src/services/prompt-suggestion.ts`
 Consumer: `tools/ember-cli/src/services/speculation.ts`
 
 Clean-room: build from THIS spec + existing ember-cli interfaces only. No founder/user

@@ -7,7 +7,7 @@ Loads the EMPIRICAL per-task base rates from the G1 base leg samples
 (validation 43 x k=8, receipt w1-floor-g1-base-*) and executes the power.py
 paired-design extensions on them: MDE-vs-k table + Monte-Carlo power grid
 (sample-level normal-proxy test and task-level any-of-k McNemar), so every
-number in docs/research/math/r2-power-prereg.md comes from an executed run.
+number in docs/domains/governance/research/math/r2-power-prereg.md comes from an executed run.
 
 Receipt: receipts/r2-power-prereg-<ts>.json. Pure stdlib.
 """

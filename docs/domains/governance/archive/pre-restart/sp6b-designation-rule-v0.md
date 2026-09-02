@@ -51,7 +51,7 @@ time.**
 dirs + clock; `--now` injectable for the selftest, defaults to system UTC;
 `--write` emits the receipt; bare invocation = staged exit 1 (evidence-
 promotion gate, house pattern). Selftest
-`scripts/nck/selftest_b_run_designation.py` (fail-closed, no model, tmp
+`src/ember/governance/scripts/nck/selftest_b_run_designation.py` (fail-closed, no model, tmp
 fixtures only).
 
 ## Freeze semantics

@@ -14,7 +14,7 @@ Bidirectional bridge: https://github.com/wordingone/ember/issues/674#issuecommen
 
 Bidirectional gradient-accumulation correction: https://github.com/wordingone/ember/issues/674#issuecomment-5225643283
 
-Sole changed path: `docs/roadmap/issue-674-bitnet-pilot-conservation.md`.
+Sole changed path: `docs/domains/governance/roadmap/issue-674-bitnet-pilot-conservation.md`.
 
 This carrier is not terminal until an independent reviewer returns exact-head PASS, all required CI and repository-policy/guard checks rerun freshly on that head and pass, the PR is non-draft/clean and merges, and the source closure comment binds the immutable merge evidence. Stale, cancelled or pre-body-refresh checks do not count.
 

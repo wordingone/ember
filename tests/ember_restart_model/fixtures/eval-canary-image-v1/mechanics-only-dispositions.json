@@ -2,7 +2,7 @@
   "authority_scope": "NO_EVALUATION_OR_CAPABILITY_CREDIT",
   "rows": [
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_a1_certified_launch.py"},
-    {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_a1_fused_backward.py"},
+    {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/domain-governance/test_a1_fused_backward.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/domain-governance/test_checkpoint_integrity.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_checkpoint_resume_smoke.py"},
     {"disposition": "MECHANICS_ONLY", "path": "tests/ember_restart_model/test_model.py"},

@@ -40,7 +40,7 @@
       "properties": {
         "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
         "cockpit_binary_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "memory_spec_path": { "const": "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" },
+        "memory_spec_path": { "const": "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json" },
         "memory_spec_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     },
@@ -103,7 +103,7 @@
         "commit_gb": { "type": "number", "minimum": 4 },
         "threshold": { "const": 4 },
         "action": { "const": "exit_cockpit_for_task_scheduler" },
-        "spec_path": { "const": "tools/ember-cli/specs/liveness-watchdog-memory-v1.json" },
+        "spec_path": { "const": "src/ember/infrastructure/tools/ember-cli/specs/liveness-watchdog-memory-v1.json" },
         "spec_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     }

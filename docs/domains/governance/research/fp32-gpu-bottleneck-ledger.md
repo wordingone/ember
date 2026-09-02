@@ -7,7 +7,7 @@ gain with receipts — without disturbing the G-shards → launch critical path.
 **Provenance rule (binding for this document):** every number is tagged
 `[R]` receipt (named file), `[L]` daemon log (job id), or `[H]` hypothesis.
 Nothing untagged is load-bearing. The receipt-side numbers are re-derived
-mechanically by `scripts/fp32_baseline_miner.py` (emits
+mechanically by `src/ember/governance/scripts/fp32_baseline_miner.py` (emits
 `receipts/fp32-baselines-*.json`); the intervention numbers come from
 `scripts/fp32_step_econ_bench.py` (emits `receipts/fp32-step-econ-*.json`).
 

@@ -118,7 +118,7 @@ A merely-runnable owned core that loses this gap at scale is a FAIL by design.
 
 ## Citation lineage (required, per policy)
 
-Inherits DT-1's lineage (`docs/charter/citation-policy-search-to-ember.md`): delta-rule
+Inherits DT-1's lineage (`docs/domains/governance/charter/citation-policy-search-to-ember.md`): delta-rule
 forward model — DIRECT prior **Widrow & Hoff (1960)** LMS/delta rule; upstream
 Hebb (1949), Rosenblatt (1958). DT-3's [UNIQUE] element (validated by no one):
 **local fused-update × scaling to 0.37B next-token LM** — The Search ran these

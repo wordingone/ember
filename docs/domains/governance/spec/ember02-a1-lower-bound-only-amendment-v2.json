@@ -9,7 +9,7 @@
     "scope": "section-4-A1-both-tiers-fail-only"
   },
   "thresholds": {
-    "path": "docs/spec/ember02-preregistration-thresholds-v1.json",
+    "path": "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
     "sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
     "change": "NO_THRESHOLD_CHANGE"
   },

@@ -589,7 +589,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/test_c_port.py",
+            "path": "src/ember/governance/scripts/ember_totality/test_c_port.py",
             "sha256": "4daddaa86d8f3c13de480fc6b3afc82536debef204abbe000452a841c195a20a",
             "present": true
           },

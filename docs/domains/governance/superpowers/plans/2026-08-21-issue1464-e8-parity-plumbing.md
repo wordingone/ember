@@ -27,7 +27,7 @@
 **Files:**
 - Modify: `src/ember/infrastructure/tools/ember-restart-3b/a1_optimizer.py`
 - Modify: `tools/ember-restart-3b/a1_execution.py`
-- Modify: `tests/ember_restart_model/test_a1_fused_backward.py`
+- Modify: `tests/ember_restart_model/domain-governance/test_a1_fused_backward.py`
 - Modify: `tests/ember_restart_model/domain-governance/test_a1_execution_e8_telemetry.py`
 
 **Interfaces:**
@@ -42,7 +42,7 @@ Add tests with hand-derived gradients `[3, 4]` and `[12]` expecting `13.0`, a 1-
 
 - [ ] **Step 2: Verify RED**
 
-Run: `python -B -m pytest tests/ember_restart_model/test_a1_fused_backward.py -q`
+Run: `python -B -m pytest tests/ember_restart_model/domain-governance/test_a1_fused_backward.py -q`
 
 Expected: FAIL because `FullGradientNormAccumulator` and `finish_gradient_norm` do not exist.
 

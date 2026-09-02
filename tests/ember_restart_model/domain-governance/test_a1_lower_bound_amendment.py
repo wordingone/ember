@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 AMENDMENT = ROOT / "docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json"
 PREREG = ROOT / "docs/domains/governance/spec/ember02-preregistration-v1.md"
-THRESHOLDS = ROOT / "docs/spec/ember02-preregistration-thresholds-v1.json"
+THRESHOLDS = ROOT / "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json"
 
 
 def sha256(path: Path) -> str:
@@ -49,7 +49,7 @@ class A1LowerBoundAmendmentContractTests(unittest.TestCase):
         self.assertEqual(
             self.amendment["thresholds"],
             {
-                "path": "docs/spec/ember02-preregistration-thresholds-v1.json",
+                "path": "docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json",
                 "sha256": sha256(THRESHOLDS),
                 "change": "NO_THRESHOLD_CHANGE",
             },
