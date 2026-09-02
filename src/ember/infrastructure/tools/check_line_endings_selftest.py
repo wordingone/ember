@@ -12,7 +12,7 @@ def load_checker(root: Path):
 
 
 def test_detects_crlf_and_accepts_lf():
-    root = Path(__file__).resolve().parents[1]
+    root = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
     checker = load_checker(root)
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
