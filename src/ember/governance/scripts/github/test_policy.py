@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from scripts.github import policy
+from src.ember.governance.scripts.github import policy
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())

@@ -42,4 +42,4 @@ machine-readable replay set is
 
 These commands prove only their stated repository properties. They do not prove training,
 evaluation quality, model capability, admission, or campaign completion. For the general evidence
-rules, read the [reproducibility charter](../charter/REPRODUCIBILITY.md).
+rules, read the [reproducibility charter](../domains/governance/charter/REPRODUCIBILITY.md).

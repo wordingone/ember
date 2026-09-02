@@ -14,7 +14,7 @@ import { readDegradedBannerState, readRoundtripAgeState } from "./circuit-breake
 import {
   buildGuardedProductionCallModel,
   _resetInitForTests,
-} from "../entrypoints/session-init.ts";
+} from "../../../../../../../tools/ember-cli/src/entrypoints/session-init.ts";
 
 describe("readDegradedBannerState", () => {
   const origFetch = globalThis.fetch;

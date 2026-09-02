@@ -802,8 +802,8 @@ def validate_execution_packet(
 ) -> None:
     validator_candidate = root / VALIDATOR_REL
     validator_path = validator_candidate.resolve(strict=True)
-    validator_parent_candidate = root / "scripts"
-    if validator_path.parent != validator_parent_candidate.resolve():
+    validator_parent = validator_candidate.parent.resolve(strict=True)
+    if validator_path.parent != validator_parent:
         raise SurfaceRefusal("COND4_EXECUTION_VALIDATOR_MISMATCH")
     validator_sha256 = hashlib.sha256(validator_path.read_bytes()).hexdigest()
     subject = evidence.get("subject") if isinstance(evidence, Mapping) else None

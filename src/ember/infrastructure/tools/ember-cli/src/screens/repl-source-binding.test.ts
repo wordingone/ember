@@ -26,9 +26,9 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
-import { ReplScreen } from "./repl.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 describe("repl operator surface source binding", () => {
   test("binds the source line to real evidence and fails closed on a stale claim", () => {

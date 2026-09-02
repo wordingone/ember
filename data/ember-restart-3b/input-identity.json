@@ -4,10 +4,10 @@
     "artifact_id":  "owned-four-domain-production-rung-v1",
     "provenance":  "deterministically replayed owned raw image/audio/reasoning/tool rung; local raw-target verifier receipt; measured rung and not sufficient-pretraining evidence",
     "admission_receipt_path":  "data/ember-restart-3b/owned-four-domain-production-rung-v1.receipt.json",
-    "admission_receipt_sha256":  "024b4343ff3b057145359532c1493b93aae41996119a09bf5f9db45db231dbe9",
+    "admission_receipt_sha256":  "fa2ee63e16adafa1ec74a5e7695f1127762384b3d367ca7f9105f881b9518332",
     "shard_path":  "data/ember-restart-3b/owned-four-domain-production-rung-v1.json",
     "next_executed_outcome":  "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
-    "sha256":  "c67084810341c46743f8f086fc5430564fe81dfa76229d2e4e8407daa6bae27c",
+    "sha256":  "26b4c4fbc1fe89de84726578e644019e9c901c06df2b97f0031969b88abe31f1",
     "goal_id":  "EMBER-02",
     "workstream_id":  "EMBER-02B"
 }

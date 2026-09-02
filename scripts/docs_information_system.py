@@ -546,6 +546,15 @@ def tracked_target_exists(target: str | None, tracked_paths: set[str]) -> bool:
     return target in tracked_paths or any(path.startswith(prefix) for path in tracked_paths)
 
 
+def disposition_document_exists(root: Path, relative: str) -> bool:
+    if (root / relative).is_file():
+        return True
+    if relative.startswith("docs/"):
+        migrated = root / "docs" / "domains" / "governance" / relative.removeprefix("docs/")
+        return migrated.is_file()
+    return False
+
+
 def reference_target_resolves(
     root: Path,
     document: Path,
@@ -898,7 +907,7 @@ def validate_reference_dispositions(root: Path, value: dict[str, Any]) -> list[d
             "visible_classification"
         ] not in {"reference", "historical", "superseded"}:
             raise DocsInfoError(f"REFERENCE_CLASSIFICATION_INVALID:{key}")
-        if not (root / str(row["document"])).is_file():
+        if not disposition_document_exists(root, str(row["document"])):
             raise DocsInfoError(f"REFERENCE_DISPOSITION_DOCUMENT_MISSING:{key}")
     expected_sha = sha256_bytes(canonical_json(rows))
     if value.get("row_set_sha256") != expected_sha:

@@ -6,7 +6,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from scripts.github import template_policy
+from src.ember.governance.scripts.github import template_policy
 # issue2015 exact-local-import:src/ember/governance/scripts/check_pr_authority_binding.py
 import importlib.util as _ember_fab48fcd56c3e48d_importlib
 import sys as _ember_fab48fcd56c3e48d_sys

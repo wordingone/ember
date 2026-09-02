@@ -12,7 +12,7 @@ import {
   parseGovernedDispatchArgs,
   runGovernedDispatch,
   sameCanonicalPath,
-} from "./governed-dispatch.ts";
+} from "../../../../../../../tools/ember-cli/src/services/governed-dispatch.ts";
 
 const SOURCE = "a".repeat(40);
 const roots: string[] = [];

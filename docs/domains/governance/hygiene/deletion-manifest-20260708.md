@@ -8,8 +8,8 @@ acceptance criteria).
 > describes the tree as it stood on the scan date; the reference counts and zero-ref
 > verdicts were measured against those locations and are deliberately not re-derived.
 > The 2026-08-05 docs consolidation (#1441) later moved many of the listed `docs/`
-> files into `docs/archive/`, `docs/charter/`, `docs/custody/`, `docs/design/`,
-> `docs/ledgers/`, and `docs/ember-restart/` — resolve any listed name against
+> files into `docs/domains/governance/archive/`, `docs/domains/governance/charter/`, `docs/custody/`, `docs/domains/governance/design/`,
+> `docs/domains/governance/ledgers/`, and `docs/domains/governance/ember-restart/` — resolve any listed name against
 > `docs/domains/governance/DOCS-README.md`'s current layout.
 
 Scope: `docs/` (205 tracked files) and `scripts/` (601 tracked files),
@@ -102,13 +102,13 @@ than a flat dump, since most share an obvious grouping:
 
 | Cluster | Count | Files |
 |---|---|---|
-| `docs/research/*-2026-06-10.md` same-day research notes | 6 | `bottleneck-conversion`, `cosmos3-read`, `exteroception`, `non-compute-accelerators`, `receipt-delta-analysis`, `d6-vram-pricing-note-20260706` |
-| `docs/research/drafts/*` explicit draft status | 2 | `fp1-smaller-core-draft.md`, `wsl-9p-probe-draft.md` |
-| `docs/verification/receipts-20260706/` July-6 verification bundle (raw terminal-snapshot artifacts + `_steplog.json`, tracked under `docs/` rather than `receipts/`) | 19 | `bisect/*.txt` (12), `resize-probe*/*.txt` (7), `chat-input-race-repro.md`, `drive-213x35/_steplog.json` |
+| `docs/domains/governance/research/*-2026-06-10.md` same-day research notes | 6 | `bottleneck-conversion`, `cosmos3-read`, `exteroception`, `non-compute-accelerators`, `receipt-delta-analysis`, `d6-vram-pricing-note-20260706` |
+| `docs/domains/governance/research/drafts/*` explicit draft status | 2 | `fp1-smaller-core-draft.md`, `wsl-9p-probe-draft.md` |
+| `docs/domains/governance/verification/receipts-20260706/` July-6 verification bundle (raw terminal-snapshot artifacts + `_steplog.json`, tracked under `docs/` rather than `receipts/`) | 19 | `bisect/*.txt` (12), `resize-probe*/*.txt` (7), `chat-input-race-repro.md`, `drive-213x35/_steplog.json` |
 | Companion narrative docs for the same bundle | 2 | `docs/domains/governance/verification/ember-cli-deploy-250-acceptance-20260706.md`, `docs/domains/governance/verification/ember-cli-live-board-20260706.md` |
 | Single-file zero-ref docs, no family | 22 | `c-e2b-tie-diagnosis-20260705.md`, `c04-gate-time-playbook.md`, `c04-muon-ceiling-analysis.md`, `custody-disposition-20260708.md`, `design/c14-mechanism-dossier-20260703.md`, `doc-freshness-protocol.md`, `goal-coverage-matrix-20260705.md`, `growth-operator-compile-target-decision.md`, `paradigm-flip-register.md`, `research/floor-probes-20260611/bias_analysis.py`, `research/floor-probes-20260611/final_verdict.md`, `research/fp21b-132-scope-under-fp26.md`, `research/fp27-round1-prereg.md`, `research/fp29-kill-synthesis-reconciliation.md`, `research/p4-clean-corpus-map-v1.md`, `sp6b-replay-rig-v0.md`, `stage1-status.md`, `superpowers/plans/2026-06-16-stage1-first-words.md`, `launch-target-multimodal-reconciliation.md` (see note above — actively gating, do not propose) |
 
-Note on the `docs/verification/receipts-20260706/` cluster (21 files
+Note on the `docs/domains/governance/verification/receipts-20260706/` cluster (21 files
 including its 2 companion docs): the raw artifacts and their narrative docs
 are almost certainly mutually cross-referenced in prose without repeating
 exact filenames (the scan only matches literal basenames) — this reads as
@@ -232,7 +232,7 @@ worth a separate look.
 | Untracked receipts proposed for DELETE (disk cleanup, zero citations) | 5,259 (5,255 m10-surface3 + 4 cache/tmp) |
 | Untracked receipts KEEP-pending (too new to judge) | 2 |
 | `.git` orphaned tmp packs, reclaimable | 4 files, ≈5.6 GB |
-| Structural findings (location drift, not deletions) | 2 — board-receipt JSON tracked under `scripts/ember_totality/` instead of `receipts/`; raw verification artifacts tracked under `docs/verification/receipts-20260706/` instead of `receipts/` |
+| Structural findings (location drift, not deletions) | 2 — board-receipt JSON tracked under `scripts/ember_totality/` instead of `receipts/`; raw verification artifacts tracked under `docs/domains/governance/verification/receipts-20260706/` instead of `receipts/` |
 
 Everything in the DELETE/CONSOLIDATE rows above is evidence for the
 follow-up deletion PR only — nothing is deleted here.

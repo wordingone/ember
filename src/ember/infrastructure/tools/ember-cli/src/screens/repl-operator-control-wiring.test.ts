@@ -22,12 +22,12 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { access, writeFile, readFile, unlink } from "fs/promises";
 import { mountInk } from "../ink/reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { startStdinBridge } from "../ink/stdin-bridge.ts";
-import { resetCommandRegistryForTests } from "../command-registry.ts";
-import { startTelemetryWatch } from "../services/telemetry-watch.ts";
-import { ReplScreen } from "./repl.ts";
+import { resetCommandRegistryForTests } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
+import { startTelemetryWatch } from "../../../../../../../tools/ember-cli/src/services/telemetry-watch.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 class FakeStdin extends EventEmitter {
   isTTY = true;

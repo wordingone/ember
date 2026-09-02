@@ -43,7 +43,7 @@ export async function boot(opts: BootOptions = {}): Promise<void> {
     await opts.mainFn();
     return;
   }
-  const { main } = await import("./process-entry.ts");
+  const { main } = await import("../../../../../../../tools/ember-cli/src/entrypoints/process-entry.ts");
   await main();
 }
 

@@ -17,7 +17,7 @@ import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { ReplScreen } from "./repl.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 function nextMacrotask(ms = 0): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

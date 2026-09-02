@@ -20,7 +20,7 @@
 import { describe, it, expect } from "bun:test";
 import React from "react";
 
-import { renderMsgDispatch } from "./screens/repl.ts";
+import { renderMsgDispatch } from "../../../../../../tools/ember-cli/src/screens/repl.ts";
 import {
   buildMessageLookups,
   UserTextMessage,

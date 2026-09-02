@@ -8,7 +8,7 @@ import {
   isModelFreeFastPath,
   referenceSeatModelName,
   resolveModelSeat,
-} from "./model-seat.ts";
+} from "../../../../src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.ts";
 
 describe("ember-cli model seat authority", () => {
   it("exempts diagnostics but never exempts the MCP server from seat gating", () => {

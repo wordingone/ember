@@ -10,5 +10,5 @@ an admitted model, or a governance verdict.
 
 Smallest safe path: use the CPU-only receipt checker in the
 [verification guide](../../guides/VERIFY.md). Operator procedures are indexed under
-[`docs/operator/`](../../operator/); follow current resource authority before any service or GPU
+[`docs/domains/governance/operator/`](../governance/operator/); follow current resource authority before any service or GPU
 launch.

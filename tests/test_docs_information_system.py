@@ -727,7 +727,7 @@ def test_checked_in_information_system_is_terminal_green() -> None:
     module = load_module()
     receipt = module.check_repository(REPO_ROOT, run_commands=False)
     assert receipt["result"] == "PASS"
-    assert receipt["current_reference_reconciliation_count"] == 453
+    assert receipt["current_reference_reconciliation_count"] == 484
     assert receipt["metadata_document_count"] >= 12
     assert receipt["claim_count"] >= 8
 
@@ -748,7 +748,7 @@ def test_current_reference_reconciliation_replays_live_rows_and_refuses_drift(
         module.validate_current_reference_reconciliation(
             REPO_ROOT, reconciliation, frozen
         )
-    ) == 453
+    ) == 484
 
     drifted = json.loads(json.dumps(reconciliation))
     drifted["rows"].pop()
@@ -829,6 +829,13 @@ def test_reference_dispositions_refuse_an_absent_document() -> None:
         match="REFERENCE_DISPOSITION_DOCUMENT_MISSING",
     ):
         module.validate_reference_dispositions(REPO_ROOT, dispositions)
+
+
+def test_reference_dispositions_accept_governance_document_cutover() -> None:
+    module = load_module()
+    assert module.disposition_document_exists(
+        REPO_ROOT, "docs/archive/goal/goal-archive.md"
+    )
 
 
 def test_reference_reconciliation_generator_matches_checked_in_bytes() -> None:

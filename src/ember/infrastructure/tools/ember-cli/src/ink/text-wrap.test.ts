@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import React from "react";
 import { Box, Text } from "./components.ts";
 import { mountInk } from "./reconciler.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "./rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { ActivityTranscriptBlock } from "../components/activity-feed-pane.ts";
 
 function renderLines(element: React.ReactElement, columns = 20, rows = 8): string[] {

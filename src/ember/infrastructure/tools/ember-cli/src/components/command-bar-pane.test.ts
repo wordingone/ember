@@ -13,7 +13,7 @@ import { describe, expect, test } from "bun:test";
 import React from "react";
 import { mountInk } from "../ink/reconciler.ts";
 import { Box } from "../ink/components.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
 import { CommandBarPane, commandBarMaxRows } from "./command-bar-pane.ts";
 import {
   buildCommandButtons,
@@ -22,7 +22,7 @@ import {
   type CommandButton,
   type CommandButtonActivation,
 } from "../services/command-buttons.ts";
-import { getCommands, resetCommandRegistryForTests, setCommandRegistryDeps } from "../command-registry.ts";
+import { getCommands, resetCommandRegistryForTests, setCommandRegistryDeps } from "../../../../../../../tools/ember-cli/src/command-registry.ts";
 import type { RegistryCommand } from "../types/command-types.ts";
 
 function cmd(name: string, overrides: Partial<RegistryCommand> = {}): RegistryCommand {

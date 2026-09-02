@@ -20,7 +20,7 @@ admitted model already exists.
 
 Infrastructure and Governance are cross-cutting. Dependencies are directional and constrained by
 [`manifests/architecture/domain-authority-v1.json`](../../manifests/architecture/domain-authority-v1.json).
-Each [domain overview](../DOCS-README.md#technical-domains) names its dependencies, implemented or
+Each [domain overview](../domains/governance/DOCS-README.md#technical-domains) names its dependencies, implemented or
 designed state, smallest safe verification route, and canonical evidence.
 
 ## Package and state boundaries
@@ -37,4 +37,4 @@ source-tree assumptions.
 The architecture map is adopted. Some public interfaces remain target-declared or dependency-
 deferred. An architectural destination, source implementation, executed receipt, independently
 reproduced result, and admitted model are separate states. Exact mutable state belongs in
-[continuity](../authority/CONTINUITY.md), not in this overview.
+[continuity](../domains/governance/authority/CONTINUITY.md), not in this overview.

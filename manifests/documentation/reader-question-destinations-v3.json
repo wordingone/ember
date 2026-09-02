@@ -51,6 +51,18 @@
       "source": "docs/authority/GOAL.md"
     },
     {
+      "basis": "The frozen instrument is immutable; the adopted architecture cutover moved canonical continuity without permitting a duplicate compatibility path.",
+      "canonical_source": "docs/domains/governance/authority/CONTINUITY.md",
+      "disposition": "RETIRED_WITH_CANONICAL_DISPOSITION",
+      "source": "docs/authority/CONTINUITY.md"
+    },
+    {
+      "basis": "The frozen instrument is immutable; the adopted architecture cutover relocated this charter without permitting a duplicate compatibility path.",
+      "canonical_source": "docs/domains/governance/charter/REPRODUCIBILITY.md",
+      "disposition": "RETIRED_WITH_CANONICAL_DISPOSITION",
+      "source": "docs/charter/REPRODUCIBILITY.md"
+    },
+    {
       "basis": "The frozen instrument is immutable; the adopted architecture cutover relocated this source without permitting a duplicate compatibility path.",
       "canonical_source": "docs/domains/governance/guides/START-HERE.md",
       "disposition": "RETIRED_WITH_CANONICAL_DISPOSITION",
@@ -79,6 +91,12 @@
       "canonical_source": "src/ember/governance/scripts/tests/test_authority_conservation.py",
       "disposition": "RETIRED_WITH_CANONICAL_DISPOSITION",
       "source": "scripts/tests/test_authority_conservation.py"
+    },
+    {
+      "basis": "The frozen instrument is immutable; the adopted architecture cutover relocated this verifier without permitting a duplicate compatibility path.",
+      "canonical_source": "src/ember/governance/scripts/verify_authority_conservation.py",
+      "disposition": "RETIRED_WITH_CANONICAL_DISPOSITION",
+      "source": "scripts/verify_authority_conservation.py"
     }
   ]
 }

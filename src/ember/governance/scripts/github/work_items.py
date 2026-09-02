@@ -17,8 +17,8 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.github import work_items_engine as engine  # noqa: E402
-from src.ember.governance.src.ember.governance.scripts.github.labels_engine import canonical_bytes, load_data  # noqa: E402
+from src.ember.governance.scripts.github import work_items_engine as engine  # noqa: E402
+from src.ember.governance.scripts.github.labels_engine import canonical_bytes, load_data  # noqa: E402
 
 WorkItemError = engine.WorkItemError
 CONTROLLED_PREFIXES = ("kind:", "area:", "state:", "priority:", "severity:")

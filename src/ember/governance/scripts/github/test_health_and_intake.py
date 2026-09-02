@@ -71,7 +71,7 @@ class HealthAndIntakeTests(unittest.TestCase):
 
     def test_issue_intake_workflow_covers_metadata_and_reopen_events(self) -> None:
         workflow = (
-            Path(__file__).resolve().parents[2]
+            next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
             / ".github"
             / "workflows"
             / "issue-intake.yml"

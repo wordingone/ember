@@ -32,10 +32,12 @@ function Get-TestCommit {
 try {
     $sourceRepository = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..\..\..")).Path
     New-Item -ItemType Directory -Force -Path (Join-Path $repository "scripts") | Out-Null
+    $fixtureGovernanceScripts = Join-Path $repository "src\ember\governance\scripts"
+    New-Item -ItemType Directory -Force -Path $fixtureGovernanceScripts | Out-Null
     Add-Type -TypeDefinition 'namespace FixtureApp { public static class Program { public static int Main() { return 0; } } }' -OutputAssembly $fakeApplication -OutputType ConsoleApplication
     Add-Type -TypeDefinition 'namespace FixtureLab { public static class Program { public static int Main() { return 23; } } }' -OutputAssembly $fakeRuntime -OutputType ConsoleApplication
     foreach ($name in @("install-ember-desktop.ps1", "ember-window-placement.ps1")) {
-        Copy-Item -LiteralPath (Join-Path $sourceRepository "scripts\$name") -Destination (Join-Path $repository "scripts\$name")
+        Copy-Item -LiteralPath (Join-Path $sourceRepository "src\ember\governance\scripts\$name") -Destination (Join-Path $fixtureGovernanceScripts $name)
     }
     $script:Installer = Join-Path $repository "src\ember\governance\scripts\install-ember-desktop.ps1"
     $env:EMBER_SELFTEST_APPLICATION = $fakeApplication
@@ -48,7 +50,7 @@ Write-Output ("EMBER_LAB=" + $env:EMBER_SELFTEST_RUNTIME)
     & git -C $repository init --quiet --object-format=sha1
     & git -C $repository config user.name "Ember deployment selftest"
     & git -C $repository config user.email "selftest@invalid.local"
-    & git -C $repository add scripts tracked.txt
+    & git -C $repository add scripts src tracked.txt
     & git -C $repository commit --quiet -m "selftest first version"
     if ($LASTEXITCODE -ne 0) { throw "Could not create first selftest source commit." }
     $a = Get-TestCommit

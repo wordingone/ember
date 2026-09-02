@@ -9,7 +9,7 @@ creating a competing authority surface.
    [`GOAL.md`](../authority/GOAL.md) is its highest amendable authority.
 2. The twelve [milestone contracts](milestones/) are the authoritative
    decomposition beneath `GOAL.md`.
-3. [`execution-graph.json`](../../../roadmap/execution-graph.json) records current scheduling,
+3. [`execution-graph.json`](execution-graph.json) records current scheduling,
    prerequisites, and parallel work. It cannot change milestone outcomes.
 4. GitHub issues and pull requests track concrete work and evidence. They do
    not become independent roadmap authority.
@@ -27,12 +27,12 @@ certified, regardless of issue counts, progress bars, or closed children.
 
 | ID | Public title | Depends on | Completion in plain language | Public certificate |
 |---|---|---|---|---|
-| [EMBER-00](../../../roadmap/milestones/EMBER-00.md) | Authority and totality lock | — | One non-contradictory public definition preserves Ember's entire intended destination. | — |
-| [EMBER-01](../../../roadmap/milestones/EMBER-01.md) | Custody, identity, and experiment spine | EMBER-00 | Every relevant artifact, issue, experiment, benchmark, and claim resolves through one verifiable identity system. | [**CERTIFIED** 2026-08-05](certificates/EMBER-01.md) |
-| [EMBER-02](../../../roadmap/milestones/EMBER-02.md) | Three-billion-parameter foundation birth | EMBER-01 | Ember first becomes a sufficiently trained, clean-genesis, native multimodal foundation model with reasoning and tool use. | — |
+| [EMBER-00](milestones/EMBER-00.md) | Authority and totality lock | — | One non-contradictory public definition preserves Ember's entire intended destination. | — |
+| [EMBER-01](milestones/EMBER-01.md) | Custody, identity, and experiment spine | EMBER-00 | Every relevant artifact, issue, experiment, benchmark, and claim resolves through one verifiable identity system. | [**CERTIFIED** 2026-08-05](certificates/EMBER-01.md) |
+| [EMBER-02](milestones/EMBER-02.md) | Three-billion-parameter foundation birth | EMBER-01 | Ember first becomes a sufficiently trained, clean-genesis, native multimodal foundation model with reasoning and tool use. | — |
 | [EMBER-03](milestones/EMBER-03.md) | Body, tools, and operator relationship | EMBER-02 | The owned model operates through Ember's real local body, tools, permissions, and configurable operator relationship. | — |
 | [EMBER-04](milestones/EMBER-04.md) | Grounded memory, world model, and dreaming | EMBER-03 | Memory, learned environment prediction, replay, consolidation, and stateful reasoning produce verified model behavior. | — |
-| [EMBER-05](../../../roadmap/milestones/EMBER-05.md) | Three-billion-parameter Verified Expert Accretion rung | EMBER-04 | Verified experience causes useful, persistent expert growth under matched causal controls. | — |
+| [EMBER-05](milestones/EMBER-05.md) | Three-billion-parameter Verified Expert Accretion rung | EMBER-04 | Verified experience causes useful, persistent expert growth under matched causal controls. | — |
 | [EMBER-06](milestones/EMBER-06.md) | Autonomous AI-research bootstrap | EMBER-05 | Ember repeatedly conducts bounded research cycles and transfers routine research burden from its founders. | — |
 | [EMBER-07](milestones/EMBER-07.md) | Seven-billion-parameter hard rung | EMBER-06 | The owned system reaches and sufficiently trains the 7B rung without losing native capabilities or lineage integrity. | — |
 | [EMBER-08](milestones/EMBER-08.md) | Fifteen-billion-parameter hard rung | EMBER-07 | The owned system reaches and sufficiently trains the 15B rung with verified scaling and causal evidence. | — |

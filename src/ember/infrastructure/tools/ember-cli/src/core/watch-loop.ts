@@ -19,8 +19,8 @@
 // dependency so the loop and its SIGINT/error-resilience behavior are unit-testable without a
 // real timer or a real terminal -- see core/watch-loop.test.ts.
 
-import type { EmberWorldState } from "./ember-world-state.ts";
-import { buildEmberWorldState } from "./ember-world-state.ts";
+import type { EmberWorldState } from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
+import { buildEmberWorldState } from "../../../../../../../tools/ember-cli/src/core/ember-world-state.ts";
 import { renderMonitorPanel } from "./monitor-render.ts";
 import type { MonitorPanelOptions } from "./monitor-render.ts";
 import { findNewestReceipts, renderReceiptsTail } from "./watch-render.ts";

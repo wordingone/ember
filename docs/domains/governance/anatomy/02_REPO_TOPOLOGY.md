@@ -3,7 +3,7 @@
 ## Top-level layout
 
 - `GOAL.md`, `INVARIANT.md`, `STATE.md`, `README.md` — governing/status docs at repo root.
-- `docs/` — specs, protocols, research notes, and this anatomy set (`docs/anatomy/`).
+- `docs/` — specs, protocols, research notes, and this anatomy set (`docs/domains/governance/anatomy/`).
 - `scripts/` — the vast majority of Ember's Python surface: training entry
   points (`ember_*.py`), the totality board (`scripts/ember_totality/`),
   receipt tooling (`receipt_check.py`, `receipt_write.py`), the resource

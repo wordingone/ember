@@ -16,8 +16,10 @@ import torch
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-MODEL_ROOT = ROOT / "tools" / "ember-restart-3b"
+MODEL_ROOT = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
+LAYOUT_ROOT = ROOT / "tools" / "ember-restart-3b"
 sys.path.insert(0, str(MODEL_ROOT))
+sys.path.insert(0, str(LAYOUT_ROOT))
 
 from model import RestartDecoderConfig, UnifiedDecoder
 from repository_layout import resolve_repository_authority  # noqa: E402

@@ -11,9 +11,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.ember.governance.src.ember.governance.scripts.github.labels_engine import canonical_bytes
+from src.ember.governance.scripts.github.labels_engine import canonical_bytes
 from src.ember.governance.scripts.github.work_items import WorkItemError, apply_plan, apply_semantic_reviews, main
-from scripts.github import work_items_engine as engine
+from src.ember.governance.scripts.github import work_items_engine as engine
 
 
 class SemanticWorkItemTests(unittest.TestCase):

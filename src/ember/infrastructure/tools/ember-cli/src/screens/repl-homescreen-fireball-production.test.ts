@@ -8,8 +8,8 @@ import { renderFireballLines } from "../components/fireball.ts";
 import { TerminalSizeContext } from "../ink/components.ts";
 import { mountInk } from "../ink/reconciler.ts";
 import { _deliverKeyEvent } from "../ink/hooks.ts";
-import { buildFrame, parseRenderedIntoFrame, StylePool } from "../ink/rendering-pipeline.ts";
-import { ReplScreen } from "./repl.ts";
+import { buildFrame, parseRenderedIntoFrame, StylePool } from "../../../../../../../tools/ember-cli/src/ink/rendering-pipeline.ts";
+import { ReplScreen } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 
 let mounted: ReturnType<typeof mountInk> | undefined;
 const originalAnimationEnv = {

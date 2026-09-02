@@ -13,6 +13,11 @@ const cockpitIconPath = join(
   "..",
   "..",
   "..",
+  "..",
+  "..",
+  "..",
+  "domains",
+  "lab",
   "assets",
   "ember.ico",
 );
@@ -79,7 +84,7 @@ export function requireCleanTrackedStatus(status: string): void {
 
 if (import.meta.main) {
   const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-  const repositoryRoot = join(sourceRoot, "..", "..", "..");
+  const repositoryRoot = join(sourceRoot, "..", "..", "..", "..", "..", "..");
   const git = spawnSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
     encoding: "utf8",
     windowsHide: true,

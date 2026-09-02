@@ -9,7 +9,7 @@ added ember-cli components to carry a consumer-bound spec node.
 
 ## Contract
 
-Every Markdown file under `tools/ember-cli/specs/` must decode as strict UTF-8 and declare one
+Every Markdown file under `src/ember/infrastructure/tools/ember-cli/specs/` must decode as strict UTF-8 and declare one
 top-level `Status:` line. A `CURRENT` or `SHIPPED` node must also declare one or more repository-root
 relative `Consumer:` paths. Each named consumer must be normalized, remain inside the repository,
 and exist as a file. `OPEN` nodes may name planned files but cannot be represented as current.

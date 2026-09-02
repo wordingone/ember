@@ -11,7 +11,7 @@
     "the_prior_evidence_is_pinned_to_a_tree_that_no_longer_exists": "The resident-training gate receipts report component_status values that would, read naively, discharge several of these rows: paper_source_preflight PASS, train_multimodal_adapter PASS, train_multimodal_floor_contract PASS, native_goal_organ PASS, recursive_query_policy PASS, verifier_conditioned_update PASS. Every one of those verdicts is bound to artifact hashes that have since drifted from master, so none of them can be inherited as current.",
     "measured_drift": [
       {
-        "path": "src/ember/governance/scripts/train_multimodal_v0.py",
+        "path": "scripts/train_multimodal_v0.py",
         "hash_pinned_by_gate_receipts": "89283f362778c7072bab81f4d5bbbd3d4b6393788c2a504469232d073cf49e90",
         "hash_at_master": "af4cb2159c0e9b6413d1e287a209c2a5ee6f61496f66832bb19950590f2a5ba9",
         "state": "DRIFTED"
@@ -32,7 +32,7 @@
     "drift_check_method": "Each path's bytes were read from origin/master and hashed, comparing against both the LF form and the CRLF form so a line-ending difference could not be mistaken for content drift. All three differ under both forms, so this is real content drift, not normalization."
   },
   "current_blocker_verified_at_master": {
-    "primary": "The resident-training gate does not pass its own selftest at master. Running src/ember/governance/scripts/ember_resident_training_gate_selftest.py raises AssertionError on 'assert passed[\"resident_training_gate_status\"] == \"PASS\"'. Instrumenting the run shows the receipt under that assertion is BLOCKED with component_status train_multimodal_floor_contract = BLOCKED, errors ['floor_contract.deferral_section_missing'], and invalid_codes ['invalid_floor_contract_bypass']. Until that is repaired, no gate receipt can be produced at master, and every row whose Required Receipt is a gate receipt is blocked by construction — independently of any training or hardware question.",
+    "primary": "The resident-training gate does not pass its own selftest at master. Running scripts/ember_resident_training_gate_selftest.py raises AssertionError on 'assert passed[\"resident_training_gate_status\"] == \"PASS\"'. Instrumenting the run shows the receipt under that assertion is BLOCKED with component_status train_multimodal_floor_contract = BLOCKED, errors ['floor_contract.deferral_section_missing'], and invalid_codes ['invalid_floor_contract_bypass']. Until that is repaired, no gate receipt can be produced at master, and every row whose Required Receipt is a gate receipt is blocked by construction — independently of any training or hardware question.",
     "secondary": "The last real gate RUN, receipts/ember-resident-training-gate/resident-training-gate-20260622T155000Z-blocked.json (sha256 e1bb5973a277219bc49c2bcb9a834535956d297fcc92ab07b4d21eeed7f980df), is BLOCKED on clean_room_harness.* — the same component DEBT-003 names as absent. The two agree independently.",
     "authority_context": "GOAL.md at master (sha256 84d1faf6ca34b02507b3c232138c1c21f3102b860cefd88c7b17cdf0dc578595) contains no occurrence of RLM, iGRPO, resident-training, clean-room, or predecessor-CLI; its EMBER_AUTHORITY_V1 block names active_goal_id EMBER-02. This ledger is itself stamped EMBER_ARTIFACT_CLASS=historical_only with 'no current execution, goal-selection, research, or completion authority', and its own Authority section states that where it conflicts with the goal file, the goal file wins. This context is recorded because it is true and material, NOT as a disposition ground: none of these rows is being cleared on the basis that the goal moved on."
   },
@@ -57,13 +57,13 @@
     },
     "DEBT-005": {
       "status": "OPEN",
-      "blocker": "The row requires a citation-only pass to be marked invalid_paper_to_spec_only. A repository-wide search at master finds that token ONLY in documentation (this ledger, docs/goal-archive-v1-full.md, docs/spec/conditions-v1.md) and in the invalid-token lists of scripts/ember_totality/test_c0.py and test_c14.py. It is never emitted by src/ember/governance/scripts/ember_resident_training_gate.py, so the guard the row demands is unimplemented. The mechanism-to-implementation map half IS emitted by the gate; the marker half is not.",
+      "blocker": "The row requires a citation-only pass to be marked invalid_paper_to_spec_only. A repository-wide search at master finds that token ONLY in documentation (this ledger, docs/goal-archive-v1-full.md, docs/spec/conditions-v1.md) and in the invalid-token lists of scripts/ember_totality/test_c0.py and test_c14.py. It is never emitted by scripts/ember_resident_training_gate.py, so the guard the row demands is unimplemented. The mechanism-to-implementation map half IS emitted by the gate; the marker half is not.",
       "why_not_cured_here": "Implementing the marker means changing gate behaviour in a script whose own selftest is currently RED at master. A change to that script could not be shown green by its selftest, so it would ship unverifiable. The honest sequence is to repair the selftest first; that repair is out of this row's scope and is recorded as the unblocking action.",
-      "unblocking_action": "Repair floor_contract.deferral_section_missing so src/ember/governance/scripts/ember_resident_training_gate_selftest.py passes, then emit invalid_paper_to_spec_only from the paper_source_preflight component when a pass yields no mechanism extraction."
+      "unblocking_action": "Repair floor_contract.deferral_section_missing so scripts/ember_resident_training_gate_selftest.py passes, then emit invalid_paper_to_spec_only from the paper_source_preflight component when a pass yields no mechanism extraction."
     },
     "DEBT-008": {
       "status": "OPEN",
-      "blocker": "The row requires a gate receipt pinning src/ember/governance/scripts/train_multimodal_v0.py's hash plus A/B/C/deleted neural evidence. The only receipts pinning that hash pin 89283f36..., which is not the file at master (af4cb215...), so the integration evidence no longer describes the tree. Re-establishing it requires a fresh gate run, which the selftest blocker prevents, and neural evidence, which requires training."
+      "blocker": "The row requires a gate receipt pinning scripts/train_multimodal_v0.py's hash plus A/B/C/deleted neural evidence. The only receipts pinning that hash pin 89283f36..., which is not the file at master (af4cb215...), so the integration evidence no longer describes the tree. Re-establishing it requires a fresh gate run, which the selftest blocker prevents, and neural evidence, which requires training."
     },
     "DEBT-010": {
       "status": "OPEN",

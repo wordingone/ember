@@ -12,7 +12,7 @@
 // error entry, so the transcript never carries a silent, contentless "assistant" turn.
 
 import { describe, it, expect } from "bun:test";
-import { applyResultEvent } from "./repl.ts";
+import { applyResultEvent } from "../../../../../../../tools/ember-cli/src/screens/repl.ts";
 import type { SessionMessage } from "../components/app-shell.ts";
 import type { ResultEvent } from "../core/query-engine.ts";
 import type { ModelResponse } from "../query/query-loop-support.ts";
