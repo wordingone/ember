@@ -1,6 +1,6 @@
 // message-adapter.ts — converts raw SDK protocol messages to internal display types.
 // CONTRACT-GAP: message-adapter.test.ts imports EmberMessage from "../types/message-types.ts"
-// which resolves to the repo-level tools/ember-cli/types/message-types.ts shim (outside src/).
+// which resolves to the repo-level src/ember/infrastructure/tools/ember-cli/types/message-types.ts shim (outside src/).
 // EmberMessage (types/message-types.ts) carries an index signature, so a raw
 // EmberMessage is assignable to Record<string, unknown> — the SDK message field
 // stays a generic record and accepts an EmberMessage without special typing.
