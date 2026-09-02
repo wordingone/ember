@@ -59,8 +59,10 @@ def _sha256(path: Path) -> str:
 
 def _connector_media_type(path: PurePosixPath) -> str:
     name = path.name.lower()
-    if name == ".gitattributes":
+    if name in {".gitattributes", ".gitignore", "license", "makefile"}:
         return "text/plain; charset=utf-8"
+    if not path.suffix:
+        return "application/octet-stream"
     if name.endswith(".jsonl.zst"):
         return "application/x-ndjson+zstd"
     if name.endswith(".json.gz"):
@@ -68,10 +70,26 @@ def _connector_media_type(path: PurePosixPath) -> str:
     media_types = {
         ".json": "application/json",
         ".jsonl": "application/x-ndjson",
+        ".bat": "text/x-msdos-batch; charset=utf-8",
+        ".code": "text/plain; charset=utf-8",
+        ".cpp": "text/x-c++src; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".cu": "text/x-cuda; charset=utf-8",
+        ".h": "text/x-c++hdr; charset=utf-8",
+        ".ico": "image/x-icon",
+        ".jpg": "image/jpeg",
         ".md": "text/markdown; charset=utf-8",
+        ".odg": "application/vnd.oasis.opendocument.graphics",
+        ".out": "application/octet-stream",
         ".parquet": "application/vnd.apache.parquet",
         ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".py": "text/x-python; charset=utf-8",
+        ".rst": "text/x-rst; charset=utf-8",
+        ".sh": "application/x-sh; charset=utf-8",
+        ".swp": "application/x-vim-swap",
         ".txt": "text/plain; charset=utf-8",
+        ".yml": "application/yaml; charset=utf-8",
     }
     media_type = media_types.get(path.suffix.lower())
     if media_type is None:
