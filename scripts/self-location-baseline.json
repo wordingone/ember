@@ -253,7 +253,7 @@
       "error": null
     },
     {
-      "path": "scripts/ember_totality/chk_controls/test_issue1372_fixture_stability.py",
+      "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_issue1372_fixture_stability.py",
       "line": 21,
       "target": "PINNED_ROOTS",
       "expression": "(HERE / 'fixtures' / 'c7_pos', HERE / 'fixtures' / 'c7_neg', HERE / 'fixtures' / 'cure5_legib_pos', HERE / 'fixtures' / 'cure5_legib_neg')",
@@ -264,7 +264,7 @@
       "error": "node outside closed grammar: Tuple"
     },
     {
-      "path": "scripts/ember_totality/enforcement_leg_test.py",
+      "path": "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
       "line": 26,
       "target": "sandbox_root_env",
       "expression": "os.environ.get('PUBGATE_ENFORCE_FIXTURES_ROOT')",
@@ -275,7 +275,7 @@
       "error": "call outside closed grammar: os.environ.get"
     },
     {
-      "path": "scripts/ember_totality/enforcement_leg_test.py",
+      "path": "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
       "line": 29,
       "target": "SANDBOX_ROOT",
       "expression": "Path(sandbox_root_env)",

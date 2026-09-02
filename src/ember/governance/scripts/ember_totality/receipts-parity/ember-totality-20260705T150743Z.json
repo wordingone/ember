@@ -1,9 +1,9 @@
 {
   "receipt_type": "ember_totality_board",
   "ticket": "EMBER-TOTALITY-BOARD",
-  "ts": "20260706T173800Z",
+  "ts": "20260705T150743Z",
   "sha_convention": "bytes on disk as-is",
-  "root": "<TEMP_WORKSPACE>/ember-goalforge",
+  "root": ".",
   "registry_spec": "docs\\spec\\conditions-v1.md",
   "registry_sync": {
     "runner_ids": 38,
@@ -21,7 +21,7 @@
       "condition": "C-BASE",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under <TEMP_WORKSPACE>/ember-goalforge/receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (1 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet)"
+      "reason": "RED C-BASE: no owned from-scratch checkpoint receipt under <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/receipts names a checkpoint whose on-disk model.pt bytes hash-match its manifest weight-hash claim (1 owned-pretrain candidate(s) scanned; checkpoint missing or hash mismatch; CHK clause (a)/(c) unmet)"
     },
     {
       "condition": "C-PORT",
@@ -33,37 +33,37 @@
       "condition": "C-FED",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-FED: federation/egress text exists but no artifact satisfies CHK (needs checkpoint-portability + work-sharding + receipt-merge design for kaggle/colab/hf + a named egress manifest + recorded per-avenue-approval/zero-egress) -> [\"docs\\\\c52-scaffold-off-test-v1.md: CHK missing ['design_mechanisms(checkpoint-portab/work-shard/receipt-merge)', 'avenues(kaggle/colab/hf)', 'egress_manifest_named', 'transfer_gate(per-avenue-approval or recorded zero-egress)']\", \"docs\\\\research\\\\teacher-system-2026-06-10.md: CHK missing ['design_mechanisms(checkpoint-portab/work-shard/receipt-merge)', 'avenues(kaggle/colab/hf)', 'egress_manifest_named', 'transfer_gate(per-avenue-approval or recorded zero-egress)']\"]"
+      "reason": "RED C-FED: federation/egress text exists but no artifact satisfies CHK (needs checkpoint-portability + work-sharding + receipt-merge design for kaggle/colab/hf + a named egress manifest + recorded per-avenue-approval/zero-egress) -> [\"docs\\\\c52-scaffold-off-test-v1.md: CHK missing ['design_mechanisms(checkpoint-portab/work-shard/receipt-merge)', 'avenues(kaggle/colab/hf)', 'egress_manifest_named', 'transfer_gate(per-avenue-approval or recorded zero-egress)']\", \"docs\\\\research\\\\teacher-system-2026-06-10.md: CHK missing ['design_mechanisms(checkpoint-portab/work-shard/receipt-merge)', 'avenues(kaggle/colab/hf)', 'egress_manifest_named', 'transfer_gate(per-avenue-approval or recorded zero-egress)']\", \"docs\\\\spec\\\\conditions-v1.md: CHK missing ['avenues(kaggle/colab/hf)']\"]"
     },
     {
       "condition": "C-GROW",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-GROW: growth-related receipts exist but NONE satisfies CHK (needs net2net/stacking/expert-add warm-start receipt with before/after param counts + loss-continuity across grow step + FLOP-saving vs from-scratch, measured on train daemon) -> [\"receipts\\\\ember-c-scale\\\\land210b-growth-runners-receipt.json: CHK missing ['param_counts_before_and_after', 'loss_continuity_across_grow_step', 'flop_saving_vs_fromscratch']\", \"receipts\\\\ember-c-scale\\\\w2-garm-grow-w2-garm-dryrun-20260706T043654Z.json: CHK missing ['param_counts_before_and_after', 'loss_continuity_across_grow_step', 'flop_saving_vs_fromscratch']\", \"receipts\\\\owned-core-widen-selftest-20260705T104739Z.json: CHK missing ['param_counts_before_and_after', 'flop_saving_vs_fromscratch', 'measured_on_train_daemon(not_analytical)']\"]"
+      "reason": "RED C-GROW: growth-related receipts exist but NONE satisfies CHK (needs net2net/stacking/expert-add warm-start receipt with before/after param counts + loss-continuity across grow step + FLOP-saving vs from-scratch, measured on train daemon) -> [\"receipts\\\\owned-core-widen-selftest-20260705T104739Z.json: CHK missing ['param_counts_before_and_after', 'flop_saving_vs_fromscratch', 'measured_on_train_daemon(not_analytical)']\"]"
     },
     {
       "condition": "C-ORGANISM",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under <TEMP_WORKSPACE>/ember-goalforge/receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 687 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT)."
+      "reason": "RED C-ORGANISM: no seed-graph inspection receipt under <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/receipts proves ingestion+growth+portability all callable on the pre-pretrain seed with per-machinery deletion-sensitivity (scanned 650 receipts; the three machineries exist only as scattered scripts \u2014 ember_growth_harness.py, governor.py, ingestion loops \u2014 never wired into ONE inspectable seed graph at step 0; CHK unmet, artifact genuinely ABSENT)."
     },
     {
       "condition": "C(-1)",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C(-1): 7/244 decisive-claim (verdict-bearing) receipts never declare api_spend_usd/paid_api_surface_used AND are not annex-covered -> zero-incremental-spend is UNPROVEN for those claims (undeclared != proven-zero); 'every decisive claim' is not satisfied by one clean packet alone. sample=['receipts\\\\completeness-sweep\\\\c34-launch-rail-issue-mapping-20260705T125847Z.json', 'receipts\\\\ember-c-scale\\\\w2-heldout-equivalence-external-20260705T174745Z.json', 'receipts\\\\ember-c-scale\\\\w2-heldout-equivalence-external-chunked-20260705T204508Z.json', 'receipts\\\\ember-c-scale\\\\w2-heldout-equivalence-external-chunked-20260705T230620Z.json', 'receipts\\\\ember-preloop-resident-gate\\\\reference-uiux-ax-observation-20260622T151722Z.json'] ... +2 more"
+      "reason": "RED C(-1): 2/234 decisive-claim (verdict-bearing) receipts never declare api_spend_usd/paid_api_surface_used AND are not annex-covered -> zero-incremental-spend is UNPROVEN for those claims (undeclared != proven-zero); 'every decisive claim' is not satisfied by one clean packet alone. sample=['receipts\\\\ember-preloop-resident-gate\\\\reference-uiux-ax-observation-20260622T151722Z.json', 'receipts\\\\ember-sovereign-retrieval\\\\design-spec-20260624T142553Z.json']"
     },
     {
       "condition": "C0",
       "status": "AUDIT-PENDING-EPOCH",
       "is_process_invariant": true,
-      "reason": "AUDIT-PENDING-EPOCH C0: a C14 PASS exists @ 20260622T152404Z but does NOT predate the earliest cited loop @ 20260612T094223Z (34 loops, window ALL (unfiltered, pre-epoch)) -> loop ran before the precondition gate -> invalid_precondition_bypass [PRE-EPOCH INFORMATIONAL finding=RED -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
+      "reason": "AUDIT-PENDING-EPOCH C0: a C14 PASS exists @ 20260622T152404Z but does NOT predate the earliest cited loop @ 20260612T094223Z (32 loops, window ALL (unfiltered, pre-epoch)) -> loop ran before the precondition gate -> invalid_precondition_bypass [PRE-EPOCH INFORMATIONAL finding=RED -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
     },
     {
       "condition": "C1",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"]"
+      "reason": "RED C1: discovery receipt(s) present but none satisfy CHK cleanly (sources+hashes+rationale+MANDATORY in-tree hash-verify) -> [\"benchmark-discovery-20260620T230519Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260621T070500Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\", \"benchmark-discovery-20260622T011400Z.json: CHK otherwise satisfied but hash_verified=False (hash-verify is MANDATORY, lane-14 hardening) -- claimed artifact path(s) ['<local-path>'] resolve off-tree/missing under ROOT=<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705, converging with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt) -> cannot verify in-tree\"]"
     },
     {
       "condition": "C2",
@@ -75,19 +75,19 @@
       "condition": "C3",
       "status": "GREEN",
       "is_process_invariant": false,
-      "reason": "GREEN C3 satisfied by d3-native-loop-rerun-20260704T.json: A<local-mount-point>/C arm contract present and the equal_budget block declares one SHARED (equal) path across all six required dimensions (wall time, GPU/CPU, data access, attempt budget, seed policy, verifier path); no zero-attempt arm, no waived governor, no unequal resource path, no active invalid_unequal_budget. arms=['A', 'B', 'C', 'Deleted'] budget_fields=['attempts_per_arm_per_task', 'cpu_gpu', 'data_access', 'verifier', 'wall_time'] seeds=present dims_present=['wall_time', 'gpu_cpu', 'data_access', 'attempt_budget', 'seed_policy', 'verifier_path'] dims_missing=[]"
+      "reason": "GREEN C3 satisfied by d3-native-loop-rerun-20260704T-redacted-edition.json: A/B/C arm contract present and the equal_budget block declares one SHARED (equal) path across all six required dimensions (wall time, GPU/CPU, data access, attempt budget, seed policy, verifier path); no zero-attempt arm, no waived governor, no unequal resource path, no active invalid_unequal_budget. arms=['A', 'B', 'C', 'Deleted'] budget_fields=['attempts_per_arm_per_task', 'cpu_gpu', 'data_access', 'verifier', 'wall_time'] seeds=present dims_present=['wall_time', 'gpu_cpu', 'data_access', 'attempt_budget', 'seed_policy', 'verifier_path'] dims_missing=[]"
     },
     {
       "condition": "C4",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember-goalforge -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o'"
+      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705 -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. pre/post neural parameter hashes cannot be trusted without an in-tree backing artifact. rows=2 before(A)+after(C) paired=2 pre_hash=set post_hash=set hashes_differ=True cmd='python scripts\\\\ember_train_multimodal_resident_adapter.py --out-dir <o'"
     },
     {
       "condition": "C5",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember-goalforge -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A<local-mount-point>/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2"
+      "reason": "RED resident-training-gate-20260622T152500Z-final.json: ARTIFACT REACHABILITY failed -- harness_interface: harness_interface_path='<local-path>' resolves OFF-TREE/missing under root=<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705 -- converges with GOAL.md's Execution-surface 'Imports owed FROM the live tree' row (anti-gaming S10 import debt); cannot verify in-tree. the aggregate A/B/C delta cannot be trusted without an in-tree backing artifact. rows=2 aggC=1.0000 aggA(before)=0.0000 aggB(ctrl)=0.4632 dC-A=+1.0000 dC-B=+0.5368 transfer_rows=2"
     },
     {
       "condition": "C6",
@@ -111,7 +111,7 @@
       "condition": "C9",
       "status": "AUDIT-PENDING-EPOCH",
       "is_process_invariant": true,
-      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under <TEMP_WORKSPACE>/ember-goalforge/receipts in window ALL (unfiltered, pre-epoch) (687/687 window/total json files scanned, 1 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \ufffd4.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
+      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/receipts in window ALL (unfiltered, pre-epoch) (650/650 window/total json files scanned, 0 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
     },
     {
       "condition": "C10",
@@ -147,7 +147,7 @@
       "condition": "C15",
       "status": "AUDIT-PENDING-EPOCH",
       "is_process_invariant": true,
-      "reason": "[RUNNER RECLASSIFIED from UNEVALUABLE] PROBE CONTRACT VIOLATION: test_c15.py emitted no recognized status line (exit=1); stderr[:300]=\"SyntaxError: Non-UTF-8 code starting with '\\\\x97' in file <TEMP_WORKSPACE> on line 3, but no encoding declared; see https://python.org/dev/peps/pep-0263/ for details\\n\" -- process-invariant rows (C0/C9/C15, GOAL.md \u00a74.0(9)) may never carry a STATE-condition status; treated as AUDIT-PENDING-EPOCH pending investigation of the probe fault"
+      "reason": "AUDIT-PENDING-EPOCH receipts\\ember-tiny-bitnet-comparison\\20260622T152800Z-final\\tiny_bitnet_comparison_receipt.json: PASS receipt fails CHK -> referenced C14 resident gate receipt not found on disk ('receipts\\\\ember-resident-training-gate\\\\resident-training-gate-20260622T152500Z-real-reference-observed.json') (3 incident(s), 0 benign block(s) also seen) [PRE-EPOCH INFORMATIONAL finding=RED -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN for this row]"
     },
     {
       "condition": "C-OBS",
@@ -159,7 +159,7 @@
       "condition": "C-ANAT",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under <TEMP_WORKSPACE>/ember-goalforge; CHK 'all 16 present and consistent with receipts' unmet"
+      "reason": "RED C-ANAT: invalid-token(s) ['invalid_anatomy_incomplete'] hold \u2014 0/16 anatomy docs present, missing prefixes=['00_', '01_', '02_', '03_', '04_', '05_', '06_', '07_', '08_', '09_', '10_', '11_', '12_', '13_', '14_', '15_'] (authoritative set 00_INDEX..15_TECHNICAL_REPORT per master-plan line 54: 5 absent + 7 partial + 4 strong); the 5 named-absent docs are genuinely not on disk under <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705; CHK 'all 16 present and consistent with receipts' unmet"
     },
     {
       "condition": "C-SCALE",
@@ -177,7 +177,7 @@
       "condition": "C-IND",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=<TEMP_WORKSPACE>/ember-goalforge"
+      "reason": "RED no IND-class receipts under receipts/ -- C-IND boots RED on all five classes (operator-independence-v1.md \u00a76 honest baseline); root=<TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705"
     },
     {
       "condition": "C-PROC",
@@ -193,33 +193,33 @@
     },
     {
       "condition": "C-SURFACE2",
-      "status": "UNEVALUABLE",
+      "status": "RED",
       "is_process_invariant": false,
-      "reason": "UNEVALUABLE C-SURFACE2: execution root <local-exec-root> not found -- probe cannot look"
+      "reason": "RED C-SURFACE2: newest receipt receipts/ember-surface2-telemetry/2026-06-28T05-15-00Z/finetune-watch-receipt.json has no rendered-telemetry evidence (events_rendered=None, render_evidence=None) -- ingestion or a cross-receipt citation is not proof of a rendered, visible surface (invalid_surface2_no_rendered_telemetry)"
     },
     {
       "condition": "C-ENF",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-ENF: enforcement layer incoherent -- check_energy_law_theory: never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_energy_law_theory.py); check_publication_gate: never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_publication_gate.py) [invalid_enforcement_regression]"
+      "reason": "RED C-ENF: enforcement layer incoherent -- check_energy_law_theory: never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/scripts/check_energy_law_theory.py); check_publication_gate: never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/scripts/check_publication_gate.py) [invalid_enforcement_regression]"
     },
     {
       "condition": "C-MILE",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-MILE: check_milestone_reconciliation never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/scripts/check_milestone_reconciliation.py) [invalid_milestone_regression]"
+      "reason": "RED C-MILE: check_milestone_reconciliation never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/scripts/check_milestone_reconciliation.py) [invalid_milestone_regression]"
     },
     {
       "condition": "C-DISC",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/src/ember/governance/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
+      "reason": "RED C-DISC: check_disconfirmation_triggers never executed (checker script not found: <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/src/ember/governance/scripts/check_disconfirmation_triggers.py) [invalid_disconfirmation_regression]"
     },
     {
       "condition": "C-LADM",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED C-LADM: 418 offending row(s) across 1 rule(s) {'invalid_ladm_no_matched_control': 418} -> [('mbpp:602:b494cf253b80fe45', 'invalid_ladm_no_matched_control'), ('mbpp:602:6045e56250184e61', 'invalid_ladm_no_matched_control'), ('mbpp:602:4c9c4155a7acbbd0', 'invalid_ladm_no_matched_control'), ('mbpp:604:495705b39b92d85f', 'invalid_ladm_no_matched_control'), ('mbpp:604:c211c0feba0df828', 'invalid_ladm_no_matched_control')] (+413 more) [48 distinct task(s) with zero matched-control coverage in receipts/ledger/control_pool.jsonl (RULING R1 scope; also absent from receipts/ledger/views/*control*.jsonl sidecars, checked separately -- widening scope does not change this verdict)]"
+      "reason": "RED C-LADM: primary ledger absent at ledger\\episodes.jsonl -> input-missing"
     },
     {
       "condition": "C-AUTO",
@@ -231,30 +231,30 @@
       "condition": "C-MANIFEST",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED denominator implausibly small (<20) -- parser/goal drift: only 0 \u00a74 condition(s) parsed from <TEMP_WORKSPACE>/ember-goalforge/GOAL.md"
+      "reason": "RED invalid_unmanifested_piece: 21/36 \u00a74 planned condition(s) ABSENT from docs/ember-completeness.md (55 rows present, ids C1..); missing=C-EFF,C-BASE,C(\u22121),C0,C-PORT,C-FED,C-GROW,C-ORGANISM,C-OBS,C-ANAT,C-SCALE,C-E2B,C-IND,C-PROC,C-SURFACE2,C-LEGIB,C-ENF,C-MILE,C-DISC,C-LADM,C-AUTO"
     },
     {
       "condition": "C-TALLY",
       "status": "RED",
       "is_process_invariant": false,
-      "reason": "RED invalid-token pct<100 matched (recomputed from ember-totality-20260705T081932Z.json: green=29/35=82.9%, not-green=['C(-1)', 'C11', 'C-SCALE', 'C-E2B', 'C-SURFACE2', 'C-TALLY'], audit_incident=['C0']); tally: tally-20260613T004807Z.json ts=2026-06-13T00:48:07Z < board ts -> STALE, IGNORED"
+      "reason": "RED invalid-token pct<100 matched (recomputed from ember-totality-20260705T150719Z.json: green=1/35=2.9%, not-green=['C-EFF', 'C-BASE', 'C-PORT', 'C-FED', 'C-GROW', 'C-ORGANISM', 'C(-1)', 'C1'], audit_incident=[]); tally: tally-20260613T004807Z.json ts=2026-06-13T00:48:07Z < board ts -> STALE, IGNORED"
     }
   ],
   "invariant_rows": [
     {
       "condition": "C0",
       "status": "AUDIT-PENDING-EPOCH",
-      "reason": "AUDIT-PENDING-EPOCH C0: a C14 PASS exists @ 20260622T152404Z but does NOT predate the earliest cited loop @ 20260612T094223Z (34 loops, window ALL (unfiltered, pre-epoch)) -> loop ran before the precondition gate -> invalid_precondition_bypass [PRE-EPOCH INFORMATIONAL finding=RED -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
+      "reason": "AUDIT-PENDING-EPOCH C0: a C14 PASS exists @ 20260622T152404Z but does NOT predate the earliest cited loop @ 20260612T094223Z (32 loops, window ALL (unfiltered, pre-epoch)) -> loop ran before the precondition gate -> invalid_precondition_bypass [PRE-EPOCH INFORMATIONAL finding=RED -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
     },
     {
       "condition": "C9",
       "status": "AUDIT-PENDING-EPOCH",
-      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under <TEMP_WORKSPACE>/ember-goalforge/receipts in window ALL (unfiltered, pre-epoch) (687/687 window/total json files scanned, 1 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \ufffd4.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
+      "reason": "AUDIT-PENDING-EPOCH C9: no code_vs_docs_metric receipt found under <TEMP_WORKSPACE>/ember-goalforge/worktree-board-20260705/receipts in window ALL (unfiltered, pre-epoch) (650/650 window/total json files scanned, 0 parse errors) -- window was scanned successfully and is empty [PRE-EPOCH INFORMATIONAL finding=UNEVALUABLE_ABSENT -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN/UNEVALUABLE for this row]"
     },
     {
       "condition": "C15",
       "status": "AUDIT-PENDING-EPOCH",
-      "reason": "[RUNNER RECLASSIFIED from UNEVALUABLE] PROBE CONTRACT VIOLATION: test_c15.py emitted no recognized status line (exit=1); stderr[:300]=\"SyntaxError: Non-UTF-8 code starting with '\\\\x97' in file <TEMP_WORKSPACE> on line 3, but no encoding declared; see https://python.org/dev/peps/pep-0263/ for details\\n\" -- process-invariant rows (C0/C9/C15, GOAL.md \u00a74.0(9)) may never carry a STATE-condition status; treated as AUDIT-PENDING-EPOCH pending investigation of the probe fault"
+      "reason": "AUDIT-PENDING-EPOCH receipts\\ember-tiny-bitnet-comparison\\20260622T152800Z-final\\tiny_bitnet_comparison_receipt.json: PASS receipt fails CHK -> referenced C14 resident gate receipt not found on disk ('receipts\\\\ember-resident-training-gate\\\\resident-training-gate-20260622T152500Z-real-reference-observed.json') (3 incident(s), 0 benign block(s) also seen) [PRE-EPOCH INFORMATIONAL finding=RED -- no goalforge-clear operator-acceptance object exists yet at receipts/acceptance/goalforge-clear-*.json (schema acceptance/v1); this is NOT an audit verdict, pre-epoch history is OUT OF AUDIT SCOPE per GOAL.md \u00a74.0(9), the actual status is never RED/GREEN for this row]"
     }
   ],
   "summary": {
@@ -262,8 +262,8 @@
     "state_condition_total": 35,
     "process_invariant_total": 3,
     "green": 1,
-    "red": 32,
-    "unevaluable": 2,
+    "red": 33,
+    "unevaluable": 1,
     "audit_ok": 0,
     "audit_incident": 0,
     "audit_pending_epoch": 3,
@@ -310,8 +310,8 @@
           },
           {
             "path": "scripts/check_goal_citations.py",
-            "sha256": "78a0da5c0bede109c3bd5a519578cfaab067f0bb092621f4cc1c381415ae8229",
-            "present": true
+            "sha256": null,
+            "present": false
           },
           {
             "path": "scripts/check_publication_gate.py",
@@ -320,7 +320,7 @@
           },
           {
             "path": "scripts/ember_tally.py",
-            "sha256": "364e7049f993c0c9583a6f2e394bccc39ba02dbb4427a3dd7837ea0f21836ae0",
+            "sha256": "4ac1d7e55f1d7cc3b819e2a0f24702ce2d3c9ca8c9cdd3af84ceac03b525f140",
             "present": true
           },
           {
@@ -334,58 +334,18 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
-            "sha256": "ee7fdc638642487671f8ce118029bc98251de953ec9fe872b4937b1c96690393",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_neg/src/ember/governance/scripts/ember_phase5_c7/regime_operator.py",
-            "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
-            "sha256": "ee7fdc638642487671f8ce118029bc98251de953ec9fe872b4937b1c96690393",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/chk_controls/fixtures/c7_pos/src/ember/governance/scripts/ember_phase5_c7/regime_operator.py",
-            "sha256": "ea0fc85cd57a53dce0a76595a51c6b5c27eb6ef235a727c28913ceb387d52fa0",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/chk_controls/fixtures/cure5_legib_neg/scripts/check_goal_citations.py",
-            "sha256": "14c75fb904c57c2197695141fb784fa0202c233163005a789791e5dc339d109c",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/chk_controls/fixtures/cure5_legib_pos/scripts/check_goal_citations.py",
-            "sha256": "14c75fb904c57c2197695141fb784fa0202c233163005a789791e5dc339d109c",
-            "present": true
-          },
-          {
-            "path": "src/ember/governance/scripts/ember_totality/chk_controls/run_controls.py",
-            "sha256": "4c135ebb1a3e188d8fd323a7298031fd34934c4f352e8db6344261645c537fff",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/chk_controls/test_ind5_comprehend_producer.py",
-            "sha256": "21d2122626014ed60e33c87a745814af9a93b0909d9d8cfc1ab33e4df16345d3",
-            "present": true
-          },
-          {
-            "path": "scripts/ember_totality/disconfirmation_leg.py",
+            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg.py",
             "sha256": "9ed9b8aa7afdc1827c99fd433e5c1d4f9b65b0e1dda57d567e0e08a104941c37",
             "present": true
           },
           {
-            "path": "scripts/ember_totality/disconfirmation_leg_test.py",
+            "path": "src/ember/governance/scripts/ember_totality/disconfirmation_leg_test.py",
             "sha256": "a42ab8e4fcb590700504177e20b019cc6eb738fdba750a3c559226d3ad11eff4",
             "present": true
           },
           {
             "path": "scripts/ember_totality/ember_totality_spec.py",
-            "sha256": "ffab3ad23eeb76c228a3157a546ade82f53df4a8e13c02906b15e2223ad5e3ba",
+            "sha256": "6121dc30eea3eb3cff74e15f59ba07fc789308366ab668924fe9b0d526f2412b",
             "present": true
           },
           {
@@ -394,13 +354,13 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/enforcement_leg_test.py",
-            "sha256": "758cc95d8d0d1e60a44c01e2fe472ac801623711a466329a46b5d89254ac9947",
+            "path": "src/ember/governance/scripts/ember_totality/enforcement_leg_test.py",
+            "sha256": "8eed3792224630f9ab4b56cd2b7bf029f3636b56c1a32d1e20e12326dc4503b9",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
-            "sha256": "f220520ee6643cbf3815573d60cd6fd46858a8746226f0f456ce86fe9da00c2d",
+            "sha256": "6a24fefaf533e0a27ac3b3922ec2e4a71bcf995b394d6761729a0de2732be6a3",
             "present": true
           },
           {
@@ -414,7 +374,7 @@
             "present": true
           },
           {
-            "path": "scripts/ember_totality/receipt_ts_authority.py",
+            "path": "src/ember/governance/scripts/ember_totality/receipt_ts_authority.py",
             "sha256": "4a767362242225405b204f01cb732c7b33917e9d1fe76374e220dbab41a358c1",
             "present": true
           },
@@ -425,87 +385,87 @@
           },
           {
             "path": "scripts/ember_totality/test_c0.py",
-            "sha256": "e6e0ba7bdb194b2e006a2bb21855170ff107362001a911af983b797d4517786f",
+            "sha256": "9b840500de44b946c4a4599a86b4d9995d44765f3eee35fd3fbd40c26484af4c",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c1.py",
-            "sha256": "d2bbe7a77e476a328a0aa49453d995edc9b92256838397d69f7b66fc764fc53d",
+            "sha256": "22ab9107c38ebd62f815084121c43eb2de0b91ed5cd6dd60b21c9a536e54b126",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c10.py",
-            "sha256": "2ab7d6143e4319356b2e79b3b582d9e77c3936788150f66ea6a823fc1f110b9c",
+            "sha256": "eeffc6fbeae5dfd39085072a5c3770745979c7c09ad0c4368d9b724dc342cb0d",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
-            "sha256": "821736ad41ede1cfe396737af5b97b52e2fe95864d11665473f03ef845a416b5",
+            "sha256": "c4ba2f1792ba11a13bb0b134b83da310eccaa675014545f3adb317369195fb04",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c12.py",
-            "sha256": "3e8c255bcfdf2eea0f3280d339eefdf2036597a83cb7fdbd42c4b1081468483a",
+            "sha256": "b6150b73c47143e051ca7573f7cda63aaa128a7ad2f0d5121a12721f76ca5e94",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c13.py",
-            "sha256": "a365c7df26a9a6432fc8ac510899464ddcbaffcee151177384b8ab983f3e8d97",
+            "sha256": "a4afecd2992fe30238e88564f1b9b6d7908776c327a7addf64323a9000288f65",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c14.py",
-            "sha256": "0bc8ef456eb331d5c44421f903c4dcd7680e98f95bbb0805319b7e4693c93d91",
+            "sha256": "07b5a7c30edb0250ee9ec5d7c01ac6b84dc0af44be0c7f9a0908438e77028bfb",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c15.py",
-            "sha256": "89c93b45eab9006681faa3e886a17728208cd1522c8d6aae50aceb9fdfd31be6",
+            "sha256": "f9f4de61302f042250ffb0cc9990dbacc51d66d187dbde8ae6617ab1f316c392",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c2.py",
-            "sha256": "9e48afc9cd4082c8ed29aba27070ab26088048fc4374e2783de4b40e4b28bd7a",
+            "sha256": "85569d19ec589770876db75989ee45d341ddaf764eb10eb9245e0d9bc7c1283e",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c3.py",
-            "sha256": "266408fee05875ca4b7923d1145c66fed5be092af5097dbea64f06e453b53f04",
+            "sha256": "ff9cec2af4f61ddeb74128822a6ccb2824e2bbea56fa0f5dd30df2814cbe5441",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c4.py",
-            "sha256": "6769ef1d883a27a39185b400cdaeeb0b6af48f368db874d07ed385eacf389eb6",
+            "sha256": "ac5ef53244738586b97502c201e086447cbee88b97c61cd259671062654b4bde",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c5.py",
-            "sha256": "c04c767a8bf96abc7726934f25104f49e4cb6df07174f34b8b3a7578ed3adcb1",
+            "sha256": "71549affc9f9968717e195649f4e9fbabb491052079e2181bff46f32362b82ce",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c6.py",
-            "sha256": "b74cccf3530410c28aca057f039a3ace2e855f9b902c923ccebe469daa764b7a",
+            "sha256": "9b64c3b847f9d4b74fb1e83126397e147706022935584ccf8b8f22d04a92c382",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c7.py",
-            "sha256": "f3debb0d8e1f191ec50f8cd14ad49c5b2cddb947346956b650869acb67c61085",
+            "sha256": "fb5ba3e3e489eb28522c4d69c74bb60d79dfd3b5353286fd99ba4d947e80f5cd",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c8.py",
-            "sha256": "a34cdfb271c3f9b74c85bb3a106fa6d93da8c1eb72628b0d59dbe6b3731270fa",
+            "sha256": "fcc828db7fdb12941fe48e2fa70f91db37cd7bd4e2b30e28abe55e0f33e8f81f",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c9.py",
-            "sha256": "eb7faafe7520decd9a3b5e783bfc8ef4237a5d128ed21f60ba4b6c9877f0529d",
+            "sha256": "b674f4f632f8f3069843e6247c90168f7659e48393aeb5ca402082fbda92f32f",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c_anat.py",
-            "sha256": "9a0219b29906ff8e5e8224d20818e255008f269ab869cc77bd9d249446a128ef",
+            "sha256": "aa843235913e3355e227cfb535ddd26c1dd5a55e92f93e690685a91f12a1d0d7",
             "present": true
           },
           {
@@ -515,7 +475,7 @@
           },
           {
             "path": "scripts/ember_totality/test_c_base.py",
-            "sha256": "67ca254803a211f578ca0ae4cbea4c8ee6b04f49bd5bb117160f12d1bee07206",
+            "sha256": "597b21867482b2adad0dc5d95c9e0070dcfd4b9333aa0e8e65266e74e3ead742",
             "present": true
           },
           {
@@ -530,7 +490,7 @@
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c_eff.py",
-            "sha256": "b3d005390001c8f8b87a6adbcd04ca1011f97afa29118046aba1596a1dd2e558",
+            "sha256": "66edc0de0cedb2462629278a7a1f3407f1f55f07a80a608fdc2e51917f4e28a0",
             "present": true
           },
           {
@@ -540,22 +500,22 @@
           },
           {
             "path": "scripts/ember_totality/test_c_fed.py",
-            "sha256": "7c180d0a56d34ee55d797c282093b08cbda82b7fb1218f4d63b2e1e38fc1adca",
+            "sha256": "a1851afa113f9cacbcecb4359a59875425c5d7b6cdda6835fc2474bedea9cd21",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c_grow.py",
-            "sha256": "4515b3947555ca6aab4f3f543d74f48d6ee9be4c15c16f1c5cfcbebcbd11fb2e",
+            "sha256": "8786f347c4d479080e7f8350cf4aefe27f241a0b09b0f777a0e2e046e8480655",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c_ind.py",
-            "sha256": "22b99fa878bb0c5749d1b4b17fdeeff089d1d355e60f66611119f4475e819dc7",
+            "sha256": "e202b8c05890fa933271f9bb23541d9c1b69387283cdc47854a0fecdaa036e12",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c_ladm.py",
-            "sha256": "5e6efcdcaca15feca20f64cb75bd67e582d22a371c471aa7b4fe015e9d3cb84b",
+            "sha256": "3e32ff2ae10326535054ceab1a09a44c570e1a5d4d9fdb975271290c10fcf889",
             "present": true
           },
           {
@@ -565,7 +525,7 @@
           },
           {
             "path": "scripts/ember_totality/test_c_manifest.py",
-            "sha256": "2c9c06f56b808194f1189edf80cb1762f5e09c2ecd27c6e899bf371927e7491a",
+            "sha256": "b2467f58a5f859f83f2459f08b357d817a8f9c28b4b55d5c437577e40f3bd612",
             "present": true
           },
           {
@@ -575,22 +535,22 @@
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c_neg1.py",
-            "sha256": "14fcda1c35f2ac98bceb3e01d902344a85dd80e8d08502d936679ada87e8e764",
+            "sha256": "0d3c6a885c538df797c265525d9514b40d81692d760c73cbee686d717a1a12d8",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c_obs.py",
-            "sha256": "0fe258ac39c82d785b29348ce6076356a6bbeb38672e4198f991b39ee9cafb8f",
+            "sha256": "0e0578dfd987a7c8fb6d0ac9ee1b3fbf231bef1620103fabcdd6e889acb12954",
             "present": true
           },
           {
             "path": "scripts/ember_totality/test_c_organism.py",
-            "sha256": "afb9dac7268a71ba8a4eed5aac7e0de01140c991086dc5cb83b308f7fa0a881f",
+            "sha256": "5c0099ba2c060822241123b8d02df32a3b5d116991b574210eb24ab3f149acba",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_c_port.py",
-            "sha256": "4daddaa86d8f3c13de480fc6b3afc82536debef204abbe000452a841c195a20a",
+            "sha256": "562b9bf731cc8b62cdf574339cc4358080a484845bc54804148cf8c77a2b9cb0",
             "present": true
           },
           {
@@ -605,17 +565,17 @@
           },
           {
             "path": "scripts/ember_totality/test_c_tally.py",
-            "sha256": "699f635c6dd435a2c07dec739d61e8e9992d31675ee505a67e91335093c13ad1",
+            "sha256": "2a6cbdc0367cb63e55c70f70db9070ab266379719af1cea2c7c203197daee928",
             "present": true
           },
           {
             "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
-            "sha256": "4594b300ae0eb2883ba98c3188ba6f937adb868e070e8f6320ab158b2c105ea8",
+            "sha256": "3e912287e358bb4e084b01c84698240526da5044dc8fe26132718343439fdef8",
             "present": true
           }
         ],
         "package_dir": "scripts/ember_totality",
-        "member_sha256": "10bcd9b5bbb58b960a83423af210e8a26885c41b079d6e15e71ab50704cee32a"
+        "member_sha256": "3f28f009c7498075ecf1a273ff0b9bfb3dabf848f249172a9e839f7e8f081bde"
       },
       {
         "member": "evaluation_suite_m",
@@ -669,7 +629,7 @@
         "files": [
           {
             "path": "GOAL.md",
-            "sha256": "78569342796a94f5c1ddca3a7794c052252177d49ee4ada1d66d1cd42fe05f58",
+            "sha256": "0f1538336a2227180fb7f0bde9c01bbaf5af0ed2bba98896422964c40b24d413",
             "present": true
           },
           {
@@ -684,7 +644,7 @@
           }
         ],
         "package_dir": null,
-        "member_sha256": "142e8a2649e6630aa7dfb96528ecddcf8c512299f8c6347c47e6fc4dfce2a81c"
+        "member_sha256": "db9aef9cd331b49a4e40c947031e43253bd7e625750fe364d321e9a34d881e19"
       },
       {
         "member": "governor",
@@ -735,11 +695,17 @@
         "member_sha256": "45021fd38511dccd2410de3c6c9ada397d518db189dad1e551f0c2931428fc55"
       }
     ],
-    "combined_sha256": "0c11163cf3937bd3d09deee6f46b6b088803d1b9aeaea4fb8c1e68542113d7ec",
+    "combined_sha256": "9de912e6a1024e9fb3920649b2dfbeee72f4b09db1e55d405f2258d5aa7f51c6",
     "pinned": null,
     "status": "pre-freeze-baseline",
-    "authorization_pairing": null,
-    "authorization_pairing_note": "Pre-clear drafting is ledger-row-authorized, not object-authorized: this baseline's authorizing reference is docs/goalforge-debate-ledger.md row R8b (2026-07-02, I-manifest pinning). Post-clear, any I-member baseline change must PAIR with an operator-acceptance object or a \u00a712 clear->fire repair receipt in this field (GOAL.md \u00a75 item 9); a flip without pairing is invalid_unauthorized_invariant_change. This field is null pre-clear by design, not by omission. (No PENDING_AUTHORIZATION.json declared an in-flight flip this run, and the combined hash is unchanged vs the prior receipt -- steady state.)",
+    "authorization_pairing": {
+      "incident": "unpaired_baseline_flip",
+      "detail": "invariant_checksum.combined_sha256 changed vs the most recent prior receipt (ember-totality-20260705T150719Z.json: 9a691ef7582eb9992955922f4e5e1d5ec679ae25c40cab9a891abb200700ae9c) to 9de912e6a1024e9fb3920649b2dfbeee72f4b09db1e55d405f2258d5aa7f51c6, but no PENDING_AUTHORIZATION.json existed at run start to explain the change -- same class as MANIFEST_DRIFT (non-aborting; a finding, not a crash).",
+      "prior_combined_sha256": "9a691ef7582eb9992955922f4e5e1d5ec679ae25c40cab9a891abb200700ae9c",
+      "new_combined_sha256": "9de912e6a1024e9fb3920649b2dfbeee72f4b09db1e55d405f2258d5aa7f51c6",
+      "prior_receipt": "ember-totality-20260705T150719Z.json"
+    },
+    "authorization_pairing_note": "Pre-clear drafting is ledger-row-authorized, not object-authorized: this baseline's authorizing reference is docs/goalforge-debate-ledger.md row R8b (2026-07-02, I-manifest pinning). Post-clear, any I-member baseline change must PAIR with an operator-acceptance object or a \u00a712 clear->fire repair receipt in this field (GOAL.md \u00a75 item 9); a flip without pairing is invalid_unauthorized_invariant_change. This field is null pre-clear by design, not by omission. (unpaired_baseline_flip THIS RUN -- see authorization_pairing.detail: the invariant hash moved with no PENDING_AUTHORIZATION.json present to name why.)",
     "note": "No pinned checksum VALUE exists yet (kernel unfired, freeze-onset per GOAL.md \u00a712) -- this run's hashes BECOME the baseline record; they are not compared against a prior hash pin. The FILE MANIFEST itself (which files belong to which bucket) IS pinned as of 2026-07-02 and is checked every run via manifest_sync above. Post freeze-onset, any I-member edit must flag a manifest change on the very next run (GOAL.md \u00a712)."
   }
 }

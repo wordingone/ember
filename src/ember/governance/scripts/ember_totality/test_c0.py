@@ -45,35 +45,35 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-# issue2015 exact-local-import:scripts/ember_totality/receipt_ts_authority.py
+# issue2015 exact-local-import:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py
 import importlib.util as _ember_3d71974c0755051a_importlib
 import sys as _ember_3d71974c0755051a_sys
 from pathlib import Path as _ember_3d71974c0755051a_Path
 _ember_3d71974c0755051a_path = _ember_3d71974c0755051a_Path(__file__).resolve().parents[5].joinpath('scripts', 'ember_totality', 'receipt_ts_authority.py')
 if not _ember_3d71974c0755051a_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/ember_totality/receipt_ts_authority.py')
-_ember_3d71974c0755051a_aliases = ('_ember_issue2015_3d71974c0755051a', 'receipt_ts_authority', 'scripts.ember_totality.receipt_ts_authority')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
+_ember_3d71974c0755051a_aliases = ('_ember_issue2015_3d71974c0755051a', 'receipt_ts_authority', 'src.ember.governance.scripts.ember_totality.receipt_ts_authority')
 _ember_3d71974c0755051a_existing = []
 for _ember_3d71974c0755051a_alias in _ember_3d71974c0755051a_aliases:
     _ember_3d71974c0755051a_candidate = _ember_3d71974c0755051a_sys.modules.get(_ember_3d71974c0755051a_alias)
     if _ember_3d71974c0755051a_candidate is not None and all(_ember_3d71974c0755051a_candidate is not item for item in _ember_3d71974c0755051a_existing):
         _ember_3d71974c0755051a_existing.append(_ember_3d71974c0755051a_candidate)
 if len(_ember_3d71974c0755051a_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/ember_totality/receipt_ts_authority.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
 if _ember_3d71974c0755051a_existing:
     _ember_3d71974c0755051a_module = _ember_3d71974c0755051a_existing[0]
     _ember_3d71974c0755051a_observed = getattr(_ember_3d71974c0755051a_module, '__file__', None)
     if _ember_3d71974c0755051a_observed is None or _ember_3d71974c0755051a_Path(_ember_3d71974c0755051a_observed).resolve() != _ember_3d71974c0755051a_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/ember_totality/receipt_ts_authority.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
 else:
     _ember_3d71974c0755051a_spec = _ember_3d71974c0755051a_importlib.spec_from_file_location('_ember_issue2015_3d71974c0755051a', _ember_3d71974c0755051a_path)
     if _ember_3d71974c0755051a_spec is None or _ember_3d71974c0755051a_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/ember_totality/receipt_ts_authority.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
     _ember_3d71974c0755051a_module = _ember_3d71974c0755051a_importlib.module_from_spec(_ember_3d71974c0755051a_spec)
     for _ember_3d71974c0755051a_alias in _ember_3d71974c0755051a_aliases:
         _ember_3d71974c0755051a_prior = _ember_3d71974c0755051a_sys.modules.get(_ember_3d71974c0755051a_alias)
         if _ember_3d71974c0755051a_prior is not None and _ember_3d71974c0755051a_prior is not _ember_3d71974c0755051a_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_totality/receipt_ts_authority.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
         _ember_3d71974c0755051a_sys.modules[_ember_3d71974c0755051a_alias] = _ember_3d71974c0755051a_module
     try:
         _ember_3d71974c0755051a_spec.loader.exec_module(_ember_3d71974c0755051a_module)
@@ -85,10 +85,10 @@ else:
 for _ember_3d71974c0755051a_alias in _ember_3d71974c0755051a_aliases:
     _ember_3d71974c0755051a_prior = _ember_3d71974c0755051a_sys.modules.get(_ember_3d71974c0755051a_alias)
     if _ember_3d71974c0755051a_prior is not None and _ember_3d71974c0755051a_prior is not _ember_3d71974c0755051a_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/ember_totality/receipt_ts_authority.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py')
     _ember_3d71974c0755051a_sys.modules[_ember_3d71974c0755051a_alias] = _ember_3d71974c0755051a_module
 effective_event_ts = getattr(_ember_3d71974c0755051a_module, 'effective_event_ts')
-# issue2015 exact-local-import-end:scripts/ember_totality/receipt_ts_authority.py  # noqa: E402 -- shared
+# issue2015 exact-local-import-end:src/ember/governance/scripts/ember_totality/receipt_ts_authority.py  # noqa: E402 -- shared
 # ordering-authority helper (#60); the ONLY place internal-ts-
 # vs-filename-stamp resolution is implemented -- test_c14.py imports the same
 # module so the two probes can never drift into different orderings.

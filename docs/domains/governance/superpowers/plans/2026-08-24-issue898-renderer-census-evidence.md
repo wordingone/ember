@@ -408,7 +408,7 @@ Run both focused test files together and require pristine output.
 
 **Files:**
 - Verify: the two new service/script files and two tests
-- Verify: `tools/ember-cli/src/services/issue898-installed-cockpit-soak.test.ts`
+- Verify: `src/ember/infrastructure/tools/ember-cli/src/services/issue898-installed-cockpit-soak.test.ts`
 - Verify: `src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline-diagnostic.test.ts`
 - Create locally for handoff: exact PR body/evidence packet after independent GREEN acceptance
 
@@ -420,7 +420,7 @@ Run both focused test files together and require pristine output.
 
 ```powershell
 bun test tools/ember-cli/src/services/issue898-renderer-census-evidence.test.ts src/ember/infrastructure/tools/ember-cli/src/scripts/issue898-renderer-census-evidence.test.ts
-bun test tools/ember-cli/src/services/issue898-installed-cockpit-soak.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline-diagnostic.test.ts
+bun test src/ember/infrastructure/tools/ember-cli/src/services/issue898-installed-cockpit-soak.test.ts src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline-diagnostic.test.ts
 ```
 
 - [ ] **Step 2: Run repository TypeScript typecheck and compare clean-base control**
