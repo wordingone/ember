@@ -85,11 +85,11 @@ jobs:
             src/ember/governance/scripts/tests/test_issue1396_cond4_surface.py \
             src/ember/governance/scripts/tests/test_verify_ember01_completion.py -k "cond4"
       - name: Verify text-lab input identity pins are fresh
-        run: python -B tools/ember-restart-3b/remint_text_lab_input_identity.py --check
+        run: python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/remint_text_lab_input_identity.py" --check
       - name: Verify training closure and Python environment authority
         run: |
           python -B src/ember/governance/scripts/training_closure.py --root .
-          python -B tools/ember-restart-3b/python_environment.py --root . verify
+          python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/python_environment.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/python_environment.py" --root . verify
       - name: Run text-lab identity freshness regressions
         run: python -B -m unittest discover -s tests/ember_restart_model -p "test_remint_text_lab_input_identity.py" -v
       - name: Run HF custody canary regressions
@@ -233,14 +233,14 @@ jobs:
           python -c "import tokenizers, torch; assert torch.__version__ == '2.10.0+cpu'; assert tokenizers.__version__ == '0.22.2'"
       - name: Run canary contract and CI-binding tests
         run: |
-          python -B tests/ember_restart_model/test_eval_canary_image.py -v
+          python -B "$(test -f tests/ember_restart_model/domain-governance/test_eval_canary_image.py && echo tests/ember_restart_model/domain-governance || echo tests/ember_restart_model)/test_eval_canary_image.py" -v
           python -B tests/domain-governance/test_eval_canary_ci_job.py -v
       - name: Measure exact positive plus full negative matrix and print terminal receipt
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B tools/ember-restart-3b/eval_canary_image.py \
-            --fixture-root tests/ember_restart_model/fixtures/eval-canary-image-v1 \
+          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/eval_canary_image.py" \
+            --fixture-root "$(test -d tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1 && echo tests/ember_restart_model/domain-governance || echo tests/ember_restart_model)/fixtures/eval-canary-image-v1" \
             --run-suite \
             --torch-wheel-filename "${TORCH_WHEEL_FILENAME}" \
             --torch-wheel-sha256 "${TORCH_WHEEL_SHA256}" \
@@ -262,7 +262,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install "tokenizers==0.22.2"
       - name: Replay checked-in production rung from canonical owned sources
-        run: python -B tools/ember-restart-3b/production_rung.py --repo-root .
+        run: python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/production_rung.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/production_rung.py" --repo-root .
   cli:
     runs-on: windows-latest
     timeout-minutes: 25

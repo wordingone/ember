@@ -32,7 +32,7 @@ if str(REPO_ROOT) not in sys.path:
 import importlib.util as _ember_a8376424dcb1abdf_importlib
 import sys as _ember_a8376424dcb1abdf_sys
 from pathlib import Path as _ember_a8376424dcb1abdf_Path
-_ember_a8376424dcb1abdf_path = _ember_a8376424dcb1abdf_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'ember_totality_spec.py')
+_ember_a8376424dcb1abdf_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_totality', 'ember_totality_spec.py')
 if not _ember_a8376424dcb1abdf_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_totality/ember_totality_spec.py')
 _ember_a8376424dcb1abdf_aliases = ('_ember_issue2015_a8376424dcb1abdf', 'ember_totality_spec', 'scripts.ember_totality.ember_totality_spec')
@@ -76,7 +76,7 @@ compute_working_set = getattr(_ember_a8376424dcb1abdf_module, 'compute_working_s
 import importlib.util as _ember_2560a87c017c05b0_importlib
 import sys as _ember_2560a87c017c05b0_sys
 from pathlib import Path as _ember_2560a87c017c05b0_Path
-_ember_2560a87c017c05b0_path = _ember_2560a87c017c05b0_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
+_ember_2560a87c017c05b0_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'lib', 'invariant.py')
 if not _ember_2560a87c017c05b0_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/lib/invariant.py')
 _ember_2560a87c017c05b0_aliases = ('_ember_issue2015_2560a87c017c05b0', 'invariant', 'scripts.lib.invariant')

@@ -45,6 +45,7 @@ def test_ember02_model_workstream_owns_3b_execution_paths() -> None:
         "receipts/ember-restart-3b/",
         "inference/ember-restart-3b/",
         "tests/ember_restart_model/",
+        "src/ember/infrastructure/tools/ember-restart-3b/",
     } <= prefixes
 
 
@@ -94,7 +95,7 @@ def test_ember02_eval_workstream_owns_all_published_evaluator_paths() -> None:
 
 
 def test_authority_verifier_binds_exact_ember02_goal() -> None:
-    verifier = (ROOT / "scripts" / "verify_authority_conservation.py").read_text(
+    verifier = (ROOT / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py").read_text(
         encoding="utf-8"
     )
     assert 'ACTIVE_GOAL_ID = "EMBER-02"' in verifier

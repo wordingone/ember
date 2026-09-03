@@ -12,8 +12,8 @@
   "exceptions": [
     {
       "path": "src/ember/governance/scripts/build_fixed_prior_manifest.py",
-      "sha256": "859087333d2867938e86e0e51ab3e455bb8d5ca3a55ea95f5206a4f1f22092dc",
-      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+      "sha256": "5106a6d1b8ac5d2b3a721e79831e8b82ead01c13166a5876b38d64a7b61c9498",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition. Repinned 2026-09-03 from 859087333d2867938e86e0e51ab3e455bb8d5ca3a55ea95f5206a4f1f22092dc: content diff is exactly one INVENTORY literal, the ember_cli tree path tools/ember-cli/src -> src/ember/infrastructure/tools/ember-cli/src (the directory the cutover moved); no training-segment API reference changed. Planted test: src/ember/governance/scripts/tests/test_build_fixed_prior_manifest_inventory.py"
     },
     {
       "path": "src/ember/governance/scripts/ember_restart/r1_launch_packet.py",
@@ -42,8 +42,8 @@
     },
     {
       "path": "src/ember/governance/scripts/r1_exit_battery.py",
-      "sha256": "bdf97da8ac4202dd74c648ad7489756e9968f3bbe9cec95e6a057cfd0c4af406",
-      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+      "sha256": "9a960614c813e0e41e4336c583c2ab6ff4dc6af205deb158376fdba73755dba8",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition. Repinned 2026-09-03 from bdf97da8ac4202dd74c648ad7489756e9968f3bbe9cec95e6a057cfd0c4af406: content diff is DEFAULT_THRESHOLDS_PATH repointed to the tracked docs/domains/governance/spec/ember02-preregistration-thresholds-v1.json (the cutover moved it) and the --selftest _e5_repo fixture creating and writing its documents at E5_PREREG_PATH / E5_INVARIANT_PATH instead of pre-cutover literals; no training-segment API reference changed. Planted test: the existing --selftest."
     },
     {
       "path": "src/ember/governance/scripts/training_closure.py",
