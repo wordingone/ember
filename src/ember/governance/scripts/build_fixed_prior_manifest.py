@@ -118,13 +118,13 @@ abort`) reads it from here."""
 INVENTORY: tuple[dict, ...] = (
     # --- training loop -----------------------------------------------------
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/train.py",
+         path="tools/ember-restart-3b/train.py",
          provenance="Owned training entry point; authored in-repo, no imported loop."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
+         path="tools/ember-restart-3b/pretrain.py",
          provenance="Owned pretraining loop body; authored in-repo."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
+         path="tools/ember-restart-3b/certified_train_launch.py",
          provenance="The ONLY consumer ember-cli /train --execute may invoke; "
                     "fixed certified launch path."),
     dict(category="training_loop", kind="file",
@@ -135,20 +135,20 @@ INVENTORY: tuple[dict, ...] = (
          provenance="Vertical-slice runner named by launch-packet output; never "
                     "executed as a command string by ember-cli."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/production_rung.py",
+         path="tools/ember-restart-3b/production_rung.py",
          provenance="Rung driver for the owned production run."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/model.py",
+         path="tools/ember-restart-3b/model.py",
          provenance="Owned unified decoder definition (clean random genesis, no "
                     "imported weights)."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/batch.py",
+         path="tools/ember-restart-3b/batch.py",
          provenance="Batch assembly and data-cursor discipline."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/optimizer_transition.py",
+         path="tools/ember-restart-3b/optimizer_transition.py",
          provenance="Optimizer state construction and transition rules."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+         path="tools/ember-restart-3b/checkpoint_artifacts.py",
          provenance="Checkpoint writer producing the hash-chained sequence R1-E3 "
                     "round-trips."),
 

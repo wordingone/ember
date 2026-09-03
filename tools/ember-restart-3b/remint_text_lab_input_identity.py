@@ -42,7 +42,7 @@ INDEX_PATH = ROOT / "data" / "ember-restart-3b" / "text-lab-authority-index-v2.j
 EXPECTED_CODE = {
     "run_vertical_slice": "tools/ember-restart-3b/run_vertical_slice.py",
     "text_lab_corpus": "tools/ember-restart-3b/text_lab_corpus.py",
-    "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
+    "train": "tools/ember-restart-3b/train.py",
 }
 EXPECTED_IDENTITY_KEYS = {"schema_version", "corpus_sha256", "code_files", "source_base_commit"}
 EXPECTED_CODE_KEYS = set(EXPECTED_CODE)

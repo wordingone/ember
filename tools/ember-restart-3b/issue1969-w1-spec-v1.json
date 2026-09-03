@@ -22,7 +22,7 @@
     "training_acceleration_blob": "c9d2ff0dc9547e202ac2067c97adae490a0b534d"
   },
   "runner": {
-    "path": "src/ember/infrastructure/tools/ember-restart-3b/packed_specialist_run.py",
+    "path": "tools/ember-restart-3b/packed_specialist_run.py",
     "control_mode": "issue1946-arm-a",
     "treatment_mode": "issue1946-arm-a",
     "recompute_policy": "WHOLE_LAYER_RECOMPUTE",

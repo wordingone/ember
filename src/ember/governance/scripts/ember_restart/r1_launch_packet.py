@@ -42,16 +42,16 @@ EXIT_SOURCE_PATHS = {
         "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
         "tools/ember-restart-3b/semantic_stream.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
+        "tools/ember-restart-3b/pretrain.py",
     ),
     "E2": (
         "src/ember/governance/scripts/r1_exit_battery.py",
         "tools/ember-restart-3b/run_vertical_slice.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
+        "tools/ember-restart-3b/pretrain.py",
     ),
     "E3": (
         "src/ember/governance/scripts/r1_exit_battery.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+        "tools/ember-restart-3b/checkpoint_artifacts.py",
     ),
     "E4": (
         "src/ember/governance/scripts/r1_exit_battery.py",
@@ -321,7 +321,7 @@ def build_ready_for_compute_packet(
         raise ValueError("WARM-100 packet must not contain resume authority")
 
     certified = _load_module(
-        source_root / "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
+        source_root / "tools/ember-restart-3b/certified_train_launch.py",
         f"ember_r1_packet_certified_{uuid.uuid4().hex}",
     )
     if current_master_reader is not None:
@@ -409,7 +409,7 @@ def build_ready_for_compute_packet(
         # person to type, and the validator has no command-line entry point.
         consumer_argv = [
             sys.executable,
-            str(source_root / "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py"),
+            str(source_root / "tools/ember-restart-3b/certified_train_launch.py"),
             "--root",
             str(launch_repo_root),
             "--certificate",

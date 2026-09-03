@@ -76,7 +76,7 @@ SCOPE BOUNDARIES (disclosed, not silent gaps):
     are different, undocumented-diff formats). Reusing a verifier that would
     reject the real artifact by construction is worse than a disclosed,
     narrow, purpose-built v5 byte-hash check. Also deliberately avoids
-    importing src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py (torch at
+    importing tools/ember-restart-3b/checkpoint_artifacts.py (torch at
     module scope) for a check that is pure hashlib -- no GPU/CUDA, no torch,
     ever, in this file.
   * R1-E7's sigma_seed computation method is NOT frozen anywhere in this

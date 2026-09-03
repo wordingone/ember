@@ -80,7 +80,7 @@ def _base_manifest() -> dict:
             "selected_as_owned_ember": False,
         },
         "architecture": {
-            "source": "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+            "source": "tools/ember-restart-3b/model.py",
             "sha256": "a" * 64,
         },
         "checkpoint": {

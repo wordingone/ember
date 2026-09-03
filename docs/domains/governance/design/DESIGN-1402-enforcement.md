@@ -49,7 +49,7 @@ packet not producible, so `certified_train_launch.py` (the ONLY path ember-cli
 /train --execute may invoke) cannot proceed. Exit code: the preflight's standing
 nonzero failure path; failure token in output: `FIXED_PRIOR_MANIFEST_STALE`.
 
-### 3. Consumption point B — `src/ember/infrastructure/tools/ember-restart-3b/production_rung.py`
+### 3. Consumption point B — `tools/ember-restart-3b/production_rung.py`
 
 `build_receipt()` gains a `fixed_prior_manifest` field:
 
