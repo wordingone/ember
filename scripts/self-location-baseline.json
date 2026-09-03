@@ -1,10 +1,10 @@
 {
-  "baselined_row_count": 658,
+  "baselined_row_count": 665,
   "expires_on": "2026-09-03",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
   "goal_id": "EMBER-02",
-  "maximum_rows": 658,
+  "maximum_rows": 665,
   "minted_on": "2026-09-03",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "rows": [
@@ -6015,6 +6015,28 @@
       "target": "ROOT"
     },
     {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "pathlib.Path(__file__).resolve().parents[2]",
+      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
+      "line": 24,
+      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
+      "status": "MISMATCH",
+      "target": "ROOT"
+    },
+    {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "pathlib.Path(__file__).resolve().parents[2]",
+      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
+      "line": 30,
+      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
+      "status": "MISMATCH",
+      "target": "ROOT"
+    },
+    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -6455,6 +6477,17 @@
       "target": "<sys.path.insert>"
     },
     {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "Path(__file__).resolve().parents[2]",
+      "expression_sha256": "04695cf8b0052951a3ca1664bf1a7794de938387727a51351a5b22914114dea4",
+      "line": 15,
+      "path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py",
+      "status": "MISMATCH",
+      "target": "TEST_ROOT"
+    },
+    {
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -6475,6 +6508,17 @@
       "path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
+    },
+    {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "pathlib.Path(__file__).resolve().parents[2]",
+      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
+      "line": 17,
+      "path": "tests/ember_restart_model/domain-governance/test_issue1508_attempt_retention_layout.py",
+      "status": "MISMATCH",
+      "target": "ROOT"
     },
     {
       "error": "call outside closed grammar: next",
@@ -6540,6 +6584,17 @@
       "line": 15,
       "path": "tests/ember_restart_model/domain-governance/test_issue1953_packaging_authority.py",
       "status": "UNEVALUABLE",
+      "target": "ROOT"
+    },
+    {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "pathlib.Path(__file__).resolve().parents[2]",
+      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
+      "line": 13,
+      "path": "tests/ember_restart_model/domain-governance/test_issue898_job_memory_ceiling_probe_verify.py",
+      "status": "MISMATCH",
       "target": "ROOT"
     },
     {
@@ -6871,6 +6926,28 @@
       "path": "tests/ember_restart_model/domain-governance/test_pdf_text_adapter.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
+    },
+    {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "pathlib.Path(__file__).resolve().parents[2]",
+      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
+      "line": 24,
+      "path": "tests/ember_restart_model/domain-governance/test_private_commit_probe.py",
+      "status": "MISMATCH",
+      "target": "ROOT"
+    },
+    {
+      "error": null,
+      "evaluated_path": "<root>/tests",
+      "expectation": "repo_root",
+      "expression": "pathlib.Path(__file__).resolve().parents[2]",
+      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
+      "line": 19,
+      "path": "tests/ember_restart_model/domain-governance/test_project_text_lab_custody_paths.py",
+      "status": "MISMATCH",
+      "target": "ROOT"
     },
     {
       "error": "call outside closed grammar: next",
@@ -7248,6 +7325,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "6776b9c31b34da162fb05c62f59b8bded60f6c24590a2245ae6002c50f377fc5",
+  "self_sha256": "98c21c118b7d827be00fd8cfaf4704f7dc68da47284ea5107db46e4164fedbf3",
   "workstream_id": "EMBER-02A"
 }

@@ -27,7 +27,7 @@ import subprocess
 import tempfile
 import unittest
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
 GATE_MODULE_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "artifact_custody_gate.py"
 ARCHITECTURE_REVISION = "ember-sparse-3b-v2"

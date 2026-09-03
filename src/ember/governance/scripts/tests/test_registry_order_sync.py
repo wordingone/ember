@@ -19,10 +19,10 @@ import os
 import sys
 import re
 
-# Add repo root to path for imports
+# Add the governance domain root to expose its ``scripts`` package.
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
-sys.path.insert(0, REPO_ROOT)
+GOVERNANCE_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, GOVERNANCE_DIR)
 
 from src.ember.governance.scripts.ember_totality import ember_totality_spec
 

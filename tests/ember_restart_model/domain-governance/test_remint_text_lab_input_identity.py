@@ -32,9 +32,6 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
         root = tmp / "repo"
         shutil.copytree(ROOT / "data", root / "data")
         shutil.copytree(ROOT / "tools", root / "tools")
-        canonical = Path("src/ember/infrastructure/tools/ember-restart-3b/train.py")
-        (root / canonical).parent.mkdir(parents=True)
-        shutil.copy2(ROOT / canonical, root / canonical)
         return root
 
     def test_check_passes_on_the_checked_in_pristine_tree(self):
@@ -47,14 +44,14 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
 
     def test_check_fails_for_each_pinned_module_when_edited(self):
         pinned = {
-            "run_vertical_slice": Path("tools/ember-restart-3b/run_vertical_slice.py"),
-            "text_lab_corpus": Path("tools/ember-restart-3b/text_lab_corpus.py"),
-            "train": Path("src/ember/infrastructure/tools/ember-restart-3b/train.py"),
+            "run_vertical_slice": "run_vertical_slice.py",
+            "text_lab_corpus": "text_lab_corpus.py",
+            "train": "train.py",
         }
-        for name, relative in pinned.items():
+        for name, filename in pinned.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
                 root = self._sandbox(Path(tmp))
-                module = root / relative
+                module = root / "tools/ember-restart-3b" / filename
                 module.write_bytes(module.read_bytes() + b"\n# drift injected by test\n")
                 check = subprocess.run(
                     [sys.executable, "-B", str(root / "tools/ember-restart-3b/remint_text_lab_input_identity.py"), "--check"],
