@@ -17,6 +17,9 @@ from typing import Any, Mapping, Sequence
 
 
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+TOPOLOGY_AUTHORITY = (
+    "mailbox ruling 34099, 2026-09-03 22:05Z, CPU minimal slice, no GPU tenancy"
+)
 WHEEL_SHA256 = "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670"
 SDIST_SHA256 = "f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73"
 REQUIRED_LEG_IDS = (
@@ -29,14 +32,13 @@ REQUIRED_LEG_IDS = (
     "external_data_present",
     "external_data_absent_refusal",
     "zero_adapter_dangling_duplicate_authority_scan",
+    "production_topology_canary",
 )
 # Legs whose authorized terminal state is a named refusal (nonzero exit): the
-# dependency-sdist refusal, the absent-external refusal, and the external-present
-# chain whose governed consumer refuses insufficient custody (exit 4) by design.
+# dependency-sdist refusal and the absent-external refusal.
 NEGATIVE_LEG_IDS = frozenset((
     "refused_dependency_sdist",
     "external_data_absent_refusal",
-    "external_data_present",
 ))
 # A negative leg passes only when its streams carry the named refusal class. An exit
 # code alone is satisfiable by an unrelated crash with the same status; the class text
@@ -49,11 +51,27 @@ NEGATIVE_LEG_REFUSAL_MARKERS: dict[str, tuple[bytes, ...]] = {
         b'"result": "EXPECTED_REFUSAL"',
         b"external authority root is absent",
     ),
-    "external_data_present": (
-        b'"result": "REFUSED_EXTERNAL_CUSTODY_INSUFFICIENT"',
-    ),
 }
 assert frozenset(NEGATIVE_LEG_REFUSAL_MARKERS) == NEGATIVE_LEG_IDS, "every negative leg names its refusal class"
+# These are the newly governed model/custody/topology legs.  Exit zero alone is
+# not evidence: each leg must emit its own terminal marker, and the external
+# custody leg must additionally expose the real validator's VERIFIED result.
+POSITIVE_LEG_PASS_MARKERS: dict[str, tuple[bytes, ...]] = {
+    "direct_training_checkpoint_evaluation_runtime_governance": (
+        b'"result": "PASS"',
+    ),
+    "lab_training_checkpoint_evaluation_runtime_governance": (
+        b'"result": "PASS"',
+    ),
+    "external_data_present": (
+        b'"result": "PASS"',
+        b'"result": "VERIFIED"',
+    ),
+    "production_topology_canary": (
+        b'"result": "PASS"',
+        b'"schema_version": "ember-issue1949-topology-canary-v1"',
+    ),
+}
 SHELL_EXECUTABLES = {
     "bash", "bash.exe", "cmd", "cmd.exe", "powershell", "powershell.exe",
     "pwsh", "pwsh.exe", "sh", "sh.exe",
@@ -195,11 +213,15 @@ def validate_plan(plan: Mapping[str, object]) -> dict[str, Any]:
             raise ACleanRefusal(f"LEG_CONTRACT_REFUSED:{row.get('id')}:duplicate")
         leg_contracts.add(signature)
     topology = plan.get("topology_canary")
-    if topology is not None:
-        if not isinstance(topology, dict) or topology.get("result") != "PASS":
-            raise ACleanRefusal("TOPOLOGY_CANARY_REFUSED")
-        if not _hex64(topology.get("raw_sha256")) or not _hex64(topology.get("self_sha256")):
-            raise ACleanRefusal("TOPOLOGY_CANARY_IDENTITY_REFUSED")
+    if (
+        not isinstance(topology, dict)
+        or set(topology) != {"schema_version", "expected_receipt_path", "authority"}
+        or topology.get("schema_version") != "ember-issue1949-topology-canary-v1"
+        or topology.get("authority") != TOPOLOGY_AUTHORITY
+        or not isinstance(topology.get("expected_receipt_path"), str)
+        or not _is_absolute_executable(topology["expected_receipt_path"])
+    ):
+        raise ACleanRefusal("TOPOLOGY_CANARY_PLAN_REFUSED")
     return json.loads(json.dumps(plan))
 
 
@@ -271,7 +293,7 @@ def validate_semantic_contract_identity(repo_root: Path, row: Mapping[str, objec
 
 def _load_self_hashed_leg_spec(path: Path, platform_name: str) -> dict[str, Any]:
     spec = json.loads(path.read_bytes())
-    if spec.get("schema_version") != "ember-issue1949-a-clean-leg-spec-v1":
+    if spec.get("schema_version") != "ember-issue1949-a-clean-leg-spec-v4":
         raise ACleanRefusal("LEG_SPEC_SCHEMA_REFUSED")
     if spec.get("platform") != platform_name:
         raise ACleanRefusal("LEG_SPEC_PLATFORM_REFUSED")
@@ -418,6 +440,13 @@ def mint_plan(
             "refused_sdist_sha256": SDIST_SHA256,
         },
         "legs": rows,
+        "topology_canary": {
+            "schema_version": "ember-issue1949-topology-canary-v1",
+            "expected_receipt_path": str(
+                artifact_root / "issue1949-a-clean-consumer-topology.json"
+            ),
+            "authority": TOPOLOGY_AUTHORITY,
+        },
     }
     plan["self_sha256"] = derive_self(plan)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -454,6 +483,53 @@ def bind_negative_leg_refusal_class(leg_id: str, stdout: bytes, stderr: bytes) -
         if marker not in combined:
             raise ACleanRefusal(f"LEG_REFUSAL_CLASS_REFUSED:{leg_id}:{marker.decode()}")
     return [marker.decode() for marker in markers]
+
+
+def bind_positive_leg_pass_markers(leg_id: str, stdout: bytes, stderr: bytes) -> list[str]:
+    """Bind terminal markers for governed positive legs; refuse marker-less exit zero."""
+    markers = POSITIVE_LEG_PASS_MARKERS.get(leg_id)
+    if markers is None:
+        return []
+    combined = stdout + b"\n" + stderr
+    for marker in markers:
+        if marker not in combined:
+            raise ACleanRefusal(f"LEG_PASS_MARKER_REFUSED:{leg_id}:{marker.decode()}")
+    return [marker.decode() for marker in markers]
+
+
+def verify_topology_canary(
+    path: Path, *, source_head: str, platform_name: str,
+) -> dict[str, str]:
+    raw = path.read_bytes()
+    payload = json.loads(raw)
+    if raw != canonical_json(payload) + b"\n":
+        raise ACleanRefusal("TOPOLOGY_CANARY_RAW_REFUSED")
+    if payload.get("self_sha256") != derive_self(payload):
+        raise ACleanRefusal("TOPOLOGY_CANARY_SELF_REFUSED")
+    expected_phases = [
+        "admission", "data_verify", "train", "checkpoint", "publish",
+        "selectable_checkpoint", "restore", "evaluation", "runtime_load",
+    ]
+    raw_hashes = payload.get("raw_hashes")
+    if (
+        payload.get("schema_version") != "ember-issue1949-topology-canary-v1"
+        or payload.get("result") != "PASS"
+        or payload.get("source_head") != source_head
+        or payload.get("platform") != platform_name
+        or payload.get("authority") != TOPOLOGY_AUTHORITY
+        or payload.get("phases") != expected_phases
+        or not isinstance(payload.get("entry_points"), list)
+        or len(payload["entry_points"]) < 7
+        or not isinstance(raw_hashes, dict)
+        or set(raw_hashes) != {"lab_operational_receipt", "checkpoint"}
+        or not all(_hex64(value) for value in raw_hashes.values())
+    ):
+        raise ACleanRefusal("TOPOLOGY_CANARY_CONTENT_REFUSED")
+    return {
+        "result": "PASS",
+        "raw_sha256": sha256_bytes(raw),
+        "self_sha256": payload["self_sha256"],
+    }
 
 
 def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: str) -> dict[str, object]:
@@ -493,6 +569,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
         if result.returncode != leg["expected_exit"]:
             raise ACleanRefusal(f"LEG_EXIT_REFUSED:{leg['id']}:{result.returncode}")
         refusal_class = bind_negative_leg_refusal_class(leg["id"], result.stdout, result.stderr)
+        pass_markers = bind_positive_leg_pass_markers(leg["id"], result.stdout, result.stderr)
         rows.append({
             "id": leg["id"], "argv": leg["argv"], "expected_exit": leg["expected_exit"],
             "actual_exit": result.returncode,
@@ -503,11 +580,18 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
             "stdout_raw_sha256": sha256_bytes(result.stdout),
             "stderr_raw_sha256": sha256_bytes(result.stderr),
             "refusal_class_markers": refusal_class,
+            "pass_markers": pass_markers,
         })
     final_head = _git(repo_root, "rev-parse", "HEAD").decode().strip()
     final_porcelain = _git(repo_root, "status", "--porcelain")
     if final_head != actual_head or final_porcelain:
         raise ACleanRefusal("CHECKOUT_POST_RUN_MUTATION_REFUSED")
+    topology_plan = plan["topology_canary"]
+    topology_canary = verify_topology_canary(
+        Path(topology_plan["expected_receipt_path"]),
+        source_head=actual_head,
+        platform_name=declared_platform,
+    )
     return write_receipt_no_overwrite(output, {
         "schema_version": "ember-issue1949-a-clean-v1",
         "result": "PASS",
@@ -518,7 +602,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
         "plan_raw_sha256": sha256_bytes(plan_raw),
         "plan_self_sha256": plan["self_sha256"],
         "legs": rows,
-        "topology_canary": plan.get("topology_canary"),
+        "topology_canary": topology_canary,
         "claim_boundary": "ARCHITECTURE_AND_PORTABILITY_MATRIX_ONLY; NO CORPUS CAPABILITY TRAINING THROUGHPUT OR MILESTONE CREDIT",
     })
 

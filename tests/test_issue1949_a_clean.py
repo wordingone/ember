@@ -45,6 +45,11 @@ def valid_plan() -> dict[str, object]:
             "refused_sdist_sha256": "f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73",
         },
         "legs": legs,
+        "topology_canary": {
+            "schema_version": "ember-issue1949-topology-canary-v1",
+            "expected_receipt_path": "C:/artifacts/issue1949-a-clean-consumer-topology.json",
+            "authority": MODULE.TOPOLOGY_AUTHORITY,
+        },
     }
     plan["self_sha256"] = MODULE.derive_self(plan)
     return plan
@@ -112,6 +117,37 @@ class ACleanTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), MODULE.canonical_json(receipt) + b"\n")
             with self.assertRaises(FileExistsError):
                 MODULE.write_receipt_no_overwrite(output, {"result": "PASS"})
+
+    def test_topology_canary_is_required_and_every_bound_field_is_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "topology.json"
+            payload = {
+                "schema_version": "ember-issue1949-topology-canary-v1",
+                "result": "PASS",
+                "source_head": "a" * 40,
+                "platform": "windows",
+                "authority": MODULE.TOPOLOGY_AUTHORITY,
+                "phases": [
+                    "admission", "data_verify", "train", "checkpoint", "publish",
+                    "selectable_checkpoint", "restore", "evaluation", "runtime_load",
+                ],
+                "entry_points": [f"owner:{index}" for index in range(7)],
+                "raw_hashes": {"lab_operational_receipt": "b" * 64, "checkpoint": "c" * 64},
+            }
+            payload["self_sha256"] = MODULE.derive_self(payload)
+            path.write_bytes(MODULE.canonical_json(payload) + b"\n")
+            verified = MODULE.verify_topology_canary(
+                path, source_head="a" * 40, platform_name="windows",
+            )
+            self.assertEqual(verified["result"], "PASS")
+            planted = dict(payload)
+            planted["phases"] = planted["phases"][:-1]
+            planted["self_sha256"] = MODULE.derive_self(planted)
+            path.write_bytes(MODULE.canonical_json(planted) + b"\n")
+            with self.assertRaisesRegex(MODULE.ACleanRefusal, "TOPOLOGY_CANARY_CONTENT_REFUSED"):
+                MODULE.verify_topology_canary(
+                    path, source_head="a" * 40, platform_name="windows",
+                )
 
     def test_external_bound_plan_is_accepted_only_with_a_fresh_clone(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -187,7 +223,7 @@ class ACleanTests(unittest.TestCase):
             head = MODULE._git(root, "rev-parse", "HEAD").decode().strip()
             spec_path = base / "spec.json"
             spec = {
-                "schema_version": "ember-issue1949-a-clean-leg-spec-v1",
+                "schema_version": "ember-issue1949-a-clean-leg-spec-v4",
                 "platform": "windows",
                 "legs": [{
                     "id": leg_id,
@@ -267,21 +303,21 @@ class ACleanTests(unittest.TestCase):
                 MODULE.validate_leg_spec_file(spec, "linux")["platform"], "linux"
             )
 
-    def test_external_present_leg_accepts_the_authorized_refusal_exit_and_rejects_zero(self) -> None:
-        self.assertIn("external_data_present", MODULE.NEGATIVE_LEG_IDS)
+    def test_external_present_is_positive_and_topology_binding_is_mandatory(self) -> None:
+        self.assertNotIn("external_data_present", MODULE.NEGATIVE_LEG_IDS)
         plan = valid_plan()
         for row in plan["legs"]:
             if row["id"] == "external_data_present":
+                self.assertEqual(row["expected_exit"], 0)
                 row["expected_exit"] = 4
         plan["self_sha256"] = MODULE.derive_self(plan)
-        MODULE.validate_plan(plan)
-        for row in plan["legs"]:
-            if row["id"] == "external_data_present":
-                row["expected_exit"] = 0
-        plan["self_sha256"] = MODULE.derive_self(plan)
-        with self.assertRaises(MODULE.ACleanRefusal) as caught:
+        with self.assertRaisesRegex(MODULE.ACleanRefusal, "POSITIVE_LEG_EXPECTED_EXIT_REFUSED"):
             MODULE.validate_plan(plan)
-        self.assertIn("NEGATIVE_LEG_EXPECTED_EXIT_REFUSED:external_data_present", str(caught.exception))
+        plan = valid_plan()
+        plan.pop("topology_canary")
+        plan["self_sha256"] = MODULE.derive_self(plan)
+        with self.assertRaisesRegex(MODULE.ACleanRefusal, "TOPOLOGY_CANARY_PLAN_REFUSED"):
+            MODULE.validate_plan(plan)
 
     def test_tool_path_refuses_when_no_root_carries_the_tool(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -291,7 +327,7 @@ class ACleanTests(unittest.TestCase):
 
     def _write_leg_spec(self, base, argv_for):
         spec = {
-            "schema_version": "ember-issue1949-a-clean-leg-spec-v1",
+            "schema_version": "ember-issue1949-a-clean-leg-spec-v4",
             "platform": "linux",
             "legs": [{
                 "id": leg_id,
@@ -438,6 +474,25 @@ class ACleanV2Tests(unittest.TestCase):
         # Positive legs carry no class.
         self.assertEqual(MODULE.bind_negative_leg_refusal_class("deterministic_data", b"x", b"y"), [])
 
+    def test_governed_positive_leg_requires_its_terminal_markers_not_just_exit_zero(self) -> None:
+        # Planted negative: a successful process with no governed result cannot pass.
+        with self.assertRaises(MODULE.ACleanRefusal) as caught:
+            MODULE.bind_positive_leg_pass_markers(
+                "external_data_present", b'{"result": "PASS"}', b""
+            )
+        self.assertIn("LEG_PASS_MARKER_REFUSED:external_data_present", str(caught.exception))
+        self.assertEqual(
+            MODULE.bind_positive_leg_pass_markers(
+                "external_data_present",
+                b'{"result": "PASS", "validator": {"result": "VERIFIED"}}',
+                b"",
+            ),
+            ['"result": "PASS"', '"result": "VERIFIED"'],
+        )
+        self.assertEqual(
+            MODULE.bind_positive_leg_pass_markers("deterministic_data", b"", b""), []
+        )
+
     def _mint_fixture(self, base: Path, argv_for=None):
         root = base / "fresh clone"
         root.mkdir()
@@ -466,7 +521,7 @@ class ACleanV2Tests(unittest.TestCase):
             argv_for = lambda leg_id: ["${PYTHON}", "${PYENV}", "--leg", leg_id]
         spec_path = base / "spec.json"
         spec = {
-            "schema_version": "ember-issue1949-a-clean-leg-spec-v1",
+            "schema_version": "ember-issue1949-a-clean-leg-spec-v4",
             "platform": "linux",
             "legs": [{
                 "id": leg_id,
