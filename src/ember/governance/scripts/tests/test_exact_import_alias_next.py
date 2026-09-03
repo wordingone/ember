@@ -16,7 +16,7 @@ import re
 import subprocess
 from pathlib import Path
 
-ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
+ROOT = Path(__file__).resolve().parents[5]
 ALIAS_NEXT = re.compile(r"_ember_[0-9a-f]{16}_next\(")
 
 
