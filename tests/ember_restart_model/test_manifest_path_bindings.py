@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "check_manifest_path_bindings.py"
+MODULE_PATH = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "check_manifest_path_bindings.py"
 SPEC = importlib.util.spec_from_file_location("check_manifest_path_bindings", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 module = importlib.util.module_from_spec(SPEC)

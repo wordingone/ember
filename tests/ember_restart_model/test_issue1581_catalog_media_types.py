@@ -13,7 +13,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 from domain_manifest import _connector_media_type  # noqa: E402
 

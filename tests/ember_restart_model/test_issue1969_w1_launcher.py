@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "issue1969_w1_launcher.py"
-SPEC_PATH = ROOT / "tools" / "ember-restart-3b" / "issue1969-w1-spec-v1.json"
+MODULE_PATH = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "issue1969_w1_launcher.py"
+SPEC_PATH = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "issue1969-w1-spec-v1.json"
 
 
 def load_module():

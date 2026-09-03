@@ -12,7 +12,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-TOOLS = ROOT / "tools" / "ember-restart-3b"
+TOOLS = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
 sys.path.insert(0, str(TOOLS))
 
 

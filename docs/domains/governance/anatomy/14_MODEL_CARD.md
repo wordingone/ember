@@ -49,7 +49,7 @@ as "TAINTED — document inclusion via classifier trained on
 Llama-3-70B-Instruct annotations" (7.4GB / 1.55M docs removed), retaining
 only sources classed CLEAN. Whether an equivalent clean-only corpus
 assembly has been completed for the current `ember-restart-3b` contract is
-not established by this doc — see `tools/ember-restart-3b/build_owned_*.py`
+not established by this doc — see `src/ember/infrastructure/tools/ember-restart-3b/build_owned_*.py`
 (04_TRAINING_PIPELINE.md) for the current owned-data construction scripts.
 
 ## Current gaps — honestly stated

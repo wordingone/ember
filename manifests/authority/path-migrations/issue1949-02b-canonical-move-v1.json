@@ -1,0 +1,700 @@
+{
+  "schema_version": "ember-exact-path-migration-map/v1",
+  "goal_id": "EMBER-02",
+  "workstream_id": "EMBER-02B",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "renames": [
+    {
+      "source_path": "tests/ember_restart_model/__init__.py",
+      "target_path": "tests/ember_restart_model/domain-governance/__init__.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/build_fixture.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/checkpoint.pt",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/checkpoint.pt"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/config.json",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/config.json"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-00.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-00.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-01.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-01.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-02.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-02.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-03.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-03.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-04.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-04.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-05.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-05.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-06.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-06.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/image-07.ppm",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/image-07.ppm"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/manifest.json",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/manifest.json"
+    },
+    {
+      "source_path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/mechanics-only-dispositions.json",
+      "target_path": "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/mechanics-only-dispositions.json"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_1464_a1_route_runner_gate.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_1464_a1_route_runner_gate.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_1464_e8_semantic_envelope.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_1464_e8_semantic_envelope.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_1483_lineage_checkpoint_byte_bound.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_1483_lineage_checkpoint_byte_bound.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_dense_cpu_offload.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_dense_cpu_offload.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_e8_evidence.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_e8_evidence.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_e8_parity.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_e8_parity.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_energy_apportionment.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_energy_apportionment.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_execution_e8_telemetry.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_execution_e8_telemetry.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_fused_backward.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_fused_backward.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_lower_bound_amendment.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_lower_bound_amendment.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_tier2_execution.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_tier2_execution.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a1_tier2_optimizer.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a1_tier2_optimizer.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_a3_run_receipt.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_a3_run_receipt.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_b8_full_hash_rederivation.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_b8_full_hash_rederivation.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_certified_train_launch.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_artifacts.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_artifacts.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_expert_identity_staleness.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_expert_identity_staleness.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_identity_roundtrip.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_identity_roundtrip.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_resume_smoke.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_resume_smoke.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_scratch_cap.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_scratch_cap.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_checkpoint_scratch_cap_3b.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_checkpoint_scratch_cap_3b.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_chunked_specialist_replay.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_chunked_specialist_replay.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_chunked_vision_replay.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_chunked_vision_replay.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_contract.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_cost_calibration_receipt.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_cost_calibration_receipt.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_counter_cli.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_counter_cli.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_custody_process_scope.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_custody_process_scope.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_domain_manifest.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_domain_manifest.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_eval_canary_image.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_eval_canary_image.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_final_publication_low_commit.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_final_publication_low_commit.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_frozen_tokenizer_decoder.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_frozen_tokenizer_decoder.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_genesis_producer.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_genesis_producer.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_import_seams.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_import_seams.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_infer.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_infer.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_input_identity.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_input_identity.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue1413_checkpoint_projection_regression.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue1508_attempt_retention_layout.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue1508_attempt_retention_layout.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue1719_pdf_tranche_case.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue1719_pdf_tranche_case.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue1946_complete_update_profile.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue1946_complete_update_profile.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue1946_marker_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue1946_marker_contract.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue1953_packaging_authority.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue1953_packaging_authority.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_issue898_job_memory_ceiling_probe_verify.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_issue898_job_memory_ceiling_probe_verify.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_mint_github_license_partition.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_mint_github_license_partition.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_mint_issue1719_tranche_admission.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_mint_issue1719_tranche_admission.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_model.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_model.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_native_compute_screen.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_native_compute_screen.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_optimizer_transition.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_optimizer_transition.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_owned_audio_frames.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_owned_audio_frames.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_owned_openai_server.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_owned_openai_server.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_owned_production_rung.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_owned_production_rung.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_owned_reasoning_tool_trajectories.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_owned_reasoning_tool_trajectories.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_owned_vision_scenes.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_owned_vision_scenes.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_owned_vision_shortcut_controls.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_owned_vision_shortcut_controls.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_packed_specialist_probe.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_packed_specialist_probe.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_packed_specialist_run.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_packed_specialist_run.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_parameter_receipt.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_parameter_receipt.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_pdf_text_adapter.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_pdf_text_adapter.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_private_commit_probe.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_private_commit_probe.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_project_text_lab_custody_paths.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_project_text_lab_custody_paths.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_python_environment.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_python_environment.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_r1_warm100_step2_authority_refusal.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_r1_warm100_step2_authority_refusal.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_remint_text_lab_input_identity.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_remint_text_lab_input_identity.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_runner_storage.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_runner_storage.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_semantic_contract.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_semantic_contract.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_semantic_identity_binding.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_semantic_identity_binding.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_semantic_memory_probe.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_semantic_memory_probe.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_semantic_stream.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_semantic_stream.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_sparse_successor.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_sparse_successor.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_specialist_bundle.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_specialist_bundle.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_specialist_lineage.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_specialist_lineage.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_specialist_semantics.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_specialist_semantics.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_specialist_stream.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_specialist_stream.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_step2_realization_registry.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_step2_realization_registry.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_text_lab_github_partition.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_text_lab_github_partition.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_tokenizer_reconstruction.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_tokenizer_reconstruction.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_training_data_verifier.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_training_data_verifier.py"
+    },
+    {
+      "source_path": "tests/ember_restart_model/test_vertical_slice.py",
+      "target_path": "tests/ember_restart_model/domain-governance/test_vertical_slice.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/__init__.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/__init__.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_checkpoint.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_checkpoint.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_dense.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_e8_evidence.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_e8_evidence.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_e8_parity.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_e8_parity.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_energy_apportionment.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_execution.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_execution.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_optimizer.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_optimizer.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_tier2_checkpoint.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_tier2_checkpoint.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_tier2_contract.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_tier2_contract.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_tier2_execution.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_tier2_execution.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a1_tier2_optimizer.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a1_tier2_optimizer.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/a3_run_receipt.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/a3_run_receipt.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/batch.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/batch.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/build_owned_audio_frames.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_audio_frames.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/build_owned_curriculum.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_curriculum.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_reasoning_tool_trajectories.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/build_owned_vision_scenes.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_vision_scenes.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/build_specialist_bundle.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/build_specialist_bundle.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/catalog_admission.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/catalog_admission.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/certified_train_launch.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/check_manifest_path_bindings.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/check_manifest_path_bindings.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/checkpoint-low-commit-deferral-policy.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/checkpoint-low-commit-deferral-policy.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/checkpoint_artifacts.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/checkpoint_scratch.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_scratch.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/custody_process_scope_worker.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/custody_process_scope_worker.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/disk_budget_runner.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/disk_budget_runner.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/domain_manifest.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/durable_io.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/durable_io.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/ember-restart-3b-a1-tier2.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/ember-restart-3b-a1-tier2.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/ember-restart-3b-a1.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/ember-restart-3b-a1.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/eval_canary_image.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/frozen_tokenizer_decoder.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/frozen_tokenizer_decoder.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/host_setup_contract.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/host_setup_contract.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/infer.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/infer.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/input_identity.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/input_identity.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue1945_owner_selection.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue1945_owner_selection.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue1946-authority-crosswalk.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue1946-authority-crosswalk.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue1946-complete-update-accounting.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue1946-complete-update-accounting.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue1946_complete_update_profile.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue1946_complete_update_profile.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue1969-w1-spec-v1.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue1969-w1-spec-v1.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue1969_w1_launcher.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue1969_w1_launcher.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/issue898_job_memory_ceiling_probe_verify.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/issue898_job_memory_ceiling_probe_verify.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/launch_packet.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/launcher-shape-exceptions.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/launcher-shape-exceptions.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/mint_github_license_partition.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/mint_github_license_partition.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/mint_github_partition_refusal.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/mint_github_partition_refusal.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/mint_issue1719_tranche_admission.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/model.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/model.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/native_compute_screen.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/native_compute_screen.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/optimizer_transition.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/optimizer_transition.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/packed_specialist_probe.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/packed_specialist_probe.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/packed_specialist_run.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/packed_specialist_run.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/parameter_counter.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/pretrain.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/probe_semantic_memory.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/probe_semantic_memory.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/production_rung.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/production_rung.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/project_text_lab_custody_paths.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/project_text_lab_custody_paths.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/python-environment-build-v1.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/python-environment-build-v1.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/python_environment.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/python_environment.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/remint_specialist_stream.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/remint_specialist_stream.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/remint_text_lab_input_identity.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/repository_layout.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/repository_layout.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/run_vertical_slice.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/semantic_contract.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/semantic_contract.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/semantic_stream.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/serve_owned_openai.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/specialist_semantics.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/specialist_semantics.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/specialist_stream.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/step2_realization_registry.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/step2_realization_registry.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/text_lab_corpus.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/tokenizer/__init__.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/tokenizer/__init__.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/tokenizer/reconstruct_frozen_tokenizer.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/tokenizer_runtime_bundle.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/train.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/train.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/training-dependency-closure-supplement.json",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/training-dependency-closure-supplement.json"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/training_acceleration.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/verify_capability_record.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/verify_cost_calibration.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/verify_cost_calibration.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/verify_owned_vision_shortcut_controls.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/verify_owned_vision_shortcut_controls.py"
+    },
+    {
+      "source_path": "tools/ember-restart-3b/verify_training_data.py",
+      "target_path": "src/ember/infrastructure/tools/ember-restart-3b/verify_training_data.py"
+    }
+  ]
+}

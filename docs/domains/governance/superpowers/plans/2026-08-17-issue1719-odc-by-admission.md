@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Exact source base: `80b34e5ef5e87b17ef5f11e8a7a716f28896bd4b`.
-- Production scope is one map entry in `tools/ember-restart-3b/text_lab_corpus.py`.
+- Production scope is one map entry in `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py`.
 - Preserve the existing uniform lowercase-before-lookup rule for every closed-map entry; accept normalized `odc-by` but add no punctuation or alias normalization.
 - The root `README.md` bytes, connector license, and evidence declaration must independently converge on `ODC-By-1.0`.
 - Do not mint tranche4d or claim corpus admission, byte movement, training, sufficient pretraining, or issue closure.
@@ -24,7 +24,7 @@
 - Modify through canonical remint only: `data/ember-restart-3b/owned-text-lab-input-identity-v2.json`
 - Modify through canonical remint only: `data/ember-restart-3b/text-lab-authority-index-v1.json`
 - Modify: `tests/ember_restart_model/domain-governance/test_text_lab_corpus.py`
-- Modify: `tools/ember-restart-3b/text_lab_corpus.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py`
 
 **Interfaces:**
 - Consumes: `adapt_connector_receipt(receipt: dict, evidence: dict) -> dict` and the existing exact `hf_fetch` receipt/evidence contract.
@@ -64,7 +64,7 @@ Add exactly this one entry to `_HF_DATASET_CARD_LICENSES`:
 
 - [ ] **Step 5: Canonically remint governed source-hash pins**
 
-Run `tools/ember-restart-3b/remint_text_lab_input_identity.py --write`, which alone may update `data/ember-restart-3b/owned-text-lab-input-identity-v2.json` and the downstream pin in `data/ember-restart-3b/text-lab-authority-index-v1.json`. Hand-editing either governed JSON file is forbidden. Then run the same tool with `--check` and require exit 0 with all live code-file pins matching.
+Run `src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py --write`, which alone may update `data/ember-restart-3b/owned-text-lab-input-identity-v2.json` and the downstream pin in `data/ember-restart-3b/text-lab-authority-index-v1.json`. Hand-editing either governed JSON file is forbidden. Then run the same tool with `--check` and require exit 0 with all live code-file pins matching.
 
 - [ ] **Step 6: Run GREEN and focused regressions**
 

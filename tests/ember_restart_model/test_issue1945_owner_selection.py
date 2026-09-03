@@ -13,7 +13,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = ROOT / "tools" / "ember-restart-3b" / "issue1945_owner_selection.py"
+MODULE = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "issue1945_owner_selection.py"
 
 
 def load_subject():

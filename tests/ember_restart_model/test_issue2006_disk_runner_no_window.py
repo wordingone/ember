@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PATH = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+PATH = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
 
 
 def load_module():

@@ -22,7 +22,7 @@
                                      "exclusive":  true
                                  },
                        "training":  {
-                                        "root":  "tools/ember-restart-3b",
+                                "root":  "src/ember/infrastructure/tools/ember-restart-3b",
                                         "exclusive":  true
                                     },
                        "checkpoints":  {

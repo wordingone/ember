@@ -55,7 +55,7 @@ function governedHandle(
 
 /** The real launch command string launch_packet.py names on an all-green packet. */
 const REAL_LAUNCH_COMMAND =
-  "python tools/ember-restart-3b/run_vertical_slice.py semantic " +
+  "python src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py semantic " +
   "--seed <launch-seed> --artifact-root ckpt/<run-id> " +
   "--receipt <manifest-bound-stream-receipt.json> --shards-root <token-shard-dir> " +
   "--tokenizer <tokenizer-path> --steps <N> --sequence-length <seq-len> " +
@@ -78,7 +78,7 @@ function allGreenStdout(command: string = REAL_LAUNCH_COMMAND): string {
       named_ember02_command: {
         note: "src/ember/governance/scripts/timeshare_pretrain.py is EXECUTION-DENIED; the real governed entry is run_vertical_slice.py semantic.",
         command,
-        library_entrypoint: "tools/ember-restart-3b/run_vertical_slice.py::run_semantic",
+        library_entrypoint: "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py::run_semantic",
       },
     }),
     "# receipt: receipts/ember-01-launch-packet/20260721T000000Z/packet.jsonl",

@@ -24,7 +24,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHECKER_RELATIVE = "src/ember/infrastructure/tools/check_governed_entry_exceptions.py"
 BASE_POLICY_RELATIVE = "src/ember/infrastructure/tools/launcher-shape-exceptions.json"
-SUPPLEMENT_RELATIVE = "tools/ember-restart-3b/launcher-shape-exceptions.json"
+SUPPLEMENT_RELATIVE = "src/ember/infrastructure/tools/ember-restart-3b/launcher-shape-exceptions.json"
 SCHEMA_VERSION = "ember-launcher-shape-exceptions-v1"
 
 

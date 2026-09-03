@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-_MODULE_PATH = Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b" / "launch_packet.py"
+_MODULE_PATH = Path(__file__).resolve().parents[3] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "launch_packet.py"
 _spec = importlib.util.spec_from_file_location("launch_packet", _MODULE_PATH)
 lp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(lp)
@@ -26,12 +26,12 @@ _CONFIG_PATH = Path(__file__).resolve().parents[3] / "configs" / "ember-restart-
 
 # The architecture's own expert declaration, read from the model module rather than
 # copied here, so a change to the roster moves the expectation with it.
-_TOOLS_DIRECTORY = Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b"
+_TOOLS_DIRECTORY = Path(__file__).resolve().parents[3] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
 if str(_TOOLS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIRECTORY))
 from repository_layout import resolve_repository_authority  # noqa: E402
 
-_MODEL_PATH = Path(__file__).resolve().parents[3] / "tools" / "ember-restart-3b" / "model.py"
+_MODEL_PATH = Path(__file__).resolve().parents[3] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "model.py"
 _model_spec = importlib.util.spec_from_file_location("ember_restart_model_decl", _MODEL_PATH)
 _model_mod = importlib.util.module_from_spec(_model_spec)
 # Register before exec: model.py defines dataclasses, and dataclasses resolves a
@@ -178,7 +178,7 @@ def test_recovery_pass_real_roundtrip(cfg, root):
 
 
 def test_recovery_fail_closed_broken_import(cfg, tmp_path):
-    # A repo root with no tools/ember-restart-3b/ package and no configs/ --
+    # A repo root with no src/ember/infrastructure/tools/ember-restart-3b/ package and no configs/ --
     # the round-trip cannot run (module caching in-process may still resolve
     # the real trainer modules, but the real config file it must sha256 is
     # absent) -> fail closed, never a silent pass.
@@ -194,7 +194,7 @@ def test_recovery_fail_closed_tampered_checkpoint(cfg, root, monkeypatch):
     # the round-trip must fail closed, never silently accept divergent state.
     import importlib
     import sys as _sys
-    tools_dir = str(root / "tools" / "ember-restart-3b")
+    tools_dir = str(root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b")
     if tools_dir not in _sys.path:
         _sys.path.insert(0, tools_dir)
     checkpoint_artifacts = importlib.import_module("checkpoint_artifacts")
@@ -253,7 +253,7 @@ def test_clean_genesis_fail_closed_borrowed_loading_in_source(cfg, root, tmp_pat
     # A model.py whose UnifiedDecoder body references a borrowed-weight load
     # call must fail closed even if the config lineage block is clean.
     fake_root = tmp_path
-    fake_tools = fake_root / "tools" / "ember-restart-3b"
+    fake_tools = fake_root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     fake_tools.mkdir(parents=True)
     (fake_tools / "model.py").write_text(
         "class UnifiedDecoder:\n    def __init__(self):\n        self.load_state_dict({})\n",
@@ -282,7 +282,7 @@ def test_identity_manifest_pass_real_config_corpus_artifact_joined(cfg, root):
     assert cfg["training"]["expected_input_artifact_id"] == "owned-four-domain-production-rung-v1"
     r = lp.preflight_identity_manifest(cfg, root)
     assert r["status"] == "pass", r
-    assert r["corpus_sha256"] == "b71c33f829daaf4a369cc660f130a1e114ab373cff5d0697f0809e729371371c"
+    assert r["corpus_sha256"] == "26b4c4fbc1fe89de84726578e644019e9c901c06df2b97f0031969b88abe31f1"
 
 
 def test_identity_manifest_pass_when_corpus_and_artifact_ids_aligned(cfg, root):

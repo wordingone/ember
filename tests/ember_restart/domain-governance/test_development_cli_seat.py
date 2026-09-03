@@ -24,12 +24,12 @@ RUNTIME_FILES = {
     "scripts/ember_restart_eval_checkpoint_consumer.py",
     "scripts/ember_restart_eval_raw_forward.py",
     "domains/model/tokenizer/tokenizer.json",
-    "tools/ember-restart-3b/batch.py",
-    "tools/ember-restart-3b/checkpoint_artifacts.py",
-    "tools/ember-restart-3b/infer.py",
-    "tools/ember-restart-3b/model.py",
-    "tools/ember-restart-3b/parameter_counter.py",
-    "tools/ember-restart-3b/serve_owned_openai.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/infer.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
 }
 
 
@@ -64,7 +64,7 @@ def _fixture(
     generated = {
         "configs/ember-restart-3b.json",
         "domains/model/tokenizer/tokenizer.json",
-        "tools/ember-restart-3b/serve_owned_openai.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
         "parameter-evidence/parameter_counter.py",
         "parameter-evidence/step2-realization-receipt.json",
         "parameter-evidence/trusted-verifiers.json",
@@ -152,7 +152,7 @@ def _fixture(
             "checkpoint": {"manifest_path": "checkpoint/checkpoint-manifest.json", "sha256": checkpoint_hash},
             "model_config": {"path": "configs/ember-restart-3b.json", "sha256": config_hash},
             "tokenizer": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": tokenizer_hash},
-            "server": {"path": "tools/ember-restart-3b/serve_owned_openai.py", "sha256": _sha256(server)},
+            "server": {"path": "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py", "sha256": _sha256(server)},
             "runtime_bundle": {"index_path": runtime_index.name, "sha256": _sha256(runtime_index)},
             "parameter_evidence": {
                 "counter_path": "parameter-evidence/parameter_counter.py",
@@ -272,5 +272,5 @@ def test_development_resolver_rejects_drift_in_imported_runtime_source(tmp_path:
     imported.write_bytes(bytes([imported_bytes[0] ^ 1]) + imported_bytes[1:])
     result = _resolve(manifest)
     assert result.returncode == 1
-    assert "runtime file tools/ember-restart-3b/infer.py" in result.stdout
+    assert "runtime file src/ember/infrastructure/tools/ember-restart-3b/infer.py" in result.stdout
     assert "content hash mismatch" in result.stdout

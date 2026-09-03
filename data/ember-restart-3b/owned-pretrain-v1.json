@@ -81,7 +81,7 @@
         "canonical_record_sha256": "3d4feed0cdc3c8a97417580cc34b7895f1f3867ae6e90be29802b3e94d88782a",
         "reasoning_target_sha256": "663eed92626ad53deb3a550eb96ff730bd72009d3792f597e9d4662735b4a703",
         "result": "PASSED",
-        "verifier_path": "tools/ember-restart-3b/verify_capability_record.py",
+        "verifier_path": "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py",
         "verifier_sha256": "df6a589882b4493f3303b63939736b5d2b89d0eac417ea901034f95960f92190"
       },
       "image_coordinates": [],
@@ -116,7 +116,7 @@
         "canonical_record_sha256": "13fc691a57bcc3619232b7717c8283eba9322c08c91b8ebccb4958d8b87753c2",
         "result": "PASSED",
         "tool_execution_sha256": "4bc171212a64616653f40bf0f1e8618b65033a1326bb9736486d3e8249e60676",
-        "verifier_path": "tools/ember-restart-3b/verify_capability_record.py",
+        "verifier_path": "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py",
         "verifier_sha256": "df6a589882b4493f3303b63939736b5d2b89d0eac417ea901034f95960f92190"
       },
       "image_coordinates": [],

@@ -141,7 +141,7 @@ fi
 
 # ---- 1d. repository data-manifest path bindings must resolve and hash ----
 if bash "$KERNEL_ROOT/src/ember/infrastructure/tools/run-python-hidden.sh" \
-  "$KERNEL_ROOT/tools/ember-restart-3b/check_manifest_path_bindings.py" --root "$SUBJECT_ROOT"; then
+  "$KERNEL_ROOT/src/ember/infrastructure/tools/ember-restart-3b/check_manifest_path_bindings.py" --root "$SUBJECT_ROOT"; then
   :
 else
   FAIL=1

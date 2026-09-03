@@ -18,11 +18,22 @@ from unittest import mock
 
 import pytest
 
-from . import test_certified_train_launch as launch_fixtures
-
-
 ROOT = Path(__file__).resolve().parents[2]
-TOOLS_DIRECTORY = ROOT / "tools" / "ember-restart-3b"
+LAUNCH_FIXTURES_PATH = (
+    Path(__file__).resolve().parent
+    / "domain-governance"
+    / "test_certified_train_launch.py"
+)
+LAUNCH_FIXTURES_SPEC = importlib.util.spec_from_file_location(
+    "test_certified_train_launch", LAUNCH_FIXTURES_PATH
+)
+assert LAUNCH_FIXTURES_SPEC and LAUNCH_FIXTURES_SPEC.loader
+launch_fixtures = importlib.util.module_from_spec(LAUNCH_FIXTURES_SPEC)
+sys.modules[LAUNCH_FIXTURES_SPEC.name] = launch_fixtures
+LAUNCH_FIXTURES_SPEC.loader.exec_module(launch_fixtures)
+
+
+TOOLS_DIRECTORY = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
 if str(TOOLS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIRECTORY))
 from repository_layout import resolve_repository_authority  # noqa: E402
@@ -31,7 +42,7 @@ TIER2_FAMILY = "dense-tier2-owned-q-galore-v1"
 
 
 def _load_a1_execution():
-    tools = ROOT / "tools" / "ember-restart-3b"
+    tools = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     inserted = str(tools) not in sys.path
     if inserted:
         sys.path.insert(0, str(tools))
@@ -121,7 +132,7 @@ def _checkpoint_identity(
     return {
         "comparison_id": comparison["comparison_id"],
         "matched_identity": matched["identity"],
-        "config_sha256": "563331b746619788f01900f4d951df29e4c6549c937a4662bac76234f5d71edc",
+        "config_sha256": "a9f9ba115dc8e139e18c528b2a3e13060ab874787e8f944bfaf4fc125fb23d80",
         "source_commit": source_commit,
         "certified_launch_sha256": certified_launch_sha256,
         "tier": "TIER_1",
@@ -152,15 +163,15 @@ def _declare_a1_route(paths: dict[str, Path]) -> None:
 
 def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
     repo = paths["repo"]
-    tools = repo / "tools" / "ember-restart-3b"
-    thresholds = repo / "docs" / "spec"
+    tools = repo / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
+    thresholds = repo / "docs" / "domains" / "governance" / "spec"
     receipt_dir = repo / "receipts" / "ember-restart-3b"
     for directory in (tools, thresholds, receipt_dir):
         directory.mkdir(parents=True, exist_ok=True)
     config_path = tools / "ember-restart-3b-a1.json"
-    shutil.copyfile(ROOT / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json", config_path)
+    shutil.copyfile(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json", config_path)
     shutil.copyfile(
-        ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json",
+        ROOT / "docs" / "domains" / "governance" / "spec" / "ember02-preregistration-thresholds-v1.json",
         thresholds / "ember02-preregistration-thresholds-v1.json",
     )
     _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
@@ -304,8 +315,8 @@ def _install_valid_a1_authority(paths: dict[str, Path]) -> dict[str, object]:
 
 def _install_valid_tier2_authority(paths: dict[str, Path]) -> dict[str, Path]:
     _install_valid_a1_authority(paths)
-    contract = paths["repo"] / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json"
-    shutil.copyfile(ROOT / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json", contract)
+    contract = paths["repo"] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json"
+    shutil.copyfile(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "ember-restart-3b-a1-tier2.json", contract)
     liveness = {
         "schema_version": "ember02-r1-e8-liveness-v1",
         "thresholds_sha256": "12c83ca9ac90f85d5e8c0ce2c8156ac0c2cf9695929b211971ee277582a5eeb5",
@@ -622,7 +633,7 @@ def test_a1_resource_authority_is_closed_typed_and_required(
 
 
 def test_dense_a1_resource_preflight_refuses_before_output_residue() -> None:
-    tools = ROOT / "tools" / "ember-restart-3b"
+    tools = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     inserted = str(tools) not in sys.path
     if inserted:
         sys.path.insert(0, str(tools))
@@ -702,7 +713,7 @@ def test_energy_undercoverage_or_inconsistency_mints_no_tier1_run(
                 artifact_root=artifact_root,
                 energy_receipt=energy,
                 thresholds_path=(
-                    launch_paths["repo"] / "docs" / "spec"
+                    launch_paths["repo"] / "docs" / "domains" / "governance" / "spec"
                     / "ember02-preregistration-thresholds-v1.json"
                 ),
                 expected_source_commit=launch_fixtures.SHA,
@@ -773,7 +784,7 @@ def test_complete_energy_window_mints_packet_a_tier1_run() -> None:
                 artifact_root=artifact_root,
                 energy_receipt=energy,
                 thresholds_path=(
-                    launch_paths["repo"] / "docs" / "spec"
+                    launch_paths["repo"] / "docs" / "domains" / "governance" / "spec"
                     / "ember02-preregistration-thresholds-v1.json"
                 ),
                 expected_source_commit=launch_fixtures.SHA,
@@ -785,7 +796,7 @@ def test_complete_energy_window_mints_packet_a_tier1_run() -> None:
             artifact_root=artifact_root,
             energy_receipt=energy,
             thresholds_path=(
-                launch_paths["repo"] / "docs" / "spec"
+                launch_paths["repo"] / "docs" / "domains" / "governance" / "spec"
                 / "ember02-preregistration-thresholds-v1.json"
             ),
             expected_source_commit=launch_fixtures.SHA,
@@ -798,7 +809,7 @@ def test_complete_energy_window_mints_packet_a_tier1_run() -> None:
                 artifact_root=artifact_root,
                 energy_receipt=energy,
                 thresholds_path=(
-                    launch_paths["repo"] / "docs" / "spec"
+                    launch_paths["repo"] / "docs" / "domains" / "governance" / "spec"
                     / "ember02-preregistration-thresholds-v1.json"
                 ),
                 expected_source_commit=launch_fixtures.SHA,
@@ -938,7 +949,7 @@ def test_real_launcher_finalizer_join_mints_tier1_run_on_complete_energy() -> No
 
 
 def test_dense_counter_uses_all_parameters_and_no_expert_route() -> None:
-    tools = ROOT / "tools" / "ember-restart-3b"
+    tools = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     inserted = str(tools) not in sys.path
     if inserted:
         sys.path.insert(0, str(tools))
@@ -957,7 +968,7 @@ def test_dense_counter_uses_all_parameters_and_no_expert_route() -> None:
 
 
 def test_dense_checkpoint_carries_complete_model_and_optimizer_inventory() -> None:
-    tools = ROOT / "tools" / "ember-restart-3b"
+    tools = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     inserted = str(tools) not in sys.path
     if inserted:
         sys.path.insert(0, str(tools))
@@ -1066,7 +1077,7 @@ def test_a1_route_refuses_typed_stale_and_swap_cases(
             launch_fixtures.write_json(paths["run_spec"], run_spec)
             launch_fixtures._write_custody_sidecars(paths)
         elif case == "config-stale":
-            config = paths["repo"] / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json"
+            config = paths["repo"] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "ember-restart-3b-a1.json"
             config.write_bytes(config.read_bytes() + b" ")
         elif case == "token-receipt-stale":
             authority["token_receipt_path"].write_bytes(

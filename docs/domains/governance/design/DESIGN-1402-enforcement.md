@@ -37,7 +37,7 @@ VERSION-probe policy: `verify()` already treats a changed-but-present toolchain
 version as a finding; `assert_fresh` inherits that (a moved toolchain at launch IS
 staleness — the run would execute under versions the declaration does not describe).
 
-### 2. Consumption point A — `tools/ember-restart-3b/launch_packet.py`
+### 2. Consumption point A — `src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py`
 
 Add preflight `preflight_fixed_prior(cfg, root)` to the existing preflight chain
 (alongside `preflight_no_sub_3b` / `preflight_resource` / `preflight_storage` /
@@ -49,7 +49,7 @@ packet not producible, so `certified_train_launch.py` (the ONLY path ember-cli
 /train --execute may invoke) cannot proceed. Exit code: the preflight's standing
 nonzero failure path; failure token in output: `FIXED_PRIOR_MANIFEST_STALE`.
 
-### 3. Consumption point B — `tools/ember-restart-3b/production_rung.py`
+### 3. Consumption point B — `src/ember/infrastructure/tools/ember-restart-3b/production_rung.py`
 
 `build_receipt()` gains a `fixed_prior_manifest` field:
 

@@ -17,9 +17,9 @@ Generated 2026-07-17 against public master `f919b116066106fc91a7d86feff39eecc70e
 
 ## Explicit C2 finding carried forward
 
-At exact PR #919 head `574d54fd114ff36ed1c923258cd47983e84fcb56`, `tools/ember-restart-3b/run_vertical_slice.py` still routes counter/judge failure through `_quarantine_counter_failed_checkpoint()` and `shutil.rmtree(checkpoint_target)`. That is a destructive research-path P0 and is escalated to the research owner; this C3 branch does not modify it.
+At exact PR #919 head `574d54fd114ff36ed1c923258cd47983e84fcb56`, `src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py` still routes counter/judge failure through `_quarantine_counter_failed_checkpoint()` and `shutil.rmtree(checkpoint_target)`. That is a destructive research-path P0 and is escalated to the research owner; this C3 branch does not modify it.
 
-The same exact head also has a P1 in `tools/ember-restart-3b/checkpoint_artifacts.py`: `admit_quarantined_checkpoint` validates hashes before invoking its verifier but does not revalidate the manifest and shards after verifier execution before promotion, so a mutation can make promoted bytes diverge from the receipt. This is escalated for owner repair; this C3 branch does not modify it.
+The same exact head also has a P1 in `src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py`: `admit_quarantined_checkpoint` validates hashes before invoking its verifier but does not revalidate the manifest and shards after verifier execution before promotion, so a mutation can make promoted bytes diverge from the receipt. This is escalated for owner repair; this C3 branch does not modify it.
 
 ## C3 scope guard
 

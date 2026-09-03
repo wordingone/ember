@@ -22,7 +22,7 @@ from unittest.mock import patch
 import torch
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 import pretrain
 import training_acceleration
@@ -1462,7 +1462,10 @@ class PretrainingSegmentTests(unittest.TestCase):
         def delayed_decode(*args: object, **kwargs: object) -> dict[str, object]:
             if live_batches:
                 self.assertIsNone(live_batches[-1](), "more than one decoded pack remained live")
-            time.sleep(0.05)
+            # Keep a full scheduler margin above the 50 ms assertion below;
+            # Windows sleep/wake accounting can under-report a requested 50 ms
+            # interval by a few milliseconds even when decode is inside the timer.
+            time.sleep(0.10)
             decoded = WeakBatch(original_decode(*args, **kwargs))
             live_batches.append(weakref.ref(decoded))
             return decoded
