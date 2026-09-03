@@ -52,7 +52,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
+GOVERNANCE_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 
 def _load_scanner_module(tmp_root, unique_suffix):
@@ -66,7 +66,7 @@ def _load_scanner_module(tmp_root, unique_suffix):
 
     cneg1_name = f"test_c_neg1_{unique_suffix}"
     cneg1_spec = importlib.util.spec_from_file_location(
-        cneg1_name, os.path.join(REPO_ROOT, "scripts", "ember_totality", "test_c_neg1.py"))
+        cneg1_name, os.path.join(GOVERNANCE_DIR, "scripts", "ember_totality", "test_c_neg1.py"))
     cneg1_mod = importlib.util.module_from_spec(cneg1_spec)
     sys.modules[cneg1_name] = cneg1_mod
     cneg1_spec.loader.exec_module(cneg1_mod)
@@ -78,7 +78,7 @@ def _load_scanner_module(tmp_root, unique_suffix):
 
     scanner_name = f"spend_annex_scan_{unique_suffix}"
     scanner_spec = importlib.util.spec_from_file_location(
-        scanner_name, os.path.join(REPO_ROOT, "scripts", "ember_totality", "spend_annex_scan.py"))
+        scanner_name, os.path.join(GOVERNANCE_DIR, "scripts", "ember_totality", "spend_annex_scan.py"))
     scanner_mod = importlib.util.module_from_spec(scanner_spec)
     sys.modules[scanner_name] = scanner_mod
     scanner_spec.loader.exec_module(scanner_mod)

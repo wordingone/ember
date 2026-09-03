@@ -30,12 +30,12 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
-sys.path.insert(0, REPO_ROOT)
+GOVERNANCE_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, GOVERNANCE_DIR)
 
 _SPEC = importlib.util.spec_from_file_location(
     "test_c_neg1_probe",
-    os.path.join(REPO_ROOT, "scripts", "ember_totality", "test_c_neg1.py"),
+    os.path.join(GOVERNANCE_DIR, "scripts", "ember_totality", "test_c_neg1.py"),
 )
 cneg1 = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(cneg1)
