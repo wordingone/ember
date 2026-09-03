@@ -4588,8 +4588,8 @@
       "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
       "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_01_custody'",
-      "expression_sha256": "5109cca2c28b6b25a6c53f29432537811ac3f13ea4d545671e6b1eb5f1d716cd",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_01_custody'",
+      "expression_sha256": "fe8d9e1e2f81d9177177191dff7eb6c4772e83b9cdc9d8e85466ac824047fd87",
       "line": 16,
       "path": "tests/ember_01_custody/domain-governance/test_issue_census.py",
       "status": "UNEVALUABLE",
@@ -5730,6 +5730,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "bab6f20c09812b473f6b81b8cbc3f428a808ef332bafbfbf43caeeb4c55a8bde",
+  "self_sha256": "6083922bac2aae84f7335db044cae6c9630ac1c77e685ae5642b7d8d8b2805ac",
   "workstream_id": "EMBER-02A"
 }

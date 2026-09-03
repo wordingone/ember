@@ -15,7 +15,7 @@ import pytest
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-MODULE_PATH = ROOT / "scripts" / "ember_01_custody" / "freeze_artifact_integrity.py"
+MODULE_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_custody" / "freeze_artifact_integrity.py"
 
 
 def load_module():
