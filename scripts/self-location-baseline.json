@@ -1,6 +1,6 @@
 {
   "baselined_row_count": 520,
-  "expires_on": "2026-09-03",
+  "expires_on": "2026-09-10",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
   "goal_id": "EMBER-02",
@@ -5730,6 +5730,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "6083922bac2aae84f7335db044cae6c9630ac1c77e685ae5642b7d8d8b2805ac",
+  "self_sha256": "0024bd5c3eee49c6ddb42d3fa72eeaa838f912492ec7fc7f7b8b04d1b6538718",
   "workstream_id": "EMBER-02A"
 }
