@@ -161,53 +161,12 @@ open_specialist_stream: Any | None = None
 
 def _specialist_stream_api() -> tuple[Any, str, str, Any]:
     """Load the P2B-only stream consumer after legacy admission is selected."""
-    # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py
-    import importlib.util as _ember_6373b0ee51e42f72_importlib
-    import sys as _ember_6373b0ee51e42f72_sys
-    from pathlib import Path as _ember_6373b0ee51e42f72_Path
-    _ember_6373b0ee51e42f72_path = _ember_6373b0ee51e42f72_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'specialist_stream.py')
-    if not _ember_6373b0ee51e42f72_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py')
-    _ember_6373b0ee51e42f72_aliases = ('_ember_issue2015_6373b0ee51e42f72', 'specialist_stream', 'tools.ember-restart-3b.specialist_stream')
-    _ember_6373b0ee51e42f72_existing = []
-    for _ember_6373b0ee51e42f72_alias in _ember_6373b0ee51e42f72_aliases:
-        _ember_6373b0ee51e42f72_candidate = _ember_6373b0ee51e42f72_sys.modules.get(_ember_6373b0ee51e42f72_alias)
-        if _ember_6373b0ee51e42f72_candidate is not None and all(_ember_6373b0ee51e42f72_candidate is not item for item in _ember_6373b0ee51e42f72_existing):
-            _ember_6373b0ee51e42f72_existing.append(_ember_6373b0ee51e42f72_candidate)
-    if len(_ember_6373b0ee51e42f72_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py')
-    if _ember_6373b0ee51e42f72_existing:
-        _ember_6373b0ee51e42f72_module = _ember_6373b0ee51e42f72_existing[0]
-        _ember_6373b0ee51e42f72_observed = getattr(_ember_6373b0ee51e42f72_module, '__file__', None)
-        if _ember_6373b0ee51e42f72_observed is None or _ember_6373b0ee51e42f72_Path(_ember_6373b0ee51e42f72_observed).resolve() != _ember_6373b0ee51e42f72_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py')
-    else:
-        _ember_6373b0ee51e42f72_spec = _ember_6373b0ee51e42f72_importlib.spec_from_file_location('_ember_issue2015_6373b0ee51e42f72', _ember_6373b0ee51e42f72_path)
-        if _ember_6373b0ee51e42f72_spec is None or _ember_6373b0ee51e42f72_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py')
-        _ember_6373b0ee51e42f72_module = _ember_6373b0ee51e42f72_importlib.module_from_spec(_ember_6373b0ee51e42f72_spec)
-        for _ember_6373b0ee51e42f72_alias in _ember_6373b0ee51e42f72_aliases:
-            _ember_6373b0ee51e42f72_prior = _ember_6373b0ee51e42f72_sys.modules.get(_ember_6373b0ee51e42f72_alias)
-            if _ember_6373b0ee51e42f72_prior is not None and _ember_6373b0ee51e42f72_prior is not _ember_6373b0ee51e42f72_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py')
-            _ember_6373b0ee51e42f72_sys.modules[_ember_6373b0ee51e42f72_alias] = _ember_6373b0ee51e42f72_module
-        try:
-            _ember_6373b0ee51e42f72_spec.loader.exec_module(_ember_6373b0ee51e42f72_module)
-        except BaseException:
-            for _ember_6373b0ee51e42f72_alias in _ember_6373b0ee51e42f72_aliases:
-                if _ember_6373b0ee51e42f72_sys.modules.get(_ember_6373b0ee51e42f72_alias) is _ember_6373b0ee51e42f72_module:
-                    _ember_6373b0ee51e42f72_sys.modules.pop(_ember_6373b0ee51e42f72_alias, None)
-            raise
-    for _ember_6373b0ee51e42f72_alias in _ember_6373b0ee51e42f72_aliases:
-        _ember_6373b0ee51e42f72_prior = _ember_6373b0ee51e42f72_sys.modules.get(_ember_6373b0ee51e42f72_alias)
-        if _ember_6373b0ee51e42f72_prior is not None and _ember_6373b0ee51e42f72_prior is not _ember_6373b0ee51e42f72_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py')
-        _ember_6373b0ee51e42f72_sys.modules[_ember_6373b0ee51e42f72_alias] = _ember_6373b0ee51e42f72_module
-    SELECTION_CURSOR_SCHEMA_VERSION = getattr(_ember_6373b0ee51e42f72_module, 'SELECTION_CURSOR_SCHEMA_VERSION')
-    TRAINING_CURSOR_SCHEMA_VERSION = getattr(_ember_6373b0ee51e42f72_module, 'TRAINING_CURSOR_SCHEMA_VERSION')
-    canonical_record_bytes = getattr(_ember_6373b0ee51e42f72_module, 'canonical_record_bytes')
-    open_specialist_stream = getattr(_ember_6373b0ee51e42f72_module, 'open_specialist_stream')
-    # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py
+    from specialist_stream import (
+        SELECTION_CURSOR_SCHEMA_VERSION,
+        TRAINING_CURSOR_SCHEMA_VERSION,
+        canonical_record_bytes,
+        open_specialist_stream,
+    )
 
     return (
         canonical_record_bytes,
@@ -220,50 +179,7 @@ def _specialist_stream_api() -> tuple[Any, str, str, Any]:
 @contextmanager
 def _lease_p2b_tokenizer_runtime(*, bundle_root: Path, manifest_path: Path) -> Iterator[dict[str, Any]]:
     """Keep bound tokenizer bytes immutable through real P2B stream validation."""
-    # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py
-    import importlib.util as _ember_4b0514041c2271ff_importlib
-    import sys as _ember_4b0514041c2271ff_sys
-    from pathlib import Path as _ember_4b0514041c2271ff_Path
-    _ember_4b0514041c2271ff_path = _ember_4b0514041c2271ff_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'tokenizer_runtime_bundle.py')
-    if not _ember_4b0514041c2271ff_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py')
-    _ember_4b0514041c2271ff_aliases = ('_ember_issue2015_4b0514041c2271ff', 'tokenizer_runtime_bundle', 'tools.ember-restart-3b.tokenizer_runtime_bundle')
-    _ember_4b0514041c2271ff_existing = []
-    for _ember_4b0514041c2271ff_alias in _ember_4b0514041c2271ff_aliases:
-        _ember_4b0514041c2271ff_candidate = _ember_4b0514041c2271ff_sys.modules.get(_ember_4b0514041c2271ff_alias)
-        if _ember_4b0514041c2271ff_candidate is not None and all(_ember_4b0514041c2271ff_candidate is not item for item in _ember_4b0514041c2271ff_existing):
-            _ember_4b0514041c2271ff_existing.append(_ember_4b0514041c2271ff_candidate)
-    if len(_ember_4b0514041c2271ff_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py')
-    if _ember_4b0514041c2271ff_existing:
-        _ember_4b0514041c2271ff_module = _ember_4b0514041c2271ff_existing[0]
-        _ember_4b0514041c2271ff_observed = getattr(_ember_4b0514041c2271ff_module, '__file__', None)
-        if _ember_4b0514041c2271ff_observed is None or _ember_4b0514041c2271ff_Path(_ember_4b0514041c2271ff_observed).resolve() != _ember_4b0514041c2271ff_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py')
-    else:
-        _ember_4b0514041c2271ff_spec = _ember_4b0514041c2271ff_importlib.spec_from_file_location('_ember_issue2015_4b0514041c2271ff', _ember_4b0514041c2271ff_path)
-        if _ember_4b0514041c2271ff_spec is None or _ember_4b0514041c2271ff_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py')
-        _ember_4b0514041c2271ff_module = _ember_4b0514041c2271ff_importlib.module_from_spec(_ember_4b0514041c2271ff_spec)
-        for _ember_4b0514041c2271ff_alias in _ember_4b0514041c2271ff_aliases:
-            _ember_4b0514041c2271ff_prior = _ember_4b0514041c2271ff_sys.modules.get(_ember_4b0514041c2271ff_alias)
-            if _ember_4b0514041c2271ff_prior is not None and _ember_4b0514041c2271ff_prior is not _ember_4b0514041c2271ff_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py')
-            _ember_4b0514041c2271ff_sys.modules[_ember_4b0514041c2271ff_alias] = _ember_4b0514041c2271ff_module
-        try:
-            _ember_4b0514041c2271ff_spec.loader.exec_module(_ember_4b0514041c2271ff_module)
-        except BaseException:
-            for _ember_4b0514041c2271ff_alias in _ember_4b0514041c2271ff_aliases:
-                if _ember_4b0514041c2271ff_sys.modules.get(_ember_4b0514041c2271ff_alias) is _ember_4b0514041c2271ff_module:
-                    _ember_4b0514041c2271ff_sys.modules.pop(_ember_4b0514041c2271ff_alias, None)
-            raise
-    for _ember_4b0514041c2271ff_alias in _ember_4b0514041c2271ff_aliases:
-        _ember_4b0514041c2271ff_prior = _ember_4b0514041c2271ff_sys.modules.get(_ember_4b0514041c2271ff_alias)
-        if _ember_4b0514041c2271ff_prior is not None and _ember_4b0514041c2271ff_prior is not _ember_4b0514041c2271ff_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py')
-        _ember_4b0514041c2271ff_sys.modules[_ember_4b0514041c2271ff_alias] = _ember_4b0514041c2271ff_module
-    lease_tokenizer_runtime_bundle = getattr(_ember_4b0514041c2271ff_module, 'lease_tokenizer_runtime_bundle')
-    # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/tokenizer_runtime_bundle.py
+    from tokenizer_runtime_bundle import lease_tokenizer_runtime_bundle
 
     with lease_tokenizer_runtime_bundle(bundle_root=bundle_root, manifest_path=manifest_path) as authority:
         yield authority
@@ -1414,50 +1330,7 @@ def measure_parameter_counts(model: Any) -> dict[str, Any]:
 def measure_dense_a1_parameter_counts(model: Any) -> dict[str, Any]:
     """Measure the distinct dense carrier without sparse-route semantics."""
 
-    # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py
-    import importlib.util as _ember_55fe345b239cef3d_importlib
-    import sys as _ember_55fe345b239cef3d_sys
-    from pathlib import Path as _ember_55fe345b239cef3d_Path
-    _ember_55fe345b239cef3d_path = _ember_55fe345b239cef3d_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'a1_dense.py')
-    if not _ember_55fe345b239cef3d_path.is_file():
-        raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py')
-    _ember_55fe345b239cef3d_aliases = ('_ember_issue2015_55fe345b239cef3d', 'a1_dense', 'tools.ember-restart-3b.a1_dense')
-    _ember_55fe345b239cef3d_existing = []
-    for _ember_55fe345b239cef3d_alias in _ember_55fe345b239cef3d_aliases:
-        _ember_55fe345b239cef3d_candidate = _ember_55fe345b239cef3d_sys.modules.get(_ember_55fe345b239cef3d_alias)
-        if _ember_55fe345b239cef3d_candidate is not None and all(_ember_55fe345b239cef3d_candidate is not item for item in _ember_55fe345b239cef3d_existing):
-            _ember_55fe345b239cef3d_existing.append(_ember_55fe345b239cef3d_candidate)
-    if len(_ember_55fe345b239cef3d_existing) > 1:
-        raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py')
-    if _ember_55fe345b239cef3d_existing:
-        _ember_55fe345b239cef3d_module = _ember_55fe345b239cef3d_existing[0]
-        _ember_55fe345b239cef3d_observed = getattr(_ember_55fe345b239cef3d_module, '__file__', None)
-        if _ember_55fe345b239cef3d_observed is None or _ember_55fe345b239cef3d_Path(_ember_55fe345b239cef3d_observed).resolve() != _ember_55fe345b239cef3d_path:
-            raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py')
-    else:
-        _ember_55fe345b239cef3d_spec = _ember_55fe345b239cef3d_importlib.spec_from_file_location('_ember_issue2015_55fe345b239cef3d', _ember_55fe345b239cef3d_path)
-        if _ember_55fe345b239cef3d_spec is None or _ember_55fe345b239cef3d_spec.loader is None:
-            raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py')
-        _ember_55fe345b239cef3d_module = _ember_55fe345b239cef3d_importlib.module_from_spec(_ember_55fe345b239cef3d_spec)
-        for _ember_55fe345b239cef3d_alias in _ember_55fe345b239cef3d_aliases:
-            _ember_55fe345b239cef3d_prior = _ember_55fe345b239cef3d_sys.modules.get(_ember_55fe345b239cef3d_alias)
-            if _ember_55fe345b239cef3d_prior is not None and _ember_55fe345b239cef3d_prior is not _ember_55fe345b239cef3d_module:
-                raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py')
-            _ember_55fe345b239cef3d_sys.modules[_ember_55fe345b239cef3d_alias] = _ember_55fe345b239cef3d_module
-        try:
-            _ember_55fe345b239cef3d_spec.loader.exec_module(_ember_55fe345b239cef3d_module)
-        except BaseException:
-            for _ember_55fe345b239cef3d_alias in _ember_55fe345b239cef3d_aliases:
-                if _ember_55fe345b239cef3d_sys.modules.get(_ember_55fe345b239cef3d_alias) is _ember_55fe345b239cef3d_module:
-                    _ember_55fe345b239cef3d_sys.modules.pop(_ember_55fe345b239cef3d_alias, None)
-            raise
-    for _ember_55fe345b239cef3d_alias in _ember_55fe345b239cef3d_aliases:
-        _ember_55fe345b239cef3d_prior = _ember_55fe345b239cef3d_sys.modules.get(_ember_55fe345b239cef3d_alias)
-        if _ember_55fe345b239cef3d_prior is not None and _ember_55fe345b239cef3d_prior is not _ember_55fe345b239cef3d_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py')
-        _ember_55fe345b239cef3d_sys.modules[_ember_55fe345b239cef3d_alias] = _ember_55fe345b239cef3d_module
-    DenseA1Decoder = getattr(_ember_55fe345b239cef3d_module, 'DenseA1Decoder')
-    # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/a1_dense.py
+    from a1_dense import DenseA1Decoder
 
     if not isinstance(model, DenseA1Decoder):
         raise ValueError("dense A1 counter requires DenseA1Decoder")

@@ -5,12 +5,12 @@
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "exceptions": [
     {
-      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
-      "sha256": "059aea9c3fbe5bf759212bb83da9457a565a93cf619388600b2db7add63b60f8",
+      "path": "tests/ember_restart_model/test_certified_train_launch.py",
+      "sha256": "8f1beaeb5066cf34b71dcaecf423a00120cf8ddc9a0702030bc81b1d7a8e04d0",
       "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
-      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
+      "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
       "sha256": "c898df21988301f7def1251708104140d558fb29c0ac67bcd62edd785a0d1c98",
       "reason": "02B-owned certified-launch custody suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
@@ -21,7 +21,7 @@
     },
     {
       "path": "tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "a96c8b3ea40beb7b4c9b904035179b3a1190103717267b3407ff77fd9ea289d6",
+      "sha256": "69bc5b935067fba465ff1d6627541ff0b7b007c35400c1a86d0dd4df957eda73",
       "reason": "02B-owned production vertical runner after canonical governance and documentation consumer relocation; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     }
   ]

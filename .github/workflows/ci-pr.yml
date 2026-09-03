@@ -233,14 +233,14 @@ jobs:
           python -c "import tokenizers, torch; assert torch.__version__ == '2.10.0+cpu'; assert tokenizers.__version__ == '0.22.2'"
       - name: Run canary contract and CI-binding tests
         run: |
-          python -B tests/ember_restart_model/domain-governance/test_eval_canary_image.py -v
+          python -B tests/ember_restart_model/test_eval_canary_image.py -v
           python -B tests/domain-governance/test_eval_canary_ci_job.py -v
       - name: Measure exact positive plus full negative matrix and print terminal receipt
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
-          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py \
-            --fixture-root tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1 \
+          GITHUB_SHA="$(git rev-parse HEAD)" timeout 12s python -B tools/ember-restart-3b/eval_canary_image.py \
+            --fixture-root tests/ember_restart_model/fixtures/eval-canary-image-v1 \
             --run-suite \
             --torch-wheel-filename "${TORCH_WHEEL_FILENAME}" \
             --torch-wheel-sha256 "${TORCH_WHEEL_SHA256}" \
@@ -262,7 +262,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install "tokenizers==0.22.2"
       - name: Replay checked-in production rung from canonical owned sources
-        run: python -B src/ember/infrastructure/tools/ember-restart-3b/production_rung.py --repo-root .
+        run: python -B tools/ember-restart-3b/production_rung.py --repo-root .
   cli:
     runs-on: windows-latest
     timeout-minutes: 25

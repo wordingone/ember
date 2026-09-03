@@ -13,50 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py
-import importlib.util as _ember_465614ebb0a85785_importlib
-import sys as _ember_465614ebb0a85785_sys
-from pathlib import Path as _ember_465614ebb0a85785_Path
-_ember_465614ebb0a85785_path = _ember_465614ebb0a85785_Path(__file__).resolve().parents[2].joinpath('src', 'ember', 'infrastructure', 'tools', 'ember-restart-3b', 'domain_manifest.py')
-if not _ember_465614ebb0a85785_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
-_ember_465614ebb0a85785_aliases = ('_ember_issue2015_465614ebb0a85785', 'domain_manifest', 'tools.ember-restart-3b.domain_manifest')
-_ember_465614ebb0a85785_existing = []
-for _ember_465614ebb0a85785_alias in _ember_465614ebb0a85785_aliases:
-    _ember_465614ebb0a85785_candidate = _ember_465614ebb0a85785_sys.modules.get(_ember_465614ebb0a85785_alias)
-    if _ember_465614ebb0a85785_candidate is not None and all(_ember_465614ebb0a85785_candidate is not item for item in _ember_465614ebb0a85785_existing):
-        _ember_465614ebb0a85785_existing.append(_ember_465614ebb0a85785_candidate)
-if len(_ember_465614ebb0a85785_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
-if _ember_465614ebb0a85785_existing:
-    _ember_465614ebb0a85785_module = _ember_465614ebb0a85785_existing[0]
-    _ember_465614ebb0a85785_observed = getattr(_ember_465614ebb0a85785_module, '__file__', None)
-    if _ember_465614ebb0a85785_observed is None or _ember_465614ebb0a85785_Path(_ember_465614ebb0a85785_observed).resolve() != _ember_465614ebb0a85785_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
-else:
-    _ember_465614ebb0a85785_spec = _ember_465614ebb0a85785_importlib.spec_from_file_location('_ember_issue2015_465614ebb0a85785', _ember_465614ebb0a85785_path)
-    if _ember_465614ebb0a85785_spec is None or _ember_465614ebb0a85785_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
-    _ember_465614ebb0a85785_module = _ember_465614ebb0a85785_importlib.module_from_spec(_ember_465614ebb0a85785_spec)
-    for _ember_465614ebb0a85785_alias in _ember_465614ebb0a85785_aliases:
-        _ember_465614ebb0a85785_prior = _ember_465614ebb0a85785_sys.modules.get(_ember_465614ebb0a85785_alias)
-        if _ember_465614ebb0a85785_prior is not None and _ember_465614ebb0a85785_prior is not _ember_465614ebb0a85785_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
-        _ember_465614ebb0a85785_sys.modules[_ember_465614ebb0a85785_alias] = _ember_465614ebb0a85785_module
-    try:
-        _ember_465614ebb0a85785_spec.loader.exec_module(_ember_465614ebb0a85785_module)
-    except BaseException:
-        for _ember_465614ebb0a85785_alias in _ember_465614ebb0a85785_aliases:
-            if _ember_465614ebb0a85785_sys.modules.get(_ember_465614ebb0a85785_alias) is _ember_465614ebb0a85785_module:
-                _ember_465614ebb0a85785_sys.modules.pop(_ember_465614ebb0a85785_alias, None)
-        raise
-for _ember_465614ebb0a85785_alias in _ember_465614ebb0a85785_aliases:
-    _ember_465614ebb0a85785_prior = _ember_465614ebb0a85785_sys.modules.get(_ember_465614ebb0a85785_alias)
-    if _ember_465614ebb0a85785_prior is not None and _ember_465614ebb0a85785_prior is not _ember_465614ebb0a85785_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py')
-    _ember_465614ebb0a85785_sys.modules[_ember_465614ebb0a85785_alias] = _ember_465614ebb0a85785_module
-load_bulk_domain_connector_receipt = getattr(_ember_465614ebb0a85785_module, 'load_bulk_domain_connector_receipt')
-# issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/domain_manifest.py
+from domain_manifest import load_bulk_domain_connector_receipt
 from input_identity import (
     resolve_catalog_evaluation_dataset,
     resolve_catalog_training_datasets,

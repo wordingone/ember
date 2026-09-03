@@ -47,7 +47,7 @@ jobs:
         run: |
           status=0
           python -B -m pytest -q scripts/tests || status=1
-          python -B -m pytest -q tests --ignore=tests/ember_restart_model/domain-governance/test_checkpoint_artifacts.py || status=1
+          python -B -m pytest -q tests --ignore=tests/ember_restart_model/test_checkpoint_artifacts.py || status=1
           exit "${status}"
       - name: Explain scheduled boundary
         if: always()

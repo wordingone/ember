@@ -8,7 +8,7 @@ These pin the refusal-without-token / pass-with-token contract every
 inventoried Ember entry point relies on. Most cases here mock the
 named-pipe RPC boundary (`_call_consume_rpc`) rather than driving a live
 `ember-lab serve` daemon -- exactly the boundary the pre-existing
-`tests/ember_restart_model/domain-governance/test_certified_train_launch.py::DispatchAuthorityTests`
+`tests/ember_restart_model/test_certified_train_launch.py::DispatchAuthorityTests`
 suite mocks for the same reason (a real dispatch daemon is not resident
 during unit tests). Everything on this side of that boundary --
 environment validation, canonical binary/source resolution, and daemon

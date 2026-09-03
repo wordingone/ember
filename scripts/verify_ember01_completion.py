@@ -697,7 +697,7 @@ def census_snapshot_binding(
 
     These live INSIDE the leg evidence on purpose: the completion receipt's
     top-level key set is validated with exact set equality by
-    src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py, so a new top-level field
+    tools/ember-restart-3b/certified_train_launch.py, so a new top-level field
     would make every certificate minted afterwards unlaunchable.
     """
     pinned = payload.get("public_master_sha") if isinstance(payload, dict) else None

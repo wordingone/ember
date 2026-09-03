@@ -25,10 +25,10 @@
 ### Task 1: Shared pre-update gradient norm and telemetry
 
 **Files:**
-- Modify: `src/ember/infrastructure/tools/ember-restart-3b/a1_optimizer.py`
+- Modify: `tools/ember-restart-3b/a1_optimizer.py`
 - Modify: `tools/ember-restart-3b/a1_execution.py`
-- Modify: `tests/ember_restart_model/domain-governance/test_a1_fused_backward.py`
-- Modify: `tests/ember_restart_model/domain-governance/test_a1_execution_e8_telemetry.py`
+- Modify: `tests/ember_restart_model/test_a1_fused_backward.py`
+- Modify: `tests/ember_restart_model/test_a1_execution_e8_telemetry.py`
 
 **Interfaces:**
 - Produces: `FullGradientNormAccumulator.accumulate(gradient: torch.Tensor) -> None`
@@ -42,7 +42,7 @@ Add tests with hand-derived gradients `[3, 4]` and `[12]` expecting `13.0`, a 1-
 
 - [ ] **Step 2: Verify RED**
 
-Run: `python -B -m pytest tests/ember_restart_model/domain-governance/test_a1_fused_backward.py -q`
+Run: `python -B -m pytest tests/ember_restart_model/test_a1_fused_backward.py -q`
 
 Expected: FAIL because `FullGradientNormAccumulator` and `finish_gradient_norm` do not exist.
 
@@ -104,8 +104,8 @@ Expected: PASS with no diff in `src/ember/governance/scripts/r1_e8_validator.py`
 ### Task 3: No-overwrite parity producer
 
 **Files:**
-- Create: `src/ember/infrastructure/tools/ember-restart-3b/a1_e8_parity.py`
-- Create: `tests/ember_restart_model/domain-governance/test_a1_e8_parity.py`
+- Create: `tools/ember-restart-3b/a1_e8_parity.py`
+- Create: `tests/ember_restart_model/test_a1_e8_parity.py`
 
 **Interfaces:**
 - Produces: `derive_parity_series(telemetry_path: Path, *, run_id: str, run_receipt_sha256: str, steps: int) -> dict[str, Any]`

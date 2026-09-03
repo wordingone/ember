@@ -29,10 +29,10 @@ describe("owned seat loader", () => {
       "scripts/ember_restart_eval_checkpoint_consumer.py",
       "scripts/ember_restart_eval_raw_forward.py",
       "domains/model/tokenizer/tokenizer.json",
-      "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
-      "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+      "tools/ember-restart-3b/batch.py",
+      "tools/ember-restart-3b/checkpoint_artifacts.py",
       "tools/ember-restart-3b/infer.py",
-      "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+      "tools/ember-restart-3b/model.py",
       "tools/ember-restart-3b/parameter_counter.py",
       "tools/ember-restart-3b/serve_owned_openai.py",
     ];
@@ -93,7 +93,7 @@ describe("owned seat loader", () => {
         root,
         sourceCommit,
         (_repoRoot, _commit, relativePath) =>
-          relativePath === "src/ember/infrastructure/tools/ember-restart-3b/model.py"
+          relativePath === "tools/ember-restart-3b/model.py"
             ? new TextEncoder().encode("forged\n")
             : readFileSync(join(root, relativePath)),
       )).toThrow("embedded Git commit");
@@ -118,10 +118,10 @@ describe("owned seat loader", () => {
         "scripts/ember_restart_eval_checkpoint_consumer.py",
         "scripts/ember_restart_eval_raw_forward.py",
         "domains/model/tokenizer/tokenizer.json",
-        "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+        "tools/ember-restart-3b/batch.py",
+        "tools/ember-restart-3b/checkpoint_artifacts.py",
         "tools/ember-restart-3b/infer.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+        "tools/ember-restart-3b/model.py",
         "tools/ember-restart-3b/parameter_counter.py",
         "tools/ember-restart-3b/serve_owned_openai.py",
       ];
@@ -213,7 +213,7 @@ describe("owned seat loader", () => {
           ...index,
           files: {
             ...index.files,
-            "src/ember/infrastructure/tools/ember-restart-3b/model.py": { bytes: -1, sha256: "not-a-hash" },
+            "tools/ember-restart-3b/model.py": { bytes: -1, sha256: "not-a-hash" },
           },
         };
         const corruptIndexBytes = new TextEncoder().encode(JSON.stringify(corruptIndex));
@@ -234,7 +234,7 @@ describe("owned seat loader", () => {
         }
         expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
         expect((caught as Error).message).toBe(
-          "trusted runtime source binding is invalid: src/ember/infrastructure/tools/ember-restart-3b/model.py",
+          "trusted runtime source binding is invalid: tools/ember-restart-3b/model.py",
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -246,7 +246,7 @@ describe("owned seat loader", () => {
       try {
         const { sourceCommit, manifestPath } = buildFixture(root);
         const forgingReadGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
-          relativePath === "src/ember/infrastructure/tools/ember-restart-3b/model.py"
+          relativePath === "tools/ember-restart-3b/model.py"
             ? new TextEncoder().encode("forged\n")
             : readFileSync(join(root, relativePath));
         let caught: unknown;
@@ -257,7 +257,7 @@ describe("owned seat loader", () => {
         }
         expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
         expect((caught as Error).message).toBe(
-          "runtime source does not match the embedded Git commit: src/ember/infrastructure/tools/ember-restart-3b/model.py",
+          "runtime source does not match the embedded Git commit: tools/ember-restart-3b/model.py",
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -410,10 +410,10 @@ describe("owned seat loader", () => {
       "scripts/ember_restart_eval_checkpoint_consumer.py",
       "scripts/ember_restart_eval_raw_forward.py",
       "domains/model/tokenizer/tokenizer.json",
-      "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
-      "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+      "tools/ember-restart-3b/batch.py",
+      "tools/ember-restart-3b/checkpoint_artifacts.py",
       "tools/ember-restart-3b/infer.py",
-      "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+      "tools/ember-restart-3b/model.py",
       "tools/ember-restart-3b/parameter_counter.py",
       "tools/ember-restart-3b/serve_owned_openai.py",
     ];

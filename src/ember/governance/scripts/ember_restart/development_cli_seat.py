@@ -55,10 +55,10 @@ RUNTIME_FILES = {
     "scripts/ember_restart_eval_checkpoint_consumer.py",
     "scripts/ember_restart_eval_raw_forward.py",
     "domains/model/tokenizer/tokenizer.json",
-    "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
-    "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+    "tools/ember-restart-3b/batch.py",
+    "tools/ember-restart-3b/checkpoint_artifacts.py",
     "tools/ember-restart-3b/infer.py",
-    "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+    "tools/ember-restart-3b/model.py",
     "tools/ember-restart-3b/parameter_counter.py",
     "tools/ember-restart-3b/serve_owned_openai.py",
 }

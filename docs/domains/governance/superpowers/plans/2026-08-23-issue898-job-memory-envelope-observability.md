@@ -93,7 +93,7 @@ Run the Python token tests and the relevant Rust dispatch-manifest tests.
 **Files:**
 
 - Modify: `tests/ember_restart_model/test_a1_certified_launch.py`
-- Modify: `src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py`
+- Modify: `tools/ember-restart-3b/certified_train_launch.py`
 
 ### Step 1: Write failing launch-boundary tests
 

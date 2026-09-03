@@ -23,7 +23,7 @@ class EvalCanaryCiJobTests(unittest.TestCase):
             "tokenizers==0.22.2",
             "TORCH_WHEEL_FILENAME",
             "TORCH_WHEEL_SHA256",
-            "python -B tests/ember_restart_model/domain-governance/test_eval_canary_image.py -v",
+            "python -B tests/ember_restart_model/test_eval_canary_image.py -v",
             "python -B tests/domain-governance/test_eval_canary_ci_job.py -v",
             "--run-suite",
             "issue1948-eval-canary-terminal.json",

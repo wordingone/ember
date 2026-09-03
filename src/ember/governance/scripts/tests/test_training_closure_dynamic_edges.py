@@ -145,7 +145,7 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
     def test_specialist_stream_declares_hash_bound_exec(self) -> None:
         closure = load_closure()
         note = closure.load_manifest(ROOT)["dynamic_call_site_notes"][
-            "src/ember/infrastructure/tools/ember-restart-3b/specialist_stream.py"
+            "tools/ember-restart-3b/specialist_stream.py"
         ]
         self.assertIn("exec", note.lower())
         self.assertIn("sha256", note.lower())

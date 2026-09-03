@@ -95,12 +95,12 @@ def test_closed_pair_refuses_bytes_outside_selected_pin(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "relative",
     [
-        "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py",
+        "tools/ember-restart-3b/certified_train_launch.py",
+        "tools/ember-restart-3b/eval_canary_image.py",
         "tools/ember-restart-3b/launch_packet.py",
         "tools/ember-restart-3b/parameter_counter.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/production_rung.py",
-        "src/ember/infrastructure/tools/ember-restart-3b/remint_specialist_stream.py",
+        "tools/ember-restart-3b/production_rung.py",
+        "tools/ember-restart-3b/remint_specialist_stream.py",
         "tools/ember-restart-3b/serve_owned_openai.py",
     ],
 )
@@ -169,17 +169,17 @@ def test_specialist_authorities_declare_canonical_preference(name: str) -> None:
 @pytest.mark.parametrize(
     "relative",
     [
-        "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/build_fixture.py",
+        "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
         "tests/ember_restart_model/test_a1_certified_launch.py",
-        "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
-        "tests/ember_restart_model/domain-governance/test_checkpoint_artifacts.py",
-        "tests/ember_restart_model/domain-governance/test_counter_cli.py",
-        "tests/ember_restart_model/domain-governance/test_frozen_tokenizer_decoder.py",
-        "tests/ember_restart_model/domain-governance/test_infer.py",
-        "tests/ember_restart_model/domain-governance/test_issue1508_attempt_retention_layout.py",
+        "tests/ember_restart_model/test_certified_train_launch.py",
+        "tests/ember_restart_model/test_checkpoint_artifacts.py",
+        "tests/ember_restart_model/test_counter_cli.py",
+        "tests/ember_restart_model/test_frozen_tokenizer_decoder.py",
+        "tests/ember_restart_model/test_infer.py",
+        "tests/ember_restart_model/test_issue1508_attempt_retention_layout.py",
         "tests/ember_restart_model/test_launch_packet.py",
-        "tests/ember_restart_model/domain-governance/test_specialist_stream.py",
-        "tests/ember_restart_model/domain-governance/test_tokenizer_reconstruction.py",
+        "tests/ember_restart_model/test_specialist_stream.py",
+        "tests/ember_restart_model/test_tokenizer_reconstruction.py",
     ],
 )
 def test_transition_sensitive_test_consumers_use_repository_layout(

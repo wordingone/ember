@@ -7,7 +7,7 @@ built out further. Nothing in this document is wired into any code path.
 
 ## Problem restated
 
-`FullStateAdamWCPUOffload` (`src/ember/infrastructure/tools/ember-restart-3b/a1_optimizer.py`)
+`FullStateAdamWCPUOffload` (`tools/ember-restart-3b/a1_optimizer.py`)
 allocates three fp32 CPU tensors per parameter — `master_copy`, `exp_avg`,
 `exp_avg_sq` — as ordinary anonymous host memory (`torch.zeros_like(...,
 device="cpu")` / `.clone()`). At 3.84B active parameters that is
