@@ -17,9 +17,9 @@ def _roots(parent: Path) -> tuple[Path, Path]:
     base = parent / "base"
     subject = parent / "subject"
     for root in (base, subject):
-        (root / "tools" / "ember-cli" / "specs").mkdir(parents=True)
-        (root / "tools" / "ember-cli" / "src" / "services").mkdir(parents=True)
-        (root / "tools" / "ember-cli" / "specs" / "open.md").write_text(
+        (root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "specs").mkdir(parents=True)
+        (root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "src" / "services").mkdir(parents=True)
+        (root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "specs" / "open.md").write_text(
             "# Open spec\n\nStatus: OPEN\n",
             encoding="utf-8",
         )
@@ -48,7 +48,7 @@ class LivePullRequestSpecFloorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base, subject = _roots(Path(tmp))
             component = "src/ember/infrastructure/tools/ember-cli/src/services/new-service.ts"
-            spec = "tools/ember-cli/specs/new-service.md"
+            spec = "src/ember/infrastructure/tools/ember-cli/specs/new-service.md"
             (subject / component).write_text("export {};\n", encoding="utf-8")
             (subject / spec).write_text(
                 "# New service\n\n"
