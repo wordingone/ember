@@ -14,7 +14,7 @@ reconstruction of it (this category's requirement, per the census: "validate ful
 before save, load, conversion, recovery, or merge"):
 
 - The real runtime checkpoint save/load consumer is
-  ``tools/ember-restart-3b/checkpoint_artifacts.load_checkpoint_artifacts``. It calls
+  ``src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.load_checkpoint_artifacts``. It calls
   ``torch.load`` on each shard, then ``model.load_state_dict`` / ``optimizer.load_state_dict``
   (checkpoint_artifacts.py lines ~1247, ~1275-1279) -- and it ALREADY fails closed BEFORE any
   of that mutation with ``CheckpointIdentityMismatch`` unless the checkpoint's own
@@ -35,7 +35,7 @@ before save, load, conversion, recovery, or merge"):
 
 So the runtime object this category must bind is the real per-tensor storage bytes physically
 present in an actual saved checkpoint shard -- read the same way the trusted, isolated counter
-(``tools/ember-restart-3b/parameter_counter``) independently inspects checkpoints: via its own
+(``src/ember/infrastructure/tools/ember-restart-3b/parameter_counter``) independently inspects checkpoints: via its own
 metadata-only unpickler (``_load_checkpoint_metadata``) and raw-storage reader
 (``_tensor_raw_bytes``), imported here, never reimplemented, and NEVER via ``torch.load``
 itself (which executes the checkpoint's pickle opcodes -- the trusted counter's whole point is
@@ -67,9 +67,10 @@ import zipfile
 from pathlib import Path
 from typing import Any, Mapping
 
-_COUNTER_MODULE_DIR = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b"
-if str(_COUNTER_MODULE_DIR) not in sys.path:
-    sys.path.insert(0, str(_COUNTER_MODULE_DIR))
+_RESTART_TOOLS = next(candidate for candidate in (Path(__file__).resolve().parents[2] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b", Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b") if (candidate / "parameter_counter.py").is_file())
+_COUNTER_MODULE_PATH = _RESTART_TOOLS
+if str(_COUNTER_MODULE_PATH) not in sys.path:
+    sys.path.insert(0, str(_COUNTER_MODULE_PATH))
 
 # The REAL runtime checkpoint inspection primitives. We import the trusted, isolated
 # counter's own metadata-only unpickler and raw-storage reader directly so the binding is

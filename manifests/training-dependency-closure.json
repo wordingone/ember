@@ -19,6 +19,7 @@
   "code": [
     "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py",
     "src/ember/infrastructure/tools/corpus_connectors/receipt.py",
+    "tools/corpus_connectors/receipt.py",
     "tools/ember-restart-3b/a1_checkpoint.py",
     "tools/ember-restart-3b/a1_dense.py",
     "tools/ember-restart-3b/a1_energy_apportionment.py",
@@ -77,6 +78,9 @@
   ],
   "data_declaration_note": "Data dependencies are declared rather than walked: a static walker cannot honestly prove which JSON a program reads, and a fabricated 'machine-detected' data edge would be worse than an explicit declaration. Every entry is a runtime input of the training chain -- the repo-relative constants in closure members (production_rung.SHARD_RELATIVE/RECEIPT_RELATIVE/TOKENIZER_RELATIVE/CONFIG_RELATIVE, text_lab_corpus._AUTHORITY_INDEX, run_vertical_slice's deferral policy and model config), the launch surface the certificate already binds by bytes (tools/launchers/Ember.cmd as cli_binary_sha256, plus the launcher it invokes), and manifests/python-environment-v1.json, which pins the third-party imports (tokenizers, torch) that live outside the repo and therefore outside any path hash. All are inside the closure hash, so changing one demands re-verification.",
   "dynamic_call_sites": {
+    "tools/corpus_connectors/receipt.py": [
+      "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
+    ],
     "tools/ember-restart-3b/certified_train_launch.py": [
       "src/ember/governance/scripts/artifact_custody_gate.py",
       "src/ember/governance/scripts/git_env_hardening.py",
@@ -94,7 +98,8 @@
     "src/ember/governance/scripts/energy_proxy_logger.py": [],
     "tools/ember-restart-3b/launch_packet.py": [],
     "tools/ember-restart-3b/mint_github_license_partition.py": [
-      "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
+      "src/ember/infrastructure/tools/corpus_connectors/receipt.py",
+      "tools/corpus_connectors/receipt.py"
     ],
     "tools/ember-restart-3b/pretrain.py": [
       "tools/ember-restart-3b/verify_capability_record.py"
@@ -109,6 +114,7 @@
     "tools/ember-restart-3b/text_lab_corpus.py": [
       "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py",
       "src/ember/infrastructure/tools/corpus_connectors/receipt.py",
+      "tools/corpus_connectors/receipt.py",
       "tools/ember-restart-3b/mint_github_license_partition.py"
     ],
     "tools/ember-restart-3b/train.py": [],

@@ -200,7 +200,14 @@ def test_execution_authority_binds_exact_checkpoint_and_parameter_receipt(tmp_pa
 
 def test_exact_model_source_and_config_construct_the_declared_production_shape_from_captured_bytes():
     module = _load_module()
-    source_path = ROOT / "tools" / "ember-restart-3b" / "model.py"
+    source_path = next(
+        candidate
+        for candidate in (
+            ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "model.py",
+            ROOT / "tools" / "ember-restart-3b" / "model.py",
+        )
+        if candidate.is_file()
+    )
     config_path = ROOT / "configs" / "ember-restart-3b.json"
     loaded = module._load_model_module(source_path.read_bytes(), source_path)
     contract = json.loads(config_path.read_bytes())

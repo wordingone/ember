@@ -90,7 +90,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
-_MODEL_PKG = os.path.join(REPO_ROOT, "tools", "ember-restart-3b")
+_MODEL_PKG = next(
+    candidate
+    for candidate in (
+        os.path.join(REPO_ROOT, "src", "ember", "infrastructure", "tools", "ember-restart-3b"),
+        os.path.join(REPO_ROOT, "tools", "ember-restart-3b"),
+    )
+    if os.path.isfile(os.path.join(candidate, "model.py"))
+)
 if _MODEL_PKG not in sys.path:
     sys.path.insert(0, _MODEL_PKG)
 

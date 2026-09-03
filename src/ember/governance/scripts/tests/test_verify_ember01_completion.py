@@ -182,7 +182,15 @@ def test_receipt_top_level_keys_match_the_launch_consumer_exactly(
     """The launch validator compares the receipt's top-level key set with set
     equality, so a new top-level field makes every certificate minted afterwards
     unlaunchable. New evidence belongs inside an existing object instead."""
-    sys.path.insert(0, str(REPO_ROOT / "tools" / "ember-restart-3b"))
+    restart_tools = next(
+        candidate
+        for candidate in (
+            REPO_ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b",
+            REPO_ROOT / "tools" / "ember-restart-3b",
+        )
+        if (candidate / "parameter_counter.py").is_file()
+    )
+    sys.path.insert(0, str(restart_tools))
     import certified_train_launch  # noqa: PLC0415
 
     selection = tmp_path / "selection.md"

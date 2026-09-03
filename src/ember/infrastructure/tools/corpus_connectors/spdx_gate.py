@@ -14,7 +14,7 @@ as one unknown identifier.
 Two design rules follow from that history:
 
 1. **Bind, never copy.** The admission allow-list lives in
-   ``tools/ember-restart-3b/text_lab_corpus.py`` and is read here at call time.
+   ``src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py`` and is read here at call time.
    This module holds no licence identifiers of its own. A fourth disagreeing
    copy of the allow-list is the bug this gate exists to prevent.
 2. **Separate syntax from policy.** A malformed expression is a defect and
@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 _ROOT = Path(__file__).resolve().parents[5]
-_ADMISSION_DIR = _ROOT / "tools" / "ember-restart-3b"
+_ADMISSION_DIR = _ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
 
 OPERATORS = ("OR", "AND", "WITH")
 

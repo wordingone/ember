@@ -17,7 +17,14 @@ import pytest
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCORER = ROOT / "scripts" / "legb_live_candidate_v5_scorer.py"
+SCORER = next(
+    candidate
+    for candidate in (
+        ROOT / "src" / "ember" / "governance" / "scripts" / "legb_live_candidate_v5_scorer.py",
+        ROOT / "scripts" / "legb_live_candidate_v5_scorer.py",
+    )
+    if candidate.is_file()
+)
 
 
 def _load():

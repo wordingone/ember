@@ -187,7 +187,7 @@ def _historical_hashes(repo: Path) -> dict[str, str]:
 
 
 def _canonical_validator(repo: Path) -> Callable[[Path, Path, Path, str, Path], Any]:
-    module_path = repo / "tools" / "ember-restart-3b" / "certified_train_launch.py"
+    module_path = repo / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "certified_train_launch.py"
     spec = importlib.util.spec_from_file_location("ember_certified_train_launch", module_path)
     if spec is None or spec.loader is None:
         raise PublicationRefusal("CERTIFIED_CONSUMER_IMPORT_FAILED")

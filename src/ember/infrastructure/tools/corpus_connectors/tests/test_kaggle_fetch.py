@@ -16,7 +16,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import kaggle_fetch
-from tools.corpus_connectors import receipt as rcpt
+from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt
 
 
 def _arg_after(cmd, flag):

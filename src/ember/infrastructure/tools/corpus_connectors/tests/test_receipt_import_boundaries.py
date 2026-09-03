@@ -25,11 +25,14 @@ import pytest
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-ADMISSION = ROOT / "scripts" / "ember_admission"
-CONNECTORS = ROOT / "tools" / "corpus_connectors"
+ADMISSION = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission"
+CONNECTORS = ROOT / "src" / "ember" / "infrastructure" / "tools" / "corpus_connectors"
 FAMILY_ROOTS = (ADMISSION, CONNECTORS)
 PREAMBLE_APPEND = "sys.path.append(str(_REPO_ROOT))"
-PACKAGE_IMPORT_PREFIXES = ("scripts.ember_admission", "tools.corpus_connectors")
+PACKAGE_IMPORT_PREFIXES = (
+    "src.ember.governance.scripts.ember_admission",
+    "src.ember.infrastructure.tools.corpus_connectors",
+)
 
 
 def _load_as_top_level_receipt(path: Path) -> object:
@@ -52,7 +55,7 @@ def _clear_modules(*prefixes: str) -> None:
 def test_connector_consumer_ignores_preloaded_admission_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _clear_modules("scripts.ember_admission", "tools.corpus_connectors")
+    _clear_modules(*PACKAGE_IMPORT_PREFIXES)
     monkeypatch.syspath_prepend(str(ADMISSION))
     admission_receipt = _load_as_top_level_receipt(ADMISSION / "receipt.py")
 
@@ -66,7 +69,7 @@ def test_connector_consumer_ignores_preloaded_admission_receipt(
 def test_admission_consumer_ignores_preloaded_connector_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _clear_modules("scripts.ember_admission", "tools.corpus_connectors")
+    _clear_modules(*PACKAGE_IMPORT_PREFIXES)
     monkeypatch.syspath_prepend(str(ADMISSION))
     connector_receipt = _load_as_top_level_receipt(CONNECTORS / "receipt.py")
 

@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import regen_bloated_manifest as regen  # noqa: E402
-from tools.corpus_connectors import receipt as rcpt  # noqa: E402
+from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt  # noqa: E402
 
 REPO_ID = "example-org/example-repo"
 SHA = "cafef00d" * 5  # 40 hex chars, fake but sha-shaped

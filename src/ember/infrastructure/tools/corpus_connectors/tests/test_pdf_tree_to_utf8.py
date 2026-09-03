@@ -123,7 +123,7 @@ def _rewrite_census_extractor(
 
 class PdfTreeToUtf8Tests(unittest.TestCase):
     def test_composite_authority_reopens_exact_disjoint_union_and_refuses_overlap(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -195,7 +195,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 module.build_composite_connector_authority(spec_raw=_canonical(overlapping))
 
     def test_one_pass_parallel_transform_extracts_each_pdf_once_and_orders_receipts(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -231,7 +231,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertTrue((output / "documents/beta/document.pdf.txt").is_file())
 
     def test_one_pass_refusal_publishes_complete_census_but_no_transform(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -252,7 +252,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_cli_exposes_bounded_one_pass_workers(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -274,7 +274,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(json.loads(stdout.getvalue())["result"], "VERIFIED")
 
     def test_exact_cc0_license_identity_transforms_and_normalizes(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -300,7 +300,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(derived["license"], "CC0-1.0")
 
     def test_unlisted_license_identity_refuses_without_residue(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -325,7 +325,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(list(root.glob(".output.staging-*")), [])
 
     def test_census_excludes_top_level_operational_logs(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -343,7 +343,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual([row["path"] for row in files], ["alpha/document.pdf", "beta/document.pdf"])
 
     def test_census_still_refuses_arbitrary_unreceipted_data(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -361,7 +361,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_produces_collision_free_closed_tree_and_reextracts_every_pdf(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -399,7 +399,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             )
 
     def test_refuses_one_empty_pdf_without_publishing_partial_custody(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -423,7 +423,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(list(root.glob(".output.staging-*")), [])
 
     def test_exact_census_refusal_partition_transforms_only_pass_rows(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -475,7 +475,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             )
 
     def test_predecessor_census_requires_explicit_producer_hash(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -497,7 +497,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_predecessor_census_accepts_only_exact_explicit_producer_hash(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -530,7 +530,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             )
 
     def test_predecessor_census_refuses_wrong_or_noncanonical_explicit_hash(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -558,7 +558,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                         )
 
     def test_predecessor_census_override_does_not_allow_other_extractor_drift(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -582,7 +582,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_cli_forwards_explicit_predecessor_census_producer_hash(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -620,7 +620,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             )
 
     def test_exclusion_set_must_equal_exact_census_refusal_set(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -656,7 +656,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                     exclusion.unlink()
 
     def test_census_records_every_refusal_without_writing_transform_custody(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -683,7 +683,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual({path.name for path in root.iterdir()}, {"source", "connector-receipt.json", "refusal-census.json"})
 
     def test_census_seals_valid_and_unwrapped_malformed_pdf_rows(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -712,7 +712,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(json.loads(report_path.read_bytes()), report)
 
     def test_census_does_not_convert_memory_exhaustion_into_a_file_refusal(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -728,7 +728,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertFalse(report_path.exists())
 
     def test_produce_structurally_requires_a_census(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -741,7 +741,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_produce_refuses_a_census_for_another_connector_receipt(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -763,7 +763,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_produce_refuses_a_bound_census_relocated_inside_source_custody(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -783,7 +783,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_cli_exposes_census_without_requiring_an_output_directory(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -802,7 +802,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(json.loads(report_path.read_bytes())["result"], "PASS")
 
     def test_verify_refuses_a_reordered_file_map_even_when_self_hash_is_reminted(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -832,7 +832,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_verify_refuses_an_open_extractor_shape_before_using_its_bounds(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -862,8 +862,8 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_derived_tree_composes_with_license_sidecar_and_real_adapter(self) -> None:
-        from tools.corpus_connectors import mint_connector_license_sidecar as license_sidecar
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import mint_connector_license_sidecar as license_sidecar
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -915,7 +915,19 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 expected_spdx="CC-BY-4.0",
                 output=root / "licensed",
             )
-            adapter_path = Path(__file__).resolve().parents[3] / "tools/ember-restart-3b/text_lab_corpus.py"
+            repo_root = next(
+                parent
+                for parent in Path(__file__).resolve().parents
+                if (parent / "pyproject.toml").is_file()
+            )
+            adapter_path = next(
+                candidate
+                for candidate in (
+                    repo_root / "src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py",
+                    repo_root / "tools/ember-restart-3b/text_lab_corpus.py",
+                )
+                if candidate.is_file()
+            )
             spec = importlib.util.spec_from_file_location("pdf_tree_text_lab_adapter", adapter_path)
             assert spec and spec.loader
             adapter = importlib.util.module_from_spec(spec)
@@ -932,7 +944,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertEqual(adapted["l4_receipt"]["result"], "VERIFIED")
 
     def test_verify_refuses_an_extra_manifest_sidecar(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -956,7 +968,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_verify_refuses_an_extra_empty_directory(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -980,7 +992,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
                 )
 
     def test_produce_rolls_back_an_extra_manifest_added_at_publish_boundary(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -1008,7 +1020,7 @@ class PdfTreeToUtf8Tests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_census_refuses_to_write_inside_source_custody(self) -> None:
-        from tools.corpus_connectors import pdf_tree_to_utf8 as module
+        from src.ember.infrastructure.tools.corpus_connectors import pdf_tree_to_utf8 as module
 
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

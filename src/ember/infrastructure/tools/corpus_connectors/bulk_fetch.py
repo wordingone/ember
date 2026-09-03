@@ -57,7 +57,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
 import chunked_download as bulk  # noqa: E402
-from tools.corpus_connectors import receipt as rcpt  # noqa: E402
+from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt  # noqa: E402
 
 CONNECTOR_NAME = "bulk_fetch"
 
