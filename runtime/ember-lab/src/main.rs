@@ -959,7 +959,7 @@ fn parse_resource_projection(
         ))
         || value.get("authority")
             != Some(&Value::String(
-                "tools/ember-restart-3b/launch_packet.py::preflight_resource".into(),
+                "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py::preflight_resource".into(),
             ))
     {
         return Err(std::io::Error::new(
@@ -1263,7 +1263,8 @@ where
         )
         .into());
     }
-    let validator = root.join("tools/ember-restart-3b/certified_train_launch.py");
+    let validator =
+        root.join("src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py");
     let readme = root.join("README.md");
     let custody_receipt = certificate_path
         .parent()
@@ -1442,7 +1443,7 @@ where
                     "sha256": hash_file(&resource_projection_config)?,
                 },
                 "mechanism": "device_resident_training",
-                "mechanism_authority": "tools/ember-restart-3b/launch_packet.py::preflight_resource",
+                "mechanism_authority": "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py::preflight_resource",
                 "projection_kind": "host_commit_projection_from_device_resident_mechanism_plus_transient_checkpoint",
                 "zero_overshoot_allowance": true,
                 "total_parameters": projection.total_parameters,
@@ -3545,7 +3546,7 @@ mod tests {
 
     fn fixture_resource_projection() -> ResourceMechanismProjection {
         parse_resource_projection(
-            br#"{"schema_version":"ember-issue898-resource-projection-v1","authority":"tools/ember-restart-3b/launch_packet.py::preflight_resource","total_parameters":3839161856,"active_parameters":1725232640,"parameter_bytes_all":7678323712,"gradient_bytes_active":3450465280,"optimizer_state_bytes_active":3450465280,"activation_reserve_bytes":4294967296,"runtime_reserve_bytes":2147483648,"mechanism_peak_bytes":21021705216,"checkpoint_publication_host_commit_reserve_bytes":8589934592}"#,
+            br#"{"schema_version":"ember-issue898-resource-projection-v1","authority":"src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py::preflight_resource","total_parameters":3839161856,"active_parameters":1725232640,"parameter_bytes_all":7678323712,"gradient_bytes_active":3450465280,"optimizer_state_bytes_active":3450465280,"activation_reserve_bytes":4294967296,"runtime_reserve_bytes":2147483648,"mechanism_peak_bytes":21021705216,"checkpoint_publication_host_commit_reserve_bytes":8589934592}"#,
         )
         .unwrap()
     }
@@ -3613,12 +3614,14 @@ mod tests {
         ));
         let repo = root.join("repo");
         let packet = root.join("custody").join("run-1").join("launch-authority");
-        std::fs::create_dir_all(repo.join("tools/ember-restart-3b")).unwrap();
+        std::fs::create_dir_all(repo.join("src/ember/infrastructure/tools/ember-restart-3b"))
+            .unwrap();
         std::fs::create_dir_all(repo.join("runtime/ember-lab")).unwrap();
         std::fs::create_dir_all(repo.join("configs")).unwrap();
         std::fs::create_dir_all(&packet).unwrap();
         std::fs::write(repo.join("README.md"), b"bound root").unwrap();
-        let validator = repo.join("tools/ember-restart-3b/certified_train_launch.py");
+        let validator =
+            repo.join("src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py");
         std::fs::write(&validator, b"print('validator')\n").unwrap();
         let resource_projection_producer =
             repo.join("runtime/ember-lab/issue898_resource_projection.py");
@@ -3832,7 +3835,7 @@ mod tests {
         assert_eq!(manifest["args"][3], repo.to_string_lossy().as_ref());
         assert_eq!(
             manifest["args"][4],
-            repo.join("tools/ember-restart-3b")
+            repo.join("src/ember/infrastructure/tools/ember-restart-3b")
                 .to_string_lossy()
                 .as_ref()
         );

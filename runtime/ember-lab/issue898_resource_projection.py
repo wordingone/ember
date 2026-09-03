@@ -13,7 +13,14 @@ from typing import Any
 
 GIB = 1024**3
 _ROOT = Path(__file__).resolve().parents[2]
-_LAUNCH_PACKET = _ROOT / "tools" / "ember-restart-3b" / "launch_packet.py"
+_LAUNCH_PACKET = next(
+    candidate
+    for candidate in (
+        _ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "launch_packet.py",
+        _ROOT / "tools" / "ember-restart-3b" / "launch_packet.py",
+    )
+    if candidate.is_file()
+)
 _SPEC = importlib.util.spec_from_file_location("issue898_launch_packet_authority", _LAUNCH_PACKET)
 if _SPEC is None or _SPEC.loader is None:
     raise RuntimeError("issue898 resource projection cannot load launch_packet authority")
@@ -76,7 +83,7 @@ def exact_resource_projection(config_path: Path) -> dict[str, Any]:
 
     return {
         "schema_version": "ember-issue898-resource-projection-v1",
-        "authority": "tools/ember-restart-3b/launch_packet.py::preflight_resource",
+        "authority": "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py::preflight_resource",
         "total_parameters": total,
         "active_parameters": active,
         "parameter_bytes_all": params_b,

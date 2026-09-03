@@ -12,8 +12,13 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "docs_information_system.py"
-PYTHON_ENVIRONMENT_SCRIPT = (
-    REPO_ROOT / "tools" / "ember-restart-3b" / "python_environment.py"
+PYTHON_ENVIRONMENT_SCRIPT = next(
+    candidate
+    for candidate in (
+        REPO_ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "python_environment.py",
+        REPO_ROOT / "tools" / "ember-restart-3b" / "python_environment.py",
+    )
+    if candidate.is_file()
 )
 
 
@@ -523,7 +528,7 @@ def test_bootstrap_public_command_requires_explicit_no_overwrite_receipt() -> No
     bootstrap = next(row for row in commands["commands"] if row["id"] == "bootstrap-python")
     bootstrap["argv"] = [
         "python",
-        "tools/ember-restart-3b/python_environment.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/python_environment.py",
         "install",
     ]
     with pytest.raises(module.DocsInfoError, match="PUBLIC_COMMAND_REQUIRED_RECEIPT_MISSING"):

@@ -18,7 +18,7 @@ against a fresh ``hashlib.sha256(bytes.fromhex(artifact_bundle["artifacts"]
 consumer this binding measures its identity from is
 ``scripts/ember_restart/development_cli_seat.resolve_development_seat`` -- the trusted
 owned-seat resolver that grants an OWNED_DEVELOPMENT serving seat only after re-hashing
-``tools/ember-restart-3b/serve_owned_openai.py`` (the file that actually answers
+``src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py`` (the file that actually answers
 ``/v1/models`` and ``/v1/chat/completions``) via its own streaming ``_sha256`` and
 requiring the fresh digest match the declared runtime-bundle binding. This binding measures
 that same real, on-disk file via the resolver's own hasher -- never a hand-typed
@@ -53,8 +53,9 @@ from pathlib import Path
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
+MOVED_SCRIPT_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_identity"
 TEST_DIR = Path(__file__).parent
-for _extra in (SCRIPT_DIR, TEST_DIR):
+for _extra in (SCRIPT_DIR, MOVED_SCRIPT_PATH, TEST_DIR):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 
@@ -250,7 +251,14 @@ class ServingRuntimeIdentityRoundTrip(unittest.TestCase):
 
         # receipt.executable_sha256 diverging from a fresh re-derivation (measured against
         # a DIFFERENT real file) -> fail closed.
-        other_path = ROOT / "tools" / "ember-restart-3b" / "infer.py"
+        other_path = next(
+            candidate
+            for candidate in (
+                ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "infer.py",
+                ROOT / "tools" / "ember-restart-3b" / "infer.py",
+            )
+            if candidate.is_file()
+        )
         other_receipt = measure_server_executable_identity(other_path)
         self.assertNotEqual(
             other_receipt["executable_sha256"], receipt["executable_sha256"]
@@ -293,7 +301,7 @@ class ServingRuntimeIdentityRoundTrip(unittest.TestCase):
 
         # A missing serving executable file fails closed at measurement time.
         with self.assertRaises(ServingRuntimeIdentityMismatch):
-            measure_server_executable_identity(ROOT / "tools" / "ember-restart-3b" / "does-not-exist.py")
+            measure_server_executable_identity(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "does-not-exist.py")
 
         # artifact_bundle_entry refuses a receipt lacking the raw bytes it needs.
         with self.assertRaises(ServingRuntimeIdentityMismatch):

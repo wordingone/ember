@@ -78,6 +78,8 @@ ADDITIONAL_CLASSIFIED_DIRECT_IMPORTERS = (
     "conv_c03_full_fused_adamw.py",
     "conv_c03_muon_ns3.py",
     "conv_c03_muon_split.py",
+    "conv_c03_muon_split_bf16ns5.py",
+    "conv_c03_muon_split_fast.py",
     "ember_cbase_avir_data.py",
     "ember_cbase_avir_data_v2.py",
     "ember_cbase_avir_augment.py",
@@ -94,18 +96,26 @@ ADDITIONAL_CLASSIFIED_DIRECT_IMPORTERS = (
     "fp40_l10_optimizer_ab.py",
     "fp44_horizon_optimizer_equiv.py",
     "fp45_batched_ns5_ab.py",
+    "grow_respec_280.py",
     "heldout_v21_fcalib.py",
     "probe_524_m2_memmap_residency.py",
     "r3null_carms.py",
+    "research/exposure_ledger.py",
+    "research/test_exposure_ledger_mmap_forward.py",
+    "run_v0_segment_device_test.py",
     "legb_inprocess_scorer.py",
     "test_ember_cbase_avir_data.py",
     "test_ember_cbase_launch.py",
+    "test_ember_cbase_mixture.py",
     "test_grow_respec_280.py",
+    "test_packed_shard_loader_memmap.py",
+    "test_run_v0_segment_mmap_forward.py",
     "test_w1_live_gates.py",
     "test_w1b_fp32_check_mmap_forward.py",
     "test_w1b_continuation.py",
     "timeshare_dryrun.py",
     "trajgate_phase0_signal_gate.py",
+    "v0_r1s1_launch.py",
     "w1b_fp32_check.py",
 )
 
@@ -128,7 +138,7 @@ DIRECT_IMPORT_RE = re.compile(
     re.MULTILINE,
 )
 EXACT_LOCAL_IMPORT_RE = re.compile(
-    r"issue2015 exact-local-import:scripts/timeshare_pretrain\.py"
+    r"issue2015 exact-local-import:(?:scripts/|src/ember/governance/scripts/)timeshare_pretrain\.py"
 )
 
 
@@ -140,6 +150,7 @@ def _run(code: str) -> subprocess.CompletedProcess[str]:
             str(PATCHED_SCRIPTS),
             str(REPO_ROOT / "scripts"),
             str(REPO_ROOT / "src" / "ember" / "governance" / "scripts"),
+            str(REPO_ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"),
             str(REPO_ROOT / "tools" / "ember-restart-3b"),
         )
     )
@@ -226,7 +237,15 @@ def test_direct_timeshare_execution_remains_historical_only() -> None:
 
 def test_historical_importers_own_their_import_denial() -> None:
     for module in HISTORICAL_DIRECT_IMPORTERS:
-        source = (REPO_ROOT / "scripts" / f"{module}.py").read_text(encoding="utf-8")
+        source_path = next(
+            candidate
+            for candidate in (
+                REPO_ROOT / "src" / "ember" / "governance" / "scripts" / f"{module}.py",
+                REPO_ROOT / "scripts" / f"{module}.py",
+            )
+            if candidate.is_file()
+        )
+        source = source_path.read_text(encoding="utf-8")
         assert "# EMBER_ARTIFACT_CLASS=historical_only" in source
         result = _run(f"import {module}")
         assert result.returncode != 0

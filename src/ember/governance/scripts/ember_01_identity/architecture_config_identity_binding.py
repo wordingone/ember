@@ -14,7 +14,7 @@ reconstruction of it (the census's own stated requirement for this category: "bi
 canonical architecture bytes and reject inferred identity"):
 
 - The real runtime architecture consumer is
-  ``tools/ember-restart-3b/parameter_counter.execute_counter`` (the trusted, isolated
+  ``src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.execute_counter`` (the trusted, isolated
   sparse-checkpoint-realization counter that ``parameter_identity_binding.py`` already
   wires against for the parameter axes). At parameter_counter.py line 696 it reads the
   model config file via ``_read_json_snapshot``, which is ``_read_bytes_snapshot`` (a
@@ -63,9 +63,11 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-_COUNTER_MODULE_DIR = Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b"
-if str(_COUNTER_MODULE_DIR) not in sys.path:
-    sys.path.insert(0, str(_COUNTER_MODULE_DIR))
+_REPO = Path(__file__).resolve().parents[5]
+_RESTART_TOOLS = next(candidate for candidate in (_REPO / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b", _REPO / "tools" / "ember-restart-3b") if (candidate / "parameter_counter.py").is_file())
+_COUNTER_MODULE_PATH = _RESTART_TOOLS
+if str(_COUNTER_MODULE_PATH) not in sys.path:
+    sys.path.insert(0, str(_COUNTER_MODULE_PATH))
 
 # The REAL runtime architecture-config consumer. We import its own file-hasher, shape
 # validator, and required architecture revision directly so the binding is provably

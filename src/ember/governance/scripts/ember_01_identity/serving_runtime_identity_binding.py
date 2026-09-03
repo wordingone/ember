@@ -22,7 +22,7 @@ CRITICAL -- bind the RUNTIME object the real consumers check, not an invented pl
   manifest's own ``server.sha256`` binding (lines 260-266:
   ``if resolved[field] != resolved_runtime[relative]: raise ValueError(...)``). The exact
   file this resolver treats as "the server" is
-  ``tools/ember-restart-3b/serve_owned_openai.py`` -- the same script whose
+  ``src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py`` -- the same script whose
   ``LoadedOwnedRuntime.from_paths`` (serve_owned_openai.py) answers ``/v1/models`` and
   ``/v1/chat/completions`` and whose own ``server_source_sha256 = sha(Path(__file__))``
   (serve_owned_openai.py line 665, reusing ``infer.sha`` -- the identical streaming
@@ -50,7 +50,7 @@ own fixture (``tests/ember_01_identity/domain-governance/test_validate_identity.
 placeholder byte string. It is sound-in-shape (a real sha256 of real bytes) yet is the
 identity of nothing any client is ever served by -- ``development_cli_seat.py``'s own
 ``_require_file_hash`` (which this module's ``verify_server_identity_binding`` re-invokes)
-would reject it the instant it is checked against ``tools/ember-restart-3b/
+would reject it the instant it is checked against ``src/ember/infrastructure/tools/ember-restart-3b/
 serve_owned_openai.py``'s actual on-disk bytes, because a placeholder can never equal a
 real file's content-address except by construction.
 
@@ -70,7 +70,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 _DEV_SEAT_MODULE_DIR = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[5]
     / "src" / "ember" / "governance" / "scripts" / "ember_restart"
 )
 if str(_DEV_SEAT_MODULE_DIR) not in sys.path:
@@ -82,7 +82,17 @@ if str(_DEV_SEAT_MODULE_DIR) not in sys.path:
 from development_cli_seat import _sha256 as _consumer_sha256  # noqa: E402
 
 SERVING_RUNTIME_IDENTITY_SCHEMA = "ember-serving-runtime-identity-receipt-v1"
-SERVER_ENTRYPOINT_RELATIVE_PATH = "tools/ember-restart-3b/serve_owned_openai.py"
+_REPOSITORY_PATH = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()
+)
+SERVER_ENTRYPOINT_RELATIVE_PATH = next(
+    relative
+    for relative in (
+        "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
+        "tools/ember-restart-3b/serve_owned_openai.py",
+    )
+    if (_REPOSITORY_PATH / relative).is_file()
+)
 
 
 class ServingRuntimeIdentityMismatch(ValueError):

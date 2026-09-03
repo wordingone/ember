@@ -40,8 +40,9 @@ from unittest import mock
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
+MOVED_SCRIPT_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_identity"
 TEST_DIR = Path(__file__).parent
-for _extra in (SCRIPT_DIR, TEST_DIR):
+for _extra in (SCRIPT_DIR, MOVED_SCRIPT_PATH, TEST_DIR):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 

@@ -12,10 +12,32 @@ import pytest
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-PRODUCER = ROOT / "tools" / "corpus_connectors" / "mint_connector_license_sidecar.py"
+PRODUCER = ROOT / "src" / "ember" / "infrastructure" / "tools" / "corpus_connectors" / "mint_connector_license_sidecar.py"
 CC0_URL = "http://creativecommons.org/publicdomain/zero/1.0/"
 CC0_URL_RECEIPT_NAME = "20260818T202142Z-paper-list-paper-list.txt-939-ids.json"
 CC0_URL_RECEIPT_SHA256 = "402ebb06f9763c33ed34d8d5a3c1dae58fbeed56afb8ccea55de0f980ad45848"
+
+
+def _restart_tool_path(filename: str) -> Path:
+    return next(
+        candidate
+        for candidate in (
+            ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / filename,
+            ROOT / "tools" / "ember-restart-3b" / filename,
+        )
+        if candidate.is_file()
+    )
+
+
+def _restart_test_path(filename: str) -> Path:
+    return next(
+        candidate
+        for candidate in (
+            ROOT / "tests" / "ember_restart_model" / "domain-governance" / filename,
+            ROOT / "tests" / "ember_restart_model" / filename,
+        )
+        if candidate.is_file()
+    )
 
 
 def _sha(raw: bytes) -> str:
@@ -257,7 +279,7 @@ def test_mint_license_sidecar_refuses_payload_absent_from_multifile_receipt(tmp_
 def test_text_lab_license_authority_refuses_unreceipted_url_alias() -> None:
     authority = _load_path(
         "text_lab_corpus_unreceipted_license_alias_test",
-        ROOT / "tools" / "ember-restart-3b" / "text_lab_corpus.py",
+        _restart_tool_path("text_lab_corpus.py"),
     )
     with pytest.raises(ValueError, match="whole conjunction is not on the text-lab allow-list"):
         authority._closed_connector_license("http://creativecommons.org/licenses/by-nc/4.0/")
@@ -316,7 +338,7 @@ def test_derived_receipt_is_accepted_by_real_text_lab_adapter(tmp_path: Path) ->
     inputs = _fixture(tmp_path)
     result = _load_producer().mint_license_sidecar(**inputs)
     receipt = json.loads(Path(result["connector_receipt_path"]).read_bytes())
-    adapter_path = ROOT / "tools" / "ember-restart-3b" / "text_lab_corpus.py"
+    adapter_path = _restart_tool_path("text_lab_corpus.py")
     spec = importlib.util.spec_from_file_location("text_lab_corpus_license_sidecar_test", adapter_path)
     assert spec and spec.loader
     adapter = importlib.util.module_from_spec(spec)
@@ -342,15 +364,15 @@ def test_derived_receipt_survives_canonical_successor_mint_and_index_reopen(tmp_
 
     fixture_module = _load_path(
         "issue1719_tranche_fixture_helpers",
-        ROOT / "tests" / "ember_restart_model" / "test_mint_issue1719_tranche_admission.py",
+        _restart_test_path("test_mint_issue1719_tranche_admission.py"),
     )
     minter = _load_path(
         "issue1719_tranche_minter_license_sidecar_test",
-        ROOT / "tools" / "ember-restart-3b" / "mint_issue1719_tranche_admission.py",
+        _restart_tool_path("mint_issue1719_tranche_admission.py"),
     )
     authority = _load_path(
         "text_lab_corpus_license_sidecar_index_test",
-        ROOT / "tools" / "ember-restart-3b" / "text_lab_corpus.py",
+        _restart_tool_path("text_lab_corpus.py"),
     )
     authority_fixture = tmp_path / "authority-fixture"
     authority_fixture.mkdir()

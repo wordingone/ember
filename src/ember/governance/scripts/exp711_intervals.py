@@ -43,8 +43,37 @@ from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
+
+
+def _resolve_ember_restart_3b_root(
+    repo_root: str, marker_filename: str = "frozen_tokenizer_decoder.py"
+) -> str:
+    """Canonical-first, legacy-second resolution for the ember-restart-3b
+    tools directory (EMBER-02B #1949 relocation:
+    tools/ember-restart-3b/** -> src/ember/infrastructure/tools/ember-restart-3b/**).
+
+    Returns the canonical path when it actually holds this module's needed
+    file; otherwise the legacy path. Checked by FILE presence, never bare
+    directory presence -- the canonical directory exists pre-cutover as a
+    scaffold (README only; see its own EMBER-02B header) while the carrier
+    that migrates the executable tools has not landed yet, so a directory-
+    existence check alone would silently select an empty canonical root.
+    This keeps this module importable both pre-cutover (legacy populated)
+    and post-cutover (canonical populated, legacy tombstoned).
+    """
+    canonical = os.path.join(
+        repo_root, "src", "ember", "infrastructure", "tools", "ember-restart-3b"
+    )
+    legacy = os.path.join(repo_root, "tools", "ember-restart-3b")
+    if os.path.isfile(os.path.join(canonical, marker_filename)):
+        return canonical
+    return legacy
+
+
 sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(REPO, "tools", "ember-restart-3b"))
+_MODEL_PACKAGE = _resolve_ember_restart_3b_root(REPO)
+if _MODEL_PACKAGE not in sys.path:
+    sys.path.insert(0, _MODEL_PACKAGE)
 
 from frozen_tokenizer_decoder import attach_frozen_bytelevel_decoder  # noqa: E402
 from receipt_write import checked_write  # noqa: E402

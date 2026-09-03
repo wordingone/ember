@@ -16,6 +16,14 @@ projection = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(projection)
 
 
+def test_launch_packet_authority_resolves_the_populated_layout():
+    canonical = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "launch_packet.py"
+    legacy = ROOT / "tools" / "ember-restart-3b" / "launch_packet.py"
+    expected = canonical if canonical.is_file() else legacy
+    assert projection._LAUNCH_PACKET == expected
+    assert projection._LAUNCH_PACKET.is_file()
+
+
 def test_exact_projection_uses_active_gradient_and_optimizer_terms():
     result = projection.exact_resource_projection(ROOT / "configs" / "ember-restart-3b.json")
 
