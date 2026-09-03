@@ -82,8 +82,25 @@ jobs:
             --dest "$RUNNER_TEMP" setuptools==84.0.0
           printf '%s  %s\n' 'f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73' "$SDIST" \
             | sha256sum --check --strict -
+          set +e
           python3 "$CHECKOUT/src/ember/infrastructure/tools/ember-restart-3b/python_environment.py" \
             --root "$CHECKOUT" --platform-profile linux install --receipt "$INSTALL"
+          install_rc=$?
+          set -e
+          if [ "$install_rc" -ne 0 ]; then
+            shopt -s nullglob
+            for log in \
+              "${INSTALL%.json}"-*.stdout.log \
+              "${INSTALL%.json}"-*.stderr.log; do
+              printf '\n===== %s =====\n' "$(basename "$log")"
+              tail -n 200 "$log"
+            done
+            if [ -f "$INSTALL" ]; then
+              printf '\n===== %s =====\n' "$(basename "$INSTALL")"
+              cat "$INSTALL"
+            fi
+            exit "$install_rc"
+          fi
 
       - name: Mint and publish exact Linux platform plan identity
         shell: bash
@@ -130,12 +147,13 @@ jobs:
 
       - name: Upload raw receipt and per-leg streams
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
         with:
           name: issue1949-a-clean-linux-${{ inputs.declared_head }}
           path: |
             ${{ runner.temp }}/issue1949-a-clean-linux.json
             ${{ runner.temp }}/issue1949-a-clean-linux-plan.json
             ${{ runner.temp }}/issue1949-a-clean-linux-leg-spec.json
-            ${{ runner.temp }}/issue1949-a-clean-linux-install.json
+            ${{ runner.temp }}/issue1949-a-clean-linux-install*
             ${{ runner.temp }}/issue1949-a-clean-linux.streams/**
-          if-no-files-found: error
+          if-no-files-found: warn
