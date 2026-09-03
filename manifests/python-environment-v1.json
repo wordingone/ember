@@ -7,14 +7,14 @@
       "implementation": "CPython",
       "python_version": "3.10.11",
       "python_executable_basename": "python.exe",
-      "platform": "Windows-10-10.0.26200-SP0",
+      "platform_pattern": "^Windows-10-10\\.0\\.\\d+-SP0$",
       "pip_version": "25.2"
     },
     "linux": {
       "implementation": "CPython",
       "python_version": "3.12.3",
       "python_executable_basename": "python3",
-      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "platform_pattern": "^Linux-.+-x86_64-with-glibc2\\.39$",
       "pip_version": "24.0"
     }
   },
@@ -41,7 +41,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "accelerate",
@@ -58,7 +63,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "arc-agi",
@@ -75,7 +85,12 @@
         "artifact_sha256": "8b16f2aacf5d7253b9f444aa2fb32ccec3ec355d7e3f33126fde3fa69942a88e"
       },
       "install_by_default": false,
-      "compatibility": "Exact live optional ARC-AGI integration; excluded from the default CPython 3.10 install because arc-agi 0.9.4 declares Requires-Python >=3.12."
+      "compatibility": "Exact live optional ARC-AGI integration; excluded from the default CPython 3.10 install because arc-agi 0.9.4 declares Requires-Python >=3.12.",
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "arcengine",
@@ -92,7 +107,12 @@
         "artifact_sha256": null
       },
       "install_by_default": false,
-      "compatibility": "Exact live optional ARC-AGI integration; excluded from the default CPython 3.10 install because arc-agi 0.9.4 declares Requires-Python >=3.12."
+      "compatibility": "Exact live optional ARC-AGI integration; excluded from the default CPython 3.10 install because arc-agi 0.9.4 declares Requires-Python >=3.12.",
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "bitsandbytes",
@@ -109,7 +129,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "openai-clip",
@@ -126,7 +151,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "cryptography",
@@ -143,7 +173,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "datasets",
@@ -160,7 +195,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "fastapi",
@@ -177,7 +217,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "huggingface_hub",
@@ -194,7 +239,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "jsonschema",
@@ -211,7 +261,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "kaggle",
@@ -228,7 +283,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "lm_eval",
@@ -245,7 +305,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "numpy",
@@ -262,7 +327,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "peft",
@@ -279,7 +349,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "psutil",
@@ -296,7 +371,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "pydantic",
@@ -313,7 +393,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "pypdf",
@@ -330,7 +415,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "pyarrow",
@@ -347,7 +437,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "requests",
@@ -364,7 +459,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "safetensors",
@@ -381,7 +481,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "scipy",
@@ -398,7 +503,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "sentencepiece",
@@ -415,7 +525,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "scikit-learn",
@@ -432,7 +547,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "tokenizers",
@@ -449,7 +569,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "tomli",
@@ -466,7 +591,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "torch",
@@ -483,7 +613,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "torchao",
@@ -500,7 +635,15 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": {
+        "windows": "0.16.0",
+        "linux": "0.16.0+cu126"
+      }
     },
     {
       "distribution": "transformers",
@@ -517,7 +660,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "triton-windows",
@@ -534,7 +682,11 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "trl",
@@ -551,7 +703,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "typing_extensions",
@@ -568,7 +725,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "unsloth",
@@ -585,7 +747,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "uvicorn",
@@ -602,7 +769,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "PyYAML",
@@ -619,7 +791,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "nltk",
@@ -636,7 +813,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     },
     {
       "distribution": "zstandard",
@@ -653,7 +835,12 @@
         "artifact_sha256": null
       },
       "install_by_default": true,
-      "compatibility": null
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
     }
   ],
   "optional_unavailable": [
