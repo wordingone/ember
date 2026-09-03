@@ -267,6 +267,22 @@ class ACleanTests(unittest.TestCase):
                 MODULE.validate_leg_spec_file(spec, "linux")["platform"], "linux"
             )
 
+    def test_external_present_leg_accepts_the_authorized_refusal_exit_and_rejects_zero(self) -> None:
+        self.assertIn("external_data_present", MODULE.NEGATIVE_LEG_IDS)
+        plan = valid_plan()
+        for row in plan["legs"]:
+            if row["id"] == "external_data_present":
+                row["expected_exit"] = 4
+        plan["self_sha256"] = MODULE.derive_self(plan)
+        MODULE.validate_plan(plan)
+        for row in plan["legs"]:
+            if row["id"] == "external_data_present":
+                row["expected_exit"] = 0
+        plan["self_sha256"] = MODULE.derive_self(plan)
+        with self.assertRaises(MODULE.ACleanRefusal) as caught:
+            MODULE.validate_plan(plan)
+        self.assertIn("NEGATIVE_LEG_EXPECTED_EXIT_REFUSED:external_data_present", str(caught.exception))
+
     def test_tool_path_refuses_when_no_root_carries_the_tool(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(MODULE.ACleanRefusal) as caught:

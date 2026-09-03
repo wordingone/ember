@@ -30,7 +30,14 @@ REQUIRED_LEG_IDS = (
     "external_data_absent_refusal",
     "zero_adapter_dangling_duplicate_authority_scan",
 )
-NEGATIVE_LEG_IDS = frozenset(("refused_dependency_sdist", "external_data_absent_refusal"))
+# Legs whose authorized terminal state is a named refusal (nonzero exit): the
+# dependency-sdist refusal, the absent-external refusal, and the external-present
+# chain whose governed consumer refuses insufficient custody (exit 4) by design.
+NEGATIVE_LEG_IDS = frozenset((
+    "refused_dependency_sdist",
+    "external_data_absent_refusal",
+    "external_data_present",
+))
 SHELL_EXECUTABLES = {
     "bash", "bash.exe", "cmd", "cmd.exe", "powershell", "powershell.exe",
     "pwsh", "pwsh.exe", "sh", "sh.exe",
