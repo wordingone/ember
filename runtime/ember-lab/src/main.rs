@@ -1263,8 +1263,7 @@ where
         )
         .into());
     }
-    let validator =
-        root.join("src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py");
+    let validator = root.join("tools/ember-restart-3b/certified_train_launch.py");
     let readme = root.join("README.md");
     let custody_receipt = certificate_path
         .parent()
@@ -3614,14 +3613,12 @@ mod tests {
         ));
         let repo = root.join("repo");
         let packet = root.join("custody").join("run-1").join("launch-authority");
-        std::fs::create_dir_all(repo.join("src/ember/infrastructure/tools/ember-restart-3b"))
-            .unwrap();
+        std::fs::create_dir_all(repo.join("tools/ember-restart-3b")).unwrap();
         std::fs::create_dir_all(repo.join("runtime/ember-lab")).unwrap();
         std::fs::create_dir_all(repo.join("configs")).unwrap();
         std::fs::create_dir_all(&packet).unwrap();
         std::fs::write(repo.join("README.md"), b"bound root").unwrap();
-        let validator =
-            repo.join("src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py");
+        let validator = repo.join("tools/ember-restart-3b/certified_train_launch.py");
         std::fs::write(&validator, b"print('validator')\n").unwrap();
         let resource_projection_producer =
             repo.join("runtime/ember-lab/issue898_resource_projection.py");
@@ -3835,7 +3832,7 @@ mod tests {
         assert_eq!(manifest["args"][3], repo.to_string_lossy().as_ref());
         assert_eq!(
             manifest["args"][4],
-            repo.join("src/ember/infrastructure/tools/ember-restart-3b")
+            repo.join("tools/ember-restart-3b")
                 .to_string_lossy()
                 .as_ref()
         );

@@ -16,8 +16,8 @@
       "reason": "run body, not a launcher. This is the program the daemon dispatches as its caged child; its __main__ is how the daemon starts it, and the child processes it creates are its own workers inside the same job object. Deleting its entry point would delete the run itself."
     },
     {
-      "path": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
-      "sha256": "d99bb8a82e6e958e0a84f598b676dc85698772572f498e81369acb53e577778d",
+      "path": "tools/ember-restart-3b/train.py",
+      "sha256": "8d2542915bbce777047b80c47ebd15a409843a0aae7bdf1cb30de1b60d42a4d0",
       "reason": "run body, same standing as run_vertical_slice.py: dispatched by the daemon, spawns only its own workers inside the cage."
     },
     {
@@ -51,12 +51,12 @@
       "reason": "CPU-only wrapper test with CUDA explicitly disabled. Its child commands are temporary stub-core fixtures used to prove STOP/CEILING_STOP and receipt shapes; it does not launch a GPU job or daemon."
     },
     {
-      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
+      "path": "tests/ember_restart_model/test_certified_train_launch.py",
       "sha256": "11a51037c13f9d408fe1494e6a91cd906348c9e1d6ae97de6390ec2e11705720",
       "reason": "certified-launch orchestration unit suite. It loads the module under test into isolated temporary custody and substitutes owned test commands/mocks to verify closed arguments, cleanup, and receipt propagation; it is not a contributor-facing production entry."
     },
     {
-      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
+      "path": "tests/ember_restart_model/test_certified_train_launch_custody.py",
       "sha256": "4e9f432fd8e0955f475fb998c6f39c9a7e964db48dc55d2c35868b8007c41c36",
       "reason": "custody-gate integration fixture. Its subprocess is the real ember-lab custody-verify CLI against isolated shard bytes and SQLite state, never the trainer or a training launch."
     },
@@ -66,8 +66,8 @@
       "reason": "runner preflight unit suite that deliberately avoids allocating the production model. Any process surface is a patched or temporary probe used to test refusal ordering and preflight evidence, not a runnable training entry."
     },
     {
-      "path": "tests/ember_restart_model/domain-governance/test_runner_storage.py",
-      "sha256": "9300520f93c762d4b8f7e093c3984d90a7802e3fb905c3c15405d67b6afd612f",
+      "path": "tests/ember_restart_model/test_runner_storage.py",
+      "sha256": "1f9f61f05e49e7bd9515f8b16d224228e3208aeb346023238908c4e273f67575",
       "reason": "storage-preflight fixture operating on temporary checkpoint and custody paths. Its child-process cases exercise bounded runner storage diagnostics; they do not dispatch a model run or expose a production launcher."
     },
     {

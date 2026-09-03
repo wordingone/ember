@@ -28,7 +28,7 @@ contract:
 That is the whole list. **No `transformers`, no `datasets`, no `peft`, no `triton`, no JAX, no
 DeepSpeed, no Megatron.**
 
-The model is `src/ember/infrastructure/tools/ember-restart-3b/model.py::UnifiedDecoder`, a `torch.nn.Module` written here,
+The model is `tools/ember-restart-3b/model.py::UnifiedDecoder`, a `torch.nn.Module` written here,
 along with everything under it: `RMSNorm`, `RawPatchProjector`, `RawAudioProjector`,
 `RotaryCoordinates`, `SharedAttention`, `SwiGLUExpert`, `_DecoderLayer`. `launch_packet.py` pins the
 `class UnifiedDecoder` marker as part of the launch preflight, so the identity of the decoder is

@@ -482,7 +482,7 @@ def test_check_collectability_direct_on_live_guard() -> None:
 
 # A dependency-light checked-in test file whose tests are class methods. This retains
 # the symbol-leaf contract without importing the full Torch model stack in policy CI.
-_CLASS_METHOD_TEST_FILE = "tests/ember_restart_model/domain-governance/test_checkpoint_scratch_cap.py"
+_CLASS_METHOD_TEST_FILE = "tests/ember_restart_model/test_checkpoint_scratch_cap.py"
 # A real collectable test that is a method on the class (leaf == this symbol).
 _REAL_CLASS_METHOD_SYMBOL = (
     "test_rejects_before_an_over_cap_write_changes_the_destination"

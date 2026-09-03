@@ -53,6 +53,5 @@ assets/*.ico -text
 domains/lab/assets/*.ico -text
 # EVAL-CANARY-IMAGE-V1 committed binary fixture members (#1948): byte-pinned
 # torch checkpoint + PPM rasters; git must never rewrite these bytes.
-tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/checkpoint.pt -text -diff
+tests/ember_restart_model/fixtures/eval-canary-image-v1/checkpoint.pt -text -diff
 tests/ember_restart_model/fixtures/eval-canary-image-v1/*.ppm -text -diff
-tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/*.ppm -text -diff
