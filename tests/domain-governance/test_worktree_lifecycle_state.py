@@ -75,6 +75,7 @@ def test_audit_fails_closed_on_expired_managed_lease(tmp_path: Path) -> None:
         "expiry-test",
         "--expires",
         "2099-01-01",
+        "--allow-c-drive",
     )
     path = state_path(repo)
     state = json.loads(path.read_text(encoding="utf-8"))
