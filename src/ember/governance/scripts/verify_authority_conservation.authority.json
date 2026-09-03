@@ -1,6 +1,6 @@
 {
   "artifact_path": "src/ember/governance/scripts/verify_authority_conservation.py",
-  "artifact_sha256": "9f37ebbc898f1c58d9ef3102b8fc044b9394d08a4f1c17a1ffe89c09089de70c",
+  "artifact_sha256": "cff54077405a29517d0189e5b33f95669dd2a4e620a05ec82dd720f3f84205d7",
   "authority": {
     "goal_id": "EMBER-02",
     "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
