@@ -90,13 +90,15 @@ jobs:
           if [ "$install_rc" -ne 0 ]; then
             shopt -s nullglob
             for log in \
-              "$RUNNER_TEMP"/*-resolved-core.stdout.log \
-              "$RUNNER_TEMP"/*-resolved-core.stderr.log \
-              "$RUNNER_TEMP"/*-completion-resolver.stdout.log \
-              "$RUNNER_TEMP"/*-completion-resolver.stderr.log; do
+              "${INSTALL%.json}"-*.stdout.log \
+              "${INSTALL%.json}"-*.stderr.log; do
               printf '\n===== %s =====\n' "$(basename "$log")"
               tail -n 200 "$log"
             done
+            if [ -f "$INSTALL" ]; then
+              printf '\n===== %s =====\n' "$(basename "$INSTALL")"
+              cat "$INSTALL"
+            fi
             exit "$install_rc"
           fi
 
