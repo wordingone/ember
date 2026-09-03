@@ -56,7 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B src/ember/governance/scripts/github/labels.py audit
+          python -B -m src.ember.governance.scripts.github.labels audit
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
           --output label-audit.json
@@ -64,7 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B src/ember/governance/scripts/github/labels.py plan
+          python -B -m src.ember.governance.scripts.github.labels plan
           --snapshot label-audit.json
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
@@ -111,7 +111,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B src/ember/governance/scripts/github/labels.py audit
+          python -B -m src.ember.governance.scripts.github.labels audit
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
           --output label-audit.json
@@ -119,7 +119,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B src/ember/governance/scripts/github/labels.py plan
+          python -B -m src.ember.governance.scripts.github.labels plan
           --snapshot label-audit.json
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml
@@ -128,7 +128,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -B src/ember/governance/scripts/github/labels.py apply
+          python -B -m src.ember.governance.scripts.github.labels apply
           --plan label-plan.json
           --manifest .github/labels.yml
           --migrations .github/label-migrations.yml

@@ -108,7 +108,7 @@ jobs:
           test "${final_master}" = "${GITHUB_SHA}"
 
           bundle="${out}/ember-oldest-issue-disposition-015-raw-sources-v1.json"
-          python -B src/ember/governance/scripts/build_oldest_issue_raw_bundle.py \
+          python -B -m src.ember.governance.scripts.build_oldest_issue_raw_bundle \
             --raw-root "${raw}" --output "${bundle}"
           cursor_args=()
           if [[ "${AFTER_ISSUE_NUMBER}" != "0" ]]; then
@@ -145,7 +145,7 @@ jobs:
           raw="${RUNNER_TEMP}/oldest-issue-disposition-raw-artifact"
           out="${RUNNER_TEMP}/oldest-issue-disposition-verified-artifact"
           mkdir -p "${out}"
-          python -B src/ember/governance/scripts/build_oldest_issue_decisions.py \
+          python -B -m src.ember.governance.scripts.build_oldest_issue_decisions \
             --capture "${raw}/capture.json" \
             --classifications manifests/oldest-issue-disposition/classifications-v1.json \
             --output "${out}/decisions.json"
@@ -156,7 +156,7 @@ jobs:
           python -B src/ember/governance/scripts/oldest_issue_disposition.py verify \
             --packet "${out}/packet.json" \
             --expected-master-sha "${GITHUB_SHA}"
-          python -B src/ember/governance/scripts/verify_oldest_issue_disposition_packet.py \
+          python -B -m src.ember.governance.scripts.verify_oldest_issue_disposition_packet \
             --packet "${out}/packet.json" \
             --raw-bundle "${raw}/ember-oldest-issue-disposition-015-raw-sources-v1.json" \
             --classifications manifests/oldest-issue-disposition/classifications-v1.json \

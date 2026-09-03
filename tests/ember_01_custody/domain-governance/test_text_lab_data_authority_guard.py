@@ -19,9 +19,11 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPT_DIR = REPO_ROOT / "scripts" / "ember_01_custody"
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+SCRIPT_DIR = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_custody"
+IDENTITY_DIR = REPO_ROOT / "scripts" / "ember_01_identity"
+for _extra in (SCRIPT_DIR, IDENTITY_DIR):
+    if str(_extra) not in sys.path:
+        sys.path.insert(0, str(_extra))
 
 import text_lab_data_authority_guard as guard
 

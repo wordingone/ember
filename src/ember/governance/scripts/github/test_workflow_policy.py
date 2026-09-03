@@ -554,6 +554,91 @@ jobs:
         self.assertEqual("${{ github.sha }}", checkout["with"]["ref"])
         self.assertFalse(checkout["with"]["persist-credentials"])
 
+    def test_src_importing_script_run_by_path_without_editable_install_is_rejected(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        workflows = root / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        script = root / "src" / "ember" / "governance" / "scripts" / "github" / "tool.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("from src.ember.governance.scripts.github import labels_engine\n", encoding="utf-8")
+        (workflows / "unsafe.yml").write_text(
+            """
+name: unsafe
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python -B src/ember/governance/scripts/github/tool.py audit
+""",
+            encoding="utf-8",
+        )
+
+        result = workflow_policy.validate_tree(root)
+
+        self.assertEqual("FAIL", result["status"])
+        self.assertTrue(
+            any("src-importing script by path without editable install" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_src_importing_script_module_invocation_needs_no_editable_install(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        workflows = root / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        script = root / "src" / "ember" / "governance" / "scripts" / "github" / "tool.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("from src.ember.governance.scripts.github import labels_engine\n", encoding="utf-8")
+        (workflows / "safe.yml").write_text(
+            """
+name: safe
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python -B -m src.ember.governance.scripts.github.tool audit
+""",
+            encoding="utf-8",
+        )
+
+        self.assertEqual("PASS", workflow_policy.validate_tree(root)["status"])
+
+    def test_src_importing_script_by_path_is_safe_after_editable_install(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        workflows = root / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        script = root / "src" / "ember" / "governance" / "scripts" / "github" / "tool.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("import src.ember.governance.scripts.github.labels_engine\n", encoding="utf-8")
+        (workflows / "safe-installed.yml").write_text(
+            """
+name: safe-installed
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: python -m pip install --editable .
+      - run: python -B src/ember/governance/scripts/github/tool.py audit
+""",
+            encoding="utf-8",
+        )
+
+        self.assertEqual("PASS", workflow_policy.validate_tree(root)["status"])
+
 
 if __name__ == "__main__":
     unittest.main()

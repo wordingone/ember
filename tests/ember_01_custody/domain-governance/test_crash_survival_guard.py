@@ -17,7 +17,7 @@ import pytest
 import torch
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPT_DIR = REPO_ROOT / "scripts" / "ember_01_custody"
+SCRIPT_DIR = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_custody"
 IDENTITY_DIR = REPO_ROOT / "scripts" / "ember_01_identity"
 for _extra in (SCRIPT_DIR, IDENTITY_DIR):
     if str(_extra) not in sys.path:
