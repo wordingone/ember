@@ -2662,6 +2662,11 @@ fn run_rehearsal(
     }
     let daemon = Daemon::open(db_path)?;
     let dispatch_outcome = daemon.dispatch_manifest(dispatch_manifest_path)?;
+    let admission_evidence = rehearsal::PhaseEvidence {
+        phase: Phase::Admission,
+        path: dispatch_outcome.receipt.path.clone(),
+        sha256: dispatch_outcome.receipt.sha256.clone(),
+    };
     let dispatch_id = manifest.dispatch_id.clone();
     let execution_manifest = manifest.clone();
     let completed = finalize_after_dispatch(
@@ -2681,7 +2686,8 @@ fn run_rehearsal(
             )?;
             let (authoritative_peak_path, authoritative_peak_sha256, authoritative_peak_bytes) =
                 runner.daemon.authoritative_whole_run_peak(&dispatch_id)?;
-            let phase_evidence = runner.daemon.load_authorized_phase_evidence(&dispatch_id)?;
+            let mut phase_evidence = runner.daemon.load_authorized_phase_evidence(&dispatch_id)?;
+            phase_evidence.insert(0, admission_evidence.clone());
             let mut execution_manifest = execution_manifest.clone();
             execution_manifest.phase_evidence = phase_evidence.clone();
             execution_manifest.measurements.evidence_path = authoritative_peak_path;
@@ -2697,6 +2703,19 @@ fn run_rehearsal(
         receipt_path.display()
     );
     Ok(completed)
+}
+
+fn minimal_slice_hold_duration(value: Option<&str>) -> Result<Duration, String> {
+    let Some(value) = value else {
+        return Ok(Duration::ZERO);
+    };
+    let hold_ms = value
+        .parse::<u64>()
+        .map_err(|_| "EMBER_LAB_MINIMAL_SLICE_HOLD_MS is not an integer".to_string())?;
+    if hold_ms > 60_000 {
+        return Err("EMBER_LAB_MINIMAL_SLICE_HOLD_MS exceeds 60000".into());
+    }
+    Ok(Duration::from_millis(hold_ms))
 }
 
 fn finalize_after_dispatch<F>(
@@ -3317,6 +3336,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::ProduceMinimalSlice { root, job_id } => {
             rehearsal::produce_minimal_slice(&root, &job_id)?;
+            let value = std::env::var("EMBER_LAB_MINIMAL_SLICE_HOLD_MS").ok();
+            std::thread::sleep(
+                minimal_slice_hold_duration(value.as_deref()).map_err(std::io::Error::other)?,
+            );
         }
         Command::VerifyTraining {
             root,
@@ -3369,6 +3392,23 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn minimal_slice_hold_is_default_zero_bounded_and_named() {
+        assert_eq!(minimal_slice_hold_duration(None).unwrap(), Duration::ZERO);
+        assert_eq!(
+            minimal_slice_hold_duration(Some("1000")).unwrap(),
+            Duration::from_millis(1000)
+        );
+        assert_eq!(
+            minimal_slice_hold_duration(Some("nope")).unwrap_err(),
+            "EMBER_LAB_MINIMAL_SLICE_HOLD_MS is not an integer"
+        );
+        assert_eq!(
+            minimal_slice_hold_duration(Some("60001")).unwrap_err(),
+            "EMBER_LAB_MINIMAL_SLICE_HOLD_MS exceeds 60000"
+        );
+    }
     use ember_lab::storage_retention::{CensusDeclaration, CustodyClass};
     use ember_lab::{JobSpec, ReceiptArtifact};
     use std::fs;
