@@ -185,4 +185,10 @@ jobs:
             ${{ runner.temp }}/issue1949-a-clean-linux-host-envelope-*.txt
             ${{ runner.temp }}/lab-runtime/custody/**
             ${{ runner.temp }}/lab-runtime/rehearsal.*.log
+            ${{ runner.temp }}/direct-runtime/**
+            ${{ runner.temp }}/topology-model-runtime/**
+            ${{ runner.temp }}/topology-runtime/**
+            ${{ runner.temp }}/external-authority/**
+            ${{ runner.temp }}/external-custody/**
+            ${{ runner.temp }}/issue1949-a-clean-consumer-*.json
           if-no-files-found: warn
