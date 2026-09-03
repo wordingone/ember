@@ -120,6 +120,114 @@ def load_build_manifest() -> dict[str, object]:
     return value
 
 
+def test_host_constants_are_valid_for_the_running_platform_profile(tmp_path: Path) -> None:
+    manifest = python_environment.load_manifest(
+        ROOT / "manifests" / "python-environment-v1.json"
+    )
+    profile = python_environment.inferred_platform_profile()
+    short_temp = python_environment._PIP_SHORT_TEMP_PARENT / "ember-pip-0123abcd"
+    receipt = tmp_path / "state/receipts/install.json"
+
+    assert python_environment._PIP_SHORT_TEMP_PARENT.is_absolute()
+    assert python_environment._PIP_SHORT_TEMP_RE.fullmatch(str(short_temp))
+    assert python_environment.isolated_interpreter_path(tmp_path, receipt).name == (
+        manifest["observed_environment"][profile]["python_executable_basename"]
+    )
+
+
+def test_manifest_packages_are_explicitly_partitioned_by_platform() -> None:
+    manifest = python_environment.load_manifest(
+        ROOT / "manifests" / "python-environment-v1.json"
+    )
+    python_environment.validate_manifest_shape(manifest)
+    rows = {row["distribution"]: row for row in manifest["packages"]}
+
+    assert all(row["platform_profiles"] for row in rows.values())
+    assert rows["triton-windows"]["platform_profiles"] == ["windows"]
+    assert rows["torchao"]["platform_versions"] == {
+        "windows": "0.16.0",
+        "linux": "0.16.0+cu126",
+    }
+
+    malformed = json.loads(json.dumps(manifest))
+    malformed["packages"][0]["platform_profiles"] = ["linux", "linux"]
+    with pytest.raises(
+        python_environment.EnvironmentContractError,
+        match="platform_profiles",
+    ):
+        python_environment.validate_manifest_shape(malformed)
+
+
+def test_install_and_verification_consumers_honor_platform_partition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = python_environment.load_manifest(
+        ROOT / "manifests" / "python-environment-v1.json"
+    )
+    build_manifest = load_build_manifest()
+    linux = python_environment.build_environment_install_plan(
+        manifest,
+        build_manifest=build_manifest,
+        python_executable="python3",
+        platform_profile="linux",
+    )
+    windows = python_environment.build_environment_install_plan(
+        manifest,
+        build_manifest=build_manifest,
+        python_executable="python.exe",
+        platform_profile="windows",
+    )
+    triton_requirement = "triton-windows==3.5.0.post21"
+
+    assert triton_requirement not in linux["resolved_core_argv"]
+    assert triton_requirement in windows["resolved_core_argv"]
+
+    def installed_version(distribution: str) -> str:
+        if distribution == "triton-windows":
+            raise python_environment.importlib.metadata.PackageNotFoundError
+        if distribution == "torchao":
+            return "0.16.0+cu126"
+        row = next(
+            row for row in manifest["packages"]
+            if row["distribution"] == distribution
+        )
+        return row["version"]
+
+    monkeypatch.setattr(
+        python_environment.importlib.metadata, "version", installed_version
+    )
+    versions = python_environment.current_installed_versions(
+        manifest, platform_profile="linux"
+    )
+    assert "triton-windows" not in versions
+    python_environment.validate_installed_versions(
+        manifest, versions, platform_profile="linux"
+    )
+
+
+def test_observed_environment_uses_a_portable_platform_pattern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = python_environment.load_manifest(
+        ROOT / "manifests" / "python-environment-v1.json"
+    )
+    profile = python_environment.inferred_platform_profile()
+    observed = manifest["observed_environment"][profile]
+    assert "platform_pattern" in observed
+    assert "platform" not in observed
+
+    monkeypatch.setattr(
+        python_environment.platform,
+        "platform",
+        lambda: (
+            "Windows-10-10.0.99999-SP0"
+            if profile == "windows"
+            else "Linux-6.99.0-example-x86_64-with-glibc2.39"
+        ),
+    )
+    python_environment.validate_observed_environment(manifest, profile)
+
+
 def test_build_manifest_is_closed_to_the_one_exact_backend_wheel() -> None:
     manifest = load_build_manifest()
     assert manifest == {
@@ -617,7 +725,11 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
     receipt_path = tmp_path / "install.json"
     write_receipt_logs(tmp_path, stages)
     python_environment.write_install_receipt_no_replace(receipt_path, receipt)
-    monkeypatch.setattr(python_environment, "current_installed_versions", lambda _manifest: {})
+    monkeypatch.setattr(
+        python_environment,
+        "current_installed_versions",
+        lambda _manifest, **_kwargs: {},
+    )
     monkeypatch.setattr(
         python_environment,
         "current_completion_versions",
@@ -626,14 +738,22 @@ def test_verify_check_installed_consumes_only_the_explicit_bound_receipt(
             for row in manifest["runtime_dependency_completion"]
         },
     )
-    monkeypatch.setattr(python_environment, "current_installed_sources", lambda _manifest: {})
+    monkeypatch.setattr(
+        python_environment,
+        "current_installed_sources",
+        lambda _manifest, **_kwargs: {},
+    )
     monkeypatch.setattr(python_environment, "validate_repository_contract", lambda **_kwargs: {"status": "PASS"})
     monkeypatch.setattr(
         python_environment,
         "validate_observed_environment",
         lambda _manifest, _platform_profile: None,
     )
-    monkeypatch.setattr(python_environment, "validate_installed_sources", lambda *_args: None)
+    monkeypatch.setattr(
+        python_environment,
+        "validate_installed_sources",
+        lambda *_args, **_kwargs: None,
+    )
     monkeypatch.setattr(python_environment, "validate_running_interpreter_binding", lambda *_args: None)
     monkeypatch.setattr(
         python_environment,
