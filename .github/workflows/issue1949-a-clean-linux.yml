@@ -126,6 +126,33 @@ jobs:
             --cargo-executable "$(command -v cargo)" --artifact-root "$RUNNER_TEMP" \
             --install-receipt "$INSTALL" --setuptools-sdist "$SDIST"
 
+      - name: Provision and receipt the declared Linux host commit envelope
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ember-lab admits a dispatch only above its survival floors (runtime/ember-lab/src/lib.rs:
+          # RESOURCE_GUARD_MIN_COMMIT_REMAINING_BYTES = 10 GiB of CommitLimit - Committed_AS and
+          # RESOURCE_GUARD_MIN_PHYSICAL_AVAILABLE_BYTES = 8 GiB of MemAvailable). A hosted runner's
+          # default CommitLimit is 50% of RAM plus swap (about 12 GiB on a 16 GiB / 4 GiB runner),
+          # which is below the floor once the environment and the ember-lab build have committed
+          # memory (run 33809300833: commit_remaining_below_survival_floor at the lab leg). The
+          # declared envelope is provisioned on the throwaway runner itself and receipted before and
+          # after; the leg fails closed with the measured headroom instead of discovering it mid-run.
+          fields='^(MemTotal|MemAvailable|SwapTotal|CommitLimit|Committed_AS):'
+          grep -E "$fields" /proc/meminfo | tee "$RUNNER_TEMP/issue1949-a-clean-linux-host-envelope-before.txt"
+          sudo sysctl -w vm.overcommit_ratio=100
+          grep -E "$fields" /proc/meminfo | tee "$RUNNER_TEMP/issue1949-a-clean-linux-host-envelope-after.txt"
+          commit_limit_kib=$(awk '/^CommitLimit:/{print $2}' /proc/meminfo)
+          committed_kib=$(awk '/^Committed_AS:/{print $2}' /proc/meminfo)
+          available_kib=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
+          commit_remaining_gib=$(( (commit_limit_kib - committed_kib) / 1048576 ))
+          physical_available_gib=$(( available_kib / 1048576 ))
+          echo "commit_remaining_gib=$commit_remaining_gib physical_available_gib=$physical_available_gib"
+          if [ "$commit_remaining_gib" -lt 12 ] || [ "$physical_available_gib" -lt 9 ]; then
+            echo "HOST_COMMIT_ENVELOPE_REFUSED:commit_remaining_gib=$commit_remaining_gib:physical_available_gib=$physical_available_gib" >&2
+            exit 1
+          fi
+
       - name: Run published Linux CPU clean-clone plan outside checkout CWD
         shell: bash
         env:
@@ -155,4 +182,7 @@ jobs:
             ${{ runner.temp }}/issue1949-a-clean-linux-leg-spec.json
             ${{ runner.temp }}/issue1949-a-clean-linux-install*
             ${{ runner.temp }}/issue1949-a-clean-linux.streams/**
+            ${{ runner.temp }}/issue1949-a-clean-linux-host-envelope-*.txt
+            ${{ runner.temp }}/lab-runtime/custody/**
+            ${{ runner.temp }}/lab-runtime/rehearsal.*.log
           if-no-files-found: warn
