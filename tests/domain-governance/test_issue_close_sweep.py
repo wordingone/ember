@@ -17,7 +17,7 @@ import pytest
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(ROOT))
 
-from scripts import issue_close_sweep
+from src.ember.governance.scripts import issue_close_sweep
 # issue2015 exact-local-import:src/ember/governance/scripts/issue_close_sweep.py
 import importlib.util as _ember_5c01894f4e13f2b2_importlib
 import sys as _ember_5c01894f4e13f2b2_sys

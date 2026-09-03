@@ -16,7 +16,7 @@ REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (paren
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.ember_totality import quarantine_sweep
+from src.ember.governance.scripts.ember_totality import quarantine_sweep
 
 
 def _load_continuity_renderer():

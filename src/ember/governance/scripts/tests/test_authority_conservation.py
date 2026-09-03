@@ -50,6 +50,7 @@ WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
                             'docs/ember-restart-3b-',
                             'models/ember-restart-3b/',
                             'tools/ember-restart-3b/',
+                            'src/ember/infrastructure/tools/ember-restart-3b/',
                             'receipts/ember-restart-3b/',
                             'inference/ember-restart-3b/',
                             'data/ember-restart-3b/',
@@ -72,6 +73,7 @@ WORKSTREAM_PATH_SCOPES = {'EMBER-02A': {'mode': 'all_except',
                             'docs/ember-restart-3b-',
                             'models/ember-restart-3b/',
                             'tools/ember-restart-3b/',
+                            'src/ember/infrastructure/tools/ember-restart-3b/',
                             'receipts/ember-restart-3b/',
                             'inference/ember-restart-3b/',
                             'data/ember-restart-3b/',
@@ -590,12 +592,12 @@ def test_repository_old_or_new_authority_layout_passes() -> None:
     assert payload["ok"] is True
 
 
-def _next_workstream_path_scopes() -> dict:
+def _old_workstream_path_scopes() -> dict:
     scopes = copy.deepcopy(WORKSTREAM_PATH_SCOPES)
     canonical = "src/ember/infrastructure/tools/ember-restart-3b/"
     for workstream_id in ("EMBER-02A", "EMBER-02B"):
         prefixes = scopes[workstream_id]["prefixes"]
-        prefixes.insert(prefixes.index("tools/ember-restart-3b/") + 1, canonical)
+        prefixes.remove(canonical)
     return scopes
 
 
@@ -611,17 +613,22 @@ def _scope_policy_errors(scopes: dict) -> list[dict]:
     return errors
 
 
-@pytest.mark.parametrize(
-    "scopes",
-    [WORKSTREAM_PATH_SCOPES, _next_workstream_path_scopes()],
-    ids=["old", "declared-next"],
-)
-def test_scope_transition_bridge_accepts_exact_old_and_next(scopes: dict) -> None:
-    assert _scope_policy_errors(scopes) == []
+def test_exact_new_scope_is_accepted() -> None:
+    assert _scope_policy_errors(WORKSTREAM_PATH_SCOPES) == []
 
 
-def test_scope_transition_bridge_refuses_third_variant() -> None:
-    third = _next_workstream_path_scopes()
+def test_old_scope_is_refused() -> None:
+    assert _scope_policy_errors(_old_workstream_path_scopes()) == [
+        {
+            "code": "policy.workstream_path_scopes",
+            "detail": "child workstreams must retain exact conflict-free path scopes",
+            "leg": 4,
+        }
+    ]
+
+
+def test_third_scope_variant_is_refused() -> None:
+    third = copy.deepcopy(WORKSTREAM_PATH_SCOPES)
     third["EMBER-02B"]["prefixes"].append("undeclared-third-scope/")
     assert _scope_policy_errors(third) == [
         {

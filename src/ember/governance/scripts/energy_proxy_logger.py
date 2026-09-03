@@ -197,7 +197,7 @@ def invariant_sha256() -> str:
     Computed from the file rather than pinned as a literal: a hardcoded copy
     would keep validating after the invariant it claims to stamp had changed.
     """
-    return hashlib.sha256((REPO_ROOT / "docs/authority/INVARIANT.md").read_bytes()).hexdigest()
+    return hashlib.sha256((Path(REPO_ROOT) / "docs/authority/INVARIANT.md").read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------

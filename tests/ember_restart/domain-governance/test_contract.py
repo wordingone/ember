@@ -998,7 +998,7 @@ def test_r1_warm100_entry_binds_contract_and_preserves_prep_only_boundary(
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -1114,7 +1114,7 @@ def test_r1_warm100_entry_rejects_stale_source_commit(tmp_path: Path):
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')
@@ -1187,7 +1187,7 @@ def test_r1_warm100_entry_rejects_dirty_source_tree(tmp_path: Path):
     import importlib.util as _ember_3cb9868455ee2567_importlib
     import sys as _ember_3cb9868455ee2567_sys
     from pathlib import Path as _ember_3cb9868455ee2567_Path
-    _ember_3cb9868455ee2567_path = _ember_3cb9868455ee2567_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
+    _ember_3cb9868455ee2567_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'contract.py')
     if not _ember_3cb9868455ee2567_path.is_file():
         raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/contract.py')
     _ember_3cb9868455ee2567_aliases = ('_ember_issue2015_3cb9868455ee2567', 'contract', 'scripts.ember_restart.contract')

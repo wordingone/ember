@@ -1447,7 +1447,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 35,
+      "line": 36,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1460,7 +1460,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 36,
+      "line": 37,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1473,7 +1473,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 37,
+      "line": 38,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1486,7 +1486,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 38,
+      "line": 39,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1499,7 +1499,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 39,
+      "line": 40,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1512,7 +1512,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 40,
+      "line": 41,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1525,7 +1525,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 41,
+      "line": 42,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1538,7 +1538,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 42,
+      "line": 43,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1551,7 +1551,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 43,
+      "line": 44,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1564,7 +1564,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 44,
+      "line": 45,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1577,7 +1577,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 45,
+      "line": 46,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1590,7 +1590,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 46,
+      "line": 47,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1603,7 +1603,7 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 47,
+      "line": 48,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -1616,42 +1616,16 @@
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 54,
+      "line": 55,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 54,
+        "source_line": 28,
         "source_target": "docs/ember-restart-3b-",
         "visible_classification": "reference"
       },
       "target": "docs/ember-restart-3b-"
-    },
-    {
-      "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 66,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 66,
-        "source_target": "docs/ember-restart-eval-",
-        "visible_classification": "reference"
-      },
-      "target": "docs/ember-restart-eval-"
-    },
-    {
-      "document": "docs/domains/governance/authority/GOAL.md",
-      "line": 67,
-      "resolution": {
-        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
-        "kind": "EXPLICIT_FILING_DISPOSITION",
-        "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 67,
-        "source_target": "docs/ember-restart-terminal-",
-        "visible_classification": "reference"
-      },
-      "target": "docs/ember-restart-terminal-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1660,11 +1634,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 68,
-        "source_target": "docs/ember-restart-browser-",
+        "source_line": 35,
+        "source_target": "docs/ember-restart-eval-",
         "visible_classification": "reference"
       },
-      "target": "docs/ember-restart-browser-"
+      "target": "docs/ember-restart-eval-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1673,11 +1647,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 69,
-        "source_target": "docs/ember-restart-audio-",
+        "source_line": 36,
+        "source_target": "docs/ember-restart-terminal-",
         "visible_classification": "reference"
       },
-      "target": "docs/ember-restart-audio-"
+      "target": "docs/ember-restart-terminal-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1686,11 +1660,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 70,
-        "source_target": "docs/ember-restart-image-",
+        "source_line": 37,
+        "source_target": "docs/ember-restart-browser-",
         "visible_classification": "reference"
       },
-      "target": "docs/ember-restart-image-"
+      "target": "docs/ember-restart-browser-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1699,11 +1673,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 71,
-        "source_target": "manifests/ember-restart-eval-",
+        "source_line": 38,
+        "source_target": "docs/ember-restart-audio-",
         "visible_classification": "reference"
       },
-      "target": "manifests/ember-restart-eval-"
+      "target": "docs/ember-restart-audio-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1712,11 +1686,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 72,
-        "source_target": "scripts/ember_restart_eval",
+        "source_line": 39,
+        "source_target": "docs/ember-restart-image-",
         "visible_classification": "reference"
       },
-      "target": "scripts/ember_restart_eval"
+      "target": "docs/ember-restart-image-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1725,11 +1699,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 73,
-        "source_target": "tests/test_ember_restart_eval",
+        "source_line": 40,
+        "source_target": "manifests/ember-restart-eval-",
         "visible_classification": "reference"
       },
-      "target": "tests/test_ember_restart_eval"
+      "target": "manifests/ember-restart-eval-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1738,11 +1712,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 74,
-        "source_target": "docs/ember-restart-sql-",
+        "source_line": 41,
+        "source_target": "scripts/ember_restart_eval",
         "visible_classification": "reference"
       },
-      "target": "docs/ember-restart-sql-"
+      "target": "scripts/ember_restart_eval"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1751,11 +1725,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 75,
-        "source_target": "docs/ember-restart-structured-tools-",
+        "source_line": 42,
+        "source_target": "tests/test_ember_restart_eval",
         "visible_classification": "reference"
       },
-      "target": "docs/ember-restart-structured-tools-"
+      "target": "tests/test_ember_restart_eval"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1764,11 +1738,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 76,
-        "source_target": "docs/ember-restart-dynamics-",
+        "source_line": 43,
+        "source_target": "docs/ember-restart-sql-",
         "visible_classification": "reference"
       },
-      "target": "docs/ember-restart-dynamics-"
+      "target": "docs/ember-restart-sql-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1777,11 +1751,11 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 77,
-        "source_target": "scripts/ember_restart_measured_receipts",
+        "source_line": 44,
+        "source_target": "docs/ember-restart-structured-tools-",
         "visible_classification": "reference"
       },
-      "target": "scripts/ember_restart_measured_receipts"
+      "target": "docs/ember-restart-structured-tools-"
     },
     {
       "document": "docs/domains/governance/authority/GOAL.md",
@@ -1790,7 +1764,33 @@
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/authority/GOAL.md",
-        "source_line": 78,
+        "source_line": 45,
+        "source_target": "docs/ember-restart-dynamics-",
+        "visible_classification": "reference"
+      },
+      "target": "docs/ember-restart-dynamics-"
+    },
+    {
+      "document": "docs/domains/governance/authority/GOAL.md",
+      "line": 79,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/domains/governance/authority/GOAL.md",
+        "source_line": 46,
+        "source_target": "scripts/ember_restart_measured_receipts",
+        "visible_classification": "reference"
+      },
+      "target": "scripts/ember_restart_measured_receipts"
+    },
+    {
+      "document": "docs/domains/governance/authority/GOAL.md",
+      "line": 80,
+      "resolution": {
+        "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
+        "kind": "EXPLICIT_FILING_DISPOSITION",
+        "source_document": "docs/domains/governance/authority/GOAL.md",
+        "source_line": 47,
         "source_target": "tests/test_ember_restart_measured_receipts",
         "visible_classification": "reference"
       },
@@ -6146,7 +6146,7 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "d5d38290f0bfefa9e6ceeae0fa5a7363c5598d255998421629397408007853e1",
+  "rows_sha256": "74d4030b60590c0637406cd608dbec1ad828d90faea71a996b4ba402db73eee5",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",

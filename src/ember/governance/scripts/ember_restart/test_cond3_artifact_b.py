@@ -45,7 +45,7 @@ from checkpoint_save_load_identity_binding import measure_checkpoint_identity  #
 import importlib.util as _ember_26b6c24e1679e1f8_importlib
 import sys as _ember_26b6c24e1679e1f8_sys
 from pathlib import Path as _ember_26b6c24e1679e1f8_Path
-_ember_26b6c24e1679e1f8_path = _ember_26b6c24e1679e1f8_next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'seat_identity_bridge.py')
+_ember_26b6c24e1679e1f8_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()).joinpath('src', 'ember', 'governance', 'scripts', 'ember_restart', 'seat_identity_bridge.py')
 if not _ember_26b6c24e1679e1f8_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_restart/seat_identity_bridge.py')
 _ember_26b6c24e1679e1f8_aliases = ('_ember_issue2015_26b6c24e1679e1f8', 'scripts.ember_restart.seat_identity_bridge', 'seat_identity_bridge')
