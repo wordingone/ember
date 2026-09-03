@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPT = REPO_ROOT / "scripts" / "ember_01_custody" / "compact_receipt.py"
+SCRIPT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_custody" / "compact_receipt.py"
 
 
 def write_run(
