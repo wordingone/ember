@@ -45,6 +45,18 @@ jobs:
           test "$actual" = "$DECLARED_HEAD"
           test -z "$(git status --porcelain)"
 
+      - name: Refuse a checkout whose canonical tool root is absent
+        shell: bash
+        env:
+          CHECKOUT: ${{ github.workspace }}/fresh clone é
+        run: |
+          set -euo pipefail
+          tool="$CHECKOUT/src/ember/infrastructure/tools/ember-restart-3b/python_environment.py"
+          if [ ! -f "$tool" ]; then
+            echo "A_CLEAN_TOOL_ROOT_UNRESOLVED: the declared head does not carry the canonical tool" >&2
+            exit 1
+          fi
+
       - name: Provision exact Linux platform profile
         uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d
         with:
@@ -98,7 +110,7 @@ jobs:
             --cargo-executable "$(command -v cargo)" --artifact-root "$RUNNER_TEMP" \
             --install-receipt "$INSTALL" --setuptools-sdist "$SDIST"
 
-      - name: Run Linux CPU clean-clone plan outside checkout CWD
+      - name: Run published Linux CPU clean-clone plan outside checkout CWD
         shell: bash
         env:
           CHECKOUT: ${{ github.workspace }}/fresh clone é
