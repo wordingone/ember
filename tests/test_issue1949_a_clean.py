@@ -403,5 +403,144 @@ class ACleanTests(unittest.TestCase):
         self.assertIn("--platform windows", windows)
 
 
+class ACleanV2Tests(unittest.TestCase):
+    """Review findings on the 02A harness (2026-09-03): refusal classes, lexical executables, missing paths."""
+
+    def test_every_negative_leg_names_a_refusal_class(self) -> None:
+        self.assertEqual(frozenset(MODULE.NEGATIVE_LEG_REFUSAL_MARKERS), MODULE.NEGATIVE_LEG_IDS)
+        for leg_id, markers in MODULE.NEGATIVE_LEG_REFUSAL_MARKERS.items():
+            self.assertTrue(markers, leg_id)
+
+    def test_negative_leg_requires_its_refusal_class_not_just_the_exit_code(self) -> None:
+        # Planted negative: the authorized exit status with unrelated output is refused.
+        with self.assertRaises(MODULE.ACleanRefusal) as caught:
+            MODULE.bind_negative_leg_refusal_class(
+                "refused_dependency_sdist", b"", b"Traceback (most recent call last): KeyError"
+            )
+        self.assertIn("LEG_REFUSAL_CLASS_REFUSED:refused_dependency_sdist", str(caught.exception))
+        bound = MODULE.bind_negative_leg_refusal_class(
+            "refused_dependency_sdist", b"",
+            b"refused: host-conditioned wheel differs from fixed manifest artifact\n",
+        )
+        self.assertEqual(bound, ["host-conditioned wheel differs from fixed manifest artifact"])
+        # Every marker of a multi-marker class is required, in either stream.
+        with self.assertRaises(MODULE.ACleanRefusal):
+            MODULE.bind_negative_leg_refusal_class(
+                "external_data_absent_refusal", b'{"result": "EXPECTED_REFUSAL"}', b""
+            )
+        self.assertEqual(
+            len(MODULE.bind_negative_leg_refusal_class(
+                "external_data_absent_refusal",
+                b'{"refusal": "external authority root is absent", "result": "EXPECTED_REFUSAL"}', b"",
+            )),
+            2,
+        )
+        # Positive legs carry no class.
+        self.assertEqual(MODULE.bind_negative_leg_refusal_class("deterministic_data", b"x", b"y"), [])
+
+    def _mint_fixture(self, base: Path, argv_for=None):
+        root = base / "fresh clone"
+        root.mkdir()
+        tool = root / MODULE.CANONICAL_TOOL_ROOT / "python_environment.py"
+        tool.parent.mkdir(parents=True)
+        tool.write_text("# canonical fixture tool\n")
+        (tool.parent / "build_owned_curriculum.py").write_text("# canonical fixture builder\n")
+        contract_files = []
+        for leg_id in MODULE.REQUIRED_LEG_IDS:
+            contract = root / "contracts" / f"{leg_id}.txt"
+            contract.parent.mkdir(exist_ok=True)
+            contract.write_text(leg_id)
+            contract_files.append(contract.relative_to(root).as_posix())
+        for command in (
+            ["git", "init", str(root)],
+            ["git", "-C", str(root), "config", "user.email", "test@example.invalid"],
+            ["git", "-C", str(root), "config", "user.name", "test"],
+            ["git", "-C", str(root), "add", "."],
+            ["git", "-C", str(root), "commit", "-m", "fixture"],
+            ["git", "-C", str(root), "remote", "add", "origin", "https://example.invalid/ember.git"],
+        ):
+            subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           creationflags=MODULE.NO_WINDOW)
+        head = MODULE._git(root, "rev-parse", "HEAD").decode().strip()
+        if argv_for is None:
+            argv_for = lambda leg_id: ["${PYTHON}", "${PYENV}", "--leg", leg_id]
+        spec_path = base / "spec.json"
+        spec = {
+            "schema_version": "ember-issue1949-a-clean-leg-spec-v1",
+            "platform": "linux",
+            "legs": [{
+                "id": leg_id,
+                "argv": argv_for(leg_id),
+                "contract_files": [contract_files[index]],
+                "expected_exit": 2 if leg_id in MODULE.NEGATIVE_LEG_IDS else 0,
+            } for index, leg_id in enumerate(MODULE.REQUIRED_LEG_IDS)],
+        }
+        spec["self_sha256"] = MODULE.derive_self(spec)
+        spec_path.write_bytes(MODULE.canonical_json(spec) + b"\n")
+        artifacts = base / "artifacts"
+        artifacts.mkdir()
+        install = artifacts / "install.json"
+        sdist = artifacts / "setuptools-84.0.0.tar.gz"
+        install.write_text("{}")
+        sdist.write_text("fixture")
+        return root, head, spec_path, artifacts, install, sdist
+
+    def _mint(self, base: Path, *, python_executable: Path, cargo_executable: Path, argv_for=None):
+        root, head, spec_path, artifacts, install, sdist = self._mint_fixture(base, argv_for)
+        return MODULE.mint_plan(
+            repo_root=root, leg_spec_path=spec_path, output=artifacts / "plan.json",
+            declared_head=head, platform_name="linux",
+            python_executable=python_executable, cargo_executable=cargo_executable,
+            artifact_root=artifacts, install_receipt=install, sdist_path=sdist,
+        )
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX venv interpreters and cargo shims are symlinks")
+    def test_mint_plan_keeps_lexical_paths_for_symlinked_python_and_cargo(self) -> None:
+        # Regressions: resolving the venv symlink bound the plan to the provisioning interpreter
+        # outside the repository root (Linux run 33796284009); resolving ~/.cargo/bin/cargo bound
+        # the lab leg to the rustup shim target (Linux run 33805309876, exit 2).
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            (base / "venv" / "bin").mkdir(parents=True)
+            (base / "cargo-home" / "bin").mkdir(parents=True)
+            python_link = base / "venv" / "bin" / "python3"
+            python_link.symlink_to(sys.executable)
+            rustup = base / "cargo-home" / "bin" / "rustup"
+            rustup.write_bytes(b"#!/bin/sh\nexit 7\n")
+            cargo_link = base / "cargo-home" / "bin" / "cargo"
+            cargo_link.symlink_to(rustup)
+            plan = self._mint(
+                base, python_executable=python_link, cargo_executable=cargo_link,
+                argv_for=lambda leg_id: ["${PYTHON}", "${PYENV}", "--leg", leg_id, "--cargo", "${CARGO}"],
+            )
+            for row in plan["legs"]:
+                self.assertEqual(row["argv"][0], str(python_link))
+                self.assertNotEqual(row["argv"][0], str(Path(sys.executable).resolve()))
+                self.assertEqual(row["executable_raw_sha256"], MODULE.sha256_file(python_link))
+                self.assertEqual(row["argv"][-1], str(cargo_link))
+                self.assertNotIn("rustup", row["argv"][-1])
+
+    def test_mint_plan_refuses_missing_interpreter_cargo_and_leg_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            with self.assertRaises(MODULE.ACleanRefusal) as caught:
+                self._mint(base, python_executable=base / "no-venv" / "bin" / "python3",
+                           cargo_executable=Path(sys.executable))
+            self.assertIn("PYTHON_EXECUTABLE_MISSING", str(caught.exception))
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            with self.assertRaises(MODULE.ACleanRefusal) as caught:
+                self._mint(base, python_executable=Path(sys.executable),
+                           cargo_executable=base / "no-cargo" / "bin" / "cargo")
+            self.assertIn("CARGO_EXECUTABLE_MISSING", str(caught.exception))
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            gone = (base / "gone-tool").as_posix()
+            with self.assertRaises(MODULE.ACleanRefusal) as caught:
+                self._mint(base, python_executable=Path(sys.executable), cargo_executable=Path(sys.executable),
+                           argv_for=lambda leg_id: [gone, "${PYENV}", "--leg", leg_id])
+            self.assertIn("LEG_EXECUTABLE_MISSING", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
