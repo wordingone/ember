@@ -23,7 +23,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -1325,14 +1325,37 @@ def isolated_interpreter_path(root: Path, receipt_path: Path) -> Path:
     return environment_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
-def create_isolated_interpreter(root: Path, interpreter: Path) -> Path:
-    """Create one no-overwrite venv; the host interpreter is only its provisioner."""
-    root = root.resolve()
-    interpreter = interpreter.resolve()
+def _lexical_relative_to_root(root: Path, interpreter: Path) -> Path:
+    """Containment by lexical absolute paths: a POSIX venv interpreter is a symlink to
+    its provisioner, so resolving it would escape the checkout on every Linux host."""
+    root_lexical = Path(os.path.abspath(root))
+    interpreter_lexical = Path(os.path.abspath(interpreter))
     try:
-        interpreter.relative_to(root)
+        Path(os.path.normcase(str(interpreter_lexical))).relative_to(
+            Path(os.path.normcase(str(root_lexical)))
+        )
+        return Path(*interpreter_lexical.parts[len(root_lexical.parts):])
     except ValueError as error:
         raise EnvironmentContractError("isolated interpreter must be inside repository root") from error
+
+
+def isolated_pip_pin_argv(interpreter: Path, pip_version: str) -> list[str]:
+    """Pin the isolated interpreter's pip to the declared platform-profile version; the
+    venv's bundled pip is whatever the provisioner shipped, never the declared one."""
+    if not isinstance(pip_version, str) or not re.fullmatch(r"[0-9][0-9A-Za-z.]*", pip_version):
+        raise EnvironmentContractError("platform profile pip_version is malformed")
+    return [
+        str(interpreter), "-I", "-m", "pip", "install", "--isolated", "--no-cache-dir",
+        "--disable-pip-version-check", "--index-url", _PRIMARY_INDEX_LOCATOR, "--no-deps",
+        f"pip=={pip_version}",
+    ]
+
+
+def create_isolated_interpreter(root: Path, interpreter: Path, pip_version: str | None = None) -> Path:
+    """Create one no-overwrite venv; the host interpreter is only its provisioner."""
+    root = Path(os.path.abspath(root))
+    interpreter = Path(os.path.abspath(interpreter))
+    _lexical_relative_to_root(root, interpreter)
     environment_root = interpreter.parents[1]
     if environment_root.exists():
         raise FileExistsError("isolated interpreter custody is no-overwrite")
@@ -1353,17 +1376,31 @@ def create_isolated_interpreter(root: Path, interpreter: Path) -> Path:
         )
     if not interpreter.is_file():
         raise EnvironmentContractError("isolated interpreter bootstrap produced no interpreter")
+    if pip_version is not None:
+        pinned = subprocess.run(
+            isolated_pip_pin_argv(interpreter, pip_version),
+            cwd=root,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            shell=False,
+            creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0),
+        )
+        if pinned.returncode != 0:
+            raise EnvironmentContractError(
+                "isolated interpreter pip pin failed: "
+                + bytes(pinned.stderr).decode("utf-8", errors="replace").strip()
+            )
     return interpreter
 
 
 def build_isolated_interpreter_binding(root: Path, interpreter: Path) -> dict[str, str]:
     """Bind the interpreter identity and its normalized installed package set."""
-    root = root.resolve()
-    interpreter = interpreter.resolve(strict=True)
-    try:
-        relative = interpreter.relative_to(root)
-    except ValueError as error:
-        raise EnvironmentContractError("isolated interpreter must be inside repository root") from error
+    root = Path(os.path.abspath(root))
+    interpreter = Path(os.path.abspath(interpreter))
+    if not interpreter.is_file():
+        raise EnvironmentContractError("isolated interpreter is absent")
+    relative = _lexical_relative_to_root(root, interpreter)
     probe = (
         "import importlib.metadata,json,platform;"
         "print(json.dumps({'python_version':platform.python_version(),"
@@ -1405,7 +1442,7 @@ def build_isolated_interpreter_binding(root: Path, interpreter: Path) -> dict[st
     if len({row["name"] for row in normalized}) != len(normalized):
         raise EnvironmentContractError("isolated interpreter package set has duplicate distributions")
     return {
-        "path": str(PureWindowsPath(relative)),
+        "path": relative.as_posix(),
         "python_version": version,
         "package_set_sha256": hashlib.sha256(_canonical(normalized)).hexdigest(),
     }
@@ -1416,12 +1453,13 @@ def validate_running_interpreter_binding(root: Path, binding: Mapping[str, Any])
     relative = binding.get("path")
     if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
         raise EnvironmentContractError("isolated interpreter binding path is malformed")
-    interpreter = (root.resolve() / Path(relative)).resolve()
+    root = Path(os.path.abspath(root))
+    interpreter = Path(os.path.abspath(root / PurePosixPath(relative)))
     try:
-        interpreter.relative_to(root.resolve())
-    except ValueError as error:
+        _lexical_relative_to_root(root, interpreter)
+    except EnvironmentContractError as error:
         raise EnvironmentContractError("isolated interpreter binding escapes repository root") from error
-    if interpreter != Path(sys.executable).resolve():
+    if os.path.normcase(str(interpreter)) != os.path.normcase(os.path.abspath(sys.executable)):
         raise EnvironmentContractError("verification is not running under receipt-bound interpreter")
     if build_isolated_interpreter_binding(root, interpreter) != dict(binding):
         raise EnvironmentContractError("receipt-bound interpreter package set differs")
@@ -1672,7 +1710,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise FileExistsError("install stage log custody is no-overwrite")
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     interpreter_path = isolated_interpreter_path(root, receipt_path)
-    create_isolated_interpreter(root, interpreter_path)
+    create_isolated_interpreter(
+        root, interpreter_path,
+        pip_version=str(select_platform_profile(manifest, selected_platform_profile)["pip_version"]),
+    )
+    # Fail fast on a binding defect here, so it can never mask a later stage failure.
+    build_isolated_interpreter_binding(root, interpreter_path)
     wheel_path = args.backend_wheel.resolve(strict=True) if args.backend_wheel is not None else None
     if wheel_path is not None and (
         wheel_path.name != _SETUPTOOLS_WHEEL or _sha256_path(wheel_path) != _SETUPTOOLS_SHA256

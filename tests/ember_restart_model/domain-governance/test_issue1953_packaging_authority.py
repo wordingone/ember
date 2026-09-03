@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,7 +87,7 @@ def use_fake_isolated_interpreter(
 ) -> Path:
     interpreter = tmp_path / "isolated/Scripts/python.exe"
 
-    def create(_root: Path, path: Path) -> Path:
+    def create(_root: Path, path: Path, **_kwargs) -> Path:
         assert path == interpreter
         interpreter.parent.mkdir(parents=True, exist_ok=True)
         interpreter.write_bytes(b"isolated")
@@ -412,6 +413,63 @@ def test_create_isolated_interpreter_uses_host_only_for_venv_bootstrap(
     assert observed["kwargs"]["stdin"] is python_environment.subprocess.DEVNULL
 
 
+def test_isolated_pip_pin_argv_binds_the_declared_profile_pip(tmp_path: Path) -> None:
+    interpreter = tmp_path / "checkout/state/python-environments/run/bin/python"
+    argv = python_environment.isolated_pip_pin_argv(interpreter, "25.2")
+    assert argv[:2] == [str(interpreter), "-I"]
+    assert argv[-1] == "pip==25.2"
+    assert "--isolated" in argv and "--no-deps" in argv
+    with pytest.raises(python_environment.EnvironmentContractError):
+        python_environment.isolated_pip_pin_argv(interpreter, "25.2; rm -rf /")
+
+
+def test_create_isolated_interpreter_pins_pip_to_the_profile_after_venv_bootstrap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    root = tmp_path / "checkout"
+    root.mkdir()
+    interpreter = root / "state/python-environments/run-pin/Scripts/python.exe"
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **_kwargs):
+        calls.append(list(argv))
+        if "venv" in argv:
+            interpreter.parent.mkdir(parents=True)
+            interpreter.write_bytes(b"isolated")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(python_environment.subprocess, "run", fake_run)
+    python_environment.create_isolated_interpreter(root, interpreter, pip_version="25.2")
+    assert calls[0][:3] == [python_environment.sys.executable, "-m", "venv"]
+    assert calls[1] == python_environment.isolated_pip_pin_argv(interpreter, "25.2")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX venv interpreters are symlinks to the provisioner")
+def test_interpreter_binding_keeps_a_symlinked_posix_venv_inside_the_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    root = tmp_path / "checkout"
+    interpreter = root / "state/python-environments/run/bin/python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.symlink_to(Path(python_environment.sys.executable))
+    monkeypatch.setattr(
+        python_environment.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({"python_version": "3.12.3", "packages": []}).encode(),
+            stderr=b"",
+        ),
+    )
+    binding = python_environment.build_isolated_interpreter_binding(root, interpreter)
+    assert binding["path"] == "state/python-environments/run/bin/python"
+    outside = tmp_path / "elsewhere/bin/python"
+    outside.parent.mkdir(parents=True)
+    outside.symlink_to(Path(python_environment.sys.executable))
+    with pytest.raises(python_environment.EnvironmentContractError):
+        python_environment.build_isolated_interpreter_binding(root, outside)
+
+
 def test_interpreter_binding_hashes_normalized_package_set(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
@@ -443,7 +501,7 @@ def test_interpreter_binding_hashes_normalized_package_set(
     ).hexdigest()
 
     assert binding == {
-        "path": "state\\python-environments\\run\\Scripts\\python.exe",
+        "path": "state/python-environments/run/Scripts/python.exe",
         "python_version": "3.10.11",
         "package_set_sha256": expected_hash,
     }
