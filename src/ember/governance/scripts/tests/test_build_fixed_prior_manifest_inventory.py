@@ -15,7 +15,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
+ROOT = Path(__file__).resolve().parents[5]
 SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
 
 
