@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import tempfile
 import unittest
@@ -11,11 +12,23 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "issue1949_a_clean_consumer.py"
+SCRIPT = ROOT / "runtime" / "ember-lab" / "scripts" / "issue1949_a_clean_consumer.py"
 SPEC = importlib.util.spec_from_file_location("issue1949_a_clean_consumer", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+
+def write_data(root: Path) -> Path:
+    path = root / "deterministic-data.json"
+    builder = MODULE._load_module(ROOT, "build_owned_curriculum")
+    payload = {
+        "schema_version": "ember-owned-pretraining-shard-v1",
+        "generator": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_curriculum.py",
+        "records": builder.records(2),
+    }
+    path.write_bytes(MODULE.canonical_json(payload) + b"\n")
+    return path
 
 
 class ACleanConsumerTests(unittest.TestCase):
@@ -40,9 +53,27 @@ class ACleanConsumerTests(unittest.TestCase):
         self.assertEqual(MODULE.COMMAND_EXITS, {
             "direct": 0,
             "lab": 0,
-            "external-present": 4,
+            "external-present": 0,
             "external-absent": 3,
+            "topology": 0,
         })
+
+    def test_real_chain_calls_production_training_evaluation_and_runtime(self) -> None:
+        source = inspect.getsource(MODULE._run_real_model_chain)
+        self.assertIn("run_pretraining_segment", source)
+        self.assertIn("evaluate_teacher_forced", source)
+        self.assertIn("greedy_generate", source)
+
+    def test_training_selection_requires_two_steps_and_topology_covers_all_experts(self) -> None:
+        rows = [{"active_expert": expert} for expert in ("vision", "audio", "reasoning", "tool")]
+        self.assertEqual(len(MODULE._select_training_records(rows, topology=False)), 2)
+        selected = MODULE._select_training_records(rows, topology=True)
+        self.assertEqual(
+            {row["active_expert"] for row in selected},
+            {"vision", "audio", "reasoning", "tool"},
+        )
+        with self.assertRaisesRegex(ValueError, "TRAINING_RECORDS_INSUFFICIENT"):
+            MODULE._select_training_records(rows[:1], topology=False)
 
     def test_receipt_path_is_below_artifact_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -90,40 +121,45 @@ class ACleanConsumerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "bound hash"):
             MODULE.external_absent_exit(other)
 
-    def test_external_projection_names_are_exact(self) -> None:
-        self.assertEqual(set(MODULE.EXTERNAL_ARTIFACTS), {
-            "text-lab-source-receipt-bundle-v4.json",
-            "owned-text-lab-corpus-v4.json",
-            "owned-text-lab-input-identity-v4.json",
-            "text-lab-authority-index-v2.json",
-        })
+    def test_lab_timing_constants_derive_from_the_producer_contract_cap(self) -> None:
+        self.assertEqual(MODULE.LAB_PRODUCER_CONTRACT_CAP_MS, 60_000)
+        self.assertEqual(
+            MODULE.LAB_DISPATCH_TTL_MS,
+            10 * MODULE.LAB_PRODUCER_CONTRACT_CAP_MS,
+        )
 
     def test_main_direct_returns_zero_and_writes_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root)]), 0)
+            data = write_data(root)
+            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root), "--data-path", str(data)]), 0)
             self.assertEqual(MODULE.reopen_receipt(MODULE.receipt_path(root, "direct"))["result"], "PASS")
 
     def test_main_direct_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root)]), 0)
-            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root)]), 2)
+            data = write_data(root)
+            argv = ["direct", "--repo-root", str(ROOT), "--artifact-root", str(root), "--data-path", str(data)]
+            self.assertEqual(MODULE.main(argv), 0)
+            self.assertEqual(MODULE.main(argv), 2)
 
     def test_main_lab_returns_zero_and_writes_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assertEqual(MODULE.main(["lab", "--repo-root", str(ROOT), "--artifact-root", str(root), "--cargo", "cargo"]), 0)
+            data = write_data(root)
+            self.assertEqual(MODULE.main(["lab", "--repo-root", str(ROOT), "--artifact-root", str(root), "--data-path", str(data), "--cargo", "cargo"]), 0)
             self.assertEqual(MODULE.reopen_receipt(MODULE.receipt_path(root, "lab"))["result"], "PASS")
 
-    def test_main_external_present_returns_named_four_and_writes_receipt(self) -> None:
+    def test_main_external_present_mints_verified_all_local_authority(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             custody = root / "external-custody"
-            self.assertEqual(MODULE.main(["external-present", "--repo-root", str(ROOT), "--artifact-root", str(root), "--receipt-custody-root", str(custody)]), 4)
+            self.assertEqual(MODULE.main(["external-present", "--repo-root", str(ROOT), "--artifact-root", str(root), "--receipt-custody-root", str(custody)]), 0)
             receipt = MODULE.reopen_receipt(MODULE.receipt_path(root, "external-present"))
-            self.assertEqual(receipt["result"], "REFUSED_EXTERNAL_CUSTODY_INSUFFICIENT")
-            self.assertTrue(Path(receipt["producer_receipt"]["path"]).is_file())
+            self.assertEqual(receipt["result"], "PASS")
+            self.assertEqual(receipt["validator"]["result"], "VERIFIED")
+            self.assertEqual(receipt["minted_authority"]["source_count"], 44)
+            self.assertIn("NOT_CANONICAL_V4", receipt["claim_boundary"])
 
     def test_main_external_absent_returns_three_and_writes_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -144,7 +180,8 @@ class ACleanConsumerTests(unittest.TestCase):
     def test_every_success_receipt_binds_production_modules(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root)]), 0)
+            data = write_data(root)
+            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root), "--data-path", str(data)]), 0)
             receipt = MODULE.reopen_receipt(MODULE.receipt_path(root, "direct"))
             self.assertTrue(receipt["production_modules"])
             self.assertTrue(all(len(row["sha256"]) == 64 for row in receipt["production_modules"]))
@@ -152,7 +189,8 @@ class ACleanConsumerTests(unittest.TestCase):
     def test_receipt_claim_boundary_forbids_capability_credit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root)]), 0)
+            data = write_data(root)
+            self.assertEqual(MODULE.main(["direct", "--repo-root", str(ROOT), "--artifact-root", str(root), "--data-path", str(data)]), 0)
             receipt = MODULE.reopen_receipt(MODULE.receipt_path(root, "direct"))
             self.assertIn("NO_CORPUS_CAPABILITY", receipt["claim_boundary"])
 
