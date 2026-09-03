@@ -23,7 +23,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -54,7 +54,7 @@ _ENVIRONMENT_KEYS = {
     "implementation",
     "python_version",
     "python_executable_basename",
-    "platform",
+    "platform_pattern",
     "pip_version",
 }
 _PACKAGE_KEYS = {
@@ -66,6 +66,8 @@ _PACKAGE_KEYS = {
     "source",
     "install_by_default",
     "compatibility",
+    "platform_profiles",
+    "platform_versions",
 }
 _SOURCE_KEYS = {"kind", "locator", "commit", "artifact_sha256"}
 _OPTIONAL_KEYS = {"imports", "feature", "reason"}
@@ -106,8 +108,14 @@ _PIP_ENVIRONMENT_CONDITIONING = {
     "GIT_CONFIG_VALUE_0": "true",
     "GIT_TERMINAL_PROMPT": "0",
 }
-_PIP_SHORT_TEMP_PARENT = Path("B:/tmp")
-_PIP_SHORT_TEMP_RE = re.compile(r"^B:\\tmp\\ember-pip-[0-9a-f]{8}$", re.IGNORECASE)
+if os.name == "nt":
+    _PIP_SHORT_TEMP_PARENT = Path("B:/tmp")
+    _PIP_SHORT_TEMP_RE = re.compile(
+        r"^B:\\tmp\\ember-pip-[0-9a-f]{8}$", re.IGNORECASE
+    )
+else:
+    _PIP_SHORT_TEMP_PARENT = Path("/tmp")
+    _PIP_SHORT_TEMP_RE = re.compile(r"^/tmp/ember-pip-[0-9a-f]{8}$")
 _COMPLETION_REQUIREMENTS = (
     "typer==0.24.0", "diffusers==0.35.2", "hf-transfer==0.1.9",
     "torchvision==0.25.0+cu126", "tyro==1.0.8", "unsloth-zoo==2026.2.1",
@@ -646,6 +654,17 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
         _require_exact_keys(value, _ENVIRONMENT_KEYS, f"observed_environment.{profile}")
         for key in sorted(_ENVIRONMENT_KEYS):
             _require_text(value.get(key), f"observed_environment.{profile}.{key}")
+        pattern_text = value["platform_pattern"]
+        try:
+            re.compile(pattern_text)
+        except re.error as error:
+            raise EnvironmentContractError(
+                f"observed_environment.{profile}.platform_pattern is malformed"
+            ) from error
+        if not pattern_text.startswith("^") or not pattern_text.endswith("$"):
+            raise EnvironmentContractError(
+                f"observed_environment.{profile}.platform_pattern must be anchored"
+            )
 
     pip_options = manifest.get("pip_options")
     if not isinstance(pip_options, list):
@@ -709,6 +728,34 @@ def validate_manifest_shape(manifest: Mapping[str, Any]) -> None:
             raise EnvironmentContractError(
                 f"{label} optional package must be excluded by default with a compatibility note"
             )
+        platform_profiles = row.get("platform_profiles")
+        if platform_profiles not in (
+            ["windows"],
+            ["linux"],
+            ["windows", "linux"],
+        ):
+            raise EnvironmentContractError(
+                f"{label}.platform_profiles must be a non-empty ordered subset "
+                "of windows and linux"
+            )
+        platform_versions = row.get("platform_versions")
+        if platform_versions is not None:
+            if (
+                not isinstance(platform_versions, dict)
+                or list(platform_versions) != platform_profiles
+            ):
+                raise EnvironmentContractError(
+                    f"{label}.platform_versions must bind every selected profile"
+                )
+            for profile, profile_version in platform_versions.items():
+                if (
+                    not isinstance(profile_version, str)
+                    or not _VERSION_RE.fullmatch(profile_version)
+                    or profile_version.split("+", 1)[0] != version.split("+", 1)[0]
+                ):
+                    raise EnvironmentContractError(
+                        f"{label}.platform_versions.{profile} is malformed"
+                    )
         source = row.get("source")
         if not isinstance(source, dict):
             raise EnvironmentContractError(f"{label}.source must be an object")
@@ -906,29 +953,57 @@ def validate_prose_authority(root: Path, manifest: Mapping[str, Any]) -> None:
             )
 
 
+def _package_rows_for_profile(
+    manifest: Mapping[str, Any], platform_profile: str | None,
+) -> list[Mapping[str, Any]]:
+    if platform_profile is None:
+        return list(manifest["packages"])
+    profile = platform_profile
+    if profile not in {"windows", "linux"}:
+        raise EnvironmentContractError(f"platform profile is unavailable: {profile!r}")
+    return [
+        row for row in manifest["packages"]
+        if profile in row.get("platform_profiles", ("windows", "linux"))
+    ]
+
+
+def _expected_package_version(
+    row: Mapping[str, Any], platform_profile: str,
+) -> str:
+    versions = row["platform_versions"]
+    if isinstance(versions, Mapping):
+        return str(versions[platform_profile])
+    return str(row["version"])
+
+
 def validate_installed_versions(
     manifest: Mapping[str, Any],
     installed_versions: Mapping[str, str],
+    platform_profile: str | None = None,
 ) -> None:
+    profile = platform_profile or inferred_platform_profile()
     normalized = {
         _normalized_distribution(name): version
         for name, version in installed_versions.items()
     }
-    for row in manifest["packages"]:
+    for row in _package_rows_for_profile(manifest, profile):
         key = _normalized_distribution(row["distribution"])
         actual = normalized.get(key)
         if actual is None and not row["install_by_default"]:
             continue
-        if actual != row["version"]:
+        expected = _expected_package_version(row, profile)
+        if actual != expected:
             raise EnvironmentContractError(
                 "installed version mismatch for "
-                f"{row['distribution']}: expected {row['version']}, got {actual}"
+                f"{row['distribution']}: expected {expected}, got {actual}"
             )
 
 
-def current_installed_versions(manifest: Mapping[str, Any]) -> dict[str, str]:
+def current_installed_versions(
+    manifest: Mapping[str, Any], platform_profile: str | None = None,
+) -> dict[str, str]:
     versions: dict[str, str] = {}
-    for row in manifest["packages"]:
+    for row in _package_rows_for_profile(manifest, platform_profile):
         distribution = row["distribution"]
         try:
             versions[distribution] = importlib.metadata.version(distribution)
@@ -972,9 +1047,10 @@ def current_completion_versions(build_manifest: Mapping[str, Any]) -> dict[str, 
 
 def current_installed_sources(
     manifest: Mapping[str, Any],
+    platform_profile: str | None = None,
 ) -> dict[str, dict[str, Any] | None]:
     sources: dict[str, dict[str, Any] | None] = {}
-    for row in manifest["packages"]:
+    for row in _package_rows_for_profile(manifest, platform_profile):
         distribution = row["distribution"]
         try:
             metadata = importlib.metadata.distribution(distribution)
@@ -1009,12 +1085,13 @@ def current_installed_sources(
 def validate_installed_sources(
     manifest: Mapping[str, Any],
     installed_sources: Mapping[str, dict[str, Any] | None],
+    platform_profile: str | None = None,
 ) -> None:
     normalized = {
         _normalized_distribution(name): value
         for name, value in installed_sources.items()
     }
-    for row in manifest["packages"]:
+    for row in _package_rows_for_profile(manifest, platform_profile):
         distribution = row["distribution"]
         direct = normalized.get(_normalized_distribution(distribution))
         if direct is None and not row["install_by_default"]:
@@ -1079,15 +1156,20 @@ def validate_observed_environment(
         "implementation": platform.python_implementation(),
         "python_version": platform.python_version(),
         "python_executable_basename": Path(sys.executable).name,
-        "platform": platform.platform(),
         "pip_version": importlib.metadata.version("pip"),
     }
-    if actual != observed:
-        mismatches = [
-            f"{key}: expected {observed[key]!r}, got {actual[key]!r}"
-            for key in sorted(actual)
-            if actual[key] != observed[key]
-        ]
+    mismatches = [
+        f"{key}: expected {observed[key]!r}, got {actual[key]!r}"
+        for key in sorted(actual)
+        if actual[key] != observed[key]
+    ]
+    actual_platform = platform.platform()
+    if re.fullmatch(str(observed["platform_pattern"]), actual_platform) is None:
+        mismatches.append(
+            "platform: expected fullmatch "
+            f"{observed['platform_pattern']!r}, got {actual_platform!r}"
+        )
+    if mismatches:
         raise EnvironmentContractError(
             "observed environment mismatch: " + "; ".join(mismatches)
         )
@@ -1098,6 +1180,7 @@ def validate_repository_contract(
     root: Path,
     manifest: Mapping[str, Any],
     installed_versions: Mapping[str, str] | None = None,
+    platform_profile: str | None = None,
 ) -> dict[str, Any]:
     validate_manifest_shape(manifest)
     mapped: dict[str, list[str]] = {}
@@ -1129,7 +1212,9 @@ def validate_repository_contract(
             raise EnvironmentContractError(f"linked manifest is missing: {path}")
     validate_prose_authority(root, manifest)
     if installed_versions is not None:
-        validate_installed_versions(manifest, installed_versions)
+        validate_installed_versions(
+            manifest, installed_versions, platform_profile=platform_profile
+        )
     return {
         "status": "PASS",
         "production_import_count": len(actual),
@@ -1144,6 +1229,7 @@ def build_install_argv(
     manifest: Mapping[str, Any],
     *,
     python_executable: str,
+    platform_profile: str | None = None,
 ) -> list[str]:
     validate_manifest_shape(manifest)
     return [
@@ -1154,7 +1240,7 @@ def build_install_argv(
         *manifest["pip_options"],
         *(
             row["requirement"]
-            for row in manifest["packages"]
+            for row in _package_rows_for_profile(manifest, platform_profile)
             if row["install_by_default"]
         ),
     ]
@@ -1163,10 +1249,14 @@ def build_install_argv(
 def build_environment_install_plan(
     manifest: Mapping[str, Any], *, build_manifest: Mapping[str, Any], python_executable: str,
     cache_dir: Path | None = None, completion_report_path: Path | None = None,
+    platform_profile: str | None = None,
 ) -> dict[str, Any]:
     validate_manifest_shape(manifest)
     validate_build_manifest_shape(build_manifest)
-    default_rows = [row for row in manifest["packages"] if row["install_by_default"]]
+    default_rows = [
+        row for row in _package_rows_for_profile(manifest, platform_profile)
+        if row["install_by_default"]
+    ]
     completion_rows = list(build_manifest["runtime_dependency_completion"])
     completion_core_rows = [
         row for row in completion_rows if row["resolver_mode"] == "resolver_core"
@@ -1322,7 +1412,7 @@ def _sha256_path(path: Path) -> str:
 def isolated_interpreter_path(root: Path, receipt_path: Path) -> Path:
     """Return the deterministic, run-scoped interpreter inside one checkout."""
     environment_root = root.resolve() / "state" / "python-environments" / receipt_path.stem
-    return environment_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    return environment_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python3")
 
 
 def _lexical_relative_to_root(root: Path, interpreter: Path) -> Path:
@@ -1640,7 +1730,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.check_installed and args.install_receipt is not None:
             parser.error("verify --install-receipt requires --check-installed")
         versions = (
-            current_installed_versions(manifest)
+            current_installed_versions(
+                manifest, platform_profile=selected_platform_profile
+            )
             if args.check_installed
             else None
         )
@@ -1653,6 +1745,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             root=root,
             manifest=manifest,
             installed_versions=versions,
+            platform_profile=selected_platform_profile,
         )
         if versions is not None:
             assert completion_versions is not None
@@ -1660,7 +1753,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             validate_observed_environment(manifest, selected_platform_profile)
             validate_installed_sources(
                 manifest,
-                current_installed_sources(manifest),
+                current_installed_sources(
+                    manifest, platform_profile=selected_platform_profile
+                ),
+                platform_profile=selected_platform_profile,
             )
             receipt = load_install_receipt(args.install_receipt.resolve(strict=True))
             validate_running_interpreter_binding(root, receipt["identity"]["isolated_interpreter"])
@@ -1685,6 +1781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(
             build_environment_install_plan(
                 manifest, build_manifest=build_manifest, python_executable=sys.executable,
+                platform_profile=selected_platform_profile,
             ),
             sort_keys=True,
         ))
@@ -1738,6 +1835,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         manifest, build_manifest=build_manifest, python_executable=str(interpreter_path),
         cache_dir=receipt_path.parent / "pip-cache",
         completion_report_path=completion_report_path,
+        platform_profile=selected_platform_profile,
     )
     environment_commands: list[dict[str, Any]] = []
     core_command, _stdout, _stderr = _run_pip_command(
