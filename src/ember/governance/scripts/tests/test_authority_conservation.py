@@ -590,6 +590,48 @@ def test_repository_old_or_new_authority_layout_passes() -> None:
     assert payload["ok"] is True
 
 
+def _next_workstream_path_scopes() -> dict:
+    scopes = copy.deepcopy(WORKSTREAM_PATH_SCOPES)
+    canonical = "src/ember/infrastructure/tools/ember-restart-3b/"
+    for workstream_id in ("EMBER-02A", "EMBER-02B"):
+        prefixes = scopes[workstream_id]["prefixes"]
+        prefixes.insert(prefixes.index("tools/ember-restart-3b/") + 1, canonical)
+    return scopes
+
+
+def _scope_policy_errors(scopes: dict) -> list[dict]:
+    verifier = load_verifier_module()
+    parse_errors: list[dict] = []
+    policy = verifier.parse_goal_policy(REPO_ROOT, parse_errors)
+    assert parse_errors == []
+    assert policy is not None
+    policy["workstream_path_scopes"] = copy.deepcopy(scopes)
+    errors: list[dict] = []
+    verifier.check_policy(REPO_ROOT, policy, errors)
+    return errors
+
+
+@pytest.mark.parametrize(
+    "scopes",
+    [WORKSTREAM_PATH_SCOPES, _next_workstream_path_scopes()],
+    ids=["old", "declared-next"],
+)
+def test_scope_transition_bridge_accepts_exact_old_and_next(scopes: dict) -> None:
+    assert _scope_policy_errors(scopes) == []
+
+
+def test_scope_transition_bridge_refuses_third_variant() -> None:
+    third = _next_workstream_path_scopes()
+    third["EMBER-02B"]["prefixes"].append("undeclared-third-scope/")
+    assert _scope_policy_errors(third) == [
+        {
+            "code": "policy.workstream_path_scopes",
+            "detail": "child workstreams must retain exact conflict-free path scopes",
+            "leg": 4,
+        }
+    ]
+
+
 def test_domain_governance_authority_path_is_selected(tmp_path: Path) -> None:
     verifier = load_verifier_module()
     path = tmp_path / "docs/domains/governance/authority/GOVERNANCE.md"
