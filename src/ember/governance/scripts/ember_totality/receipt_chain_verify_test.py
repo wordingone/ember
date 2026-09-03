@@ -20,10 +20,10 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 
-# Add repo root to path
+# Add the governance domain root to expose its ``scripts`` package.
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
-sys.path.insert(0, REPO_ROOT)
+GOVERNANCE_DIR = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, GOVERNANCE_DIR)
 
 from scripts.ember_totality import receipt_chain_verify as rcv
 

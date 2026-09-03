@@ -68,7 +68,7 @@ import sys
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
+GOVERNANCE_DIR = os.path.dirname(HERE)
 
 GROWTH_RUNG_DIR = "receipts/growth-rung-attempts"
 B2_BOOTSTRAP_DIR = "receipts/bootstrap-rung"
@@ -259,9 +259,9 @@ def evaluate_hinge(root, state):
 
 def run():
     hinge_states = [
-        evaluate_hinge(ROOT, compute_h0_ceiling(ROOT)),
-        evaluate_hinge(ROOT, compute_earned_growth(ROOT)),
-        evaluate_hinge(ROOT, compute_b2_bootstrap(ROOT)),
+        evaluate_hinge(GOVERNANCE_DIR, compute_h0_ceiling(GOVERNANCE_DIR)),
+        evaluate_hinge(GOVERNANCE_DIR, compute_earned_growth(GOVERNANCE_DIR)),
+        evaluate_hinge(GOVERNANCE_DIR, compute_b2_bootstrap(GOVERNANCE_DIR)),
     ]
     fired = sum(1 for h in hinge_states if h["trigger_fired"])
     violations = [h["hinge"] for h in hinge_states if not h["compliant"]]
@@ -277,7 +277,7 @@ def run():
         "violations": violations,
         "exit": exit_status,
     }
-    receipts_dir = os.path.join(ROOT, "scripts", "ember_totality", "receipts-disconfirmation")
+    receipts_dir = os.path.join(GOVERNANCE_DIR, "scripts", "ember_totality", "receipts-disconfirmation")
     os.makedirs(receipts_dir, exist_ok=True)
     receipt_path = os.path.join(receipts_dir, f"disconfirmation-eval-{ts}.json")
     with open(receipt_path, "w", encoding="utf-8") as f:

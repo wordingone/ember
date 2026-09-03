@@ -21,13 +21,29 @@ SPEC.loader.exec_module(writers)
 
 def _install_root(monkeypatch, tmp_path: Path) -> Path:
     (tmp_path / "receipts").mkdir()
-    (tmp_path / "scripts" / "ember_totality" / "receipts-totality").mkdir(parents=True)
+    (
+        tmp_path
+        / "src"
+        / "ember"
+        / "governance"
+        / "scripts"
+        / "ember_totality"
+        / "receipts-totality"
+    ).mkdir(parents=True)
     monkeypatch.setattr(writers, "REPO_ROOT", tmp_path)
     return tmp_path
 
 
 def _write_designated_receipt(root: Path, family: str, spend: bool) -> None:
-    directory = root / "scripts" / "ember_totality" / f"receipts-{family}"
+    directory = (
+        root
+        / "src"
+        / "ember"
+        / "governance"
+        / "scripts"
+        / "ember_totality"
+        / f"receipts-{family}"
+    )
     directory.mkdir(parents=True, exist_ok=True)
     payload = {"verdict": "PASS"}
     if spend:

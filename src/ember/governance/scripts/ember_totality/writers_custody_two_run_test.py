@@ -76,9 +76,10 @@ def test_writers_custody_two_run() -> bool:
     print("=" * 70)
 
     receipts_dir = REPO_ROOT / "receipts"
-    milestone_dir = REPO_ROOT / "scripts" / "ember_totality" / "receipts-milestone"
+    governance_dir = REPO_ROOT / "src" / "ember" / "governance"
+    milestone_dir = governance_dir / "scripts" / "ember_totality" / "receipts-milestone"
     publication_dir = (
-        REPO_ROOT / "scripts" / "ember_totality" / "receipts-publication"
+        governance_dir / "scripts" / "ember_totality" / "receipts-publication"
     )
     canonical_before = _get_all_files(receipts_dir)
     milestone_before = _get_all_json_files(milestone_dir)

@@ -6,12 +6,12 @@
   "exceptions": [
     {
       "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
-      "sha256": "11a51037c13f9d408fe1494e6a91cd906348c9e1d6ae97de6390ec2e11705720",
+      "sha256": "059aea9c3fbe5bf759212bb83da9457a565a93cf619388600b2db7add63b60f8",
       "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
       "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
-      "sha256": "4e9f432fd8e0955f475fb998c6f39c9a7e964db48dc55d2c35868b8007c41c36",
+      "sha256": "c898df21988301f7def1251708104140d558fb29c0ac67bcd62edd785a0d1c98",
       "reason": "02B-owned certified-launch custody suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
