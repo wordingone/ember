@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 from pathlib import Path
@@ -65,6 +66,12 @@ TRUSTED_CODEQL_PR_ACTIONS = (
     "github/codeql-action/init@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
     "github/codeql-action/analyze@3b0bd1d116c0bde30213346b22d4f634d96a2fb0",
 )
+SRC_SCRIPT_BY_PATH = re.compile(
+    r"\bpython(?:\s+-B)?\s+(src/[A-Za-z0-9_./-]+\.py)\b"
+)
+EDITABLE_INSTALL = re.compile(
+    r"\bpython(?:\s+-B)?\s+-m\s+pip\s+install\b[^\n]*(?:--editable\s+\.|-e\s+\.)"
+)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -75,6 +82,58 @@ def _load(path: Path) -> dict[str, Any]:
     if True in value and "on" not in value:
         value["on"] = value.pop(True)
     return value
+
+
+def _source_imports_src_package(path: Path) -> bool:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="strict"))
+    except (OSError, SyntaxError, UnicodeError):
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "src" or module.startswith("src."):
+                return True
+        elif isinstance(node, ast.Import):
+            if any(alias.name == "src" or alias.name.startswith("src.") for alias in node.names):
+                return True
+    return False
+
+
+def validate_src_script_execution(root: Path, path: Path) -> list[str]:
+    """Reject by-path execution whose absolute ``src.*`` imports need packaging.
+
+    Running ``python src/.../tool.py`` puts the tool's directory, not the
+    repository root, on ``sys.path``. A module invocation or an editable
+    install is therefore required for tools that import the ``src`` package.
+    """
+    try:
+        workflow = _load(path)
+    except Exception:
+        return []  # validate_workflow already reports the parse failure.
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict):
+        return []
+    errors: list[str] = []
+    for job_name, job in jobs.items():
+        if not isinstance(job, dict) or not isinstance(job.get("steps"), list):
+            continue
+        runs = [
+            str(step.get("run", ""))
+            for step in job["steps"]
+            if isinstance(step, dict)
+        ]
+        if any(EDITABLE_INSTALL.search(run) for run in runs):
+            continue
+        for run in runs:
+            for relative in SRC_SCRIPT_BY_PATH.findall(run):
+                source = root / Path(relative)
+                if source.is_file() and _source_imports_src_package(source):
+                    errors.append(
+                        f"{path.name}:{job_name}: src-importing script by path "
+                        f"without editable install: {relative}; invoke it with -m"
+                    )
+    return errors
 
 
 def _permission_writes(value: Any) -> bool:
@@ -382,6 +441,7 @@ def validate_tree(root: Path) -> dict[str, Any]:
     errors: list[str] = []
     for path in paths:
         errors.extend(validate_workflow(path))
+        errors.extend(validate_src_script_execution(root, path))
     return {
         "status": "PASS" if not errors else "FAIL",
         "workflow_count": len(paths),
