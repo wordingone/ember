@@ -334,7 +334,11 @@ def mint_plan(
     if declared_head != actual_head or not _hex40(declared_head) or porcelain:
         raise ACleanRefusal("MINT_CHECKOUT_IDENTITY_REFUSED")
     spec = _load_self_hashed_leg_spec(leg_spec_path.resolve(strict=True), platform_name)
-    python_executable = python_executable.resolve(strict=True)
+    # Lexical: a POSIX venv interpreter is a symlink to its provisioner; resolving it would
+    # bind the plan to the host interpreter instead of the receipt-bound one.
+    python_executable = Path(os.path.abspath(python_executable))
+    if not python_executable.is_file():
+        raise ACleanRefusal(f"PYTHON_EXECUTABLE_MISSING:{python_executable}")
     cargo_executable = cargo_executable.resolve(strict=True)
     artifact_root = artifact_root.resolve(strict=True)
     install_receipt = install_receipt.resolve(strict=True)
@@ -366,7 +370,9 @@ def mint_plan(
             if not path.is_file():
                 raise ACleanRefusal(f"LEG_CONTRACT_FILE_MISSING:{spec_row['id']}:{rel}")
             contract_files.append({"path": rel, "raw_sha256": sha256_file(path)})
-        executable = Path(argv[0]).resolve(strict=True)
+        executable = Path(os.path.abspath(argv[0]))
+        if not executable.is_file():
+            raise ACleanRefusal(f"LEG_EXECUTABLE_MISSING:{spec_row['id']}:{argv[0]}")
         rows.append({
             "id": spec_row["id"],
             "argv": argv,

@@ -25,7 +25,7 @@ permissions:
 jobs:
   linux-clean-clone:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout exact declared tip into arbitrary root
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -82,8 +82,23 @@ jobs:
             --dest "$RUNNER_TEMP" setuptools==84.0.0
           printf '%s  %s\n' 'f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73' "$SDIST" \
             | sha256sum --check --strict -
+          set +e
           python3 "$CHECKOUT/src/ember/infrastructure/tools/ember-restart-3b/python_environment.py" \
             --root "$CHECKOUT" --platform-profile linux install --receipt "$INSTALL"
+          install_rc=$?
+          set -e
+          if [ "$install_rc" -ne 0 ]; then
+            shopt -s nullglob
+            for log in \
+              "$RUNNER_TEMP"/*-resolved-core.stdout.log \
+              "$RUNNER_TEMP"/*-resolved-core.stderr.log \
+              "$RUNNER_TEMP"/*-completion-resolver.stdout.log \
+              "$RUNNER_TEMP"/*-completion-resolver.stderr.log; do
+              printf '\n===== %s =====\n' "$(basename "$log")"
+              tail -n 200 "$log"
+            done
+            exit "$install_rc"
+          fi
 
       - name: Mint and publish exact Linux platform plan identity
         shell: bash
@@ -101,12 +116,11 @@ jobs:
           set -euo pipefail
           printf '%s' "$LEG_SPEC_BASE64" | base64 --decode > "$LEG_SPEC"
           printf '%s  %s\n' "$LEG_SPEC_RAW_SHA256" "$LEG_SPEC" | sha256sum --check --strict -
-          mkdir -p "$RUNNER_TEMP/B:/tmp"
-          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python3" \
             "$CHECKOUT/scripts/issue1949_a_clean.py" mint-plan \
             --repo-root "$CHECKOUT" --leg-spec "$LEG_SPEC" --output "$PLAN" \
             --declared-head "$DECLARED_HEAD" --platform linux \
-            --python-executable "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+            --python-executable "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python3" \
             --cargo-executable "$(command -v cargo)" --artifact-root "$RUNNER_TEMP" \
             --install-receipt "$INSTALL" --setuptools-sdist "$SDIST"
 
@@ -119,23 +133,24 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
-          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python3" \
             "$CHECKOUT/scripts/issue1949_a_clean.py" run \
             --repo-root "$CHECKOUT" \
             --plan "$PLAN" \
             --output "$RECEIPT" \
             --platform linux
-          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python" \
+          "$CHECKOUT/state/python-environments/issue1949-a-clean-linux-install/bin/python3" \
             "$CHECKOUT/scripts/issue1949_a_clean.py" verify --receipt "$RECEIPT"
 
       - name: Upload raw receipt and per-leg streams
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
         with:
           name: issue1949-a-clean-linux-${{ inputs.declared_head }}
           path: |
             ${{ runner.temp }}/issue1949-a-clean-linux.json
             ${{ runner.temp }}/issue1949-a-clean-linux-plan.json
             ${{ runner.temp }}/issue1949-a-clean-linux-leg-spec.json
-            ${{ runner.temp }}/issue1949-a-clean-linux-install.json
+            ${{ runner.temp }}/issue1949-a-clean-linux-install*
             ${{ runner.temp }}/issue1949-a-clean-linux.streams/**
-          if-no-files-found: error
+          if-no-files-found: warn

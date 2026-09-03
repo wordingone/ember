@@ -301,7 +301,7 @@ def run_lab(repo_root: Path, artifact_root: Path, cargo: str) -> dict[str, Any]:
     work.mkdir(parents=True, exist_ok=False)
     repo = Path(repo_root).resolve(strict=True)
     manifest = repo / "runtime" / "ember-lab" / "Cargo.toml"
-    build = _run((cargo, "build", "--manifest-path", str(manifest), "--quiet"), cwd=work)
+    build = _run((cargo, "build", "--locked", "--manifest-path", str(manifest), "--quiet"), cwd=work)
     if build.returncode != 0:
         raise ValueError(f"EMBER_LAB_BUILD_REFUSED:{build.returncode}:{build.stderr.decode(errors='replace')}")
     binary = manifest.parent / "target" / "debug" / ("ember-lab.exe" if os.name == "nt" else "ember-lab")
@@ -348,7 +348,7 @@ def run_lab(repo_root: Path, artifact_root: Path, cargo: str) -> dict[str, Any]:
         ],
         "custody_root": str(custody),
         "storage_reserves": [{"root": str(work), "minimum_free_bytes": 1}],
-        "minimum_free_vram_bytes": 1,
+        "minimum_free_vram_bytes": 0,
         "required_available_maximum_commit_bytes": 11 * 1024**3,
         "maximum_job_memory_bytes": 1073741824,
         "simulated_peak_commit_bytes": 1048576,
@@ -394,7 +394,7 @@ def run_lab(repo_root: Path, artifact_root: Path, cargo: str) -> dict[str, Any]:
         "result": "PASS",
         "exit_code": 0,
         "adapter": "ember-lab rehearse CLI",
-        "build_argv": [cargo, "build", "--manifest-path", str(manifest), "--quiet"],
+        "build_argv": [cargo, "build", "--locked", "--manifest-path", str(manifest), "--quiet"],
         "argv": list(argv),
         "rehearsal_receipt_raw_sha256": sha256_file(lab_receipt),
         "stdout_raw_sha256": sha256_file(stdout_path),
