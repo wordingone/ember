@@ -38,6 +38,22 @@ NEGATIVE_LEG_IDS = frozenset((
     "external_data_absent_refusal",
     "external_data_present",
 ))
+# A negative leg passes only when its streams carry the named refusal class. An exit
+# code alone is satisfiable by an unrelated crash with the same status; the class text
+# is emitted by the governed consumer itself (receipt result / refusal detail).
+NEGATIVE_LEG_REFUSAL_MARKERS: dict[str, tuple[bytes, ...]] = {
+    "refused_dependency_sdist": (
+        b"host-conditioned wheel differs from fixed manifest artifact",
+    ),
+    "external_data_absent_refusal": (
+        b'"result": "EXPECTED_REFUSAL"',
+        b"external authority root is absent",
+    ),
+    "external_data_present": (
+        b'"result": "REFUSED_EXTERNAL_CUSTODY_INSUFFICIENT"',
+    ),
+}
+assert frozenset(NEGATIVE_LEG_REFUSAL_MARKERS) == NEGATIVE_LEG_IDS, "every negative leg names its refusal class"
 SHELL_EXECUTABLES = {
     "bash", "bash.exe", "cmd", "cmd.exe", "powershell", "powershell.exe",
     "pwsh", "pwsh.exe", "sh", "sh.exe",
@@ -339,7 +355,11 @@ def mint_plan(
     python_executable = Path(os.path.abspath(python_executable))
     if not python_executable.is_file():
         raise ACleanRefusal(f"PYTHON_EXECUTABLE_MISSING:{python_executable}")
-    cargo_executable = cargo_executable.resolve(strict=True)
+    # Lexical for the same reason as the interpreter: ~/.cargo/bin/cargo is a rustup shim on a
+    # fresh host; resolving it binds the plan to rustup (Linux run 33805309876, lab leg exit 2).
+    cargo_executable = Path(os.path.abspath(cargo_executable))
+    if not cargo_executable.is_file():
+        raise ACleanRefusal(f"CARGO_EXECUTABLE_MISSING:{cargo_executable}")
     artifact_root = artifact_root.resolve(strict=True)
     install_receipt = install_receipt.resolve(strict=True)
     sdist_path = sdist_path.resolve(strict=True)
@@ -419,6 +439,23 @@ def _actual_platform() -> str:
     raise ACleanRefusal(f"PLATFORM_UNSUPPORTED:{system}")
 
 
+def bind_negative_leg_refusal_class(leg_id: str, stdout: bytes, stderr: bytes) -> list[str]:
+    """Return the refusal-class markers a negative leg was bound to; refuse when absent.
+
+    Positive legs have no class and return an empty list. For a negative leg every marker
+    must appear in the leg's own streams, so the authorized nonzero exit is proven to be
+    the named refusal rather than an unrelated failure with the same status.
+    """
+    markers = NEGATIVE_LEG_REFUSAL_MARKERS.get(leg_id)
+    if markers is None:
+        return []
+    combined = stdout + b"\n" + stderr
+    for marker in markers:
+        if marker not in combined:
+            raise ACleanRefusal(f"LEG_REFUSAL_CLASS_REFUSED:{leg_id}:{marker.decode()}")
+    return [marker.decode() for marker in markers]
+
+
 def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: str) -> dict[str, object]:
     if output.exists():
         raise FileExistsError(f"OUTPUT_EXISTS_REFUSED:{output}")
@@ -455,6 +492,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
         stderr_path.write_bytes(result.stderr)
         if result.returncode != leg["expected_exit"]:
             raise ACleanRefusal(f"LEG_EXIT_REFUSED:{leg['id']}:{result.returncode}")
+        refusal_class = bind_negative_leg_refusal_class(leg["id"], result.stdout, result.stderr)
         rows.append({
             "id": leg["id"], "argv": leg["argv"], "expected_exit": leg["expected_exit"],
             "actual_exit": result.returncode,
@@ -464,6 +502,7 @@ def run_plan(repo_root: Path, plan_path: Path, output: Path, declared_platform: 
             "semantic_contract_sha256": leg["semantic_contract_sha256"],
             "stdout_raw_sha256": sha256_bytes(result.stdout),
             "stderr_raw_sha256": sha256_bytes(result.stderr),
+            "refusal_class_markers": refusal_class,
         })
     final_head = _git(repo_root, "rev-parse", "HEAD").decode().strip()
     final_porcelain = _git(repo_root, "status", "--porcelain")
