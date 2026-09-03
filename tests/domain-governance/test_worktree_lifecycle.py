@@ -707,7 +707,9 @@ def test_hooks_and_repo_guard_have_one_hidden_python_boundary() -> None:
         assert "run-python-hidden.sh" in source
         assert re.search(r"(?m)(^|[=( ])python(?:3)?\s", source) is None
 
-    shell_launcher = (REPO_ROOT / "tools" / "run-python-hidden.sh").read_text(
+    shell_launcher = (
+        REPO_ROOT / "src" / "ember" / "infrastructure" / "tools" / "run-python-hidden.sh"
+    ).read_text(
         encoding="utf-8"
     )
     assert '"${OS:-}" = "Windows_NT"' in shell_launcher
@@ -734,7 +736,9 @@ def test_windows_hidden_python_boundary_preserves_streams_args_and_exit(
     )
     env = dict(os.environ)
     env["EMBER_PYTHON_BIN"] = sys.executable
-    env["EMBER_HIDDEN_HELPER"] = str(REPO_ROOT / "tools" / "run-python-hidden.sh")
+    env["EMBER_HIDDEN_HELPER"] = str(
+        REPO_ROOT / "src" / "ember" / "infrastructure" / "tools" / "run-python-hidden.sh"
+    )
     env["EMBER_HIDDEN_CHILD"] = str(child)
     env["EMBER_HIDDEN_ARG_SPACE"] = "alpha with space"
     env["EMBER_HIDDEN_ARG_QUOTE"] = "beta'quoted"
@@ -1981,10 +1985,13 @@ def make_throwaway_tool_checkout(tmp_path: Path) -> Path:
     from it exactly the way the incident did (append bytes, never commit).
     """
     checkout = tmp_path / "tool-checkout"
-    scripts_dir = checkout / "scripts"
+    scripts_dir = checkout / "src" / "ember" / "governance" / "scripts"
     scripts_dir.mkdir(parents=True)
     shutil.copy(SCRIPT, scripts_dir / "worktree_lifecycle.py")
-    shutil.copy(REPO_ROOT / "scripts" / "gate_provenance.py", scripts_dir / "gate_provenance.py")
+    shutil.copy(
+        REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "gate_provenance.py",
+        scripts_dir / "gate_provenance.py",
+    )
     git(checkout, "init", "-b", "master")
     git(checkout, "config", "user.name", "Ember Test")
     git(checkout, "config", "user.email", "ember@example.invalid")
@@ -2001,7 +2008,7 @@ def test_refuses_every_subcommand_when_own_bytes_are_modified_vs_head(tmp_path: 
     proceeded (and `create`/`retire` would have mutated real state).
     """
     checkout = make_throwaway_tool_checkout(tmp_path)
-    tool = checkout / "scripts" / "worktree_lifecycle.py"
+    tool = checkout / "src" / "ember" / "governance" / "scripts" / "worktree_lifecycle.py"
 
     # Control: the clean checkout's own copy of the tool runs normally.
     clean = run(
@@ -2044,7 +2051,7 @@ def test_allow_modified_self_overrides_the_self_integrity_refusal(tmp_path: Path
     override, and only that flag, lets a dirty-self tool run.
     """
     checkout = make_throwaway_tool_checkout(tmp_path)
-    tool = checkout / "scripts" / "worktree_lifecycle.py"
+    tool = checkout / "src" / "ember" / "governance" / "scripts" / "worktree_lifecycle.py"
     with tool.open("a", encoding="utf-8") as handle:
         handle.write("\n# stale drift, deliberately overridden\n")
 
@@ -2160,7 +2167,7 @@ def test_provenance_banner_reports_dirty_state_of_its_own_bytes(tmp_path: Path) 
     reflecting whether the tool's OWN on-disk bytes are modified vs HEAD.
     """
     checkout = make_throwaway_tool_checkout(tmp_path)
-    tool = checkout / "scripts" / "worktree_lifecycle.py"
+    tool = checkout / "src" / "ember" / "governance" / "scripts" / "worktree_lifecycle.py"
 
     clean = run(
         sys.executable, str(tool), "--repo", str(checkout), "install", "--target", "3",
