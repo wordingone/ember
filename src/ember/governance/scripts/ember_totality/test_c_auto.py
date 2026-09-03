@@ -34,7 +34,7 @@ from pathlib import Path
 
 from autonomy_claim_evidence import ClaimEvidenceError, validate_claimed_rung
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 CANDIDATE_ROOTS = [p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT) if p]
 ROOT = next((r for r in CANDIDATE_ROOTS if os.path.isdir(r)), None)
 

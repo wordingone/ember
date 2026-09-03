@@ -73,7 +73,7 @@ Language-specific reusable work is invoked only when relevant:
 
 - Python compile, focused unit, and changed-artifact checks;
 - Rust format, check, and unit tests for `runtime/ember-lab`;
-- Bun type/build/unit checks for `tools/ember-cli/src`;
+- Bun type/build/unit checks for `src/ember/infrastructure/tools/ember-cli/src`;
 - documentation, workflow-schema, and template validation;
 - bounded integration checks.
 

@@ -11,11 +11,11 @@ MONITOR / UNDERSTAND / INTERACT via a proof-pack the operator runs himself.
 
 ## Real code that exists
 
-`tools/ember-cli/src/core/ember-world-state.ts` defines `buildEmberWorldState()`,
-called fresh at boot by `tools/ember-cli/src/commands/world-state.ts`
+`src/ember/infrastructure/tools/ember-cli/src/core/ember-world-state.ts` defines `buildEmberWorldState()`,
+called fresh at boot by `src/ember/infrastructure/tools/ember-cli/src/commands/world-state.ts`
 (`cachedState = await buildEmberWorldState()`), not a hand-maintained mirror.
-`tools/ember-cli/src/core/encounter-membrane.ts` implements the confirm-only
-membrane referenced by requirement (c). `tools/ember-cli/src/core/
+`src/ember/infrastructure/tools/ember-cli/src/core/encounter-membrane.ts` implements the confirm-only
+membrane referenced by requirement (c). `src/ember/infrastructure/tools/ember-cli/src/core/
 monitor-render.ts` implements the render side of MONITOR.
 
 `src/ember/governance/scripts/ember_cobs_capture.py` is the proof-pack CAPTURE harness (gh issue

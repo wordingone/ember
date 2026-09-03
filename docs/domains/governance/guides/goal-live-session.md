@@ -5,7 +5,7 @@ probe. It uses the real continuation engine, GoalStore transition boundary,
 receipt transition writer, and compiled `ember` entrypoint; it does not claim
 model quality or training progress.
 
-From `tools/ember-cli/src`, build and run the exact command:
+From `src/ember/infrastructure/tools/ember-cli/src`, build and run the exact command:
 
 ```powershell
 $exe = Join-Path $env:TEMP "ember-goal-live.exe"

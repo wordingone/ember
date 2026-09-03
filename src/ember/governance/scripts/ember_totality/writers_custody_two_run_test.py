@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 def _get_all_json_files(path: Path) -> set[str]:

@@ -13,7 +13,7 @@ import tempfile
 import unittest
 
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[5]
 MODULE_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
 MANIFEST_PATH = "manifests/training-dependency-closure.json"
 

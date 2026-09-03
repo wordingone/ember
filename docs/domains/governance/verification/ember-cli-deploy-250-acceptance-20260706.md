@@ -12,7 +12,7 @@ announce-first step, not performed here, and no running process was touched at a
 - Source: `public/master` @ `23a1ab90d0f4d1005918aa320ad1e01b040e0d55` ("fix: model-client retry
   circuit breaker + startup endpoint disclosure (#258)") — fresh `git fetch public master` +
   `git worktree add` immediately before building, no local edits.
-- Build command: `bun run build` (`tools/ember-cli/src/package.json`'s own script — `bun build
+- Build command: `bun run build` (`src/ember/infrastructure/tools/ember-cli/src/package.json`'s own script — `bun build
   ./entrypoints/main.ts --compile --outfile ember.exe`), preceded by `bun install`.
 - Toolchain: `bun 1.3.12`, Windows x64.
 - Output: `ember.exe`, 118,905,344 bytes.

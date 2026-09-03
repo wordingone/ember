@@ -126,7 +126,7 @@ for _ember_66ee9e91637922dc_alias in _ember_66ee9e91637922dc_aliases:
 receipt_write = _ember_66ee9e91637922dc_module
 # issue2015 exact-local-import-end:src/ember/governance/scripts/receipt_write.py  # noqa: E402
 
-REPO_ROOT = os.path.abspath(os.path.join(HERE, ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 
 # Post-genesis constitutional invariant stamp (issue #281 / receipt_check.py
 # GENESIS_TS + INVARIANT_SHA256) -- required on any receipt timestamped after

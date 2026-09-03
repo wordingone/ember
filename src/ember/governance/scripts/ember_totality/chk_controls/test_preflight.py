@@ -19,7 +19,7 @@ from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROBES_DIR = os.path.dirname(HERE)
-REPO_ROOT = os.path.abspath(os.path.join(PROBES_DIR, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..', '..'))
 RUN_CONTROLS_PATH = os.path.join(HERE, "run_controls.py")
 
 

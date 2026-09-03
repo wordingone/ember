@@ -26,7 +26,7 @@
 - Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.ts`
 - Create: `src/ember/infrastructure/tools/ember-cli/src/ink/terminal-session.test.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/termio.ts`
-- Modify: `tools/ember-cli/src/core/frontend-shell.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/core/frontend-shell.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/core/frontend-shell.test.ts`
 
 **Interfaces:**
@@ -48,7 +48,7 @@
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/reconciler.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/mouse-input.test.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
-- Modify: `tools/ember-cli/src/screens/repl.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/screens/repl.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-control-wiring.test.ts`
 
 **Interfaces:**
@@ -68,7 +68,7 @@
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/ink/components.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/app-shell.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/components/operator-surface-pane.ts`
-- Modify: `tools/ember-cli/src/screens/repl.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/screens/repl.ts`
 - Create: `src/ember/infrastructure/tools/ember-cli/src/screens/repl-scroll-containment.test.ts`
 
 **Interfaces:**

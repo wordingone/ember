@@ -1,11 +1,11 @@
 {
-  "baselined_row_count": 764,
+  "baselined_row_count": 658,
   "expires_on": "2026-09-03",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
   "goal_id": "EMBER-02",
-  "maximum_rows": 764,
-  "minted_on": "2026-09-02",
+  "maximum_rows": 658,
+  "minted_on": "2026-09-03",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "rows": [
     {
@@ -97,61 +97,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 47,
-      "path": "src/ember/governance/scripts/a1_corpus_lineage.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 39,
-      "path": "src/ember/governance/scripts/a1_freeze_declaration.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 34,
-      "path": "src/ember/governance/scripts/a1_heldout_beacon_select.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 52,
-      "path": "src/ember/governance/scripts/a1_quarantine_enum.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 66,
-      "path": "src/ember/governance/scripts/a1_quarantine_enum_v2.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
       "error": "call outside closed grammar: re.compile",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -161,28 +106,6 @@
       "path": "src/ember/governance/scripts/architecture_map.py",
       "status": "UNEVALUABLE",
       "target": "_DRIVE_ROOT_RE"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent",
-      "expression_sha256": "3016251a1bd27fa8bb1e68793f29518f7f7a1fae7bf9de859f8fd0ed891fdf9d",
-      "line": 52,
-      "path": "src/ember/governance/scripts/build_fixed_prior_manifest.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 21,
-      "path": "src/ember/governance/scripts/c04_budget.py",
-      "status": "MISMATCH",
-      "target": "_REPO_ROOT"
     },
     {
       "error": null,
@@ -405,17 +328,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..'))",
-      "expression_sha256": "1a7afb03aa4bf80097bd175605a6c0da4eb40bf26e96bd1d1e1d7875c8dcbba0",
-      "line": 129,
-      "path": "src/ember/governance/scripts/c_port_simulated_device_receipt.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: Constant",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -526,17 +438,6 @@
       "target": "_RUN_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 71,
-      "path": "src/ember/governance/scripts/check_disconfirmation_triggers.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
-    },
-    {
       "error": "call outside closed grammar: os.path.normpath",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -603,50 +504,6 @@
       "target": "SHARD_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 50,
-      "path": "src/ember/governance/scripts/corpus_acquire.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 24,
-      "path": "src/ember/governance/scripts/corpus_acquire_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 30,
-      "path": "src/ember/governance/scripts/corpus_assembly.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 43,
-      "path": "src/ember/governance/scripts/corpus_mix.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
       "error": "node outside closed grammar: Attribute",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -656,17 +513,6 @@
       "path": "src/ember/governance/scripts/corpus_mix.py",
       "status": "UNEVALUABLE",
       "target": "OUT_ROOT_DEFAULT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 28,
-      "path": "src/ember/governance/scripts/corpus_mix_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
     },
     {
       "error": "unknown alias _REPO",
@@ -768,17 +614,6 @@
       "target": "OUT_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))",
-      "expression_sha256": "1f5ff3772a424908fb848d5c376789fefd024aaa5fa77f7eb263c2bea51fb515",
-      "line": 37,
-      "path": "src/ember/governance/scripts/ember_c6_rerun_reproduction_build.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -793,8 +628,8 @@
       "error": "call outside closed grammar: PurePosixPath",
       "evaluated_path": null,
       "expectation": "repo_root",
-      "expression": "PurePosixPath('tools/ember-cli/specs')",
-      "expression_sha256": "f79b558a431bea51ac3c97811fc152f9ac66b9c7e558d738ffa78f697394ec25",
+      "expression": "PurePosixPath('src/ember/infrastructure/tools/ember-cli/specs')",
+      "expression_sha256": "4119628d7e435fcc7ffe41e459e1c5e8d9ba06a2b7b9fb0dc9f2b6a68f84d468",
       "line": 15,
       "path": "src/ember/governance/scripts/ember_cli_spec_policy.py",
       "status": "UNEVALUABLE",
@@ -832,17 +667,6 @@
       "path": "src/ember/governance/scripts/ember_cobs_capture.py",
       "status": "UNEVALUABLE",
       "target": "SCRATCH_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "SCRIPT_DIR.parent",
-      "expression_sha256": "30be2486f26693a56306480bd28f02c86040fba0ffc52b619f8de7540b4b5c3b",
-      "line": 56,
-      "path": "src/ember/governance/scripts/ember_cognitive_mode_ablation.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "call outside closed grammar: os.environ.get",
@@ -975,28 +799,6 @@
       "path": "src/ember/governance/scripts/ember_ind3_operate_capture.py",
       "status": "UNEVALUABLE",
       "target": "GOALFORGE_RECEIPTS_DIR"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))",
-      "expression_sha256": "d452906cb679b7be32ff5fe9d195775040a8dacb7a23c2ed5211ec788cae2223",
-      "line": 46,
-      "path": "src/ember/governance/scripts/ember_phase4_c15/bitlinear_unit.py",
-      "status": "MISMATCH",
-      "target": "_REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "_SCRIPTS_DIR.parent",
-      "expression_sha256": "4077f4f1c05e4d17f9fb5ab237bdfb25ea61d8787b0bd1892cb7e25fd3922f5e",
-      "line": 54,
-      "path": "src/ember/governance/scripts/ember_phase5_c7/c7_selftest.py",
-      "status": "MISMATCH",
-      "target": "_REPO_ROOT"
     },
     {
       "error": "call outside closed grammar: next",
@@ -1186,17 +988,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 30,
-      "path": "src/ember/governance/scripts/ember_totality/c_custody_dictkey_citations_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1219,50 +1010,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 34,
-      "path": "src/ember/governance/scripts/ember_totality/c_custody_extraction_cures_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 27,
-      "path": "src/ember/governance/scripts/ember_totality/c_custody_pattern_citation_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 26,
-      "path": "src/ember/governance/scripts/ember_totality/c_custody_sidecar_agewindow_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 32,
-      "path": "src/ember/governance/scripts/ember_totality/c_custody_twin_resolution_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1272,17 +1019,6 @@
       "path": "src/ember/governance/scripts/ember_totality/c_custody_wave031_dispositions_test.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 28,
-      "path": "src/ember/governance/scripts/ember_totality/c_disconfirmation_custody_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": null,
@@ -1307,17 +1043,6 @@
       "target": "_REPO_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(PROBES_DIR, '..', '..'))",
-      "expression_sha256": "cdb077a87e2f3d325c24d642d8bfa30f0b518d81d46187cb1211b0f323c3d183",
-      "line": 46,
-      "path": "src/ember/governance/scripts/ember_totality/chk_controls/run_controls.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: Tuple",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1337,28 +1062,6 @@
       "line": 15,
       "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_issue788_quarantine_sweep.py",
       "status": "UNEVALUABLE",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "PROBES_DIR.parent.parent",
-      "expression_sha256": "7b488b356493b175953ffffb1e38a82aa38077da70d843da5bc12665e3384940",
-      "line": 65,
-      "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_issue_715_denominator_regression.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(PROBES_DIR, '..', '..'))",
-      "expression_sha256": "cdb077a87e2f3d325c24d642d8bfa30f0b518d81d46187cb1211b0f323c3d183",
-      "line": 22,
-      "path": "src/ember/governance/scripts/ember_totality/chk_controls/test_preflight.py",
-      "status": "MISMATCH",
       "target": "REPO_ROOT"
     },
     {
@@ -1395,39 +1098,6 @@
       "target": "SANDBOX_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 66,
-      "path": "src/ember/governance/scripts/ember_totality/ind3_operate_producer.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 43,
-      "path": "src/ember/governance/scripts/ember_totality/ind4_customize_experiment_producer.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 63,
-      "path": "src/ember/governance/scripts/ember_totality/ind5_comprehend_producer.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT_DEFAULT"
-    },
-    {
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1461,28 +1131,6 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 35,
-      "path": "src/ember/governance/scripts/ember_totality/probe_harden_683_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 25,
-      "path": "src/ember/governance/scripts/ember_totality/receipt_chain_verify_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: Attribute",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1492,28 +1140,6 @@
       "path": "src/ember/governance/scripts/ember_totality/receipt_errata_scan.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 44,
-      "path": "src/ember/governance/scripts/ember_totality/receipt_no_local_path_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 18,
-      "path": "src/ember/governance/scripts/ember_totality/root_placeholder_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: Attribute",
@@ -1549,17 +1175,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 54,
-      "path": "src/ember/governance/scripts/ember_totality/test_c1.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1580,17 +1195,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c1.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 48,
-      "path": "src/ember/governance/scripts/ember_totality/test_c10.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -1626,17 +1230,6 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 47,
-      "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1657,17 +1250,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c11.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 54,
-      "path": "src/ember/governance/scripts/ember_totality/test_c12.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -1692,17 +1274,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 68,
-      "path": "src/ember/governance/scripts/ember_totality/test_c13.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1723,17 +1294,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c13.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 92,
-      "path": "src/ember/governance/scripts/ember_totality/test_c14.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -1758,17 +1318,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 66,
-      "path": "src/ember/governance/scripts/ember_totality/test_c15.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1778,17 +1327,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c15.py",
       "status": "UNEVALUABLE",
       "target": "_ROOT_CANDIDATES"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 91,
-      "path": "src/ember/governance/scripts/ember_totality/test_c2.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -1813,17 +1351,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 64,
-      "path": "src/ember/governance/scripts/ember_totality/test_c3.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "unknown alias EXTERNAL_STATE",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -1844,17 +1371,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c3.py",
       "status": "UNEVALUABLE",
       "target": "RESIDENT_GATE_DIR"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 94,
-      "path": "src/ember/governance/scripts/ember_totality/test_c4.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "unknown alias EXTERNAL_STATE",
@@ -1879,17 +1395,6 @@
       "target": "CANDIDATE_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 74,
-      "path": "src/ember/governance/scripts/ember_totality/test_c5.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "unknown alias EXTERNAL_STATE",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -1899,28 +1404,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c5.py",
       "status": "UNEVALUABLE",
       "target": "RESIDENT_GATE_DIR"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 61,
-      "path": "src/ember/governance/scripts/ember_totality/test_c6.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 79,
-      "path": "src/ember/governance/scripts/ember_totality/test_c7.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -1945,17 +1428,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 60,
-      "path": "src/ember/governance/scripts/ember_totality/test_c8.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -1976,17 +1448,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c8.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 52,
-      "path": "src/ember/governance/scripts/ember_totality/test_c9.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -2031,17 +1492,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c_authority.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 37,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_auto.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -2110,17 +1560,6 @@
       "target": "_artifact_root_env"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 46,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_disc.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -2165,17 +1604,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 60,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_eff.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -2198,17 +1626,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 43,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_enf.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -2229,17 +1646,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c_enf.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 50,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_fed.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -2308,17 +1714,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 95,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_ladm.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -2339,17 +1734,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c_ladm.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 59,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_legib.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -2385,17 +1769,6 @@
       "target": "_NC_ROOTS"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 76,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_mile.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "node outside closed grammar: ListComp",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -2416,17 +1789,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c_mile.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 91,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_neg1.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -2482,17 +1844,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_c_organism.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 66,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_port.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "node outside closed grammar: ListComp",
@@ -2561,17 +1912,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 68,
-      "path": "src/ember/governance/scripts/ember_totality/test_c_tally.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -2583,17 +1923,6 @@
       "target": "BOARD_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))",
-      "expression_sha256": "ee217371ebf7aa1af7e59341756f51e6595520bde7219951c13b32fc2887a567",
-      "line": 134,
-      "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -2603,94 +1932,6 @@
       "path": "src/ember/governance/scripts/ember_totality/test_surface2.py",
       "status": "UNEVALUABLE",
       "target": "DEFAULT_EXEC_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 18,
-      "path": "src/ember/governance/scripts/ember_totality/working_set_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent.parent",
-      "expression_sha256": "628418c98daba5dfa90b70d344180558f4b2201758c5add34a35fb9c70459642",
-      "line": 14,
-      "path": "src/ember/governance/scripts/ember_totality/writers_custody_two_run_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent",
-      "expression_sha256": "3016251a1bd27fa8bb1e68793f29518f7f7a1fae7bf9de859f8fd0ed891fdf9d",
-      "line": 72,
-      "path": "src/ember/governance/scripts/energy_proxy_logger.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 55,
-      "path": "src/ember/governance/scripts/exp711_manifest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 45,
-      "path": "src/ember/governance/scripts/exp711_permute.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 61,
-      "path": "src/ember/governance/scripts/exp711_scorer.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 86,
-      "path": "src/ember/governance/scripts/exp711_sensitivity.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 87,
-      "path": "src/ember/governance/scripts/exp711_verdict.py",
-      "status": "MISMATCH",
-      "target": "REPO"
     },
     {
       "error": "node outside closed grammar: JoinedStr",
@@ -2770,17 +2011,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 25,
-      "path": "src/ember/governance/scripts/fp36_consistency.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
-    },
-    {
       "error": "node outside closed grammar: IfExp",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -2812,17 +2042,6 @@
       "path": "src/ember/governance/scripts/fp6_provenance.py",
       "status": "UNEVALUABLE",
       "target": "ADAPTERS_DIR"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 40,
-      "path": "src/ember/governance/scripts/gen_problems.py",
-      "status": "MISMATCH",
-      "target": "REPO"
     },
     {
       "error": null,
@@ -2902,17 +2121,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 113,
-      "path": "src/ember/governance/scripts/heldout_v21_fcalib.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -2957,17 +2165,6 @@
       "target": "SCHEMA_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "HERE.parent",
-      "expression_sha256": "3016251a1bd27fa8bb1e68793f29518f7f7a1fae7bf9de859f8fd0ed891fdf9d",
-      "line": 48,
-      "path": "src/ember/governance/scripts/manifest_sha.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -3010,28 +2207,6 @@
       "path": "src/ember/governance/scripts/p1_envelope_sweep.py",
       "status": "UNEVALUABLE",
       "target": "CORPUS_CACHE_DIR"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(SCRIPTS_DIR)",
-      "expression_sha256": "04cee9fb058e5881d38a14f7b9fdb4f1350f51290bf92c915aa4971ddee27bb1",
-      "line": 40,
-      "path": "src/ember/governance/scripts/p513_p3_forensic.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 45,
-      "path": "src/ember/governance/scripts/p5_ratio_audit/no_local_path_leak_317_test.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "unknown alias REPO",
@@ -3199,28 +2374,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 39,
-      "path": "src/ember/governance/scripts/t2_grpo_tasklist_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 45,
-      "path": "src/ember/governance/scripts/t2_mtp_viewpath_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
       "error": "node outside closed grammar: JoinedStr",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -3241,17 +2394,6 @@
       "path": "src/ember/governance/scripts/t2_wcode_control.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 32,
-      "path": "src/ember/governance/scripts/t2r2w_viewsha_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
     },
     {
       "error": "node outside closed grammar: JoinedStr",
@@ -3307,39 +2449,6 @@
       "path": "src/ember/governance/scripts/t5_harm.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 18,
-      "path": "src/ember/governance/scripts/test_524_m4_momentum_transplant.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 36,
-      "path": "src/ember/governance/scripts/test_580_b1m_resolver_fix.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 64,
-      "path": "src/ember/governance/scripts/test_580_optimizer_id_helper.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": "call outside closed grammar: next",
@@ -3419,28 +2528,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 33,
-      "path": "src/ember/governance/scripts/test_p5_513_resolver_fix.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 24,
-      "path": "src/ember/governance/scripts/test_p5_engagement_leg_smoke.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -3482,28 +2569,6 @@
       "line": 14,
       "path": "src/ember/governance/scripts/tests/test_check_inference_training_translation.py",
       "status": "UNEVALUABLE",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 33,
-      "path": "src/ember/governance/scripts/tests/test_cneg1_annex_bom_fallback.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 39,
-      "path": "src/ember/governance/scripts/tests/test_cneg1_void_supersession.py",
-      "status": "MISMATCH",
       "target": "REPO_ROOT"
     },
     {
@@ -4002,17 +3067,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 31,
-      "path": "src/ember/governance/scripts/tests/test_probe_timeout_and_elapsed.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4057,17 +3111,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 24,
-      "path": "src/ember/governance/scripts/tests/test_registry_order_sync.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4109,28 +3152,6 @@
       "line": 16,
       "path": "src/ember/governance/scripts/tests/test_spend_annex_round4_current_receipts.py",
       "status": "UNEVALUABLE",
-      "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.abspath(os.path.join(HERE, '..', '..'))",
-      "expression_sha256": "78c5aee1472d2f10384300eebe989ef08c0223883aedad0467745f6b84af2447",
-      "line": 55,
-      "path": "src/ember/governance/scripts/tests/test_spend_annex_void_and_attestation.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 16,
-      "path": "src/ember/governance/scripts/tests/test_training_closure_dynamic_edges.py",
-      "status": "MISMATCH",
       "target": "ROOT"
     },
     {
@@ -4178,28 +3199,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 33,
-      "path": "src/ember/governance/scripts/timeshare_dryrun.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 30,
-      "path": "src/ember/governance/scripts/tokenizer_freeze_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
       "error": "call outside closed grammar: frozenset",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4244,17 +3243,6 @@
       "target": "DEFAULT_CONTROL_STEP25_DIR"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 84,
-      "path": "src/ember/governance/scripts/w1_fullstate_resume_verify.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: getattr",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -4275,28 +3263,6 @@
       "path": "src/ember/governance/scripts/w1_mbpp.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 37,
-      "path": "src/ember/governance/scripts/w1_pacing_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(os.path.dirname(os.path.abspath(__file__)))",
-      "expression_sha256": "42d325549f503fcb2ea26ff3a79fe56d787aee0ec1c54d4e3be93188f6d27129",
-      "line": 43,
-      "path": "src/ember/governance/scripts/w1b_fp32_check.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
     },
     {
       "error": null,
@@ -4574,17 +3540,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/governance",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 43,
-      "path": "src/ember/governance/scripts/w4_control_selftest.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
       "error": "node outside closed grammar: JoinedStr",
       "evaluated_path": null,
       "expectation": "derived_location_only",
@@ -4761,17 +3716,6 @@
       "target": "_REPO_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/infrastructure",
-      "expectation": "repo_root",
-      "expression": "Path(__file__).resolve().parents[2]",
-      "expression_sha256": "04695cf8b0052951a3ca1664bf1a7794de938387727a51351a5b22914114dea4",
-      "line": 32,
-      "path": "src/ember/infrastructure/tools/corpus_connectors/spdx_gate.py",
-      "status": "MISMATCH",
-      "target": "_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4827,17 +3771,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/src/ember/infrastructure",
-      "expectation": "repo_root",
-      "expression": "HERE.parents[1]",
-      "expression_sha256": "dccb797d71bfc2b976bc23f9af8f22a9a427d3d2faef743c6ca1b1fc5cff1542",
-      "line": 50,
-      "path": "src/ember/infrastructure/tools/corpus_connectors/wave_manifest.py",
-      "status": "MISMATCH",
-      "target": "REPO_ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4891,28 +3824,6 @@
       "path": "src/ember/infrastructure/tools/repo_guard_selftest.py",
       "status": "UNEVALUABLE",
       "target": "REPO_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 39,
-      "path": "tests/domain-governance/test_1436_fineweb_edu_exclusion.py",
-      "status": "MISMATCH",
-      "target": "REPO"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "os.path.dirname(HERE)",
-      "expression_sha256": "1e649179e28fa74d4268b994d2f463a92fd8592a80fecc49ef8a7e5c604f2af8",
-      "line": 27,
-      "path": "tests/domain-governance/test_a1_freeze_consumer.py",
-      "status": "MISMATCH",
-      "target": "REPO"
     },
     {
       "error": "call outside closed grammar: resolve_eval_suite_dir",
@@ -7104,28 +6015,6 @@
       "target": "ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 24,
-      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 30,
-      "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -7566,17 +6455,6 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "Path(__file__).resolve().parents[2]",
-      "expression_sha256": "04695cf8b0052951a3ca1664bf1a7794de938387727a51351a5b22914114dea4",
-      "line": 15,
-      "path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py",
-      "status": "MISMATCH",
-      "target": "TEST_ROOT"
-    },
-    {
       "error": "call outside closed grammar: os.environ.get",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -7597,17 +6475,6 @@
       "path": "tests/ember_restart_model/domain-governance/test_issue1413_checkpoint_projection_regression.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 17,
-      "path": "tests/ember_restart_model/domain-governance/test_issue1508_attempt_retention_layout.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
     },
     {
       "error": "call outside closed grammar: next",
@@ -7673,17 +6540,6 @@
       "line": 15,
       "path": "tests/ember_restart_model/domain-governance/test_issue1953_packaging_authority.py",
       "status": "UNEVALUABLE",
-      "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 13,
-      "path": "tests/ember_restart_model/domain-governance/test_issue898_job_memory_ceiling_probe_verify.py",
-      "status": "MISMATCH",
       "target": "ROOT"
     },
     {
@@ -8015,28 +6871,6 @@
       "path": "tests/ember_restart_model/domain-governance/test_pdf_text_adapter.py",
       "status": "UNEVALUABLE",
       "target": "<sys.path.insert>"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 24,
-      "path": "tests/ember_restart_model/domain-governance/test_private_commit_probe.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests",
-      "expectation": "repo_root",
-      "expression": "pathlib.Path(__file__).resolve().parents[2]",
-      "expression_sha256": "efaaffadb9a9fa60cd1c425ea2302f36579694d693594a08c1bbc635bfa7fd08",
-      "line": 19,
-      "path": "tests/ember_restart_model/domain-governance/test_project_text_lab_custody_paths.py",
-      "status": "MISMATCH",
-      "target": "ROOT"
     },
     {
       "error": "call outside closed grammar: next",
@@ -8414,6 +7248,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "01424019c4a35dc9840c0e819caef47fd8384ab8a9e9ff49eb06c197d071ede2",
+  "self_sha256": "6776b9c31b34da162fb05c62f59b8bded60f6c24590a2245ae6002c50f377fc5",
   "workstream_id": "EMBER-02A"
 }

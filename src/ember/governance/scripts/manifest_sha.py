@@ -45,7 +45,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 RECEIPTS_DIR = REPO_ROOT / "receipts"
 
 sys.path.insert(0, str(HERE))

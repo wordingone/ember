@@ -40,7 +40,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent               # scripts/ember_totality
-REPO_ROOT = HERE.parent.parent                        # ember worktree root
+REPO_ROOT = Path(__file__).resolve().parents[5]                        # ember worktree root
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 RECEIPTS_OUT_DIR = REPO_ROOT / "receipts" / "ind4-customize-experiment"
 SANDBOX_DIR = REPO_ROOT / "scratch" / "ind4-customize"

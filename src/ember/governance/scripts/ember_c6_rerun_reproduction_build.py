@@ -34,7 +34,7 @@ import re
 import subprocess
 from datetime import datetime, timezone
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 NOW = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 ORIGINALS = [

@@ -63,7 +63,7 @@ from typing import Any
 # Fall back to a couple of alternates so the probe is portable, but the
 # canonical location is the <external-state> checkout.
 # ---------------------------------------------------------------------------
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 _ROOT_CANDIDATES = [
     p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
                 os.path.join(REPO_ROOT, "<external-state>"))

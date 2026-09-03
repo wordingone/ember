@@ -22,7 +22,7 @@ Its operating constraint is one consumer GPU.
   Lab integrates experiments across declared interfaces and does not replace domain authority.
 - Inspection starts at the root `README.md` and this canonical start page. On Windows, `tools/launchers/Ember.cmd`
   is the operator entry. Python uses `manifests/python-environment-v1.json`; Rust uses
-  `runtime/ember-lab/Cargo.toml`; `ember-cli` uses `tools/ember-cli/src/package.json`.
+  `runtime/ember-lab/Cargo.toml`; `ember-cli` uses `src/ember/infrastructure/tools/ember-cli/src/package.json`.
 - The smallest safe executable check is CPU-only authority verification from the repository root:
   `python src/ember/governance/scripts/verify_authority_conservation.py --root .`. Success reports authority
   conservation; it requires no credentials, weights, or GPU and grants no model capability.
@@ -49,7 +49,7 @@ To inspect Ember, start at the repository-root `README.md` and continue through 
 Installation authorities are distinct: Python uses
 [`manifests/python-environment-v1.json`](../../../../manifests/python-environment-v1.json), Rust uses
 [`runtime/ember-lab/Cargo.toml`](../../../../runtime/ember-lab/Cargo.toml), and `ember-cli` uses
-[`tools/ember-cli/src/package.json`](../../../../tools/ember-cli/src/package.json).
+[`src/ember/infrastructure/tools/ember-cli/src/package.json`](../../../../src/ember/infrastructure/tools/ember-cli/src/package.json).
 
 From the repository root:
 

@@ -166,7 +166,7 @@ per issue #488's own instruction ("counts + rules, not per-file listing"
 for the bulk of a triage) while still naming every file that IS proposed
 for action, per file, above.
 
-## B2. Directed addition — `tools/ember-cli/` (outside the docs/scripts scan scope)
+## B2. Directed addition — `src/ember/infrastructure/tools/ember-cli/` (outside the docs/scripts scan scope)
 
 Flagged by the feed485 lane, cross-checked against PR #491's review, and
 independently re-verified here against a clean `public/master` snapshot
@@ -225,7 +225,7 @@ worth a separate look.
 |---|---|
 | DELETE-CANDIDATE, docs | 0 |
 | DELETE-CANDIDATE, scripts | 1 (`fp33_e3_gemma_e2b_smoke.py`, superseded by `fp33_e3b_gemma_e2b_proper.py`) |
-| DELETE-CANDIDATE, `tools/ember-cli/` (directed addition, B2) | 1 (`activity-pane.ts`, superseded by `activity-feed.ts` + `activity-feed-pane.ts`, PR #491; second confirmed instance of issue #485's "keyframed flame" pattern) |
+| DELETE-CANDIDATE, `src/ember/infrastructure/tools/ember-cli/` (directed addition, B2) | 1 (`activity-pane.ts`, superseded by `activity-feed.ts` + `activity-feed-pane.ts`, PR #491; second confirmed instance of issue #485's "keyframed flame" pattern) |
 | CONSOLIDATE-INTO-\<target\>, docs/scripts | 0 distinct (the 1 delete above is itself a 2-file consolidation) |
 | KEEP — zero-ref, flagged for owner triage, not proposed (docs) | 51 |
 | KEEP — zero-ref, flagged for owner triage, not proposed (scripts) | 106 |

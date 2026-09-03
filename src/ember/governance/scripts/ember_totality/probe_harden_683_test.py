@@ -32,7 +32,7 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 CEFF_PROBE = os.path.join(HERE, "test_c_eff.py")
 CGROW_PROBE = os.path.join(HERE, "test_c_grow.py")
 

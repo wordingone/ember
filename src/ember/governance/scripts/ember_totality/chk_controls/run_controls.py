@@ -43,7 +43,7 @@ from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))                    # .../scripts/ember_totality/chk_controls
 PROBES_DIR = os.path.dirname(HERE)                                    # .../scripts/ember_totality
-REPO_ROOT = os.path.abspath(os.path.join(PROBES_DIR, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..', '..'))
 FIXTURES_DIR = os.path.join(HERE, "fixtures")
 
 # PR955 round-2 repair (reviewer defect P1): the gh #715 C-MANIFEST/C-TALLY

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 
-TEST_ROOT = Path(__file__).resolve().parents[2]
+TEST_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_ROOT = Path(os.environ.get("EMBER_SOURCE_ROOT", TEST_ROOT))
 sys.path.insert(0, str(SOURCE_ROOT / "tools" / "ember-restart-3b"))
 

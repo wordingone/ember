@@ -61,7 +61,7 @@ import os
 import sys
 import unittest
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # scripts/ -> repo root
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))  # scripts/ -> repo root
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
 try:

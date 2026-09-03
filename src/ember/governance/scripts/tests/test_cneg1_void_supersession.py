@@ -36,7 +36,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 TOTALITY_DIR = os.path.join(REPO_ROOT, "scripts", "ember_totality")
 if TOTALITY_DIR not in sys.path:
     sys.path.insert(0, TOTALITY_DIR)  # both void_supersession.py and test_c_neg1.py

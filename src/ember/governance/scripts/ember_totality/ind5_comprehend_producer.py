@@ -60,7 +60,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent          # scripts/ember_totality
-REPO_ROOT_DEFAULT = HERE.parent.parent           # ember-goalforge (contract tree)
+REPO_ROOT_DEFAULT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))           # ember-goalforge (contract tree)
 sys.path.insert(0, str(REPO_ROOT_DEFAULT))
 # issue2015 exact-local-import:src/ember/governance/scripts/lib/invariant.py
 import importlib.util as _ember_2560a87c017c05b0_importlib

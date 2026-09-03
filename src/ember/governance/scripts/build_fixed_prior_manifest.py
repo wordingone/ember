@@ -49,7 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parent
+REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(HERE))
 # issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py
 import importlib.util as _ember_66ee9e91637922dc_importlib

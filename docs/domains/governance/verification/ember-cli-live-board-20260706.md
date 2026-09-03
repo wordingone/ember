@@ -18,7 +18,7 @@ when done.
 
 ## Inventory — full feature surface, with count
 
-Source: `tools/ember-cli/src` on `master` (read-only). Enumerated by reading the command registry,
+Source: `src/ember/infrastructure/tools/ember-cli/src` on `master` (read-only). Enumerated by reading the command registry,
 every file under `commands/`, the REPL's keyboard handler and the components it mounts, the CLI
 entrypoint's argv dispatch, and `cli-subcommands.ts`.
 

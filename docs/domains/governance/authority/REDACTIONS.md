@@ -65,8 +65,8 @@ These got a minimal functional fix instead of a text redaction:
 - `src/ember/governance/scripts/research/muon_spectrum_probe.py` — `leg1_receipt_path` was a hardcoded
   local-drive absolute path used to open a real comparison receipt at runtime. Now
   computed repo-relatively via `Path(__file__).resolve().parents[2]`.
-- `tools/ember-cli/src/core/frontend-shell.ts` and
-  `tools/ember-cli/src/ink/rendering-pipeline.ts` — the `M9-DIAG-LIVE` debug
+- `src/ember/infrastructure/tools/ember-cli/src/core/frontend-shell.ts` and
+  `src/ember/infrastructure/tools/ember-cli/src/ink/rendering-pipeline.ts` — the `M9-DIAG-LIVE` debug
   instrumentation hardcoded a temp-workspace absolute path as its log file location.
   Now computed via `os.tmpdir()` + `path.join(...)`, which is both portable and no
   longer machine-identifying.
@@ -84,9 +84,9 @@ genuinely multi-segment absolute path to shorten). These are excluded by name fr
 mechanism the guard already used to exclude itself:
 
 - `src/ember/governance/scripts/test_w1b_continuation.py`
-- `tools/ember-cli/src/core/monitor-render.test.ts`
-- `tools/ember-cli/src/components/homescreen-mock1-parity.test.ts`
-- `tools/ember-cli/src/components/logo-homescreen.test.ts`
+- `src/ember/infrastructure/tools/ember-cli/src/core/monitor-render.test.ts`
+- `src/ember/infrastructure/tools/ember-cli/src/components/homescreen-mock1-parity.test.ts`
+- `src/ember/infrastructure/tools/ember-cli/src/components/logo-homescreen.test.ts`
 
 **Amendment (2026-07-08):** the exclusion mechanism was sound from the start, but the
 literal content of these four fixtures was not -- they carried the real drive-mount
@@ -103,7 +103,7 @@ landed on `master` via an unrelated, concurrently-merged PR (#303, path-shorteni
 the cockpit `Data:` line) after this branch forked, and was caught fresh by this PR's
 own guard fix once the branch was brought current with `master`.
 
-`tools/ember-cli/src/entrypoints/session-init.ts` hardcodes the standard Windows
+`src/ember/infrastructure/tools/ember-cli/src/entrypoints/session-init.ts` hardcodes the standard Windows
 command-interpreter path (drive letter, `Windows`, `System32`, `cmd.exe`) as the
 `COMSPEC` fallback — this is a universal, non-identifying Windows system path (every
 Windows install has this exact file at this exact location), not a leak, and needed no

@@ -10,7 +10,7 @@ import pathlib
 
 import pytest
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 PATH = ROOT / "tools" / "ember-restart-3b" / "issue898_job_memory_ceiling_probe_verify.py"
 SPEC = importlib.util.spec_from_file_location("probe_verify", PATH)
 assert SPEC and SPEC.loader

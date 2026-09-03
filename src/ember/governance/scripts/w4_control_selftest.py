@@ -40,7 +40,7 @@ import types
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 sys.path.insert(0, HERE)
 
 if os.name == "nt":

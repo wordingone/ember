@@ -91,7 +91,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import check_path_sha_pairs, sample_recompute_row, resolve_in_tree  # noqa: E402
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
 # REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
 # cover every real invocation shape, and the dropped candidate never resolved to

@@ -62,7 +62,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent                      # .../scripts/ember_totality/chk_controls
 PROBES_DIR = HERE.parent                                     # .../scripts/ember_totality
-REPO_ROOT = PROBES_DIR.parent.parent                         # repo root
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..', '..'))                         # repo root
 PROBE_PATH = PROBES_DIR / "test_c_manifest.py"
 REAL_CONDITIONS_SPEC = REPO_ROOT / "docs" / "spec" / "conditions-v1.md"
 REAL_MANIFEST = REPO_ROOT / "docs" / "ember-completeness.md"

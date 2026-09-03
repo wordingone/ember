@@ -36,7 +36,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 SCRIPTS = os.path.join(REPO, "scripts")
 sys.path.insert(0, SCRIPTS)
 

@@ -1,14 +1,14 @@
 # 09 — Tooling and CLI
 
-## tools/ember-cli/
+## src/ember/infrastructure/tools/ember-cli/
 
 A TypeScript project implementing Ember's command-line/cockpit surface.
-`tools/ember-cli/src/commands/` holds one file (+ matching `.test.ts`) per
+`src/ember/infrastructure/tools/ember-cli/src/commands/` holds one file (+ matching `.test.ts`) per
 command, including (non-exhaustive, real directory listing): `admit.ts`
 (receipt admission), `advisor.ts`, `benchmark.ts`, `bridge-kick.ts`,
 `checkpoint-load-command.ts`, `custody.ts`, `designate.ts`, `files.ts`,
 `finetune.ts`, `goal.ts`, and `world-state.ts` (the C-OBS adapter command —
-see 12_COCKPIT_OBSERVATORY.md). `tools/ember-cli/src/core/` holds the shared
+see 12_COCKPIT_OBSERVATORY.md). `src/ember/infrastructure/tools/ember-cli/src/core/` holds the shared
 runtime: `ember-world-state.ts`, `encounter-membrane.ts`,
 `goal-continuation*.ts`, `monitor-render.ts`, `query-engine*.ts`,
 `frontend-shell.ts`. Every command has a co-located `.test.ts`.

@@ -11,7 +11,7 @@ Two documents cover the CLI's actual operator-facing surface:
 
 ## What Ember is, briefly
 
-Ember is a self-improving research system. The **cockpit** (`tools/ember-cli`)
+Ember is a self-improving research system. The **cockpit** (`src/ember/infrastructure/tools/ember-cli`)
 is the operator's window into it: a terminal CLI exposing a small set of
 slash commands over the live goal/ledger/receipts state. Everything an
 operator needs to interact with, observe, activate, deactivate, customize,
@@ -20,10 +20,10 @@ see [commands.md](commands.md) for the full list.
 
 ## Where things live
 
-- `tools/ember-cli/src/command-registry.ts` — the actual live command
+- `src/ember/infrastructure/tools/ember-cli/src/command-registry.ts` — the actual live command
   registry (source of truth; this doc is a description of it, not a
   substitute for it).
 - `receipts/` — every executed operator/experiment run leaves a JSON receipt
   here; `scripts/ember_totality/` holds the status probes that read them.
-- `state/` (inside `tools/ember-cli/`) — runtime state: heartbeats, watchdog
+- `state/` (inside `src/ember/infrastructure/tools/ember-cli/`) — runtime state: heartbeats, watchdog
   logs, planned-outage markers.

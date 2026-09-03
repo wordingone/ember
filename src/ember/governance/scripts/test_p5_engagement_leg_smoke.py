@@ -21,7 +21,7 @@ import sys
 import json
 
 # Add scripts dir to path
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
 def test_p5_engagement_leg_smoke():

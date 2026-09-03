@@ -25,7 +25,7 @@ from collections import Counter
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.dirname(HERE)
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 sys.path.insert(0, HERE)
 
 import corpus_mix as cm  # noqa: E402
