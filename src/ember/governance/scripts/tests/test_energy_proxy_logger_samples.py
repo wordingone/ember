@@ -29,7 +29,7 @@ ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / '
 
 
 def load_module():
-    path = ROOT / "scripts" / "energy_proxy_logger.py"
+    path = ROOT / "src" / "ember" / "governance" / "scripts" / "energy_proxy_logger.py"
     spec = importlib.util.spec_from_file_location("energy_proxy_logger_samples_under_test", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -105,3 +105,11 @@ def test_sample_while_pidfile_with_no_handle_persists_nothing(tmp_path: Path, mo
     )
     assert len(in_memory) == 1
     assert list(tmp_path.iterdir()) == []
+
+
+def test_invariant_sha256_reads_the_tracked_invariant_document() -> None:
+    # REPO_ROOT is a str; the join must still resolve to the tracked document.
+    module = load_module()
+    import hashlib
+    expected = hashlib.sha256((ROOT / "docs/authority/INVARIANT.md").read_bytes()).hexdigest()
+    assert module.invariant_sha256() == expected

@@ -156,7 +156,7 @@ SHA_CONVENTION = (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "spec" / "ember02-preregistration-thresholds-v1.json"
+DEFAULT_THRESHOLDS_PATH = REPO_ROOT / "docs" / "domains" / "governance" / "spec" / "ember02-preregistration-thresholds-v1.json"
 FIXED_PRIOR_MANIFEST_REL = "manifests/ember-restart-3b/fixed-prior-manifest-v1.json"
 DEFAULT_FIXED_PRIOR_MANIFEST = REPO_ROOT / FIXED_PRIOR_MANIFEST_REL
 
@@ -3415,10 +3415,12 @@ def run_selftest() -> None:
             lacks receipts/run-attempts.jsonl until issue #1497 lands)."""
             repo = tmp_path / name
             (repo / "docs" / "spec").mkdir(parents=True)
+            (repo / E5_PREREG_PATH).parent.mkdir(parents=True, exist_ok=True)
+            (repo / E5_INVARIANT_PATH).parent.mkdir(parents=True, exist_ok=True)
             (repo / "configs").mkdir()
             (repo / "manifests" / "ember-restart-3b").mkdir(parents=True)
             (repo / "receipts" / "ember-restart-3b").mkdir(parents=True)
-            (repo / "docs" / "spec" / "ember02-preregistration-v1.md").write_bytes(b"SELFTEST_FIXTURE prereg\n")
+            (repo / E5_PREREG_PATH).write_bytes(b"SELFTEST_FIXTURE prereg\n")
             (repo / "configs" / "ember-restart-3b.json").write_bytes(json.dumps({"SELFTEST_FIXTURE": True}).encode("utf-8"))
             (repo / "docs/authority/INVARIANT.md").write_bytes(b"SELFTEST_FIXTURE invariant\n")
             (repo / "manifests" / "ember-restart-3b" / "fixed-prior-manifest-v1.json").write_bytes(json.dumps({

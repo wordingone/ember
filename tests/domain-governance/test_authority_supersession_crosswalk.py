@@ -20,7 +20,7 @@ import pytest
 
 
 REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPT = REPO / "scripts" / "verify_authority_supersession_crosswalk.py"
+SCRIPT = REPO / "src" / "ember" / "governance" / "scripts" / "verify_authority_supersession_crosswalk.py"
 SPEC = importlib.util.spec_from_file_location("authority_crosswalk", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

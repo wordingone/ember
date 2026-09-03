@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 
-from scripts import lifecycle_census
+from src.ember.governance.scripts import lifecycle_census
 # issue2015 exact-local-import:src/ember/governance/scripts/lifecycle_census.py
 import importlib.util as _ember_e08f3c7c35cc91f0_importlib
 import sys as _ember_e08f3c7c35cc91f0_sys

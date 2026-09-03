@@ -175,7 +175,7 @@ INVENTORY: tuple[dict, ...] = (
          provenance="The declared boundary's single GPU (one RTX-4090-class 24 GiB)."),
 
     # --- ember-cli ---------------------------------------------------------
-    dict(category="ember_cli", kind="tree", path="tools/ember-cli/src",
+    dict(category="ember_cli", kind="tree", path="src/ember/infrastructure/tools/ember-cli/src",
          provenance="ember-cli execution surface (docs/domains/governance/authority/GOAL.md sec10): every executed "
                     "job runs through it. Version is this tree digest plus the "
                     "repo commit recorded in `repo`."),
