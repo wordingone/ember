@@ -58,8 +58,8 @@ validate_added_component_coverage = getattr(_ember_a59d77302a2b1faf_module, 'val
 
 
 def _repo(tmp_path: Path) -> Path:
-    (tmp_path / "tools" / "ember-cli" / "specs").mkdir(parents=True)
-    (tmp_path / "tools" / "ember-cli" / "src" / "services").mkdir(parents=True)
+    (tmp_path / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "specs").mkdir(parents=True)
+    (tmp_path / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "src" / "services").mkdir(parents=True)
     return tmp_path
 
 
@@ -67,7 +67,7 @@ def _write_shipped_spec(root: Path, *, consumer: str | None) -> Path:
     lines = ["# Spec — fixture", "", "Status: SHIPPED"]
     if consumer is not None:
         lines.append(f"Consumer: `{consumer}`")
-    path = root / "tools" / "ember-cli" / "specs" / "fixture.md"
+    path = root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "specs" / "fixture.md"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -91,7 +91,7 @@ def test_spec_nodes_reject_invalid_utf8_and_unsafe_consumer_paths(
     tmp_path: Path,
 ) -> None:
     root = _repo(tmp_path)
-    spec = root / "tools" / "ember-cli" / "specs" / "fixture.md"
+    spec = root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "specs" / "fixture.md"
     spec.write_bytes(b"# Spec\n\nStatus: SHIPPED\nConsumer: `\xff`\n")
 
     with pytest.raises(SpecPolicyError, match="invalid-utf8"):
@@ -104,7 +104,7 @@ def test_spec_nodes_reject_invalid_utf8_and_unsafe_consumer_paths(
 
 def test_valid_shipped_spec_returns_normalized_consumer(tmp_path: Path) -> None:
     root = _repo(tmp_path)
-    consumer = root / "tools" / "ember-cli" / "src" / "services" / "fixture.ts"
+    consumer = root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "src" / "services" / "fixture.ts"
     consumer.write_text("export {};\n", encoding="utf-8")
     _write_shipped_spec(
         root,
@@ -143,7 +143,7 @@ def test_added_component_requires_changed_spec_with_exact_consumer(
     tmp_path: Path,
 ) -> None:
     root = _repo(tmp_path)
-    component = root / "tools" / "ember-cli" / "src" / "services" / "fixture.ts"
+    component = root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "src" / "services" / "fixture.ts"
     component.write_text("export {};\n", encoding="utf-8")
     _write_shipped_spec(
         root,
@@ -172,7 +172,7 @@ def test_added_component_requires_changed_spec_with_exact_consumer(
                 "status": "added",
             },
             {
-                "filename": "tools/ember-cli/specs/fixture.md",
+                "filename": "src/ember/infrastructure/tools/ember-cli/specs/fixture.md",
                 "status": "modified",
             },
         ],
@@ -203,7 +203,7 @@ def test_test_files_do_not_masquerade_as_new_components(tmp_path: Path) -> None:
 def test_nested_production_component_requires_bound_spec(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     path = "src/ember/infrastructure/tools/ember-cli/src/services/feature/worker.ts"
-    (root / "tools" / "ember-cli" / "specs" / "open.md").write_text(
+    (root / "src" / "ember" / "infrastructure" / "tools" / "ember-cli" / "specs" / "open.md").write_text(
         "# Open fixture\n\nStatus: OPEN\n",
         encoding="utf-8",
     )
