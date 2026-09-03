@@ -29,10 +29,12 @@ pub enum Phase {
     Publish,
     SelectableCheckpoint,
     Restore,
+    Evaluation,
+    RuntimeLoad,
 }
 
 impl Phase {
-    pub const fn ordered() -> [Self; 7] {
+    pub const fn ordered() -> [Self; 9] {
         [
             Self::Admission,
             Self::DataVerify,
@@ -41,6 +43,8 @@ impl Phase {
             Self::Publish,
             Self::SelectableCheckpoint,
             Self::Restore,
+            Self::Evaluation,
+            Self::RuntimeLoad,
         ]
     }
 
@@ -53,6 +57,8 @@ impl Phase {
             Self::Publish => "publish",
             Self::SelectableCheckpoint => "selectable_checkpoint",
             Self::Restore => "restore",
+            Self::Evaluation => "evaluation",
+            Self::RuntimeLoad => "runtime_load",
         }
     }
 }
@@ -229,7 +235,7 @@ fn write_new(path: &std::path::Path, bytes: &[u8]) -> Result<(), Error> {
 }
 
 /// Digest the exact phase output bytes in their canonical sequence.  The
-/// producer commits this digest only after all six phase files and its raw
+/// producer commits this digest only after all eight phase files and its raw
 /// host observation have been durably written; the daemon recomputes it before
 /// admitting any phase.
 pub fn phase_artifact_digest(root: &Path) -> Result<String, Error> {
@@ -241,6 +247,8 @@ pub fn phase_artifact_digest(root: &Path) -> Result<String, Error> {
         "publish.json",
         "selectable_checkpoint.json",
         "restore.json",
+        "evaluation.json",
+        "runtime_load.json",
     ] {
         let bytes = fs::read(root.join(name))?;
         material.extend_from_slice(name.as_bytes());
@@ -345,6 +353,8 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
         Phase::Publish,
         Phase::SelectableCheckpoint,
         Phase::Restore,
+        Phase::Evaluation,
+        Phase::RuntimeLoad,
     ] {
         if root.join(format!("{}.json", phase.as_str())).exists() {
             return Err(producer_error(format!(
@@ -361,12 +371,55 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
         std::thread::sleep(std::time::Duration::from_millis(delay_ms));
     }
     let peak_before = current_process_peak_bytes()?;
-    let records = br#"{"id":0,"text":"ember"}
-{"id":1,"text":"lab"}
-{"id":2,"text":"slice"}
-"#;
-    write_new(&root.join("input.jsonl"), records)?;
-    let input_sha256 = sha256_bytes(records);
+    let model_receipt_path = std::env::var("EMBER_LAB_MODEL_CHAIN_RECEIPT")
+        .map(PathBuf::from)
+        .map_err(|_| producer_error("model-chain receipt path is absent"))?;
+    let model_receipt_bytes = fs::read(&model_receipt_path)?;
+    let expected_model_receipt_sha256 = std::env::var("EMBER_LAB_MODEL_CHAIN_SHA256")
+        .map_err(|_| producer_error("model-chain receipt hash is absent"))?;
+    if sha256_bytes(&model_receipt_bytes) != expected_model_receipt_sha256 {
+        return Err(producer_error("model-chain receipt bytes are not bound"));
+    }
+    let model_receipt: serde_json::Value = serde_json::from_slice(&model_receipt_bytes)
+        .map_err(|error| producer_error(format!("model-chain receipt is malformed: {error}")))?;
+    let model_steps = model_receipt
+        .pointer("/training/steps")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    if model_receipt
+        .get("result")
+        .and_then(serde_json::Value::as_str)
+        != Some("PASS")
+        || model_steps < 2
+        || model_receipt
+            .pointer("/evaluation/repeat_run_match")
+            .and_then(serde_json::Value::as_bool)
+            != Some(true)
+        || model_receipt
+            .pointer("/runtime/generated_token_ids")
+            .and_then(serde_json::Value::as_array)
+            .is_none_or(Vec::is_empty)
+    {
+        return Err(producer_error(
+            "model-chain receipt does not prove the real phase chain",
+        ));
+    }
+    let data_path = model_receipt
+        .pointer("/fixture/data_path")
+        .and_then(serde_json::Value::as_str)
+        .map(PathBuf::from)
+        .ok_or_else(|| producer_error("model-chain data path is absent"))?;
+    let records = fs::read(&data_path)?;
+    if sha256_bytes(&records)
+        != model_receipt
+            .pointer("/fixture/data_sha256")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+    {
+        return Err(producer_error("model-chain data bytes are not bound"));
+    }
+    write_new(&root.join("input.jsonl"), &records)?;
+    let input_sha256 = sha256_bytes(&records);
     let data = phase_payload(
         job_id,
         Phase::DataVerify,
@@ -375,41 +428,44 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
             "kind": "data_verify_completed",
             "input_file": "input.jsonl",
             "input_sha256": input_sha256,
-            "record_count": 3,
-            "subset_records": 3,
+            "record_count": 1,
+            "subset_records": 1,
         }),
     )?;
     write_new(&root.join("data_verify.json"), &data)?;
 
-    let mut state = 17u64;
-    for step in 1..=3u64 {
-        state = state
-            .wrapping_mul(1_103_515_245)
-            .wrapping_add(12_345 + step);
-    }
-    let optimizer_state = format!("optimizer-state-v1|job={job_id}|steps=3|state={state}\n");
-    let optimizer_state = optimizer_state.as_bytes();
-    write_new(&root.join("optimizer-state.bin"), optimizer_state)?;
-    let optimizer_state_sha256 = sha256_bytes(optimizer_state);
+    write_new(&root.join("optimizer-state.bin"), &model_receipt_bytes)?;
+    let optimizer_state_sha256 = sha256_bytes(&model_receipt_bytes);
     let train = phase_payload(
         job_id,
         Phase::Train,
         2,
         serde_json::json!({
             "kind": "train_steps_completed",
-            "train_steps": 3,
-            "update_count": 3,
+            "train_steps": model_steps,
+            "update_count": model_steps,
             "optimizer_state_file": "optimizer-state.bin",
             "optimizer_state_sha256": optimizer_state_sha256,
         }),
     )?;
     write_new(&root.join("train.json"), &train)?;
 
-    let checkpoint =
-        format!("checkpoint-v1|job={job_id}|optimizer={optimizer_state_sha256}|state={state}\n");
-    let checkpoint = checkpoint.as_bytes();
-    write_new(&root.join("checkpoint.bin"), checkpoint)?;
-    let checkpoint_sha256 = sha256_bytes(checkpoint);
+    let checkpoint_dir = model_receipt
+        .pointer("/checkpoint/path")
+        .and_then(serde_json::Value::as_str)
+        .map(PathBuf::from)
+        .ok_or_else(|| producer_error("model-chain checkpoint path is absent"))?;
+    let checkpoint = fs::read(checkpoint_dir.join("checkpoint-manifest.json"))?;
+    let checkpoint_sha256 = sha256_bytes(&checkpoint);
+    if checkpoint_sha256
+        != model_receipt
+            .pointer("/checkpoint/manifest_sha256")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+    {
+        return Err(producer_error("model-chain checkpoint bytes are not bound"));
+    }
+    write_new(&root.join("checkpoint.bin"), &checkpoint)?;
     let checkpoint_phase = phase_payload(
         job_id,
         Phase::Checkpoint,
@@ -424,8 +480,8 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
     )?;
     write_new(&root.join("checkpoint.json"), &checkpoint_phase)?;
 
-    write_new(&root.join("published-checkpoint.bin"), checkpoint)?;
-    let published_sha256 = sha256_bytes(checkpoint);
+    write_new(&root.join("published-checkpoint.bin"), &checkpoint)?;
+    let published_sha256 = sha256_bytes(&checkpoint);
     let publish = phase_payload(
         job_id,
         Phase::Publish,
@@ -464,6 +520,36 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
     )?;
     write_new(&root.join("restore.json"), &restore)?;
 
+    let model_receipt_sha256 = sha256_bytes(&model_receipt_bytes);
+    let evaluation = phase_payload(
+        job_id,
+        Phase::Evaluation,
+        7,
+        serde_json::json!({
+            "kind": "restored_checkpoint_evaluated",
+            "model_chain_receipt": model_receipt_path,
+            "model_chain_receipt_sha256": model_receipt_sha256,
+            "entry_point": model_receipt.pointer("/evaluation/entry_point"),
+            "repeat_run_match": true,
+            "restored_checkpoint_sha256": published_sha256,
+        }),
+    )?;
+    write_new(&root.join("evaluation.json"), &evaluation)?;
+    let runtime_load = phase_payload(
+        job_id,
+        Phase::RuntimeLoad,
+        8,
+        serde_json::json!({
+            "kind": "published_checkpoint_runtime_loaded",
+            "model_chain_receipt": model_receipt_path,
+            "model_chain_receipt_sha256": model_receipt_sha256,
+            "entry_point": model_receipt.pointer("/runtime/entry_point"),
+            "generated_token_ids": model_receipt.pointer("/runtime/generated_token_ids"),
+            "published_checkpoint_sha256": published_sha256,
+        }),
+    )?;
+    write_new(&root.join("runtime_load.json"), &runtime_load)?;
+
     let peak_after = current_process_peak_bytes()?;
     let whole_run_peak_bytes = peak_before.max(peak_after);
     let host_peak = serde_json::to_vec(&serde_json::json!({
@@ -490,7 +576,7 @@ pub fn produce_minimal_slice(root: &std::path::Path, job_id: &str) -> Result<(),
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64,
-        "phase_count": 6,
+        "phase_count": 8,
         "phase_artifact_sha256": phase_artifact_sha256,
         "host_peak_sha256": sha256_bytes(&host_peak),
         "producer_binary_sha256": producer_binary_sha256,

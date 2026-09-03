@@ -6722,6 +6722,8 @@ impl Daemon {
             Phase::Publish,
             Phase::SelectableCheckpoint,
             Phase::Restore,
+            Phase::Evaluation,
+            Phase::RuntimeLoad,
         ];
         if expected_whole_run_peak_bytes == 0 {
             return Err(EmberLabError::InvalidTransition {
@@ -6844,13 +6846,13 @@ impl Daemon {
             }
         })?;
         let executable_sha256 = hash_file(Path::new(&row.executable))?;
-        // Class-sweep note: `phase_artifact_digest` reads six files
+        // Class-sweep note: `phase_artifact_digest` reads eight files
         // (data_verify.json, train.json, checkpoint.json, publish.json,
         // selectable_checkpoint.json, restore.json) that the same producer
         // writes, in that fixed order, strictly before `host_peak.json` and
         // `completion.json` (rehearsal.rs). Reaching this call already proves
         // `completion.json` was durable, so by the same program-order argument
-        // all six are durable too — no retry-on-parse-failure treatment needed
+        // all eight are durable too — no retry-on-parse-failure treatment needed
         // here either.
         let phase_artifact_sha256 =
             crate::rehearsal::phase_artifact_digest(&phase_dir).map_err(EmberLabError::Io)?;
@@ -6869,7 +6871,7 @@ impl Daemon {
                 .is_some_and(|completed_at_ms| {
                     completed_at_ms >= row.started_at_ms && completed_at_ms <= readiness_deadline_ms
                 })
-            && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
+            && completion.get("phase_count").and_then(Value::as_u64) == Some(8)
             && completion.get("host_peak_sha256").and_then(Value::as_str)
                 == Some(hash_bytes(&host_peak_bytes).as_str())
             && completion
@@ -7036,12 +7038,13 @@ impl Daemon {
             match phase {
                 Phase::DataVerify => {
                     if kind != "data_verify_completed"
-                        || object.get("record_count").and_then(Value::as_u64) != Some(3)
-                        || object.get("subset_records").and_then(Value::as_u64) != Some(3)
+                        || object.get("record_count").and_then(Value::as_u64) != Some(1)
+                        || object.get("subset_records").and_then(Value::as_u64) != Some(1)
                     {
                         return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
-                            detail: "data verify did not prove three subset records".into(),
+                            detail: "data verify did not prove the bound deterministic artifact"
+                                .into(),
                         });
                     }
                     let name = object
@@ -7057,7 +7060,7 @@ impl Daemon {
                             .split(|byte| *byte == b'\n')
                             .filter(|line| !line.is_empty())
                             .count()
-                            != 3
+                            != 1
                     {
                         return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
@@ -7071,12 +7074,12 @@ impl Daemon {
                             .get("train_steps")
                             .and_then(Value::as_u64)
                             .unwrap_or(0)
-                            < 3
+                            < 2
                         || object
                             .get("update_count")
                             .and_then(Value::as_u64)
                             .unwrap_or(0)
-                            < 3
+                            < 2
                     {
                         return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
@@ -7219,6 +7222,48 @@ impl Daemon {
                         return Err(EmberLabError::InvalidTransition {
                             job_id: job_id.into(),
                             detail: "restored checkpoint is not bound".into(),
+                        });
+                    }
+                }
+                Phase::Evaluation => {
+                    if kind != "restored_checkpoint_evaluated"
+                        || object.get("repeat_run_match") != Some(&Value::Bool(true))
+                        || object
+                            .get("model_chain_receipt_sha256")
+                            .and_then(Value::as_str)
+                            .is_none_or(|value| value.len() != 64)
+                        || object.get("restored_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::Restore)
+                                .and_then(|value| value.get("restored_checkpoint_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail: "restored checkpoint evaluation evidence is absent or unbound"
+                                .into(),
+                        });
+                    }
+                }
+                Phase::RuntimeLoad => {
+                    if kind != "published_checkpoint_runtime_loaded"
+                        || object
+                            .get("generated_token_ids")
+                            .and_then(Value::as_array)
+                            .is_none_or(Vec::is_empty)
+                        || object.get("published_checkpoint_sha256")
+                            != operations
+                                .get(&Phase::Publish)
+                                .and_then(|value| value.get("published_checkpoint_sha256"))
+                        || object.get("model_chain_receipt_sha256")
+                            != operations
+                                .get(&Phase::Evaluation)
+                                .and_then(|value| value.get("model_chain_receipt_sha256"))
+                    {
+                        return Err(EmberLabError::InvalidTransition {
+                            job_id: job_id.into(),
+                            detail:
+                                "published checkpoint runtime-load evidence is absent or unbound"
+                                    .into(),
                         });
                     }
                 }
@@ -7401,7 +7446,7 @@ impl Daemon {
             && completion.get("result") == Some(&Value::String("COMPLETED".into()))
             && completion.get("job_id") == Some(&Value::String(job_id.into()))
             && completion.get("producer_pid").and_then(Value::as_u64) == Some(row.pid as u64)
-            && completion.get("phase_count").and_then(Value::as_u64) == Some(6)
+            && completion.get("phase_count").and_then(Value::as_u64) == Some(8)
             && completion.get("host_peak_sha256").and_then(Value::as_str)
                 == Some(child_peak_sha256.as_str())
             && completion
@@ -7696,7 +7741,7 @@ impl Daemon {
             .log_dir
             .join("rehearsal")
             .join(hash_bytes(job_id.as_bytes()));
-        let mut consumed = Vec::with_capacity(6);
+        let mut consumed = Vec::with_capacity(8);
         for phase in [
             Phase::DataVerify,
             Phase::Train,
@@ -7704,6 +7749,8 @@ impl Daemon {
             Phase::Publish,
             Phase::SelectableCheckpoint,
             Phase::Restore,
+            Phase::Evaluation,
+            Phase::RuntimeLoad,
         ] {
             let kind = format!("ember_lab_phase_{}", phase.as_str());
             // Materialize the event payloads before asking phase_event_authorized

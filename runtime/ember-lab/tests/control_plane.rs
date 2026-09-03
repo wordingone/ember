@@ -588,6 +588,28 @@ fn start_phase_fixture(root: &Path, job_id: &str, producer: bool) -> (Daemon, Pa
     start_phase_fixture_with_delay(root, job_id, producer, 0)
 }
 
+fn write_model_chain_fixture(root: &Path, job_id: &str) -> (PathBuf, String) {
+    let fixture = root.join(format!("{job_id}-model-chain"));
+    let checkpoint = fixture.join("checkpoint");
+    fs::create_dir_all(&checkpoint).unwrap();
+    let data_path = fixture.join("data.json");
+    fs::write(&data_path, b"{\"records\":[]}\n").unwrap();
+    let checkpoint_path = checkpoint.join("checkpoint-manifest.json");
+    fs::write(&checkpoint_path, b"{\"checkpoint\":\"fixture\"}\n").unwrap();
+    let payload = json!({
+        "result": "PASS",
+        "fixture": {"data_path": data_path, "data_sha256": sha256(&data_path)},
+        "training": {"steps": 3},
+        "checkpoint": {"path": checkpoint, "manifest_sha256": sha256(&checkpoint_path)},
+        "evaluation": {"repeat_run_match": true, "entry_point": "fixture:evaluate"},
+        "runtime": {"generated_token_ids": [1], "entry_point": "fixture:generate"},
+    });
+    let receipt = fixture.join("receipt.json");
+    fs::write(&receipt, serde_json::to_vec(&payload).unwrap()).unwrap();
+    let digest = sha256(&receipt);
+    (receipt, digest)
+}
+
 fn start_phase_fixture_with_delay(
     root: &Path,
     job_id: &str,
@@ -610,9 +632,15 @@ fn start_phase_fixture_with_delay(
     .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
     .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000");
     if producer {
+        let (model_receipt, model_receipt_sha256) = write_model_chain_fixture(root, job_id);
         spec = spec
             .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
-            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", job_id);
+            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", job_id)
+            .with_env(
+                "EMBER_LAB_MODEL_CHAIN_RECEIPT",
+                model_receipt.to_string_lossy(),
+            )
+            .with_env("EMBER_LAB_MODEL_CHAIN_SHA256", model_receipt_sha256);
         if delay_ms > 0 {
             spec = spec.with_env("EMBER_LAB_MINIMAL_SLICE_DELAY_MS", delay_ms.to_string());
         }
@@ -3208,6 +3236,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         .bind_identity("phase-job", &identity, &identity_hash)
         .unwrap();
     daemon.acquire_lease("cpu-fixture", "phase-job").unwrap();
+    let (model_receipt, model_receipt_sha256) = write_model_chain_fixture(&root, "phase-job");
     daemon
         .start_job(
             JobSpec::new(
@@ -3219,6 +3248,11 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
             .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
             .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
             .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", "phase-job")
+            .with_env(
+                "EMBER_LAB_MODEL_CHAIN_RECEIPT",
+                model_receipt.to_string_lossy(),
+            )
+            .with_env("EMBER_LAB_MODEL_CHAIN_SHA256", model_receipt_sha256)
             .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "30000"),
         )
         .unwrap();
@@ -3291,7 +3325,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
         )
         .unwrap();
     let consumed = daemon.load_authorized_phase_evidence("phase-job").unwrap();
-    assert_eq!(consumed.len(), 6);
+    assert_eq!(consumed.len(), 8);
     let evidence = produced
         .iter()
         .find(|evidence| evidence.phase == ember_lab::rehearsal::Phase::Train)
@@ -3299,7 +3333,7 @@ fn phase_events_are_daemon_bound_and_foreign_bytes_do_not_authorize() {
     assert!(daemon
         .phase_event_authorized("phase-job", "train", &evidence.sha256)
         .unwrap());
-    assert_eq!(produced.len(), 6);
+    assert_eq!(produced.len(), 8);
     assert!(produced.iter().all(|evidence| evidence
         .path
         .starts_with(root.join("ember-lab.sqlite3.logs").join("rehearsal"))));
@@ -3356,8 +3390,60 @@ fn delayed_minimal_slice_waits_for_terminal_completion() {
     let produced = daemon
         .execute_minimal_episode("phase-delayed", 1, readiness_deadline_after_ms(5_000))
         .unwrap();
-    assert_eq!(produced.len(), 6);
+    assert_eq!(produced.len(), 8);
     daemon.stop_job("phase-delayed").unwrap();
+}
+
+#[test]
+fn producer_exit_before_last_phase_is_an_invalid_transition_not_a_pass() {
+    let root = sandbox("phase-early-exit");
+    let db = root.join("phase-early-exit.sqlite3");
+    let (identity, identity_hash) = write_identity(&root);
+    let daemon = Daemon::open(&db).unwrap();
+    daemon
+        .bind_identity("phase-early-exit", &identity, &identity_hash)
+        .unwrap();
+    daemon
+        .acquire_lease("cpu-fixture", "phase-early-exit")
+        .unwrap();
+    let (model_receipt, model_receipt_sha256) =
+        write_model_chain_fixture(&root, "phase-early-exit");
+    daemon
+        .start_job(
+            JobSpec::new(
+                "phase-early-exit",
+                std::env::current_exe().unwrap().to_string_lossy(),
+                ["--exact", "fixture_child_process", "--nocapture"],
+                "cpu-fixture",
+            )
+            .with_env("EMBER_LAB_FIXTURE_CHILD", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE", "1")
+            .with_env("EMBER_LAB_MINIMAL_SLICE_JOB_ID", "phase-early-exit")
+            .with_env(
+                "EMBER_LAB_MODEL_CHAIN_RECEIPT",
+                model_receipt.to_string_lossy(),
+            )
+            .with_env("EMBER_LAB_MODEL_CHAIN_SHA256", model_receipt_sha256)
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "0"),
+        )
+        .unwrap();
+    let phase_root = root
+        .join("phase-early-exit.sqlite3.logs")
+        .join("rehearsal")
+        .join(ember_lab::hash_bytes(b"phase-early-exit"));
+    let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
+    thread::sleep(Duration::from_millis(100));
+    let error = daemon
+        .execute_minimal_episode("phase-early-exit", peak, readiness_deadline_after_ms(5_000))
+        .unwrap_err();
+    assert!(matches!(error, EmberLabError::InvalidTransition { .. }));
+    let evidence_error = daemon
+        .load_authorized_phase_evidence("phase-early-exit")
+        .unwrap_err();
+    assert!(matches!(
+        evidence_error,
+        EmberLabError::InvalidTransition { .. }
+    ));
 }
 
 #[test]
