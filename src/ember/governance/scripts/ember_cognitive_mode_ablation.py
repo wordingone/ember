@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 
 import ember_cognitive_mode_policy as cmp  # noqa: E402
 # issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py

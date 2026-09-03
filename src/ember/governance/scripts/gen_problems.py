@@ -37,7 +37,7 @@ try:
 except Exception as e:  # pragma: no cover
     sys.exit("gen_problems: PyYAML required (pip install pyyaml): %s" % e)
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # repo root
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))   # repo root
 
 # Where the verdict-layer JSON lives — an operator-local tree, intentionally
 # separate from this repo. No repo-relative default applies; set

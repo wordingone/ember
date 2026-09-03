@@ -18,7 +18,7 @@ import argparse, json, os, time
 # selftest/emit work from ANY cwd — e.g. an isolated pool-worker dir. Caught by
 # the 2026-06-13 pool integration run: relative "receipts/..." only resolved
 # from the repo root, so the selftest failed under isolation (and would fail CI).
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 def _resolve(path):
     return path if os.path.isabs(path) else os.path.join(_REPO_ROOT, path)
 

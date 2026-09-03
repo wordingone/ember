@@ -42,7 +42,7 @@
 
 **Files:**
 - Modify: `AGENTS.md`
-- Modify: `tools/ember-cli/src/package.json`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/package.json`
 
 - [ ] Require finite-timeout owned execution for automated descendant-producing commands.
 - [ ] Route the package test script through `src/ember/governance/scripts/owned_process.py`.

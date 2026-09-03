@@ -13,7 +13,7 @@ Keep the strict runtime resolver unchanged. During `Install-StableFiles`, migrat
 - Reject a marker reached through any symlink, junction, or reparse component.
 - Reject a canonical destination that is non-file or crosses a reparse component; reopen its exact raw bytes after atomic publication.
 - If it contains any other bytes, refuse without deleting or replacing it.
-- Continue creating the git-less `tools/ember-cli` marker directory and canonical `docs/domains/governance/authority/GOAL.md`.
+- Continue creating the git-less `src/ember/infrastructure/tools/ember-cli` marker directory and canonical `docs/domains/governance/authority/GOAL.md`.
 - Complete all other stable-file writes before the marker transition. Publish the canonical marker atomically, remove the legacy marker last, and restore the prior canonical state if deletion fails.
 
 This preserves the one-authority invariant, makes upgrades self-contained, and never treats foreign bytes as installer-owned.

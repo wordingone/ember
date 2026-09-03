@@ -51,7 +51,7 @@ import torch.nn.functional as F
 _THIS_FILE = pathlib.Path(__file__).resolve()
 _PKG_DIR = _THIS_FILE.parent          # scripts/ember_phase5_c7/
 _SCRIPTS_DIR = _PKG_DIR.parent        # scripts/
-_REPO_ROOT = _SCRIPTS_DIR.parent      # nc-ladder/
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]      # nc-ladder/
 
 for _p in [str(_SCRIPTS_DIR), str(_PKG_DIR)]:
     if _p not in sys.path:

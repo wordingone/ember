@@ -15,7 +15,7 @@ import unittest
 
 # Add repo root to path
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 sys.path.insert(0, REPO_ROOT)
 
 # issue2015 exact-local-import:src/ember/governance/scripts/ember_totality/ember_totality_spec.py

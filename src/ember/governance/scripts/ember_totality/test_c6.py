@@ -58,7 +58,7 @@ import glob
 import re
 import subprocess
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 EXTERNAL_STATE = next(
     (p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
                  os.path.join(REPO_ROOT, "<external-state>"))

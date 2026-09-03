@@ -30,7 +30,7 @@ Three tests, per the frozen fix spec:
 import os
 import sys
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
 GATE_KEY = "backbone_model.layers.0.mlp.gate_proj.weight"

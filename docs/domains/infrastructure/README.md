@@ -9,5 +9,5 @@ describe build authority; they do not establish runtime or model results.
 
 Smallest safe verification: inspect [`pyproject.toml`](../../../pyproject.toml),
 [`runtime/ember-lab/Cargo.toml`](../../../runtime/ember-lab/Cargo.toml), and
-[`tools/ember-cli/src/package.json`](../../../tools/ember-cli/src/package.json), then run the
+[`src/ember/infrastructure/tools/ember-cli/src/package.json`](../../../src/ember/infrastructure/tools/ember-cli/src/package.json), then run the
 CPU-only authority command in the [verification guide](../../guides/VERIFY.md).

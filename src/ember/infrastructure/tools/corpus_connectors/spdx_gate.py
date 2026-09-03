@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-_ROOT = Path(__file__).resolve().parents[2]
+_ROOT = Path(__file__).resolve().parents[5]
 _ADMISSION_DIR = _ROOT / "tools" / "ember-restart-3b"
 
 OPERATORS = ("OR", "AND", "WITH")

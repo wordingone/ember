@@ -8,5 +8,5 @@ but execution and model admission remain receipt-bound. Training may depend on M
 Infrastructure, and Governance.
 
 Smallest safe inspection: read the governed training contracts under
-[`docs/domains/governance/ember-restart/`](../../ember-restart/) without launching a job. CPU-only authority checks are
+[`docs/domains/governance/ember-restart/`](../governance/ember-restart/) without launching a job. CPU-only authority checks are
 listed in the [verification guide](../../guides/VERIFY.md).

@@ -47,7 +47,7 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 BULK_RESOLUTION_SCHEMA = "ember-wave2-bulk-resolution-v1"
 
 CHARTER_DOMAINS = {

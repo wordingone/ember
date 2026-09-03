@@ -9,7 +9,7 @@
   receipt tooling (`receipt_check.py`, `receipt_write.py`), the resource
   governor (`governor.py`), and the worktree lifecycle manager
   (`worktree_lifecycle.py`).
-- `tools/ember-cli/` — the TypeScript CLI/cockpit (Node/TS project with its
+- `src/ember/infrastructure/tools/ember-cli/` — the TypeScript CLI/cockpit (Node/TS project with its
   own `src/core/`, `src/commands/`, `src/components/`).
 - `receipts/` — the append-mostly evidence tree; every claim-bearing artifact
   lands here (see 10_RECEIPTS_PROVENANCE.md).

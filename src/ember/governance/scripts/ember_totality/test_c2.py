@@ -88,7 +88,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lane14_common import git_last_commit_time  # noqa: E402
 
 # --- Locate the external state root robustly across invocation conventions --------
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
 # REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
 # cover every real invocation shape, and the dropped candidate never resolved to

@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 
 # Add repo root to path
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 sys.path.insert(0, REPO_ROOT)
 
 from scripts.ember_totality import receipt_chain_verify as rcv

@@ -68,7 +68,7 @@ import sys
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 
 GROWTH_RUNG_DIR = "receipts/growth-rung-attempts"
 B2_BOOTSTRAP_DIR = "receipts/bootstrap-rung"
