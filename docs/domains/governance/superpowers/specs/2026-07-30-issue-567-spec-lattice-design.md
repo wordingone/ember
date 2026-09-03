@@ -16,8 +16,8 @@ and exist as a file. `OPEN` nodes may name planned files but cannot be represent
 
 The trusted live PR policy consumes GitHub's complete changed-file names, the base-pinned policy
 checkout, and the pull-request merge subject checked out as hostile data. It derives an addition
-only when a TypeScript source path under `tools/ember-cli/src/components/`,
-`tools/ember-cli/src/screens/`, or `tools/ember-cli/src/services/` is absent from the trusted base
+only when a TypeScript source path under `src/ember/infrastructure/tools/ember-cli/src/components/`,
+`src/ember/infrastructure/tools/ember-cli/src/screens/`, or `src/ember/infrastructure/tools/ember-cli/src/services/` is absent from the trusted base
 and present in the subject. The PR must also change at least one Markdown spec node whose validated
 consumer set includes every added component path. No candidate-owned policy code is imported or
 executed. Dependabot remains governed by its narrower existing schema.

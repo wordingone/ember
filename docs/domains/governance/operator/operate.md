@@ -5,7 +5,7 @@ ember-cli operator surface up, take it down cleanly, and recover it after an
 unplanned interruption (a crash, a closed terminal, a killed process).
 
 The example below uses the real `/watch` telemetry mechanism
-(`tools/ember-cli/src/services/telemetry-watch.ts`'s `startTelemetryWatch()`)
+(`src/ember/infrastructure/tools/ember-cli/src/services/telemetry-watch.ts`'s `startTelemetryWatch()`)
 running as its own OS process, wrapped by a small launcher
 (the historical telemetry-watch worker) that gives it a
 file-based ready/stop protocol so it can be operated the same way any

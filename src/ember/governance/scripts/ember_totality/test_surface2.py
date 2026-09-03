@@ -131,7 +131,7 @@ from _lane14_common import redact_root  # noqa: E402
 
 # Contract repo root, same resolution the sibling probes use (e.g.
 # test_c_proc.py's REPO_ROOT): two levels up from this file's directory.
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 
 # EMBER_EXEC_ROOT env var can override; default resolves to the contract
 # repo root itself (issue #533 -- the separate-execution-tree premise is

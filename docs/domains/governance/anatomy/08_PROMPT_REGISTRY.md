@@ -12,7 +12,7 @@ stated plainly rather than invented, per this doc set's authoring rule
 Prompt/instruction text that exists today lives inline, scattered across
 call sites rather than centrally registered:
 - Agent/tool instruction text embedded directly in TypeScript sources under
-  `tools/ember-cli/src/` (e.g. `goal-continuation-prompt.ts`, whose name
+  `src/ember/infrastructure/tools/ember-cli/src/` (e.g. `goal-continuation-prompt.ts`, whose name
   suggests a single-purpose prompt template, not a general registry).
 - Evaluation-harness prompt/instruction construction inline inside the
   `scripts/ember_restart_eval_*.py` family (each evaluator builds its own

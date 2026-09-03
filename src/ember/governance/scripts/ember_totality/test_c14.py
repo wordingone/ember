@@ -89,7 +89,7 @@ from receipt_ts_authority import effective_event_ts  # noqa: E402 -- shared
 _DIVERGENCE_NOTES = []
 
 # --- Locate the external state root robustly across invocation conventions --------
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 # [RULING-DRIFT CORRECTION, 2026-07-06, gh #254] dropped the vestigial third
 # REPO_ROOT-relative fallback candidate: EMBER_TOTALITY_ROOT and REPO_ROOT already
 # cover every real invocation shape, and the dropped candidate never resolved to

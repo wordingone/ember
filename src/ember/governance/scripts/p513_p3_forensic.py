@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.dirname(SCRIPTS_DIR)
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 sys.path.insert(0, SCRIPTS_DIR)
 
 # issue2015 exact-local-import:src/ember/governance/scripts/receipt_write.py

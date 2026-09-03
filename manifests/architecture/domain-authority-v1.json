@@ -77,8 +77,8 @@
     {"id": "python-package", "path": "pyproject.toml", "ecosystem": "python", "role": "package", "expected_blob_oid": "5dff8625f8ccafd6f3ec863208852c6efb724d2e"},
     {"id": "rust-package", "path": "runtime/ember-lab/Cargo.toml", "ecosystem": "rust", "role": "package", "expected_blob_oid": "ce10026394de0f3fe6e0ff011b4540f8dd4321e2"},
     {"id": "rust-lock", "path": "runtime/ember-lab/Cargo.lock", "ecosystem": "rust", "role": "lock", "expected_blob_oid": "40831a42fbb62a148d60e846b7d81b1c560595ef"},
-    {"id": "bun-package", "path": "tools/ember-cli/src/package.json", "ecosystem": "bun", "role": "package", "expected_blob_oid": "914332c3dcdb91893a4c4b7e6a3b48adbc4c3e8f"},
-    {"id": "bun-lock", "path": "tools/ember-cli/src/bun.lock", "ecosystem": "bun", "role": "lock", "expected_blob_oid": "d4a7830867e6205deb1a002a90ace656563db97c"}
+    {"id": "bun-package", "path": "src/ember/infrastructure/tools/ember-cli/src/package.json", "ecosystem": "bun", "role": "package", "expected_blob_oid": "914332c3dcdb91893a4c4b7e6a3b48adbc4c3e8f"},
+    {"id": "bun-lock", "path": "src/ember/infrastructure/tools/ember-cli/src/bun.lock", "ecosystem": "bun", "role": "lock", "expected_blob_oid": "d4a7830867e6205deb1a002a90ace656563db97c"}
   ],
   "backend_authority": {
     "name": "setuptools",

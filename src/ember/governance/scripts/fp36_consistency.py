@@ -22,7 +22,7 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..'))
 DOC = os.path.join(ROOT, "docs", "archive", "pre-restart", "fp36-1b-info-interpretation-v0.md")
 
 PINS = [

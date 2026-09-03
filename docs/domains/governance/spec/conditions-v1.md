@@ -326,7 +326,7 @@ pre-epoch history.
   carrying `_synthetic_control_fixture: true` or a `synthetic_event` field (a test-injected
   marker, not real production telemetry); a stale receipt (>14d older than the newest work
   commit); a receipt/sibling with no `verb` in {"stop","pause","resume","adjust"} per the real
-  `FinetuneControlCmd` schema (`tools/ember-cli/src/services/finetune-control.ts`); a
+  `FinetuneControlCmd` schema (`src/ember/infrastructure/tools/ember-cli/src/services/finetune-control.ts`); a
   `metrics_delta` that is absent or <=0. ✗ `invalid_surface2_receipt_absent`,
   `invalid_surface2_synthetic_receipt`, `invalid_surface2_stale_telemetry`,
   `invalid_surface2_no_steer_kill_event`, `invalid_surface2_token_delta_not_positive`. CHK: the

@@ -151,7 +151,7 @@ git commit -m "fix(cli): close the prompt input border"
 ### Task 2: Anchor the real StatusLine inside PromptInput
 
 **Files:**
-- Modify: `tools/ember-cli/src/screens/repl.ts`
+- Modify: `src/ember/infrastructure/tools/ember-cli/src/screens/repl.ts`
 - Modify: `src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts`
 
 **Interfaces:**
@@ -222,7 +222,7 @@ Expected: both suites pass and exactly one status component is rendered.
 - [ ] **Step 5: Commit status anchoring**
 
 ```powershell
-git add tools/ember-cli/src/screens/repl.ts src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts
+git add src/ember/infrastructure/tools/ember-cli/src/screens/repl.ts src/ember/infrastructure/tools/ember-cli/src/screens/repl-operator-surface.test.ts
 git commit -m "fix(cli): anchor status inside prompt panel"
 ```
 
@@ -403,7 +403,7 @@ Expected: all pass.
 
 ```powershell
 python scripts/repo_guard.py --base origin/master
-cd tools/ember-cli/src
+cd src/ember/infrastructure/tools/ember-cli/src
 bun run build
 ```
 

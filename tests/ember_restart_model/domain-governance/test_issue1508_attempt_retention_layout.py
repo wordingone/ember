@@ -14,7 +14,7 @@ import unittest
 from unittest import mock
 
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "tools" / "ember-restart-3b" / "certified_train_launch.py"
 if str(ROOT / "tools" / "ember-restart-3b") not in sys.path:
     sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))

@@ -88,7 +88,7 @@ from _lane14_common import sha256_file as _sha256_file  # noqa: E402
 import void_supersession  # noqa: E402  (shared VOID-supersession partition, gh issue #358)
 
 # --- Locate the state root ----------------------------------------------------
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..'))
 CANDIDATE_ROOTS = [
     p for p in (os.environ.get("EMBER_TOTALITY_ROOT"), REPO_ROOT,
                 os.path.join(REPO_ROOT, "<external-state>"))
