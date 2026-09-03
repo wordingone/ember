@@ -25,7 +25,7 @@ CLOSURE_MODULE_PATH = (
 )
 MANIFEST_RELATIVE_PATH = "manifests/training-dependency-closure.json"
 SUPPLEMENT_RELATIVE_PATH = (
-    "tools/ember-restart-3b/training-dependency-closure-supplement.json"
+    "src/ember/infrastructure/tools/ember-restart-3b/training-dependency-closure-supplement.json"
 )
 FRONTIER_RECEIPT_LEGACY = "scripts/frontier_receipt.py"
 FRONTIER_RECEIPT_CANONICAL = "src/ember/governance/scripts/frontier_receipt.py"

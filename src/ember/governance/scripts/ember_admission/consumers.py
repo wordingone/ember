@@ -48,8 +48,8 @@ CONSUMER_CLOSURE_RELATIVE_PATHS: Mapping[str, tuple[str, ...]] = {
         "src/ember/governance/scripts/ember_restart/source_authority.py",
         "scripts/ember_01_identity/checkpoint_save_load_identity_binding.py",
         "scripts/ember_01_identity/validate_identity.py",
-        "tools/ember-restart-3b/parameter_counter.py",
-        "tools/ember-restart-3b/repository_layout.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/repository_layout.py",
         *_IDENTITY_STATIC_EVIDENCE,
     ),
 }

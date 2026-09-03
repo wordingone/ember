@@ -49,7 +49,7 @@ from typing import Any, Iterable, NamedTuple
 MANIFEST_RELATIVE_PATH = "manifests/training-dependency-closure.json"
 MANIFEST_SCHEMA_VERSION = "ember-training-dependency-closure-v1"
 SUPPLEMENT_RELATIVE_PATH = (
-    "tools/ember-restart-3b/training-dependency-closure-supplement.json"
+    "src/ember/infrastructure/tools/ember-restart-3b/training-dependency-closure-supplement.json"
 )
 SUPPLEMENT_SCHEMA_VERSION = "ember-training-dependency-closure-supplement-v1"
 LAYOUT_PATH_ALIASES = (
@@ -134,7 +134,7 @@ class ClosureAudit(NamedTuple):
             lines.extend(f"  !> {edge}" for edge in self.invalid_dynamic_targets)
         if lines:
             lines.append(
-                "Note: changing tools/ember-restart-3b/parameter_counter.py is "
+                "Note: changing src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py is "
                 "inside the closure and moves counter_sha256, so any checkpoint "
                 "you intend to RESUME must have its counter receipt re-run "
                 "against the new counter (run_vertical_slice's "
@@ -537,7 +537,7 @@ def _exec_edges(root: pathlib.Path, source: pathlib.Path, tree: ast.Module) -> s
 
     Covers the shapes the training chain actually uses to spawn siblings:
     ``Path(__file__).with_name("verify_training_data.py")`` and the
-    repo-relative ``"tools/ember-restart-3b/verify_capability_record.py"``.
+    repo-relative ``"src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py"``.
     Script targets remain closure edges across Python, PowerShell, cmd, and sh.
     """
 

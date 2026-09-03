@@ -15,7 +15,7 @@ Raw 48x48x3 RGB patches and raw 640-sample audio frames are projected directly i
 | Namespace | Exclusive root |
 | --- | --- |
 | model | models/ember-restart-3b |
-| training | tools/ember-restart-3b |
+| training | src/ember/infrastructure/tools/ember-restart-3b |
 | checkpoints | receipts/ember-restart-3b |
 | inference | inference/ember-restart-3b |
 | data | data/ember-restart-3b |

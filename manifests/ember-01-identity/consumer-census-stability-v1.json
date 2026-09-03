@@ -5,12 +5,12 @@
   "goal_id": "EMBER-01",
   "workstream_id": "EMBER-01C",
   "snapshot_path": "manifests/ember-01-identity/consumer-census-v1.json",
-  "snapshot_bytes": 68645445,
-  "snapshot_sha256": "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda",
+  "snapshot_bytes": 68934382,
+  "snapshot_sha256": "ff0b20c6181b13978694b8f4ef2e9786977dfdc435ecc44c147cc3126ebba561",
   "canonical_subject_sha256": "bb47ae9442dea6a554288b940a4c87dafb70a1378153593b7c04b6345ec4144f",
   "complete_run_sha256": [
-    "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda",
-    "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda"
+    "ff0b20c6181b13978694b8f4ef2e9786977dfdc435ecc44c147cc3126ebba561",
+    "ff0b20c6181b13978694b8f4ef2e9786977dfdc435ecc44c147cc3126ebba561"
   ],
   "byte_identical": true,
   "root_count": 8,
@@ -24,7 +24,7 @@
   "environmental_adjudication": {
     "schema": "ember-snapshot-adjudication-overlay-v1",
     "policy_id": "fail-closed-static-superset-v1",
-    "snapshot_sha256": "d8350a696e923cdf49374a14d570536b0a7edc7f962b6c12f2afa0780959bdda",
+    "snapshot_sha256": "ff0b20c6181b13978694b8f4ef2e9786977dfdc435ecc44c147cc3126ebba561",
     "roles": {
       "EXECUTABLE_CANDIDATE": "CONSERVATIVE_CONSUMER",
       "DOCUMENTATION_EVIDENCE": "REVIEWED_IDENTITY_SOURCE",

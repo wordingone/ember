@@ -10,7 +10,7 @@ machine-readable replay set is
 1. Install the measured Python environment:
 
    ```text
-   python tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
+   python src/ember/infrastructure/tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
    ```
 
    Requires CPU, supported Windows Python, and network access. No GPU, credentials, data, or model

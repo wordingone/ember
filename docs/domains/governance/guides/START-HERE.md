@@ -54,7 +54,7 @@ Installation authorities are distinct: Python uses
 From the repository root:
 
 ```text
-python tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
+python src/ember/infrastructure/tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
 ```
 
 The measured environment contract is

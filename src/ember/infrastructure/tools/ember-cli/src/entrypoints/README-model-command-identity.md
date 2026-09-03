@@ -5,7 +5,7 @@
 # Closed-loop owned-server identity (ember-cli supervisor side)
 
 This documents the OUTSIDE half of the owned-model identity check. It complements
-`tools/ember-restart-3b/serve_owned_openai.py` (#968), which binds the server process's OWN
+`src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py` (#968), which binds the server process's OWN
 served identity to a verified checkpoint from the INSIDE (the process refuses to serve unless the
 checkpoint it loaded matches its own launch args). This document is about the supervisor verifying,
 from the outside, that what the supervisor actually launched is what actually got served.

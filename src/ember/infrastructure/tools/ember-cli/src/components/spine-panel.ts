@@ -21,7 +21,7 @@
 //                                    state root, utils/ember-state-root.ts).
 //   element 4 launch-packet      -> the newest receipts/ember-01-launch-packet/<ts>/
 //                                    packet.jsonl the real launch_packet.py preflight
-//                                    writes (tools/ember-restart-3b/launch_packet.py);
+//                                    writes (src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py);
 //                                    read-only here -- driving re-runs the real /train
 //                                    command via driveSpineElement, never a duplicated
 //                                    subprocess spawn.

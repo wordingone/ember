@@ -23,7 +23,7 @@
 ### Task 1: Freeze and test the superseding amendment
 
 **Files:**
-- Create: `tests/ember_restart_model/test_a1_lower_bound_amendment.py`
+- Create: `tests/ember_restart_model/domain-governance/test_a1_lower_bound_amendment.py`
 - Create: `docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json`
 
 **Interfaces:**
@@ -51,7 +51,7 @@ Include exact `supersedes`, `thresholds`, `trigger_evidence`, `decision`, `chang
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 
-Run: `pytest -p no:cacheprovider tests/ember_restart_model/test_a1_lower_bound_amendment.py -q`
+Run: `pytest -p no:cacheprovider tests/ember_restart_model/domain-governance/test_a1_lower_bound_amendment.py -q`
 Expected: all assertions PASS.
 
 - [ ] **Step 5: Run policy and whitespace verification**
@@ -62,7 +62,7 @@ Expected: PASS with no generated identity change because the amendment is outsid
 - [ ] **Step 6: Commit the frozen carrier**
 
 ```bash
-git add docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json tests/ember_restart_model/test_a1_lower_bound_amendment.py docs/domains/governance/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md
+git add docs/domains/governance/spec/ember02-a1-lower-bound-only-amendment-v2.json tests/ember_restart_model/domain-governance/test_a1_lower_bound_amendment.py docs/domains/governance/superpowers/plans/2026-08-22-a1-lower-bound-supersession.md
 git commit -m "docs(ember-02): rescope failed A1 arm as lower bound"
 ```
 

@@ -15,7 +15,7 @@
   },
   "architecture": {
     "source": "configs/ember-restart-3b.json",
-    "sha256": "33a82113cfa42fcd62d70688fea39c62b3793630c7ea48fdb5b884681a8e1781"
+    "sha256": "99640613f3bf75a7d8da022d3d2eced68a96aeadd02145dd576dcc26c80b3073"
   },
   "checkpoint": {
     "format": "ember-checkpoint-envelope-v1",
@@ -46,7 +46,7 @@
   },
   "data": {
     "corpus_id": "owned-four-domain-production-rung-v1",
-    "sha256": "b71c33f829daaf4a369cc660f130a1e114ab373cff5d0697f0809e729371371c",
+    "sha256": "26b4c4fbc1fe89de84726578e644019e9c901c06df2b97f0031969b88abe31f1",
     "ordering_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "curriculum_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "verifier_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",

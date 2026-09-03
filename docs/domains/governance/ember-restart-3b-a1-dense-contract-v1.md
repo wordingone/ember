@@ -12,7 +12,7 @@ claim that A1 has run or that R1-E8 is met.
 ## Dense identity
 
 The canonical machine contract is
-`tools/ember-restart-3b/ember-restart-3b-a1.json`. Its architecture revision is
+`src/ember/infrastructure/tools/ember-restart-3b/ember-restart-3b-a1.json`. Its architecture revision is
 `ember-dense-a1-3b-v1`: 56 dense decoder layers at width 2048, with one 4H
 SwiGLU FFN in every layer and no router or expert bank. The dense FFN inherits
 the sparse arm's SwiGLU math through an ancestry-clean owned class; an

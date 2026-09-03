@@ -39,7 +39,7 @@ of this consolidation.
   `data/ember-restart-3b/text-lab-authority-index-v1.json`, Git blob
   `60316ae00ec8d14367d3aac5dd89732faed402cc`.
 - The fail-closed consumer is
-  `tools/ember-restart-3b/text_lab_corpus.py`, Git blob
+  `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py`, Git blob
   `f39775e21167ef5dcda25ea09e3a50cf839c3956`.
 
 All 45 candidate rows in the shared #950 bundle remain

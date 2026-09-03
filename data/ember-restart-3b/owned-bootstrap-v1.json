@@ -18,8 +18,8 @@
                                "canonical_record_sha256":  "847078e507a659de80e7d65305a709858fa03deed93dc08a8a90c5e85c25313b",
                                "reasoning_target_sha256":  "663eed92626ad53deb3a550eb96ff730bd72009d3792f597e9d4662735b4a703",
                                "result":  "PASSED",
-                               "verifier_path":  "tools/ember-restart-3b/verify_capability_record.py",
-                               "verifier_sha256":  "21690fd7d55b2a4376a6ae6723d68a9429eee792d3a1023cbb1e90f3f092b8a0"
+                               "verifier_path":  "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py",
+                               "verifier_sha256":  "c845bce118697d2535a689da37a201254e2a0ea8aa2302c5a9effe1c9497d01f"
                            },
     "goal_id":  "EMBER-02",
     "image_coordinates":  [

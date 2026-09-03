@@ -79,7 +79,7 @@ Installation authorities are distinct: Python uses
 root, install the measured direct environment:
 
 ```text
-python tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
+python src/ember/infrastructure/tools/ember-restart-3b/python_environment.py install --receipt state\receipts\python-environment-install-v1.json
 ```
 
 This requires a supported Windows Python environment and network access for dependencies; it does

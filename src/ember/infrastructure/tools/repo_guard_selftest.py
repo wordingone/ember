@@ -43,7 +43,7 @@ GUARD_SUPPORT_FILES = [
     "src/ember/infrastructure/tools/check_executable_redaction_placeholders.py",
     "src/ember/infrastructure/tools/check_names_hashed.py",
     "src/ember/infrastructure/tools/check_governed_entry_exceptions.py",
-    "tools/ember-restart-3b/check_manifest_path_bindings.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/check_manifest_path_bindings.py",
     "src/ember/infrastructure/tools/governed-entry-exceptions.json",
     "src/ember/infrastructure/tools/launcher-shape-exceptions.json",
     _LEGACY_CHECKER_REL,
@@ -284,7 +284,7 @@ def make_split_kernel(test_word: str) -> Path:
         "src/ember/infrastructure/tools/check_executable_redaction_placeholders.py",
         "src/ember/infrastructure/tools/check_names_hashed.py",
         "src/ember/governance/scripts/verify_authority_conservation.py",
-        "tools/ember-restart-3b/check_manifest_path_bindings.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/check_manifest_path_bindings.py",
     ):
         source = REPO_ROOT / relative
         target = kernel / relative
@@ -1773,7 +1773,7 @@ def test_red_powershell_launcher_shape_cannot_hide_behind_selftest_name():
     try:
         hidden = tmp / "scripts" / "operator-launch-selftest.ps1"
         hidden.write_text(
-            "& python.exe tools/ember-restart-3b/run_vertical_slice.py governed-vertical\n",
+            "& python.exe src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py governed-vertical\n",
             encoding="utf-8",
             newline="\n",
         )

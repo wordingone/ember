@@ -267,7 +267,7 @@ def measure_tokens_per_second(series: list[dict[str, Any]], run_root: Path, step
                 "UNMEASURABLE tokens_per_second: data_cursor lacks finite tokens_seen/global_step "
                 f"(tokens_seen={tokens_seen!r}, global_step={global_step!r})"
             )
-        # tools/ember-restart-3b/run_vertical_slice.py writes
+        # src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py writes
         # data_cursor["resume_authority"] ONLY when the run resumed a checkpoint
         # (both write-sites: specialist ~2828-2829 and semantic ~3279-3280) --
         # its presence is the authoritative resume marker. A resumed run's

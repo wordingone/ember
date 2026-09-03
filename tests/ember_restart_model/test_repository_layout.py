@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 from repository_layout import (  # noqa: E402
     LayoutAuthority,
@@ -95,13 +95,13 @@ def test_closed_pair_refuses_bytes_outside_selected_pin(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "relative",
     [
-        "tools/ember-restart-3b/certified_train_launch.py",
-        "tools/ember-restart-3b/eval_canary_image.py",
-        "tools/ember-restart-3b/launch_packet.py",
-        "tools/ember-restart-3b/parameter_counter.py",
-        "tools/ember-restart-3b/production_rung.py",
-        "tools/ember-restart-3b/remint_specialist_stream.py",
-        "tools/ember-restart-3b/serve_owned_openai.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/eval_canary_image.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/production_rung.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/remint_specialist_stream.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
     ],
 )
 def test_production_consumers_use_the_closed_layout_seam(relative: str) -> None:
@@ -125,7 +125,7 @@ def test_production_consumers_have_no_unmediated_transition_authority(
 ) -> None:
     source = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in (ROOT / "tools" / "ember-restart-3b").glob("*.py")
+        for path in (ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b").glob("*.py")
     )
     assert forbidden not in source
 
@@ -169,17 +169,17 @@ def test_specialist_authorities_declare_canonical_preference(name: str) -> None:
 @pytest.mark.parametrize(
     "relative",
     [
-        "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
+        "tests/ember_restart_model/domain-governance/fixtures/eval-canary-image-v1/build_fixture.py",
         "tests/ember_restart_model/test_a1_certified_launch.py",
-        "tests/ember_restart_model/test_certified_train_launch.py",
-        "tests/ember_restart_model/test_checkpoint_artifacts.py",
-        "tests/ember_restart_model/test_counter_cli.py",
-        "tests/ember_restart_model/test_frozen_tokenizer_decoder.py",
-        "tests/ember_restart_model/test_infer.py",
-        "tests/ember_restart_model/test_issue1508_attempt_retention_layout.py",
-        "tests/ember_restart_model/test_launch_packet.py",
-        "tests/ember_restart_model/test_specialist_stream.py",
-        "tests/ember_restart_model/test_tokenizer_reconstruction.py",
+        "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
+        "tests/ember_restart_model/domain-governance/test_checkpoint_artifacts.py",
+        "tests/ember_restart_model/domain-governance/test_counter_cli.py",
+        "tests/ember_restart_model/domain-governance/test_frozen_tokenizer_decoder.py",
+        "tests/ember_restart_model/domain-governance/test_infer.py",
+        "tests/ember_restart_model/domain-governance/test_issue1508_attempt_retention_layout.py",
+        "tests/ember_restart_model/domain-governance/test_launch_packet.py",
+        "tests/ember_restart_model/domain-governance/test_specialist_stream.py",
+        "tests/ember_restart_model/domain-governance/test_tokenizer_reconstruction.py",
     ],
 )
 def test_transition_sensitive_test_consumers_use_repository_layout(
@@ -194,6 +194,7 @@ def test_eval_canary_fixture_names_logical_tokenizer_authority() -> None:
         ROOT
         / "tests"
         / "ember_restart_model"
+        / "domain-governance"
         / "fixtures"
         / "eval-canary-image-v1"
         / "manifest.json"
@@ -209,11 +210,11 @@ def test_specialist_pin_tuples_are_atomic_and_closed() -> None:
     )
     assert tuples == (
         (
-            "f4a59d65e98a7b90d9e2e6ca49df2dccf334cfbac107793a4d719f3354b1f7b1",
-            "26c1c82e91739449eec8a9bf41b1f89f0c091dbd9b8a958f69dcdccd9e89f01d",
+            "8ac0bf3aa55d0e29c88f35372d33a9dd42d94c0115fc63ada719341528d373c6",
+            "ba948d5a3c78a03a89227654f96b321c8e3225af6f0d8093198114f035a77a64",
         ),
         (
-            "25d4f681af1d43c12dda718b7cd0ddf75613a46a7d5053b7ddf5436e0cbf9a22",
+            "9f9f0bba758dd7c0d445ea2bc6ebcb2132917d0214e952e8fbeee70008febe70",
             "2daf3de395c83dc19707cb81f31c12c1484d9c19de2249c8eb8aec1b5a179c9d",
         ),
     )

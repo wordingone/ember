@@ -16,7 +16,7 @@ from pathlib import Path
 import torch
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import load_checkpoint_artifacts
 from pretrain import run_pretraining_segment
@@ -121,8 +121,9 @@ class CheckpointIntegrityTests(unittest.TestCase):
             restored = UnifiedDecoder(self.config, genesis_seed=99)
             restore_optimizer = torch.optim.AdamW(restored.parameters(), lr=1e-4)
             torch.manual_seed(999)
-            with unittest.mock.patch.object(torch.cuda, "set_rng_state") as set_cuda:
-                replay = load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
+            with unittest.mock.patch.object(torch.cuda, "is_available", return_value=True):
+                with unittest.mock.patch.object(torch.cuda, "set_rng_state") as set_cuda:
+                    replay = load_checkpoint_artifacts(restored, restore_optimizer, root, receipt)
         self.assertTrue(torch.equal(torch.get_rng_state(), cpu_rng))
         set_cuda.assert_called_once()
         self.assertEqual(replay["data_cursor"], self._cursor(3, global_step=3, tokens_seen=12))

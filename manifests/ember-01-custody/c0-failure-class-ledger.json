@@ -83,7 +83,7 @@
       "title": "Checkpoint / shard-size resource contradiction",
       "birth_relevance": "Surfaced 2026-07 (issue #1012): the configured shard size (4 GiB) contradicts observed checkpoint sizing, an unresolved resource-envelope defect that can silently truncate or misallocate storage during a real run.",
       "state": "CLOSED_GUARDED",
-      "guard_ref": "tests/ember_restart_model/test_checkpoint_scratch_cap.py:test_rejects_before_an_over_cap_write_changes_the_destination",
+      "guard_ref": "tests/ember_restart_model/domain-governance/test_checkpoint_scratch_cap.py:test_rejects_before_an_over_cap_write_changes_the_destination",
       "guard_kind": "test",
       "evidence": "#1012 merged c0b9219 (public master verified 2026-07-23): v5 split-shard writer + fixed 4 GiB transient scratch cap. The dependency-light test_checkpoint_scratch_cap.py guard exercises the exact ScratchCappedWriter used by checkpoint_artifacts.py and proves an over-cap write is rejected before destination bytes change. Full Torch integration remains covered by test_v5_writer_rejects_single_temp_shard_above_transient_scratch_cap and test_v5_transient_cap_breach_cleans_temps_and_retains_failure_evidence. CANARY scope: active-expert canary optimizer tensor lower bound ~3.214 GiB passes the 4 GiB cap. Sustained multi-domain ~7.151 GiB EXCEEDS it; optimizer-state splitting remains a named open pre-sustained GATE-2 precondition, while this guard keeps the contradiction fail-closed."
     },

@@ -169,7 +169,7 @@ and the public bar is unchanged by anything below: a repo flips public only when
 every row inside it has verified redistribution rights.
 
 Nine of the thirteen landed rows carry a license outside
-`tools/ember-restart-3b/text_lab_corpus.py`'s `LICENSES` allow-list
+`src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py`'s `LICENSES` allow-list
 (`CC0-1.0`, `CC-BY-4.0`, `MIT`, `Apache-2.0`, `BSD-3-Clause`, `PDDL-1.0`).
 Ruled 2026-08-14, those nine resolve into three different problems, not one:
 

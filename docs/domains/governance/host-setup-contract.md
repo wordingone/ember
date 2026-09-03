@@ -4,7 +4,7 @@
 
 Declares and validates one dimension of host readiness: commit-capacity
 headroom for mechanisms that pin large host-resident state. Implemented in
-`tools/ember-restart-3b/host_setup_contract.py`. Not yet wired into any live
+`src/ember/infrastructure/tools/ember-restart-3b/host_setup_contract.py`. Not yet wired into any live
 launch/dispatch path — that integration is a follow-up reviewed separately.
 
 ## Why this exists
@@ -79,7 +79,7 @@ extension of this one.
 
 ## The contract mechanics
 
-`tools/ember-restart-3b/host_setup_contract.py` declares, per mechanism, a
+`src/ember/infrastructure/tools/ember-restart-3b/host_setup_contract.py` declares, per mechanism, a
 `HostMechanismProfile`:
 
 ```

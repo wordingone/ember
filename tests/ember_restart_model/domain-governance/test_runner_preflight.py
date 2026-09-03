@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 import torch
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 import run_vertical_slice
 from build_owned_reasoning_tool_trajectories import build_records
@@ -808,7 +808,7 @@ class RunnerPreflightTests(unittest.TestCase):
 
     def test_vertical_runner_rejects_missing_integration_contract_before_governor(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
-            module_path = Path(directory) / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+            module_path = Path(directory) / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
             module_path.parent.mkdir(parents=True)
             module_path.write_text("# synthetic module location\n", encoding="utf-8")
             with patch.object(run_vertical_slice, "__file__", str(module_path)):
@@ -821,7 +821,7 @@ class RunnerPreflightTests(unittest.TestCase):
 
     def test_semantic_runner_rejects_missing_integration_contract_before_governor(self) -> None:
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
-            module_path = Path(directory) / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+            module_path = Path(directory) / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
             module_path.parent.mkdir(parents=True)
             module_path.write_text("# synthetic module location\n", encoding="utf-8")
             with patch.object(run_vertical_slice, "__file__", str(module_path)):
@@ -902,6 +902,13 @@ class RunnerPreflightTests(unittest.TestCase):
 
         with ExitStack() as stack:
             stack.enter_context(patch("checkpoint_artifacts._is_link_or_reparse", return_value=False))
+            stack.enter_context(
+                patch.object(
+                    run_vertical_slice,
+                    "governed_resource_preflight",
+                    return_value={"free_gb": 32.0},
+                )
+            )
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=True))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "mem_get_info", return_value=(32 * 1024**3, 32 * 1024**3)))
             stack.enter_context(patch.object(run_vertical_slice.torch.cuda, "manual_seed_all"))
@@ -1225,7 +1232,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     json.dumps(bindings, sort_keys=True, separators=(",", ":")).encode("utf-8")
                 ).hexdigest(),
                 "config_sha256": hashlib.sha256((ROOT / "configs" / "ember-restart-3b.json").read_bytes()).hexdigest(),
-                "runner_source_sha256": hashlib.sha256((ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py").read_bytes()).hexdigest(),
+                "runner_source_sha256": hashlib.sha256((ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py").read_bytes()).hexdigest(),
                 "checkpoint_byte_bound": 4096,
                 "write_budget_bytes": 4096,
             }
@@ -1535,9 +1542,12 @@ class RunnerPreflightTests(unittest.TestCase):
         # check and fails later, on an unrelated precondition -- proving the
         # ValueError above came from the budget gate, not from something else
         # run() validates first.
-        with patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=False):
-            with self.assertRaisesRegex(RuntimeError, "CUDA is required"):
-                run_vertical_slice.run(seed=83, artifact_root=artifact_root, write_budget_bytes=full_coverage_bound)
+        with patch.object(
+            run_vertical_slice, "governed_resource_preflight", return_value={"free_gb": 32.0}
+        ):
+            with patch.object(run_vertical_slice.torch.cuda, "is_available", return_value=False):
+                with self.assertRaisesRegex(RuntimeError, "CUDA is required"):
+                    run_vertical_slice.run(seed=83, artifact_root=artifact_root, write_budget_bytes=full_coverage_bound)
 
     def test_governed_vertical_refuses_successor_four_gib_checkpoint_envelope(self) -> None:
         with self.assertRaisesRegex(ValueError, "checkpoint publication bound"):
@@ -1806,7 +1816,7 @@ class RunnerPreflightTests(unittest.TestCase):
                     "model_config_sha256": manifest["model_config_sha256"],
                     "architecture_revision": manifest["architecture_revision"],
                     "active_expert_ids": manifest["active_expert_ids"],
-                    "counter_sha256": run_vertical_slice._sha256(ROOT / "tools" / "ember-restart-3b" / "parameter_counter.py"),
+                    "counter_sha256": run_vertical_slice._sha256(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "parameter_counter.py"),
                     "runtime_authority": {
                         "schema_version": "ember-counter-runtime-authority-v1",
                         "kind": "NONE",
@@ -2017,7 +2027,7 @@ class RunnerPreflightTests(unittest.TestCase):
 
     def test_runner_file_exposes_the_semantic_cli_entrypoint(self) -> None:
         completed = subprocess.run(
-            [sys.executable, str(ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"), "semantic", "--help"],
+            [sys.executable, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"), "semantic", "--help"],
             text=True, capture_output=True, check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -2048,7 +2058,7 @@ class RunnerPreflightTests(unittest.TestCase):
             root = Path(directory) / "repo"
             for relative in ("configs", "domains/model/tokenizer", "data/ember-restart-3b"):
                 shutil.copytree(ROOT / relative, root / relative)
-            tools = root / "tools" / "ember-restart-3b"
+            tools = root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
             tools.mkdir(parents=True)
             for name in (
                 "build_owned_audio_frames.py",
@@ -2059,7 +2069,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 "verify_capability_record.py",
                 "production_rung.py",
             ):
-                shutil.copy2(ROOT / "tools" / "ember-restart-3b" / name, tools / name)
+                shutil.copy2(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / name, tools / name)
             shard = root / "data" / "ember-restart-3b" / "owned-four-domain-production-rung-v1.json"
 
             def admit_then_swap(*, repo_root: Path) -> tuple[dict[str, object], dict[str, str], dict[str, object]]:
@@ -2073,7 +2083,7 @@ class RunnerPreflightTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "changed after admission"):
                     run_vertical_slice.load_authorized_records(root)
     def test_public_disk_budget_runner_creates_bound_assertion_and_invokes_child(self) -> None:
-        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        runner = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
         self.assertTrue(runner.is_file(), "public disk budget runner is missing")
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             custody = Path(directory) / "custody"
@@ -2117,7 +2127,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertEqual(runner_receipt["child_cache_assertion"], observed["payload"])
 
     def test_public_disk_budget_runner_rejects_declared_write_that_crosses_reserve(self) -> None:
-        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        runner = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
         self.assertTrue(runner.is_file(), "public disk budget runner is missing")
         with tempfile.TemporaryDirectory() as directory:
             custody = Path(directory) / "custody"
@@ -2133,8 +2143,8 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertIn("operating reserve", payload["stop_reason"])
 
     def test_public_runner_reaches_real_governed_vertical_cpu_preflight_child(self) -> None:
-        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
-        child = ROOT / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        runner = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        child = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             custody = Path(directory) / "custody"
             artifact_root = custody / "artifacts"
@@ -2156,7 +2166,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertIsNotNone(payload["child_cache_assertion"])
 
     def test_public_runner_accounts_final_receipt_bytes_inside_custody_growth(self) -> None:
-        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        runner = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             custody = Path(directory) / "custody"
             custody.mkdir()
@@ -2171,7 +2181,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertGreaterEqual(payload["file_max_growth_bytes_by_root"]["custody"], receipt_bytes)
 
     def test_public_runner_refuses_budget_that_cannot_reserve_final_receipt_before_child(self) -> None:
-        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        runner = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             custody = Path(directory) / "custody"
             custody.mkdir()
@@ -2186,7 +2196,7 @@ class RunnerPreflightTests(unittest.TestCase):
         self.assertFalse(marker.exists())
 
     def test_public_runner_combines_child_growth_and_final_receipt_reservation(self) -> None:
-        runner = ROOT / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
+        runner = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "disk_budget_runner.py"
         with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
             custody = Path(directory) / "custody"
             custody.mkdir()

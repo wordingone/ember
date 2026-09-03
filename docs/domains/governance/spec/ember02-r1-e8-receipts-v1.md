@@ -53,7 +53,7 @@ matched Tier-2/reference segment has run.
 
 ## Liveness evidence producer
 
-`tools/ember-restart-3b/a1_e8_evidence.py::mint_liveness_receipt` mints the
+`src/ember/infrastructure/tools/ember-restart-3b/a1_e8_evidence.py::mint_liveness_receipt` mints the
 `ember02-r1-e8-liveness-v1` packet from already-produced evidence: it reopens
 the Tier-1 A1 run (`a1_execution.finalize_tier1_run`'s output) and the
 matched A3 run by exact raw SHA-256, copies both plus the externally frozen
@@ -72,12 +72,12 @@ Raw per-step liveness telemetry reuses the frozen `train_step` envelope
 `tokens` (positive integer), `wall_seconds` (positive decimal), and
 `proxy_joules` (non-negative decimal) for the steps a liveness series covers.
 
-`tools/ember-restart-3b/a1_execution.py::run_dense_a1` wires `tokens` and
+`src/ember/infrastructure/tools/ember-restart-3b/a1_execution.py::run_dense_a1` wires `tokens` and
 `wall_seconds` honestly as of issue #1464's first residual: each is measured
 per step (`time.perf_counter()` at step start, differenced at
 telemetry-write time).
 
-`tools/ember-restart-3b/run_vertical_slice.py`'s governed (`run()`) and
+`src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py`'s governed (`run()`) and
 semantic (`run_semantic()`) routes emit the same frozen `tokens` and
 `wall_seconds` fields, via the shared helper `_frozen_envelope_fields`. Both
 routes' `progress_callback` closures already receive a per-step progress
@@ -96,7 +96,7 @@ in the payload unchanged for the E4 receipt accumulator and battery, which
 still read them under their original names.
 
 `proxy_joules` is now derived, closing issue #1464's second residual, by
-`tools/ember-restart-3b/a1_energy_apportionment.py`. The energy sidecar
+`src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`. The energy sidecar
 (`energy_proxy_logger.py --watch-pidfile`, launched as an independent OS
 process that communicates with the training child only through a pidfile --
 so an evidence sampler can never block or crash certified training) now

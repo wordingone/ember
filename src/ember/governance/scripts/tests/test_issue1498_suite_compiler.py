@@ -427,8 +427,8 @@ def test_d04_superseding_amendment_binds_single_authority_and_consumers() -> Non
             "sha256": _sha((ROOT / "src/ember/governance/scripts/r2_cheap_probe_battery.py").read_bytes()),
         },
         "owned_server": {
-            "path": "tools/ember-restart-3b/serve_owned_openai.py",
-            "sha256": _sha((ROOT / "tools/ember-restart-3b/serve_owned_openai.py").read_bytes()),
+            "path": "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
+            "sha256": _sha((ROOT / "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py").read_bytes()),
         },
     }
     assert amendment["decision"]["defined_probes"] == [

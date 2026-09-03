@@ -638,7 +638,7 @@ def samples_path_for(receipt_path: str | Path) -> Path:
     same directory, `<receipt-stem>.gpu-samples.jsonl`. A sibling file, not a
     field of the receipt itself, so a consumer of only the aggregate sec5.3
     `energy` block never has to parse it. The `ember-a1-e8-*` per-step energy
-    derivation (`tools/ember-restart-3b/a1_energy_apportionment.py`, issue
+    derivation (`src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`, issue
     #1464) restates this exact naming convention independently rather than
     importing it, the same "two independent transcriptions" discipline
     `a1_e8_evidence.py` documents for its own reopened evidence -- a
@@ -823,7 +823,7 @@ def run_watch(pidfile_path: str, receipt_path: str, ticket: str) -> int:
                        "\"watts\": <non-negative float>} -- the raw measured-window "
                        "GPU leg only (never the idle baseline), for the per-step "
                        "energy derivation in "
-                       "tools/ember-restart-3b/a1_energy_apportionment.py (issue #1464)"),
+                       "src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py (issue #1464)"),
         },
         "host": {
             "platform": sys.platform,
