@@ -617,7 +617,9 @@ def discover_consumers(
     class_counts: dict[str, int] = {}
     for path in sorted(by_path):
         suffix = Path(path).suffix.lower()
-        if suffix not in _TEXT_SUFFIXES:
+        parts = PurePosixPath(path).parts
+        is_manifest_json = suffix == ".json" and bool(parts) and parts[0] == "manifests"
+        if suffix not in _TEXT_SUFFIXES and not is_manifest_json:
             continue
         source_path = repo / Path(*PurePosixPath(path).parts)
         try:
@@ -638,6 +640,8 @@ def discover_consumers(
         discovery_class = (
             "documentation-reference"
             if suffix == ".md"
+            else "manifest-reference"
+            if is_manifest_json
             else "workflow-hook-installer-reference"
             if suffix in {".yml", ".yaml", ".sh", ".ps1"}
             else "source-reference"

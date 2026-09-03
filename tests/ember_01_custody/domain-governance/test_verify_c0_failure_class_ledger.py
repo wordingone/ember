@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPT_ROOT = REPO_ROOT / "scripts" / "ember_01_custody"
+SCRIPT_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_custody"
 sys.path.insert(0, str(SCRIPT_ROOT))
 
 from verify_c0_failure_class_ledger import (  # noqa: E402
