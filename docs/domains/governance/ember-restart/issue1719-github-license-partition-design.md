@@ -57,7 +57,7 @@ connector receipt and custody root satisfy this same contract.  Reacquisition is
 
 ## Closed producer contract
 
-Proposed producer: `tools/ember-restart-3b/mint_github_license_partition.py`.
+Proposed producer: `src/ember/infrastructure/tools/ember-restart-3b/mint_github_license_partition.py`.
 
 Its plan is a closed list of cases with exactly:
 
@@ -142,7 +142,7 @@ byte behavior.  A sorted set of licenses may appear only as a non-authoritative 
 successor receipt, never in `license_spdx`.
 
 The first real downstream consumer is
-`tools/ember-restart-3b/mint_issue1719_tranche_admission.py::_apply_cases`.  It must consume the
+`src/ember/infrastructure/tools/ember-restart-3b/mint_issue1719_tranche_admission.py::_apply_cases`.  It must consume the
 partition receipt by path+digest and place the partition alternative into the targeted F/H row.
 The first canonical downstream validator remains
 `text_lab_corpus.validate_authority_index`; `train.py` receives no new bypass.

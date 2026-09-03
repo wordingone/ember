@@ -262,5 +262,5 @@ src/ember/infrastructure/tools/ember-cli/src/tools/file-read.test.ts
 src/ember/infrastructure/tools/ember-cli/src/tools/file-write.test.ts
 src/ember/infrastructure/tools/ember-cli/src/utils/config-persistence.test.ts
 src/ember/infrastructure/tools/ember-cli/src/utils/repo-root.test.ts
-tools/ember-restart-3b/launch_packet.py
-tools/ember-restart-3b/serve_owned_openai.py
+src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py
+src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py

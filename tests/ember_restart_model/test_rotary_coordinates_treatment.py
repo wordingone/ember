@@ -14,7 +14,7 @@ import pytest
 import torch
 
 
-MODEL_PATH = Path(__file__).parents[2] / "tools" / "ember-restart-3b" / "model.py"
+MODEL_PATH = Path(__file__).parents[2] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "model.py"
 SPEC = importlib.util.spec_from_file_location("issue1945_rotary_model", MODEL_PATH)
 MODEL = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

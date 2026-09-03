@@ -356,7 +356,7 @@ def validate_commands_manifest(commands: dict[str, Any]) -> list[dict[str, Any]]
     expected_argv = {
         "bootstrap-python": [
             "python",
-            "tools/ember-restart-3b/python_environment.py",
+            "src/ember/infrastructure/tools/ember-restart-3b/python_environment.py",
             "install",
             "--receipt",
             "state\\receipts\\python-environment-install-v1.json",

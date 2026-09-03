@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path, PureWindowsPath
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 DOMAINS = ("mathematics", "statistics", "physics", "computer_science", "ml_ai", "training_infrastructure", "formal_logic", "software_engineering", "data_evaluation", "scientific_method", "application_worlds")
 
@@ -166,10 +166,10 @@ class TextLabCorpusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
             shutil.copytree(ROOT / "data", root / "data")
-            tools = root / "tools/ember-restart-3b"
+            tools = root / "src/ember/infrastructure/tools/ember-restart-3b"
             tools.mkdir(parents=True)
             for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
-                shutil.copy2(ROOT / "tools/ember-restart-3b" / name, tools / name)
+                shutil.copy2(ROOT / "src/ember/infrastructure/tools/ember-restart-3b" / name, tools / name)
             registry_path = root / "data/ember-restart-3b/protected-eval-registry-v2.json"
             registry = json.loads(registry_path.read_text(encoding="utf-8"))
             registry["protected"] = []
@@ -229,10 +229,10 @@ class TextLabCorpusTests(unittest.TestCase):
             root = Path(directory) / "repo"
             shutil.copytree(ROOT / "data", root / "data")
             shutil.copytree(ROOT / "manifests", root / "manifests")
-            tools = root / "tools/ember-restart-3b"
+            tools = root / "src/ember/infrastructure/tools/ember-restart-3b"
             tools.mkdir(parents=True)
             for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
-                shutil.copy2(ROOT / "tools/ember-restart-3b" / name, tools / name)
+                shutil.copy2(ROOT / "src/ember/infrastructure/tools/ember-restart-3b" / name, tools / name)
             corpus_path = root / "data/ember-restart-3b/owned-text-lab-corpus-v2.json"
             corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
             corpus["train_root_sha256"] = "0" * 64
@@ -265,10 +265,10 @@ class TextLabCorpusTests(unittest.TestCase):
             root = Path(directory) / "repo"
             shutil.copytree(ROOT / "data", root / "data")
             shutil.copytree(ROOT / "manifests", root / "manifests")
-            tools = root / "tools/ember-restart-3b"
+            tools = root / "src/ember/infrastructure/tools/ember-restart-3b"
             tools.mkdir(parents=True)
             for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
-                shutil.copy2(ROOT / "tools/ember-restart-3b" / name, tools / name)
+                shutil.copy2(ROOT / "src/ember/infrastructure/tools/ember-restart-3b" / name, tools / name)
             corpus_path = root / "data/ember-restart-3b/owned-text-lab-corpus-v2.json"
             bundle_path = root / "data/ember-restart-3b/text-lab-source-receipt-bundle-v2.json"
             corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
@@ -357,10 +357,10 @@ class TextLabCorpusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "repo"
             shutil.copytree(ROOT / "data", root / "data")
-            tools = root / "tools/ember-restart-3b"
+            tools = root / "src/ember/infrastructure/tools/ember-restart-3b"
             tools.mkdir(parents=True)
             for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
-                shutil.copy2(ROOT / "tools/ember-restart-3b" / name, tools / name)
+                shutil.copy2(ROOT / "src/ember/infrastructure/tools/ember-restart-3b" / name, tools / name)
             with (tools / "train.py").open("ab") as handle:
                 handle.write(b"# changed\n")
             import text_lab_corpus
@@ -482,10 +482,10 @@ def _write_v2_fixture(root, rows, *, bundle_result="RESOLVED", frozen_eval_hashe
     from text_lab_corpus import _authority_split_root
     shutil.copytree(ROOT / "data", root / "data")
     shutil.copytree(ROOT / "manifests", root / "manifests")
-    tools = root / "tools/ember-restart-3b"
+    tools = root / "src/ember/infrastructure/tools/ember-restart-3b"
     tools.mkdir(parents=True)
     for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
-        shutil.copy2(ROOT / "tools/ember-restart-3b" / name, tools / name)
+        shutil.copy2(ROOT / "src/ember/infrastructure/tools/ember-restart-3b" / name, tools / name)
     data_dir = root / "data/ember-restart-3b"
     registry_bytes = (data_dir / "protected-eval-registry-v2.json").read_bytes()
     corpus_schema_bytes = (data_dir / "text-lab-corpus-v3.schema.json").read_bytes()

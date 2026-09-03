@@ -1,0 +1,6525 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+
+from __future__ import annotations
+
+import contextlib
+import hashlib
+import importlib.util
+import io
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from types import SimpleNamespace
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[3]
+MODULE_PATH = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "certified_train_launch.py"
+if str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
+from repository_layout import resolve_repository_authority  # noqa: E402
+SHA = "a" * 40
+EVIDENCE_SHA256 = "b" * 64
+
+EMBER_LAB_SOURCE_FIXTURE = (
+    ("runtime/ember-lab/src/lib.rs", b"fixture lib\\n"),
+    ("runtime/ember-lab/src/data_catalog.rs", b"fixture data catalog\\n"),
+    ("runtime/ember-lab/src/rpc.rs", b"fixture rpc\\n"),
+    ("runtime/ember-lab/src/main.rs", b"fixture main\\n"),
+    ("runtime/ember-lab/src/training_verify.rs", b"fixture training verify\\n"),
+    ("runtime/ember-lab/Cargo.toml", b"[package]\\nname='fixture'\\n"),
+    ("runtime/ember-lab/Cargo.lock", b"# fixture lock\\n"),
+)
+
+
+def install_ember_lab_source_fixture(repo: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for relative, payload in EMBER_LAB_SOURCE_FIXTURE:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        digest.update(len(payload).to_bytes(8, "little", signed=False))
+        digest.update(payload)
+    return digest.hexdigest()
+
+
+def canonical_bytes(value: object) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def write_json(path: pathlib.Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(canonical_bytes(value))
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location("certified_train_launch", MODULE_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_frontier_module():
+    path = resolve_repository_authority(ROOT, "frontier_receipt").path
+    spec = importlib.util.spec_from_file_location("frontier_receipt_under_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(path.parent))
+    try:
+        importlib.invalidate_caches()
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
+    return module
+
+
+def valid_completion_receipt() -> dict[str, object]:
+    return {
+        "schema": "ember-01-completion-receipt-v1",
+        "ok": True,
+        "verified_at_utc": "2026-07-23T08:00:00+00:00",
+        "goal_id": "EMBER-02",
+        "completion_subject_goal_id": "EMBER-01",
+        "workstream_id": "EMBER-02A",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+        "certificate_legs": {str(index): "resolved-true" for index in range(1, 10)},
+        "leg_detail": {},
+        "leg_summary": {
+            "resolved_true": [str(index) for index in range(1, 10)],
+            "resolved_false": [],
+            "unresolved": [],
+        },
+        "claim_scope": {
+            "training_completed": False,
+            "model_completed": False,
+            "runtime_completed": False,
+            "benchmark_completed": False,
+            "note": "EMBER-01 spine only",
+        },
+        "checkout": {
+            "head": SHA,
+            "clean": True,
+            "detached": True,
+            "head_unchanged": True,
+            "status": "",
+            "status_before": "",
+        },
+        "selection": {
+            "selected_goal_suffix": "EMBER-GOAL-GRAPH.json",
+            "selector_sha256": "0" * 64,
+            "unchanged_during_verification": True,
+        },
+        "authority_certificate": {"ok": True},
+    }
+
+
+def valid_scope(artifact_root: pathlib.Path, custody_root: pathlib.Path) -> dict[str, object]:
+    return {
+        "purpose": "BOUNDED_CANARY",
+        "allowed_modes": ["governed-vertical"],
+        "max_optimizer_steps": 200,
+        "max_records": 1,
+        "max_active_expert_families": 1,
+        "max_gpu_vram_gib": 20.0,
+        "max_transient_checkpoint_gib": 4.0,
+        "max_wall_minutes": 15.0,
+        "max_b_write_gib": 16.0,
+        "max_c_write_gib": 0.0,
+        "max_write_budget_bytes": 16 * 1024**3,
+        "allowed_artifact_roots": [str(artifact_root)],
+        "allowed_custody_roots": [str(custody_root)],
+        "model_server_allowed": False,
+        "wsl_allowed": False,
+        "persistent_worker_allowed": False,
+    }
+
+
+def valid_run_spec(
+    certificate_sha256: str,
+    artifact_root: pathlib.Path,
+    custody_root: pathlib.Path,
+) -> dict[str, object]:
+    return {
+        "schema_version": "ember-certified-train-run-v1",
+        "certificate_sha256": certificate_sha256,
+        "run_id": "owned-3b-canary-test",
+        "seed": 83,
+        "runner_receipt": str(custody_root / "runner-receipt.json"),
+        "requested_scope": {
+            "mode": "governed-vertical",
+            "optimizer_steps": 1,
+            "max_records": 1,
+            "active_expert_families": 1,
+            "gpu_vram_gib": 20.0,
+            "transient_checkpoint_gib": 4.0,
+            "wall_minutes": 15.0,
+            "max_b_write_gib": 16.0,
+            "max_c_write_gib": 0.0,
+            "write_budget_bytes": 16 * 1024**3,
+            "artifact_root": str(artifact_root),
+            "custody_root": str(custody_root),
+        },
+    }
+
+
+def write_valid_bundle(root: pathlib.Path) -> dict[str, pathlib.Path]:
+    repo = root / "repo"
+    repo.mkdir(parents=True)
+    custody_root = root / "custody"
+    artifact_root = custody_root / "artifacts"
+    artifact_root.mkdir(parents=True)
+
+    packet_root = custody_root / "owned-3b-canary-test" / "launch-authority"
+    packet_root.mkdir(parents=True)
+    completion_path = custody_root / "ember-01-completion.json"
+    write_json(completion_path, valid_completion_receipt())
+    completion_sha256 = sha256_bytes(completion_path.read_bytes())
+
+    certificate = {
+        "schema_version": "ember-spine-certified-declaration-v1",
+        "event_kind": "SPINE_CERTIFIED",
+        "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
+        "declared_at_utc": "2026-07-23T08:00:00+00:00",
+        "superseded_by": None,
+        "completion_receipt_path": str(completion_path),
+        "completion_receipt_sha256": completion_sha256,
+        "public_master_sha": SHA,
+        "checkout_sha256": EVIDENCE_SHA256,
+        "config_sha256": EVIDENCE_SHA256,
+        "tokenizer_sha256": EVIDENCE_SHA256,
+        "input_authority_sha256": EVIDENCE_SHA256,
+        "cli_binary_sha256": EVIDENCE_SHA256,
+        "launch_packet_sha256": EVIDENCE_SHA256,
+        "board_receipt_sha256": EVIDENCE_SHA256,
+        "benchmark_registry_sha256": EVIDENCE_SHA256,
+        "failure_class_ledger_sha256": EVIDENCE_SHA256,
+        "subject_manifest_sha256": EVIDENCE_SHA256,
+        "seat_sha256": EVIDENCE_SHA256,
+        "root_summary_sha256": EVIDENCE_SHA256,
+        "declaration_conjuncts": {
+            "record_coherent": True,
+            "nine_leg_completion": True,
+            "birth_failure_classes_disposed": True,
+        },
+        "execution_scope": valid_scope(artifact_root, custody_root),
+    }
+    certificate_path = packet_root / "certificate.json"
+    write_json(certificate_path, certificate)
+    certificate_sha256 = sha256_bytes(certificate_path.read_bytes())
+
+    ledger_path = packet_root / "declaration-ledger.jsonl"
+    ledger_path.write_bytes(
+        canonical_bytes(
+            {
+                "schema_version": "ember-spine-declaration-ledger-row-v1",
+                "event_kind": "SPINE_CERTIFIED",
+                "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
+                "certificate_sha256": certificate_sha256,
+            }
+        )
+    )
+
+    run_spec_path = packet_root / "run-spec.json"
+    write_json(
+        run_spec_path,
+        valid_run_spec(certificate_sha256, artifact_root, custody_root),
+    )
+    paths = {
+        "repo": repo,
+        "certificate": certificate_path,
+        "ledger": ledger_path,
+        "run_spec": run_spec_path,
+        "completion": completion_path,
+        "artifact_root": artifact_root,
+        "custody_root": custody_root,
+    }
+    _write_custody_sidecars(paths)
+    return paths
+
+
+def _write_custody_sidecars(paths: dict[str, pathlib.Path]) -> None:
+    certificate = json.loads(paths["certificate"].read_text(encoding="utf-8"))
+    binding_keys = (
+        "benchmark_registry_sha256",
+        "board_receipt_sha256",
+        "checkout_sha256",
+        "cli_binary_sha256",
+        "config_sha256",
+        "failure_class_ledger_sha256",
+        "input_authority_sha256",
+        "launch_packet_sha256",
+        "root_summary_sha256",
+        "seat_sha256",
+        "subject_manifest_sha256",
+        "tokenizer_sha256",
+    )
+    binding_path = paths["certificate"].parent / "sha-binding-map.json"
+    write_json(
+        binding_path,
+        {
+            key: f"sha256:{certificate[key]};path:governed-source:{key}"
+            for key in binding_keys
+        },
+    )
+    receipt_path = paths["certificate"].parent / "launch-authority-custody.json"
+    files = {
+        paths["certificate"].name: sha256_bytes(paths["certificate"].read_bytes()),
+        paths["ledger"].name: sha256_bytes(paths["ledger"].read_bytes()),
+        paths["run_spec"].name: sha256_bytes(paths["run_spec"].read_bytes()),
+        binding_path.name: sha256_bytes(binding_path.read_bytes()),
+    }
+    write_json(
+        receipt_path,
+        {
+            "schema_version": "ember-launch-authority-external-custody-v1",
+            "run_id": json.loads(paths["run_spec"].read_text(encoding="utf-8"))["run_id"],
+            "custody_kind": "external-run-scoped",
+            "training_executed": False,
+            "files": files,
+        },
+    )
+    paths["binding_map"] = binding_path
+    paths["custody_receipt"] = receipt_path
+
+
+def _rewrite_run_spec_with_custody(
+    paths: dict[str, pathlib.Path], mutate
+) -> dict[str, object]:
+    """Mutate a fixture run spec and refresh the receipt that binds its bytes."""
+
+    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+    mutate(run_spec)
+    write_json(paths["run_spec"], run_spec)
+    _write_custody_sidecars(paths)
+    return run_spec
+
+
+def rewrite_certificate(
+    paths: dict[str, pathlib.Path],
+    mutate,
+) -> dict[str, object]:
+    certificate = json.loads(paths["certificate"].read_text(encoding="utf-8"))
+    mutate(certificate)
+    write_json(paths["certificate"], certificate)
+    certificate_sha256 = sha256_bytes(paths["certificate"].read_bytes())
+    write_json(
+        paths["ledger"],
+        {
+            "schema_version": "ember-spine-declaration-ledger-row-v1",
+            "event_kind": "SPINE_CERTIFIED",
+            "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
+            "certificate_sha256": certificate_sha256,
+        },
+    )
+    run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+    run_spec["certificate_sha256"] = certificate_sha256
+    write_json(paths["run_spec"], run_spec)
+    _write_custody_sidecars(paths)
+    return certificate
+
+
+class CertifiedTrainLaunchTests(unittest.TestCase):
+    def test_valid_declared_subset_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+            self.assertEqual(launch.max_records, 1)
+            self.assertEqual(launch.artifact_root, paths["artifact_root"])
+
+    def test_publisher_can_validate_complete_staging_bytes_for_canonical_destination(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            canonical_packet = paths["certificate"].parent
+            staging_packet = (
+                paths["custody_root"]
+                / ".issue1506-owned-3b-canary-test-00000000000000000000000000000000.staging"
+                / "launch-authority"
+            )
+            shutil.copytree(canonical_packet, staging_packet)
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                paths[key] = staging_packet / paths[key].name
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    expected_launch_authority_packet_directory=canonical_packet,
+                )
+
+            self.assertEqual(launch.run_id, "owned-3b-canary-test")
+            self.assertTrue(canonical_packet.exists())
+
+            foreign_staging = paths["custody_root"] / "caller-selected-staging"
+            staging_packet.rename(foreign_staging)
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                paths[key] = foreign_staging / paths[key].name
+            with (
+                mock.patch.object(module, "read_current_master", return_value=SHA),
+                self.assertRaisesRegex(ValueError, "not a canonical staging directory"),
+            ):
+                module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    expected_launch_authority_packet_directory=canonical_packet,
+                )
+
+    def test_default_consumer_refuses_substituted_custody_receipt_or_binding_map(self) -> None:
+        module = load_module()
+        for field in ("custody_receipt", "binding_map"):
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    target = paths[field]
+                    payload = json.loads(target.read_text(encoding="utf-8"))
+                    if field == "custody_receipt":
+                        payload["files"][paths["ledger"].name] = "f" * 64
+                    else:
+                        payload["config_sha256"] = ""
+                    write_json(target, payload)
+                    with mock.patch.object(module, "read_current_master", return_value=SHA):
+                        with self.assertRaisesRegex(ValueError, "launch-authority custody"):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_default_consumer_refuses_path_only_sha_binding_identity(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            binding = json.loads(paths["binding_map"].read_text(encoding="utf-8"))
+            binding["config_sha256"] = "governed-source:config_sha256"
+            write_json(paths["binding_map"], binding)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["binding_map"].name] = sha256_bytes(
+                paths["binding_map"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "source identity invalid"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_sha_binding_digest_not_in_certificate(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            binding = json.loads(paths["binding_map"].read_text(encoding="utf-8"))
+            binding["config_sha256"] = (
+                f"sha256:{'f' * 64};path:governed-source:config_sha256"
+            )
+            write_json(paths["binding_map"], binding)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["binding_map"].name] = sha256_bytes(
+                paths["binding_map"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate hash mismatch"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_extra_packet_file(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            (paths["certificate"].parent / "unexpected.bin").write_bytes(b"foreign")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "packet file set"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_custody_root_inside_repository(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root.*repository"):
+                    module.validate_certified_request(
+                        paths["custody_root"].parent,
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_duplicate_certificate_key(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            raw = paths["certificate"].read_text(encoding="utf-8")
+            duplicate = (
+                raw.rstrip().removesuffix("}")
+                + ', "schema_version": "ember-spine-certified-declaration-v1"}\n'
+            )
+            paths["certificate"].write_text(duplicate, encoding="utf-8")
+            certificate_sha256 = sha256_bytes(canonical_bytes(json.loads(duplicate)))
+            write_json(
+                paths["ledger"],
+                {
+                    "schema_version": "ember-spine-declaration-ledger-row-v1",
+                    "event_kind": "SPINE_CERTIFIED",
+                    "declared_by_role": "EMBER_CERTIFICATE_AUTHORITY",
+                    "certificate_sha256": certificate_sha256,
+                },
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["certificate_sha256"] = certificate_sha256
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "duplicate key"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_binds_raw_receipt_against_self_consistent_map_tamper(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            expected_receipt_sha256 = sha256_bytes(paths["custody_receipt"].read_bytes())
+            binding = json.loads(paths["binding_map"].read_text(encoding="utf-8"))
+            config_digest = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )["config_sha256"]
+            binding["config_sha256"] = (
+                f"sha256:{config_digest};path:governed-source:substituted-config"
+            )
+            write_json(paths["binding_map"], binding)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["binding_map"].name] = sha256_bytes(
+                paths["binding_map"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "receipt SHA-256 mismatch"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        expected_receipt_sha256,
+                    )
+
+    def test_default_main_refuses_foreign_receipt_before_execute(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            payload = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            payload["files"][paths["run_spec"].name] = "e" * 64
+            write_json(paths["custody_receipt"], payload)
+            calls: list[object] = []
+            with (
+                mock.patch.object(module, "read_current_master", return_value=SHA),
+                mock.patch.object(module, "execute_validated_launch", side_effect=lambda *a, **k: calls.append(a)),
+            ):
+                code = module.main(
+                    [
+                        "--root",
+                        str(paths["repo"]),
+                        "--certificate",
+                        str(paths["certificate"]),
+                        "--declaration-ledger",
+                        str(paths["ledger"]),
+                        "--run-spec",
+                        str(paths["run_spec"]),
+                        "--custody-receipt-sha256",
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    ]
+                )
+            self.assertEqual(code, 2)
+            self.assertEqual(calls, [])
+
+    def test_default_consumer_refuses_same_bytes_ledger_from_foreign_directory(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            foreign = pathlib.Path(directory) / "foreign-packet"
+            foreign.mkdir()
+            foreign_ledger = foreign / paths["ledger"].name
+            shutil.copyfile(paths["ledger"], foreign_ledger)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "canonical packet directory"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        foreign_ledger,
+                        paths["run_spec"],
+                    )
+
+    def test_schema_valid_certificate_absent_from_declaration_ledger_fails(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            paths["ledger"].write_text("", encoding="utf-8")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "declaration ledger membership"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_renamed_packet_files(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            renamed = {}
+            for key, new_name in (
+                ("certificate", "foreign-certificate.json"),
+                ("ledger", "foreign-ledger.jsonl"),
+                ("run_spec", "foreign-run.json"),
+            ):
+                target = paths[key].with_name(new_name)
+                paths[key].replace(target)
+                paths[key] = target
+                renamed[key] = target.name
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"] = {
+                paths["certificate"].name: sha256_bytes(paths["certificate"].read_bytes()),
+                paths["ledger"].name: sha256_bytes(paths["ledger"].read_bytes()),
+                paths["run_spec"].name: sha256_bytes(paths["run_spec"].read_bytes()),
+                paths["binding_map"].name: sha256_bytes(paths["binding_map"].read_bytes()),
+            }
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "canonical packet filename"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_packet_directory_reparse_alias(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            alias = pathlib.Path(directory) / "packet-alias"
+            try:
+                alias.symlink_to(paths["certificate"].parent, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlink unavailable on this host")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "reparse"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        alias / paths["certificate"].name,
+                        alias / paths["ledger"].name,
+                        alias / paths["run_spec"].name,
+                    )
+
+    def test_default_consumer_refuses_packet_outside_authorized_custody_root(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            foreign = pathlib.Path(directory) / "foreign-custody"
+            foreign.mkdir()
+            copied = {}
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                target = foreign / paths[key].name
+                shutil.copyfile(paths[key], target)
+                copied[key] = target
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        copied["certificate"],
+                        copied["ledger"],
+                        copied["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_packet_in_wrong_run_scoped_destination(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            wrong = paths["custody_root"] / "wrong-run" / "launch-authority"
+            wrong.mkdir(parents=True)
+            copied = {}
+            for key in ("certificate", "ledger", "run_spec", "binding_map", "custody_receipt"):
+                target = wrong / paths[key].name
+                shutil.copyfile(paths[key], target)
+                copied[key] = target
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "canonical packet destination"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        copied["certificate"],
+                        copied["ledger"],
+                        copied["run_spec"],
+                    )
+
+    def test_default_consumer_refuses_path_unsafe_run_id(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["run_id"] = "../escape"
+            write_json(paths["run_spec"], run_spec)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["run_id"] = "../escape"
+            receipt["files"][paths["run_spec"].name] = sha256_bytes(paths["run_spec"].read_bytes())
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "run_id"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_dot_segment_authorized_custody_root(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            dot_root = str(paths["custody_root"] / ".." / paths["custody_root"].name)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_custody_roots", [dot_root]
+                ),
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["custody_root"] = dot_root
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root.*dot segment"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_default_consumer_refuses_raw_current_directory_custody_segment(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            dot_root = (
+                str(paths["custody_root"].parent)
+                + os.sep
+                + "."
+                + os.sep
+                + paths["custody_root"].name
+            )
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_custody_roots", [dot_root]
+                ),
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["custody_root"] = dot_root
+            runner_receipt = pathlib.Path(run_spec["runner_receipt"])
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root.*dot segment"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+            self.assertFalse(runner_receipt.exists())
+
+    def test_all_nested_windows_subprocesses_are_hidden(self) -> None:
+        module = load_module()
+        no_window = 0x08000000
+        run_calls: list[dict[str, object]] = []
+        popen_calls: list[dict[str, object]] = []
+
+        def fake_run(argv, **kwargs):
+            run_calls.append(kwargs)
+            stdout = f"{SHA}\n" if "rev-parse" in argv else ""
+            return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+        process = mock.Mock()
+        process.poll.return_value = None
+
+        def fake_popen(argv, **kwargs):
+            popen_calls.append(kwargs)
+            return process
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            logger = repo / "scripts" / "energy_proxy_logger.py"
+            logger.parent.mkdir(parents=True)
+            logger.write_text("# fixture\n", encoding="utf-8")
+            custody = root / "custody"
+            artifact = root / "artifacts"
+            launch = mock.Mock(
+                run_id="owned-3b-canary-test",
+                custody_root=custody,
+                artifact_root=artifact,
+                runner_receipt=custody / "runner-receipt.json",
+            )
+            with (
+                mock.patch.object(module.os, "name", "nt"),
+                mock.patch.object(
+                    module.subprocess,
+                    "CREATE_NO_WINDOW",
+                    no_window,
+                    create=True,
+                ),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+                mock.patch.object(module.subprocess, "Popen", side_effect=fake_popen),
+                mock.patch.object(
+                    module,
+                    "_custody_evidence_ref",
+                    return_value=(
+                        "runner-receipt.json",
+                        b'{"schema_version":7,"runner_exit_code":0}',
+                    ),
+                ),
+                mock.patch.object(module, "ENERGY_SIDECAR_BASELINE_WAIT_S", 0.0),
+            ):
+                self.assertTrue(module.read_pin_is_ancestor(repo, SHA))
+                self.assertTrue(module.read_commit_is_ancestor(repo, SHA, SHA))
+                self.assertEqual(module.read_current_master(repo), SHA)
+                module._record_run_attempt(
+                    repo,
+                    launch,
+                    attempt_id="attempt-test",
+                    outcome="completed",
+                    start_utc="2026-08-12T00:00:00Z",
+                    end_utc="2026-08-12T00:00:01Z",
+                    outcome_basis="test",
+                    evidence_path=root / "runner-receipt.json",
+                    expected_runner_exit_code=0,
+                )
+                actual, _pidfile, disclosure = module._start_energy_sidecar(
+                    repo, launch, {}
+                )
+
+            self.assertIs(actual, process)
+            self.assertTrue(disclosure["spawned"])
+            self.assertEqual(len(run_calls), 4)
+            self.assertEqual(len(popen_calls), 1)
+            for kwargs in [*run_calls, *popen_calls]:
+                self.assertEqual(kwargs.get("creationflags"), no_window)
+
+            paths = write_valid_bundle(root / "certified-child")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                certified_launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            child_calls: list[dict[str, object]] = []
+
+            def certified_child(argv, **kwargs):
+                child_calls.append(kwargs)
+                self._write_runner_receipt(certified_launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            with (
+                mock.patch.object(module.os, "name", "nt"),
+                mock.patch.object(
+                    module.subprocess,
+                    "CREATE_NO_WINDOW",
+                    no_window,
+                    create=True,
+                ),
+                mock.patch.object(
+                    module,
+                    "_record_run_attempt",
+                    return_value={"accepted": True},
+                ),
+            ):
+                self.assertEqual(
+                    module.execute_validated_launch(
+                        paths["repo"], certified_launch, run_process=certified_child
+                    ),
+                    0,
+                )
+            self.assertEqual(len(child_calls), 1)
+            self.assertEqual(child_calls[0].get("creationflags"), no_window)
+
+    def test_default_consumer_refuses_relative_authorized_custody_root(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            # The refusal is lexical and must occur before any filesystem access.
+            # Construct a relative identity directly so this negative remains
+            # portable when the checkout and the test temp root are on different
+            # Windows drives.
+            relative_root = "relative-custody"
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_custody_roots", [relative_root]
+                ),
+            )
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["custody_root"] = relative_root
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "custody root must be absolute"):
+                    module.validate_certified_request(
+                        paths["repo"], paths["certificate"], paths["ledger"], paths["run_spec"]
+                    )
+
+    def test_certificate_and_linked_receipt_negative_matrix(self) -> None:
+        module = load_module()
+        cases = {
+            "wrong declaration role": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "declared_by_role", "UNAUTHORIZED_ROLE"
+                    ),
+                ),
+                "declaration role",
+                SHA,
+            ),
+            "wrong declaration event": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "event_kind", "SPINE_PROPOSED"
+                    ),
+                ),
+                "declaration event",
+                SHA,
+            ),
+            "superseded certificate": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "superseded_by", "b" * 64
+                    ),
+                ),
+                "superseded",
+                SHA,
+            ),
+            "wrong current master": (
+                lambda paths: None,
+                "current public master",
+                "c" * 40,
+            ),
+            "tampered linked completion": (
+                lambda paths: paths["completion"].write_text(
+                    paths["completion"].read_text(encoding="utf-8") + " ",
+                    encoding="utf-8",
+                ),
+                "completion receipt hash",
+                SHA,
+            ),
+            "non-nine legs": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["certificate_legs"].pop("9"),
+                ),
+                "exactly nine",
+                SHA,
+            ),
+            "checkout not detached": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["checkout"].__setitem__(
+                        "detached", False
+                    ),
+                ),
+                "checkout integrity",
+                SHA,
+            ),
+            "wrong completion subject": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt.__setitem__(
+                        "completion_subject_goal_id", "EMBER-02"
+                    ),
+                ),
+                "completion subject is not EMBER-01",
+                SHA,
+            ),
+            "selection changed": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["selection"].__setitem__(
+                        "unchanged_during_verification", False
+                    ),
+                ),
+                "selection integrity",
+                SHA,
+            ),
+            "false B7 conjunct": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate[
+                        "declaration_conjuncts"
+                    ].__setitem__("record_coherent", False),
+                ),
+                "B7 declaration conjunct",
+                SHA,
+            ),
+        }
+        for label, (mutate, error, current_master) in cases.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    mutate(paths)
+                    with mock.patch.object(
+                        module, "read_current_master", return_value=current_master
+                    ):
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_raw_b6_receipt_cannot_substitute_for_b7_certificate(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            paths["certificate"].write_bytes(paths["completion"].read_bytes())
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate schema"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_unknown_certificate_field_fails_closed(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            certificate["unexpected"] = True
+            write_json(paths["certificate"], certificate)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_git_object_and_content_digest_widths_are_not_interchangeable(
+        self,
+    ) -> None:
+        module = load_module()
+        cases = {
+            "git field carrying 64 hex": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "public_master_sha", EVIDENCE_SHA256
+                    ),
+                ),
+                "40-hex Git object ID",
+            ),
+            "content field carrying 40 hex": (
+                lambda paths: rewrite_certificate(
+                    paths,
+                    lambda certificate: certificate.__setitem__(
+                        "config_sha256", SHA
+                    ),
+                ),
+                "lowercase SHA-256",
+            ),
+            "linked checkout head carrying 64 hex": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["checkout"].__setitem__(
+                        "head", EVIDENCE_SHA256
+                    ),
+                ),
+                "completion checkout head",
+            ),
+            # Post-#1419 a differing head is checked for ANCESTRY instead of
+            # equality; the fixture repo has no git history, so the check fails
+            # CLOSED rather than silently accepting an unrelated head. The
+            # ancestor-accepted and non-ancestor-refused paths are covered in
+            # CompletionHeadAncestorTests.
+            "linked checkout head differs from declared master": (
+                lambda paths: _rewrite_completion(
+                    paths,
+                    lambda receipt: receipt["checkout"].__setitem__(
+                        "head", "c" * 40
+                    ),
+                ),
+                "ancestry is unprovable",
+            ),
+        }
+        for label, (mutate, error) in cases.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    mutate(paths)
+                    with mock.patch.object(
+                        module, "read_current_master", return_value=SHA
+                    ):
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_every_scope_axis_fails_above_certificate(self) -> None:
+        module = load_module()
+        cases = {
+            "mode": "semantic",
+            "optimizer_steps": 201,
+            "max_records": 2,
+            "active_expert_families": 2,
+            "gpu_vram_gib": 20.1,
+            "transient_checkpoint_gib": 4.1,
+            "wall_minutes": 15.1,
+            "max_b_write_gib": 16.1,
+            "max_c_write_gib": 0.1,
+            "write_budget_bytes": 16 * 1024**3 + 1,
+            "artifact_root": "B:/outside-artifacts",
+            "custody_root": "B:/outside-custody",
+        }
+        for field, value in cases.items():
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths = write_valid_bundle(pathlib.Path(directory))
+                    request = json.loads(
+                        paths["run_spec"].read_text(encoding="utf-8")
+                    )
+                    request["requested_scope"][field] = value
+                    write_json(paths["run_spec"], request)
+                    with mock.patch.object(
+                        module, "read_current_master", return_value=SHA
+                    ):
+                        with self.assertRaisesRegex(
+                            ValueError, f"scope exceeds certificate: {field}"
+                        ):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_run_spec_above_certificate_scope_fails_before_runner_construction(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            request = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            request["requested_scope"]["active_expert_families"] = 2
+            write_json(paths["run_spec"], request)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "scope exceeds certificate"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_valid_request_builds_exact_governed_vertical_disk_runner_argv(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertEqual(argv[0], sys.executable)
+            self.assertEqual(
+                argv[1],
+                str(
+                    paths["repo"]
+                    / "tools"
+                    / "ember-restart-3b"
+                    / "disk_budget_runner.py"
+                ),
+            )
+            self.assertEqual(argv.count("governed-vertical"), 1)
+            self.assertNotIn("semantic", argv)
+            self.assertEqual(argv[argv.index("--max-records") + 1], "1")
+            self.assertEqual(
+                argv[argv.index("--write-budget-bytes") + 1],
+                str(16 * 1024**3),
+            )
+
+    def test_scope_failure_occurs_before_run_process(self) -> None:
+        module = load_module()
+        calls: list[object] = []
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            request = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            request["requested_scope"]["active_expert_families"] = 2
+            write_json(paths["run_spec"], request)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "scope exceeds certificate"):
+                    module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
+                        run_process=lambda *args, **kwargs: calls.append(
+                            (args, kwargs)
+                        ),
+                    )
+        self.assertEqual(calls, [])
+
+    def test_valid_execution_uses_argv_without_shell_and_writes_receipt(self) -> None:
+        module = load_module()
+        calls: list[tuple[list[str], dict[str, object]]] = []
+
+        def fake_run(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return subprocess.CompletedProcess(argv, 0)
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                exit_code = module.certify_and_execute(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    run_process=fake_run,
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(calls), 1)
+            argv, kwargs = calls[0]
+            self.assertIsInstance(argv, list)
+            self.assertIs(kwargs["shell"], False)
+            self.assertIs(kwargs["check"], False)
+            self.assertEqual(kwargs["cwd"], paths["repo"])
+            self.assertEqual(
+                kwargs["env"]["PYTHONDONTWRITEBYTECODE"],
+                "1",
+                "runner argv is certificate-visible (execution receipt pins "
+                "argv[1]), so bytecode suppression must ride the spawn env "
+                "rather than an -B argv insertion",
+            )
+            execution_receipt = (
+                paths["custody_root"] / "runner-receipt-certified-launch.json"
+            )
+            receipt = json.loads(execution_receipt.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["exit_code"], 0)
+            self.assertEqual(receipt["argv"], argv)
+            self.assertFalse(
+                any(receipt["claim_scope"].values()),
+                "execution receipt must not claim capability or admission",
+            )
+
+    def test_energy_sidecar_spawn_failure_is_disclosed(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            logger = paths["repo"] / "scripts" / "energy_proxy_logger.py"
+            logger.parent.mkdir(parents=True, exist_ok=True)
+            logger.write_text("# test logger\n", encoding="utf-8")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            with mock.patch.object(
+                module.subprocess,
+                "Popen",
+                side_effect=OSError("spawn refused"),
+            ):
+                process, pidfile, disclosure = module._start_energy_sidecar(
+                    paths["repo"], launch, {}
+                )
+            self.assertIsNone(process)
+            self.assertEqual(pidfile, paths["custody_root"] / "energy-sidecar.pid")
+            self.assertFalse(disclosure["spawned"])
+            self.assertIn("sidecar spawn failed", disclosure["note"])
+            self.assertIn("OSError", disclosure["note"])
+
+    def test_energy_sidecar_baseline_timeout_is_disclosed_nonfatally(self) -> None:
+        module = load_module()
+        process = mock.Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            logger = paths["repo"] / "scripts" / "energy_proxy_logger.py"
+            logger.parent.mkdir(parents=True, exist_ok=True)
+            logger.write_text("# test logger\n", encoding="utf-8")
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            with (
+                mock.patch.object(module.subprocess, "Popen", return_value=process),
+                mock.patch.object(module, "ENERGY_SIDECAR_BASELINE_WAIT_S", 0.0),
+            ):
+                actual, _pidfile, disclosure = module._start_energy_sidecar(
+                    paths["repo"], launch, {}
+                )
+            self.assertIs(actual, process)
+            self.assertTrue(disclosure["spawned"])
+            self.assertIn("idle-baseline marker not seen within 0s", disclosure["note"])
+
+    def test_energy_sidecar_finalize_overrun_is_left_running_and_disclosed(
+        self,
+    ) -> None:
+        module = load_module()
+        process = mock.Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            pidfile = root / "energy-sidecar.pid"
+            pidfile.write_text("123", encoding="utf-8")
+            disclosure = {
+                "note": "idle baseline completed",
+                "receipt_path": str(root / "energy-proxy-receipt.json"),
+            }
+            with mock.patch.object(module, "ENERGY_SIDECAR_FINALIZE_WAIT_S", 0.0):
+                module._finish_energy_sidecar(process, pidfile, disclosure)
+            self.assertFalse(pidfile.exists())
+            self.assertIsNone(disclosure["exit_code"])
+            self.assertFalse(disclosure["receipt_written"])
+            self.assertIn("left running", disclosure["note"])
+
+    def test_energy_sidecar_finalize_exception_is_disclosed_in_execution_receipt(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+
+            def complete(argv, **kwargs):
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            sidecar_pidfile = paths["custody_root"] / "energy-sidecar.pid"
+            disclosure = {
+                "spawned": True,
+                "receipt_path": str(paths["artifact_root"] / "energy-proxy-receipt.json"),
+                "pidfile": str(sidecar_pidfile),
+                "log": str(paths["custody_root"] / "energy-sidecar.log"),
+                "note": "idle baseline completed",
+            }
+            with (
+                mock.patch.object(module.subprocess, "run", side_effect=complete),
+                mock.patch.object(
+                    module,
+                    "_start_energy_sidecar",
+                    return_value=(mock.Mock(), sidecar_pidfile, disclosure),
+                ),
+                mock.patch.object(
+                    module,
+                    "_finish_energy_sidecar",
+                    side_effect=RuntimeError("finalize exploded"),
+                ),
+                mock.patch.object(
+                    module,
+                    "_record_run_attempt",
+                    return_value={"accepted": True},
+                ),
+            ):
+                exit_code = module.execute_validated_launch(
+                    paths["repo"], launch, run_process=module.subprocess.run
+                )
+
+            self.assertEqual(exit_code, 0)
+            receipt = json.loads(
+                (
+                    paths["custody_root"] / "runner-receipt-certified-launch.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "sidecar finalize failed: RuntimeError",
+                receipt["energy_sidecar"]["note"],
+            )
+
+    def test_child_stdout_is_redirected_to_a_custody_log_not_inherited(
+        self,
+    ) -> None:
+        """Regression for #1408: the fixed runner must never inherit this
+        consumer's stdout. A noisy child (training-log lines before any JSON)
+        must not corrupt the consumer's own final stdout line, which the
+        cockpit parses as the certified-launch handshake."""
+        module = load_module()
+        calls: list[dict[str, object]] = []
+
+        def noisy_run(argv, **kwargs):
+            calls.append(kwargs)
+            child_stdout = kwargs.get("stdout")
+            self.assertIsNotNone(
+                child_stdout,
+                "child stdout must be redirected (not inherited) so it "
+                "cannot land in the consumer's own stdout stream",
+            )
+            child_stdout.write(b"epoch 1/10 loss=0.42\nepoch 2/10 loss=0.31\n")
+            child_stdout.flush()
+            self.assertEqual(
+                kwargs.get("stderr"),
+                subprocess.STDOUT,
+                "child stderr must be merged into the same redirected log",
+            )
+            return subprocess.CompletedProcess(argv, 0)
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with contextlib.redirect_stdout(io.StringIO()) as captured:
+                    exit_code = module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
+                        run_process=noisy_run,
+                    )
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(calls), 1)
+            # The consumer itself printed nothing to real stdout during the
+            # child's run (main() prints its single JSON line separately) --
+            # the noisy child lines never touched this process's stdout.
+            self.assertEqual(captured.getvalue(), "")
+
+            execution_receipt = (
+                paths["custody_root"] / "runner-receipt-certified-launch.json"
+            )
+            receipt = json.loads(execution_receipt.read_text(encoding="utf-8"))
+            self.assertIsInstance(receipt.get("child_log"), str)
+            child_log_path = pathlib.Path(receipt["child_log"])
+            self.assertTrue(
+                child_log_path.is_relative_to(paths["custody_root"]),
+                "child log must live under custody_root, not be devnulled",
+            )
+            self.assertIn("epoch 1/10", child_log_path.read_text(encoding="utf-8"))
+
+    def test_child_failure_is_propagated_and_receipted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+
+            def fail(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, 17)
+
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                exit_code = module.certify_and_execute(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                    sha256_bytes(paths["custody_receipt"].read_bytes()),
+                    run_process=fail,
+                )
+            self.assertEqual(exit_code, 17)
+            receipt = json.loads(
+                (
+                    paths["custody_root"]
+                    / "runner-receipt-certified-launch.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(receipt["exit_code"], 17)
+
+    def _install_run_attempt_registry(self, repo: pathlib.Path) -> pathlib.Path:
+        producer = repo / "src" / "ember" / "governance" / "scripts" / "run_attempt_registry.py"
+        producer.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(
+            ROOT / "src" / "ember" / "governance" / "scripts" / "run_attempt_registry.py",
+            producer,
+        )
+        return repo / "receipts" / "run-attempts.jsonl"
+
+    def _validated_registry_launch(self, module, paths: dict[str, pathlib.Path]):
+        with mock.patch.object(module, "read_current_master", return_value=SHA):
+            return module.validate_certified_request(
+                paths["repo"],
+                paths["certificate"],
+                paths["ledger"],
+                paths["run_spec"],
+            )
+
+    def _write_runner_receipt(self, launch, exit_code: int) -> None:
+        write_json(
+            launch.runner_receipt,
+            {
+                "schema_version": 7,
+                "runner_exit_code": exit_code,
+                "outcome": "COMPLETED" if exit_code == 0 else "CHILD_FAILED",
+            },
+        )
+
+    def test_launcher_appends_stable_spawn_and_completed_attempt_rows(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+
+            def complete(argv, **kwargs):
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            result = module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=complete,
+            )
+
+            self.assertEqual(result, 0)
+            rows = [
+                json.loads(line)
+                for line in registry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in rows], ["running", "completed"])
+            self.assertEqual(rows[0]["attempt_id"], rows[1]["attempt_id"])
+            self.assertTrue(rows[0]["attempt_id"].startswith("attempt-"))
+            self.assertEqual({row["run_id"] for row in rows}, {"owned-3b-canary-test"})
+            self.assertEqual({row["run_root_name"] for row in rows}, {paths["custody_root"].name})
+            self.assertEqual(
+                [row["launch_receipt_ref"] for row in rows],
+                [
+                    "owned-3b-canary-test/launch-authority/run-spec.json",
+                    "runner-receipt.json",
+                ],
+            )
+            self.assertEqual(
+                [row["source_receipt"] for row in rows],
+                [
+                    "owned-3b-canary-test/launch-authority/run-spec.json",
+                    "runner-receipt.json",
+                ],
+            )
+            self.assertIsNone(rows[0]["end_utc"])
+            self.assertIsInstance(rows[1]["end_utc"], str)
+            frontier = load_frontier_module()
+            frontier.REPO_ROOT = paths["repo"]
+            coverage = frontier.ledger_all_compute_coverage(
+                paths["custody_root"], "owned-3b-canary-test", "d" * 64
+            )
+            self.assertTrue(coverage["failed_work_included"])
+            self.assertEqual(coverage["registry_rows"], 2)
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                [entry["outcome"] for entry in receipt["run_attempt_registry"]],
+                ["running", "completed"],
+            )
+            self.assertTrue(all(entry["accepted"] for entry in receipt["run_attempt_registry"]))
+
+    def test_launcher_records_failed_and_aborted_terminal_attempts(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            failed_paths = write_valid_bundle(root / "failed")
+            failed_registry = self._install_run_attempt_registry(failed_paths["repo"])
+            failed_launch = self._validated_registry_launch(module, failed_paths)
+
+            def fail(argv, **kwargs):
+                self._write_runner_receipt(failed_launch, 17)
+                return subprocess.CompletedProcess(argv, 17)
+
+            self.assertEqual(
+                module.execute_validated_launch(
+                    failed_paths["repo"],
+                    failed_launch,
+                    run_process=fail,
+                ),
+                17,
+            )
+            failed_rows = [
+                json.loads(line)
+                for line in failed_registry.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in failed_rows], ["running", "failed"])
+            self.assertTrue(all(row["launch_receipt_ref"] for row in failed_rows))
+            retained_attempts = list(
+                failed_paths["custody_root"].glob("attempt-*-CHILD_FAILED-*")
+            )
+            self.assertEqual(len(retained_attempts), 1)
+            retained_attempt = retained_attempts[0]
+            retained_runner_receipt = retained_attempt / "runner-receipt.json"
+            self.assertTrue(retained_runner_receipt.is_file())
+            retained_runner_ref = retained_runner_receipt.relative_to(
+                failed_paths["custody_root"]
+            ).as_posix()
+            self.assertEqual(
+                failed_rows[1]["launch_receipt_ref"], retained_runner_ref
+            )
+            self.assertEqual(failed_rows[1]["source_receipt"], retained_runner_ref)
+
+            failed_disclosure_path = module._run_attempt_registry_log_path(
+                failed_launch
+            )
+            self.assertTrue(failed_disclosure_path.is_file())
+            failed_disclosures = [
+                json.loads(line)
+                for line in failed_disclosure_path.read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [row["outcome"] for row in failed_disclosures],
+                ["running", "failed"],
+            )
+            self.assertTrue(all(row["accepted"] for row in failed_disclosures))
+            self.assertEqual(
+                failed_disclosures[1]["launch_receipt_ref"], retained_runner_ref
+            )
+
+            root_execution_receipt = (
+                failed_paths["custody_root"]
+                / "runner-receipt-certified-launch.json"
+            )
+            retained_execution_receipt = (
+                retained_attempt / "runner-receipt-certified-launch.json"
+            )
+            for execution_receipt_path in (
+                root_execution_receipt,
+                retained_execution_receipt,
+            ):
+                receipt = json.loads(
+                    execution_receipt_path.read_text(encoding="utf-8")
+                )
+                self.assertEqual(
+                    receipt["attempt_retention"]["status"], "RETAINED"
+                )
+                self.assertEqual(
+                    receipt["attempt_retention"]["relative_path"],
+                    retained_attempt.name,
+                )
+                self.assertEqual(
+                    [row["outcome"] for row in receipt["run_attempt_registry"]],
+                    ["running", "failed"],
+                )
+                self.assertEqual(
+                    pathlib.Path(receipt["runner_receipt"]).resolve(),
+                    retained_runner_receipt.resolve(),
+                )
+                self.assertTrue(pathlib.Path(receipt["child_log"]).is_file())
+                self.assertTrue(
+                    pathlib.Path(receipt["child_log"])
+                    .resolve()
+                    .is_relative_to(retained_attempt.resolve())
+                )
+
+            aborted_paths = write_valid_bundle(root / "aborted")
+            aborted_registry = self._install_run_attempt_registry(aborted_paths["repo"])
+            aborted_launch = self._validated_registry_launch(module, aborted_paths)
+
+            def abort(*args, **kwargs):
+                raise RuntimeError("synthetic child spawn failure")
+
+            with self.assertRaisesRegex(RuntimeError, "synthetic child spawn failure"):
+                module.execute_validated_launch(
+                    aborted_paths["repo"], aborted_launch, run_process=abort
+                )
+            aborted_rows = [
+                json.loads(line)
+                for line in aborted_registry.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [row["outcome"] for row in aborted_rows], ["running", "aborted"]
+            )
+            self.assertEqual(
+                aborted_rows[1]["source_receipt"],
+                "runner-receipt-run-attempt-registry.jsonl",
+            )
+            disclosure_rows = [
+                json.loads(line)
+                for line in module._run_attempt_registry_log_path(aborted_launch)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [row["outcome"] for row in disclosure_rows], ["running", "aborted"]
+            )
+
+    def test_registry_refusal_is_visible_but_never_kills_the_child(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            registry_path.parent.mkdir(parents=True, exist_ok=True)
+            registry_path.write_text("not-json\n", encoding="utf-8")
+            launch = self._validated_registry_launch(module, paths)
+            child_calls: list[list[str]] = []
+
+            def complete(argv, **kwargs):
+                child_calls.append(argv)
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            result = module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=complete,
+            )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(len(child_calls), 1)
+            self.assertEqual(registry_path.read_text(encoding="utf-8"), "not-json\n")
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(len(receipt["run_attempt_registry"]), 2)
+            self.assertTrue(all(not row["accepted"] for row in receipt["run_attempt_registry"]))
+            self.assertTrue(
+                all(row["diagnostic_sha256"] for row in receipt["run_attempt_registry"])
+            )
+
+    def test_missing_terminal_runner_receipt_is_disclosed_not_registered(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+
+            result = module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0),
+            )
+
+            self.assertEqual(result, 0)
+            rows = [
+                json.loads(line)
+                for line in registry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in rows], ["running"])
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertTrue(receipt["run_attempt_registry"][0]["accepted"])
+            self.assertFalse(receipt["run_attempt_registry"][1]["accepted"])
+            self.assertEqual(
+                receipt["run_attempt_registry"][1]["error_type"], "ValueError"
+            )
+
+    def test_terminal_runner_receipt_schema_and_exit_code_are_reopened(self) -> None:
+        module = load_module()
+        cases = {
+            "wrong-schema": {"schema_version": 6, "runner_exit_code": 0},
+            "wrong-exit": {"schema_version": 7, "runner_exit_code": 17},
+            "scalar": ["not", "a", "receipt"],
+        }
+        for name, payload in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                paths = write_valid_bundle(pathlib.Path(directory))
+                registry_path = self._install_run_attempt_registry(paths["repo"])
+                launch = self._validated_registry_launch(module, paths)
+
+                def complete(argv, **kwargs):
+                    write_json(launch.runner_receipt, payload)
+                    return subprocess.CompletedProcess(argv, 0)
+
+                self.assertEqual(
+                    module.execute_validated_launch(
+                        paths["repo"], launch, run_process=complete
+                    ),
+                    0,
+                )
+                rows = [
+                    json.loads(line)
+                    for line in registry_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                self.assertEqual([row["outcome"] for row in rows], ["running"])
+                receipt = json.loads(
+                    (
+                        paths["custody_root"]
+                        / "runner-receipt-certified-launch.json"
+                    ).read_text(encoding="utf-8")
+                )
+                self.assertFalse(receipt["run_attempt_registry"][1]["accepted"])
+                self.assertEqual(
+                    receipt["run_attempt_registry"][1]["error_type"], "ValueError"
+                )
+
+    def test_running_row_reopens_the_hash_bound_run_spec(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            registry_path = self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+            paths["run_spec"].write_bytes(paths["run_spec"].read_bytes() + b"\n")
+
+            def complete(argv, **kwargs):
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            self.assertEqual(
+                module.execute_validated_launch(
+                    paths["repo"], launch, run_process=complete
+                ),
+                0,
+            )
+            rows = [
+                json.loads(line)
+                for line in registry_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual([row["outcome"] for row in rows], ["completed"])
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(receipt["run_attempt_registry"][0]["accepted"])
+            self.assertTrue(receipt["run_attempt_registry"][1]["accepted"])
+
+    def test_registry_timeout_is_visible_and_child_still_runs_once(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._install_run_attempt_registry(paths["repo"])
+            launch = self._validated_registry_launch(module, paths)
+            child_calls: list[list[str]] = []
+
+            def complete(argv, **kwargs):
+                child_calls.append(argv)
+                self._write_runner_receipt(launch, 0)
+                return subprocess.CompletedProcess(argv, 0)
+
+            with mock.patch.object(
+                module.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired(["registry"], 5.0),
+            ) as registry_run:
+                result = module.execute_validated_launch(
+                    paths["repo"], launch, run_process=complete
+                )
+
+            self.assertEqual(result, 0)
+            self.assertEqual(len(child_calls), 1)
+            self.assertEqual(registry_run.call_count, 2)
+            self.assertTrue(
+                all(
+                    call.kwargs["timeout"]
+                    == module.RUN_ATTEMPT_REGISTRY_TIMEOUT_SECONDS
+                    for call in registry_run.call_args_list
+                )
+            )
+            receipt = json.loads(
+                (paths["custody_root"] / "runner-receipt-certified-launch.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertTrue(
+                all(
+                    not row["accepted"] and row["error_type"] == "TimeoutExpired"
+                    for row in receipt["run_attempt_registry"]
+                )
+            )
+
+    def test_runner_receipt_outside_authorized_custody_fails_before_process(
+        self,
+    ) -> None:
+        module = load_module()
+        calls: list[object] = []
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["runner_receipt"] = str(
+                pathlib.Path(directory) / "outside" / "receipt.json"
+            )
+            write_json(paths["run_spec"], run_spec)
+            receipt = json.loads(paths["custody_receipt"].read_text(encoding="utf-8"))
+            receipt["files"][paths["run_spec"].name] = sha256_bytes(
+                paths["run_spec"].read_bytes()
+            )
+            write_json(paths["custody_receipt"], receipt)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "scope exceeds certificate: runner_receipt"
+                ):
+                    module.certify_and_execute(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                        sha256_bytes(paths["custody_receipt"].read_bytes()),
+                        run_process=lambda *args, **kwargs: calls.append(
+                            (args, kwargs)
+                        ),
+                    )
+        self.assertEqual(calls, [])
+
+    def test_direct_cli_scope_escalation_is_refused_at_dispatch_before_runner_receipt(self) -> None:
+        module = load_module()
+        current_master = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+            shell=False,
+        ).stdout.strip()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            _rewrite_completion(
+                paths,
+                lambda receipt: receipt["checkout"].__setitem__(
+                    "head", current_master
+                ),
+            )
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate.__setitem__(
+                    "public_master_sha", current_master
+                ),
+            )
+            request = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            request["requested_scope"]["active_expert_families"] = 2
+            write_json(paths["run_spec"], request)
+
+            argv = [
+                "--root",
+                str(ROOT),
+                "--certificate",
+                str(paths["certificate"]),
+                "--declaration-ledger",
+                str(paths["ledger"]),
+                "--run-spec",
+                str(paths["run_spec"]),
+                "--custody-receipt-sha256",
+                hashlib.sha256(paths["custody_receipt"].read_bytes()).hexdigest(),
+            ]
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if key != "EMBER_LAB_PIPE"
+                and not key.startswith("EMBER_LAB_DISPATCH_")
+            }
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                contextlib.redirect_stdout(stdout),
+                contextlib.redirect_stderr(stderr),
+            ):
+                result = module.main(argv)
+
+            self.assertEqual(result, 2)
+            self.assertIn(
+                "EMBER_LAB_DISPATCH_REQUIRED",
+                stdout.getvalue() + stderr.getvalue(),
+            )
+            self.assertFalse(
+                (paths["custody_root"] / "runner-receipt.json").exists()
+            )
+
+
+def _rewrite_completion(
+    paths: dict[str, pathlib.Path],
+    mutate,
+) -> None:
+    receipt = json.loads(paths["completion"].read_text(encoding="utf-8"))
+    mutate(receipt)
+    write_json(paths["completion"], receipt)
+    completion_sha256 = sha256_bytes(paths["completion"].read_bytes())
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate.__setitem__(
+            "completion_receipt_sha256", completion_sha256
+        ),
+    )
+
+
+class ProducerSchemaBindingTest(unittest.TestCase):
+    """Bind the consumer's completion-receipt expectations to the REAL
+    producer (scripts/verify_ember01_completion.py) so schema drift breaks CI
+    instead of the launch (issue #1300)."""
+
+    def test_leg_state_constant_matches_producer(self) -> None:
+        # AST-read the producer source (importing it drags heavy deps): the
+        # module-level RESOLVED_TRUE assignment is the emitted leg state.
+        import ast
+
+        producer_path = ROOT / "scripts" / "verify_ember01_completion.py"
+        tree = ast.parse(producer_path.read_text(encoding="utf-8"))
+        values = [
+            node.value.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "RESOLVED_TRUE"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.Constant)
+        ]
+        self.assertEqual(len(values), 1)
+        module = load_module()
+        self.assertEqual(module.COMPLETION_LEG_RESOLVED_TRUE, values[0])
+
+    def test_fixture_keys_match_consumer_closed_set(self) -> None:
+        module = load_module()
+        self.assertEqual(
+            set(valid_completion_receipt()), module.COMPLETION_RECEIPT_KEYS
+        )
+
+    def test_producer_payload_keys_match_consumer_closed_set(self) -> None:
+        # AST-extract the producer's receipt payload dict literal (the one
+        # containing the "schema" -> "ember-01-completion-receipt-v1" pair)
+        # so PRODUCER-side key drift also breaks CI, not just fixture drift.
+        import ast
+
+        producer_path = ROOT / "scripts" / "verify_ember01_completion.py"
+        tree = ast.parse(producer_path.read_text(encoding="utf-8"))
+        payload_key_sets = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            keys = [
+                key.value
+                for key in node.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            ]
+            if len(keys) != len(node.keys):
+                continue
+            values = dict(zip(keys, node.values))
+            schema_value = values.get("schema")
+            if (
+                isinstance(schema_value, ast.Constant)
+                and schema_value.value == "ember-01-completion-receipt-v1"
+            ):
+                payload_key_sets.append(set(keys))
+        self.assertEqual(len(payload_key_sets), 1)
+        module = load_module()
+        self.assertEqual(payload_key_sets[0], module.COMPLETION_RECEIPT_KEYS)
+
+
+def install_closure(repo: pathlib.Path) -> str:
+    """Give a fixture repo a real closure module, manifest, and closure files."""
+
+    script_root = repo / "src" / "ember" / "governance" / "scripts"
+    script_root.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py",
+        script_root / "training_closure.py",
+    )
+    (repo / "tools").mkdir(parents=True, exist_ok=True)
+    (repo / "tools" / "entrypoint.py").write_text("import json\n", encoding="utf-8")
+    (repo / "configs").mkdir(parents=True, exist_ok=True)
+    (repo / "configs" / "training.json").write_text('{"steps": 1}\n', encoding="utf-8")
+    manifest_path = repo / "manifests" / "training-dependency-closure.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "ember-training-dependency-closure-v1",
+                "entrypoints": ["tools/entrypoint.py"],
+                "dynamic_entrypoints": [],
+                "code": ["src/ember/governance/scripts/training_closure.py"],
+                "data": ["configs/training.json"],
+                "dynamic_call_sites": {},
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    module = load_module()
+    return module.read_live_closure_sha256(repo)
+
+
+class ClosureBoundCertificateTests(unittest.TestCase):
+    """The certificate binds the training closure, not the whole repository tip."""
+
+    def test_moved_tip_outside_the_closure_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            # A docs-only merge landed: the tip moved, the closure did not.
+            moved_tip = "c" * 40
+            with mock.patch.object(
+                module, "read_current_master", return_value=moved_tip
+            ), mock.patch.object(
+                module, "read_pin_is_ancestor", return_value=True
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.closure_sha256, closure_sha256)
+            self.assertEqual(launch.public_master_sha, moved_tip)
+
+    def test_changed_closure_file_is_rejected_even_at_the_pinned_tip(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            (paths["repo"] / "configs" / "training.json").write_text(
+                '{"steps": 2}\n', encoding="utf-8"
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "live training dependency closure"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_certificate_without_closure_sha256_still_binds_the_tip(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(
+                module, "read_current_master", return_value="c" * 40
+            ):
+                with self.assertRaisesRegex(ValueError, "current public master"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_malformed_closure_sha256_is_rejected(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": "NOT-A-HASH"})
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "closure_sha256"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_unknown_certificate_key_is_still_rejected(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"smuggled_key": "value"})
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_stale_closure_manifest_is_rejected_at_launch(self) -> None:
+        """The boundary is re-audited live: matching bytes are not enough.
+
+        Otherwise a manifest that went stale since the guard last ran in CI
+        would let code outside the declared closure train under a green
+        certificate -- worse than the blunt tip pin it replaced.
+        """
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            # An undeclared module enters the entrypoint's import graph, and the
+            # certificate is re-minted over the new bytes so only the BOUNDARY
+            # is wrong.
+            (paths["repo"] / "tools" / "smuggled.py").write_text(
+                "SECRET = 1\n", encoding="utf-8"
+            )
+            (paths["repo"] / "tools" / "entrypoint.py").write_text(
+                "from smuggled import SECRET\n", encoding="utf-8"
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "boundary guard"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_verified_pin_off_the_live_history_is_rejected(self) -> None:
+        """Closure equality alone must not accept a tree that never held the pin."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            with mock.patch.object(
+                module, "read_current_master", return_value="c" * 40
+            ), mock.patch.object(
+                module, "read_pin_is_ancestor", return_value=False
+            ):
+                with self.assertRaisesRegex(ValueError, "not an ancestor"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_read_pin_is_ancestor_answers_from_real_git_history(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "user.name", "closure test")
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git("commit", "-qm", "first")
+            first = git("rev-parse", "HEAD")
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-qm", "second")
+            second = git("rev-parse", "HEAD")
+
+            # The verified-at pin is behind live HEAD: a merge landed after
+            # verification, which is exactly the case closure binding unblocks.
+            self.assertTrue(module.read_pin_is_ancestor(repo, first))
+            self.assertTrue(module.read_pin_is_ancestor(repo, second))
+            self.assertFalse(module.read_pin_is_ancestor(repo, "d" * 40))
+
+    def test_execution_receipt_records_the_closure_binding(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            closure_sha256 = install_closure(paths["repo"])
+            rewrite_certificate(
+                paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+            )
+            with mock.patch.object(
+                module, "read_current_master", return_value=SHA
+            ), mock.patch.object(
+                module, "read_pin_is_ancestor", return_value=True
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            module.execute_validated_launch(
+                paths["repo"],
+                launch,
+                run_process=lambda *args, **kwargs: mock.Mock(returncode=0),
+            )
+            receipt = json.loads(
+                module._execution_receipt_path(launch).read_text(encoding="utf-8")
+            )
+            self.assertEqual(receipt["closure_sha256"], closure_sha256)
+
+
+class ClosureCrossConsumerAgreementTest(unittest.TestCase):
+    def test_closure_evidence_agrees_with_the_launch_consumer_at_this_tree(self) -> None:
+        """Verify side and launch side must compute the identical closure hash."""
+        sys.path.insert(0, str(ROOT / "scripts"))
+        self.addCleanup(sys.path.remove, str(ROOT / "scripts"))
+        spec = importlib.util.spec_from_file_location(
+            "verify_ember01_completion_under_test",
+            ROOT / "scripts" / "verify_ember01_completion.py",
+        )
+        assert spec is not None and spec.loader is not None
+        completion = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(completion)
+
+        launch = load_module()
+        value, reason = completion.closure_evidence_at(ROOT)
+
+        self.assertEqual(reason, "ok")
+        self.assertEqual(value, launch.read_live_closure_sha256(ROOT))
+
+
+class GuardFloorCertificateTests(unittest.TestCase):
+    """Issue #1410: guard-floor keys accepted; unknown keys still refused;
+    guard-floor certificates carry a relative completion_receipt_path."""
+
+    GUARD_FLOOR = {
+        "ticket": "issue-1410",
+        "ts": "20260804T120000Z",
+        "sha_convention": "sha256 over on-disk raw bytes (binary read, no line-ending normalization)",
+        "goal_id": "EMBER-02",
+        "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    }
+
+    def _mutate_guard_floor(self, paths: dict[str, pathlib.Path], extra=None) -> None:
+        shutil.copy2(
+            paths["completion"],
+            paths["certificate"].parent / "ember-01-completion.json",
+        )
+
+        def mutate(certificate: dict) -> None:
+            certificate.update(self.GUARD_FLOOR)
+            certificate["completion_receipt_path"] = "ember-01-completion.json"
+            if extra is not None:
+                extra(certificate)
+
+        rewrite_certificate(paths, mutate)
+
+    def test_guard_floor_certificate_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(paths)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_guard_floor_keys_are_optional_in_the_key_template(self) -> None:
+        module = load_module()
+        self.assertEqual(set(self.GUARD_FLOOR), module.GUARD_FLOOR_CERTIFICATE_KEYS)
+        self.assertLessEqual(
+            module.GUARD_FLOOR_CERTIFICATE_KEYS, module.OPTIONAL_CERTIFICATE_KEYS
+        )
+
+    def test_guard_floor_plus_unknown_key_is_still_rejected(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths, extra=lambda certificate: certificate.update({"surprise": "x"})
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "certificate schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_value_must_be_a_non_empty_string(self) -> None:
+        module = load_module()
+        for key, bad in (("ticket", ""), ("ts", 20260804), ("goal_id", None)):
+            with tempfile.TemporaryDirectory() as directory:
+                paths = write_valid_bundle(pathlib.Path(directory))
+                self._mutate_guard_floor(
+                    paths, extra=lambda certificate: certificate.update({key: bad})
+                )
+                with mock.patch.object(module, "read_current_master", return_value=SHA):
+                    with self.assertRaisesRegex(
+                        ValueError, f"certificate {key} must be a non-empty string"
+                    ):
+                        module.validate_certified_request(
+                            paths["repo"],
+                            paths["certificate"],
+                            paths["ledger"],
+                            paths["run_spec"],
+                        )
+
+    def test_guard_floor_certificate_refuses_absolute_completion_path(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            absolute = str(paths["completion"])
+
+            def mutate(certificate: dict) -> None:
+                certificate.update(self.GUARD_FLOOR)
+                certificate["completion_receipt_path"] = absolute
+
+            rewrite_certificate(paths, mutate)
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "completion_receipt_path must be relative"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_parent_traversal(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "../custody/ember-01-completion.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "must not traverse above"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_drive_root_relative_path(self) -> None:
+        # On Windows "/M/ember/custody/x.json" is not is_absolute() and has no
+        # ".." part, but resolves outside the certificate directory.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "/M/ember/custody/x.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "completion_receipt_path must not name a drive or root anchor"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_drive_relative_path(self) -> None:
+        # "C:x.json" is drive-anchored: what it names depends on the drive the
+        # certificate sits on, so it is not custody-portable.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "C:x.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "completion_receipt_path must not name a drive or root anchor"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_guard_floor_certificate_refuses_nested_packet_path(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            self._mutate_guard_floor(
+                paths,
+                extra=lambda certificate: certificate.update(
+                    {"completion_receipt_path": "receipts/ember-01-completion.json"}
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "must directly name a file"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_legacy_certificate_without_guard_floor_keeps_absolute_path(self) -> None:
+        # Existing committed triples predate #1410 and stay digest-pinned; the
+        # absolute-path refusal applies only to guard-floor certificates.
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+
+ANCESTOR_SHA = "e" * 40
+
+
+def valid_training_verify_receipt(
+    repo: pathlib.Path, closure_sha256: str, source_sha256: str = EVIDENCE_SHA256
+) -> dict[str, object]:
+    """Mirrors runtime/ember-lab/src/training_verify.rs::run's receipt."""
+
+    return {
+        "schema_version": "ember-lab-training-verify-receipt-v1",
+        "ok": True,
+        "root": str(repo),
+        "started_at_ms": 1_754_300_000_000,
+        "finished_at_ms": 1_754_300_000_112,
+        "duration_ms": 112,
+        "closure": {"declared_files": 4, "closure_sha256": closure_sha256},
+        "input_identity": {
+            "artifact_id": "owned-four-domain-production-rung-v1",
+            "identity_manifest_path": "manifests/input-identity.json",
+            "shard_path": "data/shard.json",
+            "shard_sha256": EVIDENCE_SHA256,
+            "shard_bytes": 1024,
+            "admission_receipt_path": "data/shard.receipt.json",
+            "admission_receipt_sha256": EVIDENCE_SHA256,
+        },
+        "model_tokenizer": {
+            "tokenizer_sha256": EVIDENCE_SHA256,
+            "config_sha256": EVIDENCE_SHA256,
+        },
+        "certificate": {
+            "path": "spine-certified.json",
+            "closure_sha256_matches": True,
+            "pin_is_ancestor": True,
+        },
+        "checks": [
+            {"name": "closure_members_present", "ok": True, "detail": "4 declared files present"},
+            {"name": "input_identity_admission_chain", "ok": True, "detail": "artifact_id=owned"},
+            {"name": "model_tokenizer_identity", "ok": True, "detail": "hashed"},
+            {
+                "name": "certificate_closure_and_pin",
+                "ok": True,
+                "detail": "closure_sha256_matches=true pin_is_ancestor=true",
+            },
+        ],
+        "ember_lab_binary_sha256": EVIDENCE_SHA256,
+        "ember_lab_source_sha256": source_sha256,
+    }
+
+
+class CompletionHeadAncestorTests(unittest.TestCase):
+    """Issue #1419: EMBER-01 completion is a historical fact validated at its own
+    head (an ANCESTOR of the pin); pin freshness comes from the #1400/#1418
+    training-scoped verify receipt, not from re-running the whole-repo census."""
+
+    def _ancestor_bundle(
+        self, directory: str, mutate_receipt=None, mutate_run_spec=None
+    ) -> tuple[dict[str, pathlib.Path], str]:
+        paths = write_valid_bundle(pathlib.Path(directory))
+        closure_sha256 = install_closure(paths["repo"])
+        _rewrite_completion(
+            paths,
+            lambda receipt: receipt["checkout"].__setitem__("head", ANCESTOR_SHA),
+        )
+        rewrite_certificate(
+            paths, lambda cert: cert.update({"closure_sha256": closure_sha256})
+        )
+
+        source_sha256 = install_ember_lab_source_fixture(paths["repo"])
+        receipt = valid_training_verify_receipt(
+            paths["repo"], closure_sha256, source_sha256
+        )
+        if mutate_receipt is not None:
+            mutate_receipt(receipt)
+        receipt_path = paths["custody_root"] / "training-verify.json"
+        write_json(receipt_path, receipt)
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["training_verify_receipt_path"] = str(receipt_path)
+        run_spec["training_verify_receipt_sha256"] = sha256_bytes(
+            receipt_path.read_bytes()
+        )
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        _write_custody_sidecars(paths)
+        return paths, closure_sha256
+
+    @contextlib.contextmanager
+    def _patched(self, module, is_ancestor: bool = True):
+        with mock.patch.object(
+            module, "read_current_master", return_value=SHA
+        ), mock.patch.object(
+            module, "read_pin_is_ancestor", return_value=True
+        ), mock.patch.object(
+            module, "read_commit_is_ancestor", return_value=is_ancestor
+        ):
+            yield
+
+    def test_ancestor_head_with_green_training_receipt_is_accepted(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, closure_sha256 = self._ancestor_bundle(directory)
+            with self._patched(module):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.closure_sha256, closure_sha256)
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_training_receipt_raw_sha_binding_refuses_semantic_byte_drift(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            receipt_path = pathlib.Path(run_spec["training_verify_receipt_path"])
+            receipt_path.write_bytes(receipt_path.read_bytes() + b" \n")
+
+            with self._patched(module):
+                with self.assertRaisesRegex(ValueError, "raw SHA-256 mismatch"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_stale_ember_lab_source_hash_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            receipt_path = paths["custody_root"] / "training-verify.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["ember_lab_source_sha256"] = EVIDENCE_SHA256
+            write_json(receipt_path, receipt)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["training_verify_receipt_sha256"] = sha256_bytes(
+                receipt_path.read_bytes()
+            )
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "Ember Lab source identity does not match"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_equal_head_without_training_receipt_stays_accepted(self) -> None:
+        """Back-compat: the pre-#1419 shape needs no new evidence and no git."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(
+                module, "read_current_master", return_value=SHA
+            ), mock.patch.object(
+                module,
+                "read_commit_is_ancestor",
+                side_effect=AssertionError(
+                    "an equal head is an ancestor of itself; git must not be consulted"
+                ),
+            ):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_non_ancestor_completion_head_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            with self._patched(module, is_ancestor=False):
+                with self.assertRaisesRegex(
+                    ValueError, "head is not an ancestor of declared public master"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_ancestor_head_without_training_receipt_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("training_verify_receipt_path"),
+                    spec.pop("training_verify_receipt_sha256"),
+                ),
+            )
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "must supply training_verify_receipt_path"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_stale_or_red_training_receipt_is_refused(self) -> None:
+        module = load_module()
+        cases = {
+            "red receipt": (
+                lambda receipt: receipt.__setitem__("ok", False),
+                "not green",
+            ),
+            "red check inside a green receipt": (
+                lambda receipt: receipt["checks"][3].__setitem__("ok", False),
+                "check is red: certificate_closure_and_pin",
+            ),
+            "stale closure": (
+                lambda receipt: receipt["closure"].__setitem__(
+                    "closure_sha256", "d" * 64
+                ),
+                "does not bind the certificate's training dependency closure",
+            ),
+            "receipt from another checkout": (
+                lambda receipt: receipt.__setitem__("root", "B:/some-other-tree"),
+                "produced against a different tree",
+            ),
+            "wrong schema": (
+                lambda receipt: receipt.__setitem__(
+                    "schema_version", "ember-01-completion-receipt-v1"
+                ),
+                "training verify receipt schema",
+            ),
+            "unknown receipt key": (
+                lambda receipt: receipt.__setitem__("smuggled", True),
+                "training verify receipt schema keys",
+            ),
+        }
+        for label, (mutate, error) in cases.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as directory:
+                    paths, _ = self._ancestor_bundle(
+                        directory, mutate_receipt=mutate
+                    )
+                    with self._patched(module):
+                        with self.assertRaisesRegex(ValueError, error):
+                            module.validate_certified_request(
+                                paths["repo"],
+                                paths["certificate"],
+                                paths["ledger"],
+                                paths["run_spec"],
+                            )
+
+    def test_missing_training_receipt_file_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            (paths["custody_root"] / "training-verify.json").unlink()
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "training verify receipt is unreadable"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_training_receipt_without_closure_bound_certificate_is_refused(
+        self,
+    ) -> None:
+        """A pre-#1332 certificate has no closure to bind the receipt to."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(directory)
+            rewrite_certificate(paths, lambda cert: cert.pop("closure_sha256"))
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["training_verify_receipt_path"] = str(
+                paths["custody_root"] / "training-verify.json"
+            )
+            write_json(paths["run_spec"], run_spec)
+            with self._patched(module):
+                with self.assertRaisesRegex(
+                    ValueError, "requires a closure-bound certificate"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_relative_training_receipt_path_resolves_against_the_run_spec(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_verify_receipt_path", "../../training-verify.json"
+                ),
+            )
+            with self._patched(module):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.public_master_sha, SHA)
+
+    def test_unknown_run_spec_key_is_still_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths, _ = self._ancestor_bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update({"smuggled_key": "x"}),
+            )
+            with self._patched(module):
+                with self.assertRaisesRegex(ValueError, "run spec schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_optional_run_spec_keys_are_a_closed_enumeration(self) -> None:
+        """Every optional key is enumerated here, so a new one cannot slip in
+        unvalidated: anything outside this set still hard-fails the schema."""
+
+        module = load_module()
+        self.assertEqual(
+            module.OPTIONAL_RUN_SPEC_KEYS,
+            {
+                "training_verify_receipt_path",
+                "training_verify_receipt_sha256",
+                "resume_checkpoint",
+                "resume_counter_receipt",
+                "resume_realization_registry",
+                "resume_optimizer_transition_registry",
+                "resume_optimizer_transition_registry_sha256",
+                "training_data_manifest",
+                "training_capability",
+                "training_checkpoint_interval",
+                "training_telemetry_path",
+                "training_model_chat_restore_not_before",
+                "semantic_canary_mode",
+                "semantic_canary_receipt",
+                "semantic_canary_shards_root",
+                "semantic_canary_sequence_length",
+                "semantic_canary_checkpoint_interval",
+                "semantic_canary_telemetry_path",
+                "admitted_row_set_sha256",
+                "receipt_custody_root",
+                "semantic_reproduction_intent",
+                "semantic_reproduction_target",
+                "semantic_reproduction_adjudication_output",
+                "a1_family",
+                "a1_tier",
+                "a1_mechanism",
+                "a1_token_shards_receipt",
+                "a1_shards_root",
+                "a1_comparison_authority",
+                "a1_comparison_authority_sha256",
+                "a1_sequence_length",
+                "a1_checkpoint_interval",
+                "a1_telemetry_path",
+                "a1_tier2_contract",
+                "a1_tier2_contract_sha256",
+                "a1_liveness_receipt",
+                "a1_liveness_receipt_sha256",
+                "job_memory_ceiling_probe",
+            },
+        )
+
+    def test_receipt_fixture_keys_match_the_rust_producer(self) -> None:
+        """Bind the consumer's closed key set to runtime/ember-lab/src/
+        training_verify.rs::run, so producer drift breaks CI, not the launch."""
+
+        module = load_module()
+        fixture_keys = set(
+            valid_training_verify_receipt(pathlib.Path("."), "0" * 64)
+        )
+        self.assertEqual(fixture_keys, module.TRAINING_VERIFY_RECEIPT_KEYS)
+
+        source = (
+            ROOT / "runtime" / "ember-lab" / "src" / "training_verify.rs"
+        ).read_text(encoding="utf-8")
+        marker = f'"schema_version": "{module.TRAINING_VERIFY_RECEIPT_SCHEMA}"'
+        self.assertIn(marker, source)
+        body = source[source.index(marker) :]
+        for key in module.TRAINING_VERIFY_RECEIPT_KEYS:
+            self.assertIn(f'"{key}":', body, f"producer stopped emitting {key}")
+
+    def test_read_commit_is_ancestor_answers_from_real_git_history(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "user.name", "ancestor test")
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git("commit", "-qm", "first")
+            first = git("rev-parse", "HEAD")
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-qm", "second")
+            second = git("rev-parse", "HEAD")
+            git("checkout", "-q", "-b", "sidebranch", first)
+            (repo / "side.txt").write_text("side\n", encoding="utf-8")
+            git("add", "side.txt")
+            git("commit", "-qm", "side")
+            side = git("rev-parse", "HEAD")
+
+            self.assertTrue(module.read_commit_is_ancestor(repo, first, second))
+            self.assertTrue(module.read_commit_is_ancestor(repo, first, first))
+            self.assertFalse(module.read_commit_is_ancestor(repo, second, first))
+            self.assertFalse(module.read_commit_is_ancestor(repo, side, second))
+            # Fail CLOSED: an unresolvable commit yields no ancestry evidence.
+            with self.assertRaisesRegex(ValueError, "unprovable"):
+                module.read_commit_is_ancestor(repo, "d" * 40, second)
+
+    def test_read_commit_is_ancestor_strips_env_injected_config_vectors(self) -> None:
+        """Issue #1706: real ancestry answer, plus the actual subprocess env
+        used is captured (subprocess.run wrapped, not mocked-away -- the real
+        git call still executes and the real True/False answer is still
+        asserted) and shown to exclude the GIT_CONFIG_COUNT/KEY_*/VALUE_*
+        keys that were genuinely present in the inherited environment.
+
+        This call takes no remote URL, so there is no directly observable
+        `url.*.insteadOf` redirection to reproduce here the way there is for
+        source_authority.resolve_governed_master -- verified empirically
+        that git also refuses to let an alias definition shadow a real
+        subcommand name, closing that would-be observable route too. What
+        is directly provable, and asserted here, is that the hardening is
+        genuinely applied rather than merely claimed: an inherited
+        environment-injected config entry (which CAN define arbitrary keys,
+        not just insteadOf) never reaches the subprocess this function
+        spawns.
+        """
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            repo = pathlib.Path(directory) / "repo"
+            repo.mkdir()
+
+            def git(*arguments: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", str(repo), *arguments],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "user.name", "ancestor test")
+            (repo / "first.txt").write_text("first\n", encoding="utf-8")
+            git("add", "first.txt")
+            git("commit", "-qm", "first")
+            first = git("rev-parse", "HEAD")
+            (repo / "second.txt").write_text("second\n", encoding="utf-8")
+            git("add", "second.txt")
+            git("commit", "-qm", "second")
+            second = git("rev-parse", "HEAD")
+
+            captured_envs: list[dict] = []
+            real_run = subprocess.run
+
+            def spying_run(*args, **kwargs):
+                captured_envs.append(dict(kwargs.get("env") or {}))
+                return real_run(*args, **kwargs)
+
+            poisoned_env = dict(os.environ)
+            poisoned_env.update(
+                {
+                    "GIT_CONFIG_COUNT": "1",
+                    "GIT_CONFIG_KEY_0": "core.bogusInjectedKey",
+                    "GIT_CONFIG_VALUE_0": "injected-by-test",
+                    "GIT_CONFIG_GLOBAL": str(pathlib.Path(directory) / "poisoned-global-gitconfig"),
+                }
+            )
+            with (
+                mock.patch.dict(os.environ, poisoned_env, clear=True),
+                mock.patch.object(subprocess, "run", side_effect=spying_run),
+            ):
+                self.assertTrue(module.read_commit_is_ancestor(repo, first, second))
+                self.assertFalse(module.read_commit_is_ancestor(repo, second, first))
+
+            self.assertTrue(captured_envs, "the wrapped subprocess.run was never called")
+            for env in captured_envs:
+                self.assertNotIn("GIT_CONFIG_COUNT", env)
+                self.assertNotIn("GIT_CONFIG_KEY_0", env)
+                self.assertNotIn("GIT_CONFIG_VALUE_0", env)
+                self.assertEqual(env.get("GIT_CONFIG_GLOBAL"), os.devnull)
+                self.assertEqual(env.get("GIT_CONFIG_NOSYSTEM"), "1")
+
+
+ARCHITECTURE_REVISION = "ember-sparse-3b-v2"
+REGISTRY_SHA256 = "c" * 64
+
+
+def install_model_config(
+    repo: pathlib.Path, revision: str = ARCHITECTURE_REVISION
+) -> None:
+    write_json(
+        repo / "configs" / "ember-restart-3b.json",
+        {"architecture_revision": revision},
+    )
+
+
+def install_checkpoint(
+    checkpoint: pathlib.Path,
+    *,
+    revision: str | None = ARCHITECTURE_REVISION,
+    manifest: bool = True,
+) -> pathlib.Path:
+    checkpoint.mkdir(parents=True, exist_ok=True)
+    if manifest:
+        write_json(
+            checkpoint / "checkpoint-manifest.json",
+            {"architecture_revision": revision, "global_step": 100},
+        )
+    return checkpoint
+
+
+def authorize_resume_roots(
+    paths: dict[str, pathlib.Path], *roots: pathlib.Path
+) -> None:
+    """Give the bundle's certificate the #1426 resume allowlist.
+
+    Kept OUT of valid_scope so the shared fixture stays the legacy shape: every
+    non-resume test then proves a certificate without the key takes no new code
+    path, and a test that wants the key opts into it explicitly.
+    """
+
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "allowed_resume_roots", [str(root) for root in roots]
+        ),
+    )
+
+
+def authorize_training_capabilities(
+    paths: dict[str, pathlib.Path], *capabilities: str
+) -> None:
+    """Give the bundle's certificate the #1430 specialist-capability allowlist.
+
+    Kept OUT of valid_scope for the same reason authorize_resume_roots is:
+    every non-specialist test then proves a certificate without the key takes
+    no new code path (test_plain_bundle_has_no_specialist_route), and a test
+    that wants a specialist route opts in explicitly.
+    """
+
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "allowed_training_capabilities", list(capabilities)
+        ),
+    )
+
+
+def authorize_resume_relocation(
+    paths: dict[str, pathlib.Path], root: pathlib.Path
+) -> None:
+    """Give the bundle's certificate the #1452 C: relocation custody root.
+
+    Kept as its own helper for the same reason authorize_resume_roots is: a
+    test that wants the key declares it explicitly, and a test that wants it
+    ABSENT (authorize_relocation=False on _bundle) proves the launcher
+    refuses a C:-rooted resume without it.
+    """
+
+    rewrite_certificate(
+        paths,
+        lambda certificate: certificate["execution_scope"].__setitem__(
+            "resume_relocation_custody_root", str(root)
+        ),
+    )
+
+
+def set_resume_paths(
+    paths: dict[str, pathlib.Path],
+    checkpoint: pathlib.Path,
+    evidence: pathlib.Path,
+) -> None:
+    """Repoint an already-built bundle's resume triple.
+
+    Safe after the certificate has been rewritten: the run spec's own digest is
+    computed at validation time, and only certificate_sha256 binds it back.
+    """
+
+    _rewrite_run_spec_with_custody(
+        paths,
+        lambda run_spec: run_spec.update(
+            {
+                "resume_checkpoint": str(checkpoint),
+                "resume_counter_receipt": str(evidence),
+            }
+        ),
+    )
+
+
+def install_resume_material(directory: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
+    """A resumable checkpoint plus its realization evidence, under `directory`."""
+
+    checkpoint = install_checkpoint(directory / "checkpoint-000100")
+    evidence = directory / "counter-success.json"
+    write_json(evidence, {"ok": True})
+    return checkpoint, evidence
+
+
+class _ResumeBundleMixin:
+    """Bundle helpers shared by the #1425 plumbing and #1426 authorization
+    suites; not a TestCase, so the cases are collected once each."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        config_revision: str = ARCHITECTURE_REVISION,
+        checkpoint_revision: str | None = ARCHITECTURE_REVISION,
+        checkpoint_manifest: bool = True,
+        resume_roots: list[pathlib.Path] | None = None,
+        authorize_resume: bool = True,
+        authorize_relocation: bool = False,
+        relocation_root: pathlib.Path | None = None,
+    ) -> dict[str, pathlib.Path]:
+        paths = write_valid_bundle(pathlib.Path(directory))
+        install_model_config(paths["repo"], config_revision)
+        checkpoint = install_checkpoint(
+            paths["custody_root"] / "checkpoint-000100",
+            revision=checkpoint_revision,
+            manifest=checkpoint_manifest,
+        )
+        evidence = paths["custody_root"] / "counter-success.json"
+        write_json(evidence, {"ok": True})
+        paths["checkpoint"] = checkpoint
+        paths["evidence"] = evidence
+
+        def apply_resume_spec(run_spec: dict[str, object]) -> None:
+            run_spec["resume_checkpoint"] = str(checkpoint)
+            run_spec["resume_counter_receipt"] = str(evidence)
+            if mutate_run_spec is not None:
+                mutate_run_spec(run_spec)
+
+        _rewrite_run_spec_with_custody(paths, apply_resume_spec)
+        if authorize_resume:
+            roots = (
+                [paths["custody_root"]] if resume_roots is None else resume_roots
+            )
+            authorize_resume_roots(paths, *roots)
+            # Issue #1452 / #1462 compose: a governed-vertical launch now
+            # refuses a relocated resume outright (it cannot express one), so
+            # auto-declaring a relocation root here by default -- as this
+            # helper did pre-compose -- would make every governed-vertical
+            # caller of this shared bundle newly refuse for a reason unrelated
+            # to what it is testing. authorize_relocation therefore defaults
+            # to False: ResumePlumbingTests/ResumeRootAuthorizationTests/
+            # SpecialistRoutingTests pass a real B:-drive directory (see their
+            # tempfile.TemporaryDirectory(dir="B:/tmp") callers below), so the
+            # checkpoint installed above already resolves under B: and this
+            # branch is never consulted. A caller that specifically wants an
+            # off-B:, relocation-authorized checkpoint opts in explicitly
+            # (see ResumeRelocationCustodyTests).
+            if authorize_relocation and roots:
+                authorize_resume_relocation(
+                    paths, roots[-1] if relocation_root is None else relocation_root
+                )
+        return paths
+
+    def _validate(self, module, paths: dict[str, pathlib.Path]):
+        with mock.patch.object(module, "read_current_master", return_value=SHA):
+            return module.validate_certified_request(
+                paths["repo"],
+                paths["certificate"],
+                paths["ledger"],
+                paths["run_spec"],
+            )
+
+    def _refused(self, paths: dict[str, pathlib.Path], pattern: str) -> None:
+        module = load_module()
+        with self.assertRaisesRegex(ValueError, pattern):
+            self._validate(module, paths)
+
+
+class ResumePlumbingTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1425: the certified path built a FIXED argv with no resume flags,
+    so a resumed rung could only be launched OFF the certified path. Resume is
+    expressed as optional run-spec keys, validated fail-closed before argv."""
+
+    def test_valid_resume_triple_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.resume_checkpoint, paths["checkpoint"])
+            self.assertEqual(launch.resume_evidence_path, paths["evidence"])
+            self.assertEqual(
+                launch.resume_evidence_flag, "--resume-counter-receipt"
+            )
+            self.assertIsNone(
+                launch.resume_optimizer_transition_registry_sha256
+            )
+
+            argv = module.build_runner_argv(paths["repo"], launch)
+            # The flags ride AFTER --max-records, in the order the runner's
+            # argparse declares them. This bundle's checkpoint resolves under
+            # a real B:-drive tempdir (see _bundle's directory contract), so
+            # no relocation is needed and none is emitted -- byte-identical
+            # to a pre-#1452 launch.
+            self.assertIsNone(launch.resume_relocation_custody_root)
+            self.assertEqual(
+                argv[argv.index("--max-records") :],
+                [
+                    "--max-records",
+                    "1",
+                    "--resume-checkpoint",
+                    str(paths["checkpoint"]),
+                    "--resume-counter-receipt",
+                    str(paths["evidence"]),
+                ],
+            )
+
+    def test_each_evidence_key_maps_to_its_runner_flag(self) -> None:
+        module = load_module()
+        for key, flag in (
+            ("resume_counter_receipt", "--resume-counter-receipt"),
+            ("resume_realization_registry", "--resume-realization-registry"),
+            (
+                "resume_optimizer_transition_registry",
+                "--resume-optimizer-transition-registry",
+            ),
+        ):
+            with self.subTest(evidence=key), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, key=key: spec.update(
+                        {key: spec.pop("resume_counter_receipt")}
+                    ),
+                )
+                launch = self._validate(module, paths)
+                argv = module.build_runner_argv(paths["repo"], launch)
+                self.assertEqual(
+                    argv[argv.index(flag) + 1], str(paths["evidence"])
+                )
+
+    def test_optimizer_transition_registry_sha256_rides_the_argv(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update(
+                    {
+                        "resume_optimizer_transition_registry": spec.pop(
+                            "resume_counter_receipt"
+                        ),
+                        "resume_optimizer_transition_registry_sha256": REGISTRY_SHA256,
+                    }
+                ),
+            )
+            launch = self._validate(module, paths)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            # This bundle's checkpoint resolves under a real B:-drive tempdir
+            # (see _bundle's directory contract), so no relocation is needed
+            # and the optimizer-transition-registry pair rides last.
+            self.assertIsNone(launch.resume_relocation_custody_root)
+            self.assertEqual(
+                argv[-4:],
+                [
+                    "--resume-optimizer-transition-registry",
+                    str(paths["evidence"]),
+                    "--resume-optimizer-transition-registry-sha256",
+                    REGISTRY_SHA256,
+                ],
+            )
+
+    def test_run_spec_without_resume_keys_builds_the_pre_1425_argv(self) -> None:
+        """The clean-genesis shape must be byte-identical to what shipped
+        before resume existed -- resume adds no new code path to it."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.resume_checkpoint)
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "governed-vertical",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--write-budget-bytes",
+                    str(16 * 1024**3),
+                    "--max-records",
+                    "1",
+                ],
+            )
+
+    def test_checkpoint_without_evidence_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.pop("resume_counter_receipt"),
+            )
+            self._refused(paths, "exactly one resume evidence key")
+
+    def test_two_evidence_keys_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.update(
+                    {"resume_realization_registry": spec["resume_counter_receipt"]}
+                ),
+            )
+            self._refused(paths, "exactly one resume evidence key")
+
+    def test_evidence_without_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.pop("resume_checkpoint"),
+            )
+            self._refused(paths, "requires resume_checkpoint")
+
+    def test_checkpoint_without_manifest_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, checkpoint_manifest=False)
+            self._refused(paths, "not a resumable checkpoint")
+
+    def test_architecture_revision_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, checkpoint_revision="ember-sparse-3b-v1")
+            self._refused(paths, "architecture_revision does not match")
+
+    def test_checkpoint_manifest_without_revision_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, checkpoint_revision=None)
+            self._refused(paths, "architecture_revision does not match")
+
+    def test_lexically_quarantined_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_model_config(paths["repo"])
+            checkpoint = install_checkpoint(
+                paths["custody_root"] / ".checkpoint-quarantine" / "checkpoint-000100"
+            )
+            evidence = paths["custody_root"] / "counter-success.json"
+            write_json(evidence, {"ok": True})
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.update(
+                    {
+                        "resume_checkpoint": str(checkpoint),
+                        "resume_counter_receipt": str(evidence),
+                    }
+                ),
+            )
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_quarantined_checkpoint_behind_a_link_is_refused(self) -> None:
+        """The lexical check alone is defeated by a link whose own name is
+        clean; the resolved form is checked too."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_model_config(paths["repo"])
+            real = install_checkpoint(
+                paths["custody_root"] / ".checkpoint-quarantine" / "checkpoint-000100"
+            )
+            link = paths["custody_root"] / "clean-looking-checkpoint"
+            try:
+                link.symlink_to(real, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                # Unprivileged Windows refuses symlinks but allows junctions,
+                # which resolve() follows the same way -- and a junction is the
+                # realistic shape here anyway.
+                if sys.platform != "win32" or subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(link), str(real)],
+                    capture_output=True,
+                    check=False,
+                ).returncode != 0:
+                    self.skipTest("directory links unavailable in this environment")
+            self.assertEqual(link.resolve(), real.resolve())
+            evidence = paths["custody_root"] / "counter-success.json"
+            write_json(evidence, {"ok": True})
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.update(
+                    {
+                        "resume_checkpoint": str(link),
+                        "resume_counter_receipt": str(evidence),
+                    }
+                ),
+            )
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_quarantined_evidence_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_counter_receipt",
+                    str(
+                        pathlib.Path(spec["resume_counter_receipt"]).parent
+                        / ".checkpoint-quarantine"
+                        / "counter-success.json"
+                    ),
+                ),
+            )
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_dangling_checkpoint_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_checkpoint", spec["resume_checkpoint"] + "-absent"
+                ),
+            )
+            self._refused(paths, "existing checkpoint directory")
+
+    def test_checkpoint_pointing_at_a_file_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec.__setitem__(
+                    "resume_checkpoint", str(paths["evidence"])
+                ),
+            )
+            self._refused(paths, "existing checkpoint directory")
+
+    def test_dangling_evidence_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_counter_receipt",
+                    spec["resume_counter_receipt"] + "-absent",
+                ),
+            )
+            self._refused(paths, "resume_counter_receipt must name an existing file")
+
+    def test_empty_resume_path_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_checkpoint", ""
+                ),
+            )
+            # An empty string is a DECLARED resume that names nothing, so it is
+            # refused outright rather than read as an absent key.
+            self._refused(paths, "resume_checkpoint must be a non-empty string")
+
+    def test_registry_sha256_without_its_registry_key_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "resume_optimizer_transition_registry_sha256", REGISTRY_SHA256
+                ),
+            )
+            self._refused(
+                paths,
+                "resume_optimizer_transition_registry_sha256 is only legal",
+            )
+
+    def test_malformed_registry_sha256_is_refused(self) -> None:
+        for label, value in (
+            ("too short", "c" * 63),
+            ("uppercase", "C" * 64),
+            ("non hex", "z" * 64),
+        ):
+            with self.subTest(sha=label), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.update(
+                        {
+                            "resume_optimizer_transition_registry": spec.pop(
+                                "resume_counter_receipt"
+                            ),
+                            "resume_optimizer_transition_registry_sha256": value,
+                        }
+                    ),
+                )
+                self._refused(paths, "must be a lowercase SHA-256")
+
+    def test_relative_resume_paths_resolve_against_the_run_spec(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+            )
+            relative_checkpoint = os.path.relpath(
+                paths["checkpoint"], paths["run_spec"].parent
+            )
+            relative_evidence = os.path.relpath(
+                paths["evidence"], paths["run_spec"].parent
+            )
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda spec: spec.update(
+                    {
+                        "resume_checkpoint": relative_checkpoint,
+                        "resume_counter_receipt": relative_evidence,
+                    }
+                ),
+            )
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.resume_checkpoint.resolve(strict=False),
+                paths["checkpoint"].resolve(strict=False),
+            )
+            self.assertEqual(
+                launch.resume_evidence_path.resolve(strict=False),
+                paths["evidence"].resolve(strict=False),
+            )
+
+    def test_resume_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling to run_vertical_slice's parsers,
+        so a renamed runner flag breaks CI, not a launch. Issue #1452: the two
+        relocation flags are specialist-only (governed-vertical declares
+        neither -- see ResumeRelocationCustodyTests), but this check is a
+        plain literal-text binding across the whole runner file, not scoped
+        to one subparser, so their spelling belongs here too."""
+
+        module = load_module()
+        runner = (
+            ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        ).read_text(encoding="utf-8")
+        for flag in (
+            *module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values(),
+            "--resume-checkpoint",
+            "--resume-optimizer-transition-registry-sha256",
+            "--c-relocated-under-disk-budget-runner",
+            "--relocation-custody-root",
+        ):
+            self.assertIn(f'"{flag}"', runner)
+
+    def test_config_revision_constant_matches_the_production_config(self) -> None:
+        config = json.loads(
+            (ROOT / "configs" / "ember-restart-3b.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(config["architecture_revision"], ARCHITECTURE_REVISION)
+
+
+class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1426: the resume paths sat at run-spec TOP LEVEL, outside
+    requested_scope, so they received none of the certificate authorization
+    every other launch-shaping parameter gets -- a certificate scoped to custody
+    X admitted a resume from any published bundle anywhere on the machine, and
+    was checked only for coherence. The cure is a certificate-side ALLOWLIST,
+    because containment ("inside this run's custody_root") would refuse the
+    primary use case."""
+
+    def test_resume_from_a_prior_runs_custody_is_accepted(self) -> None:
+        """The case that forbids a containment rule: an R1->R2 rung resumes from
+        a PRIOR run's custody, entirely outside this run's custody_root."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            prior = pathlib.Path(directory) / "prior-run-custody"
+            checkpoint, evidence = install_resume_material(prior)
+            paths = self._bundle(directory, resume_roots=[prior])
+            set_resume_paths(paths, checkpoint, evidence)
+
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.resume_checkpoint, checkpoint)
+            self.assertEqual(launch.resume_evidence_path, evidence)
+            self.assertFalse(
+                checkpoint.resolve().is_relative_to(
+                    paths["custody_root"].resolve()
+                )
+            )
+
+    def test_resume_outside_every_allowed_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            unlisted = pathlib.Path(directory) / "unlisted-bundle"
+            checkpoint, evidence = install_resume_material(unlisted)
+            paths = self._bundle(directory)
+            set_resume_paths(paths, checkpoint, evidence)
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_parent_traversal_out_of_an_allowed_root_is_refused(self) -> None:
+        """The executed probe that found the defect: a path whose LEXICAL form
+        sits under the allowed root and whose RESOLVED form escapes it. The
+        check therefore has to run on the resolved path, which is also the one
+        the runner would open."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside = pathlib.Path(directory) / "outside-custody"
+            checkpoint, evidence = install_resume_material(outside)
+            paths = self._bundle(directory)
+            custody_root = paths["custody_root"]
+            traversed_checkpoint = (
+                custody_root / ".." / "outside-custody" / checkpoint.name
+            )
+            traversed_evidence = (
+                custody_root / ".." / "outside-custody" / evidence.name
+            )
+            # Lexically inside the allowed root, resolves outside it.
+            self.assertTrue(
+                str(traversed_checkpoint).startswith(str(custody_root))
+            )
+            self.assertEqual(traversed_checkpoint.resolve(), checkpoint.resolve())
+
+            set_resume_paths(paths, traversed_checkpoint, traversed_evidence)
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_evidence_outside_the_allowed_roots_is_refused(self) -> None:
+        """Authorization covers the evidence path on the same basis as the
+        checkpoint. An authorized checkpoint admitted on realization evidence
+        fetched from anywhere is still an unauthorized resume."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            unlisted = pathlib.Path(directory) / "unlisted-bundle"
+            unlisted.mkdir(parents=True)
+            evidence = unlisted / "counter-success.json"
+            write_json(evidence, {"ok": True})
+            paths = self._bundle(directory)
+            set_resume_paths(paths, paths["checkpoint"], evidence)
+            self._refused(
+                paths, "run scope exceeds certificate: resume_counter_receipt"
+            )
+
+    def test_unauthorized_path_is_refused_before_it_is_opened(self) -> None:
+        """Authorization precedes every coherence check, so an unauthorized
+        path is refused without this process reading a byte of it -- the
+        refusal names authorization, not the missing directory."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            unlisted = pathlib.Path(directory) / "unlisted-bundle"
+            paths = self._bundle(directory)
+            set_resume_paths(
+                paths,
+                unlisted / "checkpoint-000100",
+                unlisted / "counter-success.json",
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_quarantine_outranks_authorization(self) -> None:
+        """Quarantine is a property of the path itself, so it is settled before
+        the certificate is consulted: a quarantined checkpoint stays
+        unselectable even inside an authorized root."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            quarantined = install_checkpoint(
+                paths["custody_root"]
+                / ".checkpoint-quarantine"
+                / "checkpoint-000100"
+            )
+            set_resume_paths(paths, quarantined, paths["evidence"])
+            self._refused(paths, "quarantined checkpoint")
+
+    def test_certificate_without_the_key_refuses_a_requested_resume(
+        self,
+    ) -> None:
+        """Fail-closed on the population that carries the defect. A pre-#1426
+        certificate authorizes no resume root, so it cannot express a certified
+        resume -- and the refusal says which action fixes it."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorize_resume=False)
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_resume_roots", certificate["execution_scope"]
+            )
+            self._refused(paths, "declares no allowed_resume_roots")
+
+    def test_certificate_without_the_key_still_launches_clean_genesis(
+        self,
+    ) -> None:
+        """The other half of the decision: a certificate without the key is
+        untouched for every launch that requests no resume, which is every
+        launch that worked before #1425."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_resume_roots", certificate["execution_scope"]
+            )
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.resume_checkpoint)
+
+    def test_empty_allowed_resume_roots_authorizes_nothing(self) -> None:
+        """An explicitly empty allowlist is legal and authorizes nothing, the
+        same way an empty allowed_artifact_roots does."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, resume_roots=[])
+            self._refused(
+                paths, "run scope exceeds certificate: resume_checkpoint"
+            )
+
+    def test_anchor_only_certificate_root_allowlists_fail_closed(self) -> None:
+        """A drive/root anchor must not authorize an entire filesystem volume."""
+
+        module = load_module()
+        anchor = pathlib.Path.cwd().anchor
+        artifact_root = pathlib.Path.cwd() / "artifacts"
+        custody_root = pathlib.Path.cwd() / "custody"
+        requested = valid_run_spec(
+            "a" * 64, artifact_root, custody_root
+        )["requested_scope"]
+        authorized = valid_scope(artifact_root, custody_root)
+        cases = (
+            ("allowed_resume_roots", None),
+            ("allowed_artifact_roots", "artifact_root"),
+            ("allowed_custody_roots", "custody_root"),
+        )
+        for allowlist_key, requested_key in cases:
+            with self.subTest(allowlist_key=allowlist_key):
+                if requested_key is None:
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        rf"certificate {allowlist_key} entry .*filesystem anchor",
+                    ):
+                        module._authorized_resume_roots(
+                            {allowlist_key: [anchor]}
+                        )
+                    continue
+                authorized_case = dict(authorized)
+                authorized_case[allowlist_key] = [anchor]
+                requested_case = dict(requested)
+                requested_case[requested_key] = anchor
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"certificate {allowlist_key} entry .*filesystem anchor",
+                ):
+                    module._require_scope_subset(requested_case, authorized_case)
+
+    def test_malformed_allowed_resume_roots_fails_closed(self) -> None:
+        for declared in ("not-a-list", [""], [None], [str(pathlib.Path.cwd()), 7]):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].__setitem__("allowed_resume_roots", declared),
+                )
+                self._refused(
+                    paths,
+                    "allowed_resume_roots must be a list of non-empty strings",
+                )
+
+    def test_unknown_execution_scope_key_is_still_refused(self) -> None:
+        """The optional-key mechanism admits exactly the enumerated key and
+        does not open the scope template (the #1410 property, one level down)."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "smuggled_key", "x"
+                ),
+            )
+            self._refused(paths, "certificate execution scope schema keys")
+
+    def test_optional_execution_scope_keys_are_a_closed_enumeration(
+        self,
+    ) -> None:
+        module = load_module()
+        self.assertEqual(
+            module.OPTIONAL_AUTHORIZED_SCOPE_KEYS,
+            {
+                "allowed_resume_roots",
+                "allowed_training_capabilities",
+                "resume_relocation_custody_root",
+                "allowed_semantic_canary_modes",
+                "allowed_admitted_row_set_sha256",
+                "allowed_receipt_custody_root",
+                "allowed_a1_families",
+                "a1_host_commit_reserve_gib",
+                "a1_gpu_free_margin_gib",
+                "a1_b_custody_floor_gib",
+                "allowed_job_memory_ceiling_probe",
+            },
+        )
+        self.assertFalse(
+            module.OPTIONAL_AUTHORIZED_SCOPE_KEYS & module.AUTHORIZED_SCOPE_KEYS
+        )
+
+
+class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1430: build_runner_argv could only ever emit "governed-vertical",
+    so an admitted ember-owned-training-data-v1 manifest was reachable only by
+    calling the runner directly -- training with no certificate. Specialist
+    routing is expressed as optional run-spec keys, validated fail-closed
+    before argv, mirroring how ResumePlumbingTests covers #1425. Reuses
+    _ResumeBundleMixin (#1426) for the resume triple + allowlist authorization
+    every specialist launch also requires -- a specialist fixture that skipped
+    it would refuse on the allowlist instead of exercising the routing logic
+    under test."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        capability: str = "image",
+        manifest_capability: str | None = None,
+        manifest_schema: str = "ember-owned-training-data-v1",
+        config_revision: str = ARCHITECTURE_REVISION,
+        checkpoint_revision: str | None = ARCHITECTURE_REVISION,
+        authorize_capability: bool = True,
+        authorized_capabilities: list[str] | None = None,
+    ) -> dict[str, pathlib.Path]:
+        # The base mixin builds the resume triple AND authorizes it (default
+        # authorize_resume=True roots the allowlist at custody_root, which is
+        # exactly where it installs the checkpoint) -- specialist layers a
+        # tokenizer, an admitted manifest, and its own run-spec keys on top,
+        # applying mutate_run_spec AFTER those keys exist so a test can target
+        # either the resume keys or the specialist keys.
+        paths = super()._bundle(
+            directory,
+            config_revision=config_revision,
+            checkpoint_revision=checkpoint_revision,
+        )
+
+        _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+        tokenizer_path = paths["repo"] / _tokenizer_authority.relative_path
+        tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
+        paths["tokenizer"] = tokenizer_path
+
+        # In-tree, mirroring build_specialist_bundle.py's OWN emission path
+        # (output_root/manifests/<capability>.json, with output_root required
+        # below repo_root) -- the only location the runner and the bundle
+        # producer will ever accept. Issue #1430 review Defect 1/2: a
+        # custody_root fixture location could never be a real admitted
+        # manifest, so this fixture could not catch a launcher that resolved
+        # relative manifests outside the tree (custody_root is by
+        # construction outside repo_root -- see write_valid_bundle).
+        manifest_path = paths["repo"] / "manifests" / f"{capability}.json"
+        write_json(
+            manifest_path,
+            {
+                "schema_version": manifest_schema,
+                "capability": (
+                    capability if manifest_capability is None else manifest_capability
+                ),
+                "data_class": "SEMANTIC_PRETRAINING",
+            },
+        )
+        paths["manifest"] = manifest_path
+        paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
+
+        def apply_specialist_spec(run_spec: dict[str, object]) -> None:
+            run_spec["training_data_manifest"] = str(manifest_path)
+            run_spec["training_capability"] = capability
+            run_spec["training_checkpoint_interval"] = 8_192
+            run_spec["training_telemetry_path"] = str(paths["telemetry"])
+            run_spec["training_model_chat_restore_not_before"] = (
+                "2026-07-18T11:00:00-07:00"
+            )
+            if mutate_run_spec is not None:
+                mutate_run_spec(run_spec)
+
+        _rewrite_run_spec_with_custody(paths, apply_specialist_spec)
+
+        # Issue #1430 review Defect 3: the certificate, not the run spec,
+        # decides which capabilities may route to the specialist runner.
+        # Default-authorize the capability this bundle declares (mirrors
+        # authorize_resume=True's default in the base mixin) so every
+        # existing routing/coherence test keeps exercising ITS OWN check
+        # rather than tripping the new authorization gate; tests targeting
+        # authorization itself opt out or override explicitly.
+        if authorize_capability:
+            authorize_training_capabilities(
+                paths,
+                *(
+                    [capability]
+                    if authorized_capabilities is None
+                    else authorized_capabilities
+                ),
+            )
+        return paths
+
+    def test_valid_specialist_route_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
+            self.assertEqual(launch.specialist_capability, "image")
+            # Issue #1430 review Defect F3: the launcher now returns the
+            # RESOLVED manifest path (see _validate_specialist_request), not
+            # the syntactically-different-but-equivalent form the fixture
+            # happens to spell it in -- paths["manifest"] itself is left
+            # unresolved here deliberately, since other tests in this class
+            # reuse the same unresolved-spelling fixture to prove the
+            # traversal check normalizes it before comparing.
+            self.assertEqual(
+                launch.specialist_data_manifest, paths["manifest"].resolve()
+            )
+            self.assertEqual(launch.specialist_tokenizer_path, paths["tokenizer"])
+            self.assertEqual(launch.specialist_parent_manifest, parent_manifest)
+            self.assertEqual(launch.specialist_root_manifest, parent_manifest)
+            self.assertEqual(launch.specialist_checkpoint_interval, 8_192)
+            self.assertEqual(launch.specialist_write_budget_gib, 16)
+            self.assertEqual(launch.specialist_telemetry_path, paths["telemetry"])
+            # Derived from run_spec["run_id"] (valid_run_spec's fixed value),
+            # not a separately declared key -- see the reasoning note above
+            # _validate_specialist_request.
+            self.assertEqual(
+                launch.specialist_telemetry_run_id, "owned-3b-canary-test"
+            )
+            self.assertEqual(
+                launch.specialist_model_chat_restore_not_before,
+                "2026-07-18T11:00:00-07:00",
+            )
+
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "specialist",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--data-manifest",
+                    str(paths["manifest"].resolve()),
+                    "--tokenizer",
+                    str(paths["tokenizer"]),
+                    "--capability",
+                    "image",
+                    "--resume-checkpoint",
+                    str(paths["checkpoint"]),
+                    "--resume-counter-receipt",
+                    str(paths["evidence"]),
+                    "--parent-manifest",
+                    str(parent_manifest),
+                    "--root-manifest",
+                    str(parent_manifest),
+                    "--max-records",
+                    "1",
+                    "--checkpoint-interval",
+                    "8192",
+                    "--write-budget-gib",
+                    "16",
+                    "--telemetry-path",
+                    str(paths["telemetry"]),
+                    "--telemetry-run-id",
+                    "owned-3b-canary-test",
+                    "--model-chat-restore-not-before",
+                    "2026-07-18T11:00:00-07:00",
+                ],
+            )
+
+    def test_same_manifest_chained_specialist_refuses_before_runner_with_receipt(
+        self,
+    ) -> None:
+        """Issue #1445: a second hop must not silently restart record zero."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            parent_manifest = paths["checkpoint"] / "checkpoint-manifest.json"
+            parent = json.loads(parent_manifest.read_text(encoding="utf-8"))
+            parent["lineage"] = {
+                "episode": {
+                    "data_verification_receipt": {
+                        "data_manifest_sha256": sha256_bytes(
+                            paths["manifest"].read_bytes()
+                        )
+                    }
+                }
+            }
+            write_json(parent_manifest, parent)
+
+            launch = self._validate(module, paths)
+            runner_calls: list[list[str]] = []
+
+            def forbidden_runner(argv, **_kwargs):
+                runner_calls.append(argv)
+                raise AssertionError("chained specialist refusal reached runner")
+
+            exit_code = module.execute_validated_launch(
+                paths["repo"], launch, run_process=forbidden_runner
+            )
+
+            self.assertEqual(exit_code, 125)
+            self.assertEqual(runner_calls, [])
+            self.assertFalse(launch.runner_receipt.exists())
+            receipt = json.loads(
+                module._execution_receipt_path(launch).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                receipt["prelaunch_refusal"],
+                {
+                    "code": "CHAINED_SPECIALIST_SAME_MANIFEST_REFUSED",
+                    "outcome": "PRELAUNCH_REJECTED",
+                },
+            )
+            self.assertEqual(receipt["exit_code"], 125)
+
+    def test_plain_bundle_has_no_specialist_route(self) -> None:
+        """A run spec with neither training_data_manifest nor
+        training_capability is the pre-#1430 shape -- ResumePlumbingTests'
+        test_run_spec_without_resume_keys_builds_the_pre_1425_argv already
+        proves this bundle's argv stays byte-identical; this pins the launch
+        field driving that decision."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.specialist_capability)
+
+    def test_exactly_one_specialist_key_is_refused(self) -> None:
+        for missing in ("training_data_manifest", "training_capability"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_specialist_companion_key_missing_is_refused(self) -> None:
+        for missing in (
+            "training_checkpoint_interval",
+            "training_telemetry_path",
+            "training_model_chat_restore_not_before",
+        ):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_specialist_companion_without_pair_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("training_data_manifest"),
+                    spec.pop("training_capability"),
+                ),
+            )
+            self._refused(
+                paths, "requires training_data_manifest and training_capability"
+            )
+
+    def test_invalid_capability_value_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_capability", "text"
+                ),
+            )
+            self._refused(paths, "training_capability must be one of")
+
+    def test_certificate_without_allowed_training_capabilities_is_refused(
+        self,
+    ) -> None:
+        """Issue #1430 review Defect 3: allowed_modes == ["governed-vertical"]
+        alone never stopped a specialist route (build_runner_argv reads only
+        run-spec content), so a certificate carrying no
+        allowed_training_capabilities at all is the pre-#1430 population --
+        fail-closed on it, same reasoning #1426 applied to resume roots. A
+        plain (non-specialist) bundle is unaffected: proven separately by
+        test_plain_bundle_has_no_specialist_route, whose certificate also
+        carries no allowed_training_capabilities."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorize_capability=False)
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_training_capabilities", certificate["execution_scope"]
+            )
+            self._refused(paths, "declares no allowed_training_capabilities")
+
+    def test_empty_allowed_training_capabilities_authorizes_nothing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorized_capabilities=[])
+            self._refused(
+                paths, "run scope exceeds certificate: training_capability"
+            )
+
+    def test_capability_not_in_allowed_training_capabilities_is_refused(
+        self,
+    ) -> None:
+        """A certificate that authorizes a DIFFERENT capability than the one
+        the run spec requests -- not absent, not empty, just disagreeing."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory, capability="image", authorized_capabilities=["audio"]
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: training_capability"
+            )
+
+    def test_malformed_allowed_training_capabilities_fails_closed(self) -> None:
+        for declared in ("not-a-list", [""], [None], ["image", 7]):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].__setitem__("allowed_training_capabilities", declared),
+                )
+                self._refused(
+                    paths,
+                    "allowed_training_capabilities must be a list of "
+                    "non-empty strings",
+                )
+
+    def test_manifest_schema_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, manifest_schema="some-other-schema-v1")
+            self._refused(
+                paths, "not an ember-owned-training-data-v1 manifest"
+            )
+
+    def test_manifest_capability_mismatch_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory, capability="image", manifest_capability="audio"
+            )
+            self._refused(
+                paths, "does not match the manifest's own declared capability"
+            )
+
+    def test_out_of_tree_manifest_is_refused(self) -> None:
+        """Issue #1430 review Defect 1 (HIGH): the runner
+        (run_vertical_slice.py::load_verified_specialist_records) and the
+        bundle producer (build_specialist_bundle.py::emit_bundle) both refuse
+        any manifest that does not resolve below repo_root. An
+        operator-declared absolute path elsewhere must be refused before this
+        process reads it -- not accepted into a perfect-looking argv the
+        runner can never actually start."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            # A sibling of repo/, not below it -- and also outside
+            # custody_root, so this is unambiguously out-of-tree either way.
+            outside_manifest = pathlib.Path(directory) / "outside-manifest.json"
+            write_json(
+                outside_manifest,
+                {
+                    "schema_version": "ember-owned-training-data-v1",
+                    "capability": "image",
+                    "data_class": "SEMANTIC_PRETRAINING",
+                },
+            )
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_data_manifest", str(outside_manifest)
+                ),
+            )
+            self._refused(
+                paths, "training_data_manifest must resolve below repo_root"
+            )
+
+    def test_relative_manifest_resolves_against_repo_root(self) -> None:
+        """Issue #1430 review Defect 1: a RELATIVE training_data_manifest must
+        resolve against repo_root, not run_spec_path.parent (the custody
+        root) -- the custody root is outside the repo by construction (see
+        write_valid_bundle), so resolving against it would build unusable
+        argv for every relative-path launch, the exact defect found."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_data_manifest", "manifests/image.json"
+                ),
+            )
+            launch = self._validate(module, paths)
+            # .resolve() on both sides, not relying on WindowsPath.__eq__'s
+            # case-insensitive comparison to mask a real casing difference
+            # between the fixture's unresolved spelling and the launcher's
+            # resolved return value (see the sibling note in
+            # test_valid_specialist_route_is_accepted_and_reaches_the_runner_argv).
+            self.assertEqual(
+                launch.specialist_data_manifest, paths["manifest"].resolve()
+            )
+
+    def test_specialist_without_resume_checkpoint_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("resume_checkpoint"),
+                    spec.pop("resume_counter_receipt"),
+                ),
+            )
+            self._refused(paths, "requires an authorized resume checkpoint")
+
+    def test_write_budget_not_exact_gib_multiple_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "write_budget_bytes", 16 * 1024**3 - 1
+                ),
+            )
+            self._refused(paths, "exact GiB multiple")
+
+    def test_write_budget_below_one_gib_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "write_budget_bytes", 0
+                ),
+            )
+            self._refused(paths, "at least 1 GiB")
+
+    def test_max_records_below_one_is_refused_for_specialist(self) -> None:
+        """Issue #1430 delta review Finding A (LOW): _require_scope_subset
+        only floors requested_scope.max_records at >= 0 -- correct for
+        governed-vertical, which tolerates 0 -- but the specialist runner
+        disagrees: bind_specialist_execution_slice refuses a zero or
+        negative slice ("specialist execution slice max records must be
+        positive"). Pre-fix, max_records=0 built parse-perfect argv the
+        runner then deterministically refused at subprocess time; this
+        certificate authorizes exactly 1 (see valid_scope), so 0 is the
+        boundary value that proves the floor without also tripping the
+        ceiling check above it."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "max_records", 0
+                ),
+            )
+            self._refused(paths, "max_records must be at least 1")
+
+    def test_fractional_max_records_is_refused(self) -> None:
+        """Issue #1430 delta review Finding A follow-up: max_records=int(...)
+        in validate_certified_request would otherwise silently truncate a
+        fractional value (e.g. 0.5 -> 0), quietly authorizing a slice the
+        run spec never actually asked for. Checked once, ahead of routing,
+        so it applies to both governed-vertical and specialist -- 0.5 is
+        below this certificate's max_records=1 ceiling (see valid_scope),
+        so this proves the truncation refusal fires before the specialist
+        floor above ever gets a chance to (a non-fractional message here
+        would mean the wrong check caught it)."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda run_spec: run_spec["requested_scope"].__setitem__(
+                    "max_records", 0.5
+                ),
+            )
+            self._refused(paths, "max_records must be an exact integer")
+
+    def test_run_id_over_128_characters_is_refused_by_custody_before_routing(
+        self,
+    ) -> None:
+        """The run-scoped custody boundary owns the effective run-id bound."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "run_id", "r" * 129
+                ),
+            )
+            self._refused(paths, "launch-authority custody run_id is invalid")
+
+    def test_model_chat_restore_not_before_accepts_the_chains_own_formats(
+        self,
+    ) -> None:
+        """Issue #1430 review Defect F1 (HIGH): an earlier version of this
+        field's validation used datetime.fromisoformat, which does not
+        accept a bare "Z" designator until CPython 3.11 -- this repo pins
+        3.10.11 (manifests/python-environment-v1.json) -- so it refused the
+        exact house convention every real timestamp producer in this chain
+        uses (mint_launch_authority.py's strftime("...Z"), this runner's own
+        telemetry writer's isoformat().replace("+00:00","Z"),
+        launch_packet.py's strftime("...Z")). Verified against both real
+        consumers of this specific field (run_vertical_slice.py's telemetry
+        write path; ember-cli's telemetry-watch.ts/telemetry-label.ts) that
+        NEITHER ever parses the value -- both only type-check it as a
+        string and either embed it verbatim in telemetry JSON or
+        string-interpolate it into a display label -- so the format check
+        was a bound this launcher does not own, and was removed. This is
+        the positive case the removed check's own test never covered: the
+        defect lived in the ACCEPTANCE direction, not the refusal one."""
+
+        module = load_module()
+        for value in (
+            "2026-07-18T11:00:00-07:00",  # the existing fixture's offset form
+            "2026-07-18T18:00:00Z",  # the house Z convention
+            "2026-07-18T18:00:00.123456Z",  # Z with fractional seconds
+            "20260718T180000Z",  # launch_packet.py's compact Z form
+        ):
+            with self.subTest(value=value), tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "training_model_chat_restore_not_before", value
+                    ),
+                )
+                launch = self._validate(module, paths)
+                self.assertEqual(
+                    launch.specialist_model_chat_restore_not_before, value
+                )
+                argv = module.build_runner_argv(paths["repo"], launch)
+                self.assertEqual(argv[-1], value)
+
+    def test_empty_model_chat_restore_not_before_is_refused(self) -> None:
+        """The one bound this process still owns after Defect F1's format
+        check was removed: non-emptiness. run_vertical_slice.py's telemetry
+        group needs a truthy value, not merely a string, and this is
+        _require_specialist_string's pre-existing, independently justified
+        check -- not a format bound reintroduced under another name."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_model_chat_restore_not_before", ""
+                ),
+            )
+            self._refused(
+                paths,
+                "training_model_chat_restore_not_before must be a non-empty "
+                "string",
+            )
+
+    def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_telemetry_path",
+                    str(pathlib.Path(directory) / "outside-telemetry.jsonl"),
+                ),
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: training_telemetry_path"
+            )
+
+    def test_missing_canonical_tokenizer_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            paths["tokenizer"].unlink()
+            self._refused(paths, "canonical")
+
+    def test_specialist_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling, required-ness, AND the
+        --capability enum to run_vertical_slice's specialist parser,
+        ast-parsed the way ProducerSchemaBindingTest binds completion-receipt
+        keys to their real producer. Issue #1430 review test-quality note: a
+        substring grep would still pass if a flag moved to another
+        subparser, if required-ness changed, or if a new required flag
+        appeared -- ast scoping by the (file-unique)
+        `specialist`/`specialist_resume` argparse variable names closes all
+        three, including the "shared with another subcommand" gap a
+        whole-file substring check cannot close (--seed/--artifact-root/
+        --resume-checkpoint/etc. also appear on vertical/governed-vertical;
+        scoping by the OWNER object, not just the flag string, is what binds
+        the check to THIS subparser's own requirements).
+
+        Issue #1430 delta review Defect F4 (LOW): the set this was checked
+        against used to be a hand-typed literal living only in this test --
+        it bound the runner's ast-derived required set to that literal, but
+        nothing bound the literal to what build_runner_argv actually emits,
+        so a future edit that stopped emitting a flag (or renamed one) would
+        pass this test right up until the runner rejected the argv at
+        subprocess time. The set below is now derived from calling the real
+        build_runner_argv against a synthetic ValidatedLaunch instead (a
+        plain NamedTuple, and build_runner_argv a pure function of it plus
+        repo_root, so constructing one directly here exercises the real
+        emission code, not an approximation of it) for each of the three
+        resume-evidence choices in turn, unioned -- so a flag build_runner_
+        argv stops emitting, or emits under the wrong spelling, now fails
+        here directly against the runner's own parser, with no hand-typed
+        literal in between to go stale.
+
+        Deliberately NOT asserted: each flag's argparse `type=`. Every argv
+        element this launcher emits is already a plain string (build_runner_
+        argv wraps every value in str(...) or takes an already-string field),
+        so a `type=` change cannot alter what this launcher emits -- it would
+        surface immediately as a runner-side parse failure on first use, not
+        as a silent contract drift the way a required-ness or enum change
+        would."""
+
+        import ast
+
+        runner_path = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        tree = ast.parse(runner_path.read_text(encoding="utf-8"))
+
+        def call_owner_attr(node: ast.AST) -> tuple[str, str] | None:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+            ):
+                return node.func.value.id, node.func.attr
+            return None
+
+        def is_required_kw(call: ast.Call) -> bool:
+            # Issue #1430 delta review Finding B (NOTE): only recognizes a
+            # literal `required=True` -- a future `required=<name>` (a
+            # variable/expression instead of the literal) would be invisible
+            # here, and Pass 2 below would silently drop that flag from
+            # required_flags. Not a live defect: every add_argument in
+            # run_vertical_slice.py's specialist subparser spells `required`
+            # as a literal today (main(), the specialist block), and both
+            # drift directions already fail loud elsewhere if that changes --
+            # a flag ast can't see as required either never reaches
+            # required_groups/required_flags (Pass 1's assertTrue on
+            # required_groups, or the final required_flags == emitted_flags
+            # comparison, catches the mismatch) or build_runner_argv keeps
+            # emitting it regardless (real launches stay correct; only this
+            # test's bookkeeping would need the literal-only assumption
+            # revisited). Recorded so the next person does not have to
+            # re-derive that this is currently safe.
+            return any(
+                keyword.arg == "required"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in call.keywords
+            )
+
+        # Pass 1: which group variables are a REQUIRED mutually-exclusive
+        # group owned directly by `specialist` (e.g. specialist_resume).
+        # Keyed off the literal owner name, not source order, so this does
+        # not depend on where in main() the specialist block sits.
+        required_groups: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            owner = call_owner_attr(node.value)
+            if (
+                owner == ("specialist", "add_mutually_exclusive_group")
+                and is_required_kw(node.value)
+                and isinstance(node.targets[0], ast.Name)
+            ):
+                required_groups.add(node.targets[0].id)
+        self.assertTrue(
+            required_groups,
+            "no required mutually-exclusive group found on the specialist "
+            "subparser -- the ast scoping below found nothing to bind",
+        )
+
+        # Pass 2: every --flag added directly to `specialist` with
+        # required=True, plus every --flag added to one of its required
+        # groups (argparse forbids required= on a group member -- membership
+        # alone makes it required, as exactly one of the group). Also
+        # extracts --capability's choices= tuple while we're already
+        # visiting its add_argument call.
+        required_flags: set[str] = set()
+        capability_choices: set[str] | None = None
+        for node in ast.walk(tree):
+            owner = call_owner_attr(node)
+            if owner is None or owner[1] != "add_argument":
+                continue
+            obj_name = owner[0]
+            if obj_name != "specialist" and obj_name not in required_groups:
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            flag = node.args[0].value
+            if not isinstance(flag, str) or not flag.startswith("--"):
+                continue
+            if obj_name == "specialist":
+                if is_required_kw(node):
+                    required_flags.add(flag)
+                if flag == "--capability":
+                    choices_node = next(
+                        (kw.value for kw in node.keywords if kw.arg == "choices"),
+                        None,
+                    )
+                    if isinstance(choices_node, (ast.Tuple, ast.List)) and all(
+                        isinstance(element, ast.Constant)
+                        and isinstance(element.value, str)
+                        for element in choices_node.elts
+                    ):
+                        capability_choices = {
+                            element.value for element in choices_node.elts
+                        }
+            else:
+                required_flags.add(flag)
+
+        module = load_module()
+        self.assertIsNotNone(
+            capability_choices,
+            "--capability's choices= could not be ast-extracted from the "
+            "specialist subparser",
+        )
+        self.assertEqual(capability_choices, module.TRAINING_CAPABILITIES)
+
+        # Pass 3: the PRODUCER side of the same binding -- what
+        # build_runner_argv actually emits, not a hand-typed guess at it.
+        # ValidatedLaunch is a plain NamedTuple and build_runner_argv a pure
+        # function of (repo_root, launch), so constructing one directly here
+        # exercises the real emission code with no fixture machinery in the
+        # way -- these placeholder values are never validated, only
+        # formatted into argv strings. Every specialist launch emits exactly
+        # one of the three resume-evidence flags (resume is mandatory --
+        # _validate_specialist_request refuses when absent, and exactly one
+        # evidence key is required by _validate_resume_request), so the
+        # UNION across all three choices is everything a specialist launch's
+        # argv can ever be required to carry -- which must equal the
+        # runner's required set exactly.
+        placeholder_fields = dict(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=1,
+            write_budget_bytes=1,
+            max_records=1,
+            max_c_write_gib=1.0,
+            max_b_write_gib=1.0,
+            resume_checkpoint=pathlib.Path("checkpoint"),
+            resume_evidence_path=pathlib.Path("evidence.json"),
+            specialist_data_manifest=pathlib.Path("manifest.json"),
+            specialist_capability="image",
+            specialist_tokenizer_path=pathlib.Path("tokenizer.json"),
+            specialist_parent_manifest=pathlib.Path("parent.json"),
+            specialist_root_manifest=pathlib.Path("root.json"),
+            specialist_checkpoint_interval=1,
+            specialist_write_budget_gib=1,
+            specialist_telemetry_path=pathlib.Path("telemetry.jsonl"),
+            specialist_telemetry_run_id="run-id",
+            specialist_model_chat_restore_not_before="2026-01-01T00:00:00Z",
+        )
+        emitted_flags: set[str] = set()
+        for resume_evidence_flag in module.RESUME_EVIDENCE_RUN_SPEC_FLAGS.values():
+            launch = module.ValidatedLaunch(
+                resume_evidence_flag=resume_evidence_flag,
+                **placeholder_fields,
+            )
+            argv = module.build_runner_argv(pathlib.Path("/repo"), launch)
+            specialist_argv = argv[argv.index("specialist") + 1 :]
+            emitted_flags |= {
+                token for token in specialist_argv if token.startswith("--")
+            }
+
+        self.assertEqual(
+            required_flags,
+            emitted_flags,
+            "the runner's required specialist flags and what "
+            "build_runner_argv actually emits have diverged",
+        )
+
+
+class SemanticCanaryRoutingTests(unittest.TestCase):
+    ADMITTED_ROW_SET_SHA256 = "d" * 64
+
+    """Issue #1719 acceptance clause 3: certified_train_launch.py could only
+    ever authorize governed-vertical (or, since #1430/#1454, the specialist
+    single-capability continuation route) -- there was no certified way to
+    launch a telemetered, clean-genesis WARM-100 canary through
+    run_vertical_slice.py's "semantic" subcommand. Extending allowed_modes
+    itself was rejected as the cure (src/ember/governance/scripts/r1_exit_battery.py's headline
+    finding): _require_scope_subset hard-requires allowed_modes ==
+    ["governed-vertical"] exactly, so this route is authorized through the
+    certificate's separate allowed_semantic_canary_modes key instead, exactly
+    mirroring how #1430/#1454 authorized the specialist route through
+    allowed_training_capabilities rather than touching allowed_modes/mode at
+    all. Semantic-canary routing is expressed as optional run-spec keys,
+    validated fail-closed before argv, mirroring how SpecialistRoutingTests
+    covers #1430.
+
+    Deliberately does NOT reuse _ResumeBundleMixin: ordinary issue #1719
+    WARM-100 is clean-random genesis and this class's own _bundle stays that
+    way by default.  Resume material is installed explicitly by the original
+    clean-genesis refusal test and by the closed, no-credit R1-E3 run-C
+    reproduction tests only."""
+
+    def _bundle(
+        self,
+        directory: str,
+        *,
+        mutate_run_spec=None,
+        mode: str = "warm-100",
+        config_revision: str = ARCHITECTURE_REVISION,
+        authorize_mode: bool = True,
+        authorized_modes: list[str] | None = None,
+    ) -> dict[str, pathlib.Path]:
+        paths = write_valid_bundle(pathlib.Path(directory))
+        install_model_config(paths["repo"], config_revision)
+
+        _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+        tokenizer_path = paths["repo"] / _tokenizer_authority.relative_path
+        tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
+        paths["tokenizer"] = tokenizer_path
+
+        # In-tree, mirroring training_data_manifest's own containment
+        # discipline (issue #1430 review Defect 1/2): the launcher requires
+        # semantic_canary_receipt/semantic_canary_shards_root to resolve
+        # below repo_root, so the fixture places them there too -- a
+        # custody_root fixture location could never pass the containment
+        # check (custody_root is outside repo_root by construction, see
+        # write_valid_bundle).
+        receipt_path = paths["repo"] / "manifests" / "token-shards-receipt.json"
+        write_json(receipt_path, {"ticket": "TOKEN-SHARDS-V0"})
+        paths["semantic_receipt"] = receipt_path
+
+        shards_root = paths["repo"] / "data" / "token-shards"
+        shards_root.mkdir(parents=True, exist_ok=True)
+        paths["semantic_shards_root"] = shards_root
+
+        paths["semantic_telemetry"] = (
+            paths["custody_root"] / "semantic-telemetry.jsonl"
+        )
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        # valid_scope's max_optimizer_steps ceiling is 200 -- 100 sits at the
+        # T-01 entry floor without also tripping the ceiling check.
+        run_spec["requested_scope"]["optimizer_steps"] = 100
+        run_spec["semantic_canary_mode"] = mode
+        run_spec["semantic_canary_receipt"] = str(receipt_path)
+        run_spec["semantic_canary_shards_root"] = str(shards_root)
+        run_spec["semantic_canary_sequence_length"] = 512
+        run_spec["semantic_canary_checkpoint_interval"] = 50
+        run_spec["semantic_canary_telemetry_path"] = str(paths["semantic_telemetry"])
+        run_spec["admitted_row_set_sha256"] = self.ADMITTED_ROW_SET_SHA256
+        if mutate_run_spec is not None:
+            mutate_run_spec(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        # write_valid_bundle's custody sidecars were hashed against the
+        # PLAIN governed-vertical run_spec.json bytes, before this method
+        # added the semantic_canary_* keys above -- resync now so the
+        # custody packet (checked ahead of routing, in
+        # _validate_run_scoped_custody_packet) does not itself refuse before
+        # the check under test ever gets a chance to run. Independent of
+        # authorize_mode below (rewrite_certificate also resyncs, but only
+        # when authorize_mode=True).
+        _write_custody_sidecars(paths)
+
+        # The certificate, not the run spec, decides which modes may route to
+        # the semantic-canary runner (mirrors authorize_training_capabilities'
+        # default-authorize-what-this-bundle-declares posture): every
+        # existing routing/coherence test keeps exercising ITS OWN check
+        # rather than tripping the new authorization gate; tests targeting
+        # authorization itself opt out or override explicitly.
+        if authorize_mode:
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_semantic_canary_modes",
+                    [mode] if authorized_modes is None else authorized_modes,
+                ),
+            )
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_admitted_row_set_sha256",
+                    self.ADMITTED_ROW_SET_SHA256,
+                ),
+            )
+        return paths
+
+    def _validate(self, module, paths: dict[str, pathlib.Path]):
+        with mock.patch.object(module, "read_current_master", return_value=SHA):
+            return module.validate_certified_request(
+                paths["repo"],
+                paths["certificate"],
+                paths["ledger"],
+                paths["run_spec"],
+            )
+
+    def _refused(self, paths: dict[str, pathlib.Path], pattern: str) -> None:
+        module = load_module()
+        with self.assertRaisesRegex(ValueError, pattern):
+            self._validate(module, paths)
+
+    def _reproduction_bundle(
+        self,
+        directory: str,
+        *,
+        mutate_reproduction=None,
+    ) -> dict[str, pathlib.Path]:
+        paths = self._bundle(directory)
+        checkpoint, evidence = install_resume_material(paths["custody_root"])
+        set_resume_paths(paths, checkpoint, evidence)
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["requested_scope"]["optimizer_steps"] = 1
+        run_spec["semantic_canary_checkpoint_interval"] = 1
+        run_spec["semantic_reproduction_intent"] = "R1_E3_RUN_C_COMPARISON"
+        run_spec["semantic_reproduction_target"] = {
+            "schema_version": "ember-semantic-reproduction-target-v1",
+            "checkpoint_manifest_sha256": sha256_bytes(
+                (checkpoint / "checkpoint-manifest.json").read_bytes()
+            ),
+            "parameter_counter_receipt_sha256": sha256_bytes(evidence.read_bytes()),
+        }
+        run_spec["semantic_reproduction_adjudication_output"] = str(
+            paths["custody_root"] / "reproduction-adjudication.json"
+        )
+        if mutate_reproduction is not None:
+            mutate_reproduction(run_spec)
+        write_json(paths["run_spec"], run_spec)
+        _write_custody_sidecars(paths)
+        authorize_resume_roots(paths, paths["custody_root"])
+        paths["resume_checkpoint"] = checkpoint
+        paths["resume_evidence"] = evidence
+        paths["reproduction_adjudication"] = pathlib.Path(
+            run_spec.get(
+                "semantic_reproduction_adjudication_output",
+                paths["custody_root"] / "reproduction-adjudication.json",
+            )
+        )
+        return paths
+
+    def test_valid_semantic_canary_route_is_accepted_and_reaches_the_runner_argv(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+
+            self.assertEqual(launch.semantic_canary_mode, "warm-100")
+            self.assertEqual(
+                launch.semantic_canary_receipt, paths["semantic_receipt"].resolve()
+            )
+            self.assertEqual(
+                launch.semantic_canary_shards_root,
+                paths["semantic_shards_root"].resolve(),
+            )
+            self.assertEqual(
+                launch.semantic_canary_tokenizer_path, paths["tokenizer"]
+            )
+            self.assertEqual(launch.semantic_canary_sequence_length, 512)
+            self.assertEqual(launch.semantic_canary_checkpoint_interval, 50)
+            self.assertEqual(launch.semantic_canary_write_budget_gib, 16)
+            self.assertEqual(
+                launch.semantic_canary_telemetry_path, paths["semantic_telemetry"]
+            )
+            self.assertEqual(launch.semantic_canary_telemetry_run_id, "owned-3b-canary-test")
+            self.assertEqual(launch.semantic_canary_steps, 100)
+            self.assertEqual(
+                launch.admitted_row_set_sha256, self.ADMITTED_ROW_SET_SHA256
+            )
+            # Never trusted from a caller-supplied value: self-computed from
+            # the exact resolved bytes this launch is about to pass as
+            # --receipt/--tokenizer/the live model config.
+            self.assertEqual(
+                launch.semantic_canary_expected_receipt_sha256,
+                sha256_bytes(paths["semantic_receipt"].read_bytes()),
+            )
+            self.assertEqual(
+                launch.semantic_canary_expected_tokenizer_sha256,
+                sha256_bytes(paths["tokenizer"].read_bytes()),
+            )
+            self.assertEqual(
+                launch.semantic_canary_expected_architecture_sha256,
+                sha256_bytes(
+                    (paths["repo"] / "configs" / "ember-restart-3b.json").read_bytes()
+                ),
+            )
+
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "semantic",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--receipt",
+                    str(paths["semantic_receipt"].resolve()),
+                    "--shards-root",
+                    str(paths["semantic_shards_root"].resolve()),
+                    "--tokenizer",
+                    str(paths["tokenizer"]),
+                    "--expected-receipt-sha256",
+                    sha256_bytes(paths["semantic_receipt"].read_bytes()),
+                    "--expected-tokenizer-sha256",
+                    sha256_bytes(paths["tokenizer"].read_bytes()),
+                    "--expected-architecture-sha256",
+                    sha256_bytes(
+                        (
+                            paths["repo"] / "configs" / "ember-restart-3b.json"
+                        ).read_bytes()
+                    ),
+                    "--admitted-row-set-sha256",
+                    self.ADMITTED_ROW_SET_SHA256,
+                    "--steps",
+                    "100",
+                    "--sequence-length",
+                    "512",
+                    "--checkpoint-interval",
+                    "50",
+                    "--write-budget-gib",
+                    "16",
+                    "--telemetry-path",
+                    str(paths["semantic_telemetry"]),
+                    "--telemetry-run-id",
+                    "owned-3b-canary-test",
+                ],
+            )
+
+    def test_admitted_row_set_pin_requires_exact_certificate_authority(self) -> None:
+        for mutate, pattern in (
+            (
+                lambda certificate: certificate["execution_scope"].pop(
+                    "allowed_admitted_row_set_sha256"
+                ),
+                "declares no allowed_admitted_row_set_sha256",
+            ),
+            (
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_admitted_row_set_sha256", "e" * 64
+                ),
+                "run scope exceeds certificate: admitted_row_set_sha256",
+            ),
+        ):
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(paths, mutate)
+                self._refused(paths, pattern)
+
+    def test_admitted_row_set_pin_authorization_is_closed_and_exact(self) -> None:
+        module = load_module()
+        pin = self.ADMITTED_ROW_SET_SHA256
+        with self.assertRaisesRegex(ValueError, "must be an exact SHA-256"):
+            module._authorized_admitted_row_set_sha256(
+                {"allowed_admitted_row_set_sha256": "not-a-hash"}
+            )
+        with self.assertRaisesRegex(
+            ValueError, "declares no allowed_admitted_row_set_sha256"
+        ):
+            module._require_authorized_admitted_row_set_sha256(pin, None)
+        with self.assertRaisesRegex(
+            ValueError, "run scope exceeds certificate: admitted_row_set_sha256"
+        ):
+            module._require_authorized_admitted_row_set_sha256(pin, "e" * 64)
+        self.assertEqual(
+            module._require_authorized_admitted_row_set_sha256(pin, pin), pin
+        )
+
+    def test_admitted_row_set_pin_reaches_semantic_runner_argv(self) -> None:
+        module = load_module()
+        launch = module.ValidatedLaunch(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=83,
+            write_budget_bytes=16 * 1024**3,
+            max_records=1,
+            max_c_write_gib=0.0,
+            max_b_write_gib=16.0,
+            semantic_canary_mode="warm-100",
+            semantic_canary_receipt=pathlib.Path("receipt.json"),
+            semantic_canary_expected_receipt_sha256="4" * 64,
+            semantic_canary_shards_root=pathlib.Path("shards"),
+            semantic_canary_tokenizer_path=pathlib.Path("tokenizer.json"),
+            semantic_canary_expected_tokenizer_sha256="5" * 64,
+            semantic_canary_expected_architecture_sha256="6" * 64,
+            semantic_canary_steps=100,
+            semantic_canary_sequence_length=512,
+            semantic_canary_checkpoint_interval=50,
+            semantic_canary_write_budget_gib=16,
+            semantic_canary_telemetry_path=pathlib.Path("telemetry.jsonl"),
+            semantic_canary_telemetry_run_id="run-id",
+            admitted_row_set_sha256=self.ADMITTED_ROW_SET_SHA256,
+        )
+        argv = module.build_runner_argv(pathlib.Path("repo"), launch)
+        index = argv.index("--admitted-row-set-sha256")
+        self.assertEqual(argv[index + 1], self.ADMITTED_ROW_SET_SHA256)
+
+    def test_receipt_custody_root_is_certificate_bound_and_reaches_runner_argv(self) -> None:
+        """Catches a caller-chosen receipt root bypassing the certificate scope."""
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            receipt_custody_root = pathlib.Path(directory) / "corpus"
+            receipt_custody_root.mkdir()
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["receipt_custody_root"] = str(receipt_custody_root)
+            write_json(paths["run_spec"], run_spec)
+            _write_custody_sidecars(paths)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_receipt_custody_root",
+                    str(receipt_custody_root),
+                ),
+            )
+
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.receipt_custody_root,
+                receipt_custody_root,
+            )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            index = argv.index("--text-lab-receipt-custody-root")
+            self.assertEqual(argv[index + 1], str(receipt_custody_root))
+
+    def test_receipt_custody_root_authorization_is_closed_and_exact(self) -> None:
+        """Catches absent, malformed, or unequal certificate authorization."""
+        module = load_module()
+        requested = pathlib.Path(tempfile.gettempdir()).resolve()
+        with self.assertRaisesRegex(
+            ValueError,
+            "declares no allowed_receipt_custody_root",
+        ):
+            module._require_authorized_receipt_custody_root(requested, None)
+        with self.assertRaisesRegex(
+            ValueError,
+            "run scope exceeds certificate: receipt_custody_root",
+        ):
+            module._require_authorized_receipt_custody_root(
+                requested,
+                "B:/different-corpus",
+            )
+        self.assertEqual(
+            module._require_authorized_receipt_custody_root(
+                requested,
+                str(requested),
+            ),
+            requested,
+        )
+        for malformed in ("", 7, False):
+            with self.subTest(malformed=malformed), self.assertRaisesRegex(
+                ValueError,
+                "must be a non-empty absolute path",
+            ):
+                module._authorized_receipt_custody_root(
+                    {"allowed_receipt_custody_root": malformed}
+                )
+
+    def test_receipt_custody_root_refuses_absent_or_mismatched_certificate_pin(self) -> None:
+        """Catches accepting a run-spec root that the certificate omitted or changed."""
+        for authorized, pattern in (
+            (None, "declares no allowed_receipt_custody_root"),
+            ("B:/different-corpus", "run scope exceeds certificate: receipt_custody_root"),
+        ):
+            with self.subTest(authorized=authorized), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(directory)
+                receipt_custody_root = pathlib.Path(directory) / "corpus"
+                receipt_custody_root.mkdir()
+                run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+                run_spec["receipt_custody_root"] = str(receipt_custody_root)
+                write_json(paths["run_spec"], run_spec)
+                _write_custody_sidecars(paths)
+                if authorized is not None:
+                    rewrite_certificate(
+                        paths,
+                        lambda certificate: certificate["execution_scope"].__setitem__(
+                            "allowed_receipt_custody_root",
+                            authorized,
+                        ),
+                    )
+                self._refused(paths, pattern)
+
+    def test_semantic_canary_with_resume_checkpoint_is_refused(self) -> None:
+        """THE load-bearing security property (issue #1719 acceptance clause
+        1): WARM-100 must be clean-random genesis, never a continuation. This
+        is the mirror image of the specialist route's own
+        test_specialist_without_resume_checkpoint_is_refused -- specialist
+        REQUIRES resume present, this route REQUIRES it absent. A run spec
+        that declares a fully valid, fully authorized semantic-canary route
+        AND a fully valid, fully authorized resume triple in the same
+        document must still be refused outright, before any argv exists."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            checkpoint, evidence = install_resume_material(paths["custody_root"])
+            set_resume_paths(paths, checkpoint, evidence)
+            authorize_resume_roots(paths, paths["custody_root"])
+            self._refused(
+                paths,
+                "semantic canary launch must not resume a checkpoint",
+            )
+
+    def test_semantic_reproduction_resume_is_closed_and_reaches_exact_argv(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._reproduction_bundle(directory)
+            launch = self._validate(module, paths)
+
+            self.assertEqual(
+                launch.semantic_reproduction_intent,
+                "R1_E3_RUN_C_COMPARISON",
+            )
+            self.assertEqual(
+                launch.semantic_reproduction_checkpoint_manifest_sha256,
+                sha256_bytes(
+                    (
+                        paths["resume_checkpoint"] / "checkpoint-manifest.json"
+                    ).read_bytes()
+                ),
+            )
+            self.assertEqual(
+                launch.semantic_reproduction_parameter_counter_receipt_sha256,
+                sha256_bytes(paths["resume_evidence"].read_bytes()),
+            )
+            self.assertEqual(
+                launch.semantic_reproduction_adjudication_output,
+                paths["reproduction_adjudication"],
+            )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            semantic_index = argv.index("semantic")
+            self.assertEqual(argv[semantic_index + 1 :].count("--resume-checkpoint"), 1)
+            resume_index = argv.index("--resume-checkpoint")
+            self.assertEqual(
+                pathlib.Path(argv[resume_index + 1]),
+                paths["resume_checkpoint"].resolve(),
+            )
+            evidence_index = argv.index("--resume-counter-receipt")
+            self.assertEqual(
+                pathlib.Path(argv[evidence_index + 1]),
+                paths["resume_evidence"].resolve(),
+            )
+            self.assertEqual(
+                pathlib.Path(argv[argv.index("--receipt") + 1]),
+                paths["custody_root"] / "runner-receipt.json",
+            )
+            semantic_receipt_index = argv.index("--receipt", semantic_index)
+            self.assertEqual(
+                pathlib.Path(argv[semantic_receipt_index + 1]),
+                paths["semantic_receipt"].resolve(),
+            )
+
+            receipt_path = module._write_execution_receipt(
+                launch, argv, 0, receipt_path=paths["custody_root"] / "execution.json"
+            )
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                receipt["execution_scope"], "REPRODUCTION_COMPARISON_ONLY"
+            )
+            self.assertEqual(
+                receipt["reproduction_comparison"]["checkpoint_manifest_sha256"],
+                launch.semantic_reproduction_checkpoint_manifest_sha256,
+            )
+            self.assertEqual(
+                receipt["reproduction_comparison"]["adjudication_output"],
+                str(paths["reproduction_adjudication"]),
+            )
+            self.assertFalse(receipt["claim_scope"]["training_progress_claimed"])
+            self.assertFalse(receipt["claim_scope"]["rung_credit_claimed"])
+            self.assertFalse(receipt["claim_scope"]["milestone_credit_claimed"])
+
+    def test_plain_semantic_resume_keeps_clean_genesis_refusal_byte_exact(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            checkpoint, evidence = install_resume_material(paths["custody_root"])
+            set_resume_paths(paths, checkpoint, evidence)
+            authorize_resume_roots(paths, paths["custody_root"])
+            self._refused(
+                paths,
+                "run spec semantic canary launch must not resume a checkpoint "
+                r"\(WARM-100 is clean-random genesis, not continuation -- a "
+                "resumed canary route is refused rather than silently trained "
+                r"as a continuation under canary authorization\)",
+            )
+
+    def test_semantic_reproduction_requires_complete_closed_declaration(self) -> None:
+        mutations = (
+            (
+                lambda spec: spec.pop("semantic_reproduction_intent"),
+                "requires semantic_reproduction_intent",
+            ),
+            (
+                lambda spec: spec.__setitem__(
+                    "semantic_reproduction_intent", "GENERAL_CONTINUATION"
+                ),
+                "semantic_reproduction_intent must equal R1_E3_RUN_C_COMPARISON",
+            ),
+            (
+                lambda spec: spec["semantic_reproduction_target"].__setitem__(
+                    "unreviewed", True
+                ),
+                "semantic_reproduction_target schema keys mismatch",
+            ),
+        )
+        for mutate, pattern in mutations:
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._reproduction_bundle(
+                    directory, mutate_reproduction=mutate
+                )
+                self._refused(paths, pattern)
+
+    def test_semantic_reproduction_refuses_target_hash_mismatch(self) -> None:
+        for key, pattern in (
+            (
+                "checkpoint_manifest_sha256",
+                "semantic reproduction checkpoint manifest SHA-256 mismatch",
+            ),
+            (
+                "parameter_counter_receipt_sha256",
+                "semantic reproduction parameter counter receipt SHA-256 mismatch",
+            ),
+        ):
+            with self.subTest(key=key), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._reproduction_bundle(
+                    directory,
+                    mutate_reproduction=lambda spec, key=key: spec[
+                        "semantic_reproduction_target"
+                    ].__setitem__(key, "0" * 64),
+                )
+                self._refused(paths, pattern)
+
+    def test_semantic_reproduction_is_exactly_one_comparison_step(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._reproduction_bundle(
+                directory,
+                mutate_reproduction=lambda spec: spec["requested_scope"].__setitem__(
+                    "optimizer_steps", 2
+                ),
+            )
+            self._refused(
+                paths,
+                r"semantic reproduction requested_scope.optimizer_steps must equal 1",
+            )
+
+    def test_semantic_reproduction_adjudication_output_is_new_and_in_custody(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside = pathlib.Path(directory) / "outside-adjudication.json"
+            paths = self._reproduction_bundle(
+                directory,
+                mutate_reproduction=lambda spec: spec.__setitem__(
+                    "semantic_reproduction_adjudication_output", str(outside)
+                ),
+            )
+            self._refused(paths, "adjudication output must be below custody_root")
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._reproduction_bundle(directory)
+            write_json(paths["reproduction_adjudication"], {"status": "fabricated"})
+            self._refused(paths, "adjudication output must not already exist")
+
+    def test_semantic_reproduction_validator_unit_two_sided(self) -> None:
+        """Seconds-scale closed-union RED/GREEN without opening corpus custody."""
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            custody = pathlib.Path(directory) / "custody"
+            checkpoint = custody / "checkpoint"
+            checkpoint.mkdir(parents=True)
+            manifest = checkpoint / "checkpoint-manifest.json"
+            evidence = custody / "counter-success.json"
+            write_json(manifest, {"schema_version": "ember-sparse-checkpoint-v5"})
+            write_json(evidence, {"ok": True})
+            resume = module.ResumeRequest(
+                checkpoint=checkpoint,
+                evidence_flag="--resume-counter-receipt",
+                evidence_path=evidence,
+                optimizer_transition_registry_sha256=None,
+                relocation_custody_root=None,
+            )
+            target = {
+                "schema_version": "ember-semantic-reproduction-target-v1",
+                "checkpoint_manifest_sha256": sha256_bytes(manifest.read_bytes()),
+                "parameter_counter_receipt_sha256": sha256_bytes(evidence.read_bytes()),
+            }
+            run_spec = {
+                "semantic_reproduction_intent": "R1_E3_RUN_C_COMPARISON",
+                "semantic_reproduction_target": target,
+                "semantic_reproduction_adjudication_output": str(
+                    custody / "reproduction-adjudication.json"
+                ),
+            }
+            validated = module._validate_semantic_reproduction_request(
+                run_spec, resume, custody
+            )
+            self.assertEqual(
+                validated.checkpoint_manifest_sha256,
+                target["checkpoint_manifest_sha256"],
+            )
+            self.assertIsNone(
+                module._validate_semantic_reproduction_request({}, resume, custody)
+            )
+            for mutate, pattern in (
+                (
+                    lambda spec: spec.pop("semantic_reproduction_intent"),
+                    "requires semantic_reproduction_intent",
+                ),
+                (
+                    lambda spec: spec["semantic_reproduction_target"].__setitem__(
+                        "unexpected", True
+                    ),
+                    "semantic_reproduction_target schema keys mismatch",
+                ),
+                (
+                    lambda spec: spec["semantic_reproduction_target"].__setitem__(
+                        "checkpoint_manifest_sha256", "0" * 64
+                    ),
+                    "checkpoint manifest SHA-256 mismatch",
+                ),
+                (
+                    lambda spec: spec.__setitem__(
+                        "semantic_reproduction_adjudication_output",
+                        str(pathlib.Path(directory) / "outside.json"),
+                    ),
+                    "adjudication output must be below custody_root",
+                ),
+            ):
+                candidate = json.loads(json.dumps(run_spec))
+                mutate(candidate)
+                with self.subTest(pattern=pattern), self.assertRaisesRegex(
+                    ValueError, pattern
+                ):
+                    module._validate_semantic_reproduction_request(
+                        candidate, resume, custody
+                    )
+
+    def test_optimizer_steps_below_the_t01_floor_is_refused(self) -> None:
+        """T-01 entry floor (>= 100), semantic-canary-only: valid_scope's own
+        max_optimizer_steps ceiling is 200, so 99 stays comfortably under it
+        -- proving the floor fires without also tripping the ceiling check
+        _require_scope_subset already applies to every mode."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec["requested_scope"].__setitem__(
+                    "optimizer_steps", 99
+                ),
+            )
+            self._refused(
+                paths, r"optimizer_steps must be at least 100.*T-01"
+            )
+
+    def test_plain_bundle_has_no_semantic_canary_route(self) -> None:
+        """A run spec with none of the semantic_canary_* keys is the
+        pre-#1719 shape -- the existing ResumePlumbingTests/SpecialistRouting
+        Tests non-regression tests already prove this bundle's argv stays
+        byte-identical; this pins the launch field driving that decision."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.semantic_canary_mode)
+
+    def test_governed_vertical_launch_builds_byte_identical_pre_1719_argv(
+        self,
+    ) -> None:
+        """Non-regression (mirrors ResumePlumbingTests'
+        test_run_spec_without_resume_keys_builds_the_pre_1425_argv and
+        SpecialistRoutingTests' test_plain_bundle_has_no_specialist_route): a
+        launch that sets none of the new semantic_canary_* fields must
+        produce byte-identical argv to what certified_train_launch.py
+        produced before this route existed."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                module.build_runner_argv(paths["repo"], launch),
+                [
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "disk_budget_runner.py"
+                    ),
+                    "--max-c-write-gib",
+                    "0.0",
+                    "--max-b-write-gib",
+                    "16.0",
+                    "--receipt",
+                    str(paths["custody_root"] / "runner-receipt.json"),
+                    "--write-root",
+                    f"custody={paths['custody_root']}",
+                    "--write-root",
+                    f"artifacts={paths['artifact_root']}",
+                    "--",
+                    sys.executable,
+                    str(
+                        paths["repo"]
+                        / "tools"
+                        / "ember-restart-3b"
+                        / "run_vertical_slice.py"
+                    ),
+                    "governed-vertical",
+                    "--seed",
+                    "83",
+                    "--artifact-root",
+                    str(paths["artifact_root"]),
+                    "--write-budget-bytes",
+                    str(16 * 1024**3),
+                    "--max-records",
+                    "1",
+                ],
+            )
+
+    def test_exactly_one_pair_key_is_refused(self) -> None:
+        for missing in ("semantic_canary_mode", "semantic_canary_receipt"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_semantic_canary_companion_key_missing_is_refused(self) -> None:
+        for missing in (
+            "semantic_canary_shards_root",
+            "semantic_canary_sequence_length",
+            "semantic_canary_checkpoint_interval",
+            "semantic_canary_telemetry_path",
+        ):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, missing=missing: spec.pop(missing),
+                )
+                self._refused(paths, f"requires {missing}, which is absent")
+
+    def test_semantic_canary_companion_without_pair_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: (
+                    spec.pop("semantic_canary_mode"),
+                    spec.pop("semantic_canary_receipt"),
+                ),
+            )
+            self._refused(
+                paths,
+                "requires semantic_canary_mode and semantic_canary_receipt",
+            )
+
+    def test_invalid_mode_value_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_mode", "cold-1000"
+                ),
+            )
+            self._refused(paths, "semantic_canary_mode must be one of")
+
+    def test_certificate_without_allowed_semantic_canary_modes_is_refused(
+        self,
+    ) -> None:
+        """A certificate carrying no allowed_semantic_canary_modes at all is
+        the pre-#1719 population -- fail-closed on it, same reasoning #1426/
+        #1430 applied to resume roots and training capabilities."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorize_mode=False)
+            certificate = json.loads(
+                paths["certificate"].read_text(encoding="utf-8")
+            )
+            self.assertNotIn(
+                "allowed_semantic_canary_modes", certificate["execution_scope"]
+            )
+            self._refused(paths, "declares no allowed_semantic_canary_modes")
+
+    def test_empty_allowed_semantic_canary_modes_authorizes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory, authorized_modes=[])
+            self._refused(
+                paths, "run scope exceeds certificate: semantic_canary_mode"
+            )
+
+    def test_mode_not_in_allowed_semantic_canary_modes_is_refused(self) -> None:
+        """A certificate that authorizes a DIFFERENT mode than the one the
+        run spec requests -- not absent, not empty, just disagreeing. Only
+        one real mode exists today (warm-100), so the certificate is made to
+        authorize a value outside SEMANTIC_CANARY_MODES entirely -- still a
+        legal (if currently unusable) certificate declaration, and still
+        must not authorize a run spec asking for a different mode."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory, mode="warm-100", authorized_modes=["cold-1000"]
+            )
+            self._refused(
+                paths, "run scope exceeds certificate: semantic_canary_mode"
+            )
+
+    def test_malformed_allowed_semantic_canary_modes_fails_closed(self) -> None:
+        for declared in ("not-a-list", [""], [None], ["warm-100", 7]):
+            with self.subTest(declared=declared), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(directory)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].__setitem__("allowed_semantic_canary_modes", declared),
+                )
+                self._refused(
+                    paths,
+                    "allowed_semantic_canary_modes must be a list of "
+                    "non-empty strings",
+                )
+
+    def test_out_of_tree_receipt_is_refused(self) -> None:
+        """The launcher requires semantic_canary_receipt to resolve below
+        repo_root -- an operator-declared absolute path elsewhere must be
+        refused before this process reads it, not accepted into a
+        perfect-looking argv the runner can never actually be trusted to
+        start from (mirrors SpecialistRoutingTests'
+        test_out_of_tree_manifest_is_refused for training_data_manifest)."""
+
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside_receipt = pathlib.Path(directory) / "outside-receipt.json"
+            write_json(outside_receipt, {"ticket": "TOKEN-SHARDS-V0"})
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_receipt", str(outside_receipt)
+                ),
+            )
+            self._refused(
+                paths, "semantic_canary_receipt must resolve below repo_root"
+            )
+
+    def test_out_of_tree_shards_root_is_accepted(self) -> None:
+        """Deliberately the OPPOSITE of test_out_of_tree_receipt_is_refused:
+        unlike semantic_canary_receipt, semantic_canary_shards_root is NOT
+        repo_root-constrained (see _validate_semantic_canary_request's
+        docstring/comment on shards_root) -- corpus shard bytes are bulk data
+        the acquisition sprint fetches to an external data root, never
+        committed to the tree. Its integrity is bound a different way: the
+        runner's own ManifestBoundTokenStream.from_receipt independently
+        sha256-verifies every shard file's bytes against the receipt's
+        content-addressed claims before reading a single token, so an
+        operator pointing this elsewhere gains nothing an unmatched receipt
+        wouldn't already refuse. Pinned here so a future edit does not
+        silently narrow this on the (incorrect) assumption it was an
+        oversight."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            outside_shards = pathlib.Path(directory) / "outside-shards"
+            outside_shards.mkdir()
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_shards_root", str(outside_shards)
+                ),
+            )
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.semantic_canary_shards_root, outside_shards.resolve()
+            )
+
+    def test_relative_receipt_resolves_against_repo_root(self) -> None:
+        """A RELATIVE semantic_canary_receipt must resolve against repo_root,
+        not run_spec_path.parent (the custody root, which is outside the
+        repo by construction) -- mirrors SpecialistRoutingTests'
+        test_relative_manifest_resolves_against_repo_root."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_receipt",
+                    "manifests/token-shards-receipt.json",
+                ),
+            )
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.semantic_canary_receipt, paths["semantic_receipt"].resolve()
+            )
+
+    def test_non_positive_sequence_length_is_refused(self) -> None:
+        for value in (0, -1):
+            with self.subTest(value=value), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "semantic_canary_sequence_length", value
+                    ),
+                )
+                self._refused(
+                    paths, "semantic_canary_sequence_length must be a positive integer"
+                )
+
+    def test_non_positive_checkpoint_interval_is_refused(self) -> None:
+        for value in (0, -1):
+            with self.subTest(value=value), tempfile.TemporaryDirectory(
+                dir="B:/tmp"
+            ) as directory:
+                paths = self._bundle(
+                    directory,
+                    mutate_run_spec=lambda spec, value=value: spec.__setitem__(
+                        "semantic_canary_checkpoint_interval", value
+                    ),
+                )
+                self._refused(
+                    paths,
+                    "semantic_canary_checkpoint_interval must be a positive integer",
+                )
+
+    def test_write_budget_not_exact_gib_multiple_is_refused_for_semantic_canary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+            run_spec["requested_scope"]["write_budget_bytes"] = 16 * 1024**3 - 1
+            write_json(paths["run_spec"], run_spec)
+            # Resync the custody sidecars against this direct mutation --
+            # same reasoning as the resync inside _bundle above.
+            _write_custody_sidecars(paths)
+            self._refused(paths, "exact GiB multiple")
+
+    def test_missing_canonical_tokenizer_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            paths["tokenizer"].unlink()
+            self._refused(paths, "canonical")
+
+    def test_telemetry_path_outside_custody_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "semantic_canary_telemetry_path",
+                    str(pathlib.Path(directory) / "outside-telemetry.jsonl"),
+                ),
+            )
+            self._refused(
+                paths,
+                "run scope exceeds certificate: semantic_canary_telemetry_path",
+            )
+
+    def test_semantic_canary_flags_match_the_runner_argparse(self) -> None:
+        """Bind the consumer's flag spelling to run_vertical_slice's semantic
+        parser, ast-parsed the same way SpecialistRoutingTests'
+        test_specialist_flags_match_the_runner_argparse binds the specialist
+        parser. Unlike the specialist parser (where every flag this launcher
+        emits is ALSO required=True on the runner's own parser, so the two
+        sets are exactly equal), the semantic parser declares
+        --telemetry-path/--telemetry-run-id as OPTIONAL (all-or-none at the
+        bare-runner level) -- this certified route makes them REQUIRED at the
+        certificate layer instead (semantic_canary_telemetry_path is in
+        SEMANTIC_CANARY_LAUNCH_RUN_SPEC_KEYS), so build_runner_argv always
+        emits them even though the runner's own parser would accept their
+        absence. The correct invariant here is therefore two-sided: every
+        flag the runner actually requires must be present (required_flags
+        subset of emitted_flags), and every flag emitted must be one the
+        parser actually recognizes (emitted_flags subset of all_flags) --
+        equality would be the wrong assertion for this specific parser. The
+        --resume-checkpoint/evidence group is excluded from both sets: this
+        route is genesis-only by construction and never emits resume flags,
+        and the runner itself does not require resume either."""
+
+        import ast
+
+        runner_path = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"
+        tree = ast.parse(runner_path.read_text(encoding="utf-8"))
+
+        def call_owner_attr(node: ast.AST) -> tuple[str, str] | None:
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+            ):
+                return node.func.value.id, node.func.attr
+            return None
+
+        def is_required_kw(call: ast.Call) -> bool:
+            return any(
+                keyword.arg == "required"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in call.keywords
+            )
+
+        all_flags: set[str] = set()
+        required_flags: set[str] = set()
+        for node in ast.walk(tree):
+            owner = call_owner_attr(node)
+            if owner is None or owner[1] != "add_argument" or owner[0] != "semantic":
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            flag = node.args[0].value
+            if not isinstance(flag, str) or not flag.startswith("--"):
+                continue
+            all_flags.add(flag)
+            if is_required_kw(node):
+                required_flags.add(flag)
+
+        self.assertTrue(
+            required_flags,
+            "no required flags found on the semantic subparser -- the ast "
+            "scoping above found nothing to bind",
+        )
+        # Confirms the asymmetry this test's docstring documents still holds
+        # -- if telemetry ever became required=True on the runner's own
+        # parser, this assertion (not the subset checks below) is what would
+        # need re-deriving.
+        self.assertNotIn("--telemetry-path", required_flags)
+        self.assertNotIn("--telemetry-run-id", required_flags)
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(directory)
+            launch = self._validate(module, paths)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            semantic_argv = argv[argv.index("semantic") + 1 :]
+            emitted_flags = {
+                token for token in semantic_argv if token.startswith("--")
+            }
+
+        self.assertTrue(
+            required_flags <= emitted_flags,
+            "build_runner_argv omits a flag the runner's semantic subparser "
+            f"actually requires: {required_flags - emitted_flags}",
+        )
+        self.assertTrue(
+            emitted_flags <= all_flags,
+            "build_runner_argv emits a flag the runner's semantic subparser "
+            f"does not recognize: {emitted_flags - all_flags}",
+        )
+
+
+class ResumeRelocationCustodyTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #1452: run_vertical_slice.authorize_production_resume_checkpoint
+    accepts a resume checkpoint that resolves off B: only when the runner also
+    receives --c-relocated-under-disk-budget-runner and a
+    --relocation-custody-root. Before #1462 only the specialist route declared
+    and forwarded them, so build_runner_argv could
+    build parse-perfect argv the runner deterministically refused the moment
+    the certificate's authorized resume root lived off B: -- after the
+    certificate was minted, the expensive place. The cure has two parts:
+    (1) the relocation custody root is a certificate decision, read from the
+    certificate and never derived from the checkpoint path or local disk
+    (mirrors #1426's allowed_resume_roots); (2) both governed-vertical and
+    specialist tails forward the exact certificate pair. ONE predicate --
+    resume.relocation_custody_root is not None, surfaced on ValidatedLaunch
+    as resume_relocation_custody_root -- drives both tails' flag emission, so
+    they cannot drift apart."""
+
+    def _specialist_bundle(self, directory: str) -> dict[str, pathlib.Path]:
+        """A fully valid specialist launch: everything SpecialistRoutingTests.
+        _bundle layers on top of the base resume triple (tokenizer, an
+        admitted manifest, the specialist run-spec keys, capability
+        authorization), built independently of that class's own fixture so a
+        future change to ITS defaults cannot silently change what THIS class
+        is testing. Does not itself relocate the checkpoint -- callers that
+        want a relocated resume repoint it with set_resume_paths, the same
+        way test_governed_vertical_route_with_b_rooted_resume_is_unaffected
+        below does."""
+
+        paths = self._bundle(directory)
+
+        _tokenizer_authority = resolve_repository_authority(ROOT, "tokenizer")
+        tokenizer_path = paths["repo"] / _tokenizer_authority.relative_path
+        tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path.write_bytes(_tokenizer_authority.path.read_bytes())
+        paths["tokenizer"] = tokenizer_path
+
+        manifest_path = paths["repo"] / "manifests" / "image.json"
+        write_json(
+            manifest_path,
+            {
+                "schema_version": "ember-owned-training-data-v1",
+                "capability": "image",
+                "data_class": "SEMANTIC_PRETRAINING",
+            },
+        )
+        paths["manifest"] = manifest_path
+        paths["telemetry"] = paths["custody_root"] / "telemetry.jsonl"
+
+        run_spec = json.loads(paths["run_spec"].read_text(encoding="utf-8"))
+        run_spec["training_data_manifest"] = str(manifest_path)
+        run_spec["training_capability"] = "image"
+        run_spec["training_checkpoint_interval"] = 8_192
+        run_spec["training_telemetry_path"] = str(paths["telemetry"])
+        run_spec["training_model_chat_restore_not_before"] = "2026-07-18T11:00:00-07:00"
+        write_json(paths["run_spec"], run_spec)
+
+        authorize_training_capabilities(paths, "image")
+        return paths
+
+    def test_specialist_route_with_relocated_resume_emits_both_flags(self) -> None:
+        """Matrix (a). The direct regression proof for the specialist tail:
+        against unfixed certified_train_launch.py this argv carries neither
+        flag. The declared custody root sits ONE LEVEL ABOVE checkpoint.parent
+        -- which coincide for every B:-rooted fixture elsewhere in this file
+        -- specifically so the emitted value can be shown to come from the
+        certificate, not from the checkpoint path."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._specialist_bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            self.assertNotEqual(checkpoint.parent.resolve(), custody_root.resolve())
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].update(
+                    {
+                        "allowed_resume_roots": [str(custody_root)],
+                        "resume_relocation_custody_root": str(custody_root),
+                    }
+                ),
+            )
+
+            launch = self._validate(module, paths)
+            self.assertEqual(launch.specialist_capability, "image")
+            self.assertEqual(
+                launch.resume_relocation_custody_root, custody_root.resolve()
+            )
+            argv = module.build_runner_argv(paths["repo"], launch)
+            specialist_argv = argv[argv.index("specialist") + 1 :]
+            self.assertIn("--c-relocated-under-disk-budget-runner", specialist_argv)
+            self.assertIn("--relocation-custody-root", specialist_argv)
+            self.assertEqual(
+                argv[-3:],
+                [
+                    "--c-relocated-under-disk-budget-runner",
+                    "--relocation-custody-root",
+                    str(custody_root.resolve()),
+                ],
+            )
+
+    def test_governed_vertical_route_with_relocated_resume_emits_both_flags(self) -> None:
+        """A certificate-authorized relocated resume is expressible on the
+        governed route and emits the same closed relocation pair as the
+        specialist route."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].update(
+                    {
+                        "allowed_resume_roots": [str(custody_root)],
+                        "resume_relocation_custody_root": str(custody_root),
+                    }
+                ),
+            )
+            launch = self._validate(module, paths)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertIn("governed-vertical", argv)
+            self.assertEqual(
+                argv[-3:],
+                [
+                    "--c-relocated-under-disk-budget-runner",
+                    "--relocation-custody-root",
+                    str(custody_root.resolve()),
+                ],
+            )
+
+    def test_governed_vertical_route_with_b_rooted_resume_is_unaffected(self) -> None:
+        """Matrix (c). B: resume behaves exactly as current master -- no
+        flags, no refusal, byte-identical argv -- proven against a REAL B:
+        path (B:/tmp, the convention test_runner_preflight.py already uses),
+        the only way to actually exercise the branch this drive check takes
+        rather than the off-B: branch a bare tempdir takes by construction on
+        this machine."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory(
+            dir="B:/tmp"
+        ) as b_directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            install_model_config(paths["repo"])
+            b_root = pathlib.Path(b_directory)
+            checkpoint, evidence = install_resume_material(b_root)
+            self.assertEqual(checkpoint.resolve().drive.upper(), "B:")
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_resume_roots", [str(b_root)]
+                ),
+            )
+
+            launch = self._validate(module, paths)
+            self.assertIsNone(launch.resume_relocation_custody_root)
+            argv = module.build_runner_argv(paths["repo"], launch)
+            self.assertNotIn("--c-relocated-under-disk-budget-runner", argv)
+            self.assertNotIn("--relocation-custody-root", argv)
+            self.assertEqual(
+                argv[-2:],
+                ["--resume-counter-receipt", str(evidence)],
+            )
+
+    def test_governed_vertical_tail_carries_certificate_relocation_flags(
+        self,
+    ) -> None:
+        """The pure argv builder forwards the certificate value without
+        deriving it from the checkpoint path."""
+
+        module = load_module()
+        launch = module.ValidatedLaunch(
+            certificate_sha256="0" * 64,
+            run_spec_sha256="1" * 64,
+            public_master_sha="2" * 40,
+            closure_sha256="3" * 64,
+            artifact_root=pathlib.Path("artifacts"),
+            custody_root=pathlib.Path("custody"),
+            runner_receipt=pathlib.Path("receipt.json"),
+            seed=1,
+            write_budget_bytes=1,
+            max_records=1,
+            max_c_write_gib=1.0,
+            max_b_write_gib=1.0,
+            resume_checkpoint=pathlib.Path("checkpoint"),
+            resume_evidence_flag="--resume-counter-receipt",
+            resume_evidence_path=pathlib.Path("evidence.json"),
+            resume_relocation_custody_root=pathlib.Path("C:/relocated-custody"),
+        )
+        self.assertIsNone(launch.specialist_capability)
+        argv = module.build_runner_argv(pathlib.Path("/repo"), launch)
+        self.assertIn("governed-vertical", argv)
+        self.assertEqual(
+            argv[-3:],
+            [
+                "--c-relocated-under-disk-budget-runner",
+                "--relocation-custody-root",
+                "C:\\relocated-custody",
+            ],
+        )
+
+    def test_c_rooted_resume_without_declared_custody_root_is_refused(self) -> None:
+        """The other refusal: a non-B: authorized root with no declared
+        custody root refuses at validation, naming the missing declaration,
+        before build_runner_argv is ever reached -- not a guess, not a
+        fallback to some local default."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            set_resume_paths(paths, checkpoint, evidence)
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].__setitem__(
+                    "allowed_resume_roots", [str(custody_root)]
+                ),
+            )
+            certificate = json.loads(paths["certificate"].read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "resume_relocation_custody_root", certificate["execution_scope"]
+            )
+            self._refused(paths, "resume_relocation_custody_root")
+
+    def test_relocation_custody_root_not_containing_the_checkpoint_is_refused(
+        self,
+    ) -> None:
+        """A declared custody root is authorization, not decoration: one that
+        does not actually contain the checkpoint is refused on the same
+        containment terms production_artifact_root enforces downstream, so
+        the mismatch is caught at the launcher instead of the runner. Uses
+        the specialist route so the refusal under test is the containment
+        check, not matrix (b)'s route refusal."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self._specialist_bundle(directory)
+            custody_root = paths["custody_root"]
+            checkpoint, evidence = install_resume_material(custody_root / "nested")
+            set_resume_paths(paths, checkpoint, evidence)
+            unrelated = pathlib.Path(directory) / "unrelated-custody"
+            unrelated.mkdir()
+            rewrite_certificate(
+                paths,
+                lambda certificate: certificate["execution_scope"].update(
+                    {
+                        "allowed_resume_roots": [str(custody_root)],
+                        "resume_relocation_custody_root": str(unrelated),
+                    }
+                ),
+            )
+            self._refused(
+                paths, "resume_relocation_custody_root does not contain"
+            )
+
+    def test_malformed_relocation_custody_root_fails_closed(self) -> None:
+        for label, declared, pattern in (
+            ("empty string", "", "must be a non-empty string"),
+            ("not a string", 7, "must be a non-empty string"),
+            # F1: a relative declaration would resolve against THIS
+            # PROCESS's own cwd (_authorized_resume_relocation_custody_root's
+            # resolve(strict=False)) rather than a certificate-fixed
+            # location -- a non-empty string, so it clears the check above
+            # and must be caught by its own, later one.
+            (
+                "relative path",
+                "relative/custody/root",
+                "must be an absolute path",
+            ),
+        ):
+            with self.subTest(declared=label), tempfile.TemporaryDirectory() as directory:
+                paths = self._bundle(directory)
+                custody_root = paths["custody_root"]
+                checkpoint, evidence = install_resume_material(custody_root / "nested")
+                set_resume_paths(paths, checkpoint, evidence)
+                rewrite_certificate(
+                    paths,
+                    lambda certificate, declared=declared: certificate[
+                        "execution_scope"
+                    ].update(
+                        {
+                            "allowed_resume_roots": [str(custody_root)],
+                            "resume_relocation_custody_root": declared,
+                        }
+                    ),
+                )
+                self._refused(
+                    paths,
+                    f"resume_relocation_custody_root {pattern}",
+                )
+
+
+class DispatchAuthorityTests(unittest.TestCase):
+    @staticmethod
+    def _dispatch_environment() -> dict[str, str]:
+        return {
+            "EMBER_LAB_PIPE": r"\\.\pipe\ember-lab-test",
+            "EMBER_LAB_DISPATCH_JOB_ID": "test-job",
+            "EMBER_LAB_DISPATCH_TOKEN": "a" * 64,
+            "EMBER_LAB_DISPATCH_DAEMON_PID": "1234",
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES": "1073741824",
+        }
+
+    @staticmethod
+    def _argv() -> list[str]:
+        return [
+            "--root", str(ROOT),
+            "--certificate", "missing-certificate.json",
+            "--declaration-ledger", "missing-ledger.json",
+            "--run-spec", "missing-run-spec.json",
+            "--custody-receipt-sha256", "a" * 64,
+        ]
+
+    def _invoke_before_validation(
+        self,
+        module: object,
+        environment: dict[str, str],
+    ) -> tuple[int, str, mock.Mock]:
+        stderr = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, environment, clear=True),
+            mock.patch.object(
+                module,
+                "validate_certified_request",
+                return_value=SimpleNamespace(artifact_root=pathlib.Path("artifacts")),
+            ) as validate,
+            mock.patch.object(module, "execute_validated_launch", return_value=0),
+            mock.patch.object(
+                module,
+                "_execution_receipt_path",
+                return_value=pathlib.Path("receipt.json"),
+            ),
+            contextlib.redirect_stderr(stderr),
+        ):
+            exit_code = module.main(self._argv())
+        return exit_code, stderr.getvalue(), validate
+
+    def test_direct_main_without_daemon_dispatch_refuses_before_certificate_access(self) -> None:
+        module = load_module()
+        exit_code, stderr, validate = self._invoke_before_validation(module, {})
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("EMBER_LAB_DISPATCH_REQUIRED", stderr)
+        validate.assert_not_called()
+
+    def test_self_consistent_fake_pipe_and_token_refuse_before_certificate_access(self) -> None:
+        module = load_module()
+        environment = {
+            "EMBER_LAB_PIPE": r"\\.\pipe\ember-lab-forged",
+            "EMBER_LAB_DISPATCH_JOB_ID": "forged-job",
+            "EMBER_LAB_DISPATCH_TOKEN": "a" * 64,
+            "EMBER_LAB_DISPATCH_DAEMON_PID": "1234",
+            "EMBER_LAB_DISPATCH_MAXIMUM_JOB_MEMORY_BYTES": "1073741824",
+        }
+        exit_code, stderr, validate = self._invoke_before_validation(module, environment)
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("EMBER_LAB_DISPATCH_REFUSED", stderr)
+        validate.assert_not_called()
+
+    def test_dispatch_consumer_loads_the_canonical_governance_module(self) -> None:
+        module = load_module()
+        loaded_module = SimpleNamespace(
+            consume_dispatch=lambda repo_root: 1073741824,
+        )
+        loader = mock.Mock()
+        specification = SimpleNamespace(loader=loader)
+        with (
+            mock.patch.dict(os.environ, self._dispatch_environment(), clear=True),
+            mock.patch.object(
+                module.importlib.util,
+                "spec_from_file_location",
+                return_value=specification,
+            ) as spec_from_file_location,
+            mock.patch.object(
+                module.importlib.util,
+                "module_from_spec",
+                return_value=loaded_module,
+            ),
+        ):
+            result = module.consume_ember_lab_dispatch(ROOT)
+
+        self.assertEqual(result, 1073741824)
+        spec_from_file_location.assert_called_once_with(
+            "ember_dispatch_token",
+            ROOT
+            / "src"
+            / "ember"
+            / "governance"
+            / "scripts"
+            / "ember_dispatch_token.py",
+        )
+        loader.exec_module.assert_called_once_with(loaded_module)
+
+    def test_authenticated_daemon_dispatch_consumes_before_certificate_validation(self) -> None:
+        module = load_module()
+        for probe_maximum, expected_receipt in (
+            (None, "receipt.json"),
+            (1024, None),
+        ):
+            with self.subTest(probe_maximum=probe_maximum):
+                effects: list[str] = []
+                stdout = io.StringIO()
+                with (
+                    mock.patch.dict(os.environ, {}, clear=True),
+                    mock.patch.object(
+                        module,
+                        "consume_ember_lab_dispatch",
+                        side_effect=lambda root: effects.append(f"consume:{root}"),
+                        create=True,
+                    ),
+                    mock.patch.object(
+                        module,
+                        "validate_certified_request",
+                        side_effect=lambda *args: (
+                            effects.append("validate"),
+                            SimpleNamespace(
+                                artifact_root=pathlib.Path("artifacts"),
+                                job_memory_ceiling_probe_maximum_bytes=probe_maximum,
+                            ),
+                        )[1],
+                    ),
+                    mock.patch.object(module, "execute_validated_launch", return_value=0),
+                    mock.patch.object(
+                        module,
+                        "_execution_receipt_path",
+                        return_value=pathlib.Path("receipt.json"),
+                    ),
+                    contextlib.redirect_stdout(stdout),
+                ):
+                    exit_code = module.main(self._argv())
+
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(effects, [f"consume:{ROOT}", "validate"])
+                self.assertEqual(
+                    json.loads(stdout.getvalue())["execution_receipt"],
+                    expected_receipt,
+                )
+
+
+class A1StepEnergyApportionmentWiringTests(unittest.TestCase):
+    """Issue #1464 residual: `_apportion_a1_step_energy` is the post-pass
+    join point wired into `execute_validated_launch` between
+    `_finish_energy_sidecar` and `_finalize_a1_packet_a` -- see
+    `src/ember/infrastructure/tools/ember-restart-3b/a1_energy_apportionment.py`'s module docstring
+    for why a post-pass (not in-loop) is the architecturally honest choice.
+    """
+
+    def _write_jsonl(self, path: pathlib.Path, rows: list[dict]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+
+    def test_no_telemetry_path_is_a_graceful_noop(self) -> None:
+        module = load_module()
+        launch = SimpleNamespace(a1_telemetry_path=None, run_id="a1run")
+        disclosure: dict[str, object] = {"receipt_path": "unused", "receipt_written": True}
+        module._apportion_a1_step_energy(ROOT, launch, disclosure)
+        self.assertNotIn("energy_apportionment_note", disclosure)
+
+    def test_no_energy_receipt_written_is_a_graceful_noop(self) -> None:
+        module = load_module()
+        launch = SimpleNamespace(a1_telemetry_path=pathlib.Path("telemetry.jsonl"), run_id="a1run")
+        disclosure: dict[str, object] = {"spawned": False, "note": "sidecar skipped: injected run_process (test double)"}
+        module._apportion_a1_step_energy(ROOT, launch, disclosure)
+        self.assertEqual(
+            disclosure["energy_apportionment_note"],
+            "skipped: no energy-proxy receipt was written for this run",
+        )
+
+    def test_real_samples_enrich_the_real_telemetry_file(self) -> None:
+        """The wiring's own real-path leg: a real `_train_step_envelope` row
+        plus a real raw samples sidecar file, joined through the actual
+        dynamically-loaded `a1_energy_apportionment.py` module -- the same
+        load path `execute_validated_launch` uses in production."""
+        module = load_module()
+        tools_directory = str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b")
+        inserted = tools_directory not in sys.path
+        if inserted:
+            sys.path.insert(0, tools_directory)
+        try:
+            a1_execution_path = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "a1_execution.py"
+            spec = importlib.util.spec_from_file_location("a1_execution_for_wiring_test", a1_execution_path)
+            assert spec is not None and spec.loader is not None
+            a1_execution = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(a1_execution)
+        finally:
+            if inserted:
+                sys.path.remove(tools_directory)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            telemetry_path = root / "a1-telemetry.jsonl"
+            from datetime import datetime, timezone
+
+            event = a1_execution._train_step_envelope(
+                run_id="a1run",
+                step=1,
+                tokens=170,
+                loss=1.0,
+                grad_norm=1.0,
+                wall_seconds=1.0,
+            )
+            event["ts"] = datetime.fromtimestamp(1.0, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+            self._write_jsonl(telemetry_path, [event])
+
+            receipt_path = root / "energy-proxy-receipt.json"
+            samples_path = root / "energy-proxy-receipt.gpu-samples.jsonl"
+            with samples_path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps({"ts": 0.0, "watts": 100.0}, sort_keys=True) + "\n")
+                handle.write(json.dumps({"ts": 1.0, "watts": 150.0}, sort_keys=True) + "\n")
+
+            launch = SimpleNamespace(a1_telemetry_path=telemetry_path, run_id="a1run")
+            disclosure = {"receipt_path": str(receipt_path), "receipt_written": True}
+            module._apportion_a1_step_energy(ROOT, launch, disclosure)
+
+            self.assertEqual(
+                disclosure["energy_apportionment_note"],
+                "1 train_step row(s) enriched with proxy_joules",
+            )
+            enriched_row = json.loads(telemetry_path.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(enriched_row["payload"]["proxy_joules"], "125.000000000000")
+
+
+class JobMemoryCeilingProbeTests(unittest.TestCase):
+    MIB = 1024**2
+    MAXIMUM = 1024 * MIB
+    DELTA = 128 * MIB
+
+    def setUp(self) -> None:
+        self.module = load_module()
+        self.authorized = {
+            "purpose": "BOUNDED_CANARY",
+            "allowed_modes": ["governed-vertical"],
+            "max_optimizer_steps": 0,
+            "max_records": 0,
+            "max_active_expert_families": 0,
+            "max_gpu_vram_gib": 0,
+            "max_transient_checkpoint_gib": 0,
+            "max_wall_minutes": 5,
+            "max_b_write_gib": 0,
+            "max_c_write_gib": 0,
+            "max_write_budget_bytes": 0,
+            "allowed_artifact_roots": ["B:/probe-artifacts"],
+            "allowed_custody_roots": ["B:/probe-custody"],
+            "model_server_allowed": False,
+            "wsl_allowed": False,
+            "persistent_worker_allowed": False,
+            "allowed_job_memory_ceiling_probe": {
+                "maximum_job_memory_bytes": self.MAXIMUM,
+                "maximum_absolute_delta_bytes": self.DELTA,
+            }
+        }
+        self.requested_scope = {
+            "mode": "governed-vertical",
+            "optimizer_steps": 0,
+            "max_records": 0,
+            "active_expert_families": 0,
+            "gpu_vram_gib": 0,
+            "transient_checkpoint_gib": 0,
+            "wall_minutes": 5,
+            "max_b_write_gib": 0,
+            "max_c_write_gib": 0,
+            "write_budget_bytes": 0,
+            "artifact_root": "B:/probe-artifacts",
+            "custody_root": "B:/probe-custody",
+        }
+
+    def request(self, signed_delta: int) -> dict[str, object]:
+        return {
+            "schema_version": "ember-certified-train-run-v1",
+            "certificate_sha256": "a" * 64,
+            "run_id": "issue898-probe",
+            "seed": 1,
+            "runner_receipt": "B:/probe-receipt.json",
+            "requested_scope": self.requested_scope,
+            "job_memory_ceiling_probe": {
+                "maximum_job_memory_bytes": self.MAXIMUM,
+                "signed_delta_bytes": signed_delta,
+            }
+        }
+
+    def rust_key_set(self, constant: str) -> set[str]:
+        source = (ROOT / "runtime" / "ember-lab" / "src" / "main.rs").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(
+            rf"const {constant}: &\[&str\] = &\[(.*?)\];", source, re.DOTALL
+        )
+        self.assertIsNotNone(match, f"Rust schema constant {constant} is absent")
+        return set(re.findall(r'"([A-Za-z0-9_]+)"', match.group(1)))
+
+    def test_rust_required_key_inventories_match_python_schema(self) -> None:
+        self.assertEqual(
+            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_RUN_SPEC_KEYS"),
+            self.module.RUN_SPEC_KEYS,
+        )
+        self.assertEqual(
+            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_EXECUTION_SCOPE_KEYS"),
+            self.module.AUTHORIZED_SCOPE_KEYS,
+        )
+        self.assertEqual(
+            self.rust_key_set("CERTIFIED_LAUNCH_REQUIRED_REQUESTED_SCOPE_KEYS"),
+            self.module.REQUESTED_SCOPE_KEYS,
+        )
+
+    def test_closed_pair_binds_nonzero_signed_delta(self) -> None:
+        self.module._require_scope_subset(self.requested_scope, self.authorized)
+        self.assertEqual(
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA),
+                self.requested_scope,
+                self.authorized,
+            ),
+            (self.MAXIMUM, -self.DELTA),
+        )
+        for delta in (0, self.DELTA + 1):
+            with self.assertRaisesRegex(ValueError, "signed delta"):
+                self.module._validate_job_memory_ceiling_probe(
+                    self.request(delta),
+                    self.requested_scope,
+                    self.authorized,
+                )
+
+    def test_absent_or_extra_authority_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "declares no"):
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA), self.requested_scope, {}
+            )
+        request = self.request(-self.DELTA)
+        request["job_memory_ceiling_probe"]["extra"] = True
+        with self.assertRaisesRegex(ValueError, "schema keys mismatch"):
+            self.module._validate_job_memory_ceiling_probe(
+                request, self.requested_scope, self.authorized
+            )
+
+    def test_probe_rejects_unknown_top_level_run_and_authority_keys(self) -> None:
+        request = self.request(-self.DELTA)
+        request["unrecognized_probe_key"] = True
+        with self.assertRaises(ValueError) as raised:
+            self.module._validate_job_memory_ceiling_probe(
+                request, self.requested_scope, self.authorized
+            )
+        self.assertEqual(
+            str(raised.exception),
+            "job-memory ceiling probe run spec has unexpected key "
+            "`unrecognized_probe_key`",
+        )
+
+        authorized = dict(self.authorized)
+        authorized["unrecognized_probe_key"] = True
+        with self.assertRaises(ValueError) as raised:
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA), self.requested_scope, authorized
+            )
+        self.assertEqual(
+            str(raised.exception),
+            "job-memory ceiling probe certificate scope has unexpected key "
+            "`unrecognized_probe_key`",
+        )
+
+    def test_probe_authority_is_mutually_exclusive_with_training_routes(self) -> None:
+        request = self.request(-self.DELTA)
+        request["semantic_canary_mode"] = "warm-100"
+        with self.assertRaisesRegex(ValueError, "unexpected key"):
+            self.module._validate_job_memory_ceiling_probe(
+                request, self.requested_scope, self.authorized
+            )
+        authorized = dict(self.authorized)
+        authorized["allowed_a1_families"] = []
+        with self.assertRaisesRegex(ValueError, "unexpected key"):
+            self.module._validate_job_memory_ceiling_probe(
+                self.request(-self.DELTA), self.requested_scope, authorized
+            )
+
+    def test_probe_training_numeric_scope_must_be_zero(self) -> None:
+        requested_scope = dict(self.requested_scope)
+        requested_scope["optimizer_steps"] = 1
+        authorized = dict(self.authorized)
+        authorized["max_optimizer_steps"] = 1
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            self.module._require_scope_subset(requested_scope, authorized)
+
+    def test_control_must_reach_near_wall_target(self) -> None:
+        target = self.MAXIMUM - self.DELTA
+        launch = SimpleNamespace(
+            job_memory_ceiling_probe_maximum_bytes=self.MAXIMUM,
+            job_memory_ceiling_probe_signed_delta_bytes=-self.DELTA,
+        )
+        requested: list[int] = []
+        observed = iter([100 * self.MIB, target])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                self.module._execute_job_memory_ceiling_probe(
+                    launch,
+                    private_commit_probe=lambda: next(observed),
+                    allocator=lambda size: requested.append(size) or bytearray(1),
+                ),
+                0,
+            )
+        self.assertEqual(requested, [target - 100 * self.MIB])
+
+        noop = iter([100 * self.MIB, 100 * self.MIB])
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "near-wall target"):
+                self.module._execute_job_memory_ceiling_probe(
+                    launch,
+                    private_commit_probe=lambda: next(noop),
+                    allocator=lambda _size: bytearray(1),
+                )
+
+    def test_positive_leg_survival_is_never_pass(self) -> None:
+        launch = SimpleNamespace(
+            job_memory_ceiling_probe_maximum_bytes=self.MAXIMUM,
+            job_memory_ceiling_probe_signed_delta_bytes=self.DELTA,
+        )
+        observed = iter([100 * self.MIB, self.MAXIMUM + self.DELTA])
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "survived"):
+                self.module._execute_job_memory_ceiling_probe(
+                    launch,
+                    private_commit_probe=lambda: next(observed),
+                    allocator=lambda _size: bytearray(1),
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

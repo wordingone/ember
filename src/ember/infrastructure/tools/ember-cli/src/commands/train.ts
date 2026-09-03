@@ -359,7 +359,7 @@ interface TrainCommandDeps {
   repoRoot?: string;
   /** Config path override; defaults to <repoRoot>/configs/ember-restart-3b.json. */
   configPath?: string;
-  /** launch_packet.py path override; defaults to <repoRoot>/tools/ember-restart-3b/launch_packet.py. */
+  /** launch_packet.py path override; defaults to <repoRoot>/src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py. */
   scriptPath?: string;
   /**
    * External, run-scoped launch-authority custody root. Defaults to

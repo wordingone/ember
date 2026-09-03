@@ -305,10 +305,10 @@
         "kind": "EXPLICIT_FILING_DISPOSITION",
         "source_document": "docs/domains/governance/anatomy/14_MODEL_CARD.md",
         "source_line": 52,
-        "source_target": "tools/ember-restart-3b/build_owned_",
+        "source_target": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_",
         "visible_classification": "reference"
       },
-      "target": "tools/ember-restart-3b/build_owned_"
+      "target": "src/ember/infrastructure/tools/ember-restart-3b/build_owned_"
     },
     {
       "document": "docs/domains/governance/archive/goal/goal-archive-v1-full.md",
@@ -6146,13 +6146,13 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "74d4030b60590c0637406cd608dbec1ad828d90faea71a996b4ba402db73eee5",
+  "rows_sha256": "537681932dc057cc83010d6a43f95109c5e7ba3003c9c3c6ea216bff7fc9f2b7",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",
     "filing_census_raw_sha256": "5a2da304d5f40cc99b6fd23dbdd092866f48eb97a282416ffada52cbf105fce7",
     "filing_census_self_sha256": "ad77a19d985a5f7772e04b782900f30b648ee78720c4446d7fc7d38a4a967b04",
-    "frozen_dispositions_raw_sha256": "53a63c0aa4bdcbfb168a6a01f0750bac5ff10033ce3c923cf9d5fae942f4ed97",
+    "frozen_dispositions_raw_sha256": "abeb1322a2bd9fcace6acd372fcd9f0a0c310103809c80e75ee3547ecb395575",
     "tree": "c09bb86cafc94409ebd775e428daac2d7923cee8"
   }
 }

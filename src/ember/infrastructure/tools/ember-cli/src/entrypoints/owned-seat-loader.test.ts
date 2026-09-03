@@ -29,12 +29,12 @@ describe("owned seat loader", () => {
       "scripts/ember_restart_eval_checkpoint_consumer.py",
       "scripts/ember_restart_eval_raw_forward.py",
       "domains/model/tokenizer/tokenizer.json",
-      "tools/ember-restart-3b/batch.py",
-      "tools/ember-restart-3b/checkpoint_artifacts.py",
-      "tools/ember-restart-3b/infer.py",
-      "tools/ember-restart-3b/model.py",
-      "tools/ember-restart-3b/parameter_counter.py",
-      "tools/ember-restart-3b/serve_owned_openai.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/infer.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
     ];
     const runtimeFiles = [
       ...trustedSources,
@@ -93,7 +93,7 @@ describe("owned seat loader", () => {
         root,
         sourceCommit,
         (_repoRoot, _commit, relativePath) =>
-          relativePath === "tools/ember-restart-3b/model.py"
+          relativePath === "src/ember/infrastructure/tools/ember-restart-3b/model.py"
             ? new TextEncoder().encode("forged\n")
             : readFileSync(join(root, relativePath)),
       )).toThrow("embedded Git commit");
@@ -118,12 +118,12 @@ describe("owned seat loader", () => {
         "scripts/ember_restart_eval_checkpoint_consumer.py",
         "scripts/ember_restart_eval_raw_forward.py",
         "domains/model/tokenizer/tokenizer.json",
-        "tools/ember-restart-3b/batch.py",
-        "tools/ember-restart-3b/checkpoint_artifacts.py",
-        "tools/ember-restart-3b/infer.py",
-        "tools/ember-restart-3b/model.py",
-        "tools/ember-restart-3b/parameter_counter.py",
-        "tools/ember-restart-3b/serve_owned_openai.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/infer.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
+        "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
       ];
       const runtimeFiles = [
         ...trustedSources,
@@ -213,7 +213,7 @@ describe("owned seat loader", () => {
           ...index,
           files: {
             ...index.files,
-            "tools/ember-restart-3b/model.py": { bytes: -1, sha256: "not-a-hash" },
+            "src/ember/infrastructure/tools/ember-restart-3b/model.py": { bytes: -1, sha256: "not-a-hash" },
           },
         };
         const corruptIndexBytes = new TextEncoder().encode(JSON.stringify(corruptIndex));
@@ -234,7 +234,7 @@ describe("owned seat loader", () => {
         }
         expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
         expect((caught as Error).message).toBe(
-          "trusted runtime source binding is invalid: tools/ember-restart-3b/model.py",
+          "trusted runtime source binding is invalid: src/ember/infrastructure/tools/ember-restart-3b/model.py",
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -246,7 +246,7 @@ describe("owned seat loader", () => {
       try {
         const { sourceCommit, manifestPath } = buildFixture(root);
         const forgingReadGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
-          relativePath === "tools/ember-restart-3b/model.py"
+          relativePath === "src/ember/infrastructure/tools/ember-restart-3b/model.py"
             ? new TextEncoder().encode("forged\n")
             : readFileSync(join(root, relativePath));
         let caught: unknown;
@@ -257,7 +257,7 @@ describe("owned seat loader", () => {
         }
         expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
         expect((caught as Error).message).toBe(
-          "runtime source does not match the embedded Git commit: tools/ember-restart-3b/model.py",
+          "runtime source does not match the embedded Git commit: src/ember/infrastructure/tools/ember-restart-3b/model.py",
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -410,12 +410,12 @@ describe("owned seat loader", () => {
       "scripts/ember_restart_eval_checkpoint_consumer.py",
       "scripts/ember_restart_eval_raw_forward.py",
       "domains/model/tokenizer/tokenizer.json",
-      "tools/ember-restart-3b/batch.py",
-      "tools/ember-restart-3b/checkpoint_artifacts.py",
-      "tools/ember-restart-3b/infer.py",
-      "tools/ember-restart-3b/model.py",
-      "tools/ember-restart-3b/parameter_counter.py",
-      "tools/ember-restart-3b/serve_owned_openai.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/infer.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
+      "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
     ];
     const runtimeFiles = [
       ...trustedSources,
@@ -546,7 +546,7 @@ describe("owned seat loader", () => {
                 mode: "INTERACTIVE",
                 model_config_path: resolve("C:/owned/model-config.json"),
                 run_manifest_path: resolve("C:/run.json"),
-                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                server_path: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
                 tokenizer_path: resolve("C:/owned/tokenizer.json"),
                 trusted_verifier_registry_path: resolve("C:/trusted.json"),
                 trusted_verifier_registry_sha256: "d".repeat(64),
@@ -575,7 +575,7 @@ describe("owned seat loader", () => {
       modelConfigPath: "C:\\owned\\model-config.json",
         pythonExecutable: "python-owned",
         runManifestPath: resolve("C:/run.json"),
-        serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        serverPath: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
         tokenizerPath: resolve("C:/owned/tokenizer.json"),
         trustedVerifierRegistryPath: resolve("C:/trusted.json"),
         trustedVerifierRegistrySha256: "d".repeat(64),
@@ -616,7 +616,7 @@ describe("owned seat loader", () => {
         mode: "INTERACTIVE",
         model_config_path: resolve("C:/owned/model-config.json"),
         run_manifest_path: resolve("C:/run.json"),
-        server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        server_path: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
         tokenizer_path: resolve("C:/owned/tokenizer.json"),
         trusted_verifier_registry_path: resolve("C:/trusted.json"),
         trusted_verifier_registry_sha256: "d".repeat(64),
@@ -665,7 +665,7 @@ describe("owned seat loader", () => {
         mode: "INTERACTIVE",
         model_config_path: resolve("C:/owned/model-config.json"),
         run_manifest_path: resolve("C:/run.json"),
-        server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+        server_path: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
         tokenizer_path: resolve("C:/owned/tokenizer.json"),
         trusted_verifier_registry_path: resolve("C:/trusted.json"),
         trusted_verifier_registry_sha256: "d".repeat(64),
@@ -734,7 +734,7 @@ describe("owned seat loader", () => {
                 development_manifest_path: resolve("C:/snapshot/development.json"),
                 mode: "INTERACTIVE",
                 model_config_path: resolve("C:/owned/model-config.json"),
-                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                server_path: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
                 tokenizer_path: resolve("C:/owned/tokenizer.json"),
               },
             }),
@@ -758,7 +758,7 @@ describe("owned seat loader", () => {
       pythonExecutable: "python-owned",
       runtimeIndexPath: resolve("C:/snapshot/runtime-bundle-index.json"),
       runtimeIndexSha256: "f".repeat(64),
-      serverPath: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+      serverPath: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
       tokenizerPath: resolve("C:/owned/tokenizer.json"),
     });
     expect(observedArgs).toEqual([
@@ -830,7 +830,7 @@ describe("owned seat loader", () => {
                 development_manifest_path: echoedManifestPath,
                 mode: "INTERACTIVE",
                 model_config_path: resolve("C:/owned/model-config.json"),
-                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                server_path: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
                 tokenizer_path: resolve("C:/owned/tokenizer.json"),
               },
             }),
@@ -897,7 +897,7 @@ describe("owned seat loader", () => {
                 model_config_path: resolve("C:/owned/model-config.json"),
                 // ... and echoed back with whatever casing the resolver used.
                 run_manifest_path: echoedManifestPath,
-                server_path: resolve("C:/repo/tools/ember-restart-3b/serve_owned_openai.py"),
+                server_path: resolve("C:/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py"),
                 tokenizer_path: resolve("C:/owned/tokenizer.json"),
                 trusted_verifier_registry_path: echoedRegistryPath,
                 trusted_verifier_registry_sha256: "d".repeat(64),

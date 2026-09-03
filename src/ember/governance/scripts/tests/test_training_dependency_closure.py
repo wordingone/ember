@@ -100,7 +100,7 @@ class TrainingClosureGuardTests(unittest.TestCase):
         self.assertTrue(audit.ok, audit.failure_report())
         self.assertIn(MANIFEST_RELATIVE_PATH, audit.declared)
         self.assertIn(
-            "tools/ember-restart-3b/run_vertical_slice.py", audit.reachable
+            "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py", audit.reachable
         )
 
     def test_guard_fails_when_an_entrypoint_imports_an_undeclared_module(self) -> None:

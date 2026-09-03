@@ -22,17 +22,17 @@ Cover default-disabled behavior, missing/mismatched census hash, unapproved sign
 ### Task 2: Implement the authority consumer and model binding
 
 **Files:**
-- Modify: `tools/ember-restart-3b/training_acceleration.py`
-- Modify: `tools/ember-restart-3b/model.py`
-- Modify: `tools/ember-restart-3b/run_vertical_slice.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/model.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py`
 
 Parse a closed activation contract, reopen the census sidecar, verify its exact hash and admitted signatures, and wrap only `SwiGLUExpert.down` instances. Preserve the original BF16 master parameters and checkpoint state identity.
 
 ### Task 3: Integrate captured training and receipts
 
 **Files:**
-- Modify: `tools/ember-restart-3b/pretrain.py`
-- Modify: `tools/ember-restart-3b/training_acceleration.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/pretrain.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py`
 
 Use static buffers per admitted signature. Capture/replay `forward_loss_backward`; leave clipping, optimizer step, cursor and checkpoint operations outside. Refresh FP8 weights exactly once after each optimizer step. Emit kernel, graph, recompute, throughput, and zero-fallback receipts.
 

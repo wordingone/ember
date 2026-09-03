@@ -58,7 +58,7 @@ const LAUNCH = {
   mode: "INTERACTIVE",
   model_config_path: "/repo/configs/ember-restart-3b.json",
   run_manifest_path: MANIFEST_PATH,
-  server_path: "/repo/tools/ember-restart-3b/serve_owned_openai.py",
+  server_path: "/repo/src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
   tokenizer_path: "/repo/domains/model/tokenizer/tokenizer.json",
   trusted_verifier_registry_path: REGISTRY_PATH,
   trusted_verifier_registry_sha256: "d".repeat(64),

@@ -20,7 +20,7 @@ RECORD = (
 LANDED_001 = MIGRATIONS / "issue2015-mega-carrier-001-v1.json"
 LANDED_002 = MIGRATIONS / "issue2015-mega-carrier-002-v1.json"
 
-EXPECTED_EXCLUDED_FOURTEEN = {
+EXPECTED_ORIGINAL_EXCLUDED_FOURTEEN = {
     "docs/authority/INVARIANT.md",
     "runtime/ember-lab/src/lib.rs",
     "runtime/ember-lab/src/main.rs",
@@ -35,6 +35,13 @@ EXPECTED_EXCLUDED_FOURTEEN = {
     "scripts/ember_01_identity/validate_identity.py",
     "scripts/verify_ember01_completion.py",
     "tests/ember_restart_model/test_a1_certified_launch.py",
+}
+
+LATE_PERFORMED_AFTER_RECORD = {
+    (
+        "scripts/ember_01_custody/issue_census.py",
+        "src/ember/governance/scripts/ember_01_custody/issue_census.py",
+    )
 }
 
 
@@ -89,7 +96,7 @@ def test_original_500_map_is_exact_and_partitioned_without_overlap() -> None:
     assert len(landed) == 476
     assert len(ruled) == 10
     assert len(excluded) == 14
-    assert {source for source, _target in excluded} == EXPECTED_EXCLUDED_FOURTEEN
+    assert {source for source, _target in excluded} == EXPECTED_ORIGINAL_EXCLUDED_FOURTEEN
     assert landed.isdisjoint(ruled)
     assert landed.isdisjoint(excluded)
     assert ruled.isdisjoint(excluded)
@@ -112,16 +119,53 @@ def test_every_performed_row_has_exactly_the_target_materialized() -> None:
         assert (ROOT / target).is_file(), target
 
 
+def test_legacy_tool_prefix_is_only_a_non_executable_tombstone() -> None:
+    tracked = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--",
+            "tools/ember-restart-3b",
+            "src/ember/infrastructure/tools/ember-restart-3b",
+        ],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout.decode("utf-8").split("\0")
+    tracked = [path for path in tracked if path]
+    legacy = [
+        path for path in tracked if path.startswith("tools/ember-restart-3b/")
+    ]
+    assert legacy == [
+        "tools/ember-restart-3b/README.md"
+    ]
+
+    runtime_files = [path for path in tracked if path not in legacy]
+    assert runtime_files
+    for path in runtime_files:
+        assert path.startswith(
+            "src/ember/infrastructure/tools/ember-restart-3b/"
+        ), path
+        assert (ROOT / path).is_file(), path
+
+
 def test_every_excluded_row_preserves_only_its_original_source() -> None:
     _original, _landed, _ruled, excluded = _partition()
-    for source, target in excluded:
+    live_excluded = excluded - LATE_PERFORMED_AFTER_RECORD
+    assert len(live_excluded) == 13
+    for source, target in live_excluded:
         assert (ROOT / source).is_file(), source
         assert not (ROOT / target).exists(), target
+    for source, target in LATE_PERFORMED_AFTER_RECORD:
+        assert not (ROOT / source).exists(), source
+        assert (ROOT / target).is_file(), target
 
 
 def test_excluded_targets_have_no_path_or_dotted_module_references() -> None:
     """Prevent consumers from silently treating excluded renames as performed."""
     _original, _landed, _ruled, excluded = _partition()
+    live_excluded = excluded - LATE_PERFORMED_AFTER_RECORD
     tracked = subprocess.run(
         ["git", "ls-files", "-z"],
         cwd=ROOT,
@@ -131,7 +175,7 @@ def test_excluded_targets_have_no_path_or_dotted_module_references() -> None:
     ignored = {RECORD.resolve(), Path(__file__).resolve()}
 
     target_needles: dict[str, set[str]] = {}
-    for _source, target in sorted(excluded):
+    for _source, target in sorted(live_excluded):
         target_needles[target] = {target}
         if target.endswith(".py"):
             target_needles[target].add(target[:-3].replace("/", "."))

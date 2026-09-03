@@ -16,7 +16,7 @@ so.
 **Plain PyTorch. The birth decoder is hand-written, not a HuggingFace model.**
 
 This distinction is the one a repo-wide grep gets wrong, so scope it to the birth path first. Every
-third-party import under `tools/ember-restart-3b/`, the exclusive training namespace named by the
+third-party import under `src/ember/infrastructure/tools/ember-restart-3b/`, the exclusive training namespace named by the
 contract:
 
 | import | role |
@@ -28,7 +28,7 @@ contract:
 That is the whole list. **No `transformers`, no `datasets`, no `peft`, no `triton`, no JAX, no
 DeepSpeed, no Megatron.**
 
-The model is `tools/ember-restart-3b/model.py::UnifiedDecoder`, a `torch.nn.Module` written here,
+The model is `src/ember/infrastructure/tools/ember-restart-3b/model.py::UnifiedDecoder`, a `torch.nn.Module` written here,
 along with everything under it: `RMSNorm`, `RawPatchProjector`, `RawAudioProjector`,
 `RotaryCoordinates`, `SharedAttention`, `SwiGLUExpert`, `_DecoderLayer`. `launch_packet.py` pins the
 `class UnifiedDecoder` marker as part of the launch preflight, so the identity of the decoder is

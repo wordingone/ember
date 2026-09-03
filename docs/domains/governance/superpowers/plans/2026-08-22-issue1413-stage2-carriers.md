@@ -13,7 +13,7 @@
 ### Task 1: Carrier 1 closed signature grammar
 
 **Files:**
-- Modify: `tools/ember-restart-3b/training_acceleration.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py`
 - Test: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
 
 1. Add failing tests for canonical tensor descriptors, active-expert and span binding, deterministic SHA-256, unique signature counts, closed receipt keys, and no-overwrite output.
@@ -24,8 +24,8 @@
 ### Task 2: Carrier 1 real-path producer integration
 
 **Files:**
-- Modify: `tools/ember-restart-3b/pretrain.py`
-- Modify: `tools/ember-restart-3b/run_vertical_slice.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/pretrain.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py`
 - Test: `tests/ember_restart_model/domain-governance/test_pretrain.py`
 - Test: `tests/ember_restart_model/domain-governance/test_runner_preflight.py`
 
@@ -49,10 +49,10 @@
 ### Task 4: Carrier 2 activation binding
 
 **Files:**
-- Modify: `tools/ember-restart-3b/training_acceleration.py`
-- Modify: `tools/ember-restart-3b/model.py`
-- Modify: `tools/ember-restart-3b/pretrain.py`
-- Modify: `tools/ember-restart-3b/run_vertical_slice.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/model.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/pretrain.py`
+- Modify: `src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py`
 - Test: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
 - Test: `tests/ember_restart_model/domain-governance/test_pretrain.py`
 - Test: `tests/ember_restart_model/domain-governance/test_runner_preflight.py`

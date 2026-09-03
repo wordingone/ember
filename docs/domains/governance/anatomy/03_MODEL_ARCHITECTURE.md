@@ -7,7 +7,7 @@ The active EMBER-02 architecture contract is `configs/ember-restart-3b.json`
 superseding contract v1 ("dense positionless production shell retired before
 GPU materialization" — the config's own `supersedes.reason`). Namespaces are
 exclusive per-purpose: model root `models/ember-restart-3b/`, training root
-`tools/ember-restart-3b/`, checkpoint root `receipts/ember-restart-3b/`.
+`src/ember/infrastructure/tools/ember-restart-3b/`, checkpoint root `receipts/ember-restart-3b/`.
 Lineage: `initialization: "random"`, `borrowed_weights: false`,
 `teacher_outputs: false`, `model_derived_data: false`,
 `external_judges: false` — a from-scratch, owned genesis by contract.

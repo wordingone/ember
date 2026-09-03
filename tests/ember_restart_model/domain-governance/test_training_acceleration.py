@@ -19,7 +19,7 @@ from unittest.mock import patch
 import torch
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 import training_acceleration
 from model import MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
