@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
 
-SPEC_ROOT = PurePosixPath("tools/ember-cli/specs")
+SPEC_ROOT = PurePosixPath("src/ember/infrastructure/tools/ember-cli/specs")
 CURRENT_STATUSES = {"CURRENT", "SHIPPED"}
 KNOWN_STATUSES = CURRENT_STATUSES | {"OPEN", "HISTORICAL", "SUPERSEDED"}
 CHANGED_FILE_STATUSES = {
@@ -63,7 +63,8 @@ def _normalize_consumer(root: Path, value: str, *, spec_path: str) -> str:
         or any(part in {"", ".", ".."} for part in candidate.parts)
         or not candidate.parts
         or not (
-            candidate.parts[0] == "tools"
+            candidate.parts[:6]
+            == ("src", "ember", "infrastructure", "tools", "ember-cli", "src")
             or candidate.parts[:3] == ("runtime", "ember-lab", "src")
         )
     ):
