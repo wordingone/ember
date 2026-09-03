@@ -62,6 +62,9 @@ build_ready_for_compute_packet = getattr(_ember_4d57af04c363ba35_module, 'build_
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
+CERTIFIED_TEST_REL = next(candidate for candidate in ("tests/ember_restart_model/domain-governance/test_certified_train_launch.py", "tests/ember_restart_model/test_certified_train_launch.py") if (ROOT / candidate).is_file())
+TEXT_TEST_REL = next(candidate for candidate in ("tests/ember_restart_model/domain-governance/test_text_lab_corpus.py", "tests/ember_restart_model/test_text_lab_corpus.py") if (ROOT / candidate).is_file())
+RESTART_TOOLS_REL = next(candidate for candidate in ("src/ember/infrastructure/tools/ember-restart-3b", "tools/ember-restart-3b") if (ROOT / candidate / "text_lab_corpus.py").is_file())
 SOURCE_COMMIT = subprocess.check_output(
     ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
 ).strip()
@@ -77,15 +80,15 @@ def _load_test_support(relative: str, name: str):
 
 
 CERTIFIED_SUPPORT = _load_test_support(
-    "tests/ember_restart_model/test_certified_train_launch.py",
+    CERTIFIED_TEST_REL,
     "r1_packet_certified_support",
 )
 TEXT_SUPPORT = _load_test_support(
-    "tests/ember_restart_model/test_text_lab_corpus.py",
+    TEXT_TEST_REL,
     "r1_packet_text_support",
 )
 TEXT_AUTHORITY = _load_test_support(
-    "tools/ember-restart-3b/text_lab_corpus.py",
+    f"{RESTART_TOOLS_REL}/text_lab_corpus.py",
     "r1_packet_shared_text_authority",
 )
 
@@ -184,10 +187,10 @@ def _write_verified_authority(
 ) -> Path:
     data = repo / "data" / "ember-restart-3b"
     data.mkdir(parents=True, exist_ok=True)
-    tools = repo / "tools" / "ember-restart-3b"
+    tools = repo / RESTART_TOOLS_REL
     tools.mkdir(parents=True, exist_ok=True)
     for name in ("text_lab_corpus.py", "train.py", "run_vertical_slice.py"):
-        shutil.copy2(ROOT / "tools" / "ember-restart-3b" / name, tools / name)
+        shutil.copy2(ROOT / RESTART_TOOLS_REL / name, tools / name)
     schema_names = (
         "text-lab-registry-v2.schema.json",
         "text-lab-bundle-v3.schema.json",
@@ -250,7 +253,7 @@ def _write_verified_authority(
             "declared_spdx": "MIT",
         }
     text_module = _load_test_support(
-        "tools/ember-restart-3b/text_lab_corpus.py", "r1_packet_authority_writer"
+        f"{RESTART_TOOLS_REL}/text_lab_corpus.py", "r1_packet_authority_writer"
     )
     bundle = {
         "schema_version": "ember-text-source-receipt-bundle-v3",
@@ -373,7 +376,8 @@ def _fixture(
         paths["repo"], CERTIFIED_SUPPORT.ARCHITECTURE_REVISION
     )
     tokenizer = paths["repo"] / "domains" / "model" / "tokenizer" / "tokenizer.json"
-    _write_json(tokenizer, {"model": {"vocab": {"<pad>": 0, "x": 1}}})
+    tokenizer.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "domains/model/tokenizer/tokenizer.json", tokenizer)
     semantic_receipt = paths["repo"] / "manifests" / "token-shards-receipt.json"
     _write_json(
         semantic_receipt,
@@ -432,7 +436,7 @@ def _build(
         stale_code_identity=stale_code_identity,
     )
     text_module = _load_test_support(
-        "tools/ember-restart-3b/text_lab_corpus.py",
+        f"{RESTART_TOOLS_REL}/text_lab_corpus.py",
         f"r1_packet_text_lab_{tmp_path.name}",
     )
 

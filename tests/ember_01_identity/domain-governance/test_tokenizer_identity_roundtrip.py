@@ -29,7 +29,11 @@ import unittest
 from pathlib import Path
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-for _extra in (ROOT / "scripts" / "ember_01_identity", ROOT / "scripts"):
+for _extra in (
+    ROOT / "scripts" / "ember_01_identity",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_identity",
+    ROOT / "src" / "ember" / "governance" / "scripts",
+):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 
@@ -89,7 +93,7 @@ def _base_manifest() -> dict:
             "disposition": "OWNED_CANDIDATE",
             "selected_as_owned_ember": False,
         },
-        "architecture": {"source": "tools/ember-restart-3b/model.py", "sha256": "a" * 64},
+        "architecture": {"source": "src/ember/infrastructure/tools/ember-restart-3b/model.py", "sha256": "a" * 64},
         "checkpoint": {
             "format": "ember-restart-3b-checkpoint-manifest-v1",
             "byte_sha256": "0" * 64,

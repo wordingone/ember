@@ -101,11 +101,12 @@ _source_role = getattr(_ember_21106b7bc55d9483_module, '_source_role')
 # issue2015 exact-local-import-end:scripts/ember_01_identity/census_consumers.py  # noqa: E402
 from merge_adjudications import LANE_SCHEMA, merge_adjudication_lanes  # noqa: E402
 
-CENSUS_PATH = (
-    _IDENTITY_DIR.parents[1] / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
+_REPOSITORY_PATH = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file()
 )
+CENSUS_PATH = _REPOSITORY_PATH / "manifests" / "ember-01-identity" / "consumer-census-v1.json"
 OUTPUT_PATH = (
-    _IDENTITY_DIR.parents[1] / "manifests" / "ember-01-identity"
+    _REPOSITORY_PATH / "manifests" / "ember-01-identity"
     / "parameter-identity-resolution-v1.json"
 )
 

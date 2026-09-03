@@ -14,12 +14,12 @@ caller-supplied ``checkpoint_bytes`` argument (validate_identity.py ~line 638-72
 checkpoint.byte_sha256``, and ``checkpoint.envelope_tensor_mismatch`` unless the envelope's
 own per-tensor hashes equal ``checkpoint.tensors``. The real runtime consumer that later
 LOADS that same checkpoint is
-``tools/ember-restart-3b/checkpoint_artifacts.load_checkpoint_artifacts`` -- it calls
+``src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.load_checkpoint_artifacts`` -- it calls
 ``torch.load`` and ``model.load_state_dict`` / ``optimizer.load_state_dict``, but ONLY after
 its own ``CheckpointIdentityMismatch`` gate (checkpoint_artifacts.py lines 1230-1243) confirms
 the checkpoint's identity. This binding measures that identity from a REAL checkpoint shard
 via the trusted, isolated counter's own safe metadata-only reader
-(``tools/ember-restart-3b/parameter_counter._load_checkpoint_metadata`` /
+(``src/ember/infrastructure/tools/ember-restart-3b/parameter_counter._load_checkpoint_metadata`` /
 ``_tensor_raw_bytes``) -- never ``torch.load`` itself, never a hand-typed digest.
 
 Fail-closed negatives drive the manifest's checkpoint identity out of agreement with the
@@ -54,9 +54,10 @@ import torch
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
-COUNTER_DIR = ROOT / "tools" / "ember-restart-3b"
+RESTART_TOOLS = next(candidate for candidate in (ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b", ROOT / "tools" / "ember-restart-3b") if (candidate / "parameter_counter.py").is_file())
+COUNTER_PATH = RESTART_TOOLS
 TEST_DIR = Path(__file__).parent
-for _extra in (SCRIPT_DIR, COUNTER_DIR, TEST_DIR):
+for _extra in (SCRIPT_DIR, COUNTER_PATH, TEST_DIR):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 

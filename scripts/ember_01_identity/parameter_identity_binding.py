@@ -6,7 +6,7 @@
 
 cond3 increment-1 (parameter_identity, 160 census rows): the identity manifest's
 ``parameters`` section must not be hand-typed or fixture-constant. This module is the
-one wiring path between ``tools/ember-restart-3b/parameter_counter.execute_counter``
+one wiring path between ``src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.execute_counter``
 (the trusted, isolated counter that inspects a *live* checkpoint under ``-I``) and
 ``scripts/ember_01_identity/validate_identity`` (the manifest-shape validator).
 
@@ -52,11 +52,10 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-_COUNTER_MODULE_DIR = (
-    Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b"
-)
-if str(_COUNTER_MODULE_DIR) not in sys.path:
-    sys.path.insert(0, str(_COUNTER_MODULE_DIR))
+_RESTART_TOOLS = next(candidate for candidate in (Path(__file__).resolve().parents[2] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b", Path(__file__).resolve().parents[2] / "tools" / "ember-restart-3b") if (candidate / "parameter_counter.py").is_file())
+_COUNTER_MODULE_PATH = _RESTART_TOOLS
+if str(_COUNTER_MODULE_PATH) not in sys.path:
+    sys.path.insert(0, str(_COUNTER_MODULE_PATH))
 
 from parameter_counter import execute_counter  # noqa: E402  (path seam above)
 from parameter_counter import _sha256 as _hash_file  # noqa: E402  (streaming file hash, no full-file read)

@@ -12,9 +12,16 @@ import unittest
 from pathlib import Path
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-_IDENTITY_DIR = ROOT / "scripts" / "ember_01_identity"
-if str(_IDENTITY_DIR) not in sys.path:
-    sys.path.insert(0, str(_IDENTITY_DIR))
+_IDENTITY_PATH = next(
+    candidate
+    for candidate in (
+        ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_identity",
+        ROOT / "scripts" / "ember_01_identity",
+    )
+    if (candidate / "resolve_parameter_identity_census.py").is_file()
+)
+if str(_IDENTITY_PATH) not in sys.path:
+    sys.path.insert(0, str(_IDENTITY_PATH))
 
 from resolve_parameter_identity_census import CENSUS_PATH, resolve  # noqa: E402
 

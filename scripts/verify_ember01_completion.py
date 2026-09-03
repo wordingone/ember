@@ -116,13 +116,13 @@ from ember_01_identity.parameter_identity_binding import (
     measure_live_checkpoint,
     verify_parameter_identity_binding,
 )
-# issue2015 exact-local-import:src/ember/governance/scripts/cond4_behavior_surface.py
+# issue2015 exact-local-import:scripts/cond4_behavior_surface.py
 import importlib.util as _ember_fb803101a82ee38f_importlib
 import sys as _ember_fb803101a82ee38f_sys
 from pathlib import Path as _ember_fb803101a82ee38f_Path
-_ember_fb803101a82ee38f_path = _ember_fb803101a82ee38f_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'cond4_behavior_surface.py')
+_ember_fb803101a82ee38f_path = _ember_fb803101a82ee38f_Path(__file__).resolve().parents[1].joinpath('scripts', 'cond4_behavior_surface.py')
 if not _ember_fb803101a82ee38f_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/cond4_behavior_surface.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:scripts/cond4_behavior_surface.py')
 _ember_fb803101a82ee38f_aliases = ('_ember_issue2015_fb803101a82ee38f', 'cond4_behavior_surface', 'scripts.cond4_behavior_surface')
 _ember_fb803101a82ee38f_existing = []
 for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
@@ -130,21 +130,21 @@ for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
     if _ember_fb803101a82ee38f_candidate is not None and all(_ember_fb803101a82ee38f_candidate is not item for item in _ember_fb803101a82ee38f_existing):
         _ember_fb803101a82ee38f_existing.append(_ember_fb803101a82ee38f_candidate)
 if len(_ember_fb803101a82ee38f_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/governance/scripts/cond4_behavior_surface.py')
+    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:scripts/cond4_behavior_surface.py')
 if _ember_fb803101a82ee38f_existing:
     _ember_fb803101a82ee38f_module = _ember_fb803101a82ee38f_existing[0]
     _ember_fb803101a82ee38f_observed = getattr(_ember_fb803101a82ee38f_module, '__file__', None)
     if _ember_fb803101a82ee38f_observed is None or _ember_fb803101a82ee38f_Path(_ember_fb803101a82ee38f_observed).resolve() != _ember_fb803101a82ee38f_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/governance/scripts/cond4_behavior_surface.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:scripts/cond4_behavior_surface.py')
 else:
     _ember_fb803101a82ee38f_spec = _ember_fb803101a82ee38f_importlib.spec_from_file_location('_ember_issue2015_fb803101a82ee38f', _ember_fb803101a82ee38f_path)
     if _ember_fb803101a82ee38f_spec is None or _ember_fb803101a82ee38f_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/governance/scripts/cond4_behavior_surface.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:scripts/cond4_behavior_surface.py')
     _ember_fb803101a82ee38f_module = _ember_fb803101a82ee38f_importlib.module_from_spec(_ember_fb803101a82ee38f_spec)
     for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
         _ember_fb803101a82ee38f_prior = _ember_fb803101a82ee38f_sys.modules.get(_ember_fb803101a82ee38f_alias)
         if _ember_fb803101a82ee38f_prior is not None and _ember_fb803101a82ee38f_prior is not _ember_fb803101a82ee38f_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cond4_behavior_surface.py')
+            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/cond4_behavior_surface.py')
         _ember_fb803101a82ee38f_sys.modules[_ember_fb803101a82ee38f_alias] = _ember_fb803101a82ee38f_module
     try:
         _ember_fb803101a82ee38f_spec.loader.exec_module(_ember_fb803101a82ee38f_module)
@@ -156,7 +156,7 @@ else:
 for _ember_fb803101a82ee38f_alias in _ember_fb803101a82ee38f_aliases:
     _ember_fb803101a82ee38f_prior = _ember_fb803101a82ee38f_sys.modules.get(_ember_fb803101a82ee38f_alias)
     if _ember_fb803101a82ee38f_prior is not None and _ember_fb803101a82ee38f_prior is not _ember_fb803101a82ee38f_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/governance/scripts/cond4_behavior_surface.py')
+        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:scripts/cond4_behavior_surface.py')
     _ember_fb803101a82ee38f_sys.modules[_ember_fb803101a82ee38f_alias] = _ember_fb803101a82ee38f_module
 COND4_AXES = getattr(_ember_fb803101a82ee38f_module, 'COND4_AXES')
 COND4_EXECUTION_SCHEMA = getattr(_ember_fb803101a82ee38f_module, 'EXECUTION_SCHEMA')
@@ -165,14 +165,14 @@ build_surface_manifest = getattr(_ember_fb803101a82ee38f_module, 'build_surface_
 validate_execution_evidence = getattr(_ember_fb803101a82ee38f_module, 'validate_execution_evidence')
 validate_execution_packet = getattr(_ember_fb803101a82ee38f_module, 'validate_execution_packet')
 validate_surface_manifest = getattr(_ember_fb803101a82ee38f_module, 'validate_surface_manifest')
-# issue2015 exact-local-import-end:src/ember/governance/scripts/cond4_behavior_surface.py
+# issue2015 exact-local-import-end:scripts/cond4_behavior_surface.py
 
 RESOLVED_TRUE = "resolved-true"
 RESOLVED_FALSE = "resolved-false"
 UNRESOLVED = "unresolved"
 
 CONFIG_REL = "configs/ember-restart-3b.json"
-LAUNCH_PACKET_REL = "tools/ember-restart-3b/launch_packet.py"
+LAUNCH_PACKET_REL = "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py"
 CENSUS_REL = "scripts/ember_01_custody/census.py"
 VALIDATE_IDENTITY_REL = "scripts/ember_01_identity/validate_identity.py"
 SEAT_TEST_REL = "src/ember/infrastructure/tools/ember-cli/src/entrypoints/model-seat.test.ts"
@@ -182,9 +182,6 @@ COND4_SURFACE_VALIDATOR_PATH = (
         for parent in Path(__file__).resolve().parents
         if (parent / "pyproject.toml").is_file()
     )
-    / "src"
-    / "ember"
-    / "governance"
     / "scripts"
     / "cond4_behavior_surface.py"
 )
@@ -697,7 +694,7 @@ def census_snapshot_binding(
 
     These live INSIDE the leg evidence on purpose: the completion receipt's
     top-level key set is validated with exact set equality by
-    tools/ember-restart-3b/certified_train_launch.py, so a new top-level field
+    src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py, so a new top-level field
     would make every certificate minted afterwards unlaunchable.
     """
     pinned = payload.get("public_master_sha") if isinstance(payload, dict) else None

@@ -32,7 +32,7 @@
     },
     {
       "path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "970ab114ab142a2ffac0890462d68cbe1bc9e41682ce4fd123c6ea116c759e10",
+      "sha256": "2ede5367ad5ec914f9940630da9100f002190791b8b7d5d5186a5a1b22ffc1f0",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {

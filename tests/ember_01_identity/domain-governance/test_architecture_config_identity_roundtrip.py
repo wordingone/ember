@@ -12,7 +12,7 @@ consumer resolves ``architecture.sha256`` through its OWNED_ADMITTED artifact-bu
 ``sha256`` of the ``content_hex`` bytes the admission bundle carries under artifact id
 ``"architecture"`` -- ``admission.artifact_hash_mismatch`` / ``admission.artifact_missing``
 otherwise. That same raw-bytes identity is what the trusted, isolated
-``parameter_counter.execute_counter`` (``tools/ember-restart-3b/parameter_counter.py``)
+``parameter_counter.execute_counter`` (``src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py``)
 reads and checks a checkpoint manifest's ``model_config_sha256`` against (line 802), after
 requiring the config's own ``ARCHITECTURE_REVISION`` and a structurally valid
 ``_model_shape`` (hidden_size / layers / attention_heads / vocab_size / tied embeddings /
@@ -49,9 +49,11 @@ from pathlib import Path
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SCRIPT_DIR = ROOT / "scripts" / "ember_01_identity"
-COUNTER_DIR = ROOT / "tools" / "ember-restart-3b"
+MOVED_SCRIPT_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "ember_01_identity"
+RESTART_TOOLS = next(candidate for candidate in (ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b", ROOT / "tools" / "ember-restart-3b") if (candidate / "parameter_counter.py").is_file())
+COUNTER_PATH = RESTART_TOOLS
 TEST_DIR = Path(__file__).parent
-for _extra in (SCRIPT_DIR, COUNTER_DIR, TEST_DIR):
+for _extra in (SCRIPT_DIR, MOVED_SCRIPT_PATH, COUNTER_PATH, TEST_DIR):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 
@@ -77,7 +79,7 @@ from architecture_config_identity_binding import (  # noqa: E402
     verify_architecture_identity_binding,
 )
 
-SOURCE = "tools/ember-restart-3b/parameter_counter.py:model_config"
+SOURCE = f"{RESTART_TOOLS.relative_to(ROOT).as_posix()}/parameter_counter.py:model_config"
 
 
 def _valid_config(*, hidden_size: int = 256, layers: int = 2, attention_heads: int = 4, vocab_size: int = 1024) -> dict:

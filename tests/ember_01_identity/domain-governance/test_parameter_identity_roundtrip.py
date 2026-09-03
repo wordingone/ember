@@ -31,17 +31,18 @@ from pathlib import Path
 import torch
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-_FIXTURE_DIR = ROOT / "tests" / "ember_restart_model" / "domain-governance"
-if not (_FIXTURE_DIR / "checkpoint_fixture.py").is_file():
+RESTART_TOOLS = next(candidate for candidate in (ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b", ROOT / "tools" / "ember-restart-3b") if (candidate / "parameter_counter.py").is_file())
+_FIXTURE_PATH = ROOT / "tests" / "ember_restart_model" / "domain-governance"
+if not (_FIXTURE_PATH / "checkpoint_fixture.py").is_file():
     _fixture_candidates = sorted(
         (ROOT / "tests" / "ember_restart_model").glob("**/checkpoint_fixture.py")
     )
     if len(_fixture_candidates) != 1:
         raise RuntimeError("checkpoint_fixture.py must have exactly one migration location")
-    _FIXTURE_DIR = _fixture_candidates[0].parent
+    _FIXTURE_PATH = _fixture_candidates[0].parent
 for _extra in (
-    ROOT / "tools" / "ember-restart-3b",
-    _FIXTURE_DIR,
+    RESTART_TOOLS,
+    _FIXTURE_PATH,
     ROOT / "scripts" / "ember_01_identity",
 ):
     if str(_extra) not in sys.path:
@@ -80,7 +81,7 @@ def _base_manifest() -> dict:
             "selected_as_owned_ember": False,
         },
         "architecture": {
-            "source": "tools/ember-restart-3b/model.py",
+            "source": f"{RESTART_TOOLS.relative_to(ROOT).as_posix()}/model.py",
             "sha256": "a" * 64,
         },
         "checkpoint": {

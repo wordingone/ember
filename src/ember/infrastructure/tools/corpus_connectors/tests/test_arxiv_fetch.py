@@ -17,7 +17,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import arxiv_fetch
-from tools.corpus_connectors import receipt as rcpt
+from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt
 
 ATOM_CC = b"""<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">

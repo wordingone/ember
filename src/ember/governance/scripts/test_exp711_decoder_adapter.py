@@ -11,9 +11,21 @@ from pathlib import Path
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-EXP711_PATH = ROOT / "scripts" / "exp711_intervals.py"
-HELPER_PATH = (
-    ROOT / "tools" / "ember-restart-3b" / "frozen_tokenizer_decoder.py"
+EXP711_PATH = next(
+    candidate
+    for candidate in (
+        ROOT / "src" / "ember" / "governance" / "scripts" / "exp711_intervals.py",
+        ROOT / "scripts" / "exp711_intervals.py",
+    )
+    if candidate.is_file()
+)
+HELPER_PATH = next(
+    candidate
+    for candidate in (
+        ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "frozen_tokenizer_decoder.py",
+        ROOT / "tools" / "ember-restart-3b" / "frozen_tokenizer_decoder.py",
+    )
+    if candidate.is_file()
 )
 TOKENIZER_PATH = ROOT / "domains" / "model" / "tokenizer" / "tokenizer.json"
 

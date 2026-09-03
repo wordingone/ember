@@ -72,7 +72,7 @@ TELEMETRY_SOURCE = "ember-restart-3b"
 # drifted copy fails the guard, which is the enforcement).
 GOAL_ID = "EMBER-02"
 # docs/domains/governance/authority/GOAL.md workstream_path_scopes: scripts/ and receipts/ (non-restart-3b
-# prefixes) are EMBER-02A territory; only tools/ember-restart-3b/ is 02B.
+# prefixes) are EMBER-02A territory; only src/ember/infrastructure/tools/ember-restart-3b/ is 02B.
 WORKSTREAM_ID = "EMBER-02A"
 NEXT_EXECUTED_OUTCOME = (
     "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"

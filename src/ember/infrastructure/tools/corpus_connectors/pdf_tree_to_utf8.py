@@ -26,8 +26,8 @@ _REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (pare
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
-from tools.corpus_connectors import pdf_to_utf8  # noqa: E402
-from tools.corpus_connectors import receipt as connector_receipt  # noqa: E402
+from src.ember.infrastructure.tools.corpus_connectors import pdf_to_utf8  # noqa: E402
+from src.ember.infrastructure.tools.corpus_connectors import receipt as connector_receipt  # noqa: E402
 
 
 SCHEMA = "ember-pdf-tree-extraction-receipt-v2"

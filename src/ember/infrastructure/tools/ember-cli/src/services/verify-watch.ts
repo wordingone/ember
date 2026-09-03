@@ -928,7 +928,7 @@ export function startVerifyRun(deps: VerifyPipelineDeps): VerifyJobState {
         "issue-census",
         deps.pythonBin,
         [
-          "-B", "src/ember/governance/scripts/ember_01_custody/issue_census.py",
+          "-B", "scripts/ember_01_custody/issue_census.py",
           // #1371: repository-scoped, so this reads the PINNED worktree, never repoRoot.
           "--repo-root", created.path,
           "--public-ref", "refs/remotes/origin/master",

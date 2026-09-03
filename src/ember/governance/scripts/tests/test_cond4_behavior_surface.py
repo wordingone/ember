@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 
-MODULE_PATH = Path(__file__).parents[1] / "cond4_behavior_surface.py"
+MODULE_PATH = Path(__file__).parents[5] / "scripts" / "cond4_behavior_surface.py"
 SPEC = importlib.util.spec_from_file_location("cond4_behavior_surface", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 surface = importlib.util.module_from_spec(SPEC)

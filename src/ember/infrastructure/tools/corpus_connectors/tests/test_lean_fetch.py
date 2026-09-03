@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import lean_fetch
-from tools.corpus_connectors import receipt as rcpt
+from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt
 
 
 class _FakeResp:

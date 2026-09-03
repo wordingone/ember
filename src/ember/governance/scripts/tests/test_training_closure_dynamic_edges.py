@@ -154,16 +154,18 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
         closure = load_closure()
         manifest = closure.load_manifest(ROOT)
         caller = "tools/ember-restart-3b/mint_github_license_partition.py"
-        target = "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
-        self.assertIn(target, manifest["code"])
-        self.assertIn(target, manifest["dynamic_call_sites"][caller])
+        bridge = "tools/corpus_connectors/receipt.py"
+        canonical = "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
+        self.assertIn(bridge, manifest["code"])
+        self.assertIn(canonical, manifest["code"])
+        self.assertIn(bridge, manifest["dynamic_call_sites"][caller])
+        self.assertIn(canonical, manifest["dynamic_call_sites"][bridge])
 
     def test_real_text_lab_dynamic_targets_are_machine_detected(self) -> None:
         closure = load_closure()
         caller = "tools/ember-restart-3b/text_lab_corpus.py"
         expected = {
-            "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py",
-            "src/ember/infrastructure/tools/corpus_connectors/receipt.py",
+            "tools/corpus_connectors/receipt.py",
             "tools/ember-restart-3b/mint_github_license_partition.py",
         }
 

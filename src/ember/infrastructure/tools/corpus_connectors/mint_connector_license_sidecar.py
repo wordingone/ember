@@ -25,7 +25,7 @@ _REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (pare
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
-from tools.corpus_connectors import receipt as connector_receipt  # noqa: E402
+from src.ember.infrastructure.tools.corpus_connectors import receipt as connector_receipt  # noqa: E402
 
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -182,7 +182,15 @@ def _write_json(path: Path, value: object) -> bytes:
 
 
 def _canonical_license_identity(value: Any) -> str:
-    authority_path = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file()) / "tools" / "ember-restart-3b" / "text_lab_corpus.py"
+    root = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
+    authority_path = next(
+        candidate
+        for candidate in (
+            root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "text_lab_corpus.py",
+            root / "tools" / "ember-restart-3b" / "text_lab_corpus.py",
+        )
+        if candidate.is_file()
+    )
     spec = importlib.util.spec_from_file_location("text_lab_corpus_sidecar_license_authority", authority_path)
     if spec is None or spec.loader is None:
         raise LicenseSidecarRefusal("canonical license authority is unavailable")

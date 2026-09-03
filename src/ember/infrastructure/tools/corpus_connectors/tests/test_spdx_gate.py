@@ -16,7 +16,7 @@ from unittest import mock
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(ROOT / "tools" / "ember-restart-3b"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[6] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 import spdx_gate  # noqa: E402
 import wave_manifest as wm  # noqa: E402

@@ -91,7 +91,7 @@ _REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (pare
 if str(_REPO_ROOT) not in sys.path:
     sys.path.append(str(_REPO_ROOT))
 
-from tools.corpus_connectors import receipt as rcpt  # noqa: E402
+from src.ember.infrastructure.tools.corpus_connectors import receipt as rcpt  # noqa: E402
 
 CONNECTOR_NAME = "arxiv_fetch"
 API_BASE = "https://export.arxiv.org/api/query"

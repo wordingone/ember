@@ -36,9 +36,9 @@ from pathlib import Path
 import pytest
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-SCRIPTS_DIR = ROOT / "scripts"
-IDENTITY_DIR = SCRIPTS_DIR / "ember_01_identity"
-for _extra in (SCRIPTS_DIR, IDENTITY_DIR):
+SCRIPTS_PATH = ROOT / "src" / "ember" / "governance" / "scripts"
+IDENTITY_PATH = SCRIPTS_PATH / "ember_01_identity"
+for _extra in (SCRIPTS_PATH, IDENTITY_PATH):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 
