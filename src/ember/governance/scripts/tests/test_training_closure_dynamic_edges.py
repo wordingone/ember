@@ -16,6 +16,30 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[5]
 MODULE_PATH = ROOT / "src" / "ember" / "governance" / "scripts" / "training_closure.py"
 MANIFEST_PATH = "manifests/training-dependency-closure.json"
+LEGACY_TOOL_ROOT = "tools/ember-restart-3b"
+CANONICAL_TOOL_ROOT = "src/ember/infrastructure/tools/ember-restart-3b"
+LEGACY_RECEIPT = "tools/corpus_connectors/receipt.py"
+CANONICAL_RECEIPT = "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
+
+
+def restart_tool(name: str) -> str:
+    """Repo-relative path of an ember-restart-3b tool at whichever root holds it.
+
+    The tool tree moves from the legacy root to the canonical root in the EMBER-02B
+    cutover; this test binds to the location that exists at the head under test, so
+    it holds on both sides of that move without editing.
+    """
+    canonical = f"{CANONICAL_TOOL_ROOT}/{name}"
+    if (ROOT / canonical).is_file():
+        return canonical
+    return f"{LEGACY_TOOL_ROOT}/{name}"
+
+
+def receipt_module_for(caller: str) -> str:
+    """The corpus-connector receipt module a tool at ``caller`` resolves by location."""
+    if caller.startswith(CANONICAL_TOOL_ROOT + "/"):
+        return CANONICAL_RECEIPT
+    return LEGACY_RECEIPT
 
 
 def load_closure():
@@ -145,7 +169,7 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
     def test_specialist_stream_declares_hash_bound_exec(self) -> None:
         closure = load_closure()
         note = closure.load_manifest(ROOT)["dynamic_call_site_notes"][
-            "tools/ember-restart-3b/specialist_stream.py"
+            restart_tool("specialist_stream.py")
         ]
         self.assertIn("exec", note.lower())
         self.assertIn("sha256", note.lower())
@@ -153,20 +177,21 @@ class TrainingClosureDynamicEdgeTests(unittest.TestCase):
     def test_github_license_partition_declares_connector_receipt_import(self) -> None:
         closure = load_closure()
         manifest = closure.load_manifest(ROOT)
-        caller = "tools/ember-restart-3b/mint_github_license_partition.py"
-        bridge = "tools/corpus_connectors/receipt.py"
-        canonical = "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
-        self.assertIn(bridge, manifest["code"])
-        self.assertIn(canonical, manifest["code"])
-        self.assertIn(bridge, manifest["dynamic_call_sites"][caller])
-        self.assertIn(canonical, manifest["dynamic_call_sites"][bridge])
+        caller = restart_tool("mint_github_license_partition.py")
+        resolved = receipt_module_for(caller)
+        self.assertIn(CANONICAL_RECEIPT, manifest["code"])
+        self.assertIn(resolved, manifest["code"])
+        self.assertIn(resolved, manifest["dynamic_call_sites"][caller])
+        if resolved == LEGACY_RECEIPT:
+            # The legacy receipt module is a bridge onto the canonical one.
+            self.assertIn(CANONICAL_RECEIPT, manifest["dynamic_call_sites"][resolved])
 
     def test_real_text_lab_dynamic_targets_are_machine_detected(self) -> None:
         closure = load_closure()
-        caller = "tools/ember-restart-3b/text_lab_corpus.py"
+        caller = restart_tool("text_lab_corpus.py")
         expected = {
-            "tools/corpus_connectors/receipt.py",
-            "tools/ember-restart-3b/mint_github_license_partition.py",
+            receipt_module_for(caller),
+            restart_tool("mint_github_license_partition.py"),
         }
 
         detected = set(closure.dynamic_repo_targets(ROOT, caller))
