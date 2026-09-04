@@ -19,8 +19,8 @@ sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "em
 
 import torch
 
-from model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
-from pretrain import run_pretraining_segment  # noqa: E402
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from src.ember.training.pretrain import run_pretraining_segment  # noqa: E402
 from train import run_launch  # noqa: E402
 
 from input_identity import (  # noqa: E402
