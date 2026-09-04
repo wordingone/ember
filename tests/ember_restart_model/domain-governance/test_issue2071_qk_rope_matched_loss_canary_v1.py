@@ -645,10 +645,10 @@ def test_treatment_checkout_accepts_only_exact_four_file_cascade(tmp_path: Path,
 def test_treatment_checkout_binds_composite_post_spine_authority_hashes():
     assert MODULE.CASCADE_ARTIFACT_SHA256[
         "data/ember-restart-3b/owned-text-lab-input-identity-v4.json"
-    ] == "24523af7896002902b207e408ba0a96caf102166fed53b6fe54191729a877eba"
+    ] == "105b277a88b6d4a07c3ed5a4733548415aec40dbac883e51f1cf49d3b7333fc0"
     assert MODULE.CASCADE_ARTIFACT_SHA256[
         "data/ember-restart-3b/text-lab-authority-index-v2.json"
-    ] == "ce0c0500d534bfd7c53d1f533d30fb574f58ae9c6d1affdc4298916ba18eb27a"
+    ] == "94846217f42984f79defd093f7fc2a4728e6750c5c03e209fcffb1819c576fcd"
 
 
 def test_treatment_checkout_refuses_cascade_hash_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

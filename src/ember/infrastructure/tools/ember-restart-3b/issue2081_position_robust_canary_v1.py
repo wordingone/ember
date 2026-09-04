@@ -240,7 +240,15 @@ def rebind_receipt(
     *,
     control_rebased_head: str,
     treatment_rebased_head: str,
+    control_source_model_sha256: str,
+    treatment_source_model_sha256: str,
 ) -> dict[str, object]:
+    for label, digest in (
+        ("CONTROL_SOURCE_MODEL", control_source_model_sha256),
+        ("TREATMENT_SOURCE_MODEL", treatment_source_model_sha256),
+    ):
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise ValueError(f"{label}_SHA256_REFUSED:{digest}")
     rebound = copy.deepcopy(value)
     rebound["schema_version"] = SCHEMA_VERSION
     if rebound.get("issue") in (2071, 2081):
@@ -249,6 +257,8 @@ def rebind_receipt(
         rebound["control_source_head"] = control_rebased_head
     if "treatment_source_head" in rebound:
         rebound["treatment_source_head"] = treatment_rebased_head
+    rebound["control_source_model_sha256"] = control_source_model_sha256
+    rebound["treatment_source_model_sha256"] = treatment_source_model_sha256
     rebound["source_lineage"] = {
         "control_predecessor_head": BASE.CONTROL_HEAD,
         "treatment_predecessor_head": BASE.TREATMENT_HEAD,
@@ -391,12 +401,18 @@ def configure_base(
             )
 
     def bound_write_receipt(path: Path, value: dict[str, object]):
+        control_source_model_sha256 = BASE.sha256_bytes(
+            rebased_git(root, "show", historical_control_spec)
+        )
+        treatment_source_model_sha256 = str(value.get("source_model_sha256", ""))
         return original_write_receipt(
             path,
             rebind_receipt(
                 value,
                 control_rebased_head=control_rebased_head,
                 treatment_rebased_head=treatment_rebased_head,
+                control_source_model_sha256=control_source_model_sha256,
+                treatment_source_model_sha256=treatment_source_model_sha256,
             ),
         )
 

@@ -343,11 +343,15 @@ def test_terminal_receipt_is_rebound_to_issue2099_and_rebased_heads():
         receipt,
         control_rebased_head="a" * 40,
         treatment_rebased_head="b" * 40,
+        control_source_model_sha256="e" * 64,
+        treatment_source_model_sha256="f" * 64,
     )
     assert rebound["schema_version"] == MODULE.SCHEMA_VERSION
     assert rebound["issue"] == 2099
     assert rebound["control_source_head"] == "a" * 40
     assert rebound["treatment_source_head"] == "b" * 40
+    assert rebound["control_source_model_sha256"] == "e" * 64
+    assert rebound["treatment_source_model_sha256"] == "f" * 64
     assert rebound["source_lineage"] == {
         "control_predecessor_head": MODULE.BASE.CONTROL_HEAD,
         "treatment_predecessor_head": MODULE.BASE.TREATMENT_HEAD,
