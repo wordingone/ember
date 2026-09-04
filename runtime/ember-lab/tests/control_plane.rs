@@ -3399,6 +3399,7 @@ fn producer_exit_before_last_phase_is_an_invalid_transition_not_a_pass() {
     let root = sandbox("phase-early-exit");
     let db = root.join("phase-early-exit.sqlite3");
     let (identity, identity_hash) = write_identity(&root);
+    let exit_sentinel = root.join("phase-early-exit.release");
     let daemon = Daemon::open(&db).unwrap();
     daemon
         .bind_identity("phase-early-exit", &identity, &identity_hash)
@@ -3424,7 +3425,11 @@ fn producer_exit_before_last_phase_is_an_invalid_transition_not_a_pass() {
                 model_receipt.to_string_lossy(),
             )
             .with_env("EMBER_LAB_MODEL_CHAIN_SHA256", model_receipt_sha256)
-            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "0"),
+            .with_env(
+                "EMBER_LAB_FIXTURE_EXIT_SENTINEL",
+                exit_sentinel.to_string_lossy(),
+            )
+            .with_env("EMBER_LAB_FIXTURE_SLEEP_MS", "5000"),
         )
         .unwrap();
     let phase_root = root
@@ -3432,18 +3437,37 @@ fn producer_exit_before_last_phase_is_an_invalid_transition_not_a_pass() {
         .join("rehearsal")
         .join(ember_lab::hash_bytes(b"phase-early-exit"));
     let peak = wait_for_host_peak(&phase_root.join("host_peak.json"));
-    thread::sleep(Duration::from_millis(100));
+    let readiness_deadline_ms = readiness_deadline_after_ms(5_000);
+    fs::write(&exit_sentinel, b"release producer").unwrap();
+    loop {
+        let state = daemon.job_state("phase-early-exit").unwrap();
+        if state == Some(JobState::Exited) {
+            break;
+        }
+        let observed_at_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        assert!(
+            observed_at_ms < readiness_deadline_ms,
+            "daemon did not observe producer exit before readiness deadline; last state: {state:?}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
     let error = daemon
-        .execute_minimal_episode("phase-early-exit", peak, readiness_deadline_after_ms(5_000))
+        .execute_minimal_episode("phase-early-exit", peak, readiness_deadline_ms)
         .unwrap_err();
-    assert!(matches!(error, EmberLabError::InvalidTransition { .. }));
+    assert!(
+        matches!(error, EmberLabError::InvalidTransition { .. }),
+        "unexpected error: {error:?}"
+    );
     let evidence_error = daemon
         .load_authorized_phase_evidence("phase-early-exit")
         .unwrap_err();
-    assert!(matches!(
-        evidence_error,
-        EmberLabError::InvalidTransition { .. }
-    ));
+    assert!(
+        matches!(evidence_error, EmberLabError::InvalidTransition { .. }),
+        "unexpected evidence error: {evidence_error:?}"
+    );
 }
 
 #[test]
