@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-09-04T02:17:51+00:00",
+  "ts": "2026-09-04T04:44:19+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,7 +12,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "1f7d0300cab7598b599ee542aba60bf37f2227f4",
+    "commit": "7b4ccf52ab7f32870b10732b60dd3980c660b8f8",
     "branch": "redacted-by-repo-policy (provenance = repo.commit)"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3609147140954170)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3758021647062500)",
         "reader_wired": true
       },
       {
@@ -107,16 +107,16 @@
       "kind": "file",
       "provenance": "Dispatch preflight producing the launch packet ember-cli gates on.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/launch_packet.py",
-      "sha256": "3cdfc48072752147d5babfbc50a43b63c3998276e867e3d43c791cffc3a63d12",
-      "size_bytes": 60324
+      "sha256": "afd4aca9a55249bd15bef86cc6cdb480c7a02076358aaca0b22feac5994ca164",
+      "size_bytes": 61165
     },
     {
       "category": "training_loop",
       "kind": "file",
       "provenance": "Vertical-slice runner named by launch-packet output; never executed as a command string by ember-cli.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "b4115ed764d71bfed3247be2bdaee058ad8679178aadc6a94d57319691e84e61",
-      "size_bytes": 315885
+      "sha256": "118df98c7d331c0340ca1b2973ce83acde29a0817a06636c2013dce4111d9115",
+      "size_bytes": 316429
     },
     {
       "category": "training_loop",
@@ -139,8 +139,8 @@
       "kind": "file",
       "provenance": "Batch assembly and data-cursor discipline.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
-      "sha256": "bc6e1b8fb1a384012391dbc26c940bbdeaf703e3944781a8c2c48a6b84863869",
-      "size_bytes": 13609
+      "sha256": "e60204fd18813c0cecd9d7c33856d096c109b0dc31339a9bfe8a4df3f205067e",
+      "size_bytes": 13411
     },
     {
       "category": "training_loop",
@@ -155,8 +155,8 @@
       "kind": "file",
       "provenance": "Checkpoint writer producing the hash-chained sequence R1-E3 round-trips.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
-      "sha256": "524dac1a471162907075d92c636aca334d3f50ea4f628591b484386b9b36d7a5",
-      "size_bytes": 182796
+      "sha256": "25fc95a197beac4d65ee36ac5499f62dbb5202d5bf8a52017365f09d287fae73",
+      "size_bytes": 182623
     },
     {
       "category": "kernels_backend",
