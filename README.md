@@ -52,6 +52,28 @@ one into another.
   [reproducibility charter](docs/domains/governance/charter/REPRODUCIBILITY.md): bind an exact public source, replay
   documented commands, and verify source identities and receipts without hidden or local evidence.
 
+## Where things are
+
+This map points to the current implementation and authority surfaces. The guard test keeps every
+path live and requires every tracked top-level directory to remain explained.
+
+| Kind | Name | Path | What you find there |
+|---|---|---|---|
+| Domain | Model | `src/ember/model` | The canonical Python model implementation. |
+| Domain | Data | `src/ember/data` | Dataset custody, synchronization, and data-domain code. |
+| Domain | Training | `src/ember/training` | The canonical training-loop implementation. |
+| Domain | Evaluation | `src/ember/evaluation` | Protected and held-out evaluation entry points. |
+| Domain | Runtime | `src/ember/runtime` | Python inference and runtime entry points. |
+| Domain | Lab | `domains/lab` | Cross-domain experiments and their declared interfaces. |
+| Domain | Infrastructure | `src/ember/infrastructure` | Operator tooling, launchers, and execution support. |
+| Domain | Governance/contracts | `src/ember/governance` | Policy enforcement and receipt-governance code. |
+| Artifact | Model | `src/ember/model/model.py` | Unified decoder definition. |
+| Artifact | Training loop | `src/ember/training/pretrain.py` | Owned pretraining loop. |
+| Artifact | Evaluator | `src/ember/evaluation/cbase_heldout_eval.py` | Held-out evaluation entry point. |
+| Artifact | Runtime entry | `src/ember/runtime/infer.py` | Inference entry point. |
+| Artifact | Data pipeline | `src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py` | Current text-lab corpus pipeline. |
+| Artifact | Governing contracts | `docs/domains/governance/authority` | Canonical goal, continuity, and governance authorities. |
+
 Start with the [first-reader route](docs/domains/governance/guides/START-HERE.md), or use the
 [documentation map](docs/domains/governance/DOCS-README.md) to choose a route by task, audience, or technical domain.
 
