@@ -262,6 +262,8 @@ def test_terminal_receipt_is_rebound_to_issue2081_and_rebased_heads():
         "campaign_issue": 1945,
         "control_source_head": MODULE.BASE.CONTROL_HEAD,
         "treatment_source_head": MODULE.BASE.TREATMENT_HEAD,
+        "source_model_sha256": "c" * 64,
+        "source_test_sha256": "d" * 64,
     }
     rebound = MODULE.rebind_receipt(
         receipt,
@@ -276,6 +278,16 @@ def test_terminal_receipt_is_rebound_to_issue2081_and_rebased_heads():
         "control_predecessor_head": MODULE.BASE.CONTROL_HEAD,
         "treatment_predecessor_head": MODULE.BASE.TREATMENT_HEAD,
     }
+    assert rebound["current_canonical_model_sha256"] == "c" * 64
+    assert rebound["current_canonical_test_sha256"] == "d" * 64
+    assert (
+        rebound["historical_microprofile_model_sha256"]
+        == MODULE.HISTORICAL_TREATMENT_MODEL_SHA256
+    )
+    assert (
+        rebound["historical_microprofile_test_sha256"]
+        == MODULE.HISTORICAL_TREATMENT_TEST_SHA256
+    )
 
 
 def test_pre_spine_hash_paths_translate_to_canonical_locations(tmp_path: Path):
@@ -291,6 +303,88 @@ def test_pre_spine_hash_paths_translate_to_canonical_locations(tmp_path: Path):
     assert MODULE.translate_pre_spine_path(tmp_path, old_test) == canonical_test
     unrelated = tmp_path / "tools" / "ember-restart-3b" / "checkpoint_artifacts.py"
     assert MODULE.translate_pre_spine_path(tmp_path, unrelated) == unrelated
+
+
+def test_dual_source_identity_accepts_post_spine_bytes_and_historical_microprofile(
+    tmp_path: Path,
+):
+    model = tmp_path / "model.py"
+    test_model = tmp_path / "test_model.py"
+    model.write_bytes(b"post-spine-treatment-model")
+    test_model.write_bytes(b"post-spine-treatment-test")
+    current_model_sha256 = MODULE.BASE.sha256_path(model)
+    current_test_sha256 = MODULE.BASE.sha256_path(test_model)
+    microprofile = {
+        "control_head": MODULE.BASE.CONTROL_HEAD,
+        "treatment_head": MODULE.BASE.TREATMENT_HEAD,
+        "treatment_model_sha256": MODULE.HISTORICAL_TREATMENT_MODEL_SHA256,
+        "treatment_test_sha256": MODULE.HISTORICAL_TREATMENT_TEST_SHA256,
+    }
+
+    bindings = MODULE.validate_source_identity_bindings(
+        microprofile=microprofile,
+        current_model_path=model,
+        current_test_path=test_model,
+        current_model_sha256=current_model_sha256,
+        current_test_sha256=current_test_sha256,
+    )
+
+    assert bindings == {
+        "current_canonical_model_sha256": current_model_sha256,
+        "current_canonical_test_sha256": current_test_sha256,
+        "historical_microprofile_model_sha256": (
+            MODULE.HISTORICAL_TREATMENT_MODEL_SHA256
+        ),
+        "historical_microprofile_test_sha256": (
+            MODULE.HISTORICAL_TREATMENT_TEST_SHA256
+        ),
+    }
+
+
+def test_dual_source_identity_refuses_wrong_historical_microprofile_binding(
+    tmp_path: Path,
+):
+    model = tmp_path / "model.py"
+    test_model = tmp_path / "test_model.py"
+    model.write_bytes(b"post-spine-treatment-model")
+    test_model.write_bytes(b"post-spine-treatment-test")
+    microprofile = {
+        "control_head": MODULE.BASE.CONTROL_HEAD,
+        "treatment_head": MODULE.BASE.TREATMENT_HEAD,
+        "treatment_model_sha256": MODULE.BASE.sha256_path(model),
+        "treatment_test_sha256": MODULE.HISTORICAL_TREATMENT_TEST_SHA256,
+    }
+
+    with pytest.raises(ValueError, match="MICROPROFILE_SOURCE_IDENTITY_REFUSED"):
+        MODULE.validate_source_identity_bindings(
+            microprofile=microprofile,
+            current_model_path=model,
+            current_test_path=test_model,
+            current_model_sha256=MODULE.BASE.sha256_path(model),
+            current_test_sha256=MODULE.BASE.sha256_path(test_model),
+        )
+
+
+def test_dual_source_identity_refuses_wrong_current_canonical_binding(tmp_path: Path):
+    model = tmp_path / "model.py"
+    test_model = tmp_path / "test_model.py"
+    model.write_bytes(b"post-spine-treatment-model")
+    test_model.write_bytes(b"post-spine-treatment-test")
+    microprofile = {
+        "control_head": MODULE.BASE.CONTROL_HEAD,
+        "treatment_head": MODULE.BASE.TREATMENT_HEAD,
+        "treatment_model_sha256": MODULE.HISTORICAL_TREATMENT_MODEL_SHA256,
+        "treatment_test_sha256": MODULE.HISTORICAL_TREATMENT_TEST_SHA256,
+    }
+
+    with pytest.raises(ValueError, match="INPUT_HASH_DRIFT_REFUSED"):
+        MODULE.validate_source_identity_bindings(
+            microprofile=microprofile,
+            current_model_path=model,
+            current_test_path=test_model,
+            current_model_sha256="0" * 64,
+            current_test_sha256=MODULE.BASE.sha256_path(test_model),
+        )
 
 
 def test_configured_base_adjudication_calls_frozen_predecessor_once(tmp_path: Path):

@@ -27,6 +27,8 @@ BASE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(BASE)
 BASE_RUNNER_SHA256 = BASE.sha256_path(_BASE_PATH)
 HISTORICAL_BASE_RUNNER_SHA256 = "a76488b723fa86e29f813e319ba07aa4e272e984fb1f8f33f310b2dc50220828"
+HISTORICAL_TREATMENT_MODEL_SHA256 = "71cb56da6a7dd3735842a081f58a167713b18685056f7172d7641627f7d0229e"
+HISTORICAL_TREATMENT_TEST_SHA256 = "57c488dab9ff9e85e4310d1cc2c9e40bfceacd2aa3a1c06935056975c2842fe3"
 
 SCHEMA_VERSION = "ember-issue2081-position-robust-matched-loss-canary-v1"
 POSITION_RATIO_FLOOR = 1.0 / 1.5
@@ -250,6 +252,16 @@ def rebind_receipt(
     rebound["historical_predecessor_runner_source_sha256"] = (
         HISTORICAL_BASE_RUNNER_SHA256
     )
+    if "source_model_sha256" in rebound:
+        rebound["current_canonical_model_sha256"] = rebound["source_model_sha256"]
+    if "source_test_sha256" in rebound:
+        rebound["current_canonical_test_sha256"] = rebound["source_test_sha256"]
+    rebound["historical_microprofile_model_sha256"] = (
+        HISTORICAL_TREATMENT_MODEL_SHA256
+    )
+    rebound["historical_microprofile_test_sha256"] = (
+        HISTORICAL_TREATMENT_TEST_SHA256
+    )
     if "claim_boundary" in rebound:
         rebound["claim_boundary"] = (
             "EIGHT WARMED-PAIR POSITION-ROBUST MATCHED-LOSS CANARY ONLY; "
@@ -295,6 +307,38 @@ def translate_pre_spine_path(root: Path, path: Path) -> Path:
             / "test_model.py"
         )
     return path
+
+
+def validate_source_identity_bindings(
+    *,
+    microprofile: Mapping[str, object],
+    current_model_path: Path,
+    current_test_path: Path,
+    current_model_sha256: str,
+    current_test_sha256: str,
+) -> dict[str, str]:
+    """Validate current canonical bytes and their historical microprofile ancestor."""
+
+    for path, expected in (
+        (current_model_path, current_model_sha256),
+        (current_test_path, current_test_sha256),
+    ):
+        actual = BASE.sha256_path(path)
+        if actual != expected:
+            raise ValueError(f"INPUT_HASH_DRIFT_REFUSED:{path}:{actual}")
+    BASE.validate_microprofile_source_identity(
+        microprofile,
+        current_model_sha256=current_model_sha256,
+        current_test_sha256=current_test_sha256,
+        historical_model_sha256=HISTORICAL_TREATMENT_MODEL_SHA256,
+        historical_test_sha256=HISTORICAL_TREATMENT_TEST_SHA256,
+    )
+    return {
+        "current_canonical_model_sha256": current_model_sha256,
+        "current_canonical_test_sha256": current_test_sha256,
+        "historical_microprofile_model_sha256": HISTORICAL_TREATMENT_MODEL_SHA256,
+        "historical_microprofile_test_sha256": HISTORICAL_TREATMENT_TEST_SHA256,
+    }
 
 
 def _require_head(value: str, label: str) -> str:
@@ -393,6 +437,21 @@ def main() -> int:
         control_rebased_head=control_rebased_head,
         treatment_rebased_head=treatment_rebased_head,
     )
+    if "--adjudicate" not in sys.argv:
+        for option in (
+            "--historical-microprofile-model-sha256",
+            "--historical-microprofile-test-sha256",
+        ):
+            if option in sys.argv:
+                raise ValueError(
+                    f"{option[2:].upper().replace('-', '_')}_OVERRIDE_REFUSED"
+                )
+        sys.argv.extend([
+            "--historical-microprofile-model-sha256",
+            HISTORICAL_TREATMENT_MODEL_SHA256,
+            "--historical-microprofile-test-sha256",
+            HISTORICAL_TREATMENT_TEST_SHA256,
+        ])
     return BASE.main()
 
 
