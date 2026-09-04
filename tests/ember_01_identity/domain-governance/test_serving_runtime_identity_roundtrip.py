@@ -254,8 +254,7 @@ class ServingRuntimeIdentityRoundTrip(unittest.TestCase):
         other_path = next(
             candidate
             for candidate in (
-                ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "infer.py",
-                ROOT / "tools" / "ember-restart-3b" / "infer.py",
+                ROOT / "src" / "ember" / "runtime" / "infer.py",
             )
             if candidate.is_file()
         )

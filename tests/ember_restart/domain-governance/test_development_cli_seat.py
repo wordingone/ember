@@ -13,7 +13,7 @@ from pathlib import Path
 from test_contract import REPO_ROOT
 
 
-RESOLVER = REPO_ROOT / "scripts" / "ember_restart" / "development_cli_seat.py"
+RESOLVER = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart" / "development_cli_seat.py"
 RUNTIME_FILES = {
     "configs/ember-restart-3b.json",
     "parameter-evidence/parameter_counter.py",
@@ -26,8 +26,8 @@ RUNTIME_FILES = {
     "domains/model/tokenizer/tokenizer.json",
     "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
     "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
-    "src/ember/infrastructure/tools/ember-restart-3b/infer.py",
-    "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+    "src/ember/runtime/infer.py",
+    "src/ember/model/model.py",
     "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
     "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
 }
@@ -49,7 +49,7 @@ def _fixture(
     checkpoint_dir.mkdir(parents=True)
     model_config = tmp_path / "configs" / "ember-restart-3b.json"
     tokenizer = tmp_path / "domains" / "model" / "tokenizer" / "tokenizer.json"
-    server = tmp_path / "tools" / "ember-restart-3b" / "serve_owned_openai.py"
+    server = tmp_path / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "serve_owned_openai.py"
     counter = tmp_path / "parameter-evidence" / "parameter_counter.py"
     receipt = tmp_path / "parameter-evidence" / "step2-realization-receipt.json"
     registry = tmp_path / "parameter-evidence" / "trusted-verifiers.json"
@@ -267,10 +267,10 @@ def test_development_resolver_rejects_tamper_claim_upgrade_and_count_drift(tmp_p
 
 def test_development_resolver_rejects_drift_in_imported_runtime_source(tmp_path: Path) -> None:
     manifest = _fixture(tmp_path)
-    imported = tmp_path / "tools" / "ember-restart-3b" / "infer.py"
+    imported = tmp_path / "src" / "ember" / "runtime" / "infer.py"
     imported_bytes = imported.read_bytes()
     imported.write_bytes(bytes([imported_bytes[0] ^ 1]) + imported_bytes[1:])
     result = _resolve(manifest)
     assert result.returncode == 1
-    assert "runtime file src/ember/infrastructure/tools/ember-restart-3b/infer.py" in result.stdout
+    assert "runtime file src/ember/runtime/infer.py" in result.stdout
     assert "content hash mismatch" in result.stdout

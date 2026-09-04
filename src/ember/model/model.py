@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Sparse clean-genesis unified decoder for the authorized Ember 3B rung.
 
@@ -121,7 +121,7 @@ class RestartDecoderConfig:
         contract_path = (
             Path(path)
             if path is not None
-            else Path(__file__).resolve().parents[5] / "configs" / "ember-restart-3b.json"
+            else Path(__file__).resolve().parents[3] / "configs" / "ember-restart-3b.json"
         )
         with contract_path.open(encoding="utf-8") as handle:
             contract = json.load(handle)

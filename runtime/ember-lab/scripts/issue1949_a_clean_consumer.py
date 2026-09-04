@@ -109,16 +109,18 @@ def _tool_root(repo_root: Path) -> Path:
 
 
 def _production_module_path(repo_root: Path, name: str) -> Path:
-    if name == "cbase_heldout_eval":
-        root = Path(repo_root).resolve(strict=True)
-        candidates = (
-            root / "src" / "ember" / "governance" / "scripts" / "cbase_heldout_eval.py",
-            root / "scripts" / "cbase_heldout_eval.py",
-        )
-        for path in candidates:
-            if path.is_file():
-                return path
-        raise ValueError("PRODUCTION_MODULE_ABSENT:cbase_heldout_eval")
+    root = Path(repo_root).resolve(strict=True)
+    canonical = {
+        "model": root / "src" / "ember" / "model" / "model.py",
+        "pretrain": root / "src" / "ember" / "training" / "pretrain.py",
+        "cbase_heldout_eval": root / "src" / "ember" / "evaluation" / "cbase_heldout_eval.py",
+        "infer": root / "src" / "ember" / "runtime" / "infer.py",
+    }
+    if name in canonical:
+        path = canonical[name]
+        if path.is_file():
+            return path
+        raise ValueError(f"PRODUCTION_MODULE_ABSENT:{name}")
     return _tool_root(repo_root) / f"{name}.py"
 
 
@@ -266,7 +268,7 @@ def _run_real_model_chain(
             },
             data_cursor=result["data_cursor"],
             model_config_sha256=sha256_file(config_path),
-            contract_sha256=sha256_file(_tool_root(repo_root) / "model.py"),
+            contract_sha256=sha256_file(_production_module_path(repo_root, "model")),
             expert_genesis_sha256=genesis,
             pre_publish_verifier=lambda candidate, manifest: _counter_verifier(
                 parameter_counter, candidate, manifest
@@ -339,7 +341,7 @@ def _run_real_model_chain(
             "data_path": str(data_path),
         },
         "training": {
-            "entry_point": "pretrain.py:run_pretraining_segment",
+            "entry_point": "src/ember/training/pretrain.py:run_pretraining_segment",
             "steps": segment["steps"],
             "tokens_seen": segment["tokens_seen"],
             "losses": segment["losses"],
@@ -353,12 +355,12 @@ def _run_real_model_chain(
             "cursor": cursor,
         },
         "evaluation": {
-            "entry_point": "cbase_heldout_eval.py:evaluate_teacher_forced",
+            "entry_point": "src/ember/evaluation/cbase_heldout_eval.py:evaluate_teacher_forced",
             "receipt_sha256": sha256_file(evaluation_path),
             **evaluation,
         },
         "runtime": {
-            "entry_point": "infer.py:greedy_generate",
+            "entry_point": "src/ember/runtime/infer.py:greedy_generate",
             "generated_token_ids": generated,
             "stop_reason": stop_reason,
             "prompt_sha256": sha256_bytes(canonical_json(runtime_row["token_ids"])),
