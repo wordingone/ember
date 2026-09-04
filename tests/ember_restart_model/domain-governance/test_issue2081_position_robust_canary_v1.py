@@ -194,8 +194,15 @@ def issue2103_real_timing_pairs():
     return pairs
 
 
-# Three disjoint W=8 windows whose consecutive window rates move by < 6 %.
-STABLE_WARM_RATES = (100.0, 102.0, 101.0, 100.0, 99.0, 101.0, 100.0, 102.0) * 3
+# Five disjoint W=8 windows whose consecutive window medians move by < 10 %.
+STABLE_WARM_RATES = (100.0, 102.0, 101.0, 100.0, 99.0, 101.0, 100.0, 102.0) * 5
+# 2f4532c0 pre-merge probe, control arm, the 24 warm updates that the summed
+# window rate refused (1677 / 1872 / 1733 tokens/s: 11.6 % then 7.4 %).
+PROBE_2F4532C0_CONTROL_WARM_RATES = (
+    1941.2, 4804.9, 1512.3, 1702.9, 1565.9, 1431.7, 1247.4, 1517.5,
+    1274.0, 1395.7, 5447.5, 1647.4, 4968.6, 1888.6, 1517.7, 1691.3,
+    1539.1, 2209.1, 1617.0, 1763.1, 2001.3, 1736.7, 1704.2, 1501.3,
+)
 
 
 def update_record(rate: float, event_ids: list[str], *, tokens: int = 960) -> dict[str, object]:
@@ -257,6 +264,10 @@ def cured_pairs(*, control_by_slot=(100.0, 90.0), treatment_by_slot=(100.0, 90.0
             measured["warm_updates"] = warm_updates
             measured["warm_updates_to_stability"] = len(warm_updates)
             measured["warm_window_rates"] = MODULE.warm_window_rates(warm_updates)
+            measured["warm_window_median_rates"] = MODULE.warm_window_median_rates(
+                warm_updates
+            )
+            measured["fast_update_census"] = MODULE.fast_update_census(warm_updates)
             measured["warm_update"] = copy.deepcopy(warm_updates[-1])
             measured["warm_loss"] = warm_updates[-1]["loss"]
             measured["warm_processed_tokens"] = warm_updates[-1]["processed_tokens"]
@@ -454,9 +465,9 @@ def test_aa_unstable_warm_sequence_refuses_at_readiness_update_deadline(
 ):
     MODULE._AA_ARM_PROGRESS.clear()
     calls = []
-    # A monotone ramp: every disjoint window rate differs from its predecessor by
-    # far more than 6 %, so readiness is never reached inside the horizon.
-    ramp = [5_000.0] + [100.0 + 10.0 * ordinal for ordinal in range(1, 40)]
+    # A monotone ramp: every disjoint window median differs from its predecessor
+    # by far more than 10 %, so readiness is never reached inside the horizon.
+    ramp = [5_000.0] + [100.0 + 10.0 * ordinal for ordinal in range(1, 60)]
     monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update_from_rates(ramp, calls))
     with pytest.raises(ValueError, match="^AA_WARM_STABILITY_NOT_REACHED_REFUSED$"):
         MODULE.run_warm_then_measure(
@@ -480,7 +491,7 @@ def test_aa_unstable_warm_sequence_refuses_at_readiness_update_deadline(
 def test_aa_refusal_sidecar_persists_every_arm_sequence(monkeypatch, tmp_path: Path):
     MODULE._AA_ARM_PROGRESS.clear()
     calls = []
-    ramp = [5_000.0] + [100.0 + 10.0 * ordinal for ordinal in range(1, 40)]
+    ramp = [5_000.0] + [100.0 + 10.0 * ordinal for ordinal in range(1, 60)]
     monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update_from_rates(ramp, calls))
     with pytest.raises(ValueError):
         MODULE.run_warm_then_measure(aa_mode=True, arm="treatment", pair=0, cursor={"cursor": 0})
@@ -495,7 +506,9 @@ def test_aa_refusal_sidecar_persists_every_arm_sequence(monkeypatch, tmp_path: P
         130.0,
     ]
     assert len(sequence["excluded_updates"]) == 1
-    assert len(sequence["warm_window_rates"]) == 3
+    assert len(sequence["warm_window_rates"]) == MODULE.AA_WARM_HORIZON_WINDOWS
+    assert len(sequence["warm_window_median_rates"]) == MODULE.AA_WARM_HORIZON_WINDOWS
+    assert sequence["fast_update_census"]["count"] == 0
     assert refusal["aa_warm_window_updates"] == MODULE.AA_WARM_WINDOW_UPDATES
     MODULE._AA_ARM_PROGRESS.clear()
 
@@ -523,19 +536,48 @@ def test_aa_disjoint_windows_refuse_the_issue2110_overlapping_median_false_posit
     steady = [1650.0, 1700.0, 1750.0, 1700.0] * 2
     warm = [
         update_record(rate, [f"s-{index}", f"e-{index}"])
-        for index, rate in enumerate(still_warming + steady + steady)
+        for index, rate in enumerate(still_warming + steady * 4)
     ]
-    rates = MODULE.warm_window_rates(warm)
-    assert len(rates) == 3
-    assert abs(rates[1] - rates[0]) / rates[0] > MODULE.AA_WARM_STABILITY_EPSILON
+    medians = MODULE.warm_window_median_rates(warm)
+    assert len(medians) == 5
+    assert abs(medians[1] - medians[0]) / medians[0] > MODULE.AA_WARM_STABILITY_EPSILON
     assert not MODULE.warm_stability_reached(warm[:16])
     assert MODULE.warm_stability_reached(warm)
     # The old rule, applied to the same still-warming tail, would have accepted it.
     assert MODULE.AA_WARM_WINDOW_UPDATES == 8
-    assert MODULE.AA_WARM_STABILITY_EPSILON == 0.06
-    assert MODULE.AA_WARM_HORIZON_WINDOWS == 3
+    assert MODULE.AA_WARM_STABILITY_EPSILON == 0.10
+    assert MODULE.AA_WARM_HORIZON_WINDOWS == 5
+    assert MODULE.AA_FAST_UPDATE_SECONDS_FRACTION == 0.5
     assert MODULE.AA_POST_SWITCH_EXCLUDED_UPDATES == 1
-    assert MODULE.AA_WARM_STABILITY_READINESS_UPDATE_LIMIT == 24
+    assert MODULE.AA_WARM_STABILITY_READINESS_UPDATE_LIMIT == 40
+
+
+def test_aa_median_windows_accept_the_2f4532c0_probe_tail_the_summed_rate_refused():
+    # The v1 cure's summed-token window rate refused this real control arm at
+    # epsilon 0.06 although the arm was steady: three ~0.10 s applied updates
+    # (real: optimizer identity advanced, loss finite, no scaler) sat inside a
+    # 0.23-0.41 s population and moved the summed rate 11.6 % then 7.4 %.
+    warm = [
+        update_record(rate, [f"s-{index}", f"e-{index}"], tokens=512)
+        for index, rate in enumerate(PROBE_2F4532C0_CONTROL_WARM_RATES)
+    ]
+    summed = MODULE.warm_window_rates(warm)
+    assert [round(rate, 1) for rate in summed] == [1677.3, 1872.3, 1733.0]
+    assert abs(summed[1] - summed[0]) / summed[0] > 0.06
+    assert abs(summed[2] - summed[1]) / summed[1] > 0.06
+    medians = MODULE.warm_window_median_rates(warm)
+    assert [round(rate, 1) for rate in medians] == [1541.7, 1669.3, 1720.5]
+    assert abs(medians[2] - medians[1]) / medians[1] < MODULE.AA_WARM_STABILITY_EPSILON
+    assert MODULE.warm_stability_reached(warm)
+    census = MODULE.fast_update_census(warm)
+    assert census["count"] == 3
+    assert census["indices"] == [1, 10, 12]
+    assert census["threshold_seconds"] == pytest.approx(0.5 * census["median_seconds"])
+    # A still-warming pair of final windows is refused even under the median.
+    slow_tail = warm[:16] + [
+        update_record(1200.0, [f"t-{index}", f"u-{index}"], tokens=512) for index in range(8)
+    ]
+    assert not MODULE.warm_stability_reached(slow_tail)
 
 
 def test_aa_disjoint_windows_share_no_sample():
@@ -565,27 +607,31 @@ def test_aa_measured_window_starts_only_after_disjoint_windows_stabilize(monkeyp
         pair=0,
         cursor={"cursor": 0},
     )
-    assert len(calls) == 1 + 24 + 8
+    assert len(calls) == 1 + 40 + 8
     # Synchronized after the excluded switch update and again after the last
     # warm update: immediately before each timing window opens.
-    assert synchronizations == [1, 25]
+    assert synchronizations == [1, 41]
     assert measured["device_synchronized_before_window"] == {"warm": True, "measured": True}
     assert [item["tokens_per_second"] for item in measured["excluded_updates"]] == [5_500.0]
-    assert measured["warm_updates_to_stability"] == 24
+    assert measured["warm_updates_to_stability"] == 40
     assert [item["tokens_per_second"] for item in measured["warm_updates"]] == list(
         STABLE_WARM_RATES
     )
     assert measured["warm_window_rates"] == MODULE.warm_window_rates(measured["warm_updates"])
+    assert measured["warm_window_median_rates"] == MODULE.warm_window_median_rates(
+        measured["warm_updates"]
+    )
+    assert measured["fast_update_census"] == MODULE.fast_update_census(measured["warm_updates"])
     assert len(measured["measured_updates"]) == 8
     assert measured["processed_tokens"] == 8 * 960
     assert measured["tokens_per_second"] == pytest.approx(99.0)
     assert measured["event_ids"] == [
-        "measured-window-measured-1-start-26",
-        "measured-window-measured-8-end-33",
+        "measured-window-measured-1-start-42",
+        "measured-window-measured-8-end-49",
     ]
     assert measured["executed_slot"] == 0
     assert measured["pair_order"] == ["control", "treatment"]
-    assert cursor == {"cursor": 33}
+    assert cursor == {"cursor": 49}
     # The excluded update never enters a window.
     assert 5_500.0 not in [item["tokens_per_second"] for item in measured["warm_updates"]]
     MODULE._AA_ARM_PROGRESS.clear()
@@ -596,6 +642,8 @@ def test_aa_adjudication_refuses_a_row_whose_excluded_update_leaked_into_warm():
     row = planted[0][0]
     row["warm_updates"][0] = copy.deepcopy(row["excluded_updates"][0])
     row["warm_window_rates"] = MODULE.warm_window_rates(row["warm_updates"])
+    row["warm_window_median_rates"] = MODULE.warm_window_median_rates(row["warm_updates"])
+    row["fast_update_census"] = MODULE.fast_update_census(row["warm_updates"])
     # The leaked update carries the excluded update's CUDA event identities.
     with pytest.raises(ValueError, match="^WARM_CUDA_EVENT_IDENTITY_REFUSED$"):
         MODULE.adjudicate_pairs(planted, aa_mode=True)
@@ -605,6 +653,22 @@ def test_aa_adjudication_refuses_stale_window_rates():
     planted = cured_pairs()
     row = planted[1][1]
     row["warm_window_rates"] = [rate * 1.01 for rate in row["warm_window_rates"]]
+    with pytest.raises(ValueError, match="^AA_WARM_STABILITY_RECORD_REFUSED$"):
+        MODULE.adjudicate_pairs(planted, aa_mode=True)
+
+
+def test_aa_adjudication_refuses_stale_median_window_rates():
+    planted = cured_pairs()
+    row = planted[0][1]
+    row["warm_window_median_rates"] = [rate * 1.01 for rate in row["warm_window_median_rates"]]
+    with pytest.raises(ValueError, match="^AA_WARM_STABILITY_RECORD_REFUSED$"):
+        MODULE.adjudicate_pairs(planted, aa_mode=True)
+
+
+def test_aa_adjudication_refuses_a_stale_fast_update_census():
+    planted = cured_pairs()
+    row = planted[2][0]
+    row["fast_update_census"] = dict(row["fast_update_census"], count=7)
     with pytest.raises(ValueError, match="^AA_WARM_STABILITY_RECORD_REFUSED$"):
         MODULE.adjudicate_pairs(planted, aa_mode=True)
 
