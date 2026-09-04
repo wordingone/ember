@@ -35,7 +35,7 @@ PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
 AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
-AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-disjoint-window-canary-v1"
+AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-disjoint-median-window-canary-v2"
 AA_ISSUE = 2112
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
@@ -45,13 +45,20 @@ AA_PAIR_ORDERS = (("control", "treatment"), ("treatment", "control")) * 4
 # #2112 cure (sized from the #2110 refusal rows): the first update after every
 # arm switch is executed and EXCLUDED from every window (it is not a whole
 # update on the device); the device is synchronized immediately before each
-# timing window opens; warm readiness compares the token rates of two
-# consecutive DISJOINT W-update windows.  The per-arm schedule is fixed
-# (excluded + horizon * W warm + W measured) so both A/A arms stay on one cursor.
+# timing window opens; warm readiness compares the MEDIAN per-update token
+# rate of the last two consecutive DISJOINT W-update windows.  The per-arm
+# schedule is fixed (excluded + horizon * W warm + W measured) so both A/A arms
+# stay on one cursor and their measured windows cover identical records.
+# Sized from the 2f4532c0 pre-merge probe (control arm): per-update seconds are
+# heavy-tailed (21 of 24 warm updates at 0.23-0.41 s, 3 at ~0.10 s, all real
+# applied updates), so a summed-token window rate moved 11.6 % / 7.4 % between
+# consecutive windows while the window medians moved 8.3 % / 3.1 %.  The median
+# is immune to that tail; the fast-update census records it for attribution.
 AA_POST_SWITCH_EXCLUDED_UPDATES = 1
 AA_WARM_WINDOW_UPDATES = 8
-AA_WARM_STABILITY_EPSILON = 0.06
-AA_WARM_HORIZON_WINDOWS = 3
+AA_WARM_STABILITY_EPSILON = 0.10
+AA_WARM_HORIZON_WINDOWS = 5
+AA_FAST_UPDATE_SECONDS_FRACTION = 0.5
 AA_MEASURED_WINDOW_UPDATES = AA_WARM_WINDOW_UPDATES
 AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = (
     AA_WARM_HORIZON_WINDOWS * AA_WARM_WINDOW_UPDATES
@@ -92,6 +99,8 @@ _AA_MEASUREMENT_FIELDS = _MEASUREMENT_FIELDS | {
     "warm_updates",
     "warm_updates_to_stability",
     "warm_window_rates",
+    "warm_window_median_rates",
+    "fast_update_census",
     "excluded_updates",
     "measured_updates",
     "device_synchronized_before_window",
@@ -177,6 +186,14 @@ def adjudicate_pairs(
         "control": [],
         "treatment": [],
     }
+    warm_window_median_rates_by_arm: dict[str, list[list[float]]] = {
+        "control": [],
+        "treatment": [],
+    }
+    fast_update_census_by_arm: dict[str, list[dict[str, object]]] = {
+        "control": [],
+        "treatment": [],
+    }
     device_synchronized_by_arm: dict[str, list[dict[str, bool]]] = {
         "control": [],
         "treatment": [],
@@ -210,6 +227,11 @@ def adjudicate_pairs(
                     or not _rates_match(
                         row.get("warm_window_rates"), warm_window_rates(warm_updates)
                     )
+                    or not _rates_match(
+                        row.get("warm_window_median_rates"),
+                        warm_window_median_rates(warm_updates),
+                    )
+                    or row.get("fast_update_census") != fast_update_census(warm_updates)
                 ):
                     raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
                 if (
@@ -242,6 +264,10 @@ def adjudicate_pairs(
                     warm_events.extend(_validate_update_record(update))
                 warm_updates_to_stability_by_arm[arm].append(warm_count)
                 warm_window_rates_by_arm[arm].append(list(row["warm_window_rates"]))
+                warm_window_median_rates_by_arm[arm].append(
+                    list(row["warm_window_median_rates"])
+                )
+                fast_update_census_by_arm[arm].append(dict(row["fast_update_census"]))
                 device_synchronized_by_arm[arm].append(dict(synchronized))
             measured_rate = _positive_finite(
                 row.get("tokens_per_second"), "TIMING_SAMPLE_INVALID_REFUSED"
@@ -360,6 +386,8 @@ def adjudicate_pairs(
                             warm_updates_to_stability_by_arm
                         ),
                         "warm_window_rates_by_arm": warm_window_rates_by_arm,
+                        "warm_window_median_rates_by_arm": warm_window_median_rates_by_arm,
+                        "fast_update_census_by_arm": fast_update_census_by_arm,
                         "device_synchronized_before_window_by_arm": (
                             device_synchronized_by_arm
                         ),
@@ -381,8 +409,10 @@ def _aa_constants() -> dict[str, object]:
         "aa_warm_stability_epsilon": AA_WARM_STABILITY_EPSILON,
         "aa_warm_horizon_windows": AA_WARM_HORIZON_WINDOWS,
         "aa_measured_window_updates": AA_MEASURED_WINDOW_UPDATES,
+        "aa_fast_update_seconds_fraction": AA_FAST_UPDATE_SECONDS_FRACTION,
         "aa_warm_readiness_criterion": (
-            "relative change between consecutive disjoint window token rates"
+            "relative change between the median per-update token rates of the"
+            " last two disjoint windows"
         ),
     }
 
@@ -434,6 +464,60 @@ def warm_window_rates(
     ]
 
 
+def window_median_rate(updates: Sequence[Mapping[str, object]]) -> float:
+    """Median per-update token rate of one window of whole updates."""
+    rates = [
+        _positive_finite(
+            item.get("tokens_per_second"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+        )
+        for item in updates
+    ]
+    if not rates:
+        raise ValueError("AA_WARM_TIMING_SAMPLE_INVALID_REFUSED")
+    return float(statistics.median(rates))
+
+
+def warm_window_median_rates(
+    updates: Sequence[Mapping[str, object]],
+    *,
+    window: int = AA_WARM_WINDOW_UPDATES,
+) -> list[float]:
+    """Median rates of every COMPLETE disjoint window, in execution order."""
+    return [
+        window_median_rate(updates[start : start + window])
+        for start in range(0, len(updates) - window + 1, window)
+    ]
+
+
+def fast_update_census(
+    updates: Sequence[Mapping[str, object]],
+    *,
+    fraction: float = AA_FAST_UPDATE_SECONDS_FRACTION,
+) -> dict[str, object]:
+    """Updates whose event seconds fall under FRACTION of the median seconds.
+
+    Diagnostic only: the 2f4532c0 probe showed real applied updates completing
+    in ~1/3 of the median time.  They are counted and named, never dropped.
+    """
+    seconds = [
+        _positive_finite(
+            item.get("event_seconds"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+        )
+        for item in updates
+    ]
+    if not seconds:
+        return {"threshold_seconds": None, "median_seconds": None, "count": 0, "indices": []}
+    median_seconds = float(statistics.median(seconds))
+    threshold = fraction * median_seconds
+    indices = [index for index, value in enumerate(seconds) if value < threshold]
+    return {
+        "threshold_seconds": threshold,
+        "median_seconds": median_seconds,
+        "count": len(indices),
+        "indices": indices,
+    }
+
+
 def _rates_match(recorded: object, computed: Sequence[float]) -> bool:
     if not isinstance(recorded, list) or len(recorded) != len(computed):
         return False
@@ -452,13 +536,15 @@ def warm_stability_reached(
     window: int = AA_WARM_WINDOW_UPDATES,
     epsilon: float = AA_WARM_STABILITY_EPSILON,
 ) -> bool:
-    """Compare the two most recent DISJOINT window rates with a fixed relative bar.
+    """Compare the two most recent DISJOINT window MEDIAN rates with a fixed bar.
 
     #2110 compared moving medians of two K=3 windows sharing two samples: the
     control arm passed with relative change 0.0 while its samples spanned
-    1,253 to 5,753 tokens/s.  Disjoint windows share no sample.
+    1,253 to 5,753 tokens/s.  Disjoint windows share no sample.  The window
+    statistic is the median per-update rate, because the summed-token rate is
+    driven by the heavy fast tail the 2f4532c0 probe receipted.
     """
-    rates = warm_window_rates(updates, window=window)
+    rates = warm_window_median_rates(updates, window=window)
     if len(rates) < 2:
         return False
     previous, current = rates[-2], rates[-1]
@@ -522,6 +608,8 @@ def _run_aa_arm(**kwargs):
         "excluded_updates": [],
         "warm_updates": [],
         "warm_window_rates": [],
+        "warm_window_median_rates": [],
+        "fast_update_census": {},
         "measured_updates": [],
         "device_synchronized_before_window": {},
     }
@@ -544,6 +632,8 @@ def _run_aa_arm(**kwargs):
     for warm_index in range(AA_WARM_STABILITY_READINESS_UPDATE_LIMIT):
         warm_updates.append(one_update(f"warm-{warm_index + 1}"))
         progress["warm_window_rates"] = warm_window_rates(warm_updates)
+        progress["warm_window_median_rates"] = warm_window_median_rates(warm_updates)
+        progress["fast_update_census"] = fast_update_census(warm_updates)
     if not warm_stability_reached(warm_updates):
         raise ValueError("AA_WARM_STABILITY_NOT_REACHED_REFUSED")
     synchronized["measured"] = synchronize_device_before_window()
@@ -574,6 +664,8 @@ def _run_aa_arm(**kwargs):
         "warm_updates": copy.deepcopy(warm_updates),
         "warm_updates_to_stability": len(warm_updates),
         "warm_window_rates": list(progress["warm_window_rates"]),
+        "warm_window_median_rates": list(progress["warm_window_median_rates"]),
+        "fast_update_census": copy.deepcopy(progress["fast_update_census"]),
         "excluded_updates": copy.deepcopy(excluded_updates),
         "measured_updates": copy.deepcopy(measured_updates),
         "device_synchronized_before_window": dict(synchronized),
