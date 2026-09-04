@@ -29,6 +29,12 @@ BASE_RUNNER_SHA256 = BASE.sha256_path(_BASE_PATH)
 HISTORICAL_BASE_RUNNER_SHA256 = "a76488b723fa86e29f813e319ba07aa4e272e984fb1f8f33f310b2dc50220828"
 HISTORICAL_TREATMENT_MODEL_SHA256 = "71cb56da6a7dd3735842a081f58a167713b18685056f7172d7641627f7d0229e"
 HISTORICAL_TREATMENT_TEST_SHA256 = "57c488dab9ff9e85e4310d1cc2c9e40bfceacd2aa3a1c06935056975c2842fe3"
+PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
+    "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca"
+)
+AA_CONTROL_TEXT_LAB_CORPUS_SHA256 = (
+    "798e0186e9791ffb831bdb294d62e4d29073fe40b5bc58a8f307086cb67f1071"
+)
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
 AA_SCHEMA_VERSION = "ember-issue2103-aa-position-independence-canary-v1"
@@ -293,6 +299,12 @@ def rebind_receipt(
         rebound["issue"] = 2103
         rebound["aa_mode"] = True
         rebound["aa_source_head"] = control_rebased_head
+        rebound["text_lab_corpus_sha256"] = (
+            AA_CONTROL_TEXT_LAB_CORPUS_SHA256
+        )
+        rebound["predecessor_text_lab_corpus_sha256"] = (
+            PREDECESSOR_TEXT_LAB_CORPUS_SHA256
+        )
     elif rebound.get("issue") in (2071, 2081):
         rebound["issue"] = 2099
     if aa_mode or "control_source_head" in rebound:
@@ -483,6 +495,11 @@ def configure_base(
         sys.path.insert(0, str(module_path))
     BASE.__file__ = str(Path(__file__).resolve(strict=True))
     BASE.SCHEMA_VERSION = AA_SCHEMA_VERSION if aa_mode else SCHEMA_VERSION
+    BASE.TEXT_LAB_CORPUS_SHA256 = (
+        AA_CONTROL_TEXT_LAB_CORPUS_SHA256
+        if aa_mode
+        else PREDECESSOR_TEXT_LAB_CORPUS_SHA256
+    )
     BASE.sha256_path = translated_sha256_path
     BASE.git = rebased_git
     BASE.validate_treatment_checkout = validate_rebased_treatment

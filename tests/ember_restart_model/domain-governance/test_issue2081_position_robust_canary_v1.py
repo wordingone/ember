@@ -732,3 +732,76 @@ def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
     }
     assert refusal["control_source_model_sha256"] == expected
     assert refusal["treatment_source_model_sha256"] == expected
+    assert (
+        refusal["text_lab_corpus_sha256"]
+        == module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256
+    )
+    assert (
+        refusal["predecessor_text_lab_corpus_sha256"]
+        == module.PREDECESSOR_TEXT_LAB_CORPUS_SHA256
+    )
+
+
+def test_configured_aa_rebinds_frozen_c1a7_corpus_authority(tmp_path: Path):
+    module = _load(
+        "issue2081_runner_configured_aa_corpus",
+        "issue2081_position_robust_canary_v1.py",
+    )
+    corpus = tmp_path / "owned-text-lab-corpus-v4.json"
+    corpus.write_bytes(b"c1a7-corpus")
+    expected = module.BASE.sha256_path(corpus)
+    module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256 = expected
+
+    module.configure_base(
+        root=tmp_path,
+        control_rebased_head="a" * 40,
+        treatment_rebased_head="a" * 40,
+        aa_mode=True,
+    )
+
+    assert module.BASE.TEXT_LAB_CORPUS_SHA256 == expected
+    assert module.BASE.validate_text_lab_corpus(corpus, expected) == expected
+    with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
+        module.BASE.validate_text_lab_corpus(corpus, "0" * 64)
+
+
+def test_configured_aa_refuses_predecessor_corpus_pin(tmp_path: Path):
+    module = _load(
+        "issue2081_runner_configured_aa_refuses_predecessor_corpus",
+        "issue2081_position_robust_canary_v1.py",
+    )
+    corpus = tmp_path / "owned-text-lab-corpus-v4.json"
+    corpus.write_bytes(b"c1a7-corpus")
+    module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256 = module.BASE.sha256_path(corpus)
+    module.configure_base(
+        root=tmp_path,
+        control_rebased_head="a" * 40,
+        treatment_rebased_head="a" * 40,
+        aa_mode=True,
+    )
+
+    with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
+        module.BASE.validate_text_lab_corpus(
+            corpus, module.PREDECESSOR_TEXT_LAB_CORPUS_SHA256
+        )
+
+
+def test_configured_non_aa_refuses_control_corpus_pin(tmp_path: Path):
+    module = _load(
+        "issue2081_runner_configured_non_aa_refuses_control_corpus",
+        "issue2081_position_robust_canary_v1.py",
+    )
+    corpus = tmp_path / "owned-text-lab-corpus-v4.json"
+    corpus.write_bytes(b"predecessor-corpus")
+    module.PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = module.BASE.sha256_path(corpus)
+    module.configure_base(
+        root=tmp_path,
+        control_rebased_head="a" * 40,
+        treatment_rebased_head="b" * 40,
+        aa_mode=False,
+    )
+
+    with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
+        module.BASE.validate_text_lab_corpus(
+            corpus, module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256
+        )
