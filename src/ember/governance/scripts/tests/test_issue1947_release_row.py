@@ -9,7 +9,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPT = ROOT / "src" / "ember" / "governance" / "scripts" / "issue1947_release_row.py"
 
@@ -123,3 +122,87 @@ def test_text_adapter_uses_real_bound_inference_row(tmp_path: Path) -> None:
             "score": 0.0,
         }],
     }
+
+
+def _write_image_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
+    custody = tmp_path / "objects"
+    custody.mkdir()
+    files = []
+    frozen_items = []
+    physical_paths = []
+    for index in range(64):
+        raw = f"image-{index}".encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        relative = f"{digest}.png"
+        physical = custody / relative
+        physical.write_bytes(raw)
+        physical_paths.append(physical)
+        files.append({"path": relative, "bytes": len(raw), "sha256": digest})
+        frozen_items.append({
+            "item_id": f"sha256:{digest}",
+            "gold_object_sha256": digest,
+            "byte_count": len(raw),
+            "media_type": "image/png",
+        })
+    connector = tmp_path / "connector.json"
+    connector.write_text(json.dumps({
+        "schema": "corpus-connector-receipt-v1",
+        "dest_root": str(custody),
+        "files": files,
+    }), encoding="utf-8")
+    contract = tmp_path / "contract.json"
+    _write_self_hashed(contract, {
+        "schema_version": "ember-issue2105-protected-image-contract-v1",
+        "result": "PASS",
+        "task_class": "adapter_totality",
+        "task": {
+            "id": "EXACT_IMAGE_PAYLOAD_SHA256_IDENTITY",
+            "consumes": ["image_payload_bytes"],
+            "forbidden_inputs": ["mmmu_question", "mmmu_answer", "mmmu_options"],
+        },
+        "source": {"connector_receipt_raw_sha256": hashlib.sha256(connector.read_bytes()).hexdigest()},
+        "frozen_items": frozen_items,
+        "totality": {"expected": 64, "observed": 64, "complete": True},
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    })
+    return contract, connector, physical_paths
+
+
+def test_image_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+    contract, connector, paths = _write_image_fixture(tmp_path)
+    paths[0].write_bytes(b"corrupted")
+    result = tmp_path / "image-row.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["result"] == "IMAGE_HELDOUT_ROW_PRODUCED"
+    assert row["row_id"] == "E-MATRIX-IMAGE"
+    assert row["task_class"] == "adapter_totality"
+    assert row["score"] == 63 / 64
+    assert sum(item["score"] == 0.0 for item in row["items"]) == 1
+    body = dict(row)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+
+
+def test_image_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) -> None:
+    contract, connector, paths = _write_image_fixture(tmp_path)
+    paths[0].unlink()
+    result = tmp_path / "image-refusal.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 78
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"] == "IMAGE_HELDOUT_REFUSED"
+    assert refusal["reason"].startswith("IMAGE_PAYLOAD_MISSING_REFUSED:")
+    assert refusal["task_class"] == "adapter_totality"
+    body = dict(refusal)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()

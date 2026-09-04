@@ -1468,6 +1468,7 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
     let relations = RelationIndex::from_edges(edges)?;
     validate_not_run_evaluation_consumers_with_index(records, &relations)?;
     let mut admitted_training_objects = BTreeSet::new();
+    let mut admitted_heldout_objects = BTreeSet::new();
     let mut protected_evaluation_objects = BTreeSet::new();
     for record in records {
         let row = object(record, "record")?;
@@ -1569,10 +1570,16 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
                         "membership {id} exact_sha256 does not match membership_object"
                     ));
                 }
-                if string_value(row, "split", "membership record")? == "train"
-                    && string_value(row, "admission_state", "membership record")? == "admitted"
-                {
-                    admitted_training_objects.insert(objects[0].clone());
+                if string_value(row, "admission_state", "membership record")? == "admitted" {
+                    match string_value(row, "split", "membership record")? {
+                        "train" => {
+                            admitted_training_objects.insert(objects[0].clone());
+                        }
+                        "heldout" => {
+                            admitted_heldout_objects.insert(objects[0].clone());
+                        }
+                        _ => {}
+                    }
                 }
             }
             "protected_eval" => {
@@ -1639,6 +1646,14 @@ fn validate_required_relations(records: &[Value], edges: &[Value]) -> Result<()>
     {
         return invalid(format!(
             "admitted training membership overlaps protected evaluation object {overlap}"
+        ));
+    }
+    if let Some(overlap) = admitted_training_objects
+        .intersection(&admitted_heldout_objects)
+        .next()
+    {
+        return invalid(format!(
+            "admitted heldout membership overlaps admitted training object {overlap}"
         ));
     }
     Ok(())
@@ -2080,6 +2095,74 @@ mod tests {
             ),
         ];
         assert!(validate_not_run_evaluation_consumers(&[record, membership], &edges).is_err());
+    }
+
+    #[test]
+    fn admitted_heldout_membership_cannot_overlap_training_object_at_import() {
+        let digest = "b".repeat(64);
+        let object_id = format!("sha256:{digest}");
+        let records = vec![
+            json!({
+                "kind": "dataset_version",
+                "id": "dataset:train",
+                "version_class": "genesis"
+            }),
+            json!({
+                "kind": "dataset_version",
+                "id": "dataset:heldout",
+                "version_class": "genesis"
+            }),
+            json!({
+                "kind": "membership",
+                "id": "membership:train",
+                "split": "train",
+                "admission_state": "admitted",
+                "exact_sha256": digest
+            }),
+            json!({
+                "kind": "membership",
+                "id": "membership:heldout",
+                "split": "heldout",
+                "admission_state": "admitted",
+                "exact_sha256": "b".repeat(64)
+            }),
+        ];
+        let edges = vec![
+            edge(
+                "version_membership",
+                "dataset_version",
+                "dataset:train",
+                "membership",
+                "membership:train",
+            ),
+            edge(
+                "membership_object",
+                "membership",
+                "membership:train",
+                "immutable_object",
+                &object_id,
+            ),
+            edge(
+                "version_membership",
+                "dataset_version",
+                "dataset:heldout",
+                "membership",
+                "membership:heldout",
+            ),
+            edge(
+                "membership_object",
+                "membership",
+                "membership:heldout",
+                "immutable_object",
+                &object_id,
+            ),
+        ];
+
+        let error = validate_required_relations(&records, &edges)
+            .expect_err("the import must reject one object admitted into train and heldout");
+        assert!(error
+            .to_string()
+            .contains("admitted heldout membership overlaps admitted training object"));
     }
 
     #[test]
