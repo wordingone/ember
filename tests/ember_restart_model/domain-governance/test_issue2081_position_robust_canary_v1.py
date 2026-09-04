@@ -7,6 +7,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import statistics
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,28 @@ def _load(name: str, filename: str):
 
 
 MODULE = _load("issue2081_runner", "issue2081_position_robust_canary_v1.py")
+
+ISSUE2081_MEASUREMENTS_RAW_SHA256 = (
+    "d15a926c3af03d7bb01ca8f4a155b67c0867d72892b2cf5ba2c875b1b5d780eb"
+)
+ISSUE2081_REAL_TIMINGS = (
+    (0, "control", 1945.7892940402694, 1753.7675935058019),
+    (0, "treatment", 1407.5302612593212, 5933.965368965198),
+    (1, "treatment", 2067.4725273506506, 1307.412247015052),
+    (1, "control", 1863.7143258322124, 6008.493508819052),
+    (2, "control", 1883.4276887360643, 1782.5855838846223),
+    (2, "treatment", 1768.541325852364, 5691.260633449473),
+    (3, "treatment", 1286.2639026570587, 1464.6438888679857),
+    (3, "control", 2131.5226698308556, 5965.766357930883),
+    (4, "control", 2226.5615673772386, 1264.6355922231755),
+    (4, "treatment", 1750.1386625657808, 5653.660387944888),
+    (5, "treatment", 1562.0425111793488, 1667.3922716165625),
+    (5, "control", 1368.456907498496, 5974.101639607531),
+    (6, "control", 1449.6323820392713, 1368.4065686910944),
+    (6, "treatment", 1249.2181597362892, 5757.980377575808),
+    (7, "treatment", 1556.2207539869933, 1547.1203524626212),
+    (7, "control", 1828.1960273398797, 5884.667852622834),
+)
 
 
 def row(arm: str, pair: int, *, rate: float) -> dict[str, object]:
@@ -99,6 +122,29 @@ def warmed_pairs(*, ratios: list[float] | None = None, measured_warm: float = 1.
     return pairs
 
 
+def issue2081_real_timing_pairs():
+    pairs = warmed_pairs()
+    for pair_index, arm, measured_rate, warm_rate in ISSUE2081_REAL_TIMINGS:
+        measured = next(row for row in pairs[pair_index] if row["arm"] == arm)
+        measured["tokens_per_second"] = measured_rate
+        measured["event_seconds"] = measured["processed_tokens"] / measured_rate
+        measured["warm_tokens_per_second"] = warm_rate
+        measured["warm_event_seconds"] = measured["warm_processed_tokens"] / warm_rate
+        measured["warm_update"]["tokens_per_second"] = warm_rate
+        measured["warm_update"]["event_seconds"] = measured["warm_event_seconds"]
+    return pairs
+
+
+def legacy_warm_position_ratios(pairs):
+    by_arm = {"control": [], "treatment": []}
+    for rows in pairs:
+        for measured in rows:
+            by_arm[measured["arm"]].append(
+                measured["tokens_per_second"] / measured["warm_tokens_per_second"]
+            )
+    return {arm: statistics.median(values) for arm, values in by_arm.items()}
+
+
 @pytest.mark.parametrize(
     ("ratios", "expected", "expected_median"),
     [
@@ -121,28 +167,56 @@ def test_median_of_eight_paired_ratios_controls_verdict(
     )
 
 
-def test_position_effect_guard_refuses_before_verdict():
-    with pytest.raises(ValueError, match="TIMING_POSITION_EFFECT_REFUSED"):
-        MODULE.adjudicate_pairs(warmed_pairs(measured_warm=2.0))
-
-
-def test_position_effect_on_one_arm_refuses_before_verdict():
+def test_measured_slot_effect_guard_refuses_before_verdict():
     planted = warmed_pairs()
     for rows in planted:
-        treatment = next(row for row in rows if row["arm"] == "treatment")
-        treatment["warm_tokens_per_second"] = treatment["tokens_per_second"] / 2.0
-        treatment["warm_event_seconds"] = (
-            treatment["warm_processed_tokens"]
-            / treatment["warm_tokens_per_second"]
-        )
-        treatment["warm_update"]["tokens_per_second"] = treatment[
-            "warm_tokens_per_second"
-        ]
-        treatment["warm_update"]["event_seconds"] = treatment[
-            "warm_event_seconds"
-        ]
+        for position, measured in enumerate(rows):
+            if measured["arm"] == "treatment":
+                measured["tokens_per_second"] = 200.0 if position == 1 else 100.0
+                measured["event_seconds"] = (
+                    measured["processed_tokens"] / measured["tokens_per_second"]
+                )
     with pytest.raises(ValueError, match="TIMING_POSITION_EFFECT_REFUSED:treatment"):
         MODULE.adjudicate_pairs(planted)
+
+
+def test_warm_slot_artifact_does_not_drive_the_position_gate():
+    planted = warmed_pairs()
+    for rows in planted:
+        for position, measured in enumerate(rows):
+            measured["warm_tokens_per_second"] *= 4.0 if position == 1 else 1.0
+            measured["warm_event_seconds"] = (
+                measured["warm_processed_tokens"]
+                / measured["warm_tokens_per_second"]
+            )
+            measured["warm_update"]["tokens_per_second"] = measured[
+                "warm_tokens_per_second"
+            ]
+            measured["warm_update"]["event_seconds"] = measured[
+                "warm_event_seconds"
+            ]
+    assert MODULE.adjudicate_pairs(planted)["disposition"] == "PASS_POSITIVE"
+
+
+def test_issue2081_real_rows_pass_new_gate_reject_and_reproduce_old_gate():
+    assert ISSUE2081_MEASUREMENTS_RAW_SHA256.startswith("d15a926c")
+    pairs = issue2081_real_timing_pairs()
+    decision = MODULE.adjudicate_pairs(pairs)
+    assert decision["measured_slot_gate_by_arm"]["control"][
+        "measured_slot_ratio"
+    ] == pytest.approx(1.037, rel=1e-3)
+    assert decision["measured_slot_gate_by_arm"]["treatment"][
+        "measured_slot_ratio"
+    ] == pytest.approx(0.988, rel=1e-3)
+    assert decision["median_paired_treatment_control_ratio"] == pytest.approx(
+        0.856, rel=1e-3
+    )
+    assert decision["disposition"] == "REJECTED"
+    old_ratio = legacy_warm_position_ratios(pairs)["treatment"]
+    assert (
+        f"TIMING_POSITION_EFFECT_REFUSED:treatment:{old_ratio}"
+        == "TIMING_POSITION_EFFECT_REFUSED:treatment:0.5944780822437837"
+    )
 
 
 def test_warm_record_must_match_flat_adjudicated_fields():
@@ -255,7 +329,7 @@ def test_old_position_multiplier_cancels_when_both_measurements_are_second(
     assert 0.98 <= median_ratio / 1.02 <= 1.02
 
 
-def test_terminal_receipt_is_rebound_to_issue2081_and_rebased_heads():
+def test_terminal_receipt_is_rebound_to_issue2099_and_rebased_heads():
     receipt = {
         "schema_version": "old",
         "issue": 2071,
@@ -271,7 +345,7 @@ def test_terminal_receipt_is_rebound_to_issue2081_and_rebased_heads():
         treatment_rebased_head="b" * 40,
     )
     assert rebound["schema_version"] == MODULE.SCHEMA_VERSION
-    assert rebound["issue"] == 2081
+    assert rebound["issue"] == 2099
     assert rebound["control_source_head"] == "a" * 40
     assert rebound["treatment_source_head"] == "b" * 40
     assert rebound["source_lineage"] == {
@@ -470,11 +544,11 @@ def test_successor_refusal_sidecar_and_terminal_are_mutually_exclusive(tmp_path:
     assert not output.exists()
     refusal = json.loads(output.with_name("terminal.refusal.json").read_text())
     assert refusal["result"] == "REFUSED"
-    assert refusal["issue"] == 2081
+    assert refusal["issue"] == 2099
     assert refusal["schema_version"] == MODULE.SCHEMA_VERSION
 
     completed = tmp_path / "completed.json"
-    MODULE.BASE.write_receipt(completed, {"result": "REJECTED", "issue": 2081})
+    MODULE.BASE.write_receipt(completed, {"result": "REJECTED", "issue": 2099})
     assert MODULE.write_exclusive_refusal(completed, ValueError("LATE")) is None
     assert completed.is_file()
     assert not completed.with_name("completed.refusal.json").exists()

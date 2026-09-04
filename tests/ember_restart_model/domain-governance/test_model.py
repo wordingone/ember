@@ -203,6 +203,69 @@ class RestartDecoderModelTests(unittest.TestCase):
         values = torch.randn(1, attention.heads, 3, attention.head_dim) * 100
         self.assertTrue(torch.allclose(attention.q_norm(values).square().mean(dim=-1), torch.ones(1, attention.heads, 3), rtol=1e-4, atol=1e-4))
 
+    def test_shared_qk_rope_sdpa_route_matches_frozen_forward_and_gradients(self) -> None:
+        torch.manual_seed(2069)
+        treatment = UnifiedDecoder(self.config).layers[0].attention
+        reference = copy.deepcopy(treatment)
+        hidden_reference = torch.randn(2, 7, self.config.hidden_size, requires_grad=True)
+        hidden_treatment = hidden_reference.detach().clone().requires_grad_(True)
+        coordinates = torch.randint(0, 31, (2, 7, 2))
+        allowed = torch.ones(2, 7, 7, dtype=torch.bool).tril()
+
+        batch, sequence, width = hidden_reference.shape
+        qkv = reference.qkv(hidden_reference).view(
+            batch, sequence, 3, reference.heads, reference.head_dim
+        )
+        query, key, value = qkv.unbind(dim=2)
+        query = reference.rope.apply(reference.q_norm(query).transpose(1, 2), coordinates)
+        key = reference.rope.apply(reference.k_norm(key).transpose(1, 2), coordinates)
+        value = value.transpose(1, 2)
+        attended = torch.nn.functional.scaled_dot_product_attention(
+            query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False
+        )
+        expected = reference.output(attended.transpose(1, 2).reshape(batch, sequence, width))
+        actual = treatment(hidden_treatment, coordinates, allowed)
+        torch.testing.assert_close(actual, expected, rtol=0.0, atol=0.0)
+
+        upstream = torch.randn_like(actual)
+        (expected * upstream).sum().backward()
+        (actual * upstream).sum().backward()
+        torch.testing.assert_close(hidden_treatment.grad, hidden_reference.grad, rtol=0.0, atol=0.0)
+        for (reference_name, reference_parameter), (treatment_name, treatment_parameter) in zip(
+            reference.named_parameters(), treatment.named_parameters()
+        ):
+            self.assertEqual(reference_name, treatment_name)
+            torch.testing.assert_close(treatment_parameter.grad, reference_parameter.grad, rtol=0.0, atol=0.0)
+
+    def test_shared_qk_rope_returns_value_unchanged_and_refuses_shape_drift(self) -> None:
+        attention = UnifiedDecoder(self.config).layers[0].attention
+        query = torch.randn(2, attention.heads, 5, attention.head_dim)
+        key = torch.randn_like(query)
+        value = torch.randn_like(query)
+        coordinates = torch.randint(0, 17, (2, 5, 2))
+        actual_query, actual_key, actual_value = attention.rope.apply_qk_sdpa(
+            query, key, value, coordinates
+        )
+        torch.testing.assert_close(
+            actual_query, attention.rope.apply(query, coordinates), rtol=0.0, atol=0.0
+        )
+        torch.testing.assert_close(
+            actual_key, attention.rope.apply(key, coordinates), rtol=0.0, atol=0.0
+        )
+        self.assertIs(actual_value, value)
+        with self.assertRaisesRegex(ValueError, "QK_ROPE_SDPA_REFUSED:QKV_SHAPE"):
+            attention.rope.apply_qk_sdpa(query, key[:, :, :-1], value, coordinates)
+
+    def test_shared_qk_rope_helper_owns_no_layout_conversion(self) -> None:
+        source = (ROOT / "src" / "ember" / "model" / "model.py").read_text(
+            encoding="utf-8"
+        )
+        helper = source.split("    def apply_qk_sdpa(", 1)[1].split("\n\n\nclass SharedAttention", 1)[0]
+        self.assertNotIn(".transpose(", helper)
+        self.assertNotIn(".permute(", helper)
+        forward = source.split("class SharedAttention", 1)[1].split("\n\n\nclass SwiGLUExpert", 1)[0]
+        self.assertEqual(forward.count(".permute(2, 0, 3, 1, 4)"), 1)
+
     def test_production_materialization_is_guarded_and_meta_is_available(self) -> None:
         config = RestartDecoderConfig.from_contract()
         with self.assertRaises(ValueError):
