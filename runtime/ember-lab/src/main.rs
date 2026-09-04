@@ -1787,7 +1787,7 @@ fn prepare_cockpit_launch_with(
 }
 
 fn usage() -> &'static str {
-    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab storage-reconcile --pipe <\\\\.\\pipe\\name> --repository-root <path> --policy <path> --declarations <path> --models-root <path> --state-root <path> --custody <path> --pin-set-sha256 <hex> --current-master <sha> --projected-models-bytes <n> --projected-state-bytes <n> --mode <dry-run|execute>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
+    "usage:\n  ember-lab serve --db <path> --pipe <\\\\.\\pipe\\name>\n  ember-lab dispatch --pipe <\\\\.\\pipe\\name> --manifest <path>\n  ember-lab launch --root <path> --certificate <path> --declaration-ledger <path> --run-spec <path> --custody-receipt-sha256 <hex> [--receipt <path>] [--db <path>] [--pipe <\\\\.\\pipe\\name>]\n  ember-lab storage-reconcile --pipe <\\\\.\\pipe\\name> --repository-root <path> --policy <path> --declarations <path> --models-root <path> --state-root <path> --custody <path> --pin-set-sha256 <hex> --current-master <sha> --projected-models-bytes <n> --projected-state-bytes <n> --mode <dry-run|execute>\n  ember-lab resource-guard-rearm --pipe <\\\\.\\pipe\\name> --frozen-observation-sha256 <hex> --breach-class <class> --diagnostic-receipt <path> --diagnostic-receipt-sha256 <hex>\n  ember-lab data-catalog-status --db <path>\n  ember-lab data-catalog-import --db <path> --manifest <path> --receipt <path> --export <path> --source-commit <lowercase-40-hex>\n  ember-lab register-artifact --db <path> --sha256 <hex> --byte-count <n> --media-type <type> --location <volume>=<locator> [--location <volume>=<locator> ...]\n  ember-lab retire-artifact-location --db <path> --sha256 <hex> --volume <volume> --locator <locator> --reason <text>\n  ember-lab data-catalog-quarantine-overlaps --db <path> --audit <path> --reason <text> --receipt <path>\n  ember-lab custody-verify --db <path> --hash <sha256> [--hash <sha256> ...] --root <volume>=<path> [--root <volume>=<path> ...] --receipt <path> [--rehash]\n  ember-lab produce-minimal-slice --root <path> --job-id <id>\n  ember-lab verify-training --root <path> --receipt <path> [--certificate <path>]\n  ember-lab rehearse --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab episode --capability <name> --db <path> --dispatch-manifest <path> --manifest <path> --receipt <path>\n  ember-lab runbook --output <path>"
 }
 
 enum Command {
@@ -1832,6 +1832,12 @@ enum Command {
         volume: String,
         locator: String,
         reason: String,
+    },
+    DataCatalogQuarantineOverlaps {
+        db: PathBuf,
+        audit: PathBuf,
+        reason: String,
+        receipt: PathBuf,
     },
     CustodyVerify {
         db: PathBuf,
@@ -2325,6 +2331,31 @@ fn parse_args() -> Result<Command, String> {
             volume: volume.ok_or_else(|| format!("missing --volume\n{}", usage()))?,
             locator: locator.ok_or_else(|| format!("missing --locator\n{}", usage()))?,
             reason: reason.ok_or_else(|| format!("missing --reason\n{}", usage()))?,
+        });
+    }
+
+    if command == "data-catalog-quarantine-overlaps" {
+        let mut db = None;
+        let mut audit = None;
+        let mut reason = None;
+        let mut receipt = None;
+        while let Some(flag) = args.next() {
+            let value = args
+                .next()
+                .ok_or_else(|| format!("missing value for {flag}\n{}", usage()))?;
+            match flag.as_str() {
+                "--db" => db = Some(PathBuf::from(value)),
+                "--audit" => audit = Some(PathBuf::from(value)),
+                "--reason" => reason = Some(value),
+                "--receipt" => receipt = Some(PathBuf::from(value)),
+                _ => return Err(format!("unknown flag {flag}\n{}", usage())),
+            }
+        }
+        return Ok(Command::DataCatalogQuarantineOverlaps {
+            db: db.ok_or_else(|| format!("missing --db\n{}", usage()))?,
+            audit: audit.ok_or_else(|| format!("missing --audit\n{}", usage()))?,
+            reason: reason.ok_or_else(|| format!("missing --reason\n{}", usage()))?,
+            receipt: receipt.ok_or_else(|| format!("missing --receipt\n{}", usage()))?,
         });
     }
 
@@ -3308,6 +3339,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let daemon = Daemon::open(&db)?;
             daemon.retire_artifact_location(&sha256, &volume, &locator, &reason)?;
             println!("retire-artifact-location: {volume}/{locator} for sha256:{sha256} retired");
+        }
+        Command::DataCatalogQuarantineOverlaps {
+            db,
+            audit,
+            reason,
+            receipt,
+        } => {
+            let audit_bytes = std::fs::read(&audit)?;
+            let daemon = Daemon::open(&db)?;
+            let outcome = daemon.quarantine_overlap_memberships(&audit_bytes, &reason)?;
+            let status = daemon.data_catalog_status()?;
+            let payload = serde_json::json!({
+                "schema_version": "ember-data-catalog-quarantine-overlaps-receipt-v1",
+                "audit_path": audit.display().to_string(),
+                "audit_self_sha256": outcome.audit_self_sha256,
+                "overlap_count": outcome.overlap_count,
+                "quarantined": outcome.quarantined,
+                "already_quarantined": outcome.already_quarantined,
+                "reason": reason,
+                "catalog_status_after": status,
+            });
+            std::fs::write(&receipt, serde_json::to_vec_pretty(&payload)?)?;
+            println!("{}", serde_json::to_string(&payload)?);
         }
         Command::CustodyVerify {
             db,

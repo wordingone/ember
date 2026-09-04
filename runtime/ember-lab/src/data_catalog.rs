@@ -95,7 +95,18 @@ pub(crate) fn migrate(conn: &Connection) -> Result<()> {
                  REFERENCES data_catalog_records(kind,record_id)
          );
          CREATE INDEX IF NOT EXISTS data_catalog_location_events_by_tuple
-             ON data_catalog_location_events(object_id,volume,locator,seq);",
+             ON data_catalog_location_events(object_id,volume,locator,seq);
+         CREATE TABLE IF NOT EXISTS data_catalog_admission_events(
+             seq INTEGER PRIMARY KEY AUTOINCREMENT,
+             membership_id TEXT NOT NULL,
+             from_state TEXT NOT NULL CHECK(from_state IN ('admitted','excluded','refused','quarantined')),
+             to_state TEXT NOT NULL CHECK(to_state IN ('admitted','excluded','refused','quarantined')),
+             reason TEXT NOT NULL,
+             audit_self_sha256 TEXT NOT NULL,
+             event_at_ms INTEGER NOT NULL CHECK(event_at_ms >= 0),
+             payload_json TEXT NOT NULL,
+             payload_sha256 TEXT NOT NULL
+         );",
     )?;
     Ok(())
 }
@@ -1988,6 +1999,253 @@ fn invalid_error(detail: impl Into<String>) -> EmberLabError {
     }
 }
 
+const OVERLAP_AUDIT_SCHEMA: &str = "ember-data-catalog-train-heldout-intersection-audit-v2";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QuarantineOverlapOutcome {
+    pub audit_self_sha256: String,
+    pub overlap_count: usize,
+    pub quarantined: usize,
+    pub already_quarantined: usize,
+}
+
+/// Remediates a REFUSED train/heldout intersection audit (#2105): every heldout membership the
+/// audit names is moved `admitted -> quarantined` in one transaction, each move is appended to
+/// `data_catalog_admission_events`, and the whole graph is re-validated before commit so the
+/// commit itself proves the overlap set is empty afterwards. The audit is bound by its own
+/// `self_sha256` (recomputed over the canonical audit body) and every named pair must exist in
+/// THIS catalog as an admitted heldout membership and an admitted train membership over the same
+/// object; a row that names anything else refuses the whole call.
+pub(crate) fn quarantine_overlap_memberships(
+    conn: &mut Connection,
+    audit_bytes: &[u8],
+    reason: &str,
+    quarantined_at_ms: i64,
+) -> Result<QuarantineOverlapOutcome> {
+    if reason.is_empty() {
+        return invalid("overlap quarantine requires a nonempty reason");
+    }
+    let audit: Value = serde_json::from_slice(audit_bytes)?;
+    let root = object(&audit, "overlap audit")?;
+    required_string(root, "schema_version", "overlap audit", |value| {
+        value == OVERLAP_AUDIT_SCHEMA
+    })?;
+    required_string(root, "result", "overlap audit", |value| value == "REFUSED")?;
+    let claimed_self = required_sha(root, "self_sha256", "overlap audit")?.to_string();
+    let mut body = root.clone();
+    body.remove("self_sha256");
+    let computed_self = sha256(&canonical_json_bytes(&Value::Object(body))?);
+    if computed_self != claimed_self {
+        return invalid(format!(
+            "overlap audit self_sha256 {claimed_self} does not match its body ({computed_self})"
+        ));
+    }
+    let overlaps = required_array(root, "overlaps", "overlap audit")?;
+    if overlaps.is_empty() {
+        return invalid("overlap audit names no overlaps; nothing to quarantine");
+    }
+
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let mut quarantined = 0;
+    let mut already_quarantined = 0;
+    let mut seen = BTreeSet::new();
+    for (index, overlap) in overlaps.iter().enumerate() {
+        let row = object(overlap, "overlap row")?;
+        let digest = required_sha(row, "exact_sha256", "overlap row")?;
+        let heldout_id = string_value(row, "heldout_membership_record_id", "overlap row")?;
+        let train_id = string_value(row, "train_membership_record_id", "overlap row")?;
+        if !seen.insert(heldout_id.to_string()) {
+            return invalid(format!(
+                "overlap row {index} repeats heldout membership {heldout_id}"
+            ));
+        }
+        let train = membership_payload(&tx, train_id)?.ok_or_else(|| {
+            invalid_error(format!(
+                "overlap row {index} names train membership {train_id} that is not in this catalog"
+            ))
+        })?;
+        let train_row = object(&train, "train membership")?;
+        if string_value(train_row, "split", "train membership")? != "train"
+            || string_value(train_row, "admission_state", "train membership")? != "admitted"
+            || string_value(train_row, "exact_sha256", "train membership")? != digest
+        {
+            return invalid(format!(
+                "overlap row {index}: {train_id} is not an admitted train membership over {digest}"
+            ));
+        }
+        let heldout = membership_payload(&tx, heldout_id)?.ok_or_else(|| {
+            invalid_error(format!(
+                "overlap row {index} names heldout membership {heldout_id} that is not in this catalog"
+            ))
+        })?;
+        let heldout_row = object(&heldout, "heldout membership")?;
+        if string_value(heldout_row, "split", "heldout membership")? != "heldout"
+            || string_value(heldout_row, "exact_sha256", "heldout membership")? != digest
+        {
+            return invalid(format!(
+                "overlap row {index}: {heldout_id} is not a heldout membership over {digest}"
+            ));
+        }
+        let from_state = string_value(heldout_row, "admission_state", "heldout membership")?;
+        match from_state {
+            "quarantined" => {
+                already_quarantined += 1;
+                continue;
+            }
+            "admitted" => {}
+            other => {
+                return invalid(format!(
+                    "overlap row {index}: {heldout_id} is {other}, not admitted; refusing to relabel"
+                ));
+            }
+        }
+        let mut updated_row = heldout_row.clone();
+        updated_row.insert("admission_state".into(), json!("quarantined"));
+        let updated = Value::Object(updated_row);
+        validate_record(&updated)?;
+        let payload_json = serde_json::to_string(&updated)?;
+        let payload_sha256 = sha256(payload_json.as_bytes());
+        let changed = tx.execute(
+            "UPDATE data_catalog_records SET payload_json=?1,payload_sha256=?2
+             WHERE kind='membership' AND record_id=?3",
+            params![payload_json, payload_sha256, heldout_id],
+        )?;
+        if changed != 1 {
+            return invalid(format!(
+                "overlap row {index}: membership {heldout_id} vanished during quarantine"
+            ));
+        }
+        let event = json!({
+            "membership_id": heldout_id,
+            "from_state": "admitted",
+            "to_state": "quarantined",
+            "reason": reason,
+            "audit_self_sha256": claimed_self,
+            "train_membership_id": train_id,
+            "exact_sha256": digest,
+            "event_at_ms": quarantined_at_ms,
+        });
+        let event_json = serde_json::to_string(&event)?;
+        let event_sha256 = sha256(event_json.as_bytes());
+        tx.execute(
+            "INSERT INTO data_catalog_admission_events(
+                 membership_id,from_state,to_state,reason,audit_self_sha256,event_at_ms,
+                 payload_json,payload_sha256
+             ) VALUES(?1,'admitted','quarantined',?2,?3,?4,?5,?6)",
+            params![
+                heldout_id,
+                reason,
+                claimed_self,
+                quarantined_at_ms,
+                event_json,
+                event_sha256
+            ],
+        )?;
+        quarantined += 1;
+    }
+
+    // The commit is the proof: the remediated graph must satisfy every relation invariant,
+    // including "no admitted heldout membership overlaps an admitted training object".
+    let records = normalize_records(&query_payloads(
+        &tx,
+        "SELECT payload_json FROM data_catalog_records ORDER BY kind,record_id",
+    )?)?;
+    let edges = normalize_edges(&query_payloads(
+        &tx,
+        "SELECT payload_json FROM data_catalog_edges
+         ORDER BY kind,from_kind,from_id,to_kind,to_id,ordinal",
+    )?)?;
+    validate_edge_endpoints(&records, &edges)?;
+    validate_required_relations(&records, &edges)?;
+    tx.commit()?;
+    Ok(QuarantineOverlapOutcome {
+        audit_self_sha256: claimed_self,
+        overlap_count: overlaps.len(),
+        quarantined,
+        already_quarantined,
+    })
+}
+
+fn membership_payload(conn: &Connection, record_id: &str) -> Result<Option<Value>> {
+    let payload: Option<String> = conn
+        .query_row(
+            "SELECT payload_json FROM data_catalog_records
+             WHERE kind='membership' AND record_id=?1",
+            params![record_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(match payload {
+        Some(text) => Some(serde_json::from_str(&text)?),
+        None => None,
+    })
+}
+
+/// Canonical form shared with the Python audit producer: keys sorted, compact separators,
+/// non-ASCII escaped (`json.dumps(sort_keys=True, separators=(",", ":"))`).
+fn canonical_json_bytes(value: &Value) -> Result<Vec<u8>> {
+    let mut out = String::new();
+    write_canonical_json(value, &mut out)?;
+    Ok(out.into_bytes())
+}
+
+fn write_canonical_json(value: &Value, out: &mut String) -> Result<()> {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
+        Value::Number(number) => out.push_str(&number.to_string()),
+        Value::String(text) => write_canonical_string(text, out),
+        Value::Array(items) => {
+            out.push('[');
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                write_canonical_json(item, out)?;
+            }
+            out.push(']');
+        }
+        Value::Object(map) => {
+            let sorted: BTreeMap<&String, &Value> = map.iter().collect();
+            out.push('{');
+            for (index, (key, item)) in sorted.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                write_canonical_string(key, out);
+                out.push(':');
+                write_canonical_json(item, out)?;
+            }
+            out.push('}');
+        }
+    }
+    Ok(())
+}
+
+fn write_canonical_string(text: &str, out: &mut String) {
+    out.push('"');
+    for ch in text.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{08}' => out.push_str("\\b"),
+            '\u{0c}' => out.push_str("\\f"),
+            ch if (ch as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", ch as u32)),
+            ch if (ch as u32) < 0x80 => out.push(ch),
+            ch => {
+                let mut units = [0u16; 2];
+                for unit in ch.encode_utf16(&mut units) {
+                    out.push_str(&format!("\\u{:04x}", unit));
+                }
+            }
+        }
+    }
+    out.push('"');
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2195,6 +2453,227 @@ mod tests {
         assert!(
             started.elapsed() < Duration::from_secs(10),
             "indexed row8 relation lookup exceeded 10 seconds"
+        );
+    }
+
+    fn quarantine_fixture_manifest(heldout_admission_state: &str) -> Vec<u8> {
+        let digest = "c".repeat(64);
+        let object_id = format!("sha256:{digest}");
+        let membership = |id: &str, split: &str, admission_state: &str| {
+            json!({
+                "kind": "membership",
+                "id": id,
+                "admission_state": admission_state,
+                "domain": "statistics",
+                "exact_sha256": digest,
+                "near_dedup_cluster": "cluster-1",
+                "register": "L3",
+                "shard_id": "shard-1",
+                "split": split,
+                "tokenizer_sha256": "d".repeat(64),
+                "window_end": 8,
+                "window_start": 0
+            })
+        };
+        let dataset = |id: &str| {
+            json!({
+                "kind": "dataset_version",
+                "id": id,
+                "created_at_ms": 0,
+                "manifest_sha256": "e".repeat(64),
+                "name": id,
+                "state": "admitted",
+                "version_class": "genesis"
+            })
+        };
+        let manifest = json!({
+            "schema_version": MANIFEST_SCHEMA,
+            "records": [
+                dataset("dataset:train"),
+                dataset("dataset:heldout"),
+                {
+                    "kind": "immutable_object",
+                    "id": object_id,
+                    "sha256": digest,
+                    "byte_count": 8,
+                    "media_type": "text/plain",
+                    "locator": format!("sha256/{}/{digest}", &digest[..2]),
+                    "custody_state": "available"
+                },
+                membership("membership:train-1", "train", "admitted"),
+                membership("membership:heldout-1", "heldout", heldout_admission_state),
+            ],
+            "edges": [
+                edge("version_membership", "dataset_version", "dataset:train", "membership", "membership:train-1"),
+                edge("membership_object", "membership", "membership:train-1", "immutable_object", &object_id),
+                edge("version_membership", "dataset_version", "dataset:heldout", "membership", "membership:heldout-1"),
+                edge("membership_object", "membership", "membership:heldout-1", "immutable_object", &object_id),
+            ]
+        });
+        serde_json::to_vec(&manifest).unwrap()
+    }
+
+    /// The predecessor catalogs were produced before the overlap invariant existed, so the
+    /// overlapping state can only be reached by writing the row directly, never by import.
+    fn overlapping_catalog() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        import_manifest(&mut conn, &quarantine_fixture_manifest("excluded"), 0)
+            .expect("a non-overlapping catalog imports");
+        let payload: String = conn
+            .query_row(
+                "SELECT payload_json FROM data_catalog_records WHERE record_id='membership:heldout-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let mut record: Value = serde_json::from_str(&payload).unwrap();
+        record["admission_state"] = json!("admitted");
+        let payload_json = serde_json::to_string(&record).unwrap();
+        conn.execute(
+            "UPDATE data_catalog_records SET payload_json=?1,payload_sha256=?2
+             WHERE record_id='membership:heldout-1'",
+            params![payload_json.clone(), sha256(payload_json.as_bytes())],
+        )
+        .unwrap();
+        conn
+    }
+
+    fn graph_validation(conn: &Connection) -> Result<()> {
+        let records = normalize_records(
+            &query_payloads(conn, "SELECT payload_json FROM data_catalog_records").unwrap(),
+        )?;
+        let edges = normalize_edges(&query_payloads(
+            conn,
+            "SELECT payload_json FROM data_catalog_edges",
+        )?)?;
+        validate_required_relations(&records, &edges)
+    }
+
+    fn overlap_audit(
+        heldout_id: &str,
+        train_id: &str,
+        digest: &str,
+        self_sha: Option<&str>,
+    ) -> Vec<u8> {
+        let mut body = json!({
+            "schema_version": OVERLAP_AUDIT_SCHEMA,
+            "result": "REFUSED",
+            "catalog_raw_sha256": "f".repeat(64),
+            "overlap_object_count": 1,
+            "overlap_relation_count": 1,
+            "scanned_membership_count": 2,
+            "overlaps": [{
+                "exact_sha256": digest,
+                "heldout_dataset_id": "dataset:heldout",
+                "heldout_domain": "statistics",
+                "heldout_membership_record_id": heldout_id,
+                "object_media_type": "text/plain",
+                "train_dataset_id": "dataset:train",
+                "train_domain": "statistics",
+                "train_membership_record_id": train_id
+            }]
+        });
+        let computed = sha256(&canonical_json_bytes(&body).unwrap());
+        body["self_sha256"] = json!(self_sha.map(str::to_string).unwrap_or(computed));
+        serde_json::to_vec(&body).unwrap()
+    }
+
+    #[test]
+    fn quarantine_clears_the_overlap_and_the_commit_proves_it() {
+        let mut conn = overlapping_catalog();
+        let before = graph_validation(&conn).expect_err("the planted overlap must be invalid");
+        assert!(before
+            .to_string()
+            .contains("admitted heldout membership overlaps"));
+
+        let digest = "c".repeat(64);
+        let audit = overlap_audit("membership:heldout-1", "membership:train-1", &digest, None);
+        let outcome =
+            quarantine_overlap_memberships(&mut conn, &audit, "issue2105 remediation", 7).unwrap();
+        assert_eq!(outcome.overlap_count, 1);
+        assert_eq!(outcome.quarantined, 1);
+        assert_eq!(outcome.already_quarantined, 0);
+        graph_validation(&conn).expect("the remediated graph satisfies every relation invariant");
+
+        let (state, events): (String, i64) = conn
+            .query_row(
+                "SELECT json_extract(payload_json,'$.admission_state'),
+                        (SELECT COUNT(*) FROM data_catalog_admission_events)
+                 FROM data_catalog_records WHERE record_id='membership:heldout-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, "quarantined");
+        assert_eq!(events, 1);
+
+        let again =
+            quarantine_overlap_memberships(&mut conn, &audit, "issue2105 remediation", 8).unwrap();
+        assert_eq!((again.quarantined, again.already_quarantined), (0, 1));
+    }
+
+    #[test]
+    fn quarantine_refuses_a_row_that_is_not_an_overlap_in_this_catalog() {
+        let mut conn = overlapping_catalog();
+        let digest = "c".repeat(64);
+        // Planted negative: the train side names the heldout membership itself, which is not an
+        // admitted train membership over the object; nothing may be relabelled.
+        let audit = overlap_audit(
+            "membership:heldout-1",
+            "membership:heldout-1",
+            &digest,
+            None,
+        );
+        let error = quarantine_overlap_memberships(&mut conn, &audit, "planted", 1)
+            .expect_err("a row that is not an admitted train/heldout pair refuses");
+        assert!(error
+            .to_string()
+            .contains("not an admitted train membership"));
+        let state: String = conn
+            .query_row(
+                "SELECT json_extract(payload_json,'$.admission_state')
+                 FROM data_catalog_records WHERE record_id='membership:heldout-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            state, "admitted",
+            "a refused call leaves the catalog untouched"
+        );
+        let events: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM data_catalog_admission_events",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(events, 0);
+    }
+
+    #[test]
+    fn quarantine_refuses_an_audit_whose_self_hash_does_not_bind_its_body() {
+        let mut conn = overlapping_catalog();
+        let digest = "c".repeat(64);
+        let audit = overlap_audit(
+            "membership:heldout-1",
+            "membership:train-1",
+            &digest,
+            Some(&"0".repeat(64)),
+        );
+        let error = quarantine_overlap_memberships(&mut conn, &audit, "planted", 1)
+            .expect_err("a self_sha256 that does not match the body refuses");
+        assert!(error.to_string().contains("does not match its body"));
+    }
+
+    #[test]
+    fn canonical_json_matches_python_sorted_compact_ascii_dumps() {
+        // json.dumps({"b": 1, "a": "é", "c": [true, None, "x\"y"]}, sort_keys=True, separators=(",", ":"))
+        let value = json!({"b": 1, "a": "é", "c": [true, null, "x\"y"]});
+        assert_eq!(
+            String::from_utf8(canonical_json_bytes(&value).unwrap()).unwrap(),
+            r#"{"a":"\u00e9","b":1,"c":[true,null,"x\"y"]}"#
         );
     }
 }
