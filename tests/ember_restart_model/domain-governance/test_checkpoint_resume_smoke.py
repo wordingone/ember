@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governan
 
 import run_vertical_slice
 from checkpoint_artifacts import load_checkpoint_artifacts, write_checkpoint_artifacts
-from src.ember.training.pretrain import run_pretraining_segment
+from pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
 _checkpoint_fixture_spec = importlib.util.spec_from_file_location(
     "issue898_resume_checkpoint_fixture", Path(__file__).with_name("checkpoint_fixture.py")
@@ -43,7 +43,7 @@ assert _checkpoint_fixture_spec is not None and _checkpoint_fixture_spec.loader 
 _checkpoint_fixture = importlib.util.module_from_spec(_checkpoint_fixture_spec)
 _checkpoint_fixture_spec.loader.exec_module(_checkpoint_fixture)
 fixture_counter_receipt = _checkpoint_fixture.fixture_counter_receipt
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from model import RestartDecoderConfig, UnifiedDecoder
 
 # Larger than any real host's commit headroom: forces the REAL preflight
 # (real available_host_commit_bytes() probe) into CheckpointDeferredLowCommit.

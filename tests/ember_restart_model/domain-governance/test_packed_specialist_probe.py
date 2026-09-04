@@ -16,7 +16,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
-from src.ember.model.model import RestartDecoderConfig
+from model import RestartDecoderConfig
 from packed_specialist_probe import build_packed_density_receipt, take_exact_pack
 
 

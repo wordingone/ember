@@ -20,7 +20,7 @@ import batch
 from batch import decode_owned_batch, run_one_batch
 from parameter_counter import measure_parameter_counts
 from run_vertical_slice import _counter_expected_counts
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from model import RestartDecoderConfig, UnifiedDecoder
 
 
 class VerticalSliceTests(unittest.TestCase):

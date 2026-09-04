@@ -31,7 +31,7 @@ if str(_TOOLS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIRECTORY))
 from repository_layout import resolve_repository_authority  # noqa: E402
 
-_MODEL_PATH = Path(__file__).resolve().parents[3] / "src" / "ember" / "model" / "model.py"
+_MODEL_PATH = Path(__file__).resolve().parents[3] / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "model.py"
 _model_spec = importlib.util.spec_from_file_location("ember_restart_model_decl", _MODEL_PATH)
 _model_mod = importlib.util.module_from_spec(_model_spec)
 # Register before exec: model.py defines dataclasses, and dataclasses resolves a
@@ -253,9 +253,9 @@ def test_clean_genesis_fail_closed_borrowed_loading_in_source(cfg, root, tmp_pat
     # A model.py whose UnifiedDecoder body references a borrowed-weight load
     # call must fail closed even if the config lineage block is clean.
     fake_root = tmp_path
-    fake_model = fake_root / "src" / "ember" / "model"
-    fake_model.mkdir(parents=True)
-    (fake_model / "model.py").write_text(
+    fake_tools = fake_root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
+    fake_tools.mkdir(parents=True)
+    (fake_tools / "model.py").write_text(
         "class UnifiedDecoder:\n    def __init__(self):\n        self.load_state_dict({})\n",
         encoding="utf-8",
     )

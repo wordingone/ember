@@ -37,7 +37,7 @@ from checkpoint_artifacts import (
 )
 import parameter_counter
 from specialist_stream import SELECTION_CURSOR_SCHEMA_VERSION, TRAINING_CURSOR_SCHEMA_VERSION, canonical_record_bytes, open_specialist_stream
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from model import RestartDecoderConfig, UnifiedDecoder
 _checkpoint_fixture_spec = importlib.util.spec_from_file_location(
     "issue898_counter_checkpoint_fixture", Path(__file__).with_name("checkpoint_fixture.py")
 )
