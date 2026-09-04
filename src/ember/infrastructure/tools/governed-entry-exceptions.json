@@ -57,6 +57,11 @@
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
+      "path": "src/ember/training/pretrain.py",
+      "sha256": "b2321936c2eb77aba0e17f1ea9015bd7ec3c8a70d2d8ba1610c7f2716d19b472",
+      "reason": "issue #2092 moves the existing governed pretraining entry from the restart tool directory into its canonical training domain; this exact content-addressed exception is equivalent to the legacy whole-directory exclusion and does not widen the governed-entry surface"
+    },
+    {
       "path": "tools/ember-restart-3b/certified_train_launch.py",
       "sha256": "0f947f36e4e0db2e3e42da0fc53fbadca7850df441b53a95050793d65c96dc1f",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
