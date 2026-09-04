@@ -2,7 +2,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02B
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Position-robust successor to the frozen issue #2071 canary runner."""
+"""Measured-slot position-gated successor to the closed issue #2081 canary."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ HISTORICAL_BASE_RUNNER_SHA256 = "a76488b723fa86e29f813e319ba07aa4e272e984fb1f8f3
 HISTORICAL_TREATMENT_MODEL_SHA256 = "71cb56da6a7dd3735842a081f58a167713b18685056f7172d7641627f7d0229e"
 HISTORICAL_TREATMENT_TEST_SHA256 = "57c488dab9ff9e85e4310d1cc2c9e40bfceacd2aa3a1c06935056975c2842fe3"
 
-SCHEMA_VERSION = "ember-issue2081-position-robust-matched-loss-canary-v1"
+SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
 _BASE_RUN_ONE_UPDATE = BASE.run_one_update
@@ -124,16 +124,15 @@ def paired_median_ratio(
 def adjudicate_pairs(
     pairs: Sequence[Sequence[Mapping[str, object]]],
 ) -> dict[str, object]:
-    """Retain #2071 integrity gates, then apply #2081's warmed estimator."""
+    """Retain every integrity gate, then gate position from measured rows only."""
     predecessor = _BASE_ADJUDICATE_PAIRS(pairs)
-    measured_warm_ratios: list[float] = []
-    measured_warm_ratios_by_arm: dict[str, list[float]] = {
-        "control": [],
-        "treatment": [],
+    measured_rates_by_arm_and_slot: dict[str, dict[int, list[float]]] = {
+        "control": {0: [], 1: []},
+        "treatment": {0: [], 1: []},
     }
     warm_events: list[str] = []
-    for pair_index, rows in enumerate(pairs):
-        for row in rows:
+    for rows in pairs:
+        for executed_slot, row in enumerate(rows):
             arm = str(row["arm"])
             measured_rate = _positive_finite(
                 row.get("tokens_per_second"), "TIMING_SAMPLE_INVALID_REFUSED"
@@ -177,21 +176,27 @@ def adjudicate_pairs(
             if not warm_record_matches:
                 raise ValueError("WARM_RECORD_DRIFT_REFUSED")
             warm_events.extend(event_ids)
-            measured_warm_ratio = measured_rate / warm_rate
-            measured_warm_ratios.append(measured_warm_ratio)
-            measured_warm_ratios_by_arm[arm].append(measured_warm_ratio)
+            measured_rates_by_arm_and_slot[arm][executed_slot].append(measured_rate)
     if len(warm_events) != len(set(warm_events)):
         raise ValueError("WARM_CUDA_EVENT_IDENTITY_REFUSED")
-    position_ratios_by_arm = {
-        arm: statistics.median(values)
-        for arm, values in measured_warm_ratios_by_arm.items()
+    measured_slot_gate_by_arm = {
+        arm: {
+            "executed_slot_0_measured_median_tps": statistics.median(values[0]),
+            "executed_slot_1_measured_median_tps": statistics.median(values[1]),
+        }
+        for arm, values in measured_rates_by_arm_and_slot.items()
     }
-    for arm, position_ratio in position_ratios_by_arm.items():
+    for values in measured_slot_gate_by_arm.values():
+        values["measured_slot_ratio"] = (
+            values["executed_slot_0_measured_median_tps"]
+            / values["executed_slot_1_measured_median_tps"]
+        )
+    for arm, values in measured_slot_gate_by_arm.items():
+        position_ratio = values["measured_slot_ratio"]
         if not POSITION_RATIO_FLOOR <= position_ratio <= POSITION_RATIO_CEILING:
             raise ValueError(
                 f"TIMING_POSITION_EFFECT_REFUSED:{arm}:{position_ratio}"
             )
-    position_ratio = statistics.median(measured_warm_ratios)
     paired_ratios, median_ratio = paired_median_ratio(pairs)
     return {
         **predecessor,
@@ -202,10 +207,10 @@ def adjudicate_pairs(
         ),
         "paired_treatment_control_ratios": paired_ratios,
         "median_paired_treatment_control_ratio": median_ratio,
-        "measured_warm_tokens_per_second_ratios": measured_warm_ratios,
-        "median_measured_warm_tokens_per_second_ratio": position_ratio,
-        "median_measured_warm_tokens_per_second_ratio_by_arm": position_ratios_by_arm,
-        "estimator": "median-of-eight-warmed-paired-ratios-v1",
+        "measured_slot_gate_by_arm": measured_slot_gate_by_arm,
+        "position_gate_ratio_orientation": "executed-slot-0-over-executed-slot-1",
+        "warm_rows_used_for_gating": False,
+        "estimator": "median-of-eight-paired-ratios-measured-slot-gate-v2",
     }
 
 
@@ -238,8 +243,8 @@ def rebind_receipt(
 ) -> dict[str, object]:
     rebound = copy.deepcopy(value)
     rebound["schema_version"] = SCHEMA_VERSION
-    if rebound.get("issue") == 2071:
-        rebound["issue"] = 2081
+    if rebound.get("issue") in (2071, 2081):
+        rebound["issue"] = 2099
     if "control_source_head" in rebound:
         rebound["control_source_head"] = control_rebased_head
     if "treatment_source_head" in rebound:
@@ -264,7 +269,7 @@ def rebind_receipt(
     )
     if "claim_boundary" in rebound:
         rebound["claim_boundary"] = (
-            "EIGHT WARMED-PAIR POSITION-ROBUST MATCHED-LOSS CANARY ONLY; "
+            "EIGHT WARMED-PAIR MEASURED-SLOT POSITION-GATED MATCHED-LOSS CANARY ONLY; "
             "NO 20K, CAPABILITY, SUFFICIENT-PRETRAINING, CAMPAIGN, EMBER-02, OR GOAL CREDIT"
         )
     return rebound
@@ -285,7 +290,7 @@ def write_exclusive_refusal(
         "refusal_class": type(error).__name__,
         "refusal_message": str(error),
         "last_phase": BASE._LAST_PHASE,
-        "issue": 2081,
+        "issue": 2099,
         "predecessor_runner_source_sha256": BASE_RUNNER_SHA256,
         "historical_predecessor_runner_source_sha256": (
             HISTORICAL_BASE_RUNNER_SHA256

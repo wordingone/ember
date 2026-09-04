@@ -257,7 +257,9 @@ class RestartDecoderModelTests(unittest.TestCase):
             attention.rope.apply_qk_sdpa(query, key[:, :, :-1], value, coordinates)
 
     def test_shared_qk_rope_helper_owns_no_layout_conversion(self) -> None:
-        source = (ROOT / "tools" / "ember-restart-3b" / "model.py").read_text(encoding="utf-8")
+        source = (ROOT / "src" / "ember" / "model" / "model.py").read_text(
+            encoding="utf-8"
+        )
         helper = source.split("    def apply_qk_sdpa(", 1)[1].split("\n\n\nclass SharedAttention", 1)[0]
         self.assertNotIn(".transpose(", helper)
         self.assertNotIn(".permute(", helper)
