@@ -100,7 +100,7 @@ jobs:
         run: python -B src/ember/governance/scripts/gen_readme_status.py --check --generated-status
       - name: Verify canonical documentation information system
         run: |
-          python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py
+          python -B -m pytest -p no:cacheprovider -q tests/test_docs_information_system.py tests/domain-governance/test_readme_where_things_are.py
           python -B scripts/docs_information_system.py check --root .
       - name: Verify POSIX owned process-tree cleanup
         run: python -B src/ember/governance/scripts/ember_gate_process_supervision_selftest.py
