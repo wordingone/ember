@@ -123,7 +123,7 @@ class Issue1946CompleteUpdateProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match repo HEAD"):
                 verified_execution_source_commit(ROOT, "a" * 40)
 
-        dirty = Mock(returncode=0, stdout=" M src/ember/infrastructure/tools/ember-restart-3b/pretrain.py\n", stderr="")
+        dirty = Mock(returncode=0, stdout=" M src/ember/training/pretrain.py\n", stderr="")
         with patch(
             "issue1946_complete_update_profile.subprocess.run",
             side_effect=[head, dirty],

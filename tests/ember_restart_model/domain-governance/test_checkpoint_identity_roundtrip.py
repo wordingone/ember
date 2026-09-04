@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "em
 sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governance"))
 
 from checkpoint_artifacts import CheckpointIdentityMismatch, load_checkpoint_artifacts
-from model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 
 _checkpoint_fixture_spec = importlib.util.spec_from_file_location(
     "issue898_identity_checkpoint_fixture", Path(__file__).with_name("checkpoint_fixture.py")

@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 import training_acceleration
-from model import MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
 
 
 W2_SCOPE = "final_decoder_layer_shared_and_selected_expert_swiglu_down_4h_to_h"
