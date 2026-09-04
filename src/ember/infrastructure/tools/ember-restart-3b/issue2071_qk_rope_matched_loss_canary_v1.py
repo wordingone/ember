@@ -32,8 +32,8 @@ TEXT_LAB_CORPUS_RELATIVE_PATH = Path("data/ember-restart-3b/owned-text-lab-corpu
 TEXT_LAB_CORPUS_SHA256 = "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca"
 CASCADE_ARTIFACT_SHA256 = {
     "data/ember-restart-3b/owned-text-lab-corpus-v4.json": "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca",
-    "data/ember-restart-3b/owned-text-lab-input-identity-v4.json": "1b349fa33e45c4653d14a6f62dc1bb825d3086ddf0c85e5eddfeeddbf97fb26c",
-    "data/ember-restart-3b/text-lab-authority-index-v2.json": "fbe376f31b878baf14924cef592c9959c4064f626a44abc237aeb1446417c794",
+    "data/ember-restart-3b/owned-text-lab-input-identity-v4.json": "24523af7896002902b207e408ba0a96caf102166fed53b6fe54191729a877eba",
+    "data/ember-restart-3b/text-lab-authority-index-v2.json": "ce0c0500d534bfd7c53d1f533d30fb574f58ae9c6d1affdc4298916ba18eb27a",
     "data/ember-restart-3b/text-lab-source-receipt-bundle-v4.json": "94fee7e03049ebb4ebb5cbe6b93450e449d8b558384e8d3f8bf90f4a55cfde09",
 }
 SCOPE_RUN_SPEC_RAW_SHA256 = "e457d7ede3fcd08151236bbd9b730a48976212551e2620e1751eb92e35974c89"
@@ -953,6 +953,25 @@ def interpreter_binding_preflight(
     return identity
 
 
+def bind_interpreter_for_mode(
+    torch: Any,
+    *,
+    expected_python_sha256: str,
+    expected_torch_version: str,
+    preflight_only: bool,
+) -> dict[str, object]:
+    """Bind the visible GPU interpreter before masking devices for CPU preflight."""
+
+    identity = interpreter_binding_preflight(
+        torch,
+        expected_python_sha256=expected_python_sha256,
+        expected_torch_version=expected_torch_version,
+    )
+    if preflight_only:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    return identity
+
+
 def run_one_update(*, arm: str, pair: int, model: Any, optimizer: Any, stream: Any, config: Any,
                    pretrain: Any, model_module: Any, methods: Mapping[str, object], cursor: Mapping[str, object],
                    census: Sequence[tuple[str, int]], backend_identity: Sequence[str], sequence_length: int) -> tuple[dict[str, object], dict[str, object]]:
@@ -1114,16 +1133,15 @@ def main() -> int:
     validate_prestart(prestart)
     emit_progress(output, "PRESTART_RESOURCE_FLOORS_PASS", **prestart)
     os.environ["EMBER_GATE_AUTHORIZED"] = "1"
-    if args.preflight_only:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     module_root = root / "tools/ember-restart-3b"
     sys.path.insert(0, str(module_root))
     torch = importlib.import_module("torch")
     try:
-        interpreter_binding = interpreter_binding_preflight(
+        interpreter_binding = bind_interpreter_for_mode(
             torch,
             expected_python_sha256=args.python_sha256,
             expected_torch_version=args.torch_version,
+            preflight_only=args.preflight_only,
         )
     except RuntimeError as error:
         if str(error).startswith("INTERPRETER_BINDING_REFUSED:"):

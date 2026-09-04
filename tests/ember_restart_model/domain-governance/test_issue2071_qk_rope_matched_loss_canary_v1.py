@@ -105,6 +105,57 @@ def test_interpreter_binding_preflight_refuses_cpu_interpreter(tmp_path: Path, m
         )
 
 
+def test_cpu_preflight_masks_cuda_only_after_visible_interpreter_binding(tmp_path: Path, monkeypatch):
+    executable = tmp_path / "python.exe"
+    executable.write_bytes(b"packet-bound-python")
+    monkeypatch.setattr(MODULE.sys, "executable", str(executable))
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    expected_sha = hashlib.sha256(executable.read_bytes()).hexdigest()
+    torch = type("Torch", (), {
+        "__version__": "2.10.0+cu126",
+        "cuda": InterpreterCudaFake(),
+    })
+
+    identity = MODULE.bind_interpreter_for_mode(
+        torch,
+        expected_python_sha256=expected_sha,
+        expected_torch_version="2.10.0+cu126",
+        preflight_only=True,
+    )
+
+    assert identity["cuda_available"] is True
+    assert identity["cuda_device_count"] == 1
+    assert identity["cuda_device_name"] == "Fake GPU"
+    assert MODULE.os.environ["CUDA_VISIBLE_DEVICES"] == "-1"
+
+
+def test_governed_mode_preserves_interpreter_binding_and_cuda_visibility(tmp_path: Path, monkeypatch):
+    executable = tmp_path / "python.exe"
+    executable.write_bytes(b"packet-bound-python")
+    monkeypatch.setattr(MODULE.sys, "executable", str(executable))
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "7")
+    expected_sha = hashlib.sha256(executable.read_bytes()).hexdigest()
+    torch = type("Torch", (), {
+        "__version__": "2.10.0+cu126",
+        "cuda": InterpreterCudaFake(),
+    })
+
+    direct = MODULE.interpreter_binding_preflight(
+        torch,
+        expected_python_sha256=expected_sha,
+        expected_torch_version="2.10.0+cu126",
+    )
+    governed = MODULE.bind_interpreter_for_mode(
+        torch,
+        expected_python_sha256=expected_sha,
+        expected_torch_version="2.10.0+cu126",
+        preflight_only=False,
+    )
+
+    assert governed == direct
+    assert MODULE.os.environ["CUDA_VISIBLE_DEVICES"] == "7"
+
+
 def test_peak_memory_reset_uses_backend_when_present():
     cuda = PeakMemoryCudaFake()
     result = MODULE.prepare_peak_memory_accounting(type("Torch", (), {"cuda": cuda}), "cuda:0")
@@ -589,6 +640,15 @@ def test_treatment_checkout_accepts_only_exact_four_file_cascade(tmp_path: Path,
     MODULE.validate_treatment_checkout(tmp_path, MODULE.TREATMENT_HEAD, status.encode())
     with pytest.raises(ValueError, match="SOURCE_HEAD_OR_CLEANLINESS_REFUSED"):
         MODULE.validate_treatment_checkout(tmp_path, MODULE.TREATMENT_HEAD, (status + "?? extra.txt\n").encode())
+
+
+def test_treatment_checkout_binds_composite_post_spine_authority_hashes():
+    assert MODULE.CASCADE_ARTIFACT_SHA256[
+        "data/ember-restart-3b/owned-text-lab-input-identity-v4.json"
+    ] == "24523af7896002902b207e408ba0a96caf102166fed53b6fe54191729a877eba"
+    assert MODULE.CASCADE_ARTIFACT_SHA256[
+        "data/ember-restart-3b/text-lab-authority-index-v2.json"
+    ] == "ce0c0500d534bfd7c53d1f533d30fb574f58ae9c6d1affdc4298916ba18eb27a"
 
 
 def test_treatment_checkout_refuses_cascade_hash_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
