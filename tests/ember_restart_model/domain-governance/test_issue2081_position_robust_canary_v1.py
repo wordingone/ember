@@ -67,6 +67,25 @@ ISSUE2099_REAL_TIMINGS = (
     (7, "control", 2150.5217675197587, 5573.794433719146),
 )
 
+ISSUE2103_REAL_TIMINGS = (
+    (0, "control", 1897.209372910094),
+    (0, "treatment", 1930.6942952901195),
+    (1, "treatment", 1737.8733953208643),
+    (1, "control", 1884.0725764565718),
+    (2, "control", 1347.0319832676967),
+    (2, "treatment", 1584.4580240191942),
+    (3, "treatment", 1191.0771388760172),
+    (3, "control", 2175.360421929171),
+    (4, "control", 2032.5517876369934),
+    (4, "treatment", 1683.5894141852598),
+    (5, "treatment", 1765.4388411748453),
+    (5, "control", 1166.4257530586735),
+    (6, "control", 1790.8176439112183),
+    (6, "treatment", 1231.1481084321001),
+    (7, "treatment", 1625.94012233014),
+    (7, "control", 1543.24592770266),
+)
+
 
 def row(arm: str, pair: int, *, rate: float) -> dict[str, object]:
     return {
@@ -163,6 +182,53 @@ def issue2099_real_timing_pairs():
         measured["warm_event_seconds"] = measured["warm_processed_tokens"] / warm_rate
         measured["warm_update"]["tokens_per_second"] = warm_rate
         measured["warm_update"]["event_seconds"] = measured["warm_event_seconds"]
+    return pairs
+
+
+def issue2103_real_timing_pairs():
+    pairs = warmed_pairs()
+    for pair_index, arm, measured_rate in ISSUE2103_REAL_TIMINGS:
+        measured = next(row for row in pairs[pair_index] if row["arm"] == arm)
+        measured["tokens_per_second"] = measured_rate
+        measured["event_seconds"] = measured["processed_tokens"] / measured_rate
+    return pairs
+
+
+def cured_pairs(*, control_by_slot=(100.0, 90.0), treatment_by_slot=(100.0, 90.0)):
+    pairs = warmed_pairs()
+    for pair_index, rows in enumerate(pairs):
+        expected_order = MODULE.AA_PAIR_ORDERS[pair_index]
+        for executed_slot, measured in enumerate(rows):
+            measured["tokens_per_second"] = (
+                control_by_slot[executed_slot]
+                if measured["arm"] == "control"
+                else treatment_by_slot[executed_slot]
+            )
+            measured["event_seconds"] = (
+                measured["processed_tokens"] / measured["tokens_per_second"]
+            )
+            measured["executed_slot"] = executed_slot
+            measured["pair_order"] = list(expected_order)
+            measured["warm_updates_to_stability"] = 4
+            warm_updates = []
+            for warm_index, warm_rate in enumerate((100.0, 102.0, 101.0, 100.0), 1):
+                warm_updates.append({
+                    "loss": 2.0,
+                    "processed_tokens": 960,
+                    "event_seconds": 960.0 / warm_rate,
+                    "tokens_per_second": warm_rate,
+                    "event_ids": [
+                        f"warm-{warm_index}-start-{measured['arm']}-{pair_index}",
+                        f"warm-{warm_index}-end-{measured['arm']}-{pair_index}",
+                    ],
+                })
+            measured["warm_updates"] = warm_updates
+            measured["warm_update"] = copy.deepcopy(warm_updates[-1])
+            measured["warm_loss"] = warm_updates[-1]["loss"]
+            measured["warm_processed_tokens"] = warm_updates[-1]["processed_tokens"]
+            measured["warm_event_seconds"] = warm_updates[-1]["event_seconds"]
+            measured["warm_tokens_per_second"] = warm_updates[-1]["tokens_per_second"]
+            measured["warm_event_ids"] = warm_updates[-1]["event_ids"]
     return pairs
 
 
@@ -292,8 +358,124 @@ def test_aa_planted_point_95_median_is_position_dependent():
     )
     assert decision["aa_paired_median_ratio"] == pytest.approx(0.95)
     assert decision["aa_position_gate_pass"] is True
-    assert decision["aa_result"] == "HARNESS_POSITION_DEPENDENT"
-    assert decision["disposition"] == "HARNESS_POSITION_DEPENDENT"
+    assert decision["aa_result"] == "HARNESS_CURE_INSUFFICIENT"
+    assert decision["disposition"] == "HARNESS_CURE_INSUFFICIENT"
+
+
+def test_aa_cure_alternates_pair_order_and_preserves_slot_ratio_orientation():
+    planted = cured_pairs()
+    decision = MODULE.adjudicate_pairs(planted, aa_mode=True)
+    assert MODULE.AA_PAIR_ORDERS == (
+        ("control", "treatment"),
+        ("treatment", "control"),
+    ) * 4
+    assert decision["aa_pair_order_alternated"] is True
+    assert decision["measured_slot_gate_by_arm"]["control"][
+        "measured_slot_ratio"
+    ] == pytest.approx(100.0 / 90.0)
+    assert decision["measured_slot_gate_by_arm"]["treatment"][
+        "measured_slot_ratio"
+    ] == pytest.approx(100.0 / 90.0)
+    assert decision["warm_updates_to_stability_by_arm"] == {
+        "control": [4] * 8,
+        "treatment": [4] * 8,
+    }
+    assert decision["disposition"] == "HARNESS_POSITION_INDEPENDENT"
+
+
+def test_aa_unstable_warm_sequence_refuses_at_readiness_update_deadline(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_update(**kwargs):
+        calls.append(copy.deepcopy(kwargs))
+        ordinal = len(calls)
+        rate = 100.0 if ordinal % 2 else 200.0
+        return ({
+            "loss": 2.0,
+            "processed_tokens": 960,
+            "event_seconds": 960.0 / rate,
+            "tokens_per_second": rate,
+            "event_ids": [f"start-{ordinal}", f"end-{ordinal}"],
+        }, {"cursor": ordinal})
+
+    monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update)
+    with pytest.raises(ValueError, match="^AA_WARM_STABILITY_NOT_REACHED_REFUSED$"):
+        MODULE.run_warm_then_measure(
+            aa_mode=True,
+            arm="control",
+            pair=0,
+            cursor={"cursor": 0},
+        )
+    assert len(calls) == MODULE.AA_WARM_STABILITY_READINESS_UPDATE_LIMIT
+
+
+def test_aa_warm_constants_are_calibrated_to_issue2103_host_timing_proxy():
+    # #2103 retained only one warm plus one measured update per arm/pair, not
+    # four consecutive warm updates.  The first two chronological rows per arm
+    # are therefore the closest available four-update host-noise proxy.
+    control_proxy = [
+        1503.5332172427418,
+        1897.209372910094,
+        5114.854005449686,
+        1884.0725764565718,
+    ]
+    treatment_proxy = [
+        4554.093001840059,
+        1930.6942952901195,
+        1826.7413105418068,
+        1737.8733953208643,
+    ]
+    assert MODULE.AA_WARM_STABILITY_K == 3
+    assert MODULE.AA_WARM_STABILITY_EPSILON == 0.06
+    assert MODULE.warm_stability_reached(control_proxy)
+    assert MODULE.warm_stability_reached(treatment_proxy)
+
+
+def test_aa_measured_update_starts_only_after_moving_median_stabilizes(monkeypatch):
+    rates = iter((100.0, 102.0, 101.0, 100.0, 99.0))
+    calls = []
+
+    def fake_update(**kwargs):
+        calls.append(copy.deepcopy(kwargs))
+        rate = next(rates)
+        ordinal = len(calls)
+        return ({
+            "loss": 2.0,
+            "processed_tokens": 960,
+            "event_seconds": 960.0 / rate,
+            "tokens_per_second": rate,
+            "event_ids": [f"start-{ordinal}", f"end-{ordinal}"],
+        }, {"cursor": ordinal})
+
+    monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update)
+    measured, cursor = MODULE.run_warm_then_measure(
+        aa_mode=True,
+        arm="control",
+        pair=0,
+        cursor={"cursor": 0},
+    )
+    assert len(calls) == 5
+    assert measured["warm_updates_to_stability"] == 4
+    assert [row["tokens_per_second"] for row in measured["warm_updates"]] == [
+        100.0,
+        102.0,
+        101.0,
+        100.0,
+    ]
+    assert measured["tokens_per_second"] == 99.0
+    assert measured["executed_slot"] == 0
+    assert measured["pair_order"] == ["control", "treatment"]
+    assert cursor == {"cursor": 5}
+
+
+def test_issue2103_sixteen_real_rows_replay_under_unchanged_estimator():
+    decision = MODULE.adjudicate_pairs(issue2103_real_timing_pairs(), aa_mode=True)
+    assert decision["aa_paired_median_ratio"] == pytest.approx(
+        0.970026070405825
+    )
+    assert decision["disposition"] == "HARNESS_CURE_INSUFFICIENT"
 
 
 def test_issue2099_real_rows_reproduce_refused_metrics_under_aa_adjudication():
@@ -306,7 +488,7 @@ def test_issue2099_real_rows_reproduce_refused_metrics_under_aa_adjudication():
     ] == pytest.approx(0.832586068830104)
     assert decision["aa_paired_median_ratio"] == pytest.approx(0.9234003022297244)
     assert decision["aa_position_gate_pass"] is False
-    assert decision["aa_result"] == "HARNESS_POSITION_DEPENDENT"
+    assert decision["aa_result"] == "HARNESS_CURE_INSUFFICIENT"
 
 
 def test_one_arm_executes_warm_then_measure_from_the_warm_cursor(monkeypatch):
@@ -730,9 +912,12 @@ def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
     )
     expected = module.BASE.sha256_bytes(control_model)
     assert refusal["result"] == "REFUSED"
-    assert refusal["issue"] == 2103
+    assert refusal["issue"] == 2110
     assert refusal["schema_version"] == module.AA_SCHEMA_VERSION
     assert refusal["aa_mode"] is True
+    assert refusal["aa_pair_order_alternated"] is True
+    assert refusal["aa_warm_stability_k"] == module.AA_WARM_STABILITY_K
+    assert refusal["aa_warm_stability_epsilon"] == module.AA_WARM_STABILITY_EPSILON
     assert refusal["control_source_head"] == head
     assert refusal["treatment_source_head"] == head
     assert refusal["source_lineage"] == {
