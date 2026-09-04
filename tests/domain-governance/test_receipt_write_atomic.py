@@ -11,7 +11,7 @@ import pytest
 
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src" / "ember" / "governance" / "scripts"))
 
 import receipt_write  # noqa: E402
 
@@ -69,6 +69,28 @@ def test_serializer_failure_never_exposes_partial_canonical_receipt(
 
     assert destination.read_bytes() == original
     assert not Path(str(destination) + ".INVALID.quarantine").exists()
+    assert not list(tmp_path.glob(".receipt.json.*.tmp"))
+
+
+def test_staging_create_permission_error_is_bounded_and_preserved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "receipt.json"
+    calls: list[str] = []
+
+    def deny_create(path, flags, mode=0o777):
+        calls.append(str(path))
+        error = PermissionError(13, "injected staging create denial", str(path))
+        error.winerror = 5
+        raise error
+
+    monkeypatch.setattr(receipt_write.os, "open", deny_create)
+    with pytest.raises(PermissionError) as raised:
+        receipt_write.checked_write(str(destination), VALID)
+
+    assert raised.value.winerror == 5
+    assert len(calls) == 3
+    assert not destination.exists()
     assert not list(tmp_path.glob(".receipt.json.*.tmp"))
 
 
