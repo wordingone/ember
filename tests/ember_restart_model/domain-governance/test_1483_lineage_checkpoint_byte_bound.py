@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import EXPERT_NAMES, optimizer_covers_every_expert_route
-from model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 from run_vertical_slice import (
     checkpoint_serialization_byte_bound,
     specialist_checkpoint_bound_active_parameters,

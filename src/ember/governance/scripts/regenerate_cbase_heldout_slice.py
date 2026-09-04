@@ -12,9 +12,9 @@ draws all 16 windows from v0-00016.bin, global token range
 (#1436, src/ember/governance/scripts/fineweb_exclusion.py) proved the ruled-excluded fineweb_edu
 range is [4055121325, 5723508974) -- which CONTAINS v0-00016.bin's entire
 span. Every window in the committed frozen slice is 100% fineweb_edu content
-now that the exclusion is ruled; scripts/cbase_heldout_eval.py's new
+now that the exclusion is ruled; src/ember/evaluation/cbase_heldout_eval.py's new
 verify_slice_excludes_ruled_sources() correctly REFUSES it (proven: running
-`python -B scripts/cbase_heldout_eval.py --validate-only --shard-dir
+`python -B src/ember/evaluation/cbase_heldout_eval.py --validate-only --shard-dir
 <real shard bytes>` against the real committed manifest exits 2 with
 SLICE_OVERLAPS_EXCLUDED_SOURCE). The slice predates the ruling by 5 days
 (PR #1228 merged 2026-07-30; the ruling audit is dated 2026-08-04) -- it was
@@ -46,7 +46,7 @@ attempted here.
 
 Because of that, this script's output is a CANDIDATE manifest, not a
 frozen one: manifests/cbase-heldout-slice-v1.json's schema hard-requires
-selection_evidence.verdict == "CLEAN" (scripts/cbase_heldout_eval.py
+selection_evidence.verdict == "CLEAN" (src/ember/evaluation/cbase_heldout_eval.py
 load_frozen_slice_manifest, SLICE_SELECTION_VERDICT_INVALID), and "CLEAN"
 in that field specifically denotes a passed n-gram decontamination check
 (see receipts/ember-c-scale/w2-heldout-decontam-20260708T121128Z.json).
@@ -583,7 +583,7 @@ def build_candidate(*, shard_dir: Path, window_count: int) -> tuple[dict, dict]:
             "reason": ("entirely inside the ruled-excluded fineweb_edu range "
                       "[4055121325, 5723508974); the exclusion ruling (2026-08-04 L3 audit, "
                       "#1436) postdates this slice's PR (#1228, merged 2026-07-30) by 5 days"),
-            "proof": ("python -B scripts/cbase_heldout_eval.py --validate-only --shard-dir "
+            "proof": ("python -B src/ember/evaluation/cbase_heldout_eval.py --validate-only --shard-dir "
                      "<real shards> exits 2 with SLICE_OVERLAPS_EXCLUDED_SOURCE against the "
                      "committed manifest, using the verify_slice_excludes_ruled_sources check "
                      "added in this same change"),

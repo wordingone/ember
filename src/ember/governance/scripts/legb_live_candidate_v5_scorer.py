@@ -751,7 +751,7 @@ def build_live_candidate_scorer(*, checkpoint_dir: str, route: str,
 
     verified = load_verified_v5_checkpoint(checkpoint_dir)
 
-    from model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+    from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
     config_path = os.path.join(REPO_ROOT, MODEL_CONFIG_REL)
     config = RestartDecoderConfig.from_contract(config_path)

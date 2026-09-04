@@ -203,8 +203,7 @@ def test_exact_model_source_and_config_construct_the_declared_production_shape_f
     source_path = next(
         candidate
         for candidate in (
-            ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "model.py",
-            ROOT / "tools" / "ember-restart-3b" / "model.py",
+            ROOT / "src" / "ember" / "model" / "model.py",
         )
         if candidate.is_file()
     )

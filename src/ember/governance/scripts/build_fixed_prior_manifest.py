@@ -121,7 +121,7 @@ INVENTORY: tuple[dict, ...] = (
          path="src/ember/infrastructure/tools/ember-restart-3b/train.py",
          provenance="Owned training entry point; authored in-repo, no imported loop."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
+         path="src/ember/training/pretrain.py",
          provenance="Owned pretraining loop body; authored in-repo."),
     dict(category="training_loop", kind="file",
          path="src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
@@ -138,7 +138,7 @@ INVENTORY: tuple[dict, ...] = (
          path="src/ember/infrastructure/tools/ember-restart-3b/production_rung.py",
          provenance="Rung driver for the owned production run."),
     dict(category="training_loop", kind="file",
-         path="src/ember/infrastructure/tools/ember-restart-3b/model.py",
+         path="src/ember/model/model.py",
          provenance="Owned unified decoder definition (clean random genesis, no "
                     "imported weights)."),
     dict(category="training_loop", kind="file",

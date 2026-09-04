@@ -6,18 +6,19 @@
   "policy": "A tracked script outside the sanctioned governed-entry homes that references the training-segment API passes only when enumerated here with a matching content digest. Path alone is never sufficient.",
   "sanctioned_homes": [
     "runtime/ember-lab/",
+    "src/ember/training/",
     "tools/ember-cli/",
     "tools/ember-restart-3b/"
   ],
   "exceptions": [
     {
       "path": "src/ember/governance/scripts/build_fixed_prior_manifest.py",
-      "sha256": "bf1ba128ef1b394eccd735d358aee96dff5bc689268f2b32c88f9284ec99e251",
+      "sha256": "80ea4d833d341da52fc2707b28df5c6a3e804cf8b723bd573aeed4ff483967d4",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition. Repinned 2026-09-03 from 859087333d2867938e86e0e51ab3e455bb8d5ca3a55ea95f5206a4f1f22092dc: content diff is exactly one INVENTORY literal, the ember_cli tree path tools/ember-cli/src -> src/ember/infrastructure/tools/ember-cli/src (the directory the cutover moved); no training-segment API reference changed. Planted test: src/ember/governance/scripts/tests/test_build_fixed_prior_manifest_inventory.py"
     },
     {
       "path": "src/ember/governance/scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "185a5127b9a4612254a157bbf232579f3008458f09bf056de4d3bd2b5bd9c5ce",
+      "sha256": "6dcee632a40cad8f83ad771a1050630899548efe2b975fb091bf894e3fff4a18",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -32,12 +33,12 @@
     },
     {
       "path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "2ede5367ad5ec914f9940630da9100f002190791b8b7d5d5186a5a1b22ffc1f0",
+      "sha256": "96e6d52440b73771633914c19e6c6073fc70aed8e224c8adb42542f1c9f1557e",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/nativization_motion_trace.py",
-      "sha256": "e42deee05fa311002d431fb9f25e6b4edbe8e6fd354e99798a25d0cf6f52197b",
+      "sha256": "4f5aa9af3376b6603f33516c2c50dd3c3351a714c40d11517a27614e7e14fbaf",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -63,11 +64,6 @@
     {
       "path": "tools/ember-restart-3b/mint_issue1719_tranche_admission.py",
       "sha256": "5f17605476aa6feba927b42b043d23d0012c54fb288d3691036b48f39fae75ec",
-      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
-    },
-    {
-      "path": "tools/ember-restart-3b/pretrain.py",
-      "sha256": "eede7eca7d8cd2e6bfd58b4f9b94ca0e941d8c1c9ab1fd4d06c7ca1ba8ac6f3d",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {

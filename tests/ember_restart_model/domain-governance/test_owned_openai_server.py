@@ -704,7 +704,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
                 config_snapshot.unlink(missing_ok=True)
 
     def test_development_loader_uses_real_validator_canonicalize_materialize_chain(self) -> None:
-        from model import RestartDecoderConfig, UnifiedDecoder
+        from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=1, attention_heads=4, vocab_size=64)
         model = UnifiedDecoder(config, device="cpu")
@@ -737,7 +737,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertIs(model.lm_head.weight, model.token_embedding.weight)
 
     def test_development_loader_rejects_incomplete_v5_split_shard_set(self) -> None:
-        from model import RestartDecoderConfig, UnifiedDecoder
+        from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=1, attention_heads=4, vocab_size=64
@@ -788,7 +788,7 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         load.assert_not_called()
 
     def test_development_loader_reads_closed_v5_split_shared_model_shard(self) -> None:
-        from model import RestartDecoderConfig, UnifiedDecoder
+        from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=1, attention_heads=4, vocab_size=64
@@ -847,8 +847,8 @@ class OwnedOpenAiServerTests(unittest.TestCase):
         self.assertNotIn("expert-", str(load.call_args))
 
     def test_development_loader_reads_owner_sharded_v5_shared_model_only(self) -> None:
-        import model as model_module
-        from model import RestartDecoderConfig, UnifiedDecoder
+        import src.ember.model.model as model_module
+        from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=1, attention_heads=4, vocab_size=64
@@ -1015,7 +1015,7 @@ class OwnedServerLoadCheckpointIdentityTests(unittest.TestCase):
     """
 
     def _build_real_checkpoint(self, root: Path) -> tuple[Path, str, object]:
-        from model import RestartDecoderConfig, UnifiedDecoder
+        from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
         from checkpoint_artifacts import write_checkpoint_artifacts
 
         config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=1, attention_heads=4, vocab_size=64)

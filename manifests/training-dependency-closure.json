@@ -45,9 +45,9 @@
     "src/ember/infrastructure/tools/ember-restart-3b/host_setup_contract.py",
     "src/ember/infrastructure/tools/ember-restart-3b/input_identity.py",
     "src/ember/infrastructure/tools/ember-restart-3b/mint_github_license_partition.py",
-    "src/ember/infrastructure/tools/ember-restart-3b/model.py",
+    "src/ember/model/model.py",
     "src/ember/infrastructure/tools/ember-restart-3b/optimizer_transition.py",
-    "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py",
+    "src/ember/training/pretrain.py",
     "src/ember/infrastructure/tools/ember-restart-3b/production_rung.py",
     "src/ember/infrastructure/tools/ember-restart-3b/semantic_contract.py",
     "src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py",
@@ -97,7 +97,7 @@
     "src/ember/infrastructure/tools/ember-restart-3b/mint_github_license_partition.py": [
       "src/ember/infrastructure/tools/corpus_connectors/receipt.py"
     ],
-    "src/ember/infrastructure/tools/ember-restart-3b/pretrain.py": [
+    "src/ember/training/pretrain.py": [
       "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py"
     ],
     "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py": [

@@ -19,9 +19,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 from checkpoint_artifacts import load_checkpoint_artifacts
-from pretrain import run_pretraining_segment
+from src.ember.training.pretrain import run_pretraining_segment
 from verify_capability_record import expected_receipt
-from model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 _CHECKPOINT_FIXTURE_PATH = Path(__file__).resolve().with_name("checkpoint_fixture.py")
 _CHECKPOINT_FIXTURE_SPEC = importlib.util.spec_from_file_location(
     "_ember_issue2015_checkpoint_fixture", _CHECKPOINT_FIXTURE_PATH

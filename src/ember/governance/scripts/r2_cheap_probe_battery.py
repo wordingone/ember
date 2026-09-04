@@ -86,7 +86,7 @@ command with zero further code changes:
     could not be adjudicated on this date because the battery is
     undefined" is durable and auditable rather than silent.
   * Receipt conventions matched to src/ember/governance/scripts/legb_inprocess_scorer.py (issue
-    #757) and scripts/cbase_heldout_eval.py (issue #760): ticket/ts/
+    #757) and src/ember/evaluation/cbase_heldout_eval.py (issue #760): ticket/ts/
     sha_convention/invariant_sha256 envelope, `receipt_write.checked_write`
     atomic quarantine-on-invalid publication, double-run determinism proof
     on every scored item (bit-identical score vectors across two
@@ -227,7 +227,7 @@ T24_CONFIDENCE_LEVEL = 0.95             # T-24
 # itself names no resample count (see module docstring, secondary
 # ambiguity).
 BOOTSTRAP_RESAMPLES = 10000
-DEFAULT_SEED = 83  # matches scripts/cbase_heldout_eval.py's default --seed
+DEFAULT_SEED = 83  # matches src/ember/evaluation/cbase_heldout_eval.py's default --seed
 
 RECEIPT_SCHEMA = "r2-cheap-probe-battery/v1"
 PROBE_MANIFEST_SCHEMA = "r2-cheap-probe-battery-manifest/v1"
