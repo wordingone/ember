@@ -35,17 +35,27 @@ PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
 AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
-AA_SCHEMA_VERSION = "ember-issue2110-aa-position-balanced-warm-stable-canary-v1"
+AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-disjoint-window-canary-v1"
+AA_ISSUE = 2112
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
 AA_PAIRED_RATIO_FLOOR = 0.98
 AA_PAIRED_RATIO_CEILING = 1.02
 AA_PAIR_ORDERS = (("control", "treatment"), ("treatment", "control")) * 4
-AA_WARM_STABILITY_K = 3
+# #2112 cure (sized from the #2110 refusal rows): the first update after every
+# arm switch is executed and EXCLUDED from every window (it is not a whole
+# update on the device); the device is synchronized immediately before each
+# timing window opens; warm readiness compares the token rates of two
+# consecutive DISJOINT W-update windows.  The per-arm schedule is fixed
+# (excluded + horizon * W warm + W measured) so both A/A arms stay on one cursor.
+AA_POST_SWITCH_EXCLUDED_UPDATES = 1
+AA_WARM_WINDOW_UPDATES = 8
 AA_WARM_STABILITY_EPSILON = 0.06
-# One previous and one current K-wide moving-median window are observable at
-# K+1 updates.  A fixed deadline also keeps both A/A arms on the same cursor.
-AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = AA_WARM_STABILITY_K + 1
+AA_WARM_HORIZON_WINDOWS = 3
+AA_MEASURED_WINDOW_UPDATES = AA_WARM_WINDOW_UPDATES
+AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = (
+    AA_WARM_HORIZON_WINDOWS * AA_WARM_WINDOW_UPDATES
+)
 _BASE_RUN_ONE_UPDATE = BASE.run_one_update
 _BASE_ADJUDICATE_PAIRS = BASE.adjudicate_pairs
 
@@ -81,6 +91,10 @@ _AA_MEASUREMENT_FIELDS = _MEASUREMENT_FIELDS | {
     "pair_order",
     "warm_updates",
     "warm_updates_to_stability",
+    "warm_window_rates",
+    "excluded_updates",
+    "measured_updates",
+    "device_synchronized_before_window",
 }
 
 
@@ -159,6 +173,14 @@ def adjudicate_pairs(
         "control": [],
         "treatment": [],
     }
+    warm_window_rates_by_arm: dict[str, list[list[float]]] = {
+        "control": [],
+        "treatment": [],
+    }
+    device_synchronized_by_arm: dict[str, list[dict[str, bool]]] = {
+        "control": [],
+        "treatment": [],
+    }
     cure_fields_present = any(
         "executed_slot" in row for rows in pairs for row in rows
     )
@@ -175,45 +197,52 @@ def adjudicate_pairs(
                     raise ValueError(f"AA_PAIR_ORDER_DRIFT_REFUSED:{pair_index}")
                 warm_updates = row.get("warm_updates")
                 warm_count = int(row.get("warm_updates_to_stability", 0))
+                excluded_updates = row.get("excluded_updates")
+                measured_updates = row.get("measured_updates")
+                synchronized = row.get("device_synchronized_before_window")
                 if (
                     not isinstance(warm_updates, list)
                     or warm_count != len(warm_updates)
                     or warm_count != AA_WARM_STABILITY_READINESS_UPDATE_LIMIT
                     or not all(isinstance(item, Mapping) for item in warm_updates)
                     or warm_updates[-1] != row.get("warm_update")
-                    or not warm_stability_reached(
-                        [item.get("tokens_per_second") for item in warm_updates]
+                    or not warm_stability_reached(warm_updates)
+                    or not _rates_match(
+                        row.get("warm_window_rates"), warm_window_rates(warm_updates)
                     )
                 ):
                     raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
-                for update in warm_updates:
-                    update_tokens = int(update.get("processed_tokens", 0))
-                    update_seconds = _positive_finite(
-                        update.get("event_seconds"),
-                        "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED",
+                if (
+                    not isinstance(excluded_updates, list)
+                    or len(excluded_updates) != AA_POST_SWITCH_EXCLUDED_UPDATES
+                    or not all(isinstance(item, Mapping) for item in excluded_updates)
+                ):
+                    raise ValueError("AA_EXCLUDED_UPDATE_RECORD_REFUSED")
+                if (
+                    not isinstance(measured_updates, list)
+                    or len(measured_updates) != AA_MEASURED_WINDOW_UPDATES
+                    or not all(isinstance(item, Mapping) for item in measured_updates)
+                    or int(row.get("processed_tokens", 0))
+                    != sum(int(item.get("processed_tokens", 0)) for item in measured_updates)
+                    or not math.isclose(
+                        float(row.get("event_seconds", 0.0)),
+                        sum(float(item.get("event_seconds", 0.0)) for item in measured_updates),
+                        rel_tol=1e-9,
+                        abs_tol=1e-12,
                     )
-                    update_rate = _positive_finite(
-                        update.get("tokens_per_second"),
-                        "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED",
-                    )
-                    update_events = update.get("event_ids")
-                    if (
-                        update_tokens <= 0
-                        or not math.isclose(
-                            update_rate,
-                            update_tokens / update_seconds,
-                            rel_tol=1e-12,
-                            abs_tol=1e-12,
-                        )
-                        or not isinstance(update_events, list)
-                        or len(update_events) != 2
-                        or not all(
-                            isinstance(item, str) and item for item in update_events
-                        )
-                    ):
-                        raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
-                    warm_events.extend(update_events)
+                ):
+                    raise ValueError("AA_MEASURED_WINDOW_RECORD_REFUSED")
+                if (
+                    not isinstance(synchronized, Mapping)
+                    or set(synchronized) != {"warm", "measured"}
+                    or not all(isinstance(value, bool) for value in synchronized.values())
+                ):
+                    raise ValueError("AA_DEVICE_SYNCHRONIZATION_RECORD_REFUSED")
+                for update in (*excluded_updates, *warm_updates, *measured_updates):
+                    warm_events.extend(_validate_update_record(update))
                 warm_updates_to_stability_by_arm[arm].append(warm_count)
+                warm_window_rates_by_arm[arm].append(list(row["warm_window_rates"]))
+                device_synchronized_by_arm[arm].append(dict(synchronized))
             measured_rate = _positive_finite(
                 row.get("tokens_per_second"), "TIMING_SAMPLE_INVALID_REFUSED"
             )
@@ -324,13 +353,16 @@ def adjudicate_pairs(
                     tuple(row.get("arm") for row in rows) for rows in pairs
                 )
                 == AA_PAIR_ORDERS,
-                "aa_warm_stability_k": AA_WARM_STABILITY_K,
-                "aa_warm_stability_epsilon": AA_WARM_STABILITY_EPSILON,
+                **_aa_constants(),
                 **(
                     {
                         "warm_updates_to_stability_by_arm": (
                             warm_updates_to_stability_by_arm
-                        )
+                        ),
+                        "warm_window_rates_by_arm": warm_window_rates_by_arm,
+                        "device_synchronized_before_window_by_arm": (
+                            device_synchronized_by_arm
+                        ),
                     }
                     if cure_fields_present
                     else {}
@@ -342,22 +374,112 @@ def adjudicate_pairs(
     }
 
 
-def warm_stability_reached(
-    rates: Sequence[object],
+def _aa_constants() -> dict[str, object]:
+    return {
+        "aa_post_switch_excluded_updates": AA_POST_SWITCH_EXCLUDED_UPDATES,
+        "aa_warm_window_updates": AA_WARM_WINDOW_UPDATES,
+        "aa_warm_stability_epsilon": AA_WARM_STABILITY_EPSILON,
+        "aa_warm_horizon_windows": AA_WARM_HORIZON_WINDOWS,
+        "aa_measured_window_updates": AA_MEASURED_WINDOW_UPDATES,
+        "aa_warm_readiness_criterion": (
+            "relative change between consecutive disjoint window token rates"
+        ),
+    }
+
+
+def _validate_update_record(update: Mapping[str, object]) -> list[str]:
+    """Return the update's two CUDA event ids after token/timing accounting."""
+    tokens = int(update.get("processed_tokens", 0))
+    seconds = _positive_finite(
+        update.get("event_seconds"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+    )
+    rate = _positive_finite(
+        update.get("tokens_per_second"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+    )
+    events = update.get("event_ids")
+    if (
+        tokens <= 0
+        or not math.isclose(rate, tokens / seconds, rel_tol=1e-12, abs_tol=1e-12)
+        or not isinstance(events, list)
+        or len(events) != 2
+        or not all(isinstance(item, str) and item for item in events)
+    ):
+        raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
+    return list(events)
+
+
+def window_rate(updates: Sequence[Mapping[str, object]]) -> float:
+    """Tokens over summed CUDA-event seconds for one window of whole updates."""
+    tokens = sum(int(item.get("processed_tokens", 0)) for item in updates)
+    seconds = sum(
+        _positive_finite(
+            item.get("event_seconds"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+        )
+        for item in updates
+    )
+    if tokens <= 0 or seconds <= 0:
+        raise ValueError("AA_WARM_TIMING_SAMPLE_INVALID_REFUSED")
+    return tokens / seconds
+
+
+def warm_window_rates(
+    updates: Sequence[Mapping[str, object]],
     *,
-    k: int = AA_WARM_STABILITY_K,
+    window: int = AA_WARM_WINDOW_UPDATES,
+) -> list[float]:
+    """Rates of every COMPLETE disjoint window, in execution order."""
+    return [
+        window_rate(updates[start : start + window])
+        for start in range(0, len(updates) - window + 1, window)
+    ]
+
+
+def _rates_match(recorded: object, computed: Sequence[float]) -> bool:
+    if not isinstance(recorded, list) or len(recorded) != len(computed):
+        return False
+    try:
+        return all(
+            math.isclose(float(a), float(b), rel_tol=1e-9, abs_tol=1e-12)
+            for a, b in zip(recorded, computed)
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def warm_stability_reached(
+    updates: Sequence[Mapping[str, object]],
+    *,
+    window: int = AA_WARM_WINDOW_UPDATES,
     epsilon: float = AA_WARM_STABILITY_EPSILON,
 ) -> bool:
-    """Compare consecutive K-update moving medians using a fixed relative bar."""
-    values = [
-        _positive_finite(value, "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED")
-        for value in rates
-    ]
-    if len(values) < k + 1:
+    """Compare the two most recent DISJOINT window rates with a fixed relative bar.
+
+    #2110 compared moving medians of two K=3 windows sharing two samples: the
+    control arm passed with relative change 0.0 while its samples spanned
+    1,253 to 5,753 tokens/s.  Disjoint windows share no sample.
+    """
+    rates = warm_window_rates(updates, window=window)
+    if len(rates) < 2:
         return False
-    previous = statistics.median(values[-k - 1 : -1])
-    current = statistics.median(values[-k:])
+    previous, current = rates[-2], rates[-1]
     return abs(current - previous) / previous < epsilon
+
+
+def synchronize_device_before_window() -> bool:
+    """Drain queued device work so the next timing window starts at a boundary."""
+    try:
+        torch = importlib.import_module("torch")
+    except ImportError:
+        return False
+    if not torch.cuda.is_available():
+        return False
+    torch.cuda.synchronize()
+    return True
+
+
+# Per-arm, per-pair progress retained for the refusal sidecar: a refusal must
+# attribute on its own (the #2110 sidecar dropped the treatment arm's sequence).
+_AA_ARM_PROGRESS: dict[str, dict[str, object]] = {}
 
 
 def _with_event_prefix(
@@ -372,24 +494,9 @@ def run_warm_then_measure(*, aa_mode: bool = False, **kwargs):
     if int(kwargs.get("pair", 0)) < 0:
         return _BASE_RUN_ONE_UPDATE(**kwargs)
     if aa_mode:
-        warm_updates: list[dict[str, object]] = []
-        warm_cursor = kwargs["cursor"]
-        for warm_index in range(AA_WARM_STABILITY_READINESS_UPDATE_LIMIT):
-            warm_kwargs = dict(kwargs)
-            warm_kwargs["cursor"] = warm_cursor
-            warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**warm_kwargs)
-            warm_updates.append(
-                _with_event_prefix(warm, f"warm-{warm_index + 1}")
-            )
-            if warm_stability_reached(
-                [item["tokens_per_second"] for item in warm_updates]
-            ):
-                break
-        else:
-            raise ValueError("AA_WARM_STABILITY_NOT_REACHED_REFUSED")
-    else:
-        warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**kwargs)
-        warm_updates = [_with_event_prefix(warm, "warm")]
+        return _run_aa_arm(**kwargs)
+    warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**kwargs)
+    warm_updates = [_with_event_prefix(warm, "warm")]
     measured_kwargs = dict(kwargs)
     measured_kwargs["cursor"] = warm_cursor
     measured, measured_cursor = _BASE_RUN_ONE_UPDATE(**measured_kwargs)
@@ -404,16 +511,74 @@ def run_warm_then_measure(*, aa_mode: bool = False, **kwargs):
         "warm_update": copy.deepcopy(final_warm),
         "event_ids": measured_event_ids,
     })
-    if aa_mode:
-        pair_index = int(kwargs["pair"])
-        pair_order = AA_PAIR_ORDERS[pair_index]
-        measured.update({
-            "executed_slot": pair_order.index(str(kwargs["arm"])),
-            "pair_order": list(pair_order),
-            "warm_updates": warm_updates,
-            "warm_updates_to_stability": len(warm_updates),
-        })
     return measured, measured_cursor
+
+
+def _run_aa_arm(**kwargs):
+    """Excluded switch update -> sync -> warm windows -> sync -> measured window."""
+    arm = str(kwargs["arm"])
+    pair_index = int(kwargs["pair"])
+    progress: dict[str, object] = {
+        "excluded_updates": [],
+        "warm_updates": [],
+        "warm_window_rates": [],
+        "measured_updates": [],
+        "device_synchronized_before_window": {},
+    }
+    _AA_ARM_PROGRESS[f"pair-{pair_index}-{arm}"] = progress
+    cursor = kwargs["cursor"]
+
+    def one_update(prefix: str):
+        nonlocal cursor
+        call_kwargs = dict(kwargs)
+        call_kwargs["cursor"] = cursor
+        update, cursor = _BASE_RUN_ONE_UPDATE(**call_kwargs)
+        return _with_event_prefix(update, prefix)
+
+    excluded_updates: list[dict[str, object]] = progress["excluded_updates"]
+    for excluded_index in range(AA_POST_SWITCH_EXCLUDED_UPDATES):
+        excluded_updates.append(one_update(f"excluded-{excluded_index + 1}"))
+    synchronized: dict[str, bool] = progress["device_synchronized_before_window"]
+    synchronized["warm"] = synchronize_device_before_window()
+    warm_updates: list[dict[str, object]] = progress["warm_updates"]
+    for warm_index in range(AA_WARM_STABILITY_READINESS_UPDATE_LIMIT):
+        warm_updates.append(one_update(f"warm-{warm_index + 1}"))
+        progress["warm_window_rates"] = warm_window_rates(warm_updates)
+    if not warm_stability_reached(warm_updates):
+        raise ValueError("AA_WARM_STABILITY_NOT_REACHED_REFUSED")
+    synchronized["measured"] = synchronize_device_before_window()
+    measured_updates: list[dict[str, object]] = progress["measured_updates"]
+    for measured_index in range(AA_MEASURED_WINDOW_UPDATES):
+        measured_updates.append(one_update(f"measured-{measured_index + 1}"))
+    final_warm = warm_updates[-1]
+    measured = copy.deepcopy(measured_updates[-1])
+    processed_tokens = sum(int(item["processed_tokens"]) for item in measured_updates)
+    event_seconds = sum(float(item["event_seconds"]) for item in measured_updates)
+    pair_order = AA_PAIR_ORDERS[pair_index]
+    measured.update({
+        "processed_tokens": processed_tokens,
+        "event_seconds": event_seconds,
+        "tokens_per_second": processed_tokens / event_seconds,
+        "event_ids": [
+            f"measured-window-{measured_updates[0]['event_ids'][0]}",
+            f"measured-window-{measured_updates[-1]['event_ids'][1]}",
+        ],
+        "warm_loss": final_warm["loss"],
+        "warm_processed_tokens": final_warm["processed_tokens"],
+        "warm_event_seconds": final_warm["event_seconds"],
+        "warm_tokens_per_second": final_warm["tokens_per_second"],
+        "warm_event_ids": final_warm["event_ids"],
+        "warm_update": copy.deepcopy(final_warm),
+        "executed_slot": pair_order.index(arm),
+        "pair_order": list(pair_order),
+        "warm_updates": copy.deepcopy(warm_updates),
+        "warm_updates_to_stability": len(warm_updates),
+        "warm_window_rates": list(progress["warm_window_rates"]),
+        "excluded_updates": copy.deepcopy(excluded_updates),
+        "measured_updates": copy.deepcopy(measured_updates),
+        "device_synchronized_before_window": dict(synchronized),
+    })
+    return measured, cursor
 
 
 def rebind_receipt(
@@ -439,12 +604,11 @@ def rebind_receipt(
             r"[0-9a-f]{64}", aa_text_lab_corpus_sha256
         ) is None:
             raise ValueError("AA_CORPUS_DERIVED_PIN_REFUSED")
-        rebound["issue"] = 2110
+        rebound["issue"] = AA_ISSUE
         rebound["aa_mode"] = True
         rebound["aa_source_head"] = control_rebased_head
         rebound["aa_pair_order_alternated"] = True
-        rebound["aa_warm_stability_k"] = AA_WARM_STABILITY_K
-        rebound["aa_warm_stability_epsilon"] = AA_WARM_STABILITY_EPSILON
+        rebound.update(_aa_constants())
         rebound["text_lab_corpus_sha256"] = aa_text_lab_corpus_sha256
         rebound["predecessor_text_lab_corpus_sha256"] = (
             PREDECESSOR_TEXT_LAB_CORPUS_SHA256
@@ -509,6 +673,14 @@ def write_exclusive_refusal(
         "predecessor_runner_source_sha256": BASE_RUNNER_SHA256,
         "historical_predecessor_runner_source_sha256": (
             HISTORICAL_BASE_RUNNER_SHA256
+        ),
+        **(
+            {
+                "aa_arm_progress": copy.deepcopy(_AA_ARM_PROGRESS),
+                **_aa_constants(),
+            }
+            if _AA_ARM_PROGRESS
+            else {}
         ),
     })
 
