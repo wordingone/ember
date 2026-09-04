@@ -32,8 +32,8 @@ TEXT_LAB_CORPUS_RELATIVE_PATH = Path("data/ember-restart-3b/owned-text-lab-corpu
 TEXT_LAB_CORPUS_SHA256 = "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca"
 CASCADE_ARTIFACT_SHA256 = {
     "data/ember-restart-3b/owned-text-lab-corpus-v4.json": "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca",
-    "data/ember-restart-3b/owned-text-lab-input-identity-v4.json": "24523af7896002902b207e408ba0a96caf102166fed53b6fe54191729a877eba",
-    "data/ember-restart-3b/text-lab-authority-index-v2.json": "ce0c0500d534bfd7c53d1f533d30fb574f58ae9c6d1affdc4298916ba18eb27a",
+    "data/ember-restart-3b/owned-text-lab-input-identity-v4.json": "105b277a88b6d4a07c3ed5a4733548415aec40dbac883e51f1cf49d3b7333fc0",
+    "data/ember-restart-3b/text-lab-authority-index-v2.json": "94846217f42984f79defd093f7fc2a4728e6750c5c03e209fcffb1819c576fcd",
     "data/ember-restart-3b/text-lab-source-receipt-bundle-v4.json": "94fee7e03049ebb4ebb5cbe6b93450e449d8b558384e8d3f8bf90f4a55cfde09",
 }
 SCOPE_RUN_SPEC_RAW_SHA256 = "e457d7ede3fcd08151236bbd9b730a48976212551e2620e1751eb92e35974c89"

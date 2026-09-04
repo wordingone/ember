@@ -183,6 +183,46 @@ class RemintTextLabInputIdentityTests(unittest.TestCase):
             )
             self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
 
+    def test_write_can_remint_source_base_commit_and_downstream_index_pin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sandbox(Path(tmp))
+            script = root / "src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py"
+            identity_path = root / IDENTITY_REL
+            index_path = root / INDEX_REL
+            before_identity = json.loads(identity_path.read_bytes())
+            before_index = json.loads(index_path.read_bytes())
+            new_source_base = "a774617a9665f69ed045eef16c75b4aa852830af"
+
+            write = subprocess.run(
+                [sys.executable, "-B", str(script), "--write", "--source-base-commit", new_source_base],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(write.returncode, 0, write.stdout + write.stderr)
+            after_identity = json.loads(identity_path.read_bytes())
+            after_index = json.loads(index_path.read_bytes())
+            self.assertEqual(after_identity["source_base_commit"], new_source_base)
+            for key in ("corpus_sha256", "schema_version", "code_files"):
+                self.assertEqual(after_identity[key], before_identity[key])
+            for key in before_index:
+                if key != "input_identity":
+                    self.assertEqual(after_index[key], before_index[key])
+            self.assertEqual(after_index["input_identity"]["sha256"], sha(identity_path.read_bytes()))
+
+    def test_write_rejects_malformed_source_base_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._sandbox(Path(tmp))
+            script = root / "src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py"
+            result = subprocess.run(
+                [sys.executable, "-B", str(script), "--write", "--source-base-commit", "not-a-commit"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("40-character lowercase Git commit", result.stdout)
+
     def test_write_is_a_no_op_when_already_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._sandbox(Path(tmp))
