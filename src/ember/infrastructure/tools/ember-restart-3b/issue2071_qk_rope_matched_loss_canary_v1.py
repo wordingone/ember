@@ -75,6 +75,27 @@ def sha256_path(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_microprofile_source_identity(
+    microprofile: Mapping[str, object],
+    *,
+    current_model_sha256: str,
+    current_test_sha256: str,
+    historical_model_sha256: str | None = None,
+    historical_test_sha256: str | None = None,
+) -> None:
+    """Bind a historical microprofile without weakening current-source pins."""
+
+    expected_model = historical_model_sha256 or current_model_sha256
+    expected_test = historical_test_sha256 or current_test_sha256
+    if (
+        microprofile.get("treatment_head") != TREATMENT_HEAD
+        or microprofile.get("control_head") != CONTROL_HEAD
+        or microprofile.get("treatment_model_sha256") != expected_model
+        or microprofile.get("treatment_test_sha256") != expected_test
+    ):
+        raise ValueError("MICROPROFILE_SOURCE_IDENTITY_REFUSED")
+
+
 def validate_treatment_checkout(root: Path, head: str, porcelain: bytes) -> None:
     """Permit only the exact, receipt-bound four-file authority cascade overlay."""
 
@@ -1005,6 +1026,8 @@ def main() -> int:
     parser.add_argument("--microprofile-self-sha256", required=True)
     parser.add_argument("--model-sha256", required=True)
     parser.add_argument("--test-sha256", required=True)
+    parser.add_argument("--historical-microprofile-model-sha256")
+    parser.add_argument("--historical-microprofile-test-sha256")
     parser.add_argument("--python-sha256", required=True)
     parser.add_argument("--torch-version", required=True)
     parser.add_argument("--seed", type=int, default=2071)
@@ -1051,13 +1074,13 @@ def main() -> int:
     microprofile = json.loads(args.microprofile.read_text(encoding="utf-8"))
     if microprofile.get("result") != "PASS_POSITIVE" or microprofile.get("self_sha256") != args.microprofile_self_sha256:
         raise ValueError("MICROPROFILE_PREDECESSOR_REFUSED")
-    if (
-        microprofile.get("treatment_head") != TREATMENT_HEAD
-        or microprofile.get("control_head") != CONTROL_HEAD
-        or microprofile.get("treatment_model_sha256") != args.model_sha256
-        or microprofile.get("treatment_test_sha256") != args.test_sha256
-    ):
-        raise ValueError("MICROPROFILE_SOURCE_IDENTITY_REFUSED")
+    validate_microprofile_source_identity(
+        microprofile,
+        current_model_sha256=args.model_sha256,
+        current_test_sha256=args.test_sha256,
+        historical_model_sha256=args.historical_microprofile_model_sha256,
+        historical_test_sha256=args.historical_microprofile_test_sha256,
+    )
     backend = microprofile.get("backend")
     if isinstance(backend, Mapping):
         values = [tuple(value) for value in backend.values()]
@@ -1190,6 +1213,14 @@ def main() -> int:
             "certificate_raw_sha256": args.scope_certificate_raw_sha256,
             "certificate_self_sha256": args.scope_certificate_self_sha256,
             "checkpoint_manifest_sha256": designation["manifest"]["raw_sha256"],
+            "source_model_sha256": args.model_sha256,
+            "source_test_sha256": args.test_sha256,
+            "historical_microprofile_model_sha256": (
+                args.historical_microprofile_model_sha256 or args.model_sha256
+            ),
+            "historical_microprofile_test_sha256": (
+                args.historical_microprofile_test_sha256 or args.test_sha256
+            ),
             "text_lab_corpus_sha256": args.text_lab_corpus_sha256,
             "semantic_receipt_sha256": stream.receipt_sha256,
             "semantic_tokenizer_sha256": stream.tokenizer_sha256,
@@ -1293,7 +1324,14 @@ def main() -> int:
         "initial_cursor_contract": initial_cursor_contract,
         "source_model_sha256": args.model_sha256,
         "runner_source_sha256": runner_source_sha256,
-        "source_test_sha256": args.test_sha256, "microprofile_raw_sha256": args.microprofile_raw_sha256,
+        "source_test_sha256": args.test_sha256,
+        "historical_microprofile_model_sha256": (
+            args.historical_microprofile_model_sha256 or args.model_sha256
+        ),
+        "historical_microprofile_test_sha256": (
+            args.historical_microprofile_test_sha256 or args.test_sha256
+        ),
+        "microprofile_raw_sha256": args.microprofile_raw_sha256,
         "microprofile_self_sha256": args.microprofile_self_sha256, "seed": args.seed,
         "burn_in_updates_per_arm": BURN_IN_UPDATES_PER_ARM, "measured_updates_per_arm": MEASURED_UPDATES_PER_ARM,
         "measured_order": list(MEASURED_ORDER), "parameter_census": [[name, index] for name, index in census],
