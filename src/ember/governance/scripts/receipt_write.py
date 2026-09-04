@@ -34,13 +34,41 @@ CLI:
 import argparse
 import json
 import os
-import tempfile
+import secrets
 import sys
 from pathlib import Path
 
 # Import the frozen validator directly — no shell-out.
 sys.path.insert(0, str(Path(__file__).parent))
 import receipt_check  # noqa: E402
+
+
+STAGING_CREATE_ATTEMPTS = 3
+
+
+def _create_staging_file(parent: str, basename: str) -> tuple[int, str]:
+    """Create one same-directory staging file without tempfile's Win32 spin.
+
+    CPython's tempfile._mkstemp_inner treats every PermissionError as a possible
+    directory-name collision on Windows when os.access reports the parent as
+    writable. A real create denial can therefore burn through TMP_MAX while
+    holding a receipt writer indefinitely. Keep the collision/denial retry
+    bounded and re-raise the final native OSError, including its winerror.
+    """
+    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_BINARY", 0) | getattr(os, "O_NOINHERIT", 0)
+    last_error: OSError | None = None
+    for _attempt in range(STAGING_CREATE_ATTEMPTS):
+        staging_path = os.path.join(
+            parent,
+            f".{basename}.{secrets.token_hex(8)}.tmp",
+        )
+        try:
+            return os.open(staging_path, flags, 0o600), staging_path
+        except (FileExistsError, PermissionError) as exc:
+            last_error = exc
+    assert last_error is not None
+    raise last_error
 
 
 def checked_write(path: str, obj: dict) -> None:
@@ -60,11 +88,7 @@ def checked_write(path: str, obj: dict) -> None:
     """
     path = os.path.abspath(os.fspath(path))
     parent = os.path.dirname(path) or os.curdir
-    fd, staging_path = tempfile.mkstemp(
-        dir=parent,
-        prefix=f".{os.path.basename(path)}.",
-        suffix=".tmp",
-    )
+    fd, staging_path = _create_staging_file(parent, os.path.basename(path))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, indent=2)

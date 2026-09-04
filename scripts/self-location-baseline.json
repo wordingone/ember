@@ -4346,8 +4346,8 @@
       "error": "unknown alias ROOT",
       "evaluated_path": null,
       "expectation": "derived_location_only",
-      "expression": "str(ROOT / 'scripts')",
-      "expression_sha256": "0b8ee487ec7e21b77c242a928525c94302e86bee23c5da0fd91adaef083182b5",
+      "expression": "str(ROOT / 'src' / 'ember' / 'governance' / 'scripts')",
+      "expression_sha256": "b6e1c7c418d7528d1a3150e922b98c8f9eb79e21d64cbc887ee52f1d94bf0d44",
       "line": 14,
       "path": "tests/domain-governance/test_receipt_write_atomic.py",
       "status": "UNEVALUABLE",
@@ -5730,6 +5730,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "0024bd5c3eee49c6ddb42d3fa72eeaa838f912492ec7fc7f7b8b04d1b6538718",
+  "self_sha256": "a382b35d53232925b7dcfb0406334c7f7e17859dea10e23c5fa3c3b1fdedb0a8",
   "workstream_id": "EMBER-02A"
 }
