@@ -19,7 +19,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
-from src.ember.model.model import RMSNorm, RawAudioProjector, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from model import RMSNorm, RawAudioProjector, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
 
 class RestartDecoderModelTests(unittest.TestCase):

@@ -13,7 +13,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import threading
 import tempfile
 import time
@@ -23,11 +22,8 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
-_REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
-if str(_REPO_IMPORT_HOME) not in sys.path:
-    sys.path.insert(0, str(_REPO_IMPORT_HOME))
 from batch import decode_owned_batch
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from model import RestartDecoderConfig, UnifiedDecoder
 # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py
 import importlib.util as _ember_1601eccb5605602b_importlib
 import sys as _ember_1601eccb5605602b_sys

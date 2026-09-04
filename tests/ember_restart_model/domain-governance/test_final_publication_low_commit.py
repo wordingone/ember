@@ -336,7 +336,7 @@ class PublicationProjectionTeardownOrderingTests(unittest.TestCase):
 
     def _vision_step_fixture(self) -> tuple[object, object, dict[str, object], dict[str, int]]:
         import torch
-        from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+        from model import RestartDecoderConfig, UnifiedDecoder
 
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64
