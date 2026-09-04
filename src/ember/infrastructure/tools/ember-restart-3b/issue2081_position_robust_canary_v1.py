@@ -35,11 +35,17 @@ PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
 AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
-AA_SCHEMA_VERSION = "ember-issue2103-aa-position-independence-canary-v1"
+AA_SCHEMA_VERSION = "ember-issue2110-aa-position-balanced-warm-stable-canary-v1"
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
 AA_PAIRED_RATIO_FLOOR = 0.98
 AA_PAIRED_RATIO_CEILING = 1.02
+AA_PAIR_ORDERS = (("control", "treatment"), ("treatment", "control")) * 4
+AA_WARM_STABILITY_K = 3
+AA_WARM_STABILITY_EPSILON = 0.06
+# One previous and one current K-wide moving-median window are observable at
+# K+1 updates.  A fixed deadline also keeps both A/A arms on the same cursor.
+AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = AA_WARM_STABILITY_K + 1
 _BASE_RUN_ONE_UPDATE = BASE.run_one_update
 _BASE_ADJUDICATE_PAIRS = BASE.adjudicate_pairs
 
@@ -70,6 +76,12 @@ _MEASUREMENT_FIELDS = {
     "runner_source_sha256",
     "row_sha256",
 }
+_AA_MEASUREMENT_FIELDS = _MEASUREMENT_FIELDS | {
+    "executed_slot",
+    "pair_order",
+    "warm_updates",
+    "warm_updates_to_stability",
+}
 
 
 def _positive_finite(value: object, refusal: str) -> float:
@@ -79,7 +91,9 @@ def _positive_finite(value: object, refusal: str) -> float:
     return result
 
 
-def load_measurement_pairs(path: Path) -> list[list[dict[str, object]]]:
+def load_measurement_pairs(
+    path: Path, *, aa_mode: bool = False
+) -> list[list[dict[str, object]]]:
     """Load the successor's hash-bound warm-plus-measured row schema."""
     rows: list[dict[str, object]] = []
     for index, raw in enumerate(path.resolve(strict=True).read_bytes().splitlines()):
@@ -87,7 +101,8 @@ def load_measurement_pairs(path: Path) -> list[list[dict[str, object]]]:
             row = json.loads(raw)
         except (TypeError, ValueError) as error:
             raise ValueError(f"MEASUREMENT_ROW_JSON_REFUSED:{index}") from error
-        if not isinstance(row, dict) or set(row) != _MEASUREMENT_FIELDS:
+        required = _AA_MEASUREMENT_FIELDS if aa_mode else _MEASUREMENT_FIELDS
+        if not isinstance(row, dict) or set(row) != required:
             raise ValueError(f"MEASUREMENT_ROW_SCHEMA_REFUSED:{index}")
         claimed = row.pop("row_sha256")
         if claimed != BASE.sha256_bytes(BASE.canonical(row)):
@@ -140,9 +155,65 @@ def adjudicate_pairs(
         "treatment": {0: [], 1: []},
     }
     warm_events: list[str] = []
-    for rows in pairs:
+    warm_updates_to_stability_by_arm: dict[str, list[int]] = {
+        "control": [],
+        "treatment": [],
+    }
+    cure_fields_present = any(
+        "executed_slot" in row for rows in pairs for row in rows
+    )
+    for pair_index, rows in enumerate(pairs):
+        expected_order = AA_PAIR_ORDERS[pair_index]
         for executed_slot, row in enumerate(rows):
             arm = str(row["arm"])
+            if aa_mode and cure_fields_present:
+                if (
+                    int(row.get("executed_slot", -1)) != executed_slot
+                    or tuple(row.get("pair_order", ())) != expected_order
+                    or tuple(item.get("arm") for item in rows) != expected_order
+                ):
+                    raise ValueError(f"AA_PAIR_ORDER_DRIFT_REFUSED:{pair_index}")
+                warm_updates = row.get("warm_updates")
+                warm_count = int(row.get("warm_updates_to_stability", 0))
+                if (
+                    not isinstance(warm_updates, list)
+                    or warm_count != len(warm_updates)
+                    or warm_count != AA_WARM_STABILITY_READINESS_UPDATE_LIMIT
+                    or not all(isinstance(item, Mapping) for item in warm_updates)
+                    or warm_updates[-1] != row.get("warm_update")
+                    or not warm_stability_reached(
+                        [item.get("tokens_per_second") for item in warm_updates]
+                    )
+                ):
+                    raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
+                for update in warm_updates:
+                    update_tokens = int(update.get("processed_tokens", 0))
+                    update_seconds = _positive_finite(
+                        update.get("event_seconds"),
+                        "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED",
+                    )
+                    update_rate = _positive_finite(
+                        update.get("tokens_per_second"),
+                        "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED",
+                    )
+                    update_events = update.get("event_ids")
+                    if (
+                        update_tokens <= 0
+                        or not math.isclose(
+                            update_rate,
+                            update_tokens / update_seconds,
+                            rel_tol=1e-12,
+                            abs_tol=1e-12,
+                        )
+                        or not isinstance(update_events, list)
+                        or len(update_events) != 2
+                        or not all(
+                            isinstance(item, str) and item for item in update_events
+                        )
+                    ):
+                        raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
+                    warm_events.extend(update_events)
+                warm_updates_to_stability_by_arm[arm].append(warm_count)
             measured_rate = _positive_finite(
                 row.get("tokens_per_second"), "TIMING_SAMPLE_INVALID_REFUSED"
             )
@@ -184,7 +255,8 @@ def adjudicate_pairs(
                 warm_record_matches = False
             if not warm_record_matches:
                 raise ValueError("WARM_RECORD_DRIFT_REFUSED")
-            warm_events.extend(event_ids)
+            if not (aa_mode and cure_fields_present):
+                warm_events.extend(event_ids)
             measured_rates_by_arm_and_slot[arm][executed_slot].append(measured_rate)
     if len(warm_events) != len(set(warm_events)):
         raise ValueError("WARM_CUDA_EVENT_IDENTITY_REFUSED")
@@ -222,7 +294,7 @@ def adjudicate_pairs(
             and AA_PAIRED_RATIO_FLOOR
             <= median_ratio
             <= AA_PAIRED_RATIO_CEILING
-            else "HARNESS_POSITION_DEPENDENT"
+            else "HARNESS_CURE_INSUFFICIENT"
         )
     else:
         aa_result = None
@@ -248,6 +320,21 @@ def adjudicate_pairs(
                 "aa_paired_median_ratio": median_ratio,
                 "aa_position_gate_pass": position_gate_pass,
                 "aa_result": aa_result,
+                "aa_pair_order_alternated": tuple(
+                    tuple(row.get("arm") for row in rows) for rows in pairs
+                )
+                == AA_PAIR_ORDERS,
+                "aa_warm_stability_k": AA_WARM_STABILITY_K,
+                "aa_warm_stability_epsilon": AA_WARM_STABILITY_EPSILON,
+                **(
+                    {
+                        "warm_updates_to_stability_by_arm": (
+                            warm_updates_to_stability_by_arm
+                        )
+                    }
+                    if cure_fields_present
+                    else {}
+                ),
             }
             if aa_mode
             else {}
@@ -255,24 +342,77 @@ def adjudicate_pairs(
     }
 
 
-def run_warm_then_measure(**kwargs):
+def warm_stability_reached(
+    rates: Sequence[object],
+    *,
+    k: int = AA_WARM_STABILITY_K,
+    epsilon: float = AA_WARM_STABILITY_EPSILON,
+) -> bool:
+    """Compare consecutive K-update moving medians using a fixed relative bar."""
+    values = [
+        _positive_finite(value, "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED")
+        for value in rates
+    ]
+    if len(values) < k + 1:
+        return False
+    previous = statistics.median(values[-k - 1 : -1])
+    current = statistics.median(values[-k:])
+    return abs(current - previous) / previous < epsilon
+
+
+def _with_event_prefix(
+    update: Mapping[str, object], prefix: str
+) -> dict[str, object]:
+    rebound = copy.deepcopy(dict(update))
+    rebound["event_ids"] = [f"{prefix}-{value}" for value in update["event_ids"]]
+    return rebound
+
+
+def run_warm_then_measure(*, aa_mode: bool = False, **kwargs):
     if int(kwargs.get("pair", 0)) < 0:
         return _BASE_RUN_ONE_UPDATE(**kwargs)
-    warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**kwargs)
+    if aa_mode:
+        warm_updates: list[dict[str, object]] = []
+        warm_cursor = kwargs["cursor"]
+        for warm_index in range(AA_WARM_STABILITY_READINESS_UPDATE_LIMIT):
+            warm_kwargs = dict(kwargs)
+            warm_kwargs["cursor"] = warm_cursor
+            warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**warm_kwargs)
+            warm_updates.append(
+                _with_event_prefix(warm, f"warm-{warm_index + 1}")
+            )
+            if warm_stability_reached(
+                [item["tokens_per_second"] for item in warm_updates]
+            ):
+                break
+        else:
+            raise ValueError("AA_WARM_STABILITY_NOT_REACHED_REFUSED")
+    else:
+        warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**kwargs)
+        warm_updates = [_with_event_prefix(warm, "warm")]
     measured_kwargs = dict(kwargs)
     measured_kwargs["cursor"] = warm_cursor
     measured, measured_cursor = _BASE_RUN_ONE_UPDATE(**measured_kwargs)
-    warm_event_ids = [f"warm-{value}" for value in warm["event_ids"]]
+    final_warm = warm_updates[-1]
     measured_event_ids = [f"measured-{value}" for value in measured["event_ids"]]
     measured.update({
-        "warm_loss": warm["loss"],
-        "warm_processed_tokens": warm["processed_tokens"],
-        "warm_event_seconds": warm["event_seconds"],
-        "warm_tokens_per_second": warm["tokens_per_second"],
-        "warm_event_ids": warm_event_ids,
-        "warm_update": {**copy.deepcopy(warm), "event_ids": warm_event_ids},
+        "warm_loss": final_warm["loss"],
+        "warm_processed_tokens": final_warm["processed_tokens"],
+        "warm_event_seconds": final_warm["event_seconds"],
+        "warm_tokens_per_second": final_warm["tokens_per_second"],
+        "warm_event_ids": final_warm["event_ids"],
+        "warm_update": copy.deepcopy(final_warm),
         "event_ids": measured_event_ids,
     })
+    if aa_mode:
+        pair_index = int(kwargs["pair"])
+        pair_order = AA_PAIR_ORDERS[pair_index]
+        measured.update({
+            "executed_slot": pair_order.index(str(kwargs["arm"])),
+            "pair_order": list(pair_order),
+            "warm_updates": warm_updates,
+            "warm_updates_to_stability": len(warm_updates),
+        })
     return measured, measured_cursor
 
 
@@ -299,9 +439,12 @@ def rebind_receipt(
             r"[0-9a-f]{64}", aa_text_lab_corpus_sha256
         ) is None:
             raise ValueError("AA_CORPUS_DERIVED_PIN_REFUSED")
-        rebound["issue"] = 2103
+        rebound["issue"] = 2110
         rebound["aa_mode"] = True
         rebound["aa_source_head"] = control_rebased_head
+        rebound["aa_pair_order_alternated"] = True
+        rebound["aa_warm_stability_k"] = AA_WARM_STABILITY_K
+        rebound["aa_warm_stability_epsilon"] = AA_WARM_STABILITY_EPSILON
         rebound["text_lab_corpus_sha256"] = aa_text_lab_corpus_sha256
         rebound["predecessor_text_lab_corpus_sha256"] = (
             PREDECESSOR_TEXT_LAB_CORPUS_SHA256
@@ -338,7 +481,7 @@ def rebind_receipt(
     )
     if "claim_boundary" in rebound:
         rebound["claim_boundary"] = (
-            "EIGHT-PAIR A/A HARNESS POSITION-INDEPENDENCE TEST ONLY; "
+            "EIGHT-PAIR POSITION-BALANCED, WARM-STABLE A/A HARNESS TEST ONLY; "
             "NO TREATMENT, 20K, CAPABILITY, CAMPAIGN, EMBER-02, OR GOAL CREDIT"
             if aa_mode
             else "EIGHT WARMED-PAIR MEASURED-SLOT POSITION-GATED MATCHED-LOSS CANARY ONLY; "
@@ -516,8 +659,12 @@ def configure_base(
     BASE.sha256_path = translated_sha256_path
     BASE.git = rebased_git
     BASE.validate_treatment_checkout = validate_rebased_treatment
-    BASE.run_one_update = run_warm_then_measure
-    BASE.load_measurement_pairs = load_measurement_pairs
+    BASE.run_one_update = lambda **kwargs: run_warm_then_measure(
+        aa_mode=aa_mode, **kwargs
+    )
+    BASE.load_measurement_pairs = lambda path: load_measurement_pairs(
+        path, aa_mode=aa_mode
+    )
     BASE.adjudicate_pairs = lambda pairs: adjudicate_pairs(pairs, aa_mode=aa_mode)
     BASE.write_receipt = bound_write_receipt
 
