@@ -429,7 +429,6 @@ GOVERNED_ENTRY_PATHSPEC=(
   ':(exclude)tools/ember-restart-3b'
   ':(exclude)src/ember/infrastructure/tools/ember-cli'
   ':(exclude)src/ember/infrastructure/tools/ember-restart-3b'
-  ':(exclude)src/ember/training'
   ':(exclude)tools/check_governed_entry_exceptions.py'
   ':(exclude)src/ember/infrastructure/tools/check_governed_entry_exceptions.py'
   ':(exclude)tools/repo-guard.sh'

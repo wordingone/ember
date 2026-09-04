@@ -13,7 +13,7 @@
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
     "commit": "1f7d0300cab7598b599ee542aba60bf37f2227f4",
-    "branch": "lifecycle-worktree-branch-redacted-by-repo-policy"
+    "branch": "redacted-by-repo-policy (provenance = repo.commit)"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
