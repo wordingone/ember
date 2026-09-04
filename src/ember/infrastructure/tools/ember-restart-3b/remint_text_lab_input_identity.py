@@ -20,9 +20,11 @@ Usage:
         Recompute code_files hashes from live module bytes, rewrite
         owned-text-lab-input-identity-v4.json and the downstream
         input_identity.sha256 pin in text-lab-authority-index-v2.json.
-        Every other field (corpus_sha256, source_base_commit, schema_version)
-        is carried through byte-identical -- this script touches ONLY the
-        code-hash-derived fields, never hand-edits.
+        Every other field is carried through byte-identical.
+
+    python src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py --write --source-base-commit <40-hex>
+        Additionally remint source_base_commit through the same canonical
+        producer, then refresh the downstream authority-index pin.
 
 Never hand-edit either JSON file directly (issue #1461 cure requirement:
 "canonical regeneration paths, never hand-edited hashes").
@@ -32,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -110,7 +113,18 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true", help="verify pins match live bytes; no writes")
     group.add_argument("--write", action="store_true", help="regenerate pins from live bytes")
+    parser.add_argument(
+        "--source-base-commit",
+        help="with --write, remint source_base_commit to an exact 40-character lowercase Git commit",
+    )
     args = parser.parse_args()
+
+    if args.source_base_commit is not None:
+        if not args.write:
+            parser.error("--source-base-commit requires --write")
+        if re.fullmatch(r"[0-9a-f]{40}", args.source_base_commit) is None:
+            print("INVALID AUTHORITY INPUT: source_base_commit must be a 40-character lowercase Git commit")
+            return 2
 
     try:
         identity = _validate_identity(json.loads(IDENTITY_PATH.read_bytes()))
@@ -121,6 +135,10 @@ def main() -> int:
     live = live_code_hashes()
     pinned = identity.get("code_files", {})
     stale = {name: (pinned.get(name), live[name]) for name in EXPECTED_CODE if pinned.get(name) != live[name]}
+    source_base_stale = (
+        args.source_base_commit is not None
+        and identity["source_base_commit"] != args.source_base_commit
+    )
     identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
     index_stale = index["input_identity"]["sha256"] != identity_sha
 
@@ -137,12 +155,14 @@ def main() -> int:
         print("Cure: python src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py --write")
         return 1
 
-    if not stale and not index_stale:
+    if not stale and not source_base_stale and not index_stale:
         print("text-lab input identity: already fresh, no write needed")
         return 0
 
-    if stale:
+    if stale or source_base_stale:
         identity["code_files"] = live
+        if source_base_stale:
+            identity["source_base_commit"] = args.source_base_commit
         IDENTITY_PATH.write_bytes(_dump(identity))
         identity_sha = _sha_bytes(IDENTITY_PATH.read_bytes())
 
@@ -151,6 +171,8 @@ def main() -> int:
 
     for name, (old, new) in stale.items():
         print(f"re-minted {name}: {old} -> {new}")
+    if source_base_stale:
+        print(f"re-minted source_base_commit -> {args.source_base_commit}")
     print(f"re-minted input_identity.sha256 in text-lab-authority-index-v2.json -> {identity_sha}")
     return 0
 
