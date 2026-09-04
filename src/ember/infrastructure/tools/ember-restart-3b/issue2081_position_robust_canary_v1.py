@@ -32,9 +32,7 @@ HISTORICAL_TREATMENT_TEST_SHA256 = "57c488dab9ff9e85e4310d1cc2c9e40bfceacd2aa3a1
 PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
     "c494b4cd325a0b0c91e4c2075f5b1aad42a413af037590063781384d210261ca"
 )
-AA_CONTROL_TEXT_LAB_CORPUS_SHA256 = (
-    "798e0186e9791ffb831bdb294d62e4d29073fe40b5bc58a8f307086cb67f1071"
-)
+AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
 AA_SCHEMA_VERSION = "ember-issue2103-aa-position-independence-canary-v1"
@@ -286,6 +284,7 @@ def rebind_receipt(
     control_source_model_sha256: str,
     treatment_source_model_sha256: str,
     aa_mode: bool = False,
+    aa_text_lab_corpus_sha256: str | None = None,
 ) -> dict[str, object]:
     for label, digest in (
         ("CONTROL_SOURCE_MODEL", control_source_model_sha256),
@@ -296,12 +295,14 @@ def rebind_receipt(
     rebound = copy.deepcopy(value)
     rebound["schema_version"] = AA_SCHEMA_VERSION if aa_mode else SCHEMA_VERSION
     if aa_mode:
+        if aa_text_lab_corpus_sha256 is None or re.fullmatch(
+            r"[0-9a-f]{64}", aa_text_lab_corpus_sha256
+        ) is None:
+            raise ValueError("AA_CORPUS_DERIVED_PIN_REFUSED")
         rebound["issue"] = 2103
         rebound["aa_mode"] = True
         rebound["aa_source_head"] = control_rebased_head
-        rebound["text_lab_corpus_sha256"] = (
-            AA_CONTROL_TEXT_LAB_CORPUS_SHA256
-        )
+        rebound["text_lab_corpus_sha256"] = aa_text_lab_corpus_sha256
         rebound["predecessor_text_lab_corpus_sha256"] = (
             PREDECESSOR_TEXT_LAB_CORPUS_SHA256
         )
@@ -435,6 +436,17 @@ def configure_base(
     original_sha256_path = BASE.sha256_path
     original_git = BASE.git
     original_write_receipt = BASE.write_receipt
+    aa_text_lab_corpus_sha256: str | None = None
+    if aa_mode:
+        try:
+            aa_corpus_bytes = original_git(
+                root,
+                "show",
+                f"{control_rebased_head}:{AA_CORPUS_REPO_PATH}",
+            )
+        except (OSError, RuntimeError) as error:
+            raise ValueError("AA_CORPUS_BLOB_MISSING_REFUSED") from error
+        aa_text_lab_corpus_sha256 = BASE.sha256_bytes(aa_corpus_bytes)
 
     def translated_sha256_path(path: Path) -> str:
         return original_sha256_path(translate_pre_spine_path(root, Path(path)))
@@ -484,6 +496,7 @@ def configure_base(
                 control_source_model_sha256=control_source_model_sha256,
                 treatment_source_model_sha256=treatment_source_model_sha256,
                 aa_mode=aa_mode,
+                aa_text_lab_corpus_sha256=aa_text_lab_corpus_sha256,
             ),
         )
 
@@ -496,7 +509,7 @@ def configure_base(
     BASE.__file__ = str(Path(__file__).resolve(strict=True))
     BASE.SCHEMA_VERSION = AA_SCHEMA_VERSION if aa_mode else SCHEMA_VERSION
     BASE.TEXT_LAB_CORPUS_SHA256 = (
-        AA_CONTROL_TEXT_LAB_CORPUS_SHA256
+        aa_text_lab_corpus_sha256
         if aa_mode
         else PREDECESSOR_TEXT_LAB_CORPUS_SHA256
     )

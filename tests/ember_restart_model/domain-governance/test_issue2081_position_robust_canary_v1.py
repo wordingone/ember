@@ -699,11 +699,20 @@ def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
     )
     head = "a" * 40
     control_model = b"aa-control-model-bytes"
+    corpus_bytes = b"m7-corpus-bytes"
+    corpus = tmp_path / "data" / "ember-restart-3b" / "owned-text-lab-corpus-v4.json"
+    corpus.parent.mkdir(parents=True)
+    corpus.write_bytes(corpus_bytes)
 
     def fake_git(repo_root: Path, *args: str) -> bytes:
         assert repo_root == tmp_path
         if args == ("show", f"{head}:src/ember/model/model.py"):
             return control_model
+        if args == (
+            "show",
+            f"{head}:data/ember-restart-3b/owned-text-lab-corpus-v4.json",
+        ):
+            return corpus_bytes
         raise AssertionError(args)
 
     monkeypatch.setattr(module.BASE, "git", fake_git)
@@ -734,28 +743,43 @@ def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
     assert refusal["treatment_source_model_sha256"] == expected
     assert (
         refusal["text_lab_corpus_sha256"]
-        == module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256
+        == module.BASE.sha256_bytes(corpus_bytes)
     )
+    assert refusal["aa_source_head"] == head
     assert (
         refusal["predecessor_text_lab_corpus_sha256"]
         == module.PREDECESSOR_TEXT_LAB_CORPUS_SHA256
     )
 
 
-def test_configured_aa_rebinds_frozen_c1a7_corpus_authority(tmp_path: Path):
+def test_configured_aa_derives_corpus_authority_from_source_head(
+    monkeypatch, tmp_path: Path
+):
     module = _load(
         "issue2081_runner_configured_aa_corpus",
         "issue2081_position_robust_canary_v1.py",
     )
-    corpus = tmp_path / "owned-text-lab-corpus-v4.json"
-    corpus.write_bytes(b"c1a7-corpus")
+    head = "a" * 40
+    corpus = tmp_path / "data" / "ember-restart-3b" / "owned-text-lab-corpus-v4.json"
+    corpus.parent.mkdir(parents=True)
+    corpus.write_bytes(b"m7-corpus")
     expected = module.BASE.sha256_path(corpus)
-    module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256 = expected
+
+    monkeypatch.setattr(
+        module.BASE,
+        "git",
+        lambda root, *args: corpus.read_bytes()
+        if args == (
+            "show",
+            f"{head}:data/ember-restart-3b/owned-text-lab-corpus-v4.json",
+        )
+        else b"model",
+    )
 
     module.configure_base(
         root=tmp_path,
-        control_rebased_head="a" * 40,
-        treatment_rebased_head="a" * 40,
+        control_rebased_head=head,
+        treatment_rebased_head=head,
         aa_mode=True,
     )
 
@@ -765,24 +789,57 @@ def test_configured_aa_rebinds_frozen_c1a7_corpus_authority(tmp_path: Path):
         module.BASE.validate_text_lab_corpus(corpus, "0" * 64)
 
 
-def test_configured_aa_refuses_predecessor_corpus_pin(tmp_path: Path):
+def test_configured_aa_refuses_repo_root_corpus_drift(
+    monkeypatch, tmp_path: Path
+):
     module = _load(
         "issue2081_runner_configured_aa_refuses_predecessor_corpus",
         "issue2081_position_robust_canary_v1.py",
     )
-    corpus = tmp_path / "owned-text-lab-corpus-v4.json"
-    corpus.write_bytes(b"c1a7-corpus")
-    module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256 = module.BASE.sha256_path(corpus)
+    head = "a" * 40
+    corpus = tmp_path / "data" / "ember-restart-3b" / "owned-text-lab-corpus-v4.json"
+    corpus.parent.mkdir(parents=True)
+    corpus.write_bytes(b"repo-root-drift")
+    monkeypatch.setattr(
+        module.BASE,
+        "git",
+        lambda root, *args: b"source-head-corpus"
+        if args == (
+            "show",
+            f"{head}:data/ember-restart-3b/owned-text-lab-corpus-v4.json",
+        )
+        else b"model",
+    )
     module.configure_base(
         root=tmp_path,
-        control_rebased_head="a" * 40,
-        treatment_rebased_head="a" * 40,
+        control_rebased_head=head,
+        treatment_rebased_head=head,
         aa_mode=True,
     )
 
     with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
-        module.BASE.validate_text_lab_corpus(
-            corpus, module.PREDECESSOR_TEXT_LAB_CORPUS_SHA256
+        module.BASE.validate_text_lab_corpus(corpus, module.BASE.TEXT_LAB_CORPUS_SHA256)
+
+
+def test_configured_aa_refuses_missing_source_head_corpus_blob(
+    monkeypatch, tmp_path: Path
+):
+    module = _load(
+        "issue2081_runner_configured_aa_missing_corpus_blob",
+        "issue2081_position_robust_canary_v1.py",
+    )
+    monkeypatch.setattr(
+        module.BASE,
+        "git",
+        lambda root, *args: (_ for _ in ()).throw(RuntimeError("GIT_REFUSED:missing")),
+    )
+
+    with pytest.raises(ValueError, match="AA_CORPUS_BLOB_MISSING_REFUSED"):
+        module.configure_base(
+            root=tmp_path,
+            control_rebased_head="a" * 40,
+            treatment_rebased_head="a" * 40,
+            aa_mode=True,
         )
 
 
@@ -802,6 +859,4 @@ def test_configured_non_aa_refuses_control_corpus_pin(tmp_path: Path):
     )
 
     with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
-        module.BASE.validate_text_lab_corpus(
-            corpus, module.AA_CONTROL_TEXT_LAB_CORPUS_SHA256
-        )
+        module.BASE.validate_text_lab_corpus(corpus, "0" * 64)
