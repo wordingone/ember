@@ -55,8 +55,8 @@ EVIDENCE = _load("a1_e8_evidence")
 APPORTIONMENT = _load("a1_energy_apportionment")
 
 sys.path.insert(0, str(TOOLS))
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
-from src.ember.training.pretrain import run_pretraining_segment  # noqa: E402
+from model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from pretrain import run_pretraining_segment  # noqa: E402
 
 
 def _core_text_record(index: int) -> dict[str, object]:

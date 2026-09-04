@@ -110,51 +110,7 @@ for _ember_f5951795c08a31e2_alias in _ember_f5951795c08a31e2_aliases:
 load_checkpoint_artifacts = getattr(_ember_f5951795c08a31e2_module, 'load_checkpoint_artifacts')
 published_checkpoint_receipt = getattr(_ember_f5951795c08a31e2_module, 'published_checkpoint_receipt')
 # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py
-# issue2015 exact-local-import:src/ember/model/model.py
-import importlib.util as _ember_4108d33796031947_importlib
-import sys as _ember_4108d33796031947_sys
-from pathlib import Path as _ember_4108d33796031947_Path
-_ember_4108d33796031947_path = ROOT.joinpath('src', 'ember', 'model', 'model.py')
-if not _ember_4108d33796031947_path.is_file():
-    raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/model/model.py')
-_ember_4108d33796031947_aliases = ('_ember_issue2015_4108d33796031947', 'model')
-_ember_4108d33796031947_existing = []
-for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
-    _ember_4108d33796031947_candidate = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
-    if _ember_4108d33796031947_candidate is not None and all(_ember_4108d33796031947_candidate is not item for item in _ember_4108d33796031947_existing):
-        _ember_4108d33796031947_existing.append(_ember_4108d33796031947_candidate)
-if len(_ember_4108d33796031947_existing) > 1:
-    raise ImportError('EXACT_LOCAL_IMPORT_IDENTITY_COLLISION:src/ember/model/model.py')
-if _ember_4108d33796031947_existing:
-    _ember_4108d33796031947_module = _ember_4108d33796031947_existing[0]
-    _ember_4108d33796031947_observed = getattr(_ember_4108d33796031947_module, '__file__', None)
-    if _ember_4108d33796031947_observed is None or _ember_4108d33796031947_Path(_ember_4108d33796031947_observed).resolve() != _ember_4108d33796031947_path:
-        raise ImportError('EXACT_LOCAL_IMPORT_WRONG_TARGET:src/ember/model/model.py')
-else:
-    _ember_4108d33796031947_spec = _ember_4108d33796031947_importlib.spec_from_file_location('_ember_issue2015_4108d33796031947', _ember_4108d33796031947_path)
-    if _ember_4108d33796031947_spec is None or _ember_4108d33796031947_spec.loader is None:
-        raise ImportError('EXACT_LOCAL_IMPORT_SPEC_INVALID:src/ember/model/model.py')
-    _ember_4108d33796031947_module = _ember_4108d33796031947_importlib.module_from_spec(_ember_4108d33796031947_spec)
-    for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
-        _ember_4108d33796031947_prior = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
-        if _ember_4108d33796031947_prior is not None and _ember_4108d33796031947_prior is not _ember_4108d33796031947_module:
-            raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/model/model.py')
-        _ember_4108d33796031947_sys.modules[_ember_4108d33796031947_alias] = _ember_4108d33796031947_module
-    try:
-        _ember_4108d33796031947_spec.loader.exec_module(_ember_4108d33796031947_module)
-    except BaseException:
-        for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
-            if _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias) is _ember_4108d33796031947_module:
-                _ember_4108d33796031947_sys.modules.pop(_ember_4108d33796031947_alias, None)
-        raise
-for _ember_4108d33796031947_alias in _ember_4108d33796031947_aliases:
-    _ember_4108d33796031947_prior = _ember_4108d33796031947_sys.modules.get(_ember_4108d33796031947_alias)
-    if _ember_4108d33796031947_prior is not None and _ember_4108d33796031947_prior is not _ember_4108d33796031947_module:
-        raise ImportError('EXACT_LOCAL_IMPORT_ALIAS_COLLISION:src/ember/model/model.py')
-    _ember_4108d33796031947_sys.modules[_ember_4108d33796031947_alias] = _ember_4108d33796031947_module
-RestartDecoderConfig = getattr(_ember_4108d33796031947_module, 'RestartDecoderConfig')
-UnifiedDecoder = getattr(_ember_4108d33796031947_module, 'UnifiedDecoder')
-# issue2015 exact-local-import-end:src/ember/model/model.py
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
 sys.path.insert(0, str(ROOT))
 from src.ember.governance.scripts.ember_restart.prediction_contract import (  # noqa: E402

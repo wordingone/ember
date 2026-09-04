@@ -15,7 +15,6 @@ import math
 import os
 import re
 import shutil
-import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
@@ -23,9 +22,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 import torch
-_REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
-if str(_REPO_IMPORT_HOME) not in sys.path:
-    sys.path.insert(0, str(_REPO_IMPORT_HOME))
 from batch import decode_owned_packed_batch
 from checkpoint_artifacts import (
     build_packed_fresh_genesis_specialist_lineage,
@@ -33,7 +29,7 @@ from checkpoint_artifacts import (
     published_checkpoint_receipt,
     write_checkpoint_artifacts,
 )
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from model import RestartDecoderConfig, UnifiedDecoder
 from issue1946_complete_update_profile import (
     BoardEnergyTracker,
     build_arm_receipt as build_issue1946_arm_receipt,
@@ -91,7 +87,7 @@ for _ember_1601eccb5605602b_alias in _ember_1601eccb5605602b_aliases:
     _ember_1601eccb5605602b_sys.modules[_ember_1601eccb5605602b_alias] = _ember_1601eccb5605602b_module
 measure_parameter_counts = getattr(_ember_1601eccb5605602b_module, 'measure_parameter_counts')
 # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py
-from src.ember.training.pretrain import (
+from pretrain import (
     COMPLETE_UPDATE_BACKWARD_MARKER,
     COMPLETE_UPDATE_FORWARD_LOSS_MARKER,
     COMPLETE_UPDATE_GRADIENT_CLIPPING_MARKER,

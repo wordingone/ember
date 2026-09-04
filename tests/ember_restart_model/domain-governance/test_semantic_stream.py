@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 from batch import decode_owned_batch
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
-from src.ember.training.pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
+from model import RestartDecoderConfig, UnifiedDecoder
+from pretrain import run_manifest_bound_semantic_segment, run_pretraining_segment
 from semantic_stream import ManifestBoundTokenStream
 
 

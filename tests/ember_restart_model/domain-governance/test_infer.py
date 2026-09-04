@@ -19,9 +19,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 sys.path.insert(0, str(ROOT))
 from repository_layout import resolve_repository_authority  # noqa: E402
-from src.ember.model.model import RestartDecoderConfig
+from model import RestartDecoderConfig
 
-from src.ember.runtime.infer import _prompt_batch, canonical_prediction_envelope, frozen_split_prompt, load_frozen_tokenizer, greedy_generate
+from infer import _prompt_batch, canonical_prediction_envelope, frozen_split_prompt, load_frozen_tokenizer, greedy_generate
 from src.ember.governance.scripts.ember_restart.prediction_contract import validate_predictions
 
 

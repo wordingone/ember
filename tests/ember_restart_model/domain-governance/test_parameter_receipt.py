@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "em
 sys.path.insert(0, str(ROOT / "tests" / "ember_restart_model" / "domain-governance"))
 
 from checkpoint_artifacts import write_checkpoint_artifacts as _production_write
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from model import RestartDecoderConfig, UnifiedDecoder
 _checkpoint_fixture_spec = importlib.util.spec_from_file_location(
     "issue898_parameter_checkpoint_fixture", Path(__file__).with_name("checkpoint_fixture.py")
 )

@@ -24,11 +24,11 @@ import torch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
-import src.ember.training.pretrain as pretrain
+import pretrain
 import training_acceleration
 from batch import decode_owned_batch, decode_owned_packed_batch
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
-from src.ember.training.pretrain import run_pretraining_segment
+from model import RestartDecoderConfig, UnifiedDecoder
+from pretrain import run_pretraining_segment
 from specialist_stream import (
     SELECTION_CURSOR_SCHEMA_VERSION,
     SELECTION_RECEIPT_SCHEMA_VERSION,
