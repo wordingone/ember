@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 
-ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
+ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
 HEADING = "## Where things are"
 
