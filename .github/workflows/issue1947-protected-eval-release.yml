@@ -1,0 +1,67 @@
+# goal_id: EMBER-02
+# workstream_id: EMBER-02A
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+name: issue1947 protected eval release recomputation
+
+on:
+  workflow_dispatch:
+    inputs:
+      designation_receipt_raw_sha256:
+        description: Full SHA-256 of the designated checkpoint manifest
+        required: true
+        type: string
+      matrix_self_sha256:
+        description: Full protected-matrix self SHA-256
+        required: true
+        type: string
+      analysis_self_sha256:
+        description: Full prospective-analysis self SHA-256
+        required: true
+        type: string
+      bundle_path:
+        description: Repository-relative redacted release-bundle.json path
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  full-matrix-recompute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5
+        with:
+          python-version: "3.10"
+      - name: Independent raw-row recomputation
+        env:
+          BUNDLE_PATH: "${{ inputs.bundle_path }}"
+          DESIGNATION_MANIFEST_SHA256: "${{ inputs.designation_receipt_raw_sha256 }}"
+          MATRIX_SELF_SHA256: "${{ inputs.matrix_self_sha256 }}"
+          ANALYSIS_SELF_SHA256: "${{ inputs.analysis_self_sha256 }}"
+        run: >-
+          python src/ember/governance/scripts/issue1947_release_recompute.py
+          --bundle "$BUNDLE_PATH"
+          --expected-designation-manifest-sha256 "$DESIGNATION_MANIFEST_SHA256"
+          --expected-matrix-self-sha256 "$MATRIX_SELF_SHA256"
+          --expected-analysis-self-sha256 "$ANALYSIS_SELF_SHA256"
+          --receipt "issue1947-release-recompute-${{ github.run_id }}.json"
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: issue1947-release-recompute
+          path: issue1947-release-recompute-*.json
+          if-no-files-found: error
+          retention-days: 90
+
+  windows-loader-shape:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v5
+        with:
+          python-version: "3.10"
+      - run: python src/ember/governance/scripts/issue1947_release_recompute.py --help
