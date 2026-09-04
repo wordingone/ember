@@ -3367,6 +3367,15 @@ impl Daemon {
         )
     }
 
+    pub fn quarantine_overlap_memberships(
+        &self,
+        audit_bytes: &[u8],
+        reason: &str,
+    ) -> Result<data_catalog::QuarantineOverlapOutcome> {
+        let mut conn = self.conn()?;
+        data_catalog::quarantine_overlap_memberships(&mut conn, audit_bytes, reason, now_ms())
+    }
+
     pub fn custody_verify(
         &self,
         hashes: &[String],
