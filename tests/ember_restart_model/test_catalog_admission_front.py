@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -1319,3 +1319,148 @@ def test_projection_spec_is_closed_path_free_and_outputs_refuse_overwrite(
     write_new(direct_output, manifest_raw)
     with pytest.raises(FileExistsError):
         write_new(direct_output, b"replacement")
+
+
+def test_train_partition_projection_dispatches_closed_schema_and_names_authority_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    partition_path = tmp_path / "partition-receipt.json"
+    partition_path.write_bytes(b"partition-v1")
+    source_receipt = tmp_path / "source-receipt.json"
+    source_receipt.write_bytes(canonical({
+        "schema": "corpus-connector-receipt-v1",
+        "canonical_url": "https://github.com/search?q=topic%3Acuda",
+        "fetched_at": "2026-08-15T00:00:00Z",
+    }))
+    alpha_sha = sha256(b"alpha")
+    charlie_sha = sha256(b"charlie")
+    partition = {
+        "source_id": "candidate-training_infrastructure-train-1",
+        "domain": "training_infrastructure",
+        "split": "train",
+        "partition_root_sha256": "b" * 64,
+        "source_connector_receipt_path": str(source_receipt),
+        "source_connector_receipt_sha256": sha256(source_receipt.read_bytes()),
+        "license_summary": ["Apache-2.0", "MIT"],
+        "repositories": [{"files": [
+            {"path": "src/main.py", "blob_path": "blobs/a", "bytes": 5, "sha256": alpha_sha},
+            {"path": "cmake/Modules/FindFAISS.cmake", "blob_path": "blobs/c", "bytes": 7, "sha256": charlie_sha},
+        ]}],
+    }
+    (tmp_path / "blobs").mkdir()
+    (tmp_path / "blobs" / "a").write_bytes(b"alpha")
+    (tmp_path / "blobs" / "c").write_bytes(b"charlie")
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "validate_partition_receipt",
+        lambda _path: partition,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "_load_partition_media_type_table",
+        lambda: {
+            "classes": {
+                ".cmake": {
+                    "count": 1,
+                    "media_type": "text/plain; charset=utf-8",
+                    "reason": "explicit source or build-language class",
+                }
+            }
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "_load_predecessor_media_type_table",
+        lambda: {"media_types_by_object_id": {"sha256:" + alpha_sha: "application/octet-stream"}},
+        raising=False,
+    )
+    spec = canonical({
+        "schema_version": "ember-issue1581-catalog-projection-spec-v1",
+        "tokenizer_sha256": "4" * 64,
+        "created_at_ms": 1,
+        "rows": [{
+            "license_partition_receipt_path": str(partition_path),
+            "license_partition_receipt_sha256": sha256(partition_path.read_bytes()),
+            "source_id": "candidate-training_infrastructure-train-1",
+            "domain": "training_infrastructure",
+            "split": "train",
+            "supporting_receipts": [],
+        }],
+    })
+    manifest_raw = project_catalog_spec(spec_raw=spec)
+    manifest = json.loads(manifest_raw)
+    assert str(tmp_path).encode() not in manifest_raw
+    assert next(row for row in manifest["records"] if row["kind"] == "source")["id"] == "source:candidate-training_infrastructure-train-1"
+    media_types = {
+        row["sha256"]: row["media_type"]
+        for row in manifest["records"]
+        if row["kind"] == "immutable_object"
+    }
+    assert media_types[alpha_sha] == "application/octet-stream"
+    assert media_types[charlie_sha] == "text/plain; charset=utf-8"
+    assert all(edge["payload"] == {} for edge in manifest["edges"])
+
+    planted_unknown = json.loads(manifest_raw)
+    source_object = next(
+        edge for edge in planted_unknown["edges"] if edge["kind"] == "source_object"
+    )
+    source_object["payload"]["path_derived_media_type"] = "text/plain; charset=utf-8"
+    with pytest.raises(
+        ValueError, match="CATALOG_EDGE_PAYLOAD_SCHEMA_REFUSED:source_object"
+    ):
+        catalog_admission_module.validate_edge_payloads_against_frozen_catalog_schema(
+            planted_unknown
+        )
+
+    partition["repositories"][0]["files"].append(
+        {"path": "future/new.brandnew", "blob_path": "blobs/d", "bytes": 3, "sha256": sha256(b"raw")}
+    )
+    (tmp_path / "blobs" / "d").write_bytes(b"raw")
+    with pytest.raises(ValueError, match="PARTITION_PROJECTION_MEDIA_CLASS_UNMAPPED:.brandnew"):
+        project_catalog_spec(spec_raw=spec)
+    partition["repositories"][0]["files"].pop()
+
+    partition_path.write_bytes(b"partition-with-one-repository-row-removed")
+    monkeypatch.setattr(
+        catalog_admission_module,
+        "validate_partition_receipt",
+        lambda _path: (_ for _ in ()).throw(ValueError("repository count mismatch")),
+        raising=False,
+    )
+    tampered = json.loads(spec)
+    tampered["rows"][0]["license_partition_receipt_sha256"] = sha256(partition_path.read_bytes())
+    with pytest.raises(ValueError, match="PARTITION_PROJECTION_AUTHORITY_REFUSED:repository count mismatch"):
+        project_catalog_spec(spec_raw=canonical(tampered))
+
+
+def test_train_partition_media_table_is_goal_bound() -> None:
+    table = catalog_admission_module._load_partition_media_type_table()
+    assert table["goal_id"] == "EMBER-02"
+    assert table["workstream_id"] == "EMBER-02B"
+    assert table["next_executed_outcome"] == (
+        "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+    )
+    predecessor = catalog_admission_module._load_predecessor_media_type_table()
+    assert predecessor["goal_id"] == "EMBER-02"
+    assert predecessor["workstream_id"] == "EMBER-02B"
+    assert predecessor["binding_count"] == 609
+    assert predecessor["binding_count"] == len(predecessor["media_types_by_object_id"])
+
+
+def test_content_sniff_is_path_independent_and_extension_is_only_a_binary_tiebreak(
+    tmp_path: Path,
+) -> None:
+    raw = b"same utf8 bytes\n"
+    first = tmp_path / "same.py"
+    second = tmp_path / "same.bin"
+    first.write_bytes(raw)
+    second.write_bytes(raw)
+    table = {"classes": {".bin": {"media_type": "application/octet-stream"}}}
+    assert catalog_admission_module._content_media_type(first, PurePosixPath("same.py"), table) == (
+        "text/plain; charset=utf-8"
+    )
+    assert catalog_admission_module._content_media_type(second, PurePosixPath("same.bin"), table) == (
+        "text/plain; charset=utf-8"
+    )
