@@ -48,6 +48,24 @@ ISSUE2081_REAL_TIMINGS = (
     (7, "treatment", 1556.2207539869933, 1547.1203524626212),
     (7, "control", 1828.1960273398797, 5884.667852622834),
 )
+ISSUE2099_REAL_TIMINGS = (
+    (0, "control", 2078.5426774994303, 1202.48119198705),
+    (0, "treatment", 1606.9000512799196, 5055.495301910687),
+    (1, "treatment", 1578.9889970061993, 1905.4655047834212),
+    (1, "control", 1364.303111281772, 5524.636914238418),
+    (2, "control", 1419.4036246484213, 1784.9294612448577),
+    (2, "treatment", 2175.562114014352, 5216.147245367491),
+    (3, "treatment", 1704.2603420463456, 1395.5689571631478),
+    (3, "control", 2088.259018453726, 5600.3405491964995),
+    (4, "control", 1342.0968615560555, 1277.733317939093),
+    (4, "treatment", 1383.2793795086168, 5326.70697019859),
+    (5, "treatment", 1398.0449455205305, 1882.1065096802658),
+    (5, "control", 2193.1014207786134, 5691.948983124709),
+    (6, "control", 1322.1143533417612, 1214.351792975264),
+    (6, "treatment", 1972.1101118447214, 5498.359108164329),
+    (7, "treatment", 1400.8450050127346, 1561.4432624129977),
+    (7, "control", 2150.5217675197587, 5573.794433719146),
+)
 
 
 def row(arm: str, pair: int, *, rate: float) -> dict[str, object]:
@@ -125,6 +143,19 @@ def warmed_pairs(*, ratios: list[float] | None = None, measured_warm: float = 1.
 def issue2081_real_timing_pairs():
     pairs = warmed_pairs()
     for pair_index, arm, measured_rate, warm_rate in ISSUE2081_REAL_TIMINGS:
+        measured = next(row for row in pairs[pair_index] if row["arm"] == arm)
+        measured["tokens_per_second"] = measured_rate
+        measured["event_seconds"] = measured["processed_tokens"] / measured_rate
+        measured["warm_tokens_per_second"] = warm_rate
+        measured["warm_event_seconds"] = measured["warm_processed_tokens"] / warm_rate
+        measured["warm_update"]["tokens_per_second"] = warm_rate
+        measured["warm_update"]["event_seconds"] = measured["warm_event_seconds"]
+    return pairs
+
+
+def issue2099_real_timing_pairs():
+    pairs = warmed_pairs()
+    for pair_index, arm, measured_rate, warm_rate in ISSUE2099_REAL_TIMINGS:
         measured = next(row for row in pairs[pair_index] if row["arm"] == arm)
         measured["tokens_per_second"] = measured_rate
         measured["event_seconds"] = measured["processed_tokens"] / measured_rate
@@ -243,6 +274,39 @@ def test_both_arms_in_the_same_post_warm_position_remove_order_effect():
     decision = MODULE.adjudicate_pairs(planted)
     assert decision["median_paired_treatment_control_ratio"] == pytest.approx(1.0)
     assert decision["disposition"] == "REJECTED"
+
+
+def test_aa_identical_arms_are_position_independent():
+    decision = MODULE.adjudicate_pairs(
+        warmed_pairs(ratios=[1.0] * 8), aa_mode=True
+    )
+    assert decision["aa_paired_median_ratio"] == pytest.approx(1.0)
+    assert decision["aa_position_gate_pass"] is True
+    assert decision["aa_result"] == "HARNESS_POSITION_INDEPENDENT"
+    assert decision["disposition"] == "HARNESS_POSITION_INDEPENDENT"
+
+
+def test_aa_planted_point_95_median_is_position_dependent():
+    decision = MODULE.adjudicate_pairs(
+        warmed_pairs(ratios=[0.95] * 8), aa_mode=True
+    )
+    assert decision["aa_paired_median_ratio"] == pytest.approx(0.95)
+    assert decision["aa_position_gate_pass"] is True
+    assert decision["aa_result"] == "HARNESS_POSITION_DEPENDENT"
+    assert decision["disposition"] == "HARNESS_POSITION_DEPENDENT"
+
+
+def test_issue2099_real_rows_reproduce_refused_metrics_under_aa_adjudication():
+    decision = MODULE.adjudicate_pairs(issue2099_real_timing_pairs(), aa_mode=True)
+    assert decision["measured_slot_gate_by_arm"]["control"][
+        "measured_slot_ratio"
+    ] == pytest.approx(0.6514846191958159)
+    assert decision["measured_slot_gate_by_arm"]["treatment"][
+        "measured_slot_ratio"
+    ] == pytest.approx(0.832586068830104)
+    assert decision["aa_paired_median_ratio"] == pytest.approx(0.9234003022297244)
+    assert decision["aa_position_gate_pass"] is False
+    assert decision["aa_result"] == "HARNESS_POSITION_DEPENDENT"
 
 
 def test_one_arm_executes_warm_then_measure_from_the_warm_cursor(monkeypatch):
@@ -542,6 +606,32 @@ def test_offline_main_derives_repo_root_without_conflicting_cli_argument(
     assert MODULE.sys.argv[1:] == ["--adjudicate", str(tmp_path)]
 
 
+def test_aa_main_binds_control_head_into_both_arms(monkeypatch, tmp_path: Path):
+    configured = {}
+
+    def fake_configure_base(**kwargs):
+        configured.update(kwargs)
+
+    head = "a" * 40
+    monkeypatch.setattr(MODULE, "configure_base", fake_configure_base)
+    monkeypatch.setattr(MODULE.BASE, "main", lambda: 0)
+    monkeypatch.setattr(MODULE.sys, "argv", [
+        str(MODULE.Path(MODULE.__file__).resolve()),
+        "--aa",
+        "--control-rebased-head",
+        head,
+        "--treatment-rebased-head",
+        head,
+        "--adjudicate",
+        str(tmp_path),
+    ])
+    assert MODULE.main() == 0
+    assert configured["aa_mode"] is True
+    assert configured["control_rebased_head"] == head
+    assert configured["treatment_rebased_head"] == head
+    assert MODULE.sys.argv[1:] == ["--adjudicate", str(tmp_path)]
+
+
 def test_successor_refusal_sidecar_and_terminal_are_mutually_exclusive(tmp_path: Path):
     output = tmp_path / "terminal.json"
     MODULE.write_exclusive_refusal(output, ValueError("PLANTED"))
@@ -556,3 +646,89 @@ def test_successor_refusal_sidecar_and_terminal_are_mutually_exclusive(tmp_path:
     assert MODULE.write_exclusive_refusal(completed, ValueError("LATE")) is None
     assert completed.is_file()
     assert not completed.with_name("completed.refusal.json").exists()
+
+
+def test_configured_refusal_rebind_hashes_both_models_and_writes_sidecar(
+    monkeypatch, tmp_path: Path
+):
+    module = _load(
+        "issue2081_runner_configured_refusal",
+        "issue2081_position_robust_canary_v1.py",
+    )
+    control_head = "a" * 40
+    treatment_head = "b" * 40
+    control_model = b"control-model-bytes"
+    treatment_model = b"treatment-model-bytes"
+
+    def fake_git(repo_root: Path, *args: str) -> bytes:
+        assert repo_root == tmp_path
+        if args == ("show", f"{control_head}:src/ember/model/model.py"):
+            return control_model
+        if args == ("show", f"{treatment_head}:src/ember/model/model.py"):
+            return treatment_model
+        raise AssertionError(args)
+
+    monkeypatch.setattr(module.BASE, "git", fake_git)
+    module.configure_base(
+        root=tmp_path,
+        control_rebased_head=control_head,
+        treatment_rebased_head=treatment_head,
+    )
+    output = tmp_path / "terminal.json"
+    module.write_exclusive_refusal(output, ValueError("PLANTED_REBOUND_REFUSAL"))
+
+    refusal_path = output.with_name("terminal.refusal.json")
+    assert refusal_path.is_file()
+    refusal = json.loads(refusal_path.read_text())
+    assert refusal["result"] == "REFUSED"
+    assert refusal["refusal_message"] == "PLANTED_REBOUND_REFUSAL"
+    assert refusal["control_source_model_sha256"] == module.BASE.sha256_bytes(
+        control_model
+    )
+    assert refusal["treatment_source_model_sha256"] == module.BASE.sha256_bytes(
+        treatment_model
+    )
+
+
+def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
+    monkeypatch, tmp_path: Path
+):
+    module = _load(
+        "issue2081_runner_configured_aa_refusal",
+        "issue2081_position_robust_canary_v1.py",
+    )
+    head = "a" * 40
+    control_model = b"aa-control-model-bytes"
+
+    def fake_git(repo_root: Path, *args: str) -> bytes:
+        assert repo_root == tmp_path
+        if args == ("show", f"{head}:src/ember/model/model.py"):
+            return control_model
+        raise AssertionError(args)
+
+    monkeypatch.setattr(module.BASE, "git", fake_git)
+    module.configure_base(
+        root=tmp_path,
+        control_rebased_head=head,
+        treatment_rebased_head=head,
+        aa_mode=True,
+    )
+    output = tmp_path / "terminal.json"
+    module.write_exclusive_refusal(output, ValueError("PLANTED_AA_REFUSAL"))
+
+    refusal = json.loads(
+        output.with_name("terminal.refusal.json").read_text()
+    )
+    expected = module.BASE.sha256_bytes(control_model)
+    assert refusal["result"] == "REFUSED"
+    assert refusal["issue"] == 2103
+    assert refusal["schema_version"] == module.AA_SCHEMA_VERSION
+    assert refusal["aa_mode"] is True
+    assert refusal["control_source_head"] == head
+    assert refusal["treatment_source_head"] == head
+    assert refusal["source_lineage"] == {
+        "control_predecessor_head": head,
+        "treatment_predecessor_head": head,
+    }
+    assert refusal["control_source_model_sha256"] == expected
+    assert refusal["treatment_source_model_sha256"] == expected
