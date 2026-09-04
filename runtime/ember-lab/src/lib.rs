@@ -33,7 +33,7 @@ pub type Result<T> = std::result::Result<T, EmberLabError>;
 
 /// Largest UTF-8 dispatch-manifest payload that fits the 64 KiB JSON-RPC line envelope even when JSON string escaping doubles every source byte.
 pub const MAX_DISPATCH_MANIFEST_BYTES: usize = 30_000;
-const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 7;
+const CURRENT_DATABASE_SCHEMA_VERSION: u32 = 8;
 const DISPATCH_TOKEN_ENV: &str = "EMBER_LAB_DISPATCH_TOKEN";
 const DISPATCH_JOB_ID_ENV: &str = "EMBER_LAB_DISPATCH_JOB_ID";
 const DISPATCH_JOB_OBJECT_NAME_ENV: &str = "EMBER_LAB_DISPATCH_JOB_OBJECT_NAME";
@@ -187,6 +187,46 @@ pub fn rollback_empty_artifact_custody_migration(path: &Path) -> Result<()> {
     tx.execute_batch(
         "DROP TABLE data_catalog_location_events;
          UPDATE metadata SET value='5' WHERE key='schema_version';",
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Rolls back the #2105 admission-events migration specifically (schema 8 -> 7). Pinned to the
+/// literal version 8 like every historical step above. Refused once any admission event exists:
+/// an event row is the durable receipt of a membership relabel and must never be dropped.
+pub fn rollback_empty_admission_events_migration(path: &Path) -> Result<()> {
+    const ROLLBACK_FROM_SCHEMA_VERSION: u32 = 8;
+    let _state_writer_lock = acquire_state_writer_lock(path)?;
+    let mut conn = Connection::open(path)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let schema_version: String = tx.query_row(
+        "SELECT value FROM metadata WHERE key='schema_version'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema_version != ROLLBACK_FROM_SCHEMA_VERSION.to_string() {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: format!(
+                "admission events rollback requires database schema version {ROLLBACK_FROM_SCHEMA_VERSION}, found {schema_version}"
+            ),
+        });
+    }
+    let event_rows: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM data_catalog_admission_events",
+        [],
+        |row| row.get(0),
+    )?;
+    if event_rows != 0 {
+        return Err(EmberLabError::InvalidDataCatalog {
+            detail: "admission events rollback refuses after admission events exist".into(),
+        });
+    }
+    tx.execute_batch(
+        "DROP TABLE data_catalog_admission_events;
+         UPDATE metadata SET value='7' WHERE key='schema_version';",
     )?;
     tx.commit()?;
     Ok(())

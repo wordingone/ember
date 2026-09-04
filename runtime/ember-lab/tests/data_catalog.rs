@@ -3,8 +3,9 @@
 // next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 
 use ember_lab::{
-    rollback_empty_artifact_custody_migration, rollback_empty_data_catalog_migration,
-    rollback_empty_foreign_process_pressure_migration, Daemon, EmberLabError,
+    rollback_empty_admission_events_migration, rollback_empty_artifact_custody_migration,
+    rollback_empty_data_catalog_migration, rollback_empty_foreign_process_pressure_migration,
+    Daemon, EmberLabError,
 };
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -36,7 +37,7 @@ fn fresh_database_schema_seven_contains_foreign_pressure_tables() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(version, "7");
+    assert_eq!(version, "8");
 
     let tables: Vec<String> = conn
         .prepare(
@@ -1074,6 +1075,7 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     .unwrap();
     drop(conn);
     // A downgrade to 4 chains through each historical step in order.
+    rollback_empty_admission_events_migration(&empty_db).unwrap();
     rollback_empty_foreign_process_pressure_migration(&empty_db).unwrap();
     rollback_empty_artifact_custody_migration(&empty_db).unwrap();
     rollback_empty_data_catalog_migration(&empty_db).unwrap();
@@ -1117,6 +1119,7 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     )
     .unwrap();
     drop(conn);
+    rollback_empty_admission_events_migration(&populated_db).unwrap();
     rollback_empty_foreign_process_pressure_migration(&populated_db).unwrap();
     rollback_empty_artifact_custody_migration(&populated_db).unwrap();
     let error = rollback_empty_data_catalog_migration(&populated_db).unwrap_err();
@@ -1125,6 +1128,49 @@ fn empty_migration_can_roll_back_but_catalog_data_blocks_downgrade() {
     assert_eq!(reopened.export_data_catalog_manifest().unwrap(), before);
 
     drop(reopened);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn admission_events_rollback_refuses_once_an_event_exists() {
+    let root = temp_root("admission-events-rollback");
+    let db = root.join("events.sqlite3");
+    drop(Daemon::open(&db).unwrap());
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute(
+        "INSERT INTO data_catalog_admission_events(membership_id,from_state,to_state,reason,audit_self_sha256,event_at_ms,payload_json,payload_sha256)
+         VALUES('membership:x','admitted','quarantined','test','0000000000000000000000000000000000000000000000000000000000000000',1,'{}','00')",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+    let error = rollback_empty_admission_events_migration(&db).unwrap_err();
+    assert!(format!("{error:?}").contains("refuses after admission events exist"));
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    let version: String = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key='schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, "8");
+    conn.execute("DELETE FROM data_catalog_admission_events", [])
+        .unwrap();
+    drop(conn);
+    rollback_empty_admission_events_migration(&db).unwrap();
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    let version: String = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key='schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(version, "7");
+    let wrong = rollback_empty_admission_events_migration(&db).unwrap_err();
+    assert!(format!("{wrong:?}").contains("requires database schema version 8"));
+    drop(conn);
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -1159,6 +1205,7 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
     let mismatch = root.join("mismatch.sqlite3");
     drop(Daemon::open(&mismatch).unwrap());
     reset_to_empty_pressure_seed(&mismatch);
+    rollback_empty_admission_events_migration(&mismatch).unwrap();
     rusqlite::Connection::open(&mismatch)
         .unwrap()
         .execute(
@@ -1185,6 +1232,7 @@ fn foreign_pressure_rollback_has_three_distinct_atomic_refusals() {
     let history = root.join("history.sqlite3");
     drop(Daemon::open(&history).unwrap());
     reset_to_empty_pressure_seed(&history);
+    rollback_empty_admission_events_migration(&history).unwrap();
     let conn = rusqlite::Connection::open(&history).unwrap();
     conn.execute(
         "INSERT INTO foreign_process_pressure_observations(observed_at_ms,outcome,payload_json) VALUES(1,'clear','{}')",
