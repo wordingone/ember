@@ -31,8 +31,11 @@ HISTORICAL_TREATMENT_MODEL_SHA256 = "71cb56da6a7dd3735842a081f58a167713b18685056
 HISTORICAL_TREATMENT_TEST_SHA256 = "57c488dab9ff9e85e4310d1cc2c9e40bfceacd2aa3a1c06935056975c2842fe3"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
+AA_SCHEMA_VERSION = "ember-issue2103-aa-position-independence-canary-v1"
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
+AA_PAIRED_RATIO_FLOOR = 0.98
+AA_PAIRED_RATIO_CEILING = 1.02
 _BASE_RUN_ONE_UPDATE = BASE.run_one_update
 _BASE_ADJUDICATE_PAIRS = BASE.adjudicate_pairs
 
@@ -123,6 +126,8 @@ def paired_median_ratio(
 
 def adjudicate_pairs(
     pairs: Sequence[Sequence[Mapping[str, object]]],
+    *,
+    aa_mode: bool = False,
 ) -> dict[str, object]:
     """Retain every integrity gate, then gate position from measured rows only."""
     predecessor = _BASE_ADJUDICATE_PAIRS(pairs)
@@ -191,19 +196,42 @@ def adjudicate_pairs(
             values["executed_slot_0_measured_median_tps"]
             / values["executed_slot_1_measured_median_tps"]
         )
-    for arm, values in measured_slot_gate_by_arm.items():
-        position_ratio = values["measured_slot_ratio"]
-        if not POSITION_RATIO_FLOOR <= position_ratio <= POSITION_RATIO_CEILING:
+    position_gate_pass = all(
+        POSITION_RATIO_FLOOR
+        <= values["measured_slot_ratio"]
+        <= POSITION_RATIO_CEILING
+        for values in measured_slot_gate_by_arm.values()
+    )
+    if not aa_mode:
+        for arm, values in measured_slot_gate_by_arm.items():
+            position_ratio = values["measured_slot_ratio"]
+            if POSITION_RATIO_FLOOR <= position_ratio <= POSITION_RATIO_CEILING:
+                continue
             raise ValueError(
                 f"TIMING_POSITION_EFFECT_REFUSED:{arm}:{position_ratio}"
             )
     paired_ratios, median_ratio = paired_median_ratio(pairs)
+    if aa_mode:
+        aa_result = (
+            "HARNESS_POSITION_INDEPENDENT"
+            if position_gate_pass
+            and AA_PAIRED_RATIO_FLOOR
+            <= median_ratio
+            <= AA_PAIRED_RATIO_CEILING
+            else "HARNESS_POSITION_DEPENDENT"
+        )
+    else:
+        aa_result = None
     return {
         **predecessor,
         "disposition": (
-            "PASS_POSITIVE"
-            if median_ratio >= BASE.SPEEDUP_RATIO_FLOOR
-            else "REJECTED"
+            aa_result
+            if aa_mode
+            else (
+                "PASS_POSITIVE"
+                if median_ratio >= BASE.SPEEDUP_RATIO_FLOOR
+                else "REJECTED"
+            )
         ),
         "paired_treatment_control_ratios": paired_ratios,
         "median_paired_treatment_control_ratio": median_ratio,
@@ -211,6 +239,15 @@ def adjudicate_pairs(
         "position_gate_ratio_orientation": "executed-slot-0-over-executed-slot-1",
         "warm_rows_used_for_gating": False,
         "estimator": "median-of-eight-paired-ratios-measured-slot-gate-v2",
+        **(
+            {
+                "aa_paired_median_ratio": median_ratio,
+                "aa_position_gate_pass": position_gate_pass,
+                "aa_result": aa_result,
+            }
+            if aa_mode
+            else {}
+        ),
     }
 
 
@@ -242,6 +279,7 @@ def rebind_receipt(
     treatment_rebased_head: str,
     control_source_model_sha256: str,
     treatment_source_model_sha256: str,
+    aa_mode: bool = False,
 ) -> dict[str, object]:
     for label, digest in (
         ("CONTROL_SOURCE_MODEL", control_source_model_sha256),
@@ -250,18 +288,26 @@ def rebind_receipt(
         if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
             raise ValueError(f"{label}_SHA256_REFUSED:{digest}")
     rebound = copy.deepcopy(value)
-    rebound["schema_version"] = SCHEMA_VERSION
-    if rebound.get("issue") in (2071, 2081):
+    rebound["schema_version"] = AA_SCHEMA_VERSION if aa_mode else SCHEMA_VERSION
+    if aa_mode:
+        rebound["issue"] = 2103
+        rebound["aa_mode"] = True
+        rebound["aa_source_head"] = control_rebased_head
+    elif rebound.get("issue") in (2071, 2081):
         rebound["issue"] = 2099
-    if "control_source_head" in rebound:
+    if aa_mode or "control_source_head" in rebound:
         rebound["control_source_head"] = control_rebased_head
-    if "treatment_source_head" in rebound:
+    if aa_mode or "treatment_source_head" in rebound:
         rebound["treatment_source_head"] = treatment_rebased_head
     rebound["control_source_model_sha256"] = control_source_model_sha256
     rebound["treatment_source_model_sha256"] = treatment_source_model_sha256
     rebound["source_lineage"] = {
-        "control_predecessor_head": BASE.CONTROL_HEAD,
-        "treatment_predecessor_head": BASE.TREATMENT_HEAD,
+        "control_predecessor_head": (
+            control_rebased_head if aa_mode else BASE.CONTROL_HEAD
+        ),
+        "treatment_predecessor_head": (
+            treatment_rebased_head if aa_mode else BASE.TREATMENT_HEAD
+        ),
     }
     rebound["predecessor_runner_source_sha256"] = BASE_RUNNER_SHA256
     rebound["historical_predecessor_runner_source_sha256"] = (
@@ -279,7 +325,10 @@ def rebind_receipt(
     )
     if "claim_boundary" in rebound:
         rebound["claim_boundary"] = (
-            "EIGHT WARMED-PAIR MEASURED-SLOT POSITION-GATED MATCHED-LOSS CANARY ONLY; "
+            "EIGHT-PAIR A/A HARNESS POSITION-INDEPENDENCE TEST ONLY; "
+            "NO TREATMENT, 20K, CAPABILITY, CAMPAIGN, EMBER-02, OR GOAL CREDIT"
+            if aa_mode
+            else "EIGHT WARMED-PAIR MEASURED-SLOT POSITION-GATED MATCHED-LOSS CANARY ONLY; "
             "NO 20K, CAPABILITY, SUFFICIENT-PRETRAINING, CAMPAIGN, EMBER-02, OR GOAL CREDIT"
         )
     return rebound
@@ -363,7 +412,11 @@ def _require_head(value: str, label: str) -> str:
 
 
 def configure_base(
-    *, root: Path, control_rebased_head: str, treatment_rebased_head: str
+    *,
+    root: Path,
+    control_rebased_head: str,
+    treatment_rebased_head: str,
+    aa_mode: bool = False,
 ) -> None:
     control_rebased_head = _require_head(control_rebased_head, "CONTROL_REBASED")
     treatment_rebased_head = _require_head(treatment_rebased_head, "TREATMENT_REBASED")
@@ -376,6 +429,9 @@ def configure_base(
 
     historical_control_spec = (
         f"{BASE.CONTROL_HEAD}:tools/ember-restart-3b/model.py"
+    )
+    treatment_model_spec = (
+        f"{treatment_rebased_head}:src/ember/model/model.py"
     )
 
     def rebased_git(repo_root: Path, *args: str) -> bytes:
@@ -404,7 +460,9 @@ def configure_base(
         control_source_model_sha256 = BASE.sha256_bytes(
             rebased_git(root, "show", historical_control_spec)
         )
-        treatment_source_model_sha256 = str(value.get("source_model_sha256", ""))
+        treatment_source_model_sha256 = BASE.sha256_bytes(
+            rebased_git(root, "show", treatment_model_spec)
+        )
         return original_write_receipt(
             path,
             rebind_receipt(
@@ -413,6 +471,7 @@ def configure_base(
                 treatment_rebased_head=treatment_rebased_head,
                 control_source_model_sha256=control_source_model_sha256,
                 treatment_source_model_sha256=treatment_source_model_sha256,
+                aa_mode=aa_mode,
             ),
         )
 
@@ -423,13 +482,13 @@ def configure_base(
     ):
         sys.path.insert(0, str(module_path))
     BASE.__file__ = str(Path(__file__).resolve(strict=True))
-    BASE.SCHEMA_VERSION = SCHEMA_VERSION
+    BASE.SCHEMA_VERSION = AA_SCHEMA_VERSION if aa_mode else SCHEMA_VERSION
     BASE.sha256_path = translated_sha256_path
     BASE.git = rebased_git
     BASE.validate_treatment_checkout = validate_rebased_treatment
     BASE.run_one_update = run_warm_then_measure
     BASE.load_measurement_pairs = load_measurement_pairs
-    BASE.adjudicate_pairs = adjudicate_pairs
+    BASE.adjudicate_pairs = lambda pairs: adjudicate_pairs(pairs, aa_mode=aa_mode)
     BASE.write_receipt = bound_write_receipt
 
 
@@ -444,8 +503,14 @@ def _pop_required_cli_value(name: str) -> str:
 
 
 def main() -> int:
+    aa_mode = "--aa" in sys.argv
+    if aa_mode:
+        sys.argv.remove("--aa")
     control_rebased_head = _pop_required_cli_value("--control-rebased-head")
-    treatment_rebased_head = _pop_required_cli_value("--treatment-rebased-head")
+    supplied_treatment_head = _pop_required_cli_value("--treatment-rebased-head")
+    treatment_rebased_head = (
+        control_rebased_head if aa_mode else supplied_treatment_head
+    )
     if "--adjudicate" in sys.argv:
         root = Path(__file__).resolve(strict=True).parents[5]
     else:
@@ -457,7 +522,13 @@ def main() -> int:
         root=root,
         control_rebased_head=control_rebased_head,
         treatment_rebased_head=treatment_rebased_head,
+        aa_mode=aa_mode,
     )
+    if aa_mode and supplied_treatment_head != control_rebased_head:
+        raise ValueError(
+            "AA_TREATMENT_HEAD_MUST_EQUAL_CONTROL_REFUSED:"
+            f"{supplied_treatment_head}:{control_rebased_head}"
+        )
     if "--adjudicate" not in sys.argv:
         for option in (
             "--historical-microprofile-model-sha256",
