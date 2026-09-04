@@ -11,6 +11,7 @@ from enum import Enum
 import hashlib
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -19,7 +20,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
-from model import RMSNorm, RawAudioProjector, RawPatchProjector, SharedAttention
+_REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
+if str(_REPO_IMPORT_HOME) not in sys.path:
+    sys.path.insert(0, str(_REPO_IMPORT_HOME))
+from src.ember.model.model import RMSNorm, RawAudioProjector, RawPatchProjector, SharedAttention
 
 
 class A1Tier(str, Enum):

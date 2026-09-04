@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
-from model import RestartDecoderConfig
+from src.ember.model.model import RestartDecoderConfig
 
 CONTRACT_PATH = ROOT / "configs" / "ember-restart-3b.json"
 

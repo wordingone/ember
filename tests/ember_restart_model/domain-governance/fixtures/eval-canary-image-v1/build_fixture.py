@@ -18,10 +18,11 @@ import torch
 ROOT = Path(__file__).resolve().parents[5]
 MODEL_DIR = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
 LAYOUT_DIR = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(MODEL_DIR))
 sys.path.insert(0, str(LAYOUT_DIR))
 
-from model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 from repository_layout import resolve_repository_authority  # noqa: E402
 
 
