@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 import run_vertical_slice
 import parameter_counter
-from model import RestartDecoderConfig
+from src.ember.model.model import RestartDecoderConfig
 from run_vertical_slice import mint_genesis_candidate
 
 

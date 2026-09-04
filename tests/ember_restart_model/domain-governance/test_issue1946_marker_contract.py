@@ -14,12 +14,12 @@ import torch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
-import pretrain  # noqa: E402
+import src.ember.training.pretrain as pretrain  # noqa: E402
 import packed_specialist_run  # noqa: E402
 
 
 def test_complete_update_marker_constants_are_used_by_the_timed_regions() -> None:
-    source = (ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "pretrain.py").read_text(encoding="utf-8")
+    source = (ROOT / "src" / "ember" / "training" / "pretrain.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     constants = {
         "COMPLETE_UPDATE_REFERENCE_FORWARD_MARKER",

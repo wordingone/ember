@@ -53,7 +53,7 @@ for _extra in (
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 
-from model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 from checkpoint_fixture import write_checkpoint_artifacts  # noqa: E402
 
 import parameter_identity_binding as pib  # noqa: E402

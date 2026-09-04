@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 import torch
 
-SCRIPT = Path(__file__).with_name("cbase_heldout_eval.py")
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "src" / "ember" / "evaluation" / "cbase_heldout_eval.py"
 
 def load_module():
     spec = importlib.util.spec_from_file_location("cbase_heldout_eval", SCRIPT)
@@ -90,12 +91,13 @@ def build_real_corpus_fixture(nc_root, shard_root, *, clean_tokens=2000, fineweb
     # issue2015 exact-local-import-end:src/ember/governance/scripts/token_shards_v0.py
     nc_root = Path(nc_root); shard_root = Path(shard_root)
     (nc_root/"receipts").mkdir(parents=True, exist_ok=True)
-    (nc_root/"tokenizer").mkdir(parents=True, exist_ok=True)
+    tokenizer_path = nc_root / "domains" / "model" / "tokenizer" / "tokenizer.json"
+    tokenizer_path.parent.mkdir(parents=True, exist_ok=True)
     shard_root.mkdir(parents=True, exist_ok=True)
     prem_names = {"assembly_receipt": "fixture-assembly.json", "tokenizer_freeze_receipt": "fixture-tokfreeze.json"}
     for nm in prem_names.values():
         write_json(nc_root/"receipts"/nm, {"ticket": "FIXTURE", "ts": "20260101T000000Z"})
-    write_json(nc_root/"tokenizer"/"tokenizer.json", {"vocab_size": 32000})
+    write_json(tokenizer_path, {"vocab_size": 32000})
     with open(nc_root/"receipts"/"v1-provenance-manifest-20260706.jsonl", "w", encoding="utf-8") as fh:
         fh.write(json.dumps({"source": "code_github_clean", "provenance_verdict": "CLEAN"}) + "\n")
         fh.write(json.dumps({"source": "fineweb_edu", "action": "DROP",
@@ -123,7 +125,7 @@ def build_real_corpus_fixture(nc_root, shard_root, *, clean_tokens=2000, fineweb
                                  "sha256": sha(nc_root/"receipts"/prem_names["assembly_receipt"])},
             "tokenizer_freeze_receipt": {"name": prem_names["tokenizer_freeze_receipt"],
                                          "sha256": sha(nc_root/"receipts"/prem_names["tokenizer_freeze_receipt"])},
-            "tokenizer_json": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": sha(nc_root/"tokenizer"/"tokenizer.json")},
+            "tokenizer_json": {"path": "domains/model/tokenizer/tokenizer.json", "sha256": sha(tokenizer_path)},
         },
         "sha_convention": tsv.SHA_CONVENTION, "no_gpu": True,
     }
@@ -198,7 +200,7 @@ class FakeV5Module:
     class LiveCandidateRefusal(Exception):
         pass
     MODEL_SHARDS=("shared-model.pt","expert-vision.pt","expert-audio.pt","expert-reasoning.pt","expert-tool.pt")
-    __file__=str(Path(__file__).with_name("legb_live_candidate_v5_scorer.py"))
+    __file__=str(ROOT / "src" / "ember" / "governance" / "scripts" / "legb_live_candidate_v5_scorer.py")
     def __init__(self, *, binding=None, verified=None, refusal=None):
         self.binding=binding or _v5_binding(); self.verified=verified or {
             "manifest":{"schema_version":"ember-sparse-checkpoint-v5","active_expert_ids":self.binding["route"]["manifest_declared_active_expert_ids"]},

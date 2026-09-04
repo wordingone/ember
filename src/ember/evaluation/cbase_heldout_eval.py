@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 import numpy as np
 
+ROOT = Path(__file__).resolve().parents[3]
+GOVERNANCE_SCRIPTS = ROOT / "src" / "ember" / "governance" / "scripts"
+
 class HeldoutEvalRefusal(ValueError):
     """The requested evaluation cannot be proved from the supplied bytes."""
 
@@ -162,7 +165,7 @@ def verify_rule_derived_selection(manifest: Mapping[str,Any], *, shard_dir: str|
     selection=manifest["selection_evidence"]
     if selection["verdict"] in {"CLEAN","CLEAN_VS_TRAINED_CONSUMPTION"}: return
     if selection["verdict"]!="RULE_DERIVED_EXCLUSION_CLEAN": raise HeldoutEvalRefusal("RULE_FREEZE_VERDICT_INVALID")
-    root=Path(nc) if nc is not None else Path(__file__).resolve().parents[1]
+    root=Path(nc) if nc is not None else ROOT
     receipt_path=root/selection["path"]
     if not receipt_path.is_file() or _sha256(receipt_path)!=selection["sha256"] or selection["batch_sha256"]!=selection["sha256"]:
         raise HeldoutEvalRefusal("RULE_FREEZE_RECEIPT_IDENTITY_INVALID")
@@ -186,7 +189,7 @@ def verify_rule_derived_selection(manifest: Mapping[str,Any], *, shard_dir: str|
         import importlib.util as _ember_a2a797319a415ece_importlib
         import sys as _ember_a2a797319a415ece_sys
         from pathlib import Path as _ember_a2a797319a415ece_Path
-        _ember_a2a797319a415ece_path = _ember_a2a797319a415ece_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'regenerate_cbase_heldout_slice.py')
+        _ember_a2a797319a415ece_path = ROOT.joinpath('src', 'ember', 'governance', 'scripts', 'regenerate_cbase_heldout_slice.py')
         if not _ember_a2a797319a415ece_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
         _ember_a2a797319a415ece_aliases = ('_ember_issue2015_a2a797319a415ece', 'regenerate_cbase_heldout_slice', 'scripts.regenerate_cbase_heldout_slice')
@@ -228,13 +231,13 @@ def verify_rule_derived_selection(manifest: Mapping[str,Any], *, shard_dir: str|
         # issue2015 exact-local-import-end:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py
     except ImportError:
         import sys
-        here=str(Path(__file__).resolve().parent)
+        here=str(GOVERNANCE_SCRIPTS)
         if here not in sys.path: sys.path.insert(0,here)
         # issue2015 exact-local-import:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py
         import importlib.util as _ember_a2a797319a415ece_importlib
         import sys as _ember_a2a797319a415ece_sys
         from pathlib import Path as _ember_a2a797319a415ece_Path
-        _ember_a2a797319a415ece_path = _ember_a2a797319a415ece_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'regenerate_cbase_heldout_slice.py')
+        _ember_a2a797319a415ece_path = ROOT.joinpath('src', 'ember', 'governance', 'scripts', 'regenerate_cbase_heldout_slice.py')
         if not _ember_a2a797319a415ece_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/regenerate_cbase_heldout_slice.py')
         _ember_a2a797319a415ece_aliases = ('_ember_issue2015_a2a797319a415ece', 'regenerate_cbase_heldout_slice', 'scripts.regenerate_cbase_heldout_slice')
@@ -303,7 +306,7 @@ def verify_trained_consumption_selection(manifest: Mapping[str,Any], *,
         return
     if checkpoint_dir is None or training_consumption_set is None:
         raise HeldoutEvalRefusal("TRAINING_CONSUMPTION_BINDING_REQUIRED")
-    root=Path(nc) if nc is not None else Path(__file__).resolve().parents[1]
+    root=Path(nc) if nc is not None else ROOT
     receipt_path=root/selection["path"]
     if not receipt_path.is_file() or _sha256(receipt_path)!=selection["sha256"]:
         raise HeldoutEvalRefusal("TRAINED_CONSUMPTION_RECEIPT_IDENTITY_INVALID")
@@ -322,7 +325,7 @@ def verify_trained_consumption_selection(manifest: Mapping[str,Any], *,
         raise HeldoutEvalRefusal("TRAINED_CONSUMPTION_CHECKPOINT_IDENTITY_MISMATCH")
     try:
         import sys
-        w2_dir=str(Path(__file__).resolve().parent/"w2_heldout")
+        w2_dir=str(GOVERNANCE_SCRIPTS / "w2_heldout")
         if w2_dir not in sys.path: sys.path.insert(0,w2_dir)
         import build_decontam_batch_mp as trained_scope
         consumption=trained_scope.load_training_consumption_set(training_consumption_set,selection["training_consumption_set_sha256"])
@@ -347,14 +350,14 @@ def _fineweb_exclusion_module():
     importing token_shards_v0 -- defensive against pytest invocation
     contexts that don't already have scripts/ on sys.path."""
     import sys
-    here=str(Path(__file__).resolve().parent)
+    here=str(GOVERNANCE_SCRIPTS)
     if here not in sys.path: sys.path.insert(0,here)
     try:
         # issue2015 exact-local-import:src/ember/governance/scripts/fineweb_exclusion.py
         import importlib.util as _ember_d46db7ae0cab2934_importlib
         import sys as _ember_d46db7ae0cab2934_sys
         from pathlib import Path as _ember_d46db7ae0cab2934_Path
-        _ember_d46db7ae0cab2934_path = _ember_d46db7ae0cab2934_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'fineweb_exclusion.py')
+        _ember_d46db7ae0cab2934_path = ROOT.joinpath('src', 'ember', 'governance', 'scripts', 'fineweb_exclusion.py')
         if not _ember_d46db7ae0cab2934_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/fineweb_exclusion.py')
         _ember_d46db7ae0cab2934_aliases = ('_ember_issue2015_d46db7ae0cab2934', 'fineweb_exclusion', 'scripts.fineweb_exclusion')
@@ -435,7 +438,7 @@ def verify_slice_excludes_ruled_sources(manifest: Mapping[str,Any], *, shard_dir
     policy so this check and the loader can never disagree about what
     "nothing to exclude" means."""
     fx=_fineweb_exclusion_module()
-    root=Path(nc) if nc is not None else Path(__file__).resolve().parents[1]
+    root=Path(nc) if nc is not None else ROOT
     receipt_name=Path(manifest["source_corpus"]["receipt_path"]).name
     receipt_path=root/"receipts"/receipt_name
     if not receipt_path.is_file(): raise HeldoutEvalRefusal(f"EXCLUSION_DERIVATION_FAILED: shard receipt not on disk: {receipt_path}")
@@ -514,7 +517,7 @@ def evaluate_teacher_forced(model, windows: Sequence[Mapping[str,Any]], *, devic
 def build_receipt(*,checkpoint: Mapping[str,Any],checkpoint_identity: Mapping[str,Any],slice_manifest_sha256: str,slice_manifest: Mapping[str,Any],evaluation: Mapping[str,Any],excluded_source_ranges: Sequence[tuple[int,int]]=()) -> dict:
     return {"schema":"cbase-heldout-eval/v1","issue":"#760","issue_refs":["#760","#1433"],"ts":datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),"scale":slice_manifest["scale"],"checkpoint":dict(checkpoint),"checkpoint_identity":dict(checkpoint_identity),"slice_manifest_sha256":slice_manifest_sha256,"evaluation":dict(evaluation),"excluded_source_ranges_verified":[list(r) for r in excluded_source_ranges],"api_spend_usd":0.0,"paid_api_surface_used":False,"claim_boundary":"heldout NLL/BPB measurement only; no capability, same-quality, or milestone-completion claim","markers":["HELDOUT_EVAL_DETERMINISM_PASS","HELDOUT_EVAL_NEGATIVE_FIXTURES_PASS","HELDOUT_SLICE_DISJOINT_PASS"]}
 
-FROZEN_SLICE_PATH = Path(__file__).resolve().parents[1] / "manifests" / "cbase-heldout-slice-v1.json"
+FROZEN_SLICE_PATH = ROOT / "manifests" / "cbase-heldout-slice-v1.json"
 FROZEN_SLICE_SHA256 = "32052288e761d8a01375bec40bc04785fcd46d75db58b325b73090f23dd74c14"
 CHECKPOINT_PINS = {
     "step25": {"model.pt":"3fa4ca09db7d749cb68e470ff07cd66d53706512e212a8482124a8872d55deac","optimizer.pt":"d52f5969887725551574a01c920342dff491a0f95cdff97ba4fe3511d83a70b0","rng.pt":"c9ca61ab0e5fb9661e54dc9bb2df294f3828390829c997330f9290a02aabc379","manifest.json":"3bd76c858576a3a0ac48bd2eecf3d33702116874529be640e627d4558f45d138"},
@@ -541,14 +544,14 @@ def _build_read_only_eval_model(identity: Mapping[str,Any], mtp_count: int, devi
 def _v5_scorer_module():
     """Reuse #1723's reviewed v5 byte verifier/model constructor verbatim."""
     import sys
-    here=str(Path(__file__).resolve().parent)
+    here=str(GOVERNANCE_SCRIPTS)
     if here not in sys.path: sys.path.insert(0,here)
     try:
         # issue2015 exact-local-import:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py
         import importlib.util as _ember_e20708112c9b9bf3_importlib
         import sys as _ember_e20708112c9b9bf3_sys
         from pathlib import Path as _ember_e20708112c9b9bf3_Path
-        _ember_e20708112c9b9bf3_path = _ember_e20708112c9b9bf3_Path(__file__).resolve().parents[1].joinpath('src', 'ember', 'governance', 'scripts', 'legb_live_candidate_v5_scorer.py')
+        _ember_e20708112c9b9bf3_path = ROOT.joinpath('src', 'ember', 'governance', 'scripts', 'legb_live_candidate_v5_scorer.py')
         if not _ember_e20708112c9b9bf3_path.is_file():
             raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/legb_live_candidate_v5_scorer.py')
         _ember_e20708112c9b9bf3_aliases = ('_ember_issue2015_e20708112c9b9bf3', 'legb_live_candidate_v5_scorer', 'scripts.legb_live_candidate_v5_scorer')

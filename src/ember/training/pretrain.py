@@ -1,5 +1,5 @@
 # goal_id: EMBER-02
-# workstream_id: EMBER-02B
+# workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Real bounded pretraining segments over independently verified routed records."""
 
@@ -20,13 +20,19 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
+
+ROOT = Path(__file__).resolve().parents[3]
+_HELPER_HOME = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
+if str(_HELPER_HOME) not in sys.path:
+    sys.path.insert(0, str(_HELPER_HOME))
+
 from batch import DOMAIN_MODALITIES, decode_owned_batch, decode_owned_packed_batch
-from model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
 # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py
 import importlib.util as _ember_61c7220b679f890b_importlib
 import sys as _ember_61c7220b679f890b_sys
 from pathlib import Path as _ember_61c7220b679f890b_Path
-_ember_61c7220b679f890b_path = _ember_61c7220b679f890b_Path(__file__).resolve().parent.joinpath('semantic_stream.py')
+_ember_61c7220b679f890b_path = _HELPER_HOME.joinpath('semantic_stream.py')
 if not _ember_61c7220b679f890b_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py')
 _ember_61c7220b679f890b_aliases = ('_ember_issue2015_61c7220b679f890b', 'semantic_stream', 'src.ember.infrastructure.tools.ember-restart-3b.semantic_stream')
@@ -71,7 +77,7 @@ from specialist_stream import TRAINING_CURSOR_SCHEMA_VERSION
 import importlib.util as _ember_fdf17d80b319f347_importlib
 import sys as _ember_fdf17d80b319f347_sys
 from pathlib import Path as _ember_fdf17d80b319f347_Path
-_ember_fdf17d80b319f347_path = _ember_fdf17d80b319f347_Path(__file__).resolve().parent.joinpath('training_acceleration.py')
+_ember_fdf17d80b319f347_path = _HELPER_HOME.joinpath('training_acceleration.py')
 if not _ember_fdf17d80b319f347_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py')
 _ember_fdf17d80b319f347_aliases = ('_ember_issue2015_fdf17d80b319f347', 'src.ember.infrastructure.tools.ember_restart_3b.training_acceleration', 'training_acceleration')
@@ -123,7 +129,7 @@ training_step_signature = getattr(_ember_fdf17d80b319f347_module, 'training_step
 CheckpointCallback = Callable[[int, dict[str, Any]], None]
 ProgressCallback = Callable[[dict[str, object]], None]
 SignatureObserver = Callable[[dict[str, object]], None]
-VERIFIER_PATH = Path(__file__).with_name("verify_capability_record.py")
+VERIFIER_PATH = _HELPER_HOME / "verify_capability_record.py"
 VERIFIER_PUBLIC_PATH = "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py"
 _DISPATCH_JOB_OBJECT_NAME_ENV = "EMBER_LAB_DISPATCH_JOB_OBJECT_NAME"
 _DISPATCH_CUSTODY_ENV = (

@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -16,8 +17,11 @@ from typing import Any
 
 import torch
 
+_REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
+if str(_REPO_IMPORT_HOME) not in sys.path:
+    sys.path.insert(0, str(_REPO_IMPORT_HOME))
 from batch import decode_owned_batch
-from model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py
 import importlib.util as _ember_1601eccb5605602b_importlib
 import sys as _ember_1601eccb5605602b_sys
