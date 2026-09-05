@@ -636,6 +636,108 @@ def adapt_image_audio_text(contract_path: Path, source_paths: list[Path]) -> dic
     return receipt
 
 
+REASONING_CONTRACT_SCHEMA = "ember-issue1947-protected-reasoning-contract-v1"
+REASONING_TASK_ID = "EXACT_REASONING_ITEM_IDENTITY"
+REASONING_FORBIDDEN_INPUTS = [
+    "explanation", "subfield", "topic_difficulty", "img_type", "image_payloads", "prediction_custody",
+]
+REASONING_ITEM_COUNT = 847
+REASONING_ANSWER_KEYS = frozenset({"answer", "id"})
+
+
+def _reasoning_canonical_bytes(payload: dict[str, object]) -> bytes:
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode("utf-8")
+
+
+def adapt_reasoning(contract_path: Path, source_paths: list[Path]) -> dict[str, object]:
+    """E-MATRIX-REASONING (#2148): item identity over the admitted MMMU item text object
+    ({id, question, options}, the #2130 object) and the admitted answer object ({answer, id}).
+    Explanation, subfield, topic_difficulty, img_type, image payloads and prediction custody are
+    forbidden inputs: an item-text object carrying any member beyond {id, question, options}, an
+    answer object carrying any member beyond {answer, id} (or another item's id), and a
+    non-connector source receipt all refuse the row instead of scoring it."""
+
+    contract, contract_raw = load_self_hashed(contract_path, REASONING_CONTRACT_SCHEMA)
+    task = contract.get("task")
+    if (
+        contract.get("result") != "PASS"
+        or contract.get("task_class") != "adapter_totality"
+        or not isinstance(task, dict)
+        or task.get("id") != REASONING_TASK_ID
+        or task.get("consumes") != ["item_text_payload_bytes", "answer_payload_bytes"]
+        or task.get("forbidden_inputs") != REASONING_FORBIDDEN_INPUTS
+        or contract.get("totality")
+        != {"expected": REASONING_ITEM_COUNT, "observed": REASONING_ITEM_COUNT, "complete": True}
+    ):
+        raise ValueError("REASONING_CONTRACT_TASK_TOTALITY_REFUSED")
+    by_sha, supplied = _load_bound_sources(contract, source_paths, "REASONING")
+    frozen_items = contract.get("frozen_items")
+    if not isinstance(frozen_items, list) or len(frozen_items) != REASONING_ITEM_COUNT:
+        raise ValueError("REASONING_CONTRACT_ITEM_TOTALITY_REFUSED")
+    items: list[dict[str, object]] = []
+    for frozen in frozen_items:
+        if not isinstance(frozen, dict):
+            raise TypeError("REASONING_CONTRACT_ITEM_SCHEMA_REFUSED")
+        item_id = frozen.get("item_id")
+        gold = frozen.get("gold_item_sha256")
+        text_object = frozen.get("item_text_object")
+        answer_object = frozen.get("answer_object")
+        if (
+            not isinstance(item_id, str)
+            or not isinstance(gold, str)
+            or not isinstance(text_object, dict)
+            or not isinstance(answer_object, dict)
+        ):
+            raise TypeError("REASONING_CONTRACT_ITEM_SCHEMA_REFUSED")
+        text_raw = _bound_payload(by_sha, text_object.get("sha256"), text_object.get("byte_count"), item_id, "REASONING")
+        answer_raw = _bound_payload(by_sha, answer_object.get("sha256"), answer_object.get("byte_count"), item_id, "REASONING")
+        try:
+            text_payload = json.loads(text_raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"REASONING_FORBIDDEN_INPUT_REFUSED:item_text_unreadable:{item_id}") from error
+        if (
+            not isinstance(text_payload, dict)
+            or set(text_payload) != IMAGE_TEXT_TEXT_KEYS
+            or text_payload.get("id") != item_id
+            or _image_text_canonical_bytes(item_id, text_payload) != text_raw
+        ):
+            raise ValueError(f"REASONING_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
+        try:
+            answer_payload = json.loads(answer_raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"REASONING_FORBIDDEN_INPUT_REFUSED:answer_unreadable:{item_id}") from error
+        if (
+            not isinstance(answer_payload, dict)
+            or set(answer_payload) != REASONING_ANSWER_KEYS
+            or answer_payload.get("id") != item_id
+            or not isinstance(answer_payload.get("answer"), str)
+            or _reasoning_canonical_bytes(answer_payload) != answer_raw
+        ):
+            raise ValueError(f"REASONING_FORBIDDEN_INPUT_REFUSED:answer_shape:{item_id}")
+        prediction = sha(text_raw + answer_raw)
+        # Same item schema as the other adapters (issue1947_release_execute.validate_row).
+        items.append({
+            "item_id": item_id,
+            "gold_item_sha256": gold,
+            "prediction": prediction,
+            "score": 1.0 if prediction == gold else 0.0,
+        })
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue2148-reasoning-row-receipt-v1",
+        "result": "REASONING_HELDOUT_ROW_PRODUCED",
+        "row_id": "E-MATRIX-REASONING",
+        "task_class": "adapter_totality",
+        "task": REASONING_TASK_ID,
+        "contract_raw_sha256": sha(contract_raw),
+        "connector_receipt_raw_sha256s": supplied,
+        "items": items,
+        "score": sum(float(item["score"]) for item in items) / len(items),
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    }
+    receipt["self_sha256"] = sha(canonical(receipt))
+    return receipt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="operation", required=True)
@@ -676,7 +778,35 @@ def main() -> int:
         help="connector receipt bound by the contract; repeat for every bound receipt",
     )
     image_audio_text.add_argument("--result", type=Path, required=True)
+    reasoning = subparsers.add_parser("adapt-reasoning")
+    reasoning.add_argument("--contract", type=Path, required=True)
+    reasoning.add_argument(
+        "--source-receipt", type=Path, required=True, action="append",
+        help="connector receipt bound by the contract; repeat for every bound receipt",
+    )
+    reasoning.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
+    if args.operation == "adapt-reasoning":
+        try:
+            row = adapt_reasoning(args.contract, list(args.source_receipt))
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue2148-reasoning-row-refusal-v1",
+                "result": "REASONING_HELDOUT_REFUSED",
+                "row_id": "E-MATRIX-REASONING",
+                "task_class": "adapter_totality",
+                "reason": str(error),
+                "claim_boundary": "ADAPTER TOTALITY REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
     if args.operation == "adapt-image-audio-text":
         try:
             row = adapt_image_audio_text(args.contract, list(args.source_receipt))
