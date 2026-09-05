@@ -34,7 +34,18 @@ PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
 )
 AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
-SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
+PREDECESSOR_SCHEMA_VERSION = (
+    "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
+)
+# #2131: treatment mode executes the SAME per-arm windowed procedure as the
+# A/A path (excluded post-switch update, fixed burn-in window, boundary sync,
+# 16-update measured window) with two distinct heads.  The #2128 receipt under
+# the predecessor schema (one warm + one measured update per arm) carried the
+# predecessor's position signatures and could not discriminate a 2 % effect.
+SCHEMA_VERSION = (
+    "ember-issue2131-treatment-boundary-synced-fixed-burn-in-paired-window-canary-v1"
+)
+TREATMENT_ISSUE = 2131
 AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-fixed-burn-in-paired-window-canary-v4"
 AA_ISSUE = 2112
 POSITION_RATIO_FLOOR = 1.0 / 1.5
@@ -144,8 +155,10 @@ def load_measurement_pairs(
             row = json.loads(raw)
         except (TypeError, ValueError) as error:
             raise ValueError(f"MEASUREMENT_ROW_JSON_REFUSED:{index}") from error
-        required = _AA_MEASUREMENT_FIELDS if aa_mode else _MEASUREMENT_FIELDS
-        if not isinstance(row, dict) or set(row) != required:
+        # #2131: every mode measures with the windowed procedure, so every
+        # row carries the windowed fields; a predecessor-schema row (one warm
+        # plus one measured update) refuses in treatment mode as it does in A/A.
+        if not isinstance(row, dict) or set(row) != _AA_MEASUREMENT_FIELDS:
             raise ValueError(f"MEASUREMENT_ROW_SCHEMA_REFUSED:{index}")
         claimed = row.pop("row_sha256")
         if claimed != BASE.sha256_bytes(BASE.canonical(row)):
@@ -224,7 +237,7 @@ def adjudicate_pairs(
     )
     for pair_index, rows in enumerate(pairs):
         expected_order = AA_PAIR_ORDERS[pair_index]
-        if aa_mode and cure_fields_present:
+        if cure_fields_present:
             pair_statistics = paired_update_statistics(rows)
             loss_divergence = pair_statistics["measured_loss_max_relative_divergence"]
             if loss_divergence > AA_MEASURED_LOSS_RELATIVE_LIMIT:
@@ -235,7 +248,7 @@ def adjudicate_pairs(
             paired_update_statistics_by_pair.append(pair_statistics)
         for executed_slot, row in enumerate(rows):
             arm = str(row["arm"])
-            if aa_mode and cure_fields_present:
+            if cure_fields_present:
                 if (
                     int(row.get("executed_slot", -1)) != executed_slot
                     or tuple(row.get("pair_order", ())) != expected_order
@@ -347,7 +360,7 @@ def adjudicate_pairs(
                 warm_record_matches = False
             if not warm_record_matches:
                 raise ValueError("WARM_RECORD_DRIFT_REFUSED")
-            if not (aa_mode and cure_fields_present):
+            if not cure_fields_present:
                 warm_events.extend(event_ids)
             measured_rates_by_arm_and_slot[arm][executed_slot].append(measured_rate)
     if len(warm_events) != len(set(warm_events)):
@@ -417,26 +430,38 @@ def adjudicate_pairs(
                 )
                 == AA_PAIR_ORDERS,
                 **_aa_constants(),
-                **(
-                    {
-                        "warm_updates_to_stability_by_arm": (
-                            warm_updates_to_stability_by_arm
-                        ),
-                        "warm_window_rates_by_arm": warm_window_rates_by_arm,
-                        "warm_window_median_rates_by_arm": warm_window_median_rates_by_arm,
-                        "fast_update_census_by_arm": fast_update_census_by_arm,
-                        "device_synchronized_before_window_by_arm": (
-                            device_synchronized_by_arm
-                        ),
-                        "aa_paired_update_statistics_by_pair": (
-                            paired_update_statistics_by_pair
-                        ),
-                    }
-                    if cure_fields_present
-                    else {}
-                ),
             }
             if aa_mode
+            else {}
+        ),
+        **(
+            {
+                **(
+                    {}
+                    if aa_mode
+                    else {
+                        "windowed_estimator_issue": TREATMENT_ISSUE,
+                        "pair_order_alternated": tuple(
+                            tuple(row.get("arm") for row in rows) for rows in pairs
+                        )
+                        == AA_PAIR_ORDERS,
+                        **_aa_constants(),
+                    }
+                ),
+                "warm_updates_to_stability_by_arm": (
+                    warm_updates_to_stability_by_arm
+                ),
+                "warm_window_rates_by_arm": warm_window_rates_by_arm,
+                "warm_window_median_rates_by_arm": warm_window_median_rates_by_arm,
+                "fast_update_census_by_arm": fast_update_census_by_arm,
+                "device_synchronized_before_window_by_arm": (
+                    device_synchronized_by_arm
+                ),
+                "aa_paired_update_statistics_by_pair": (
+                    paired_update_statistics_by_pair
+                ),
+            }
+            if cure_fields_present
             else {}
         ),
     }
@@ -689,27 +714,17 @@ def _with_event_prefix(
 
 
 def run_warm_then_measure(*, aa_mode: bool = False, **kwargs):
+    """One arm of one pair: the windowed procedure in BOTH modes (#2131).
+
+    Burn-in pairs (pair < 0) stay a single base update.  The A/A path and the
+    treatment path execute the identical per-arm schedule; only the heads the
+    arms are bound to differ, so the A/A same-bytes proof certifies the exact
+    code the treatment measurement runs.
+    """
+    del aa_mode  # the schedule no longer depends on the mode
     if int(kwargs.get("pair", 0)) < 0:
         return _BASE_RUN_ONE_UPDATE(**kwargs)
-    if aa_mode:
-        return _run_aa_arm(**kwargs)
-    warm, warm_cursor = _BASE_RUN_ONE_UPDATE(**kwargs)
-    warm_updates = [_with_event_prefix(warm, "warm")]
-    measured_kwargs = dict(kwargs)
-    measured_kwargs["cursor"] = warm_cursor
-    measured, measured_cursor = _BASE_RUN_ONE_UPDATE(**measured_kwargs)
-    final_warm = warm_updates[-1]
-    measured_event_ids = [f"measured-{value}" for value in measured["event_ids"]]
-    measured.update({
-        "warm_loss": final_warm["loss"],
-        "warm_processed_tokens": final_warm["processed_tokens"],
-        "warm_event_seconds": final_warm["event_seconds"],
-        "warm_tokens_per_second": final_warm["tokens_per_second"],
-        "warm_event_ids": final_warm["event_ids"],
-        "warm_update": copy.deepcopy(final_warm),
-        "event_ids": measured_event_ids,
-    })
-    return measured, measured_cursor
+    return _run_aa_arm(**kwargs)
 
 
 def _run_aa_arm(**kwargs):
@@ -820,8 +835,13 @@ def rebind_receipt(
         rebound["predecessor_text_lab_corpus_sha256"] = (
             PREDECESSOR_TEXT_LAB_CORPUS_SHA256
         )
-    elif rebound.get("issue") in (2071, 2081):
-        rebound["issue"] = 2099
+    else:
+        if rebound.get("issue") in (2071, 2081, 2099):
+            rebound["issue"] = TREATMENT_ISSUE
+        rebound["aa_mode"] = False
+        rebound["predecessor_schema_version"] = PREDECESSOR_SCHEMA_VERSION
+        rebound["pair_order_alternated"] = True
+        rebound.update(_aa_constants())
     if aa_mode or "control_source_head" in rebound:
         rebound["control_source_head"] = control_rebased_head
     if aa_mode or "treatment_source_head" in rebound:
@@ -855,8 +875,9 @@ def rebind_receipt(
             "EIGHT-PAIR POSITION-BALANCED, WARM-STABLE A/A HARNESS TEST ONLY; "
             "NO TREATMENT, 20K, CAPABILITY, CAMPAIGN, EMBER-02, OR GOAL CREDIT"
             if aa_mode
-            else "EIGHT WARMED-PAIR MEASURED-SLOT POSITION-GATED MATCHED-LOSS CANARY ONLY; "
-            "NO 20K, CAPABILITY, SUFFICIENT-PRETRAINING, CAMPAIGN, EMBER-02, OR GOAL CREDIT"
+            else "EIGHT-PAIR POSITION-BALANCED, BOUNDARY-SYNCED WINDOWED MATCHED-LOSS "
+            "TREATMENT CANARY ONLY; NO 20K, CAPABILITY, SUFFICIENT-PRETRAINING, "
+            "CAMPAIGN, EMBER-02, OR GOAL CREDIT"
         )
     return rebound
 
@@ -876,7 +897,7 @@ def write_exclusive_refusal(
         "refusal_class": type(error).__name__,
         "refusal_message": str(error),
         "last_phase": BASE._LAST_PHASE,
-        "issue": 2099,
+        "issue": TREATMENT_ISSUE,
         "predecessor_runner_source_sha256": BASE_RUNNER_SHA256,
         "historical_predecessor_runner_source_sha256": (
             HISTORICAL_BASE_RUNNER_SHA256
