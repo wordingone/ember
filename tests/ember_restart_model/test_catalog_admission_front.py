@@ -1464,3 +1464,159 @@ def test_content_sniff_is_path_independent_and_extension_is_only_a_binary_tiebre
     assert catalog_admission_module._content_media_type(second, PurePosixPath("same.bin"), table) == (
         "text/plain; charset=utf-8"
     )
+
+def _heldout_and_train_sharing_one_object(tmp_path: Path) -> tuple[dict, str]:
+    """Combined export: one heldout and one admitted train membership over the same bytes."""
+    shared = b"shared statistics text"
+    combined: dict = {"schema_version": "ember-data-catalog-export-v1", "records": [], "edges": []}
+    heldout_dataset_id = ""
+    for source, domain_split in [
+        ("candidate-statistics-heldout-1", ("statistics", "heldout")),
+        ("candidate-statistics-train-0", ("statistics", "train")),
+    ]:
+        domain, split = domain_split
+        connector_path, connector_sha = write_connector(
+            tmp_path / source,
+            source=source,
+            domain=domain,
+            files=[("shared.txt", shared)],
+        )
+        row = load_bulk_domain_connector_receipt(
+            receipt_path=connector_path,
+            expected_receipt_sha256=connector_sha,
+            source_id=source,
+            expected_source_selector=source,
+            expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+            domain=domain,
+            split=split,
+        )
+        manifest = json.loads(
+            build_dataset_catalog_manifest(
+                rows=[row], tokenizer_sha256="4" * 64, created_at_ms=1
+            )
+        )
+        if split == "heldout":
+            heldout_dataset_id = next(
+                item["id"] for item in manifest["records"] if item["kind"] == "dataset_version"
+            )
+        combined["records"].extend(manifest["records"])
+        combined["edges"].extend(manifest["edges"])
+    return combined, heldout_dataset_id
+
+
+def _evaluation_consumer_over(combined: dict, dataset_id: str) -> bytes:
+    raw = canonical(combined)
+    receipt = import_receipt(
+        manifest_raw=raw,
+        canonical_export=raw,
+        inserted_records=len(combined["records"]),
+        inserted_edges=len(combined["edges"]),
+    )
+    e_matrix = canonical(
+        {
+            "schema_version": "ember-issue1581-slot-e-matrix-definition-v1",
+            "rows": [{"row_id": "candidate-statistics-heldout-1", "state": "ABSENT"}],
+        }
+    )
+    return catalog_admission_module.build_evaluation_consumer_catalog_fragment(
+        catalog_export_raw=raw,
+        first_import_receipt_raw=receipt,
+        dataset_id=dataset_id,
+        e_matrix_packet_raw=e_matrix,
+        source_commit="1" * 40,
+        model_sha256="5" * 64,
+        checkpoint_sha256="6" * 64,
+        tokenizer_sha256="4" * 64,
+        config_sha256="7" * 64,
+        evaluator_sha256="8" * 64,
+    )
+
+
+def _heldout_memberships(combined: dict, dataset_id: str) -> list[dict]:
+    ids = {
+        edge["to_id"]
+        for edge in combined["edges"]
+        if edge["kind"] == "version_membership" and edge["from_id"] == dataset_id
+    }
+    return [row for row in combined["records"] if row.get("id") in ids]
+
+
+def test_evaluation_consumer_takes_isolation_over_admitted_heldout_memberships_only(
+    tmp_path: Path,
+) -> None:
+    """Live defect (#2105 -> #1581 debt row): 608 heldout memberships quarantined by
+    data-catalog-quarantine-overlaps still mapped to admitted train objects, and the
+    builder counted them, refusing a graph whose admitted-only overlap is zero."""
+    combined, dataset_id = _heldout_and_train_sharing_one_object(tmp_path)
+    memberships = _heldout_memberships(combined, dataset_id)
+    assert len(memberships) == 1
+
+    # Planted overlap while the heldout membership is still admitted: refuses.
+    with pytest.raises(ValueError, match="overlaps admitted train objects"):
+        _evaluation_consumer_over(combined, dataset_id)
+
+    # The catalog quarantine removed that membership from the protected set:
+    # the isolation proof holds over the remaining admitted heldout memberships.
+    memberships[0]["admission_state"] = "quarantined"
+    with pytest.raises(ValueError, match="no admitted heldout memberships"):
+        _evaluation_consumer_over(combined, dataset_id)
+
+    # Add a second, clean heldout membership to the same dataset: passes, and the
+    # quarantined object never enters the fragment.
+    clean_digest = sha256(b"clean heldout text")
+    clean_membership = dict(memberships[0])
+    clean_membership.update(
+        {
+            "id": f"membership:candidate-statistics-heldout-1:{clean_digest}",
+            "admission_state": "admitted",
+            "exact_sha256": clean_digest,
+            "near_dedup_cluster": f"sha256:{clean_digest}",
+            "shard_id": f"shard:sha256:{clean_digest}",
+        }
+    )
+    combined["records"].append(clean_membership)
+    combined["records"].append(
+        {
+            "kind": "immutable_object",
+            "id": f"sha256:{clean_digest}",
+            "sha256": clean_digest,
+            "byte_count": len(b"clean heldout text"),
+            "media_type": "text/plain; charset=utf-8",
+            "locator": f"sha256/{clean_digest[:2]}/{clean_digest}",
+            "custody_state": "available",
+        }
+    )
+    combined["edges"].extend(
+        [
+            {
+                "kind": "version_membership",
+                "from_kind": "dataset_version",
+                "from_id": dataset_id,
+                "to_kind": "membership",
+                "to_id": clean_membership["id"],
+                "ordinal": 1,
+                "payload": {},
+            },
+            {
+                "kind": "membership_object",
+                "from_kind": "membership",
+                "from_id": clean_membership["id"],
+                "to_kind": "immutable_object",
+                "to_id": f"sha256:{clean_digest}",
+                "ordinal": 0,
+                "payload": {},
+            },
+        ]
+    )
+    fragment = json.loads(_evaluation_consumer_over(combined, dataset_id))
+    attempt = next(row for row in fragment["records"] if row["kind"] == "consumer_attempt")
+    assert attempt["id"].startswith("attempt:issue1581-catalog-evaluation:")
+    protected_eval = next(row for row in fragment["records"] if row["kind"] == "protected_eval")
+    assert protected_eval["overlap_state"] == "isolated"
+    assert memberships[0]["exact_sha256"] not in json.dumps(fragment)
+
+    # Any admission state this builder does not know is a refusal, never a pass.
+    clean_membership["admission_state"] = "pending"
+    with pytest.raises(ValueError, match="unknown admission state"):
+        _evaluation_consumer_over(combined, dataset_id)
+
