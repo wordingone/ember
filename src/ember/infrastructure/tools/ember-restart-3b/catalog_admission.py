@@ -673,13 +673,61 @@ def build_consumer_catalog_fragment(
 
 
 def revalidate_e_matrix_catalog_bindings(
-    *, e_matrix_packet_raw: bytes, resolved_identity: dict[str, Any]
+    *,
+    e_matrix_packet_raw: bytes,
+    resolved_identity: dict[str, Any],
+    consumed_export_sha256: str | None = None,
 ) -> dict[str, Any]:
+    """Bind the E-MATRIX packet to the resolved catalog identity.
+
+    consumed_export_sha256 is the canonical export the consumer was built
+    against (the dataset import receipt's export) — a re-derivation packet is
+    authored before its own import and therefore binds THAT export, never the
+    final export that already contains the packet.
+    """
     packet = json.loads(e_matrix_packet_raw)
-    if packet.get("schema_version") == "ember-issue1581-slot-e-matrix-definition-v1":
+    schema_version = packet.get("schema_version")
+    if schema_version in {
+        "ember-issue1581-slot-e-matrix-definition-v1",
+        "ember-issue1581-slot-e-matrix-rederivation-v1",
+    }:
         rows = packet.get("rows")
+        expected_fields = {"schema_version", "rows"}
+        if schema_version == "ember-issue1581-slot-e-matrix-rederivation-v1":
+            # A re-derivation is a NEW evaluation identity (the packet bytes
+            # are the protected_eval id) bound to the catalog state it was
+            # proven on; the predecessor evaluation stays bound to its own
+            # contaminated attempt and is never rewritten.
+            expected_fields = {"schema_version", "rows", "rederivation"}
+            rederivation = packet.get("rederivation")
+            if (
+                not isinstance(rederivation, dict)
+                or set(rederivation)
+                != {
+                    "predecessor_evaluation_id",
+                    "predecessor_attempt_id",
+                    "quarantine_receipt_sha256",
+                    "catalog_export_sha256",
+                }
+                or not str(rederivation["predecessor_evaluation_id"]).startswith(
+                    "evaluation:e-matrix-catalog-isolation:"
+                )
+                or not str(rederivation["predecessor_attempt_id"]).startswith(
+                    "attempt:issue1581-catalog-evaluation:"
+                )
+                or consumed_export_sha256 is None
+                or rederivation["catalog_export_sha256"] != consumed_export_sha256
+            ):
+                raise ValueError(
+                    "slot E-MATRIX re-derivation must bind its predecessor and the"
+                    " catalog export it was proven on"
+                )
+            _require_sha(
+                str(rederivation["quarantine_receipt_sha256"]),
+                "quarantine receipt identity",
+            )
         if (
-            set(packet) != {"schema_version", "rows"}
+            set(packet) != expected_fields
             or not isinstance(rows, list)
             or len(rows) != 1
             or not isinstance(rows[0], dict)
@@ -1052,8 +1100,48 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
     )
 
 
+def _consumer_edges_bound_to_export(
+    edges: list[Any], *, expected_dataset_id: str, consumed_export_sha256: str | None
+) -> list[dict[str, Any]]:
+    """Consumer-dataset edges for the dataset, narrowed to the consumer that read
+    the given export: an attempt id ends with the sha256 of the catalog export it
+    consumed, so a re-derived consumer (a second attempt over the same dataset,
+    #1581 debt row) is selected by the export it was proven on, never by count."""
+    matching = [
+        edge
+        for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("kind") == "consumer_dataset"
+        and edge.get("to_id") == expected_dataset_id
+        and isinstance(edge.get("from_id"), str)
+    ]
+    if (
+        consumed_export_sha256 is not None
+        and len(matching) > 1
+        and all(
+            str(edge["from_id"]).startswith(_CATALOG_ADMISSION_ATTEMPT_PREFIXES)
+            for edge in matching
+        )
+    ):
+        matching = [
+            edge
+            for edge in matching
+            if str(edge["from_id"]).endswith(":" + consumed_export_sha256)
+        ]
+    return matching
+
+
+_CATALOG_ADMISSION_ATTEMPT_PREFIXES = (
+    "attempt:issue1581-catalog-preflight:",
+    "attempt:issue1581-catalog-evaluation:",
+)
+
+
 def _dataset_resolver_for_manifest(
-    manifest_raw: bytes, *, expected_dataset_id: str
+    manifest_raw: bytes,
+    *,
+    expected_dataset_id: str,
+    consumed_export_sha256: str | None = None,
 ) -> tuple[Any, str]:
     """Select train or evaluation resolution only from an exact catalog edge."""
 
@@ -1064,13 +1152,11 @@ def _dataset_resolver_for_manifest(
     edges = manifest.get("edges") if isinstance(manifest, dict) else None
     if not isinstance(edges, list):
         raise ValueError("catalog consumer manifest schema is invalid")
-    matching_edges = [
-        edge
-        for edge in edges
-        if isinstance(edge, dict)
-        and edge.get("kind") == "consumer_dataset"
-        and edge.get("to_id") == expected_dataset_id
-    ]
+    matching_edges = _consumer_edges_bound_to_export(
+        edges,
+        expected_dataset_id=expected_dataset_id,
+        consumed_export_sha256=consumed_export_sha256,
+    )
     if len(matching_edges) != 1:
         raise ValueError(
             "catalog consumer manifest must select exactly one dataset resolver"
@@ -1152,7 +1238,9 @@ def finalize_catalog_admission(
     if len(source_commits) != 1:
         raise ValueError("catalog import receipts do not share one source commit")
     resolver, expected_split = _dataset_resolver_for_manifest(
-        consumer_fragment_raw, expected_dataset_id=expected_dataset_id
+        consumer_fragment_raw,
+        expected_dataset_id=expected_dataset_id,
+        consumed_export_sha256=str(first.get("canonical_export_sha256")),
     )
     resolved = resolver(
         catalog_export_raw=final_catalog_export_raw,
@@ -1164,6 +1252,7 @@ def finalize_catalog_admission(
     expected_revalidation = revalidate_e_matrix_catalog_bindings(
         e_matrix_packet_raw=e_matrix_packet_raw,
         resolved_identity=resolved,
+        consumed_export_sha256=str(first.get("canonical_export_sha256")),
     )
     try:
         revalidation = json.loads(e_matrix_revalidation_raw)
@@ -1294,12 +1383,22 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif arguments.command == "revalidate":
             catalog_export_raw = _read(arguments.catalog_export)
+            dataset_import_receipt_raw = _read(arguments.dataset_import_receipt)
+            consumed_export_sha256 = _verified_import_receipt(
+                dataset_import_receipt_raw
+            ).get("canonical_export_sha256")
             resolver, expected_split = _dataset_resolver_for_manifest(
-                catalog_export_raw, expected_dataset_id=arguments.dataset_id
+                catalog_export_raw,
+                expected_dataset_id=arguments.dataset_id,
+                consumed_export_sha256=(
+                    str(consumed_export_sha256)
+                    if isinstance(consumed_export_sha256, str)
+                    else None
+                ),
             )
             resolved = resolver(
                 catalog_export_raw=catalog_export_raw,
-                dataset_import_receipt_raw=_read(arguments.dataset_import_receipt),
+                dataset_import_receipt_raw=dataset_import_receipt_raw,
                 consumer_import_receipt_raw=_read(arguments.consumer_import_receipt),
                 expected_dataset_id=arguments.dataset_id,
                 expected_split=expected_split,
@@ -1308,6 +1407,11 @@ def main(argv: list[str] | None = None) -> int:
                 revalidate_e_matrix_catalog_bindings(
                     e_matrix_packet_raw=_read(arguments.e_matrix_packet),
                     resolved_identity=resolved,
+                    consumed_export_sha256=(
+                        str(consumed_export_sha256)
+                        if isinstance(consumed_export_sha256, str)
+                        else None
+                    ),
                 )
             )
         else:
