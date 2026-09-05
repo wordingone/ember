@@ -84,6 +84,8 @@ jobs:
           python -B -m pytest -q \
             src/ember/governance/scripts/tests/test_issue1396_cond4_surface.py \
             src/ember/governance/scripts/tests/test_verify_ember01_completion.py -k "cond4"
+      - name: Execute the catalog consumption receipt consumer tests (#2124)
+        run: python -B -m pytest -q -p no:cacheprovider src/ember/governance/scripts/tests/test_catalog_consumption_receipt.py
       - name: Verify text-lab input identity pins are fresh
         run: python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/remint_text_lab_input_identity.py" --check
       - name: Verify training closure and Python environment authority
