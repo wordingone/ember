@@ -35,34 +35,45 @@ PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
 AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
-AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-disjoint-median-window-canary-v2"
+AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-fixed-burn-in-paired-window-canary-v3"
 AA_ISSUE = 2112
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
 AA_PAIRED_RATIO_FLOOR = 0.98
 AA_PAIRED_RATIO_CEILING = 1.02
 AA_PAIR_ORDERS = (("control", "treatment"), ("treatment", "control")) * 4
-# #2112 cure (sized from the #2110 refusal rows): the first update after every
-# arm switch is executed and EXCLUDED from every window (it is not a whole
-# update on the device); the device is synchronized immediately before each
-# timing window opens; warm readiness compares the MEDIAN per-update token
-# rate of the last two consecutive DISJOINT W-update windows.  The per-arm
-# schedule is fixed (excluded + horizon * W warm + W measured) so both A/A arms
-# stay on one cursor and their measured windows cover identical records.
-# Sized from the 2f4532c0 pre-merge probe (control arm): per-update seconds are
-# heavy-tailed (21 of 24 warm updates at 0.23-0.41 s, 3 at ~0.10 s, all real
-# applied updates), so a summed-token window rate moved 11.6 % / 7.4 % between
-# consecutive windows while the window medians moved 8.3 % / 3.1 %.  The median
-# is immune to that tail; the fast-update census records it for attribution.
+# #2112 cure (sized from the #2110 refusal rows and two pre-merge probes): the
+# first update after every arm switch is executed and EXCLUDED from every
+# window (it is not a whole update on the device); the device is synchronized
+# immediately before each timing window opens; the per-arm schedule is FIXED
+# (excluded + one W-update burn-in window + one measured window) so both A/A
+# arms stay on one cursor and their windows cover identical records.
+#
+# Why there is no convergence gate.  Probe 2f4532c0 (24 warm updates) and probe
+# a6d2c3fd (40 warm updates, control arm) both receipted STEADY-STATE
+# per-update seconds spread uniformly over 0.23-0.41 s (CV 0.17, tokens fixed
+# at 512, no drift: window medians 1536 / 1496 / 1831 / 1392 / 1689 tokens/s).
+# A readiness rule that waits for two 8-sample window statistics to agree
+# within eps (summed rate at 0.06, then median at 0.10) refused both probes at
+# the horizon without ever measuring: the spread is the steady state of the
+# device on these records, not warm-up, and cannot be waited out.  The
+# transient the gate existed for (the 4,500-5,700 tokens/s post-switch first
+# update) is already removed by the excluded update and the synchronization.
+# The burn-in census (window rates, window medians, fast-update census) is
+# still persisted for attribution.  The measured window is doubled to W=16 so
+# a per-pair ratio carries sixteen paired records per arm, and the
+# adjudication persists the per-pair cross-arm correlation of per-update
+# seconds (same cursor, same records) so the terminal receipt attributes the
+# steady-state spread to the records or to the device on its own.
 AA_POST_SWITCH_EXCLUDED_UPDATES = 1
 AA_WARM_WINDOW_UPDATES = 8
-AA_WARM_STABILITY_EPSILON = 0.10
-AA_WARM_HORIZON_WINDOWS = 5
+AA_WARM_BURN_IN_WINDOWS = 1
 AA_FAST_UPDATE_SECONDS_FRACTION = 0.5
-AA_MEASURED_WINDOW_UPDATES = AA_WARM_WINDOW_UPDATES
-AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = (
-    AA_WARM_HORIZON_WINDOWS * AA_WARM_WINDOW_UPDATES
-)
+AA_MEASURED_WINDOW_UPDATES = 16
+AA_WARM_BURN_IN_UPDATES = AA_WARM_BURN_IN_WINDOWS * AA_WARM_WINDOW_UPDATES
+# Retained name: the receipt/test field "warm_updates_to_stability" counts the
+# fixed burn-in.
+AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = AA_WARM_BURN_IN_UPDATES
 _BASE_RUN_ONE_UPDATE = BASE.run_one_update
 _BASE_ADJUDICATE_PAIRS = BASE.adjudicate_pairs
 
@@ -198,11 +209,14 @@ def adjudicate_pairs(
         "control": [],
         "treatment": [],
     }
+    paired_update_statistics_by_pair: list[dict[str, object]] = []
     cure_fields_present = any(
         "executed_slot" in row for rows in pairs for row in rows
     )
     for pair_index, rows in enumerate(pairs):
         expected_order = AA_PAIR_ORDERS[pair_index]
+        if aa_mode and cure_fields_present:
+            paired_update_statistics_by_pair.append(paired_update_statistics(rows))
         for executed_slot, row in enumerate(rows):
             arm = str(row["arm"])
             if aa_mode and cure_fields_present:
@@ -223,7 +237,7 @@ def adjudicate_pairs(
                     or warm_count != AA_WARM_STABILITY_READINESS_UPDATE_LIMIT
                     or not all(isinstance(item, Mapping) for item in warm_updates)
                     or warm_updates[-1] != row.get("warm_update")
-                    or not warm_stability_reached(warm_updates)
+                    or not warm_burn_in_complete(warm_updates)
                     or not _rates_match(
                         row.get("warm_window_rates"), warm_window_rates(warm_updates)
                     )
@@ -233,7 +247,7 @@ def adjudicate_pairs(
                     )
                     or row.get("fast_update_census") != fast_update_census(warm_updates)
                 ):
-                    raise ValueError("AA_WARM_STABILITY_RECORD_REFUSED")
+                    raise ValueError("AA_WARM_BURN_IN_RECORD_REFUSED")
                 if (
                     not isinstance(excluded_updates, list)
                     or len(excluded_updates) != AA_POST_SWITCH_EXCLUDED_UPDATES
@@ -391,6 +405,9 @@ def adjudicate_pairs(
                         "device_synchronized_before_window_by_arm": (
                             device_synchronized_by_arm
                         ),
+                        "aa_paired_update_statistics_by_pair": (
+                            paired_update_statistics_by_pair
+                        ),
                     }
                     if cure_fields_present
                     else {}
@@ -406,13 +423,14 @@ def _aa_constants() -> dict[str, object]:
     return {
         "aa_post_switch_excluded_updates": AA_POST_SWITCH_EXCLUDED_UPDATES,
         "aa_warm_window_updates": AA_WARM_WINDOW_UPDATES,
-        "aa_warm_stability_epsilon": AA_WARM_STABILITY_EPSILON,
-        "aa_warm_horizon_windows": AA_WARM_HORIZON_WINDOWS,
+        "aa_warm_burn_in_windows": AA_WARM_BURN_IN_WINDOWS,
+        "aa_warm_burn_in_updates": AA_WARM_BURN_IN_UPDATES,
         "aa_measured_window_updates": AA_MEASURED_WINDOW_UPDATES,
         "aa_fast_update_seconds_fraction": AA_FAST_UPDATE_SECONDS_FRACTION,
         "aa_warm_readiness_criterion": (
-            "relative change between the median per-update token rates of the"
-            " last two disjoint windows"
+            "fixed burn-in of one W-update window after the excluded post-switch"
+            " update; no convergence gate (probes 2f4532c0 and a6d2c3fd receipted"
+            " the per-update spread as steady state)"
         ),
     }
 
@@ -530,25 +548,84 @@ def _rates_match(recorded: object, computed: Sequence[float]) -> bool:
         return False
 
 
-def warm_stability_reached(
+def warm_burn_in_complete(
     updates: Sequence[Mapping[str, object]],
     *,
-    window: int = AA_WARM_WINDOW_UPDATES,
-    epsilon: float = AA_WARM_STABILITY_EPSILON,
+    burn_in: int = AA_WARM_BURN_IN_UPDATES,
 ) -> bool:
-    """Compare the two most recent DISJOINT window MEDIAN rates with a fixed bar.
+    """Exactly the fixed burn-in, every update a valid timed record.
 
-    #2110 compared moving medians of two K=3 windows sharing two samples: the
-    control arm passed with relative change 0.0 while its samples spanned
-    1,253 to 5,753 tokens/s.  Disjoint windows share no sample.  The window
-    statistic is the median per-update rate, because the summed-token rate is
-    driven by the heavy fast tail the 2f4532c0 probe receipted.
+    No convergence criterion: probes 2f4532c0 and a6d2c3fd receipted that the
+    per-update spread (0.23-0.41 s at 512 tokens) is steady state, so any rule
+    waiting for consecutive window statistics to agree refuses forever.
     """
-    rates = warm_window_median_rates(updates, window=window)
-    if len(rates) < 2:
+    if len(updates) != burn_in:
         return False
-    previous, current = rates[-2], rates[-1]
-    return abs(current - previous) / previous < epsilon
+    try:
+        for item in updates:
+            _positive_finite(
+                item.get("tokens_per_second"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+            )
+            _positive_finite(
+                item.get("event_seconds"), "AA_WARM_TIMING_SAMPLE_INVALID_REFUSED"
+            )
+    except (ValueError, AttributeError):
+        return False
+    return True
+
+
+def pearson_correlation(
+    first: Sequence[float], second: Sequence[float]
+) -> float | None:
+    """Sample Pearson r of two equal-length sequences; None when undefined."""
+    if len(first) != len(second) or len(first) < 3:
+        return None
+    mean_first = statistics.fmean(first)
+    mean_second = statistics.fmean(second)
+    covariance = sum(
+        (a - mean_first) * (b - mean_second) for a, b in zip(first, second)
+    )
+    spread_first = math.sqrt(sum((a - mean_first) ** 2 for a in first))
+    spread_second = math.sqrt(sum((b - mean_second) ** 2 for b in second))
+    if spread_first == 0.0 or spread_second == 0.0:
+        return None
+    return covariance / (spread_first * spread_second)
+
+
+def paired_update_statistics(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    """Per-pair cross-arm statistics over the measured windows (same records)."""
+    by_arm = {
+        str(row["arm"]): list(row.get("measured_updates") or []) for row in rows
+    }
+    control = by_arm.get("control", [])
+    treatment = by_arm.get("treatment", [])
+    if len(control) != len(treatment) or not control:
+        raise ValueError("AA_MEASURED_WINDOW_RECORD_REFUSED")
+    control_seconds = [float(item["event_seconds"]) for item in control]
+    treatment_seconds = [float(item["event_seconds"]) for item in treatment]
+    ratios = [
+        float(t["tokens_per_second"]) / float(c["tokens_per_second"])
+        for c, t in zip(control, treatment)
+    ]
+    return {
+        "paired_update_seconds_correlation": pearson_correlation(
+            control_seconds, treatment_seconds
+        ),
+        "paired_update_ratio_median": statistics.median(ratios),
+        "measured_seconds_cv_by_arm": {
+            arm: (
+                statistics.pstdev(values) / statistics.fmean(values)
+                if len(values) > 1 and statistics.fmean(values) > 0.0
+                else None
+            )
+            for arm, values in (
+                ("control", control_seconds),
+                ("treatment", treatment_seconds),
+            )
+        },
+    }
 
 
 def synchronize_device_before_window() -> bool:
@@ -634,8 +711,8 @@ def _run_aa_arm(**kwargs):
         progress["warm_window_rates"] = warm_window_rates(warm_updates)
         progress["warm_window_median_rates"] = warm_window_median_rates(warm_updates)
         progress["fast_update_census"] = fast_update_census(warm_updates)
-    if not warm_stability_reached(warm_updates):
-        raise ValueError("AA_WARM_STABILITY_NOT_REACHED_REFUSED")
+    if not warm_burn_in_complete(warm_updates):
+        raise ValueError("AA_WARM_BURN_IN_INCOMPLETE_REFUSED")
     synchronized["measured"] = synchronize_device_before_window()
     measured_updates: list[dict[str, object]] = progress["measured_updates"]
     for measured_index in range(AA_MEASURED_WINDOW_UPDATES):
