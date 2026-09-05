@@ -306,6 +306,12 @@ def _image_text_canonical_bytes(item_id: str, payload: dict[str, object]) -> byt
 def _load_image_text_sources(
     contract: dict[str, object], source_paths: list[Path]
 ) -> tuple[dict[str, tuple[Path, dict[str, object]]], list[str]]:
+    return _load_bound_sources(contract, source_paths, "IMAGE_TEXT")
+
+
+def _load_bound_sources(
+    contract: dict[str, object], source_paths: list[Path], prefix: str,
+) -> tuple[dict[str, tuple[Path, dict[str, object]]], list[str]]:
     """Every source must be a connector receipt bound by the contract; the bound
     set must be supplied in full. A receipt of any other schema (a prediction
     custody receipt, an answer dictionary) is a forbidden input, refused before
@@ -314,7 +320,7 @@ def _load_image_text_sources(
     binding = contract.get("source")
     bound = binding.get("connector_receipt_raw_sha256s") if isinstance(binding, dict) else None
     if not isinstance(bound, list) or not bound or any(not isinstance(v, str) for v in bound):
-        raise ValueError("IMAGE_TEXT_CONTRACT_SOURCE_BINDING_REFUSED")
+        raise ValueError(f"{prefix}_CONTRACT_SOURCE_BINDING_REFUSED")
     by_sha: dict[str, tuple[Path, dict[str, object]]] = {}
     supplied: list[str] = []
     for source_path in source_paths:
@@ -322,52 +328,59 @@ def _load_image_text_sources(
         try:
             source = json.loads(source_raw)
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise ValueError("IMAGE_TEXT_SOURCE_RECEIPT_UNREADABLE_REFUSED") from error
+            raise ValueError(f"{prefix}_SOURCE_RECEIPT_UNREADABLE_REFUSED") from error
         if not isinstance(source, dict) or source.get("schema") != "corpus-connector-receipt-v1":
             observed = source.get("schema") if isinstance(source, dict) else None
             observed = observed or (source.get("schema_version") if isinstance(source, dict) else None)
-            raise ValueError(f"IMAGE_TEXT_FORBIDDEN_INPUT_REFUSED:source_schema:{observed}")
+            raise ValueError(f"{prefix}_FORBIDDEN_INPUT_REFUSED:source_schema:{observed}")
         digest = sha(source_raw)
         if digest not in bound:
-            raise ValueError("IMAGE_TEXT_SOURCE_RECEIPT_BINDING_DRIFT_REFUSED")
+            raise ValueError(f"{prefix}_SOURCE_RECEIPT_BINDING_DRIFT_REFUSED")
         if digest in supplied:
-            raise ValueError("IMAGE_TEXT_SOURCE_RECEIPT_DUPLICATE_REFUSED")
+            raise ValueError(f"{prefix}_SOURCE_RECEIPT_DUPLICATE_REFUSED")
         supplied.append(digest)
         root_value = source.get("dest_root")
         files = source.get("files")
         if not isinstance(root_value, str) or not isinstance(files, list):
-            raise TypeError("IMAGE_TEXT_SOURCE_RECEIPT_TOTALITY_REFUSED")
+            raise TypeError(f"{prefix}_SOURCE_RECEIPT_TOTALITY_REFUSED")
         root = Path(root_value)
         if not root.is_absolute() or not root.is_dir():
-            raise ValueError("IMAGE_TEXT_CUSTODY_ROOT_MISSING_REFUSED")
+            raise ValueError(f"{prefix}_CUSTODY_ROOT_MISSING_REFUSED")
         root = root.resolve()
         for row in files:
             if not isinstance(row, dict) or not isinstance(row.get("sha256"), str):
-                raise TypeError("IMAGE_TEXT_SOURCE_RECEIPT_FILE_SCHEMA_REFUSED")
+                raise TypeError(f"{prefix}_SOURCE_RECEIPT_FILE_SCHEMA_REFUSED")
             if row["sha256"] in by_sha:
-                raise ValueError("IMAGE_TEXT_SOURCE_RECEIPT_DUPLICATE_OBJECT_REFUSED")
+                raise ValueError(f"{prefix}_SOURCE_RECEIPT_DUPLICATE_OBJECT_REFUSED")
             by_sha[row["sha256"]] = (root, row)
     if sorted(supplied) != sorted(bound):
-        raise ValueError("IMAGE_TEXT_SOURCE_RECEIPT_SET_INCOMPLETE_REFUSED")
+        raise ValueError(f"{prefix}_SOURCE_RECEIPT_SET_INCOMPLETE_REFUSED")
     return by_sha, sorted(supplied)
 
 
 def _image_text_payload(
     by_sha: dict[str, tuple[Path, dict[str, object]]], digest: object, byte_count: object, item_id: object,
 ) -> bytes:
+    return _bound_payload(by_sha, digest, byte_count, item_id, "IMAGE_TEXT")
+
+
+def _bound_payload(
+    by_sha: dict[str, tuple[Path, dict[str, object]]], digest: object, byte_count: object, item_id: object,
+    prefix: str,
+) -> bytes:
     entry = by_sha.get(digest) if isinstance(digest, str) else None
     if entry is None:
-        raise ValueError(f"IMAGE_TEXT_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
+        raise ValueError(f"{prefix}_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
     root, row = entry
     if row.get("bytes") != byte_count or not isinstance(row.get("path"), str):
-        raise ValueError(f"IMAGE_TEXT_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
+        raise ValueError(f"{prefix}_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
     physical = (root / Path(row["path"])).resolve()
     try:
         physical.relative_to(root)
     except ValueError as error:
-        raise ValueError(f"IMAGE_TEXT_PAYLOAD_PATH_ESCAPE_REFUSED:{item_id}:{digest}") from error
+        raise ValueError(f"{prefix}_PAYLOAD_PATH_ESCAPE_REFUSED:{item_id}:{digest}") from error
     if not physical.is_file():
-        raise ValueError(f"IMAGE_TEXT_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
+        raise ValueError(f"{prefix}_PAYLOAD_MISSING_REFUSED:{item_id}:{digest}")
     return physical.read_bytes()
 
 
@@ -451,6 +464,93 @@ def adapt_image_text(contract_path: Path, source_paths: list[Path]) -> dict[str,
     return receipt
 
 
+AUDIO_TEXT_CONTRACT_SCHEMA = "ember-issue1947-protected-audio-text-contract-v1"
+AUDIO_TEXT_TASK_ID = "EXACT_AUDIO_TEXT_PAIR_IDENTITY"
+AUDIO_TEXT_FORBIDDEN_INPUTS = ["speaker_metadata", "chapter_metadata", "prediction_custody"]
+AUDIO_TEXT_ITEM_COUNT = 64
+AUDIO_TEXT_TEXT_KEYS = frozenset({"utterance_id", "transcript"})
+
+
+def _audio_text_canonical_bytes(payload: dict[str, object]) -> bytes:
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode("utf-8")
+
+
+def adapt_audio_text(contract_path: Path, source_paths: list[Path]) -> dict[str, object]:
+    """E-MATRIX-AUDIO-TEXT (#2138): pair identity over the admitted audio payload and the
+    admitted transcript text object. Speaker/chapter identities and prediction custody are
+    forbidden inputs: a transcript object carrying any member beyond {utterance_id,
+    transcript} refuses the row, and a non-connector receipt refuses before any byte is read."""
+
+    contract, contract_raw = load_self_hashed(contract_path, AUDIO_TEXT_CONTRACT_SCHEMA)
+    task = contract.get("task")
+    if (
+        contract.get("result") != "PASS"
+        or contract.get("task_class") != "adapter_totality"
+        or not isinstance(task, dict)
+        or task.get("id") != AUDIO_TEXT_TASK_ID
+        or task.get("consumes") != ["audio_payload_bytes", "transcript_text_payload_bytes"]
+        or task.get("forbidden_inputs") != AUDIO_TEXT_FORBIDDEN_INPUTS
+        or contract.get("totality")
+        != {"expected": AUDIO_TEXT_ITEM_COUNT, "observed": AUDIO_TEXT_ITEM_COUNT, "complete": True}
+    ):
+        raise ValueError("AUDIO_TEXT_CONTRACT_TASK_TOTALITY_REFUSED")
+    by_sha, supplied = _load_bound_sources(contract, source_paths, "AUDIO_TEXT")
+    frozen_items = contract.get("frozen_items")
+    if not isinstance(frozen_items, list) or len(frozen_items) != AUDIO_TEXT_ITEM_COUNT:
+        raise ValueError("AUDIO_TEXT_CONTRACT_ITEM_TOTALITY_REFUSED")
+    items: list[dict[str, object]] = []
+    for frozen in frozen_items:
+        if not isinstance(frozen, dict):
+            raise TypeError("AUDIO_TEXT_CONTRACT_ITEM_SCHEMA_REFUSED")
+        item_id = frozen.get("item_id")
+        gold = frozen.get("gold_item_sha256")
+        audio_object = frozen.get("audio_object")
+        text_object = frozen.get("item_text_object")
+        if (
+            not isinstance(item_id, str)
+            or not isinstance(gold, str)
+            or not isinstance(audio_object, dict)
+            or not isinstance(text_object, dict)
+        ):
+            raise TypeError("AUDIO_TEXT_CONTRACT_ITEM_SCHEMA_REFUSED")
+        audio_raw = _bound_payload(by_sha, audio_object.get("sha256"), audio_object.get("byte_count"), item_id, "AUDIO_TEXT")
+        text_raw = _bound_payload(by_sha, text_object.get("sha256"), text_object.get("byte_count"), item_id, "AUDIO_TEXT")
+        try:
+            text_payload = json.loads(text_raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_unreadable:{item_id}") from error
+        if (
+            not isinstance(text_payload, dict)
+            or set(text_payload) != AUDIO_TEXT_TEXT_KEYS
+            or text_payload.get("utterance_id") != item_id
+            or not isinstance(text_payload.get("transcript"), str)
+            or _audio_text_canonical_bytes(text_payload) != text_raw
+        ):
+            raise ValueError(f"AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
+        prediction = sha(audio_raw + text_raw)
+        # Same item schema as the other adapters (issue1947_release_execute.validate_row).
+        items.append({
+            "item_id": item_id,
+            "gold_item_sha256": gold,
+            "prediction": prediction,
+            "score": 1.0 if prediction == gold else 0.0,
+        })
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue2138-audio-text-row-receipt-v1",
+        "result": "AUDIO_TEXT_HELDOUT_ROW_PRODUCED",
+        "row_id": "E-MATRIX-AUDIO-TEXT",
+        "task_class": "adapter_totality",
+        "task": AUDIO_TEXT_TASK_ID,
+        "contract_raw_sha256": sha(contract_raw),
+        "connector_receipt_raw_sha256s": supplied,
+        "items": items,
+        "score": sum(float(item["score"]) for item in items) / len(items),
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    }
+    receipt["self_sha256"] = sha(canonical(receipt))
+    return receipt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="operation", required=True)
@@ -477,6 +577,13 @@ def main() -> int:
         help="connector receipt bound by the contract; repeat for every bound receipt",
     )
     image_text.add_argument("--result", type=Path, required=True)
+    audio_text = subparsers.add_parser("adapt-audio-text")
+    audio_text.add_argument("--contract", type=Path, required=True)
+    audio_text.add_argument(
+        "--source-receipt", type=Path, required=True, action="append",
+        help="connector receipt bound by the contract; repeat for every bound receipt",
+    )
+    audio_text.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
     if args.operation == "adapt-text":
         row = adapt_text(args.contract, args.source_receipt)
@@ -516,6 +623,27 @@ def main() -> int:
                 "schema_version": "ember-issue2130-image-text-row-refusal-v1",
                 "result": "IMAGE_TEXT_HELDOUT_REFUSED",
                 "row_id": "E-MATRIX-IMAGE-TEXT",
+                "task_class": "adapter_totality",
+                "reason": str(error),
+                "claim_boundary": "ADAPTER TOTALITY REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
+    if args.operation == "adapt-audio-text":
+        try:
+            row = adapt_audio_text(args.contract, list(args.source_receipt))
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue2138-audio-text-row-refusal-v1",
+                "result": "AUDIO_TEXT_HELDOUT_REFUSED",
+                "row_id": "E-MATRIX-AUDIO-TEXT",
                 "task_class": "adapter_totality",
                 "reason": str(error),
                 "claim_boundary": "ADAPTER TOTALITY REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
