@@ -22,6 +22,7 @@ Claim boundary: producer/loader compatibility only. No optimizer consumes anythi
 from __future__ import annotations
 
 import argparse
+import array
 import hashlib
 import io
 import json
@@ -462,6 +463,7 @@ def fill_shards(
     exhausted = False
 
     def write_chunk(chunk: bytes) -> None:
+        nonlocal separator_tokens
         digest = sha(chunk)
         name = f"v1-{len(shards):05d}-{digest[:12]}.bin"
         target = root / name
@@ -474,6 +476,11 @@ def fill_shards(
                 stream.write(chunk)
             os.replace(temp, target)
         shards.append({"name": name, "sha256": digest, "n_tokens": len(chunk) // 2})
+        # Separator id 0 is unreachable from text (band guard), so every 0 in a written shard is a
+        # writer-inserted separator; counting them here keeps the accounting inside the covered prefix.
+        written = array.array("H")
+        written.frombytes(chunk)
+        separator_tokens += written.count(SEPARATOR_ID)
 
     rows = manifest["rows"]
     while len(shards) < shard_count and cursor < len(rows):
@@ -482,7 +489,6 @@ def fill_shards(
         spans.append({"sha256": row["sha256"], "token_start": written_tokens, "token_end": written_tokens + len(tokens)})
         written_tokens += len(tokens)
         content_tokens += len(tokens) - separators
-        separator_tokens += separators
         buffer.extend(struct.pack(f"<{len(tokens)}H", *tokens))
         cursor += 1
         while len(buffer) >= shard_tokens * 2 and len(shards) < shard_count:
@@ -509,8 +515,9 @@ def fill_shards(
         "premises": {"tokenizer_json": {"path": str(tokenizer_path.resolve()), "sha256": tokenizer_sha256}},
         "shards": shards,
         "total_stream_tokens": covered,
-        "content_total_tokens": min(content_tokens, covered),
+        "content_total_tokens": covered - separator_tokens,
         "separator_tokens": separator_tokens,
+        "accounting_rule": "counted inside the written shards: separators = occurrences of id 0 (unreachable from text); content = total - separators",
         "reserved_band_guard": band,
         "catalog_binding": {
             "schema_version": BINDING_SCHEMA,
