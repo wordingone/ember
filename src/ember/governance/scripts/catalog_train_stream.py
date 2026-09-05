@@ -164,14 +164,36 @@ def _export_views(export: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], li
 
 def leakage_sets(export: dict[str, Any]) -> dict[str, set[str]]:
     objects, memberships, _, edges = _export_views(export)
-    heldout = {row["exact_sha256"] for row in memberships if row.get("split") != "train"}
-    quarantined = {row["exact_sha256"] for row in memberships if row.get("admission_state") != "admitted"}
+    # An ADMITTED non-train membership protects its bytes. A quarantined non-train membership is
+    # the catalog's own resolution of a train/heldout overlap (the bytes were withdrawn from the
+    # evaluation side and stay adjudicated train); it is counted, never treated as heldout.
+    heldout = {
+        row["exact_sha256"]
+        for row in memberships
+        if row.get("split") != "train" and row.get("admission_state") == "admitted"
+    }
+    # A quarantined TRAIN membership withdraws those bytes from training.
+    quarantined = {
+        row["exact_sha256"]
+        for row in memberships
+        if row.get("split") == "train" and row.get("admission_state") != "admitted"
+    }
+    adjudicated_overlap = {
+        row["exact_sha256"]
+        for row in memberships
+        if row.get("split") != "train" and row.get("admission_state") != "admitted"
+    }
     protected = {
         edge["to_id"].split(":", 1)[1]
         for edge in edges
         if isinstance(edge, dict) and edge.get("kind") == "evaluation_object" and isinstance(edge.get("to_id"), str)
     }
-    return {"heldout": heldout, "quarantined": quarantined, "protected_eval": protected}
+    return {
+        "heldout": heldout,
+        "quarantined": quarantined,
+        "protected_eval": protected,
+        "_adjudicated_overlap": adjudicated_overlap,
+    }
 
 
 def build_staging_manifest(
@@ -222,6 +244,7 @@ def build_staging_manifest(
     rows: list[dict[str, Any]] = []
     excluded: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     unresolved = [0, 0]
+    adjudicated_overlap_staged = 0
     seen: set[str] = set()
     for dataset_id in sorted(dataset_ids):
         shas: list[str] = []
@@ -239,8 +262,12 @@ def build_staging_manifest(
                 continue
             seen.add(digest)
             for name, hashes in leakage.items():
+                if name.startswith("_"):
+                    continue
                 if digest in hashes:
                     raise StreamError(f"LEAKAGE_REFUSED:{name}:{digest}")
+            if digest in leakage["_adjudicated_overlap"]:
+                adjudicated_overlap_staged += 1
             obj = objects.get(digest)
             if obj is None:
                 raise StreamError(f"OBJECT_MISSING_REFUSED:{digest}")
@@ -283,6 +310,12 @@ def build_staging_manifest(
             "quarantined_hashes": len(leakage["quarantined"]),
             "protected_eval_hashes": len(leakage["protected_eval"]),
             "staged_intersection": 0,
+            "adjudicated_overlap_hashes": len(leakage["_adjudicated_overlap"]),
+            "adjudicated_overlap_staged": adjudicated_overlap_staged,
+            "rule": (
+                "heldout = admitted non-train memberships; quarantined = quarantined train memberships; "
+                "a quarantined non-train membership is the catalog's overlap resolution and is counted, not refused"
+            ),
         },
         "custody_receipts": receipt_bindings,
         "staged_count": len(rows),
