@@ -766,30 +766,58 @@ def test_issue2099_real_rows_reproduce_refused_metrics_under_aa_adjudication():
     assert decision["aa_result"] == "HARNESS_CURE_INSUFFICIENT"
 
 
-def test_one_arm_executes_warm_then_measure_from_the_warm_cursor(monkeypatch):
+def test_issue2131_treatment_mode_executes_the_windowed_procedure_from_one_cursor(
+    monkeypatch,
+):
+    """#2131: treatment mode runs the A/A schedule (excluded, burn-in, measured)."""
+    MODULE._AA_ARM_PROGRESS.clear()
     calls = []
-
-    def fake_update(**kwargs):
-        calls.append(copy.deepcopy(kwargs))
-        ordinal = len(calls)
-        return ({
-            "loss": float(ordinal),
-            "processed_tokens": 960,
-            "event_seconds": float(ordinal),
-            "tokens_per_second": 960.0 / ordinal,
-            "event_ids": [f"start-{ordinal}", f"end-{ordinal}"],
-        }, {"cursor": ordinal})
-
-    monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update)
-    measured, cursor = MODULE.run_warm_then_measure(
-        arm="control", pair=3, cursor={"cursor": 0}
+    synchronizations = []
+    rates = [5_500.0] + list(STABLE_WARM_RATES) + [99.0] * 16
+    monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update_from_rates(rates, calls))
+    monkeypatch.setattr(
+        MODULE,
+        "synchronize_device_before_window",
+        lambda: synchronizations.append(len(calls)) or True,
     )
-    assert [call["cursor"] for call in calls] == [{"cursor": 0}, {"cursor": 1}]
-    assert cursor == {"cursor": 2}
-    assert measured["warm_tokens_per_second"] == pytest.approx(960.0)
-    assert measured["tokens_per_second"] == pytest.approx(480.0)
-    assert measured["warm_event_ids"] == ["warm-start-1", "warm-end-1"]
-    assert measured["event_ids"] == ["measured-start-2", "measured-end-2"]
+    measured, cursor = MODULE.run_warm_then_measure(
+        arm="treatment", pair=3, cursor={"cursor": 0}
+    )
+    assert len(calls) == 1 + 8 + 16
+    assert [call["cursor"] for call in calls] == [{"cursor": index} for index in range(25)]
+    assert synchronizations == [1, 9]
+    assert cursor == {"cursor": 25}
+    assert set(MODULE._AA_MEASUREMENT_FIELDS - MODULE._MEASUREMENT_FIELDS) <= set(measured)
+    assert [item["tokens_per_second"] for item in measured["excluded_updates"]] == [5_500.0]
+    assert measured["warm_updates_to_stability"] == MODULE.AA_WARM_BURN_IN_UPDATES
+    assert len(measured["measured_updates"]) == MODULE.AA_MEASURED_WINDOW_UPDATES
+    assert measured["tokens_per_second"] == pytest.approx(99.0)
+    assert measured["executed_slot"] == 0
+    assert measured["pair_order"] == ["treatment", "control"]
+    assert measured["device_synchronized_before_window"] == {"warm": True, "measured": True}
+    MODULE._AA_ARM_PROGRESS.clear()
+
+
+def test_issue2131_aa_and_treatment_modes_execute_byte_identical_arm_schedules(
+    monkeypatch,
+):
+    """The same-bytes proof certifies the exact code the treatment run executes."""
+    rates = [5_500.0] + list(STABLE_WARM_RATES) + [99.0] * 16
+    outputs = []
+    for aa_mode in (True, False):
+        MODULE._AA_ARM_PROGRESS.clear()
+        calls = []
+        monkeypatch.setattr(
+            MODULE, "_BASE_RUN_ONE_UPDATE", fake_update_from_rates(rates, calls)
+        )
+        monkeypatch.setattr(MODULE, "synchronize_device_before_window", lambda: True)
+        measured, cursor = MODULE.run_warm_then_measure(
+            aa_mode=aa_mode, arm="control", pair=2, cursor={"cursor": 0}
+        )
+        outputs.append((MODULE.BASE.canonical(measured), cursor, len(calls)))
+        MODULE._AA_ARM_PROGRESS.clear()
+    assert outputs[0] == outputs[1]
+    assert outputs[0][2] == 25
 
 
 def test_burn_in_indices_remain_exactly_one_update(monkeypatch):
@@ -808,16 +836,19 @@ def test_burn_in_indices_remain_exactly_one_update(monkeypatch):
     assert cursor == {"cursor": 1}
 
 
-def test_old_position_multiplier_cancels_when_both_measurements_are_second(
+def test_issue2131_post_switch_multiplier_never_reaches_the_treatment_window(
     monkeypatch,
 ):
+    """The fast first post-switch update is executed, recorded, and excluded."""
+    MODULE._AA_ARM_PROGRESS.clear()
     calls = []
+    per_arm = 1 + MODULE.AA_WARM_BURN_IN_UPDATES + MODULE.AA_MEASURED_WINDOW_UPDATES
 
     def fake_update(**kwargs):
         calls.append((kwargs["pair"], kwargs["arm"]))
-        position = 1 if len(calls) % 2 else 2
+        position = (len(calls) - 1) % per_arm
         true_rate = 100.0 if kwargs["arm"] == "control" else 102.0
-        rate = true_rate * (4.0 if position == 2 else 1.0)
+        rate = true_rate * (4.0 if position == 0 else 1.0)
         return ({
             "loss": 2.0,
             "processed_tokens": 960,
@@ -830,6 +861,7 @@ def test_old_position_multiplier_cancels_when_both_measurements_are_second(
         }, {"cursor": len(calls)})
 
     monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update)
+    monkeypatch.setattr(MODULE, "synchronize_device_before_window", lambda: True)
     pairs = []
     for pair_index, order in enumerate(MODULE.BASE.PAIR_ORDERS):
         rows = []
@@ -840,17 +872,19 @@ def test_old_position_multiplier_cancels_when_both_measurements_are_second(
             measured.update({"arm": arm, "pair": pair_index})
             rows.append(measured)
         pairs.append(rows)
-    assert all(
-        row["tokens_per_second"] / row["warm_tokens_per_second"] == 4.0
-        for rows in pairs
-        for row in rows
-    )
+    for rows in pairs:
+        for row in rows:
+            true_rate = 100.0 if row["arm"] == "control" else 102.0
+            assert row["excluded_updates"][0]["tokens_per_second"] == 4.0 * true_rate
+            assert row["tokens_per_second"] == pytest.approx(true_rate)
+            assert row["warm_tokens_per_second"] == pytest.approx(true_rate)
     ratios, median_ratio = MODULE.paired_median_ratio(pairs)
     assert ratios == pytest.approx([1.02] * 8)
-    assert 0.98 <= median_ratio / 1.02 <= 1.02
+    assert median_ratio == pytest.approx(1.02)
+    MODULE._AA_ARM_PROGRESS.clear()
 
 
-def test_terminal_receipt_is_rebound_to_issue2099_and_rebased_heads():
+def test_terminal_receipt_is_rebound_to_issue2131_and_rebased_heads():
     receipt = {
         "schema_version": "old",
         "issue": 2071,
@@ -868,7 +902,12 @@ def test_terminal_receipt_is_rebound_to_issue2099_and_rebased_heads():
         treatment_source_model_sha256="f" * 64,
     )
     assert rebound["schema_version"] == MODULE.SCHEMA_VERSION
-    assert rebound["issue"] == 2099
+    assert rebound["schema_version"].startswith("ember-issue2131-treatment-")
+    assert rebound["issue"] == MODULE.TREATMENT_ISSUE == 2131
+    assert rebound["aa_mode"] is False
+    assert rebound["predecessor_schema_version"] == MODULE.PREDECESSOR_SCHEMA_VERSION
+    assert rebound["predecessor_schema_version"].startswith("ember-issue2099-")
+    assert rebound["aa_measured_window_updates"] == MODULE.AA_MEASURED_WINDOW_UPDATES
     assert rebound["control_source_head"] == "a" * 40
     assert rebound["treatment_source_head"] == "b" * 40
     assert rebound["control_source_model_sha256"] == "e" * 64
@@ -1014,29 +1053,83 @@ def test_configured_base_adjudication_calls_frozen_predecessor_once(tmp_path: Pa
     assert decision["median_paired_treatment_control_ratio"] == pytest.approx(1.02)
 
 
-def test_warmed_measurement_rows_are_offline_adjudicable(tmp_path: Path):
-    path = tmp_path / "measurements.jsonl"
+def _write_measurement_rows(path: Path, pairs) -> None:
     raw_rows = []
-    for rows in warmed_pairs():
+    for rows in pairs:
         for original in rows:
             measured = copy.deepcopy(original)
-            measured["warm_update"] = {
-                "loss": measured["warm_loss"] if "warm_loss" in measured else 2.0,
-                "processed_tokens": measured["warm_processed_tokens"],
-                "event_seconds": measured["warm_event_seconds"],
-                "tokens_per_second": measured["warm_tokens_per_second"],
-                "event_ids": measured["warm_event_ids"],
-            }
-            measured["warm_loss"] = 2.0
             measured["runner_source_sha256"] = "d" * 64
             measured["row_sha256"] = MODULE.BASE.sha256_bytes(
                 MODULE.BASE.canonical(measured)
             )
             raw_rows.append(MODULE.BASE.canonical(measured))
     path.write_bytes(b"\n".join(raw_rows) + b"\n")
+
+
+def test_issue2131_windowed_treatment_rows_are_offline_adjudicable(tmp_path: Path):
+    path = tmp_path / "measurements.jsonl"
+    _write_measurement_rows(
+        path,
+        cured_pairs(control_by_slot=(100.0, 100.0), treatment_by_slot=(104.0, 104.0)),
+    )
     loaded = MODULE.load_measurement_pairs(path)
     assert len(loaded) == 8
-    assert MODULE.adjudicate_pairs(loaded)["disposition"] == "PASS_POSITIVE"
+    decision = MODULE.adjudicate_pairs(loaded)
+    assert decision["disposition"] == "PASS_POSITIVE"
+    assert decision["median_paired_treatment_control_ratio"] == pytest.approx(1.04)
+    # The treatment receipt records the windowed attribution exactly as the A/A does.
+    assert decision["windowed_estimator_issue"] == 2131
+    assert decision["pair_order_alternated"] is True
+    assert decision["aa_measured_window_updates"] == MODULE.AA_MEASURED_WINDOW_UPDATES
+    for key in (
+        "warm_updates_to_stability_by_arm",
+        "warm_window_rates_by_arm",
+        "warm_window_median_rates_by_arm",
+        "fast_update_census_by_arm",
+        "device_synchronized_before_window_by_arm",
+        "aa_paired_update_statistics_by_pair",
+    ):
+        assert key in decision, key
+    assert decision["warm_updates_to_stability_by_arm"] == {
+        "control": [8] * 8,
+        "treatment": [8] * 8,
+    }
+    assert "aa_result" not in decision
+
+
+def test_issue2131_predecessor_schema_rows_refuse_in_treatment_mode(tmp_path: Path):
+    """Deliberate red: the #2128-shaped single-update rows no longer adjudicate."""
+    path = tmp_path / "measurements.jsonl"
+    _write_measurement_rows(path, warmed_pairs())
+    with pytest.raises(ValueError, match="MEASUREMENT_ROW_SCHEMA_REFUSED:0"):
+        MODULE.load_measurement_pairs(path)
+    with pytest.raises(ValueError, match="MEASUREMENT_ROW_SCHEMA_REFUSED:0"):
+        MODULE.load_measurement_pairs(path, aa_mode=True)
+
+
+def test_issue2131_configured_treatment_mode_binds_the_windowed_schema(tmp_path: Path):
+    names = ("__file__", "SCHEMA_VERSION", "TEXT_LAB_CORPUS_SHA256", "sha256_path",
+             "git", "validate_treatment_checkout", "run_one_update",
+             "load_measurement_pairs", "adjudicate_pairs", "write_receipt")
+    saved = {name: getattr(MODULE.BASE, name) for name in names}
+    saved_sys_path = list(MODULE.sys.path)
+    try:
+        MODULE.configure_base(
+            root=tmp_path,
+            control_rebased_head="a" * 40,
+            treatment_rebased_head="b" * 40,
+        )
+        assert MODULE.BASE.SCHEMA_VERSION == MODULE.SCHEMA_VERSION
+        assert MODULE.BASE.SCHEMA_VERSION != MODULE.PREDECESSOR_SCHEMA_VERSION
+        assert MODULE.BASE.SCHEMA_VERSION != MODULE.AA_SCHEMA_VERSION
+        assert (
+            MODULE.BASE.TEXT_LAB_CORPUS_SHA256
+            == MODULE.PREDECESSOR_TEXT_LAB_CORPUS_SHA256
+        )
+    finally:
+        for name, value in saved.items():
+            setattr(MODULE.BASE, name, value)
+        MODULE.sys.path[:] = saved_sys_path
 
 
 def test_offline_main_derives_repo_root_without_conflicting_cli_argument(
@@ -1095,7 +1188,7 @@ def test_successor_refusal_sidecar_and_terminal_are_mutually_exclusive(tmp_path:
     assert not output.exists()
     refusal = json.loads(output.with_name("terminal.refusal.json").read_text())
     assert refusal["result"] == "REFUSED"
-    assert refusal["issue"] == 2099
+    assert refusal["issue"] == MODULE.TREATMENT_ISSUE
     assert refusal["schema_version"] == MODULE.SCHEMA_VERSION
 
     completed = tmp_path / "completed.json"
