@@ -235,3 +235,116 @@ def test_image_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
         for item in validated["items"]
     )
 
+
+
+def _write_audio_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
+    custody = tmp_path / "objects"
+    custody.mkdir()
+    files = []
+    frozen_items = []
+    physical_paths = []
+    for index in range(64):
+        raw = f"flac-{index}".encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        relative = f"{digest}.flac"
+        physical = custody / relative
+        physical.write_bytes(raw)
+        physical_paths.append(physical)
+        files.append({"path": relative, "bytes": len(raw), "sha256": digest})
+        frozen_items.append({
+            "item_id": f"sha256:{digest}",
+            "gold_object_sha256": digest,
+            "byte_count": len(raw),
+            "media_type": "audio/flac",
+        })
+    connector = tmp_path / "connector.json"
+    connector.write_text(json.dumps({
+        "schema": "corpus-connector-receipt-v1",
+        "dest_root": str(custody),
+        "files": files,
+    }), encoding="utf-8")
+    contract = tmp_path / "contract.json"
+    _write_self_hashed(contract, {
+        "schema_version": "ember-issue1947-protected-audio-contract-v1",
+        "result": "PASS",
+        "task_class": "adapter_totality",
+        "task": {
+            "id": "EXACT_AUDIO_PAYLOAD_SHA256_IDENTITY",
+            "consumes": ["audio_payload_bytes"],
+            "forbidden_inputs": ["librispeech_transcript", "speaker_metadata", "chapter_metadata"],
+        },
+        "source": {"connector_receipt_raw_sha256": hashlib.sha256(connector.read_bytes()).hexdigest()},
+        "frozen_items": frozen_items,
+        "totality": {"expected": 64, "observed": 64, "complete": True},
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    })
+    return contract, connector, physical_paths
+
+
+def test_audio_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+    contract, connector, paths = _write_audio_fixture(tmp_path)
+    paths[0].write_bytes(b"corrupted")
+    result = tmp_path / "audio-row.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["result"] == "AUDIO_HELDOUT_ROW_PRODUCED"
+    assert row["row_id"] == "E-MATRIX-AUDIO"
+    assert row["task_class"] == "adapter_totality"
+    assert row["score"] == 63 / 64
+    assert sum(item["score"] == 0.0 for item in row["items"]) == 1
+    body = dict(row)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+
+
+def test_audio_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) -> None:
+    contract, connector, paths = _write_audio_fixture(tmp_path)
+    paths[0].unlink()
+    result = tmp_path / "audio-refusal.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 78
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"] == "AUDIO_HELDOUT_REFUSED"
+    assert refusal["reason"].startswith("AUDIO_PAYLOAD_MISSING_REFUSED:")
+    assert refusal["task_class"] == "adapter_totality"
+    body = dict(refusal)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+
+def test_audio_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: Path) -> None:
+    """Audio row mirror of the executor-schema test: the adapter must emit the
+    executor's `gold_item_sha256` key, not the contract's `gold_object_sha256`.
+    The executor's own validator is the consumer, so it adjudicates the produced row."""
+    import importlib.util
+
+    contract, connector, _paths = _write_audio_fixture(tmp_path)
+    result = tmp_path / "audio-row.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-audio", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location(
+        "issue1947_release_execute", SCRIPT.with_name("issue1947_release_execute.py")
+    )
+    executor = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(executor)
+    validated = executor.validate_row(row, "E-MATRIX-AUDIO")
+    assert len(validated["items"]) == 64
+    assert all(
+        set(item) == {"item_id", "gold_item_sha256", "prediction", "score"}
+        for item in validated["items"]
+    )
+
