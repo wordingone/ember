@@ -164,6 +164,37 @@ RUN_SPEC_KEYS = {
     "seed",
     "runner_receipt",
     "requested_scope",
+    "training_job_purpose",
+}
+# Job purpose (issue #2119): every project GPU job must declare which of the
+# three mutually-exclusive purposes it is, because retained-training credit
+# and the required bindings differ by purpose. This is a REQUIRED key (joins
+# RUN_SPEC_KEYS, not OPTIONAL_RUN_SPEC_KEYS) rather than an optional route
+# flag like resume/specialist/a1 -- unlike those, a bare governed-vertical
+# launch with none of the optional groups present still has a purpose, so
+# there is no "absent means legacy shape" reading available here. Required
+# bindings per purpose are enforced by _validate_training_job_purpose, called
+# from validate_certified_request after resume/specialist/a1 are resolved.
+TRAINING_JOB_PURPOSES = {
+    "CONTINUE_TRAINING",
+    "RETENTION_ELIGIBLE_EXPERIMENT",
+    "DIAGNOSTIC",
+}
+# Required companions for RETENTION_ELIGIBLE_EXPERIMENT (issue #2119): the
+# frozen common start reuses resume_checkpoint (RESUME_RUN_SPEC_KEYS), so only
+# the two fields with no existing equivalent are declared here.
+TRAINING_EXPERIMENT_RUN_SPEC_KEYS = {
+    "training_experiment_protocol",
+    "training_experiment_continuation_rule",
+}
+# Required companions for DIAGNOSTIC (issue #2119). job_memory_ceiling_probe
+# requests are always DIAGNOSTIC by construction (see
+# _validate_job_memory_ceiling_probe's training_job_purpose check below), so
+# this group is also folded into JOB_MEMORY_CEILING_PROBE_PERMITTED_RUN_SPEC_KEYS.
+TRAINING_DIAGNOSTIC_RUN_SPEC_KEYS = {
+    "training_diagnostic_question",
+    "training_diagnostic_non_advancement_reason",
+    "training_diagnostic_return_condition",
 }
 # Pin-freshness evidence (issue #1419) rides the RUN SPEC, not the certificate:
 # the certificate is a frozen sha-cited payload minted at verification time,
@@ -313,9 +344,16 @@ OPTIONAL_RUN_SPEC_KEYS = (
     | A1_RUN_SPEC_KEYS
     | A1_TIER2_RUN_SPEC_KEYS
     | JOB_MEMORY_CEILING_PROBE_RUN_SPEC_KEYS
+    | TRAINING_EXPERIMENT_RUN_SPEC_KEYS
+    | TRAINING_DIAGNOSTIC_RUN_SPEC_KEYS
 )
+# job_memory_ceiling_probe is always DIAGNOSTIC (issue #2119): its permitted/
+# required run-spec key set therefore also carries the diagnostic companions,
+# not just the base RUN_SPEC_KEYS (which now includes training_job_purpose).
 JOB_MEMORY_CEILING_PROBE_PERMITTED_RUN_SPEC_KEYS = (
-    RUN_SPEC_KEYS | JOB_MEMORY_CEILING_PROBE_RUN_SPEC_KEYS
+    RUN_SPEC_KEYS
+    | JOB_MEMORY_CEILING_PROBE_RUN_SPEC_KEYS
+    | TRAINING_DIAGNOSTIC_RUN_SPEC_KEYS
 )
 CHECKPOINT_MANIFEST_NAME = "checkpoint-manifest.json"
 CONFIG_RELATIVE_PATH = "configs/ember-restart-3b.json"
@@ -561,6 +599,12 @@ class ValidatedLaunch(NamedTuple):
     a1_liveness_receipt_sha256: str | None = None
     job_memory_ceiling_probe_maximum_bytes: int | None = None
     job_memory_ceiling_probe_signed_delta_bytes: int | None = None
+    # Issue #2119. Always populated by validate_certified_request (the field
+    # is required, not optional) -- the trailing default and None type exist
+    # only so older production-shaped tests that construct this tuple
+    # directly do not silently acquire a synthetic classification, matching
+    # every other trailing-defaulted field's stated reason above.
+    training_job_purpose: str | None = None
 
 
 class A1Tier(str, Enum):
@@ -2683,6 +2727,15 @@ def _validate_job_memory_ceiling_probe(
         raise ValueError(
             "job-memory ceiling probe certificate authority has no matching request"
         )
+    # Issue #2119: a job-memory ceiling probe is always DIAGNOSTIC by
+    # construction (it is a bounded instrumentation measurement, never
+    # training) -- mutual exclusivity with any other purpose is enforced
+    # here, mirroring the numeric-pair exclusivity check below.
+    if run_spec.get("training_job_purpose") != "DIAGNOSTIC":
+        raise ValueError(
+            "job-memory ceiling probe request requires training_job_purpose "
+            "DIAGNOSTIC"
+        )
     authorized = _require_object(
         authorized_raw, "allowed job-memory ceiling probe"
     )
@@ -2762,6 +2815,74 @@ def _validate_job_memory_ceiling_probe(
     if requested_scope["mode"] != "governed-vertical":
         raise ValueError("job-memory ceiling probe request mode mismatch")
     return maximum, signed_delta
+
+
+def _validate_training_job_purpose(
+    run_spec: dict[str, Any],
+    *,
+    has_resume: bool,
+    has_data_segment: bool,
+) -> str:
+    """Issue #2119: enforce the required-binding table for whichever purpose
+    this run spec declares. Called once every other route's presence/absence
+    has already been resolved (resume/specialist/a1), since CONTINUE_TRAINING
+    and RETENTION_ELIGIBLE_EXPERIMENT both bind to those routes' own state
+    rather than duplicating a second admission check for them here.
+
+    A job-memory ceiling probe's mutual exclusivity with every other purpose
+    is enforced earlier, in _validate_job_memory_ceiling_probe -- that
+    function runs before this one and already raises for a probe request
+    whose training_job_purpose is not DIAGNOSTIC, so this function does not
+    re-check that route.
+    """
+
+    purpose = run_spec.get("training_job_purpose")
+    if not isinstance(purpose, str) or purpose not in TRAINING_JOB_PURPOSES:
+        raise ValueError(
+            "run spec training_job_purpose must be one of "
+            f"{sorted(TRAINING_JOB_PURPOSES)}"
+        )
+    if purpose == "CONTINUE_TRAINING":
+        if not has_resume:
+            raise ValueError(
+                "training_job_purpose CONTINUE_TRAINING requires a verified "
+                "parent state (resume_checkpoint)"
+            )
+        if not has_data_segment:
+            raise ValueError(
+                "training_job_purpose CONTINUE_TRAINING requires an admitted "
+                "next data segment (training_data_manifest or an a1 shard "
+                "authority)"
+            )
+    elif purpose == "RETENTION_ELIGIBLE_EXPERIMENT":
+        if not has_resume:
+            raise ValueError(
+                "training_job_purpose RETENTION_ELIGIBLE_EXPERIMENT requires "
+                "a frozen common start (resume_checkpoint)"
+            )
+        protocol = run_spec.get("training_experiment_protocol")
+        if not isinstance(protocol, str) or not protocol:
+            raise ValueError(
+                "training_job_purpose RETENTION_ELIGIBLE_EXPERIMENT requires "
+                "a non-empty training_experiment_protocol"
+            )
+        continuation_rule = run_spec.get(
+            "training_experiment_continuation_rule"
+        )
+        if not isinstance(continuation_rule, str) or not continuation_rule:
+            raise ValueError(
+                "training_job_purpose RETENTION_ELIGIBLE_EXPERIMENT requires "
+                "a non-empty training_experiment_continuation_rule"
+            )
+    else:
+        assert purpose == "DIAGNOSTIC"
+        for key in sorted(TRAINING_DIAGNOSTIC_RUN_SPEC_KEYS):
+            value = run_spec.get(key)
+            if not isinstance(value, str) or not value:
+                raise ValueError(
+                    f"training_job_purpose DIAGNOSTIC requires a non-empty {key}"
+                )
+    return purpose
 
 
 _RUN_SCOPED_CUSTODY_SCHEMA = "ember-launch-authority-external-custody-v1"
@@ -3307,6 +3428,16 @@ def validate_certified_request(
         _authorized_a1_families(authorized_scope),
     )
 
+    # Issue #2119: purpose classification runs last among the route
+    # validators, once resume/specialist/a1 are all resolved, since
+    # CONTINUE_TRAINING and RETENTION_ELIGIBLE_EXPERIMENT bind directly to
+    # their outcomes (a verified parent state, an admitted data segment).
+    training_job_purpose = _validate_training_job_purpose(
+        run_spec,
+        has_resume=resume is not None,
+        has_data_segment=specialist is not None or a1 is not None,
+    )
+
     custody_root = pathlib.Path(requested_scope["custody_root"])
     runner_receipt = pathlib.Path(run_spec["runner_receipt"])
     try:
@@ -3520,6 +3651,7 @@ def validate_certified_request(
         job_memory_ceiling_probe_signed_delta_bytes=(
             None if job_memory_ceiling_probe is None else job_memory_ceiling_probe[1]
         ),
+        training_job_purpose=training_job_purpose,
         authority_paths=tuple(authority_paths),
     )
 
