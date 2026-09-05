@@ -244,12 +244,15 @@ def build_census(
 
     if sha(license_raw) != LICENSE_SHA256:
         raise ValueError("LICENSE_SHA256_DRIFT_REFUSED")
-    _verified_audio_census(audio_census_raw)
+    audio_census = _verified_audio_census(audio_census_raw)
     ids = [item["item_id"] for item in items]
     if ids != sorted(ids) or len(ids) != EXPECTED_ITEM_COUNT or len(set(ids)) != len(ids):
         raise ValueError(f"ITEM_COUNT_REFUSED:{len(ids)}")
     audio_hashes = {item["audio_sha256"] for item in items}
-    if sha(canonical(sorted(audio_hashes))) != AUDIO_SELECTED_SET_SHA256:
+    # `selected_set_sha256` is the #2120 census's own identity (sha256 over its canonical `selected`
+    # entries, verified against the frozen constant above); the item set is bound by set equality with
+    # those entries, never by re-deriving the hash under a formula of this module's own.
+    if audio_hashes != {str(entry["exact_sha256"]) for entry in audio_census["selected"]}:
         raise ValueError("AUDIO_SELECTED_SET_SHA256_DRIFT_REFUSED")
     if admitted_heldout_audio_hashes != audio_hashes:
         raise ValueError(

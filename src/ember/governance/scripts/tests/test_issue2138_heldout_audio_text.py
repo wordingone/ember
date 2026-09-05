@@ -82,7 +82,8 @@ def _audio_census_raw() -> bytes:
         "result": "PASS",
         "selected": selected,
         "selected_count": len(selected),
-        "selected_set_sha256": sha(canonical(sorted(row["exact_sha256"] for row in selected))),
+        # the #2120 census identity: sha256 over the canonical selected entries (issue1947_heldout_audio)
+        "selected_set_sha256": sha(canonical(selected)),
     }
     census["self_sha256"] = sha(canonical(census))
     return json.dumps(census, sort_keys=True, indent=2).encode() + b"\n"
@@ -317,4 +318,17 @@ def test_catalog_binding_requires_both_dataset_memberships(inputs) -> None:
             census, text_connector_raw=text_raw, predecessor_connector_raw=inputs["predecessor_raw"],
             predecessor_contract_raw=_predecessor_contract_raw(), catalog_export_raw=export,
             dataset_ids=[text_ds],
+        )
+
+
+def test_item_set_that_is_not_the_census_selected_set_refuses(inputs) -> None:
+    items, read = MODULE.read_transcripts(inputs["tar"], inputs["audio_census_raw"])
+    payloads = MODULE.read_predecessor_audio_payloads(inputs["predecessor_raw"], items)
+    items[0]["audio_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="AUDIO_SELECTED_SET_SHA256_DRIFT_REFUSED"):
+        MODULE.build_census(
+            items=items, trans_files_read=read, license_raw=LICENSE_RAW,
+            audio_census_raw=inputs["audio_census_raw"], predecessor_connector_raw=inputs["predecessor_raw"],
+            audio_payloads=payloads, admitted_train_object_hashes=set(),
+            admitted_heldout_audio_hashes=inputs["audio_hashes"],
         )
