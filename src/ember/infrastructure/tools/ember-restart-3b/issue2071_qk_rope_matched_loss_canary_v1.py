@@ -974,7 +974,8 @@ def bind_interpreter_for_mode(
 
 def run_one_update(*, arm: str, pair: int, model: Any, optimizer: Any, stream: Any, config: Any,
                    pretrain: Any, model_module: Any, methods: Mapping[str, object], cursor: Mapping[str, object],
-                   census: Sequence[tuple[str, int]], backend_identity: Sequence[str], sequence_length: int) -> tuple[dict[str, object], dict[str, object]]:
+                   census: Sequence[tuple[str, int]], backend_identity: Sequence[str], sequence_length: int,
+                   micro_batch: int = 1) -> tuple[dict[str, object], dict[str, object]]:
     torch = importlib.import_module("torch")
     model_module.SharedAttention.forward = methods[arm]
     resume = classify_cursor(cursor, stream.receipt_sha256, stream.tokenizer_sha256)
@@ -985,7 +986,7 @@ def run_one_update(*, arm: str, pair: int, model: Any, optimizer: Any, stream: A
     start_event.record()
     segment = pretrain.run_manifest_bound_semantic_segment(
         model=model, optimizer=optimizer, stream=stream, config=config,
-        device=torch.device("cuda"), sequence_length=sequence_length, steps=1,
+        device=torch.device("cuda"), sequence_length=sequence_length, steps=1, micro_batch=micro_batch,
         checkpoint_every=2, checkpoint_callback=lambda _step, _state: None,
         initial_data_cursor=resume["initial_data_cursor"],
         initial_global_step=initial_step, initial_tokens_seen=initial_tokens,
@@ -1051,9 +1052,12 @@ def main() -> int:
     parser.add_argument("--torch-version", required=True)
     parser.add_argument("--seed", type=int, default=2071)
     parser.add_argument("--sequence-length", type=int, default=512)
+    parser.add_argument("--micro-batch", type=int, default=1)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
+    if args.micro_batch < 1 or args.sequence_length < 1:
+        raise ValueError("UPDATE_SHAPE_REFUSED")
     root = args.repo_root.resolve(strict=True)
     output = args.output.resolve()
     runner_source_sha256 = sha256_path(Path(__file__).resolve(strict=True))
@@ -1291,7 +1295,8 @@ def main() -> int:
         for burn_index in range(BURN_IN_UPDATES_PER_ARM):
             burn, cursor = run_one_update(arm=arm, pair=-1 - burn_index, model=model, optimizer=optimizer,
                 stream=stream, config=config, pretrain=pretrain, model_module=model_module, methods=methods,
-                cursor=cursor, census=census, backend_identity=backend_identity, sequence_length=args.sequence_length)
+                cursor=cursor, census=census, backend_identity=backend_identity, sequence_length=args.sequence_length,
+                micro_batch=args.micro_batch)
             burn_in.append({"arm": arm, "loss": burn["loss"], "processed_tokens": burn["processed_tokens"]})
         emit_progress(output, "BURN_IN_ARM_COMPLETE", arm=arm)
     cursor = restore_runtime(model, optimizer, initial)
@@ -1305,7 +1310,8 @@ def main() -> int:
                 cursor = restore_runtime(model, optimizer, common)
             row, post_cursor = run_one_update(arm=arm, pair=pair_index, model=model, optimizer=optimizer,
                 stream=stream, config=config, pretrain=pretrain, model_module=model_module, methods=methods,
-                cursor=cursor, census=census, backend_identity=backend_identity, sequence_length=args.sequence_length)
+                cursor=cursor, census=census, backend_identity=backend_identity, sequence_length=args.sequence_length,
+                micro_batch=args.micro_batch)
             row["start_identity"] = start_identity
             append_measurement_row(
                 output, row, runner_source_sha256=runner_source_sha256,
@@ -1330,6 +1336,8 @@ def main() -> int:
             "receipt_sha256": stream.receipt_sha256,
             "tokenizer_sha256": stream.tokenizer_sha256,
             "sequence_length": args.sequence_length,
+            "micro_batch": args.micro_batch,
+            "tokens_per_update": args.sequence_length * args.micro_batch,
         },
         "scope_precedent": {
             "run_spec_raw_sha256": args.scope_run_spec_raw_sha256,
