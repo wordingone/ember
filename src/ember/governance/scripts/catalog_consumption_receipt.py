@@ -27,7 +27,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from catalog_train_stream import (  # noqa: E402
     StreamError,
     canonical,
+    extended_spans,
     leakage_sets,
+    read_shard_ledger,
+    verify_ledger_genesis,
+    verify_ledger_shards,
     self_hashed,
     sha,
     sha_file,
@@ -130,6 +134,9 @@ def build_receipt(
     catalog_export_raw_sha256: str,
     run_id: str,
     merged_head: str,
+    shard_ledger: list[dict[str, Any]] | None = None,
+    shard_ledger_raw_sha256: str | None = None,
+    shards_root: Path | None = None,
 ) -> dict[str, Any]:
     if runner_receipt.get("schema_version") != 7:
         raise ConsumptionError("RUNNER_RECEIPT_SCHEMA_REFUSED")
@@ -183,25 +190,47 @@ def build_receipt(
     if tokens_seen != expected_tokens:
         raise ConsumptionError(f"CONSUMED_COUNT_MISMATCH_REFUSED:{tokens_seen}!={expected_tokens}")
 
-    prefix = shard_prefix_tokens(stream_receipt)
+    receipt_shards = [dict(shard) for shard in stream_receipt["shards"]]
+    receipt_total = _int(stream_receipt.get("total_stream_tokens"), "STREAM_RECEIPT_TOTAL_REFUSED")
+    spans = spans_document.get("spans")
+    if not isinstance(spans, list) or not spans:
+        raise ConsumptionError("SPANS_EMPTY_REFUSED")
+    if spans[-1].get("token_end") != receipt_total:
+        raise ConsumptionError("SPANS_TOTAL_MISMATCH_REFUSED")
+    shards = receipt_shards
+    ledger_block: dict[str, Any] | None = None
+    if shard_ledger is not None:
+        # The receipt is immutable; production past it lives in the ledger, whose first K rows must
+        # restate the receipt's shards and whose later rows carry verified bytes and their spans.
+        try:
+            verify_ledger_genesis(shard_ledger, stream_receipt)
+            if shards_root is None:
+                raise ConsumptionError("SHARD_LEDGER_ROOT_REFUSED")
+            verify_ledger_shards(shards_root, shard_ledger, start=len(receipt_shards))
+        except StreamError as error:
+            raise ConsumptionError(str(error)) from error
+        shards = receipt_shards + [
+            {"name": row["name"], "sha256": row["sha256"], "n_tokens": row["n_tokens"]} for row in shard_ledger[len(receipt_shards):]
+        ]
+        spans = extended_spans(spans, shard_ledger, len(receipt_shards))
+        ledger_block = {"raw_sha256": shard_ledger_raw_sha256, "rows": len(shard_ledger), "rows_beyond_receipt": len(shard_ledger) - len(receipt_shards)}
+    prefix = shard_prefix_tokens({"shards": shards})
     shard_index = _int(cursor.get("shard_index"), "CURSOR_SHARD_INDEX_REFUSED")
     token_offset = _int(cursor.get("token_offset"), "CURSOR_TOKEN_OFFSET_REFUSED")
-    if shard_index >= len(stream_receipt["shards"]) or token_offset > prefix[shard_index + 1] - prefix[shard_index]:
+    if shard_index >= len(shards) or token_offset > prefix[shard_index + 1] - prefix[shard_index]:
         raise ConsumptionError("CURSOR_OUT_OF_RANGE_REFUSED")
     cursor_position = prefix[shard_index] + token_offset
     if cursor_position != tokens_seen:
         raise ConsumptionError(f"CURSOR_POSITION_MISMATCH_REFUSED:{cursor_position}!={tokens_seen}")
-    total_stream_tokens = _int(stream_receipt.get("total_stream_tokens"), "STREAM_RECEIPT_TOTAL_REFUSED")
+    total_stream_tokens = prefix[-1]
     window_end = min(tokens_seen + LOOKAHEAD_TOKENS, total_stream_tokens)
     if tokens_seen > total_stream_tokens:
         raise ConsumptionError("CONSUMED_BEYOND_STREAM_REFUSED")
-
-    spans = spans_document.get("spans")
-    if not isinstance(spans, list) or not spans:
-        raise ConsumptionError("SPANS_EMPTY_REFUSED")
     consumed = consumed_spans(spans, window_end)
     if spans[-1].get("token_end") != total_stream_tokens:
         raise ConsumptionError("SPANS_TOTAL_MISMATCH_REFUSED")
+    if ledger_block is not None:
+        ledger_block["rows_consumed"] = min(shard_index + 1, len(shards))
 
     leakage = leakage_sets(catalog_export)
     objects = {
@@ -249,7 +278,10 @@ def build_receipt(
                 "staging_manifest_raw_sha256": binding.get("staging_manifest_raw_sha256"),
                 "tokenizer_sha256": tokenizer_sha256,
                 "total_stream_tokens": total_stream_tokens,
-                "shards": [dict(shard) for shard in stream_receipt["shards"]],
+                "receipt_total_stream_tokens": receipt_total,
+                "receipt_shard_count": len(receipt_shards),
+                "shards": shards,
+                "shard_ledger": ledger_block,
             },
             "catalog": {
                 "export_raw_sha256": catalog_export_raw_sha256,
@@ -375,6 +407,14 @@ def _emit(args: argparse.Namespace) -> int:
     stream_raw = args.stream_receipt.read_bytes()
     spans_raw = args.spans.read_bytes()
     export_raw_sha = sha_file(args.catalog_export)
+    ledger_rows = None
+    ledger_raw_sha = None
+    if args.shard_ledger is not None:
+        try:
+            ledger_rows = read_shard_ledger(args.shard_ledger)
+        except StreamError as error:
+            raise ConsumptionError(str(error)) from error
+        ledger_raw_sha = sha_file(args.shard_ledger)
     receipt = build_receipt(
         runner_result=runner_result,
         runner_receipt=_load_json(args.runner_receipt, "RUNNER_RECEIPT_UNREADABLE_REFUSED"),
@@ -389,6 +429,9 @@ def _emit(args: argparse.Namespace) -> int:
         catalog_export_raw_sha256=export_raw_sha,
         run_id=args.run_id,
         merged_head=args.merged_head,
+        shard_ledger=ledger_rows,
+        shard_ledger_raw_sha256=ledger_raw_sha,
+        shards_root=(args.shards_root or args.stream_receipt.resolve().parent) if ledger_rows is not None else None,
     )
     raw = canonical(receipt) + b"\n"
     write_new(args.output, raw)
@@ -428,6 +471,8 @@ def main(argv: list[str] | None = None) -> int:
     emit.add_argument("--catalog-export", type=Path, required=True)
     emit.add_argument("--run-id", required=True)
     emit.add_argument("--merged-head", required=True)
+    emit.add_argument("--shard-ledger", type=Path, default=None, help="append-only shard ledger beside the stream receipt (#2135)")
+    emit.add_argument("--shards-root", type=Path, default=None, help="directory holding the shard files (default: the stream receipt's directory)")
     emit.add_argument("--output", type=Path, required=True)
     emit.set_defaults(func=_emit)
     fragment = sub.add_parser("fragment", help="write the data-catalog-import fragment binding consumer attempts")

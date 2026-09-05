@@ -183,3 +183,63 @@ def test_fragment_binds_one_attempt_per_dataset(world: dict, capsys) -> None:
     # an evaluation id absent from the export refuses
     rc = ccr.main(["fragment", "--receipt", str(world["tmp"] / "r6.json"), "--catalog-export", str(world["export_path"]), "--evaluation-id", "evaluation:missing", "--checkpoint-manifest", str(ckpt), "--architecture-config", str(cfg), "--output", str(world["tmp"] / "f2.json")])
     assert rc == 78 and "EVALUATION_ID_ABSENT_REFUSED" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- shard ledger (#2135)
+def _ledger_for(world: dict, extra_tokens: int) -> tuple[Path, dict]:
+    """Genesis rows restating the receipt's two shards, plus one produced shard with real bytes."""
+
+    receipt = json.loads(world["receipt_path"].read_bytes())
+    spans = world["spans_doc"]["spans"]
+    rows = []
+    prev = cts.LEDGER_GENESIS_PREV
+    running = 0
+    for index, shard in enumerate(receipt["shards"]):
+        end = running + shard["n_tokens"]
+        clipped = cts._clip_spans(spans, running, end)
+        row = cts.build_ledger_row(index=index, name=shard["name"], sha256=shard["sha256"], n_tokens=shard["n_tokens"], token_start=running,
+                                   spans=clipped, resume={"object_index": 0, "carry_tokens": 0}, exhausted=False, prev_row_sha256=prev)
+        rows.append(row); prev = row["row_sha256"]; running = end
+    chunk = bytes(range(extra_tokens * 2 % 256)) if False else b"\x01\x00" * extra_tokens
+    name = f"v1-00002-{cts.sha(chunk)[:12]}.bin"
+    (world["tmp"] / name).write_bytes(chunk)
+    row = cts.build_ledger_row(index=2, name=name, sha256=cts.sha(chunk), n_tokens=extra_tokens, token_start=running,
+                               spans=[{"sha256": world["objects"][0], "token_start": running, "token_end": running + extra_tokens}],
+                               resume={"object_index": 6, "carry_tokens": 0}, exhausted=True, prev_row_sha256=prev)
+    rows.append(row)
+    ledger = world["tmp"] / "shard-ledger-s32.jsonl"
+    ledger.write_bytes(b"".join(json.dumps(r, sort_keys=True, separators=(",", ":")).encode() + b"\n" for r in rows))
+    return ledger, rows[-1]
+
+
+def test_cursor_beyond_the_receipt_needs_the_ledger_and_binds_it(world: dict, capsys) -> None:
+    ledger, produced = _ledger_for(world, extra_tokens=16)
+    # 2 receipt shards of 32 + one ledger shard of 16 = 80 tokens; a run of 9 steps x 8 = 72 lands in shard 2.
+    beyond = json.loads(json.dumps(world["result"]))
+    beyond["segment"]["global_step"] = 9
+    beyond["segment"]["tokens_seen"] = 72
+    beyond["segment"]["data_cursor"].update({"global_step": 9, "tokens_seen": 72, "shard_index": 2, "token_offset": 8, "record_index": 9})
+    result_path = world["tmp"] / "beyond.json"
+    result_path.write_text(json.dumps(beyond), encoding="utf-8")
+    world["run_spec_path"].write_text(json.dumps({"semantic_canary_sequence_length": SEQ, "requested_scope": {"optimizer_steps": 9}}), encoding="utf-8")
+    rc, _ = _emit(world, out="no-ledger.json", result_path=result_path)
+    assert rc == 78 and "CURSOR_OUT_OF_RANGE_REFUSED" in capsys.readouterr().out
+    output = world["tmp"] / "with-ledger.json"
+    argv = [
+        "emit", "--runner-result", str(result_path), "--runner-receipt", str(world["runner_receipt_path"]), "--run-spec", str(world["run_spec_path"]),
+        "--stream-receipt", str(world["receipt_path"]), "--expected-stream-receipt-sha256", world["receipt_sha"], "--spans", str(world["spans_path"]),
+        "--catalog-export", str(world["export_path"]), "--run-id", "run-ledger", "--merged-head", HEAD, "--shard-ledger", str(ledger), "--shards-root", str(world["tmp"]),
+        "--output", str(output),
+    ]
+    assert ccr.main(argv) == 0, capsys.readouterr().out
+    receipt = json.loads(output.read_bytes())
+    assert receipt["stream"]["total_stream_tokens"] == 80 and receipt["stream"]["receipt_total_stream_tokens"] == 64
+    assert receipt["stream"]["receipt_shard_count"] == 2 and len(receipt["stream"]["shards"]) == 3
+    assert receipt["stream"]["shard_ledger"] == {"raw_sha256": cts.sha_file(ledger), "rows": 3, "rows_beyond_receipt": 1, "rows_consumed": 3}
+    assert receipt["consumption"]["consumed_token_count"] == 72 and receipt["consumption"]["final_cursor"] == {"shard_index": 2, "token_offset": 8, "position": 72}
+    last = receipt["consumption"]["consumed_object_spans"][-1]
+    assert last["sha256"] == world["objects"][0] and last["token_start"] == 64 and last["token_end"] == 73 and last["partial"]
+    # Drifted ledger shard bytes refuse; a ledger whose genesis disagrees with the receipt refuses.
+    (world["tmp"] / produced["name"]).write_bytes(b"\x02\x00" * 16)
+    out2 = world["tmp"] / "drift.json"
+    assert ccr.main(argv[:-1] + [str(out2)]) == 78 and "SHARD_LEDGER_BYTES_REFUSED" in capsys.readouterr().out
