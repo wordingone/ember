@@ -18,8 +18,8 @@
     },
     {
       "path": "src/ember/governance/scripts/ember_restart/r1_launch_packet.py",
-      "sha256": "6dcee632a40cad8f83ad771a1050630899548efe2b975fb091bf894e3fff4a18",
-      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
+      "sha256": "8b7302b8bf9c32f840e24f27b0947b9e2c3ff8e5851f30cca0d6d16370bd1f86",
+      "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition. Repinned for issue #2119: _build_run_spec's WARM-100 packet now declares the required training_job_purpose (DIAGNOSTIC, since WARM-100 is a PREP_ONLY semantic-canary probe with no resume authority and does not advance the retained trained lineage)."
     },
     {
       "path": "src/ember/governance/scripts/ember_surface2_capture.py",

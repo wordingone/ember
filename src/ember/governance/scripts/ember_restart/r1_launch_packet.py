@@ -188,6 +188,34 @@ def _build_run_spec(
         "semantic_canary_checkpoint_interval": checkpoint_interval,
         "semantic_canary_telemetry_path": str(telemetry_path),
         "admitted_row_set_sha256": admitted_row_set_sha256,
+        # Issue #2119: every certified run declares training_job_purpose.
+        # WARM-100 is a semantic-canary probe of the governed real path at
+        # 100 optimizer steps -- it deliberately excludes resume_ authority
+        # (see the check immediately below build_ready_for_compute_packet's
+        # call site) and its own R1 entry shape is fixed to PREP_ONLY, so it
+        # neither continues nor advances the retained trained lineage.
+        # CONTINUE_TRAINING and RETENTION_ELIGIBLE_EXPERIMENT both require a
+        # verified parent state (resume_checkpoint) under
+        # _validate_training_job_purpose; DIAGNOSTIC is the only
+        # schema-legal and semantically correct classification for a
+        # PREP_ONLY canary that answers "does the governed path hold at
+        # WARM-100 scale" without advancing anything.
+        "training_job_purpose": "DIAGNOSTIC",
+        "training_diagnostic_question": (
+            "does the governed real training path execute correctly for "
+            "100 optimizer steps under the WARM-100 semantic canary scope"
+        ),
+        "training_diagnostic_non_advancement_reason": (
+            "WARM-100 is fixed PREP_ONLY (see _validate_entry_shape) and "
+            "carries no resume authority, so it cannot continue or advance "
+            "the retained trained lineage"
+        ),
+        "training_diagnostic_return_condition": (
+            "the semantic canary receipt and telemetry are inspected after "
+            "the run; a subsequent CONTINUE_TRAINING or "
+            "RETENTION_ELIGIBLE_EXPERIMENT run is a separate, later launch "
+            "packet"
+        ),
     }
 
 
