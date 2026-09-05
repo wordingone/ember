@@ -713,3 +713,184 @@ def test_audio_text_adapter_row_satisfies_the_release_executor_item_schema(tmp_p
     spec.loader.exec_module(executor)
     validated = executor.validate_row(row, "E-MATRIX-AUDIO-TEXT")
     assert validated is row
+
+
+def _write_image_audio_text_fixture(tmp_path: Path) -> tuple[Path, list[Path], dict[str, Path]]:
+    """64 items: one admitted image object (image connector), one audio object (audio connector) and
+    one canonical transcript object (transcript connector) each, bound as the #2145 contract binds them."""
+
+    image_root = tmp_path / "images"
+    audio_root = tmp_path / "audio"
+    text_root = tmp_path / "transcripts"
+    for root in (image_root, audio_root, text_root):
+        root.mkdir()
+    image_files, audio_files, text_files, frozen_items = [], [], [], []
+    physical: dict[str, Path] = {}
+    for index in range(AUDIO_TEXT_ITEMS):
+        item_id = f"1995-1837-{index:04d}"
+        image_raw = f"png-{index}".encode()
+        audio_raw = f"flac-{index}".encode()
+        text_raw = _audio_text_canonical(item_id, f"LINE {index} OF THE FIXTURE")
+        digests = [hashlib.sha256(raw).hexdigest() for raw in (image_raw, audio_raw, text_raw)]
+        paths = [image_root / f"{digests[0]}.png", audio_root / f"{digests[1]}.flac", text_root / f"{digests[2]}.json"]
+        for raw, digest, path, files in zip(
+            (image_raw, audio_raw, text_raw), digests, paths, (image_files, audio_files, text_files)
+        ):
+            path.write_bytes(raw)
+            physical[digest] = path
+            files.append({"path": path.name, "bytes": len(raw), "sha256": digest})
+        frozen_items.append({
+            "item_id": item_id,
+            "image_text_item_id": f"validation_Art_{index}",
+            "gold_item_sha256": hashlib.sha256(image_raw + audio_raw + text_raw).hexdigest(),
+            "image_object": {"sha256": digests[0], "byte_count": len(image_raw), "media_type": "image/png"},
+            "audio_object": {"sha256": digests[1], "byte_count": len(audio_raw), "media_type": "audio/flac"},
+            "item_text_object": {"sha256": digests[2], "byte_count": len(text_raw), "media_type": "application/json"},
+        })
+    receipts = []
+    for name, root, files, source_id in (
+        ("connector-images.json", image_root, image_files, "mmmu-validation-heldout-images"),
+        ("connector-audio.json", audio_root, audio_files, "librispeech-test-clean-heldout-audio-64"),
+        ("connector-transcripts.json", text_root, text_files, "librispeech-test-clean-heldout-audio-text-transcripts"),
+    ):
+        receipt = tmp_path / name
+        receipt.write_text(json.dumps({
+            "schema": "corpus-connector-receipt-v1",
+            "source_id": source_id,
+            "dest_root": str(root),
+            "files": files,
+        }), encoding="utf-8")
+        receipts.append(receipt)
+    contract = tmp_path / "image-audio-text-contract.json"
+    _write_self_hashed(contract, {
+        "schema_version": "ember-issue1947-protected-image-audio-text-contract-v1",
+        "result": "PASS",
+        "task_class": "adapter_totality",
+        "task": {
+            "id": "EXACT_IMAGE_AUDIO_TEXT_TRIPLE_IDENTITY",
+            "consumes": ["image_payload_bytes", "audio_payload_bytes", "transcript_text_payload_bytes"],
+            "forbidden_inputs": ["speaker_metadata", "chapter_metadata", "mmmu_answer_dictionary", "prediction_custody"],
+        },
+        "source": {
+            "connector_receipt_raw_sha256s": sorted(
+                hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+            ),
+        },
+        "frozen_items": frozen_items,
+        "totality": {"expected": AUDIO_TEXT_ITEMS, "observed": AUDIO_TEXT_ITEMS, "complete": True},
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    })
+    return contract, receipts, physical
+
+
+def _run_image_audio_text(contract: Path, receipts: list[Path], result: Path) -> subprocess.CompletedProcess:
+    command = [sys.executable, str(SCRIPT), "adapt-image-audio-text", "--contract", str(contract)]
+    for receipt in receipts:
+        command += ["--source-receipt", str(receipt)]
+    command += ["--result", str(result)]
+    return subprocess.run(command, capture_output=True, text=True, check=False)
+
+
+def test_image_audio_text_adapter_produces_the_triple_identity_row(tmp_path: Path) -> None:
+    contract, receipts, _physical = _write_image_audio_text_fixture(tmp_path)
+    result = tmp_path / "row.json"
+    completed = _run_image_audio_text(contract, receipts, result)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["result"] == "IMAGE_AUDIO_TEXT_HELDOUT_ROW_PRODUCED"
+    assert row["row_id"] == "E-MATRIX-IMAGE-AUDIO-TEXT"
+    assert row["task"] == "EXACT_IMAGE_AUDIO_TEXT_TRIPLE_IDENTITY"
+    assert row["score"] == 1.0 and len(row["items"]) == AUDIO_TEXT_ITEMS
+    assert row["connector_receipt_raw_sha256s"] == sorted(
+        hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+    )
+    body = dict(row)
+    assert body.pop("self_sha256") == hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def test_image_audio_text_adapter_planted_image_corruption_scores_below_one(tmp_path: Path) -> None:
+    contract, receipts, physical = _write_image_audio_text_fixture(tmp_path)
+    contract_body = json.loads(contract.read_text(encoding="utf-8"))
+    victim = contract_body["frozen_items"][9]
+    # Same byte count, different bytes: the receipt row still matches, the triple identity does not.
+    image_path = physical[victim["image_object"]["sha256"]]
+    corrupted = b"png-X"
+    assert len(corrupted) == victim["image_object"]["byte_count"]
+    image_path.write_bytes(corrupted)
+    result = tmp_path / "row.json"
+    completed = _run_image_audio_text(contract, receipts, result)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert abs(row["score"] - (AUDIO_TEXT_ITEMS - 1) / AUDIO_TEXT_ITEMS) < 1e-12
+    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == [victim["item_id"]]
+
+
+def test_image_audio_text_adapter_refuses_forbidden_inputs(tmp_path: Path) -> None:
+    contract, receipts, physical = _write_image_audio_text_fixture(tmp_path)
+    contract_body = json.loads(contract.read_text(encoding="utf-8"))
+    victim = contract_body["frozen_items"][3]
+    # A transcript object that smuggles the MMMU answer dictionary is a forbidden input, not a scored miss.
+    text_path = physical[victim["item_text_object"]["sha256"]]
+    smuggled = _audio_text_canonical(victim["item_id"], "LINE 3 OF THE FIXTURE", {"answer": "B"})
+    text_path.write_bytes(smuggled)
+    receipt_body = json.loads(receipts[2].read_text(encoding="utf-8"))
+    for row in receipt_body["files"]:
+        if row["sha256"] == victim["item_text_object"]["sha256"]:
+            row["bytes"] = len(smuggled)
+    receipts[2].write_text(json.dumps(receipt_body), encoding="utf-8")
+    rebound = json.loads(contract.read_text(encoding="utf-8"))
+    rebound["source"]["connector_receipt_raw_sha256s"] = sorted(
+        hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+    )
+    for item in rebound["frozen_items"]:
+        if item["item_id"] == victim["item_id"]:
+            item["item_text_object"]["byte_count"] = len(smuggled)
+    rebound.pop("self_sha256")
+    _write_self_hashed(tmp_path / "rebound.json", rebound)
+    result = tmp_path / "row-forbidden.json"
+    completed = _run_image_audio_text(tmp_path / "rebound.json", receipts, result)
+    assert completed.returncode == 78
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"] == "IMAGE_AUDIO_TEXT_HELDOUT_REFUSED"
+    assert refusal["reason"].startswith(
+        f"IMAGE_AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{victim['item_id']}"
+    )
+
+    # A prediction-custody receipt supplied as a source refuses before any byte is read.
+    (tmp_path / "second").mkdir()
+    contract2, receipts2, _ = _write_image_audio_text_fixture(tmp_path / "second")
+    custody = tmp_path / "second" / "prediction-custody.json"
+    custody.write_text(json.dumps({"schema_version": "ember-prediction-custody-v1", "rows": []}), encoding="utf-8")
+    result2 = tmp_path / "row-custody.json"
+    completed = _run_image_audio_text(contract2, [receipts2[0], receipts2[1], custody], result2)
+    assert completed.returncode == 78
+    refusal = json.loads(result2.read_text(encoding="utf-8"))
+    assert refusal["reason"] == "IMAGE_AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:source_schema:ember-prediction-custody-v1"
+
+    # The bound receipt set must be supplied in full (three receipts, not two).
+    result3 = tmp_path / "row-incomplete.json"
+    completed = _run_image_audio_text(contract2, receipts2[:2], result3)
+    assert completed.returncode == 78
+    assert (
+        json.loads(result3.read_text(encoding="utf-8"))["reason"]
+        == "IMAGE_AUDIO_TEXT_SOURCE_RECEIPT_SET_INCOMPLETE_REFUSED"
+    )
+
+
+def test_image_audio_text_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: Path) -> None:
+    import importlib.util
+
+    contract, receipts, _ = _write_image_audio_text_fixture(tmp_path)
+    result = tmp_path / "row.json"
+    assert _run_image_audio_text(contract, receipts, result).returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location(
+        "issue1947_release_execute", SCRIPT.parent / "issue1947_release_execute.py"
+    )
+    executor = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(executor)
+    validated = executor.validate_row(row, "E-MATRIX-IMAGE-AUDIO-TEXT")
+    assert validated is row
