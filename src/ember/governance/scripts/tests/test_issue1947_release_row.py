@@ -206,3 +206,32 @@ def test_image_adapter_missing_payload_writes_refusal_receipt(tmp_path: Path) ->
     body = dict(refusal)
     claimed = body.pop("self_sha256")
     assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+
+def test_image_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: Path) -> None:
+    """Live refusal 2026-09-05 (ITEM_SCHEMA_DRIFT:E-MATRIX-IMAGE): the adapter emitted the
+    contract's `gold_object_sha256` key while the executor requires `gold_item_sha256`.
+    The executor's own validator is the consumer, so it adjudicates the produced row."""
+    import importlib.util
+
+    contract, connector, _paths = _write_image_fixture(tmp_path)
+    result = tmp_path / "image-row.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location(
+        "issue1947_release_execute", SCRIPT.with_name("issue1947_release_execute.py")
+    )
+    executor = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(executor)
+    validated = executor.validate_row(row, "E-MATRIX-IMAGE")
+    assert len(validated["items"]) == 64
+    assert all(
+        set(item) == {"item_id", "gold_item_sha256", "prediction", "score"}
+        for item in validated["items"]
+    )
+

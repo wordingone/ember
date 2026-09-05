@@ -170,9 +170,12 @@ def adapt_image(contract_path: Path, source_path: Path) -> dict[str, object]:
         if not physical.is_file():
             raise ValueError(f"IMAGE_PAYLOAD_MISSING_REFUSED:{gold}")
         prediction = sha(physical.read_bytes())
+        # The release executor's item schema (issue1947_release_execute.validate_row)
+        # is exactly {item_id, gold_item_sha256, prediction, score}; the contract's
+        # `gold_object_sha256` is the same digest under the image contract's name.
         items.append({
             "item_id": frozen.get("item_id"),
-            "gold_object_sha256": gold,
+            "gold_item_sha256": gold,
             "prediction": prediction,
             "score": 1.0 if prediction == gold else 0.0,
         })
