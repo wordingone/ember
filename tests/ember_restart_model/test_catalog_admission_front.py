@@ -1620,3 +1620,288 @@ def test_evaluation_consumer_takes_isolation_over_admitted_heldout_memberships_o
     with pytest.raises(ValueError, match="unknown admission state"):
         _evaluation_consumer_over(combined, dataset_id)
 
+def _slot_identity(export_sha: str) -> dict:
+    return {
+        "source_ids": ["candidate-statistics-heldout-1"],
+        "split": "heldout",
+        "dataset_id": "dataset:issue1581-bulk-heldout:" + "6" * 64,
+        "catalog_export_sha256": export_sha,
+    }
+
+
+def test_slot_e_matrix_rederivation_packet_is_a_new_evaluation_bound_to_its_catalog():
+    """A re-derived isolation evaluation carries its own packet bytes (hence its own
+    protected_eval id: the importer admits exactly one consumer per evaluation) and
+    names the predecessor, the quarantine receipt, and the export it was proven on."""
+    revalidate = catalog_admission_module.revalidate_e_matrix_catalog_bindings
+    export_sha = "a" * 64
+    rows = [{"row_id": "candidate-statistics-heldout-1", "state": "ABSENT"}]
+    rederivation = {
+        "predecessor_evaluation_id": "evaluation:e-matrix-catalog-isolation:" + "c" * 64,
+        "predecessor_attempt_id": "attempt:issue1581-catalog-evaluation:" + "f" * 64,
+        "quarantine_receipt_sha256": "9" * 64,
+        "catalog_export_sha256": export_sha,
+    }
+    packet = canonical(
+        {
+            "schema_version": "ember-issue1581-slot-e-matrix-rederivation-v1",
+            "rows": rows,
+            "rederivation": rederivation,
+        }
+    )
+    result = revalidate(
+        e_matrix_packet_raw=packet,
+        resolved_identity=_slot_identity("d" * 64),
+        consumed_export_sha256=export_sha,
+    )
+    assert result["schema_version"] == "ember-issue1581-slot-e-matrix-revalidation-v1"
+    assert result["expected_slot_id"] == "candidate-statistics-heldout-1"
+    assert result["rows"][0]["protected_eval_admission_satisfied"] is True
+
+    # Bound to a different export than the one the consumer consumed, or revalidated
+    # without the consumed export at all: refuses. The FINAL export (which already
+    # contains the packet) is never the binding target.
+    with pytest.raises(ValueError, match="re-derivation must bind"):
+        revalidate(
+            e_matrix_packet_raw=packet,
+            resolved_identity=_slot_identity(export_sha),
+            consumed_export_sha256="b" * 64,
+        )
+    with pytest.raises(ValueError, match="re-derivation must bind"):
+        revalidate(e_matrix_packet_raw=packet, resolved_identity=_slot_identity(export_sha))
+
+    # A v1 packet never carries the rederivation block, and a rederivation packet
+    # never drops it or adds fields.
+    v1_with_block = canonical(
+        {
+            "schema_version": "ember-issue1581-slot-e-matrix-definition-v1",
+            "rows": rows,
+            "rederivation": rederivation,
+        }
+    )
+    with pytest.raises(ValueError, match="exactly one absent slot row"):
+        revalidate(
+            e_matrix_packet_raw=v1_with_block,
+            resolved_identity=_slot_identity(export_sha),
+            consumed_export_sha256=export_sha,
+        )
+    without_block = canonical(
+        {"schema_version": "ember-issue1581-slot-e-matrix-rederivation-v1", "rows": rows}
+    )
+    with pytest.raises(ValueError, match="re-derivation must bind"):
+        revalidate(
+            e_matrix_packet_raw=without_block,
+            resolved_identity=_slot_identity(export_sha),
+            consumed_export_sha256=export_sha,
+        )
+    for field, bad in [
+        ("predecessor_evaluation_id", "evaluation:other:" + "c" * 64),
+        ("predecessor_attempt_id", "attempt:issue1581-catalog-preflight:" + "f" * 64),
+        ("quarantine_receipt_sha256", "not-a-sha"),
+    ]:
+        broken = dict(rederivation, **{field: bad})
+        raw = canonical(
+            {
+                "schema_version": "ember-issue1581-slot-e-matrix-rederivation-v1",
+                "rows": rows,
+                "rederivation": broken,
+            }
+        )
+        with pytest.raises(ValueError):
+            revalidate(
+                e_matrix_packet_raw=raw,
+                resolved_identity=_slot_identity(export_sha),
+                consumed_export_sha256=export_sha,
+            )
+    # Distinct bytes from the v1 packet over the same slot row: a distinct evaluation id.
+    v1 = canonical({"schema_version": "ember-issue1581-slot-e-matrix-definition-v1", "rows": rows})
+    assert sha256(v1) != sha256(packet)
+
+def test_rederived_consumer_is_selected_by_the_export_it_consumed_never_by_count():
+    """Live refusal (#1581 debt row): after the re-derived evaluation consumer was
+    imported beside the predecessor, revalidate refused with "must select exactly one
+    dataset resolver" because two catalog-admission attempts consume the dataset. The
+    certified consumer is the attempt whose id ends with the export sha256 carried by
+    the dataset import receipt; a consumer of any other identity is still refused."""
+    select = catalog_admission_module._dataset_resolver_for_manifest
+    dataset_id = "dataset:issue1581-bulk-heldout:" + "6" * 64
+    predecessor = "attempt:issue1581-catalog-evaluation:" + "f" * 64
+    rederived = "attempt:issue1581-catalog-evaluation:" + "0" * 64
+
+    def manifest(*attempt_ids):
+        return canonical(
+            {
+                "records": [],
+                "edges": [
+                    {
+                        "kind": "consumer_dataset",
+                        "from_kind": "consumer_attempt",
+                        "from_id": attempt_id,
+                        "to_kind": "dataset_version",
+                        "to_id": dataset_id,
+                        "ordinal": 0,
+                        "payload": {},
+                    }
+                    for attempt_id in attempt_ids
+                ],
+            }
+        )
+
+    # One consumer: unchanged behaviour, with or without the export binding.
+    _, split = select(manifest(rederived), expected_dataset_id=dataset_id)
+    assert split == "heldout"
+    _, split = select(
+        manifest(rederived), expected_dataset_id=dataset_id, consumed_export_sha256="0" * 64
+    )
+    assert split == "heldout"
+    # Two catalog-admission consumers: the one bound to the consumed export wins.
+    _, split = select(
+        manifest(predecessor, rederived),
+        expected_dataset_id=dataset_id,
+        consumed_export_sha256="0" * 64,
+    )
+    assert split == "heldout"
+    # Without the binding two consumers stay ambiguous; a binding matching neither,
+    # or matching both, refuses.
+    for binding in (None, "1" * 64):
+        with pytest.raises(ValueError, match="exactly one dataset resolver"):
+            select(
+                manifest(predecessor, rederived),
+                expected_dataset_id=dataset_id,
+                consumed_export_sha256=binding,
+            )
+    with pytest.raises(ValueError, match="exactly one dataset resolver"):
+        select(
+            manifest(rederived, "attempt:issue1581-catalog-preflight:" + "0" * 64),
+            expected_dataset_id=dataset_id,
+            consumed_export_sha256="0" * 64,
+        )
+    # A consumer that is not a catalog-admission attempt disables narrowing: the
+    # planted-duplicate substitution refusal holds exactly as before.
+    with pytest.raises(ValueError, match="exactly one dataset resolver"):
+        select(
+            manifest(rederived, "attempt:duplicate:" + "b" * 64),
+            expected_dataset_id=dataset_id,
+            consumed_export_sha256="0" * 64,
+        )
+
+def test_evaluation_dataset_resolves_over_admitted_memberships_after_a_quarantine(
+    tmp_path: Path,
+) -> None:
+    """Live refusal (#1581 debt row): the shared resolver required every membership of
+    the heldout dataset to be admitted, so the quarantined graph (608 memberships in
+    admission_state quarantined) refused "does not match the exact admitted split"."""
+    resolve_evaluation_dataset = input_identity_module.resolve_catalog_evaluation_dataset
+    connector_path, connector_sha = write_connector(
+        tmp_path,
+        source="candidate-statistics-heldout-1",
+        domain="statistics",
+        files=[("kept.txt", b"kept heldout text"), ("leaked.txt", b"leaked heldout text")],
+    )
+    row = load_bulk_domain_connector_receipt(
+        receipt_path=connector_path,
+        expected_receipt_sha256=connector_sha,
+        source_id="candidate-statistics-heldout-1",
+        expected_source_selector="candidate-statistics-heldout-1",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="statistics",
+        split="heldout",
+    )
+    manifest = json.loads(
+        build_dataset_catalog_manifest(rows=[row], tokenizer_sha256="4" * 64, created_at_ms=1)
+    )
+    dataset_id = next(item["id"] for item in manifest["records"] if item["kind"] == "dataset_version")
+    memberships = [item for item in manifest["records"] if item["kind"] == "membership"]
+    assert len(memberships) == 2
+    leaked = next(item for item in memberships if item["exact_sha256"] == sha256(b"leaked heldout text"))
+    leaked["admission_state"] = "quarantined"
+    manifest_raw = canonical(manifest)
+    first_receipt = import_receipt(
+        manifest_raw=manifest_raw,
+        canonical_export=manifest_raw,
+        inserted_records=len(manifest["records"]),
+        inserted_edges=len(manifest["edges"]),
+    )
+    fragment = json.loads(
+        catalog_admission_module.build_evaluation_consumer_catalog_fragment(
+            catalog_export_raw=manifest_raw,
+            first_import_receipt_raw=first_receipt,
+            dataset_id=dataset_id,
+            e_matrix_packet_raw=canonical(
+                {
+                    "schema_version": "ember-issue1581-slot-e-matrix-definition-v1",
+                    "rows": [{"row_id": "candidate-statistics-heldout-1", "state": "ABSENT"}],
+                }
+            ),
+            source_commit="1" * 40,
+            model_sha256="5" * 64,
+            checkpoint_sha256="6" * 64,
+            tokenizer_sha256="4" * 64,
+            config_sha256="7" * 64,
+            evaluator_sha256="8" * 64,
+        )
+    )
+    combined = json.loads(manifest_raw)
+    combined["records"].extend(fragment["records"])
+    combined["edges"].extend(fragment["edges"])
+    combined_raw = canonical(combined)
+    consumer_receipt = import_receipt(
+        manifest_raw=canonical(fragment),
+        canonical_export=combined_raw,
+        inserted_records=len(fragment["records"]),
+        inserted_edges=len(fragment["edges"]),
+    )
+    resolved = resolve_evaluation_dataset(
+        catalog_export_raw=combined_raw,
+        dataset_import_receipt_raw=first_receipt,
+        consumer_import_receipt_raw=consumer_receipt,
+        expected_dataset_id=dataset_id,
+        expected_split="heldout",
+    )
+    assert resolved["dataset_id"] == dataset_id
+    assert resolved["split"] == "heldout"
+    # Only the admitted membership is resolved content.
+    assert resolved["object_count"] == 1
+
+    # Every membership quarantined: nothing to resolve.
+    everything = json.loads(combined_raw)
+    for item in everything["records"]:
+        if item.get("kind") == "membership":
+            item["admission_state"] = "quarantined"
+    everything_raw = canonical(everything)
+    everything_receipt = import_receipt(
+        manifest_raw=canonical(fragment),
+        canonical_export=everything_raw,
+        inserted_records=len(fragment["records"]),
+        inserted_edges=len(fragment["edges"]),
+    )
+    with pytest.raises(InputIdentityError, match="no admitted memberships"):
+        resolve_evaluation_dataset(
+            catalog_export_raw=everything_raw,
+            dataset_import_receipt_raw=first_receipt,
+            consumer_import_receipt_raw=everything_receipt,
+            expected_dataset_id=dataset_id,
+            expected_split="heldout",
+        )
+
+    # An admission state the resolver does not know is still the split refusal.
+    unknown = json.loads(combined_raw)
+    next(item for item in unknown["records"] if item.get("kind") == "membership")[
+        "admission_state"
+    ] = "pending"
+    unknown_raw = canonical(unknown)
+    unknown_receipt = import_receipt(
+        manifest_raw=canonical(fragment),
+        canonical_export=unknown_raw,
+        inserted_records=len(fragment["records"]),
+        inserted_edges=len(fragment["edges"]),
+    )
+    with pytest.raises(InputIdentityError, match="exact admitted split"):
+        resolve_evaluation_dataset(
+            catalog_export_raw=unknown_raw,
+            dataset_import_receipt_raw=first_receipt,
+            consumer_import_receipt_raw=unknown_receipt,
+            expected_dataset_id=dataset_id,
+            expected_split="heldout",
+        )
+
