@@ -6,13 +6,13 @@
   "exceptions": [
     {
       "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch.py",
-      "sha256": "feccce0dd5c59f2815ce67c17109e089a60c9d01810df0159f218e666c5221d3",
-      "reason": "02B-owned certified-launch orchestration suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
+      "sha256": "4008096282bd826b084c3e96ec6f9cb25c78c2708e59e487ed5c8f5f2bd2d575",
+      "reason": "02B-owned certified-launch orchestration suite; repinned for issue #2119 (training_job_purpose required-binding tests plus the pre-existing ROOT = Path(__file__) NameError fix needed to run this module at all). The per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
       "path": "tests/ember_restart_model/domain-governance/test_certified_train_launch_custody.py",
-      "sha256": "e0232f315a024bc65065b8bae0d8cdfed91b99cde29155c7399c5f23f5f6e921",
-      "reason": "02B-owned certified-launch custody suite after the repository-layout transition; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
+      "sha256": "ce382db940326091e355f86694d7631b19f596dafaf2575850c4c401755b89e8",
+      "reason": "02B-owned certified-launch custody suite; repinned for the pre-existing ROOT = Path(__file__) NameError fix (issue #2119 packet) needed to run this module at all. The per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
       "path": "tests/ember_restart_model/domain-governance/test_runner_preflight.py",
