@@ -894,3 +894,202 @@ def test_image_audio_text_adapter_row_satisfies_the_release_executor_item_schema
     spec.loader.exec_module(executor)
     validated = executor.validate_row(row, "E-MATRIX-IMAGE-AUDIO-TEXT")
     assert validated is row
+
+
+REASONING_ITEMS = 847
+
+
+def _reasoning_answer_canonical(item_id: str, answer: str, extra: dict | None = None) -> bytes:
+    payload = {"answer": answer, "id": item_id}
+    if extra:
+        payload.update(extra)
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+
+
+def _write_reasoning_fixture(tmp_path: Path) -> tuple[Path, list[Path], dict[str, Path]]:
+    """847 items: one admitted item-text object ({id, question, options}, the predecessor connector)
+    and one canonical answer object ({answer, id}, the carrier connector) each, bound as the #2148
+    contract binds them."""
+
+    items_root = tmp_path / "items"
+    answers_root = tmp_path / "answers"
+    items_root.mkdir()
+    answers_root.mkdir()
+    item_files, answer_files, frozen_items = [], [], []
+    physical: dict[str, Path] = {}
+    for index in range(REASONING_ITEMS):
+        item_id = f"validation_Subject_{index}"
+        text_raw = _image_text_canonical(item_id)
+        text_digest = hashlib.sha256(text_raw).hexdigest()
+        answer_raw = _reasoning_answer_canonical(item_id, "ABCD"[index % 4])
+        answer_digest = hashlib.sha256(answer_raw).hexdigest()
+        text_path = items_root / f"{text_digest}.json"
+        text_path.write_bytes(text_raw)
+        answer_path = answers_root / f"{answer_digest}.json"
+        answer_path.write_bytes(answer_raw)
+        physical[text_digest] = text_path
+        physical[answer_digest] = answer_path
+        item_files.append({"path": text_path.name, "bytes": len(text_raw), "sha256": text_digest})
+        answer_files.append({"path": answer_path.name, "bytes": len(answer_raw), "sha256": answer_digest})
+        frozen_items.append({
+            "item_id": item_id,
+            "gold_item_sha256": hashlib.sha256(text_raw + answer_raw).hexdigest(),
+            "item_text_object": {"sha256": text_digest, "byte_count": len(text_raw), "media_type": "application/json"},
+            "answer_object": {"sha256": answer_digest, "byte_count": len(answer_raw), "media_type": "application/json"},
+        })
+    receipts = []
+    for name, root, files, source_id in (
+        ("connector-answers.json", answers_root, answer_files, "mmmu-validation-heldout-reasoning-answers"),
+        ("connector-predecessor-items.json", items_root, item_files, "mmmu-validation-heldout-image-text-items"),
+    ):
+        receipt = tmp_path / name
+        receipt.write_text(json.dumps({
+            "schema": "corpus-connector-receipt-v1",
+            "source_id": source_id,
+            "dest_root": str(root),
+            "files": files,
+        }), encoding="utf-8")
+        receipts.append(receipt)
+    contract = tmp_path / "reasoning-contract.json"
+    _write_self_hashed(contract, {
+        "schema_version": "ember-issue1947-protected-reasoning-contract-v1",
+        "result": "PASS",
+        "task_class": "adapter_totality",
+        "task": {
+            "id": "EXACT_REASONING_ITEM_IDENTITY",
+            "consumes": ["item_text_payload_bytes", "answer_payload_bytes"],
+            "forbidden_inputs": ["explanation", "subfield", "topic_difficulty", "img_type", "image_payloads", "prediction_custody"],
+        },
+        "source": {
+            "connector_receipt_raw_sha256s": sorted(
+                hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+            ),
+        },
+        "frozen_items": frozen_items,
+        "totality": {"expected": REASONING_ITEMS, "observed": REASONING_ITEMS, "complete": True},
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    })
+    return contract, receipts, physical
+
+
+def _run_reasoning(contract: Path, receipts: list[Path], result: Path) -> subprocess.CompletedProcess:
+    command = [sys.executable, str(SCRIPT), "adapt-reasoning", "--contract", str(contract)]
+    for receipt in receipts:
+        command += ["--source-receipt", str(receipt)]
+    command += ["--result", str(result)]
+    return subprocess.run(command, capture_output=True, text=True, check=False)
+
+
+def test_reasoning_adapter_produces_the_item_identity_row(tmp_path: Path) -> None:
+    contract, receipts, _physical = _write_reasoning_fixture(tmp_path)
+    result = tmp_path / "row.json"
+    completed = _run_reasoning(contract, receipts, result)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["result"] == "REASONING_HELDOUT_ROW_PRODUCED"
+    assert row["row_id"] == "E-MATRIX-REASONING"
+    assert row["task"] == "EXACT_REASONING_ITEM_IDENTITY"
+    assert row["score"] == 1.0 and len(row["items"]) == REASONING_ITEMS
+    assert row["connector_receipt_raw_sha256s"] == sorted(
+        hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+    )
+    body = dict(row)
+    assert body.pop("self_sha256") == hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def test_reasoning_adapter_planted_answer_corruption_scores_846_of_847(tmp_path: Path) -> None:
+    contract, receipts, physical = _write_reasoning_fixture(tmp_path)
+    contract_body = json.loads(contract.read_text(encoding="utf-8"))
+    victim = contract_body["frozen_items"][11]
+    # Same byte count, different answer letter: the receipt row still matches, the item identity does not.
+    answer_path = physical[victim["answer_object"]["sha256"]]
+    corrupted = _reasoning_answer_canonical(victim["item_id"], "E")
+    assert len(corrupted) == victim["answer_object"]["byte_count"]
+    answer_path.write_bytes(corrupted)
+    result = tmp_path / "row.json"
+    completed = _run_reasoning(contract, receipts, result)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert abs(row["score"] - (REASONING_ITEMS - 1) / REASONING_ITEMS) < 1e-12
+    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == [victim["item_id"]]
+
+
+def test_reasoning_adapter_refuses_forbidden_inputs(tmp_path: Path) -> None:
+    contract, receipts, physical = _write_reasoning_fixture(tmp_path)
+    contract_body = json.loads(contract.read_text(encoding="utf-8"))
+    victim = contract_body["frozen_items"][5]
+    # An answer object that smuggles the explanation is a forbidden input, not a scored miss.
+    answer_path = physical[victim["answer_object"]["sha256"]]
+    smuggled = _reasoning_answer_canonical(victim["item_id"], "B", {"explanation": "because"})
+    answer_path.write_bytes(smuggled)
+    receipt_body = json.loads(receipts[0].read_text(encoding="utf-8"))
+    for row in receipt_body["files"]:
+        if row["sha256"] == victim["answer_object"]["sha256"]:
+            row["bytes"] = len(smuggled)
+    receipts[0].write_text(json.dumps(receipt_body), encoding="utf-8")
+    rebound = json.loads(contract.read_text(encoding="utf-8"))
+    rebound["source"]["connector_receipt_raw_sha256s"] = sorted(
+        hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+    )
+    for item in rebound["frozen_items"]:
+        if item["item_id"] == victim["item_id"]:
+            item["answer_object"]["byte_count"] = len(smuggled)
+    rebound.pop("self_sha256")
+    _write_self_hashed(tmp_path / "rebound.json", rebound)
+    result = tmp_path / "row-forbidden.json"
+    completed = _run_reasoning(tmp_path / "rebound.json", receipts, result)
+    assert completed.returncode == 78
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"] == "REASONING_HELDOUT_REFUSED"
+    assert refusal["reason"].startswith(f"REASONING_FORBIDDEN_INPUT_REFUSED:answer_shape:{victim['item_id']}")
+
+    # An answer object carrying another item's id (two answers swapped in custody) refuses too.
+    (tmp_path / "swap").mkdir()
+    contract3, receipts3, physical3 = _write_reasoning_fixture(tmp_path / "swap")
+    body3 = json.loads(contract3.read_text(encoding="utf-8"))
+    first, second = body3["frozen_items"][0], body3["frozen_items"][1]
+    raw_first = physical3[first["answer_object"]["sha256"]].read_bytes()
+    raw_second = physical3[second["answer_object"]["sha256"]].read_bytes()
+    assert len(raw_first) == len(raw_second)
+    physical3[first["answer_object"]["sha256"]].write_bytes(raw_second)
+    physical3[second["answer_object"]["sha256"]].write_bytes(raw_first)
+    result3 = tmp_path / "row-swap.json"
+    completed = _run_reasoning(contract3, receipts3, result3)
+    assert completed.returncode == 78
+    assert json.loads(result3.read_text(encoding="utf-8"))["reason"] == f"REASONING_FORBIDDEN_INPUT_REFUSED:answer_shape:{first['item_id']}"
+
+    # A prediction-custody receipt supplied as a source refuses before any byte is read.
+    (tmp_path / "second").mkdir()
+    contract2, receipts2, _ = _write_reasoning_fixture(tmp_path / "second")
+    custody = tmp_path / "second" / "prediction-custody.json"
+    custody.write_text(json.dumps({"schema_version": "ember-prediction-custody-v1", "rows": []}), encoding="utf-8")
+    result2 = tmp_path / "row-custody.json"
+    completed = _run_reasoning(contract2, [receipts2[0], custody], result2)
+    assert completed.returncode == 78
+    refusal = json.loads(result2.read_text(encoding="utf-8"))
+    assert refusal["reason"] == "REASONING_FORBIDDEN_INPUT_REFUSED:source_schema:ember-prediction-custody-v1"
+
+    # The bound receipt set must be supplied in full.
+    result4 = tmp_path / "row-incomplete.json"
+    completed = _run_reasoning(contract2, [receipts2[0]], result4)
+    assert completed.returncode == 78
+    assert json.loads(result4.read_text(encoding="utf-8"))["reason"] == "REASONING_SOURCE_RECEIPT_SET_INCOMPLETE_REFUSED"
+
+
+def test_reasoning_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: Path) -> None:
+    import importlib.util
+
+    contract, receipts, _ = _write_reasoning_fixture(tmp_path)
+    result = tmp_path / "row.json"
+    assert _run_reasoning(contract, receipts, result).returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location(
+        "issue1947_release_execute", SCRIPT.parent / "issue1947_release_execute.py"
+    )
+    executor = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(executor)
+    validated = executor.validate_row(row, "E-MATRIX-REASONING")
+    assert validated is row
