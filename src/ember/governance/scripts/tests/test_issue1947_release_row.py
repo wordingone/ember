@@ -124,13 +124,23 @@ def test_text_adapter_uses_real_bound_inference_row(tmp_path: Path) -> None:
     }
 
 
-def _write_image_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
+def _write_image_fixture(
+    tmp_path: Path,
+    *,
+    count: int = 64,
+    schema_version: str = "ember-issue2105-protected-image-contract-v1",
+    observed_total: int | None = None,
+) -> tuple[Path, Path, list[Path]]:
+    """observed_total, when different from count, plants a totality drift: the contract
+    claims a different observed/expected count than the number of frozen_items actually
+    written, so the totality equality check in adapt_image must catch the mismatch."""
+
     custody = tmp_path / "objects"
     custody.mkdir()
     files = []
     frozen_items = []
     physical_paths = []
-    for index in range(64):
+    for index in range(count):
         raw = f"image-{index}".encode()
         digest = hashlib.sha256(raw).hexdigest()
         relative = f"{digest}.png"
@@ -150,9 +160,10 @@ def _write_image_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
         "dest_root": str(custody),
         "files": files,
     }), encoding="utf-8")
+    total = observed_total if observed_total is not None else count
     contract = tmp_path / "contract.json"
     _write_self_hashed(contract, {
-        "schema_version": "ember-issue2105-protected-image-contract-v1",
+        "schema_version": schema_version,
         "result": "PASS",
         "task_class": "adapter_totality",
         "task": {
@@ -162,7 +173,7 @@ def _write_image_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
         },
         "source": {"connector_receipt_raw_sha256": hashlib.sha256(connector.read_bytes()).hexdigest()},
         "frozen_items": frozen_items,
-        "totality": {"expected": 64, "observed": 64, "complete": True},
+        "totality": {"expected": total, "observed": total, "complete": True},
         "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
     })
     return contract, connector, physical_paths
@@ -235,6 +246,49 @@ def test_image_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
         for item in validated["items"]
     )
 
+
+def test_image_adapter_accepts_widened_v2_contract_256_items(tmp_path: Path) -> None:
+    """#2116: the widened 256-item image contract (schema ember-protected-image-contract-v2)
+    must be consumable by this same adapter, unchanged in every check but the schema
+    allowlist and the totality total, which now comes from the contract itself."""
+
+    contract, connector, _paths = _write_image_fixture(
+        tmp_path, count=256, schema_version="ember-protected-image-contract-v2",
+    )
+    result = tmp_path / "image-row-v2.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["result"] == "IMAGE_HELDOUT_ROW_PRODUCED"
+    assert row["row_id"] == "E-MATRIX-IMAGE"
+    assert len(row["items"]) == 256
+    assert row["score"] == 1.0
+    body = dict(row)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+
+
+def test_image_adapter_refuses_v2_contract_with_observed_255(tmp_path: Path) -> None:
+    """A v2 contract claiming totality {expected:255, observed:255, complete:True} is not
+    one of the admissible totals (64 or 256) and must refuse, not silently adapt 255 items."""
+
+    contract, connector, _paths = _write_image_fixture(
+        tmp_path, count=255, schema_version="ember-protected-image-contract-v2",
+    )
+    result = tmp_path / "image-refusal-v2.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "adapt-image", "--contract", str(contract),
+         "--source-receipt", str(connector), "--result", str(result)],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 78
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"] == "IMAGE_HELDOUT_REFUSED"
+    assert refusal["reason"] == "IMAGE_CONTRACT_TASK_TOTALITY_REFUSED"
 
 
 def _write_audio_fixture(tmp_path: Path) -> tuple[Path, Path, list[Path]]:
