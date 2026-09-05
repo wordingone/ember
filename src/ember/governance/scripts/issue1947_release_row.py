@@ -33,10 +33,13 @@ def sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def load_self_hashed(path: Path, schema_version: str) -> tuple[dict[str, Any], bytes]:
+def load_self_hashed(
+    path: Path, schema_version: str | tuple[str, ...]
+) -> tuple[dict[str, Any], bytes]:
     raw = path.read_bytes()
     payload = json.loads(raw)
-    if payload.get("schema_version") != schema_version:
+    allowed_schemas = (schema_version,) if isinstance(schema_version, str) else schema_version
+    if payload.get("schema_version") not in allowed_schemas:
         raise ValueError(f"SCHEMA_DRIFT:{path}")
     claimed = payload.get("self_sha256")
     body = dict(payload)
@@ -101,16 +104,23 @@ def adapt_text(contract_path: Path, source_path: Path) -> dict[str, object]:
     }
 
 
+IMAGE_CONTRACT_SCHEMAS = (
+    "ember-issue2105-protected-image-contract-v1",
+    "ember-protected-image-contract-v2",
+)
+IMAGE_CONTRACT_ADMISSIBLE_TOTALS = (64, 256)
+
+
 def adapt_image(contract_path: Path, source_path: Path) -> dict[str, object]:
-    contract, contract_raw = load_self_hashed(
-        contract_path, "ember-issue2105-protected-image-contract-v1"
-    )
+    contract, contract_raw = load_self_hashed(contract_path, IMAGE_CONTRACT_SCHEMAS)
     source_raw = source_path.read_bytes()
     try:
         source = json.loads(source_raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("IMAGE_SOURCE_RECEIPT_UNREADABLE_REFUSED") from error
     task = contract.get("task")
+    totality = contract.get("totality")
+    expected_total = totality.get("expected") if isinstance(totality, dict) else None
     if (
         contract.get("result") != "PASS"
         or contract.get("task_class") != "adapter_totality"
@@ -119,8 +129,8 @@ def adapt_image(contract_path: Path, source_path: Path) -> dict[str, object]:
         or task.get("consumes") != ["image_payload_bytes"]
         or task.get("forbidden_inputs")
         != ["mmmu_question", "mmmu_answer", "mmmu_options"]
-        or contract.get("totality")
-        != {"expected": 64, "observed": 64, "complete": True}
+        or expected_total not in IMAGE_CONTRACT_ADMISSIBLE_TOTALS
+        or totality != {"expected": expected_total, "observed": expected_total, "complete": True}
     ):
         raise ValueError("IMAGE_CONTRACT_TASK_TOTALITY_REFUSED")
     binding = contract.get("source")
@@ -147,7 +157,7 @@ def adapt_image(contract_path: Path, source_path: Path) -> dict[str, object]:
             raise ValueError("IMAGE_SOURCE_RECEIPT_DUPLICATE_OBJECT_REFUSED")
         by_sha[row["sha256"]] = row
     frozen_items = contract.get("frozen_items")
-    if not isinstance(frozen_items, list) or len(frozen_items) != 64:
+    if not isinstance(frozen_items, list) or len(frozen_items) != expected_total:
         raise ValueError("IMAGE_CONTRACT_ITEM_TOTALITY_REFUSED")
     items: list[dict[str, object]] = []
     for frozen in frozen_items:
