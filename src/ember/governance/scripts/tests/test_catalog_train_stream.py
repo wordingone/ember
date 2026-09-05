@@ -52,12 +52,15 @@ def write_tokenizer(tmp_path: Path) -> tuple[Path, str]:
     return path, sha(path.read_bytes())
 
 
-def build_fixture(tmp_path: Path, *, leak: bool = False) -> tuple[Path, Path, list[bytes]]:
+def build_fixture(tmp_path: Path, *, leak: bool = False, adjudicated_overlap: bool = False, quarantined_train: bool = False) -> tuple[Path, Path, list[bytes]]:
     custody = tmp_path / "custody"
     custody.mkdir()
     payloads = [b"hello world\n", b"catalog train stream doc one\n", b"two two two\n"]
     files = []
-    for index, raw in enumerate(payloads):
+    overlap_raw = b"overlap text adjudicated to train\n"
+    withdrawn_raw = b"train text withdrawn by quarantine\n"
+    custody_payloads = list(payloads) + ([overlap_raw] if adjudicated_overlap else []) + ([withdrawn_raw] if quarantined_train else [])
+    for index, raw in enumerate(custody_payloads):
         (custody / f"f{index}.txt").write_bytes(raw)
         files.append({"path": f"f{index}.txt", "bytes": len(raw), "sha256": sha(raw)})
     receipt = {"schema": "corpus-connector-receipt-v1", "dest_root": str(custody), "files": files}
@@ -77,7 +80,7 @@ def build_fixture(tmp_path: Path, *, leak: bool = False) -> tuple[Path, Path, li
     def add(raw: bytes, split: str, dataset: str, media: str, state: str = "admitted") -> None:
         digest = sha(raw)
         records.append({"kind": "immutable_object", "id": f"sha256:{digest}", "sha256": digest, "byte_count": len(raw), "media_type": media, "locator": f"sha256/{digest[:2]}/{digest}", "custody_state": "available"})
-        membership = f"membership:src:{digest}"
+        membership = f"membership:{dataset[-8:]}:{split}:{state}:{digest}"
         records.append({"kind": "membership", "id": membership, "split": split, "admission_state": state, "exact_sha256": digest, "tokenizer_sha256": "t" * 64})
         edges.append({"kind": "version_membership", "from_id": dataset, "to_id": membership})
         edges.append({"kind": "membership_object", "from_id": membership, "to_id": f"sha256:{digest}"})
@@ -90,6 +93,13 @@ def build_fixture(tmp_path: Path, *, leak: bool = False) -> tuple[Path, Path, li
     if leak:
         # The planted positive: a heldout object also carried by the train dataset.
         add(heldout_raw, "train", TRAIN, "text/plain; charset=utf-8")
+    if adjudicated_overlap:
+        # The catalog's own overlap resolution: the heldout side was quarantined, train stays admitted.
+        add(overlap_raw, "heldout", HELDOUT, "text/plain; charset=utf-8", state="quarantined")
+        add(overlap_raw, "train", TRAIN, "text/plain; charset=utf-8")
+    if quarantined_train:
+        add(withdrawn_raw, "train", TRAIN, "text/plain; charset=utf-8", state="quarantined")
+        add(withdrawn_raw, "train", TRAIN, "text/plain; charset=utf-8")
     export_path = tmp_path / "export.json"
     export_path.write_bytes(json.dumps({"records": records, "edges": edges}).encode())
     return export_path, receipt_path, payloads
@@ -237,3 +247,30 @@ def test_fill_refuses_a_document_that_reaches_the_reserved_band(tmp_path: Path) 
     tokenizer, literals = MODULE.load_frozen_tokenizer(tokenizer_path, tokenizer_sha)
     assert literals == ["<band1>"]
     assert MODULE.reserved_band_probe(tokenizer, literals)["result"] == "PASS"
+
+
+def test_stage_counts_the_catalogs_overlap_resolution_and_refuses_a_quarantined_train_membership(tmp_path: Path) -> None:
+    export_path, receipt_path, payloads = build_fixture(tmp_path, adjudicated_overlap=True)
+    manifest = MODULE.build_staging_manifest(
+        export_raw=export_path.read_bytes(),
+        dataset_ids=None,
+        tokenizer_sha256="t" * 64,
+        custody_receipts=[(receipt_path, receipt_path.read_bytes())],
+    )
+    assertion = manifest["leakage_assertion"]
+    assert assertion["result"] == "executed_pass"
+    assert assertion["adjudicated_overlap_hashes"] == 1
+    assert assertion["adjudicated_overlap_staged"] == 1
+    assert manifest["staged_count"] == len(payloads) + 1
+    # The admitted heldout object is still protected.
+    assert assertion["heldout_hashes"] == 1
+
+    (tmp_path / "q").mkdir()
+    export_path, receipt_path, _ = build_fixture(tmp_path / "q", quarantined_train=True)
+    with pytest.raises(ValueError, match="TRAIN_MEMBERSHIP_STATE_REFUSED|LEAKAGE_REFUSED:quarantined:"):
+        MODULE.build_staging_manifest(
+            export_raw=export_path.read_bytes(),
+            dataset_ids=None,
+            tokenizer_sha256="t" * 64,
+            custody_receipts=[(receipt_path, receipt_path.read_bytes())],
+        )
