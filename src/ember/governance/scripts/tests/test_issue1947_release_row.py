@@ -348,3 +348,185 @@ def test_audio_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: 
         for item in validated["items"]
     )
 
+
+IMAGE_TEXT_ITEMS = 847
+
+
+def _image_text_canonical(item_id: str, extra: dict | None = None) -> bytes:
+    payload = {"id": item_id, "question": f"What is <image 1> in {item_id}?", "options": ["a", "b", "c"]}
+    if extra:
+        payload.update(extra)
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+
+
+def _write_image_text_fixture(tmp_path: Path) -> tuple[Path, list[Path], dict[str, Path]]:
+    """847 items: one image object each (the first item shares its image with the
+    second), one canonical item-text object each; images split across a carrier
+    connector and a predecessor connector exactly as the live contract binds them."""
+
+    carrier_root = tmp_path / "carrier"
+    predecessor_root = tmp_path / "predecessor"
+    text_root = tmp_path / "items"
+    for root in (carrier_root, predecessor_root, text_root):
+        root.mkdir()
+    carrier_files, predecessor_files, text_files, frozen_items = [], [], [], []
+    physical: dict[str, Path] = {}
+    for index in range(IMAGE_TEXT_ITEMS):
+        item_id = f"validation_Fixture_{index}"
+        image_raw = b"png-shared" if index < 2 else f"png-{index}".encode()
+        image_digest = hashlib.sha256(image_raw).hexdigest()
+        text_raw = _image_text_canonical(item_id)
+        text_digest = hashlib.sha256(text_raw).hexdigest()
+        if image_digest not in physical:
+            if index == 0:
+                target_root, target_files = predecessor_root, predecessor_files
+            else:
+                target_root, target_files = carrier_root, carrier_files
+            image_path = target_root / f"{image_digest}.png"
+            image_path.write_bytes(image_raw)
+            physical[image_digest] = image_path
+            target_files.append({"path": image_path.name, "bytes": len(image_raw), "sha256": image_digest})
+        text_path = text_root / f"{text_digest}.json"
+        text_path.write_bytes(text_raw)
+        physical[text_digest] = text_path
+        text_files.append({"path": text_path.name, "bytes": len(text_raw), "sha256": text_digest})
+        frozen_items.append({
+            "item_id": item_id,
+            "gold_item_sha256": hashlib.sha256(image_raw + text_raw).hexdigest(),
+            "image_objects": [{"sha256": image_digest, "byte_count": len(image_raw), "media_type": "image/png"}],
+            "item_text_object": {"sha256": text_digest, "byte_count": len(text_raw), "media_type": "application/json"},
+        })
+    receipts = []
+    for name, root, files, source_id in (
+        ("connector-images.json", carrier_root, carrier_files, "mmmu-validation-heldout-image-text-images"),
+        ("connector-items.json", text_root, text_files, "mmmu-validation-heldout-image-text-items"),
+        ("connector-predecessor.json", predecessor_root, predecessor_files, "mmmu-validation-heldout-image-64"),
+    ):
+        receipt = tmp_path / name
+        receipt.write_text(json.dumps({
+            "schema": "corpus-connector-receipt-v1",
+            "source_id": source_id,
+            "dest_root": str(root),
+            "files": files,
+        }), encoding="utf-8")
+        receipts.append(receipt)
+    contract = tmp_path / "contract.json"
+    _write_self_hashed(contract, {
+        "schema_version": "ember-protected-image-text-contract-v1",
+        "result": "PASS",
+        "task_class": "adapter_totality",
+        "task": {
+            "id": "EXACT_IMAGE_TEXT_PAYLOAD_SHA256_IDENTITY",
+            "consumes": ["image_payload_bytes", "item_text_payload_bytes"],
+            "forbidden_inputs": ["mmmu_answer_dictionary", "prediction_custody"],
+        },
+        "source": {
+            "connector_receipt_raw_sha256s": sorted(
+                hashlib.sha256(receipt.read_bytes()).hexdigest() for receipt in receipts
+            ),
+        },
+        "frozen_items": frozen_items,
+        "totality": {"expected": IMAGE_TEXT_ITEMS, "observed": IMAGE_TEXT_ITEMS, "complete": True},
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    })
+    return contract, receipts, physical
+
+
+def _run_image_text(contract: Path, receipts: list[Path], result: Path) -> subprocess.CompletedProcess:
+    command = [sys.executable, str(SCRIPT), "adapt-image-text", "--contract", str(contract)]
+    for receipt in receipts:
+        command += ["--source-receipt", str(receipt)]
+    command += ["--result", str(result)]
+    return subprocess.run(command, capture_output=True, text=True, check=False)
+
+
+def test_image_text_adapter_planted_corruption_scores_below_one(tmp_path: Path) -> None:
+    contract, receipts, physical = _write_image_text_fixture(tmp_path)
+    corrupted = hashlib.sha256(b"png-5").hexdigest()
+    physical[corrupted].write_bytes(b"corrupted")
+    result = tmp_path / "row.json"
+    completed = _run_image_text(contract, receipts, result)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["result"] == "IMAGE_TEXT_HELDOUT_ROW_PRODUCED"
+    assert row["row_id"] == "E-MATRIX-IMAGE-TEXT"
+    assert row["task_class"] == "adapter_totality"
+    assert len(row["items"]) == IMAGE_TEXT_ITEMS
+    assert row["score"] == (IMAGE_TEXT_ITEMS - 1) / IMAGE_TEXT_ITEMS
+    assert [item["item_id"] for item in row["items"] if item["score"] == 0.0] == ["validation_Fixture_5"]
+    assert len(row["connector_receipt_raw_sha256s"]) == 3
+    body = dict(row)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+
+
+def test_image_text_adapter_missing_payload_and_missing_receipt_refuse(tmp_path: Path) -> None:
+    contract, receipts, physical = _write_image_text_fixture(tmp_path)
+    physical[hashlib.sha256(b"png-shared").hexdigest()].unlink()
+    result = tmp_path / "refusal.json"
+    completed = _run_image_text(contract, receipts, result)
+    assert completed.returncode == 78
+    refusal = json.loads(result.read_text(encoding="utf-8"))
+    assert refusal["result"] == "IMAGE_TEXT_HELDOUT_REFUSED"
+    assert refusal["reason"].startswith("IMAGE_TEXT_PAYLOAD_MISSING_REFUSED:validation_Fixture_0:")
+    body = dict(refusal)
+    claimed = body.pop("self_sha256")
+    assert claimed == hashlib.sha256(_canonical(body)).hexdigest()
+    # Supplying only two of the three bound receipts refuses before any item is scored.
+    completed = _run_image_text(contract, receipts[:2], tmp_path / "refusal-2.json")
+    assert completed.returncode == 78
+    refusal = json.loads((tmp_path / "refusal-2.json").read_text(encoding="utf-8"))
+    assert refusal["reason"] == "IMAGE_TEXT_SOURCE_RECEIPT_SET_INCOMPLETE_REFUSED"
+
+
+def test_image_text_adapter_refuses_forbidden_inputs(tmp_path: Path) -> None:
+    """Deliberate reds: a prediction custody receipt supplied as a source, and an
+    item-text object that carries the answer, both refuse as forbidden inputs."""
+
+    contract, receipts, physical = _write_image_text_fixture(tmp_path)
+    predictions = tmp_path / "predictions.json"
+    predictions.write_text(json.dumps({
+        "schema_version": "ember-restart-mmmu-predictions-v1",
+        "dest_root": str(tmp_path),
+        "files": [],
+    }), encoding="utf-8")
+    completed = _run_image_text(contract, receipts[:2] + [predictions], tmp_path / "refusal-a.json")
+    assert completed.returncode == 78
+    refusal = json.loads((tmp_path / "refusal-a.json").read_text(encoding="utf-8"))
+    assert refusal["reason"].startswith("IMAGE_TEXT_FORBIDDEN_INPUT_REFUSED:source_schema:")
+
+    item_id = "validation_Fixture_3"
+    clean = _image_text_canonical(item_id)
+    with_answer = _image_text_canonical(item_id, {"answer": "B"})
+    text_path = physical[hashlib.sha256(clean).hexdigest()]
+    # Keep the receipt's byte count honest so the refusal is the shape check, not a size check.
+    padded = with_answer[: len(clean)] if len(with_answer) >= len(clean) else with_answer.ljust(len(clean))
+    text_path.write_bytes(padded)
+    completed = _run_image_text(contract, receipts, tmp_path / "refusal-b.json")
+    assert completed.returncode == 78
+    refusal = json.loads((tmp_path / "refusal-b.json").read_text(encoding="utf-8"))
+    assert refusal["reason"].startswith("IMAGE_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_")
+    assert item_id in refusal["reason"]
+
+
+def test_image_text_adapter_row_satisfies_the_release_executor_item_schema(tmp_path: Path) -> None:
+    import importlib.util
+
+    contract, receipts, _physical = _write_image_text_fixture(tmp_path)
+    result = tmp_path / "row.json"
+    completed = _run_image_text(contract, receipts, result)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    row = json.loads(result.read_text(encoding="utf-8"))
+    assert row["score"] == 1.0
+    spec = importlib.util.spec_from_file_location(
+        "issue1947_release_execute", SCRIPT.with_name("issue1947_release_execute.py")
+    )
+    executor = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(executor)
+    validated = executor.validate_row(row, "E-MATRIX-IMAGE-TEXT")
+    assert len(validated["items"]) == IMAGE_TEXT_ITEMS
+    assert all(
+        set(item) == {"item_id", "gold_item_sha256", "prediction", "score"}
+        for item in validated["items"]
+    )
