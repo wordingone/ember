@@ -52,14 +52,17 @@ def write_tokenizer(tmp_path: Path) -> tuple[Path, str]:
     return path, sha(path.read_bytes())
 
 
-def build_fixture(tmp_path: Path, *, leak: bool = False, adjudicated_overlap: bool = False, quarantined_train: bool = False) -> tuple[Path, Path, list[bytes]]:
+LATIN1_RAW = b"caf\xe9 declared utf-8 but encoded latin-1\n"
+
+
+def build_fixture(tmp_path: Path, *, leak: bool = False, adjudicated_overlap: bool = False, quarantined_train: bool = False, undecodable: bool = False) -> tuple[Path, Path, list[bytes]]:
     custody = tmp_path / "custody"
     custody.mkdir()
     payloads = [b"hello world\n", b"catalog train stream doc one\n", b"two two two\n"]
     files = []
     overlap_raw = b"overlap text adjudicated to train\n"
     withdrawn_raw = b"train text withdrawn by quarantine\n"
-    custody_payloads = list(payloads) + ([overlap_raw] if adjudicated_overlap else []) + ([withdrawn_raw] if quarantined_train else [])
+    custody_payloads = list(payloads) + ([overlap_raw] if adjudicated_overlap else []) + ([withdrawn_raw] if quarantined_train else []) + ([LATIN1_RAW] if undecodable else [])
     for index, raw in enumerate(custody_payloads):
         (custody / f"f{index}.txt").write_bytes(raw)
         files.append({"path": f"f{index}.txt", "bytes": len(raw), "sha256": sha(raw)})
@@ -100,6 +103,9 @@ def build_fixture(tmp_path: Path, *, leak: bool = False, adjudicated_overlap: bo
     if quarantined_train:
         add(withdrawn_raw, "train", TRAIN, "text/plain; charset=utf-8", state="quarantined")
         add(withdrawn_raw, "train", TRAIN, "text/plain; charset=utf-8")
+    if undecodable:
+        # The catalog declares UTF-8; the bytes are not. Staging must exclude it under its own class, not stage it.
+        add(LATIN1_RAW, "train", TRAIN, "text/plain; charset=utf-8")
     export_path = tmp_path / "export.json"
     export_path.write_bytes(json.dumps({"records": records, "edges": edges}).encode())
     return export_path, receipt_path, payloads
@@ -475,3 +481,60 @@ def test_produce_refuses_a_broken_chain_and_regenerates_only_identical_bytes(tmp
     with pytest.raises(MODULE.StreamError, match="SHARD_LEDGER_LOCKED_REFUSED"):
         MODULE.produce_shards(manifest=manifest, receipt_path=receipt_path, receipt=receipt, receipt_spans=spans_doc["spans"], tokenizer_path=tokenizer_path, shard_tokens=2, target_shards=4)
     lock.rmdir()
+
+
+def test_stage_excludes_an_undecodable_text_object_and_plan_reverifies_the_claim(tmp_path: Path) -> None:
+    export_path, receipt_path, payloads = build_fixture(tmp_path, undecodable=True)
+    manifest = MODULE.build_staging_manifest(
+        export_raw=export_path.read_bytes(), dataset_ids=None, tokenizer_sha256="t" * 64,
+        custody_receipts=[(receipt_path, receipt_path.read_bytes())],
+    )
+    bad = sha(LATIN1_RAW)
+    assert bad not in {row["sha256"] for row in manifest["rows"]}
+    assert [row["sha256"] for row in manifest["rows"]] == sorted(sha(raw) for raw in payloads)
+    key = "text/plain; charset=utf-8" + MODULE.UNDECODABLE_SUFFIX
+    assert manifest["excluded_media_classes"] == {
+        "application/pdf": {"objects": 1, "bytes": 13}, key: {"objects": 1, "bytes": len(LATIN1_RAW)},
+    }
+    [claim] = manifest["undecodable_objects"]
+    assert claim["sha256"] == bad and claim["error_start"] == 3 and claim["byte_count"] == len(LATIN1_RAW)
+    manifest_raw = json.dumps(manifest, sort_keys=True).encode()
+    coverage = MODULE.build_coverage_receipt(
+        export_raw=export_path.read_bytes(), manifest=manifest, manifest_raw_sha256=sha(manifest_raw),
+        custody_receipts=[(receipt_path, receipt_path.read_bytes())],
+    )
+    [row] = coverage["per_dataset"]
+    assert (row["staged"], row["excluded"], row["unresolved"], row["attributed_objects"]) == (3, 2, 0, 5)
+    assert coverage["totals"]["excluded_media_classes"] == manifest["excluded_media_classes"]
+    # planted negative 1: the manifest claims a perfectly decodable object is undecodable -> refused by re-verification
+    lying = dict(manifest)
+    good = manifest["rows"][0]
+    lying["rows"] = manifest["rows"][1:]
+    lying["staged_count"] = len(lying["rows"])
+    lying["undecodable_objects"] = manifest["undecodable_objects"] + [{
+        "sha256": good["sha256"], "dataset_id": TRAIN, "media_type": good["media_type"], "byte_count": good["byte_count"],
+        "error_start": 0, "error_reason": "planted",
+    }]
+    lying["excluded_media_classes"] = dict(manifest["excluded_media_classes"])
+    lying["excluded_media_classes"][key] = {"objects": 2, "bytes": len(LATIN1_RAW) + good["byte_count"]}
+    lying.pop("self_sha256")
+    lying = MODULE.self_hashed(lying)
+    with pytest.raises(MODULE.StreamError, match=f"COVERAGE_UNDECODABLE_CLAIM_REFUSED:{good['sha256']}"):
+        MODULE.build_coverage_receipt(
+            export_raw=export_path.read_bytes(), manifest=lying, manifest_raw_sha256="0" * 64,
+            custody_receipts=[(receipt_path, receipt_path.read_bytes())],
+        )
+    # planted negative 2: an undecodable object that was staged anyway is refused as an excluded object staged
+    staged_anyway = dict(manifest)
+    staged_anyway["rows"] = sorted(manifest["rows"] + [{
+        "dataset_id": TRAIN, "sha256": bad, "byte_count": len(LATIN1_RAW), "media_type": "text/plain; charset=utf-8",
+        "extractor": "text_utf8", "physical_path": str(tmp_path / "custody" / "f3.txt"), "receipt_sha256s": manifest["rows"][0]["receipt_sha256s"],
+    }], key=lambda item: item["sha256"])
+    staged_anyway["staged_count"] = len(staged_anyway["rows"])
+    staged_anyway.pop("self_sha256")
+    staged_anyway = MODULE.self_hashed(staged_anyway)
+    with pytest.raises(MODULE.StreamError, match=f"COVERAGE_EXCLUDED_OBJECT_STAGED_REFUSED:{bad}"):
+        MODULE.build_coverage_receipt(
+            export_raw=export_path.read_bytes(), manifest=staged_anyway, manifest_raw_sha256="0" * 64,
+            custody_receipts=[(receipt_path, receipt_path.read_bytes())],
+        )

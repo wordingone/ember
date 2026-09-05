@@ -63,6 +63,7 @@ BUDGET_CLAUSE_INDEX = 17
 BUDGET_CLAUSE_MARKER = "token budget"
 LEDGER_SCHEMA = "ember-catalog-train-shard-ledger-v1"
 LEDGER_GENESIS_PREV = "0" * 64
+UNDECODABLE_SUFFIX = " [undecodable-utf8]"
 
 EXTRACTORS: dict[str, str] = {
     "text/plain; charset=utf-8": "text_utf8",
@@ -265,6 +266,7 @@ def build_staging_manifest(
     leakage = leakage_sets(export)
     rows: list[dict[str, Any]] = []
     excluded: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    undecodable: list[dict[str, Any]] = []
     unresolved = [0, 0]
     adjudicated_overlap_staged = 0
     seen: set[str] = set()
@@ -307,6 +309,20 @@ def build_staging_manifest(
                 continue
             if physical.stat().st_size != byte_count:
                 raise StreamError(f"CUSTODY_BYTE_COUNT_REFUSED:{digest}")
+            if extractor == "text_utf8":
+                # The catalog's declared charset is a claim; the stream's encode contract needs the bytes to hold it.
+                # An object whose bytes are not UTF-8 is excluded under its own class and listed, so coverage can
+                # re-verify the claim per object instead of re-reading the corpus.
+                try:
+                    physical.read_bytes().decode("utf-8")
+                except UnicodeDecodeError as error:
+                    excluded[media + UNDECODABLE_SUFFIX][0] += 1
+                    excluded[media + UNDECODABLE_SUFFIX][1] += byte_count
+                    undecodable.append({
+                        "sha256": digest, "dataset_id": dataset_id, "media_type": media, "byte_count": byte_count,
+                        "error_start": int(error.start), "error_reason": str(error.reason),
+                    })
+                    continue
             rows.append({
                 "dataset_id": dataset_id,
                 "sha256": digest,
@@ -343,6 +359,7 @@ def build_staging_manifest(
         "staged_count": len(rows),
         "staged_bytes": sum(row["byte_count"] for row in rows),
         "excluded_media_classes": {media: {"objects": n, "bytes": b} for media, (n, b) in sorted(excluded.items())},
+        "undecodable_objects": sorted(undecodable, key=lambda item: item["sha256"]),
         "unresolved_custody": {"objects": unresolved[0], "bytes": unresolved[1]},
         "rows": rows,
         "claim_boundary": "STAGING ONLY; NO TOKENS CONSUMED; NO CAPABILITY, SUFFICIENCY, OR CAMPAIGN CREDIT",
@@ -432,6 +449,8 @@ def build_coverage_receipt(
     seen: set[str] = set()
     excluded_total: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     unresolved_total = [0, 0]
+    undecodable_claims = {str(item["sha256"]): item for item in manifest.get("undecodable_objects", [])}
+    undecodable_seen: set[str] = set()
     rows: list[dict[str, Any]] = []
     staged_seen: set[str] = set()
     for dataset_id in dataset_ids:
@@ -456,13 +475,29 @@ def build_coverage_receipt(
                 excluded_total[media][0] += 1
                 excluded_total[media][1] += byte_count
                 continue
-            if resolve_physical(digest, indexes) is None:
+            physical = resolve_physical(digest, indexes)
+            if physical is None:
                 if digest in staged_by_object:
                     raise StreamError(f"COVERAGE_UNRESOLVED_OBJECT_STAGED_REFUSED:{digest}")
                 unresolved += 1
                 unresolved_tokens += tokens
                 unresolved_total[0] += 1
                 unresolved_total[1] += byte_count
+                continue
+            if digest in undecodable_claims:
+                if digest in staged_by_object:
+                    raise StreamError(f"COVERAGE_EXCLUDED_OBJECT_STAGED_REFUSED:{digest}")
+                try:
+                    physical.read_bytes().decode("utf-8")
+                except UnicodeDecodeError:
+                    pass
+                else:
+                    raise StreamError(f"COVERAGE_UNDECODABLE_CLAIM_REFUSED:{digest}")
+                undecodable_seen.add(digest)
+                excluded += 1
+                excluded_tokens += tokens
+                excluded_total[media + UNDECODABLE_SUFFIX][0] += 1
+                excluded_total[media + UNDECODABLE_SUFFIX][1] += byte_count
                 continue
             staged_dataset = staged_by_object.get(digest)
             if staged_dataset is None:
@@ -489,6 +524,9 @@ def build_coverage_receipt(
     extra = set(staged_by_object) - staged_seen
     if extra:
         raise StreamError(f"COVERAGE_FOREIGN_ROW_REFUSED:{sorted(extra)[0]}")
+    foreign_claims = set(undecodable_claims) - undecodable_seen
+    if foreign_claims:
+        raise StreamError(f"COVERAGE_UNDECODABLE_FOREIGN_REFUSED:{sorted(foreign_claims)[0]}")
     excluded_classes = {media: {"objects": n, "bytes": b} for media, (n, b) in sorted(excluded_total.items())}
     if excluded_classes != manifest.get("excluded_media_classes"):
         raise StreamError("COVERAGE_EXCLUDED_CLASSES_DRIFT_REFUSED")
