@@ -184,6 +184,10 @@ def test_fill_produces_a_receipt_the_semantic_stream_loader_accepts_unchanged(tm
         receipt_path=receipt_path_out, shards_root=receipt_path_out.parent, tokenizer_path=tokenizer_path,
     )
     assert stream.tokenizer_sha256 == tokenizer_sha
+    written_receipt = json.loads(receipt_path_out.read_text(encoding="utf-8"))
+    # Accounting is measured inside the written shards: content + separators == covered tokens.
+    assert written_receipt["content_total_tokens"] + written_receipt["separator_tokens"] == written_receipt["total_stream_tokens"]
+    assert written_receipt["separator_tokens"] >= 1
     episode, cursor = stream.next_episode(shard_index=0, token_offset=0, sequence_length=4)
     # Objects stage in sha256 order; rebuild the expected stream from that order.
     frozen, _ = MODULE.load_frozen_tokenizer(tokenizer_path, tokenizer_sha)
