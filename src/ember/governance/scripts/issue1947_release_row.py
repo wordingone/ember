@@ -551,6 +551,91 @@ def adapt_audio_text(contract_path: Path, source_paths: list[Path]) -> dict[str,
     return receipt
 
 
+IMAGE_AUDIO_TEXT_CONTRACT_SCHEMA = "ember-issue1947-protected-image-audio-text-contract-v1"
+IMAGE_AUDIO_TEXT_TASK_ID = "EXACT_IMAGE_AUDIO_TEXT_TRIPLE_IDENTITY"
+IMAGE_AUDIO_TEXT_FORBIDDEN_INPUTS = ["speaker_metadata", "chapter_metadata", "mmmu_answer_dictionary", "prediction_custody"]
+IMAGE_AUDIO_TEXT_ITEM_COUNT = 64
+
+
+def adapt_image_audio_text(contract_path: Path, source_paths: list[Path]) -> dict[str, object]:
+    """E-MATRIX-IMAGE-AUDIO-TEXT (#2145): triple identity over the admitted image payload, the
+    admitted audio payload, and the admitted transcript text object. Speaker/chapter identities,
+    the MMMU answer dictionary, and prediction custody are forbidden inputs: a transcript object
+    carrying any member beyond {utterance_id, transcript} refuses the row, and a non-connector
+    receipt refuses before any byte is read."""
+
+    contract, contract_raw = load_self_hashed(contract_path, IMAGE_AUDIO_TEXT_CONTRACT_SCHEMA)
+    task = contract.get("task")
+    if (
+        contract.get("result") != "PASS"
+        or contract.get("task_class") != "adapter_totality"
+        or not isinstance(task, dict)
+        or task.get("id") != IMAGE_AUDIO_TEXT_TASK_ID
+        or task.get("consumes") != ["image_payload_bytes", "audio_payload_bytes", "transcript_text_payload_bytes"]
+        or task.get("forbidden_inputs") != IMAGE_AUDIO_TEXT_FORBIDDEN_INPUTS
+        or contract.get("totality")
+        != {"expected": IMAGE_AUDIO_TEXT_ITEM_COUNT, "observed": IMAGE_AUDIO_TEXT_ITEM_COUNT, "complete": True}
+    ):
+        raise ValueError("IMAGE_AUDIO_TEXT_CONTRACT_TASK_TOTALITY_REFUSED")
+    by_sha, supplied = _load_bound_sources(contract, source_paths, "IMAGE_AUDIO_TEXT")
+    frozen_items = contract.get("frozen_items")
+    if not isinstance(frozen_items, list) or len(frozen_items) != IMAGE_AUDIO_TEXT_ITEM_COUNT:
+        raise ValueError("IMAGE_AUDIO_TEXT_CONTRACT_ITEM_TOTALITY_REFUSED")
+    items: list[dict[str, object]] = []
+    for frozen in frozen_items:
+        if not isinstance(frozen, dict):
+            raise TypeError("IMAGE_AUDIO_TEXT_CONTRACT_ITEM_SCHEMA_REFUSED")
+        item_id = frozen.get("item_id")
+        gold = frozen.get("gold_item_sha256")
+        image_object = frozen.get("image_object")
+        audio_object = frozen.get("audio_object")
+        text_object = frozen.get("item_text_object")
+        if (
+            not isinstance(item_id, str)
+            or not isinstance(gold, str)
+            or not isinstance(image_object, dict)
+            or not isinstance(audio_object, dict)
+            or not isinstance(text_object, dict)
+        ):
+            raise TypeError("IMAGE_AUDIO_TEXT_CONTRACT_ITEM_SCHEMA_REFUSED")
+        image_raw = _bound_payload(by_sha, image_object.get("sha256"), image_object.get("byte_count"), item_id, "IMAGE_AUDIO_TEXT")
+        audio_raw = _bound_payload(by_sha, audio_object.get("sha256"), audio_object.get("byte_count"), item_id, "IMAGE_AUDIO_TEXT")
+        text_raw = _bound_payload(by_sha, text_object.get("sha256"), text_object.get("byte_count"), item_id, "IMAGE_AUDIO_TEXT")
+        try:
+            text_payload = json.loads(text_raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"IMAGE_AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_unreadable:{item_id}") from error
+        if (
+            not isinstance(text_payload, dict)
+            or set(text_payload) != AUDIO_TEXT_TEXT_KEYS
+            or text_payload.get("utterance_id") != item_id
+            or not isinstance(text_payload.get("transcript"), str)
+            or _audio_text_canonical_bytes(text_payload) != text_raw
+        ):
+            raise ValueError(f"IMAGE_AUDIO_TEXT_FORBIDDEN_INPUT_REFUSED:item_text_shape:{item_id}")
+        prediction = sha(image_raw + audio_raw + text_raw)
+        items.append({
+            "item_id": item_id,
+            "gold_item_sha256": gold,
+            "prediction": prediction,
+            "score": 1.0 if prediction == gold else 0.0,
+        })
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue2145-image-audio-text-row-receipt-v1",
+        "result": "IMAGE_AUDIO_TEXT_HELDOUT_ROW_PRODUCED",
+        "row_id": "E-MATRIX-IMAGE-AUDIO-TEXT",
+        "task_class": "adapter_totality",
+        "task": IMAGE_AUDIO_TEXT_TASK_ID,
+        "contract_raw_sha256": sha(contract_raw),
+        "connector_receipt_raw_sha256s": supplied,
+        "items": items,
+        "score": sum(float(item["score"]) for item in items) / len(items),
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    }
+    receipt["self_sha256"] = sha(canonical(receipt))
+    return receipt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="operation", required=True)
@@ -584,7 +669,35 @@ def main() -> int:
         help="connector receipt bound by the contract; repeat for every bound receipt",
     )
     audio_text.add_argument("--result", type=Path, required=True)
+    image_audio_text = subparsers.add_parser("adapt-image-audio-text")
+    image_audio_text.add_argument("--contract", type=Path, required=True)
+    image_audio_text.add_argument(
+        "--source-receipt", type=Path, required=True, action="append",
+        help="connector receipt bound by the contract; repeat for every bound receipt",
+    )
+    image_audio_text.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
+    if args.operation == "adapt-image-audio-text":
+        try:
+            row = adapt_image_audio_text(args.contract, list(args.source_receipt))
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue2145-image-audio-text-row-refusal-v1",
+                "result": "IMAGE_AUDIO_TEXT_HELDOUT_REFUSED",
+                "row_id": "E-MATRIX-IMAGE-AUDIO-TEXT",
+                "task_class": "adapter_totality",
+                "reason": str(error),
+                "claim_boundary": "ADAPTER TOTALITY REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
     if args.operation == "adapt-text":
         row = adapt_text(args.contract, args.source_receipt)
         args.result.parent.mkdir(parents=True, exist_ok=True)
