@@ -646,6 +646,75 @@ def build_budget_receipt(
 
 
 # --------------------------------------------------------------------------- encode
+ENCODE_WINDOW_CHARS = 1 << 22  # bounds every tokenizer.encode()/pre_tokenize_str() call to ~4M chars
+ENCODE_LOOKAHEAD_CHARS = 4096
+ENCODE_MIN_WINDOW_PIECES = 3
+
+
+def encode_document_bounded(
+    tokenizer: Any,
+    text: str,
+    window_chars: int = ENCODE_WINDOW_CHARS,
+    lookahead_chars: int = ENCODE_LOOKAHEAD_CHARS,
+) -> tuple[list[int], bool]:
+    """Token ids for one document, bounding every tokenizer call to at most
+    `window_chars + lookahead_chars` characters of input -- the cure for the receipted
+    allocator failure inside a single whole-document `tokenizer.encode()` call on a large
+    text_utf8 object (issue2135-u3-governed-79c832a9-20260905T1640Z/produce-exhaust.stderr.log).
+
+    Equivalence (property-tested in tests/test_issue2121_bounded_encode.py against the frozen
+    tokenizer): the returned ids equal `tokenizer.encode(text, add_special_tokens=False).ids`,
+    for a BPE tokenizer whose pre_tokenizer is ByteLevel(add_prefix_space=False, use_regex=True)
+    with no normalizer. Two properties of that pipeline make windowing exact:
+      * BPE merges never cross a pre-token boundary -- each pre-token is merged independently.
+      * The ByteLevel regex scans left to right with no lookbehind; its only lookahead is the
+        single character `\\s+(?!\\S)` checks (whether a whitespace run's next character is
+        itself non-whitespace).
+    A pre-token produced by `pre_tokenize_str` over a window is therefore the SAME pre-token a
+    whole-string scan would produce at that position, PROVIDED the window also holds at least
+    one character past that pre-token's own end -- true for every pre-token in the window except
+    (up to) its last one, which may be truncated by the window boundary, and the one before that,
+    whose own resolution can depend on seeing the (possibly truncated) last one's first
+    character. (Two adjacent single-character whitespace pre-tokens are split apart only because
+    a real, later character forces the earlier one's greedy match to back off by one; drop that
+    later character and the isolated remainder re-merges under `\\s+(?!\\S)`'s greedy match --
+    this is exactly why each kept pre-token is encoded on its own already-identified span below,
+    never by re-tokenizing a joined substring, which would re-derive -- and can get wrong --
+    exactly the boundary this paragraph is protecting.)
+
+    Each window therefore keeps every pre-token except its last two, encodes each kept pre-token
+    on its own span via one batched `encode_batch` call, and resumes the next window at the
+    second-to-last pre-token's start (which is re-discovered there with a fresh full window of
+    lookahead). A window holding fewer than `ENCODE_MIN_WINDOW_PIECES` pre-tokens at all (a
+    single pathologically long pre-token spanning the window) has no safe cut point; the
+    remainder is encoded in one whole call instead, and `fallback_used=True` is returned so the
+    caller can note it (no receipt field is added for this -- the staging manifest, receipt
+    schema, shard naming, RESERVED_BAND checks and CLI stay unchanged per the #2121 contract).
+    """
+
+    length = len(text)
+    position = 0
+    ids: list[int] = []
+    fallback_used = False
+    while position < length:
+        window_end = min(position + window_chars + lookahead_chars, length)
+        if window_end >= length:
+            ids.extend(tokenizer.encode(text[position:window_end], add_special_tokens=False).ids)
+            return ids, fallback_used
+        pieces = tokenizer.pre_tokenizer.pre_tokenize_str(text[position:window_end])
+        keep = pieces[:-2] if len(pieces) >= ENCODE_MIN_WINDOW_PIECES else []
+        cut = position + int(pieces[-2][1][0]) if len(pieces) >= ENCODE_MIN_WINDOW_PIECES else position
+        if not keep or cut <= position:
+            # Pathological single huge pre-token: no safe cut point exists in this window.
+            ids.extend(tokenizer.encode(text[position:], add_special_tokens=False).ids)
+            return ids, True
+        piece_texts = [text[position + start : position + end] for _, (start, end) in keep]
+        for encoding in tokenizer.encode_batch(piece_texts, add_special_tokens=False):
+            ids.extend(encoding.ids)
+        position = cut
+    return ids, fallback_used
+
+
 def load_frozen_tokenizer(tokenizer_path: Path, expected_sha256: str) -> tuple[Any, list[str]]:
     """Load tokenizer.json with its added_tokens table stripped in memory (v0 contract)."""
 
@@ -718,7 +787,14 @@ def extract_documents(path: Path, extractor: str) -> Iterator[str]:
 
 
 def encode_object(tokenizer: Any, row: dict[str, Any]) -> tuple[list[int], int]:
-    """Tokens for one staged object; documents separated by the writer-inserted id 0."""
+    """Tokens for one staged object; documents separated by the writer-inserted id 0.
+
+    Each document is encoded through `encode_document_bounded` (bounded-window equivalence
+    proof above) instead of one whole-document `tokenizer.encode()` call, so a large object's
+    encode never allocates on the scale of its own byte size in a single tokenizer call. The
+    RESERVED_BAND check runs over the same per-document `ids` it always has; the bound changes
+    how those ids are produced, never what is checked.
+    """
 
     path = Path(row["physical_path"])
     if sha_file(path) != row["sha256"]:
@@ -726,7 +802,9 @@ def encode_object(tokenizer: Any, row: dict[str, Any]) -> tuple[list[int], int]:
     tokens: list[int] = []
     separators = 0
     for document in extract_documents(path, row["extractor"]):
-        ids = tokenizer.encode(document, add_special_tokens=False).ids
+        ids, _fallback_used = encode_document_bounded(
+            tokenizer, document, window_chars=ENCODE_WINDOW_CHARS, lookahead_chars=ENCODE_LOOKAHEAD_CHARS
+        )
         if any(token in RESERVED_IDS or token == SEPARATOR_ID or token >= MAX_ID_LT for token in ids):
             raise StreamError(f"RESERVED_BAND_REFUSED:{row['sha256']}")
         tokens.extend(ids)
