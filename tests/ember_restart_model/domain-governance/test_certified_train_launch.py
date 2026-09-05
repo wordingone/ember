@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "certified_train_launch.py"
 if str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b") not in sys.path:
     sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
@@ -158,6 +158,20 @@ def valid_run_spec(
         "run_id": "owned-3b-canary-test",
         "seed": 83,
         "runner_receipt": str(custody_root / "runner-receipt.json"),
+        # Issue #2119: training_job_purpose is a required run-spec key. The
+        # shared base fixture classifies DIAGNOSTIC -- the one purpose whose
+        # required bindings (the three string fields below) neither require
+        # nor forbid the optional resume/specialist/semantic-canary/a1 groups
+        # every other test class layers on top of this fixture, so adding the
+        # new required field here does not change what any existing test was
+        # actually exercising. A route-specific test that needs
+        # CONTINUE_TRAINING or RETENTION_ELIGIBLE_EXPERIMENT semantics
+        # overrides this key explicitly (see the TrainingJobPurposeTests
+        # class).
+        "training_job_purpose": "DIAGNOSTIC",
+        "training_diagnostic_question": "does the owned checkpoint restore cleanly",
+        "training_diagnostic_non_advancement_reason": "unverified instrumentation change",
+        "training_diagnostic_return_condition": "restore verified against a real checkpoint",
         "requested_scope": {
             "mode": "governed-vertical",
             "optimizer_steps": 1,
@@ -2905,6 +2919,11 @@ class CompletionHeadAncestorTests(unittest.TestCase):
                 "a1_liveness_receipt",
                 "a1_liveness_receipt_sha256",
                 "job_memory_ceiling_probe",
+                "training_experiment_protocol",
+                "training_experiment_continuation_rule",
+                "training_diagnostic_question",
+                "training_diagnostic_non_advancement_reason",
+                "training_diagnostic_return_condition",
             },
         )
 
@@ -3872,6 +3891,210 @@ class ResumeRootAuthorizationTests(_ResumeBundleMixin, unittest.TestCase):
         self.assertFalse(
             module.OPTIONAL_AUTHORIZED_SCOPE_KEYS & module.AUTHORIZED_SCOPE_KEYS
         )
+
+
+class TrainingJobPurposeTests(_ResumeBundleMixin, unittest.TestCase):
+    """Issue #2119 section 2: every certified launch declares
+    training_job_purpose, and the required-binding table is enforced at the
+    real validate_certified_request boundary -- one deliberate red per gate,
+    executed through the actual entry point, never a mock of it."""
+
+    def test_missing_training_job_purpose_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            _rewrite_run_spec_with_custody(
+                paths, lambda spec: spec.pop("training_job_purpose")
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(ValueError, "run spec schema keys"):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_unrecognized_training_job_purpose_value_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda spec: spec.__setitem__(
+                    "training_job_purpose", "SPECULATIVE_BOONDOGGLE"
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError, "training_job_purpose must be one of"
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_continue_training_without_resume_checkpoint_is_refused(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda spec: spec.__setitem__(
+                    "training_job_purpose", "CONTINUE_TRAINING"
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "CONTINUE_TRAINING requires a verified parent state",
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_continue_training_with_resume_but_no_data_segment_is_refused(
+        self,
+    ) -> None:
+        """Verified parent state alone is not sufficient -- CONTINUE_TRAINING
+        also requires an admitted next data segment (issue #2119's required-
+        binding table)."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+            paths = self._bundle(
+                directory,
+                mutate_run_spec=lambda spec: spec.__setitem__(
+                    "training_job_purpose", "CONTINUE_TRAINING"
+                ),
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "CONTINUE_TRAINING requires an admitted next data segment",
+            ):
+                self._validate(module, paths)
+
+    def test_retention_eligible_experiment_without_continuation_rule_is_refused(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+
+            def apply(spec: dict[str, object]) -> None:
+                spec["training_job_purpose"] = "RETENTION_ELIGIBLE_EXPERIMENT"
+                spec["training_experiment_protocol"] = "receipts/exp-protocol.json"
+                # training_experiment_continuation_rule deliberately absent.
+
+            paths = self._bundle(directory, mutate_run_spec=apply)
+            with self.assertRaisesRegex(
+                ValueError,
+                "RETENTION_ELIGIBLE_EXPERIMENT requires a non-empty "
+                "training_experiment_continuation_rule",
+            ):
+                self._validate(module, paths)
+
+    def test_retention_eligible_experiment_without_resume_checkpoint_is_refused(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            _rewrite_run_spec_with_custody(
+                paths,
+                lambda spec: spec.update(
+                    {
+                        "training_job_purpose": "RETENTION_ELIGIBLE_EXPERIMENT",
+                        "training_experiment_protocol": "receipts/exp-protocol.json",
+                        "training_experiment_continuation_rule": (
+                            "retain the control arm if the treatment's "
+                            "protected score regresses"
+                        ),
+                    }
+                ),
+            )
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "RETENTION_ELIGIBLE_EXPERIMENT requires a frozen common start",
+                ):
+                    module.validate_certified_request(
+                        paths["repo"],
+                        paths["certificate"],
+                        paths["ledger"],
+                        paths["run_spec"],
+                    )
+
+    def test_retention_eligible_experiment_with_full_bindings_is_accepted(
+        self,
+    ) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory(dir="B:/tmp") as directory:
+
+            def apply(spec: dict[str, object]) -> None:
+                spec["training_job_purpose"] = "RETENTION_ELIGIBLE_EXPERIMENT"
+                spec["training_experiment_protocol"] = "receipts/exp-protocol.json"
+                spec["training_experiment_continuation_rule"] = (
+                    "retain the control arm if the treatment's protected "
+                    "score regresses"
+                )
+
+            paths = self._bundle(directory, mutate_run_spec=apply)
+            launch = self._validate(module, paths)
+            self.assertEqual(
+                launch.training_job_purpose, "RETENTION_ELIGIBLE_EXPERIMENT"
+            )
+
+    def test_diagnostic_missing_one_of_three_required_fields_is_refused(self) -> None:
+        """One deliberate red per gate: DIAGNOSTIC's three required bindings
+        are checked independently -- dropping any single one refuses."""
+
+        module = load_module()
+        for missing_key in (
+            "training_diagnostic_question",
+            "training_diagnostic_non_advancement_reason",
+            "training_diagnostic_return_condition",
+        ):
+            with (
+                self.subTest(missing_key=missing_key),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                paths = write_valid_bundle(pathlib.Path(directory))
+                _rewrite_run_spec_with_custody(
+                    paths, lambda spec, key=missing_key: spec.pop(key)
+                )
+                with mock.patch.object(module, "read_current_master", return_value=SHA):
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        f"DIAGNOSTIC requires a non-empty {missing_key}",
+                    ):
+                        module.validate_certified_request(
+                            paths["repo"],
+                            paths["certificate"],
+                            paths["ledger"],
+                            paths["run_spec"],
+                        )
+
+    def test_diagnostic_launch_is_accepted_by_default(self) -> None:
+        """The shared base fixture already classifies DIAGNOSTIC -- pin that
+        a bare governed-vertical launch validates end to end and that the
+        classification is surfaced on the returned ValidatedLaunch."""
+
+        module = load_module()
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_valid_bundle(pathlib.Path(directory))
+            with mock.patch.object(module, "read_current_master", return_value=SHA):
+                launch = module.validate_certified_request(
+                    paths["repo"],
+                    paths["certificate"],
+                    paths["ledger"],
+                    paths["run_spec"],
+                )
+            self.assertEqual(launch.training_job_purpose, "DIAGNOSTIC")
 
 
 class SpecialistRoutingTests(_ResumeBundleMixin, unittest.TestCase):
@@ -6371,6 +6594,13 @@ class JobMemoryCeilingProbeTests(unittest.TestCase):
             "seed": 1,
             "runner_receipt": "B:/probe-receipt.json",
             "requested_scope": self.requested_scope,
+            # Issue #2119: a job-memory ceiling probe is always DIAGNOSTIC by
+            # construction, and DIAGNOSTIC's required bindings are the three
+            # fields below.
+            "training_job_purpose": "DIAGNOSTIC",
+            "training_diagnostic_question": "what is the caged child's real memory ceiling",
+            "training_diagnostic_non_advancement_reason": "instrumentation-only probe, no training",
+            "training_diagnostic_return_condition": "ceiling measured and receipted",
             "job_memory_ceiling_probe": {
                 "maximum_job_memory_bytes": self.MAXIMUM,
                 "signed_delta_bytes": signed_delta,
@@ -6418,6 +6648,28 @@ class JobMemoryCeilingProbeTests(unittest.TestCase):
                     self.requested_scope,
                     self.authorized,
                 )
+
+    def test_purpose_diagnostic_is_required_for_a_probe_request(self) -> None:
+        """Issue #2119: a job-memory ceiling probe is always DIAGNOSTIC by
+        construction. The DIAGNOSTIC-classified request (already the fixture
+        default) is accepted; the identical request reclassified as
+        CONTINUE_TRAINING is refused -- mutual exclusivity, mirroring the
+        numeric-pair exclusivity check this class already covers above."""
+
+        accepted = self.request(-self.DELTA)
+        self.assertEqual(
+            self.module._validate_job_memory_ceiling_probe(
+                accepted, self.requested_scope, self.authorized
+            ),
+            (self.MAXIMUM, -self.DELTA),
+        )
+
+        mutated = self.request(-self.DELTA)
+        mutated["training_job_purpose"] = "CONTINUE_TRAINING"
+        with self.assertRaisesRegex(ValueError, "training_job_purpose DIAGNOSTIC"):
+            self.module._validate_job_memory_ceiling_probe(
+                mutated, self.requested_scope, self.authorized
+            )
 
     def test_absent_or_extra_authority_fails_closed(self) -> None:
         with self.assertRaisesRegex(ValueError, "declares no"):
