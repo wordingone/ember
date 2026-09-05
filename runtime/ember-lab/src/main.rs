@@ -688,6 +688,7 @@ const CERTIFIED_LAUNCH_REQUIRED_RUN_SPEC_KEYS: &[&str] = &[
     "runner_receipt",
     "schema_version",
     "seed",
+    "training_job_purpose",
 ];
 const CERTIFIED_LAUNCH_REQUIRED_EXECUTION_SCOPE_KEYS: &[&str] = &[
     "allowed_artifact_roots",
@@ -3499,6 +3500,15 @@ mod tests {
             "run_id": "issue898-probe",
             "seed": 1,
             "runner_receipt": "B:/probe-receipt.json",
+            // Issue #2119: training_job_purpose joined the required run-spec
+            // keys this fixture's closed-key checks enforce. A job-memory
+            // ceiling probe is always DIAGNOSTIC by construction on the
+            // Python side (certified_train_launch.py's own
+            // _validate_job_memory_ceiling_probe); this Rust-side parser
+            // only mirrors the key SET, not that value semantic, so any
+            // string here would pass -- DIAGNOSTIC is used for fixture
+            // fidelity with the real shape a probe request actually carries.
+            "training_job_purpose": "DIAGNOSTIC",
             "requested_scope": {
                 "mode": "governed-vertical",
                 "optimizer_steps": 0,
