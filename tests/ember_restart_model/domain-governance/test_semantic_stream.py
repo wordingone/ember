@@ -161,6 +161,80 @@ class SemanticStreamTests(unittest.TestCase):
             result["data_cursor"],
             {"shard": "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12], "record_index": 2, "receipt_sha256": stream.receipt_sha256, "tokenizer_sha256": stream.tokenizer_sha256, "shard_index": 0, "token_offset": 4, "global_step": 2, "tokens_seen": 4},
         )
+    def test_micro_batch_consumes_consecutive_episodes_per_step_and_binds_the_last_cursor(self) -> None:
+        """#2136: micro_batch episodes form one [B, T] update; resume state and token counts stay exact."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11, 12, 13, 14, 15, 16]])
+            stream = ManifestBoundTokenStream.from_receipt(
+                receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer
+            )
+            config = RestartDecoderConfig.small_for_tests(
+                hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+            )
+            model = UnifiedDecoder(config, genesis_seed=47)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            checkpoints: list[dict[str, object]] = []
+            result = run_manifest_bound_semantic_segment(
+                model=model,
+                optimizer=optimizer,
+                stream=stream,
+                config=config,
+                device=torch.device("cpu"),
+                sequence_length=2,
+                steps=2,
+                micro_batch=2,
+                checkpoint_every=1,
+                checkpoint_callback=lambda _step, state: checkpoints.append(state),
+            )
+        self.assertEqual(result["steps"], 2)
+        self.assertEqual(result["tokens_seen"], 8)
+        self.assertEqual(result["data_cursor"]["record_index"], 2)
+        self.assertEqual(result["data_cursor"]["global_step"], 2)
+        self.assertEqual(result["data_cursor"]["token_offset"], 8)
+        self.assertEqual(len(checkpoints), 2)
+        self.assertEqual(checkpoints[0]["data_cursor"]["token_offset"], 4)
+        self.assertEqual(checkpoints[0]["data_cursor"]["tokens_seen"], 4)
+
+    def test_micro_batch_rejects_non_positive_values_before_training(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, shards_root, tokenizer = self._receipt(root, [[8, 9, 10, 11]])
+            stream = ManifestBoundTokenStream.from_receipt(
+                receipt_path=receipt, shards_root=shards_root, tokenizer_path=tokenizer
+            )
+            config = RestartDecoderConfig.small_for_tests(
+                hidden_size=32, layers=2, attention_heads=4, vocab_size=64
+            )
+            model = UnifiedDecoder(config, genesis_seed=47)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+            for bad in (0, -1, 2.0):
+                with self.assertRaisesRegex(ValueError, "micro_batch"):
+                    run_manifest_bound_semantic_segment(
+                        model=model, optimizer=optimizer, stream=stream, config=config,
+                        device=torch.device("cpu"), sequence_length=2, steps=1,
+                        micro_batch=bad, checkpoint_every=1,
+                        checkpoint_callback=lambda _step, _state: None,
+                    )
+
+    def test_semantic_text_batch_record_decodes_to_two_dimensional_tensors_and_refuses_ragged_rows(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        record = {
+            "schema_version": "ember-owned-semantic-text-batch-v1", "active_expert": "shared",
+            "token_ids": [[8, 9, 10], [11, 12, 13]], "target_ids": [[9, 10, 11], [12, 13, 14]],
+        }
+        batch = decode_owned_batch(record, config, device=torch.device("cpu"))
+        self.assertEqual(tuple(batch["input_ids"].shape), (2, 3))
+        self.assertEqual(tuple(batch["target_ids"].shape), (2, 3))
+        self.assertEqual(batch["active_expert"], "shared")
+        self.assertEqual(batch["spans"], [])
+        ragged = dict(record, token_ids=[[8, 9, 10], [11, 12]], target_ids=[[9, 10, 11], [12, 13]])
+        with self.assertRaisesRegex(ValueError, "one sequence length"):
+            decode_owned_batch(ragged, config, device=torch.device("cpu"))
+        routed = dict(record, active_expert="vision")
+        with self.assertRaisesRegex(ValueError, "shared core route"):
+            decode_owned_batch(routed, config, device=torch.device("cpu"))
+
     def test_resume_cursor_rejects_declared_identity_or_counter_drift_before_training(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
