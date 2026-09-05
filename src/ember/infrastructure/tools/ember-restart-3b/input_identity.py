@@ -366,6 +366,16 @@ def _resolve_catalog_dataset(
     _verified_catalog_import_receipt(
         consumer_import_receipt_raw, expected_export_sha256=catalog_export_sha256
     )
+    # The consumer this receipt pair certifies is the attempt that consumed the
+    # dataset import's export: its attempt id ends with that export's sha256. A
+    # re-derived consumer (a later attempt over the same dataset, #1581 debt
+    # row) is therefore selected by the export it was proven on, never by count.
+    try:
+        consumed_export_sha256 = json.loads(dataset_import_receipt_raw).get(
+            "canonical_export_sha256"
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+        consumed_export_sha256 = None
     try:
         catalog = json.loads(catalog_export_raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -404,6 +414,21 @@ def _resolve_catalog_dataset(
         and expected_dataset_id in admitted_datasets
         and isinstance(edge.get("from_id"), str)
     ]
+    if (
+        len(consumer_dataset_edges) > 1
+        and isinstance(consumed_export_sha256, str)
+        and all(
+            edge["from_id"].startswith(
+                ("attempt:issue1581-catalog-preflight:", "attempt:issue1581-catalog-evaluation:")
+            )
+            for edge in consumer_dataset_edges
+        )
+    ):
+        consumer_dataset_edges = [
+            edge
+            for edge in consumer_dataset_edges
+            if edge["from_id"].endswith(":" + consumed_export_sha256)
+        ]
     if len(consumer_dataset_edges) != 1:
         raise InputIdentityError(
             "catalog_dataset_substitution",
@@ -461,10 +486,24 @@ def _resolve_catalog_dataset(
         and row.get("id") in membership_ids
     ]
     if len(memberships) != len(membership_ids) or not memberships or any(
-        row.get("split") != expected_split or row.get("admission_state") != "admitted"
+        row.get("split") != expected_split
+        or row.get("admission_state") not in {"admitted", "quarantined"}
         for row in memberships
     ):
         raise InputIdentityError("catalog_dataset_substitution", "catalog dataset does not match the exact admitted split")
+    # A membership the catalog quarantined (data-catalog-quarantine-overlaps) is
+    # not part of the dataset's admitted content: the resolved identity covers the
+    # admitted memberships only, so object counts and source bindings describe
+    # what a consumer may actually credit.  An all-quarantined dataset resolves
+    # to nothing and refuses.
+    membership_ids = {
+        row["id"] for row in memberships if row.get("admission_state") == "admitted"
+    }
+    if not membership_ids:
+        raise InputIdentityError(
+            "catalog_dataset_substitution",
+            "catalog dataset carries no admitted memberships",
+        )
     membership_object_edges = [
         edge
         for edge in edges
