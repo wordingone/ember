@@ -86,6 +86,8 @@ jobs:
             src/ember/governance/scripts/tests/test_verify_ember01_completion.py -k "cond4"
       - name: Execute the catalog consumption receipt consumer tests (#2124)
         run: python -B -m pytest -q -p no:cacheprovider src/ember/governance/scripts/tests/test_catalog_consumption_receipt.py
+      - name: Execute the release-row adapter and heldout image-text consumer tests (#1947)
+        run: python -B -m pytest -q -p no:cacheprovider src/ember/governance/scripts/tests/test_issue1947_release_row.py src/ember/governance/scripts/tests/test_issue2130_heldout_image_text.py
       - name: Verify text-lab input identity pins are fresh
         run: python -B "$(test -f src/ember/infrastructure/tools/ember-restart-3b/remint_text_lab_input_identity.py && echo src/ember/infrastructure/tools/ember-restart-3b || echo tools/ember-restart-3b)/remint_text_lab_input_identity.py" --check
       - name: Verify training closure and Python environment authority
