@@ -195,6 +195,100 @@ def adapt_image(contract_path: Path, source_path: Path) -> dict[str, object]:
     return receipt
 
 
+def adapt_audio(contract_path: Path, source_path: Path) -> dict[str, object]:
+    contract, contract_raw = load_self_hashed(
+        contract_path, "ember-issue1947-protected-audio-contract-v1"
+    )
+    source_raw = source_path.read_bytes()
+    try:
+        source = json.loads(source_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("AUDIO_SOURCE_RECEIPT_UNREADABLE_REFUSED") from error
+    task = contract.get("task")
+    if (
+        contract.get("result") != "PASS"
+        or contract.get("task_class") != "adapter_totality"
+        or not isinstance(task, dict)
+        or task.get("id") != "EXACT_AUDIO_PAYLOAD_SHA256_IDENTITY"
+        or task.get("consumes") != ["audio_payload_bytes"]
+        or task.get("forbidden_inputs")
+        != ["librispeech_transcript", "speaker_metadata", "chapter_metadata"]
+        or contract.get("totality")
+        != {"expected": 64, "observed": 64, "complete": True}
+    ):
+        raise ValueError("AUDIO_CONTRACT_TASK_TOTALITY_REFUSED")
+    binding = contract.get("source")
+    if (
+        not isinstance(binding, dict)
+        or binding.get("connector_receipt_raw_sha256") != sha(source_raw)
+    ):
+        raise ValueError("AUDIO_SOURCE_RECEIPT_BINDING_DRIFT_REFUSED")
+    if source.get("schema") != "corpus-connector-receipt-v1":
+        raise ValueError("AUDIO_SOURCE_RECEIPT_SCHEMA_REFUSED")
+    root_value = source.get("dest_root")
+    files = source.get("files")
+    if not isinstance(root_value, str) or not isinstance(files, list):
+        raise TypeError("AUDIO_SOURCE_RECEIPT_TOTALITY_REFUSED")
+    root = Path(root_value)
+    if not root.is_absolute() or not root.is_dir():
+        raise ValueError("AUDIO_CUSTODY_ROOT_MISSING_REFUSED")
+    root = root.resolve()
+    by_sha: dict[str, dict[str, object]] = {}
+    for row in files:
+        if not isinstance(row, dict) or not isinstance(row.get("sha256"), str):
+            raise TypeError("AUDIO_SOURCE_RECEIPT_FILE_SCHEMA_REFUSED")
+        if row["sha256"] in by_sha:
+            raise ValueError("AUDIO_SOURCE_RECEIPT_DUPLICATE_OBJECT_REFUSED")
+        by_sha[row["sha256"]] = row
+    frozen_items = contract.get("frozen_items")
+    if not isinstance(frozen_items, list) or len(frozen_items) != 64:
+        raise ValueError("AUDIO_CONTRACT_ITEM_TOTALITY_REFUSED")
+    items: list[dict[str, object]] = []
+    for frozen in frozen_items:
+        if not isinstance(frozen, dict):
+            raise TypeError("AUDIO_CONTRACT_ITEM_SCHEMA_REFUSED")
+        gold = frozen.get("gold_object_sha256")
+        source_row = by_sha.get(gold) if isinstance(gold, str) else None
+        if (
+            source_row is None
+            or source_row.get("bytes") != frozen.get("byte_count")
+            or source_row.get("sha256") != gold
+            or not isinstance(source_row.get("path"), str)
+        ):
+            raise ValueError(f"AUDIO_PAYLOAD_MISSING_REFUSED:{gold}")
+        physical = (root / Path(source_row["path"])).resolve()
+        try:
+            physical.relative_to(root)
+        except ValueError as error:
+            raise ValueError(f"AUDIO_PAYLOAD_PATH_ESCAPE_REFUSED:{gold}") from error
+        if not physical.is_file():
+            raise ValueError(f"AUDIO_PAYLOAD_MISSING_REFUSED:{gold}")
+        prediction = sha(physical.read_bytes())
+        # Same item schema as adapt_image (issue1947_release_execute.validate_row):
+        # {item_id, gold_item_sha256, prediction, score}; the audio contract's
+        # `gold_object_sha256` is the same digest under the audio contract's name.
+        items.append({
+            "item_id": frozen.get("item_id"),
+            "gold_item_sha256": gold,
+            "prediction": prediction,
+            "score": 1.0 if prediction == gold else 0.0,
+        })
+    receipt: dict[str, object] = {
+        "schema_version": "ember-issue1947-audio-row-receipt-v1",
+        "result": "AUDIO_HELDOUT_ROW_PRODUCED",
+        "row_id": "E-MATRIX-AUDIO",
+        "task_class": "adapter_totality",
+        "task": "EXACT_AUDIO_PAYLOAD_SHA256_IDENTITY",
+        "contract_raw_sha256": sha(contract_raw),
+        "connector_receipt_raw_sha256": sha(source_raw),
+        "items": items,
+        "score": sum(float(item["score"]) for item in items) / len(items),
+        "claim_boundary": "ADAPTER TOTALITY SCORE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+    }
+    receipt["self_sha256"] = sha(canonical(receipt))
+    return receipt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="operation", required=True)
@@ -210,6 +304,10 @@ def main() -> int:
     image.add_argument("--contract", type=Path, required=True)
     image.add_argument("--source-receipt", type=Path, required=True)
     image.add_argument("--result", type=Path, required=True)
+    audio = subparsers.add_parser("adapt-audio")
+    audio.add_argument("--contract", type=Path, required=True)
+    audio.add_argument("--source-receipt", type=Path, required=True)
+    audio.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
     if args.operation == "adapt-text":
         row = adapt_text(args.contract, args.source_receipt)
@@ -228,6 +326,27 @@ def main() -> int:
                 "schema_version": "ember-issue2105-image-row-refusal-v1",
                 "result": "IMAGE_HELDOUT_REFUSED",
                 "row_id": "E-MATRIX-IMAGE",
+                "task_class": "adapter_totality",
+                "reason": str(error),
+                "claim_boundary": "ADAPTER TOTALITY REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
+    if args.operation == "adapt-audio":
+        try:
+            row = adapt_audio(args.contract, args.source_receipt)
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue1947-audio-row-refusal-v1",
+                "result": "AUDIO_HELDOUT_REFUSED",
+                "row_id": "E-MATRIX-AUDIO",
                 "task_class": "adapter_totality",
                 "reason": str(error),
                 "claim_boundary": "ADAPTER TOTALITY REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
