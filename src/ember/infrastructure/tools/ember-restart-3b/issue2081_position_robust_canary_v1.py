@@ -35,7 +35,7 @@ PREDECESSOR_TEXT_LAB_CORPUS_SHA256 = (
 AA_CORPUS_REPO_PATH = "data/ember-restart-3b/owned-text-lab-corpus-v4.json"
 
 SCHEMA_VERSION = "ember-issue2099-measured-slot-position-matched-loss-canary-v1"
-AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-fixed-burn-in-paired-window-canary-v3"
+AA_SCHEMA_VERSION = "ember-issue2112-aa-boundary-synced-fixed-burn-in-paired-window-canary-v4"
 AA_ISSUE = 2112
 POSITION_RATIO_FLOOR = 1.0 / 1.5
 POSITION_RATIO_CEILING = 1.5
@@ -74,6 +74,15 @@ AA_WARM_BURN_IN_UPDATES = AA_WARM_BURN_IN_WINDOWS * AA_WARM_WINDOW_UPDATES
 # Retained name: the receipt/test field "warm_updates_to_stability" counts the
 # fixed burn-in.
 AA_WARM_STABILITY_READINESS_UPDATE_LIMIT = AA_WARM_BURN_IN_UPDATES
+# Probe 1432ec91 (v3 schema) was refused LOSS_DIVERGENCE_REFUSED:7 with an absolute
+# gap of 0.001026 at loss ~6.7: the A/A row handed the base adjudicator the LAST
+# measured update's loss, so 25 updates of kernel-order drift were judged against
+# the base's same-start tolerance (its row loss is the FIRST update from the common
+# snapshot). Sampled parameters were identical across arms in all eight pairs, and
+# the first post-switch update's loss was bit-identical in all eight. The row loss
+# is therefore the common-start (excluded) update's loss, and the measured
+# trajectory gets its own relative gate at the base's relative limit.
+AA_MEASURED_LOSS_RELATIVE_LIMIT = BASE.LOSS_RELATIVE_LIMIT
 _BASE_RUN_ONE_UPDATE = BASE.run_one_update
 _BASE_ADJUDICATE_PAIRS = BASE.adjudicate_pairs
 
@@ -216,7 +225,14 @@ def adjudicate_pairs(
     for pair_index, rows in enumerate(pairs):
         expected_order = AA_PAIR_ORDERS[pair_index]
         if aa_mode and cure_fields_present:
-            paired_update_statistics_by_pair.append(paired_update_statistics(rows))
+            pair_statistics = paired_update_statistics(rows)
+            loss_divergence = pair_statistics["measured_loss_max_relative_divergence"]
+            if loss_divergence > AA_MEASURED_LOSS_RELATIVE_LIMIT:
+                raise ValueError(
+                    "AA_MEASURED_LOSS_TRAJECTORY_DIVERGENCE_REFUSED"
+                    f":{pair_index}:{loss_divergence}"
+                )
+            paired_update_statistics_by_pair.append(pair_statistics)
         for executed_slot, row in enumerate(rows):
             arm = str(row["arm"])
             if aa_mode and cure_fields_present:
@@ -254,6 +270,13 @@ def adjudicate_pairs(
                     or not all(isinstance(item, Mapping) for item in excluded_updates)
                 ):
                     raise ValueError("AA_EXCLUDED_UPDATE_RECORD_REFUSED")
+                if not math.isclose(
+                    float(row.get("loss", float("nan"))),
+                    float(excluded_updates[0].get("loss", float("nan"))),
+                    rel_tol=0.0,
+                    abs_tol=0.0,
+                ):
+                    raise ValueError(f"AA_ROW_LOSS_NOT_COMMON_START_REFUSED:{pair_index}")
                 if (
                     not isinstance(measured_updates, list)
                     or len(measured_updates) != AA_MEASURED_WINDOW_UPDATES
@@ -427,6 +450,12 @@ def _aa_constants() -> dict[str, object]:
         "aa_warm_burn_in_updates": AA_WARM_BURN_IN_UPDATES,
         "aa_measured_window_updates": AA_MEASURED_WINDOW_UPDATES,
         "aa_fast_update_seconds_fraction": AA_FAST_UPDATE_SECONDS_FRACTION,
+        "aa_measured_loss_relative_limit": AA_MEASURED_LOSS_RELATIVE_LIMIT,
+        "aa_row_loss_semantics": (
+            "row loss = the excluded post-switch update (first update from the"
+            " common snapshot, the base same-start contract); the measured"
+            " trajectory is gated per update at the relative limit"
+        ),
         "aa_warm_readiness_criterion": (
             "fixed burn-in of one W-update window after the excluded post-switch"
             " update; no convergence gate (probes 2f4532c0 and a6d2c3fd receipted"
@@ -609,7 +638,13 @@ def paired_update_statistics(
         float(t["tokens_per_second"]) / float(c["tokens_per_second"])
         for c, t in zip(control, treatment)
     ]
+    loss_relative_divergences = [
+        abs(float(t["loss"]) - float(c["loss"])) / max(abs(float(c["loss"])), 1e-12)
+        for c, t in zip(control, treatment)
+    ]
     return {
+        "measured_loss_max_relative_divergence": max(loss_relative_divergences),
+        "measured_loss_relative_divergences": loss_relative_divergences,
         "paired_update_seconds_correlation": pearson_correlation(
             control_seconds, treatment_seconds
         ),
@@ -730,6 +765,9 @@ def _run_aa_arm(**kwargs):
             f"measured-window-{measured_updates[0]['event_ids'][0]}",
             f"measured-window-{measured_updates[-1]['event_ids'][1]}",
         ],
+        # Base contract: the row loss is the first update from the common snapshot.
+        "loss": float(excluded_updates[0]["loss"]),
+        "measured_window_final_loss": float(measured_updates[-1]["loss"]),
         "warm_loss": final_warm["loss"],
         "warm_processed_tokens": final_warm["processed_tokens"],
         "warm_event_seconds": final_warm["event_seconds"],

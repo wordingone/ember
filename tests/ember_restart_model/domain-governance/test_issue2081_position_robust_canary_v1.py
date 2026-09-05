@@ -536,7 +536,8 @@ def test_aa_constants_are_the_fixed_schedule():
     assert MODULE.AA_POST_SWITCH_EXCLUDED_UPDATES == 1
     assert MODULE.AA_PAIRED_RATIO_FLOOR == 0.98
     assert MODULE.AA_PAIRED_RATIO_CEILING == 1.02
-    assert MODULE.AA_SCHEMA_VERSION.endswith("fixed-burn-in-paired-window-canary-v3")
+    assert MODULE.AA_SCHEMA_VERSION.endswith("fixed-burn-in-paired-window-canary-v4")
+    assert MODULE.AA_MEASURED_LOSS_RELATIVE_LIMIT == MODULE.BASE.LOSS_RELATIVE_LIMIT == 0.001
 
 
 def test_aa_convergence_rules_refused_both_probes_and_the_fixed_burn_in_accepts_them():
@@ -1324,3 +1325,119 @@ def test_configured_non_aa_refuses_control_corpus_pin(tmp_path: Path):
 
     with pytest.raises(ValueError, match="TEXT_LAB_CORPUS_HASH_DRIFT_REFUSED"):
         module.BASE.validate_text_lab_corpus(corpus, "0" * 64)
+
+# Probe 1432ec91 (v3 schema), pair 7: the excluded post-switch update was bit-identical
+# across arms; the sixteen measured updates drifted by kernel order to an absolute
+# gap of 0.001026 at the window end (relative 1.58e-4), which the base same-start
+# absolute limit refused. Sampled parameters were identical across arms.
+PROBE_1432EC91_PAIR7_EXCLUDED_LOSS = 7.234157562255859
+PROBE_1432EC91_PAIR7_CONTROL_MEASURED_LOSSES = (
+        6.235986232757568,
+        6.478296279907227,
+        6.549032211303711,
+        7.685911178588867,
+        6.971773147583008,
+        6.617013931274414,
+        6.391950607299805,
+        6.780386924743652,
+        6.329543113708496,
+        6.507449150085449,
+        7.093740940093994,
+        6.8353166580200195,
+        6.579925537109375,
+        7.113293647766113,
+        6.474474906921387,
+        6.499075889587402,
+    )
+PROBE_1432EC91_PAIR7_TREATMENT_MEASURED_LOSSES = (
+        6.235986232757568,
+        6.478296279907227,
+        6.549032211303711,
+        7.685911178588867,
+        6.971773147583008,
+        6.617013931274414,
+        6.391284942626953,
+        6.780644416809082,
+        6.328922748565674,
+        6.506711006164551,
+        7.0934224128723145,
+        6.835687637329102,
+        6.580197334289551,
+        7.114263534545898,
+        6.474981784820557,
+        6.498049736022949,
+    )
+
+
+def _plant_probe_1432ec91_pair7(pairs):
+    rows = pairs[7]
+    for row in rows:
+        losses = (
+            PROBE_1432EC91_PAIR7_CONTROL_MEASURED_LOSSES
+            if row["arm"] == "control"
+            else PROBE_1432EC91_PAIR7_TREATMENT_MEASURED_LOSSES
+        )
+        row["excluded_updates"][0]["loss"] = PROBE_1432EC91_PAIR7_EXCLUDED_LOSS
+        row["loss"] = PROBE_1432EC91_PAIR7_EXCLUDED_LOSS
+        for update, loss in zip(row["measured_updates"], losses):
+            update["loss"] = loss
+    return pairs
+
+
+def test_aa_row_loss_is_the_common_start_update_never_the_window_end(monkeypatch):
+    MODULE._AA_ARM_PROGRESS.clear()
+    calls = []
+
+    def fake_update(**kwargs):
+        calls.append(copy.deepcopy(kwargs))
+        ordinal = len(calls)
+        record = update_record(100.0, [f"start-{ordinal}", f"end-{ordinal}"])
+        record["loss"] = 10.0 - 0.1 * ordinal
+        return record, {"cursor": ordinal}
+
+    monkeypatch.setattr(MODULE, "_BASE_RUN_ONE_UPDATE", fake_update)
+    monkeypatch.setattr(MODULE, "synchronize_device_before_window", lambda: True)
+    measured, _ = MODULE.run_warm_then_measure(
+        aa_mode=True, arm="treatment", pair=1, cursor={"cursor": 0}
+    )
+    assert measured["loss"] == pytest.approx(9.9)
+    assert measured["loss"] == measured["excluded_updates"][0]["loss"]
+    assert measured["measured_window_final_loss"] == pytest.approx(10.0 - 0.1 * 25)
+    assert measured["measured_updates"][-1]["loss"] == measured["measured_window_final_loss"]
+    MODULE._AA_ARM_PROGRESS.clear()
+
+
+def test_aa_adjudication_accepts_probe_1432ec91_kernel_drift_under_the_common_start_loss():
+    pairs = _plant_probe_1432ec91_pair7(cured_pairs())
+    decision = MODULE.adjudicate_pairs(pairs, aa_mode=True)
+    assert decision["aa_result"] == "HARNESS_POSITION_INDEPENDENT"
+    statistics_7 = decision["aa_paired_update_statistics_by_pair"][7]
+    assert statistics_7["measured_loss_max_relative_divergence"] == pytest.approx(
+        0.000157917, rel=1e-3
+    )
+    assert statistics_7["measured_loss_max_relative_divergence"] < MODULE.AA_MEASURED_LOSS_RELATIVE_LIMIT
+    assert decision["aa_measured_loss_relative_limit"] == MODULE.BASE.LOSS_RELATIVE_LIMIT
+    # The v3 row semantics (window-end loss) reproduce the live refusal exactly.
+    stale = _plant_probe_1432ec91_pair7(cured_pairs())
+    for row in stale[7]:
+        row["loss"] = row["measured_updates"][-1]["loss"]
+        row["excluded_updates"][0]["loss"] = row["loss"]
+    with pytest.raises(ValueError, match="LOSS_DIVERGENCE_REFUSED:7:0.001026"):
+        MODULE.adjudicate_pairs(stale, aa_mode=True)
+
+
+def test_aa_adjudication_refuses_a_measured_trajectory_that_really_diverges():
+    pairs = _plant_probe_1432ec91_pair7(cured_pairs())
+    treatment = next(row for row in pairs[7] if row["arm"] == "treatment")
+    treatment["measured_updates"][9]["loss"] *= 1.0 + 2 * MODULE.AA_MEASURED_LOSS_RELATIVE_LIMIT
+    with pytest.raises(ValueError, match="AA_MEASURED_LOSS_TRAJECTORY_DIVERGENCE_REFUSED:7:"):
+        MODULE.adjudicate_pairs(pairs, aa_mode=True)
+
+
+def test_aa_adjudication_refuses_a_row_loss_that_is_not_the_common_start_update():
+    pairs = cured_pairs()
+    control = next(row for row in pairs[2] if row["arm"] == "control")
+    control["loss"] = control["excluded_updates"][0]["loss"] + 1e-9
+    with pytest.raises(ValueError, match="AA_ROW_LOSS_NOT_COMMON_START_REFUSED:2"):
+        MODULE.adjudicate_pairs(pairs, aa_mode=True)
+
