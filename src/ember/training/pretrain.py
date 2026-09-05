@@ -1883,13 +1883,22 @@ def run_manifest_bound_semantic_segment(
     initial_data_cursor: Mapping[str, object] | None = None,
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
+    micro_batch: int = 1,
 ) -> dict[str, Any]:
-    """Train bounded shared-text episodes while preserving receipt-bound shard resume state."""
+    """Train bounded shared-text episodes while preserving receipt-bound shard resume state.
+
+    ``micro_batch`` > 1 consumes that many consecutive receipt-bound episodes per optimizer
+    step as one [micro_batch, sequence_length] batch (#2136); the step's bound cursor is the
+    cursor after its LAST episode, so exact resume is unchanged and tokens_seen counts every
+    consumed token.
+    """
 
     if not isinstance(sequence_length, int) or sequence_length < 1:
         raise ValueError("semantic stream sequence_length must be positive")
     if not isinstance(steps, int) or steps < 1:
         raise ValueError("semantic stream steps must be positive")
+    if type(micro_batch) is not int or micro_batch < 1:
+        raise ValueError("semantic stream micro_batch must be a positive integer")
     if type(initial_global_step) is not int or type(initial_tokens_seen) is not int or min(initial_global_step, initial_tokens_seen) < 0:
         raise ValueError("semantic stream resume counters must be nonnegative integers")
     expected_shard = "TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12]
@@ -1921,14 +1930,25 @@ def run_manifest_bound_semantic_segment(
     records: list[dict[str, object]] = []
     cursors: list[dict[str, int]] = []
     for _ in range(steps):
-        episode, next_cursor = stream.next_episode(
-            shard_index=shard_index,
-            token_offset=token_offset,
-            sequence_length=sequence_length,
-        )
-        records.append(episode)
+        episodes: list[dict[str, object]] = []
+        for _ in range(micro_batch):
+            episode, next_cursor = stream.next_episode(
+                shard_index=shard_index,
+                token_offset=token_offset,
+                sequence_length=sequence_length,
+            )
+            episodes.append(episode)
+            shard_index, token_offset = next_cursor["shard_index"], next_cursor["token_offset"]
+        if micro_batch == 1:
+            records.append(episodes[0])
+        else:
+            records.append({
+                "schema_version": "ember-owned-semantic-text-batch-v1",
+                "active_expert": "shared",
+                "token_ids": [list(item["token_ids"]) for item in episodes],
+                "target_ids": [list(item["target_ids"]) for item in episodes],
+            })
         cursors.append(next_cursor)
-        shard_index, token_offset = next_cursor["shard_index"], next_cursor["token_offset"]
 
     def bound_cursor(cursor: Mapping[str, int], global_step: int, tokens_seen: int) -> dict[str, object]:
         return {
