@@ -28,6 +28,7 @@ def test_training_infrastructure_observed_media_types_are_closed() -> None:
         "assets/icon.ico": "image/x-icon",
         "assets/photo.jpg": "image/jpeg",
         "assets/screenshot.png": "image/png",
+        "audio/1995-1837-0010.flac": "audio/flac",
         "build/kernel.out": "application/octet-stream",
         "examples/hello_gpu_ref": "application/octet-stream",
         "include/kernel.h": "text/x-c++hdr; charset=utf-8",

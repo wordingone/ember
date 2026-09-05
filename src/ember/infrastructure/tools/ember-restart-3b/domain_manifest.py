@@ -75,6 +75,7 @@ def _connector_media_type(path: PurePosixPath) -> str:
         ".cpp": "text/x-c++src; charset=utf-8",
         ".css": "text/css; charset=utf-8",
         ".cu": "text/x-cuda; charset=utf-8",
+        ".flac": "audio/flac",
         ".h": "text/x-c++hdr; charset=utf-8",
         ".ico": "image/x-icon",
         ".jpg": "image/jpeg",
