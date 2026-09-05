@@ -103,6 +103,38 @@ def _validate_domain(*, active_expert: str, image_count: int, audio_count: int) 
         )
 
 
+def _decode_semantic_text_batch(
+    record: dict[str, Any],
+    config: RestartDecoderConfig,
+    *,
+    device: torch.device,
+) -> dict[str, Any]:
+    """Decode a micro-batch of equal-length shared-core text episodes into [B, T] tensors (#2136)."""
+
+    if record.get("active_expert") != "shared":
+        raise ValueError("semantic text batches must use the shared core route")
+    token_rows = record.get("token_ids")
+    target_rows = record.get("target_ids")
+    if (
+        not isinstance(token_rows, list) or not isinstance(target_rows, list)
+        or not token_rows or len(token_rows) != len(target_rows)
+        or any(not isinstance(row, list) or not row for row in token_rows + target_rows)
+    ):
+        raise ValueError("semantic text batch token_ids and target_ids must be non-empty lists of equal-length rows")
+    width = len(token_rows[0])
+    if any(len(row) != width for row in token_rows + target_rows):
+        raise ValueError("semantic text batch rows must share one sequence length")
+    if any(not isinstance(item, int) or item < 0 or item >= config.vocab_size for row in token_rows + target_rows for item in row):
+        raise ValueError("token IDs must be within the configured vocabulary")
+    return {
+        "input_ids": torch.tensor(token_rows, dtype=torch.long, device=device),
+        "target_ids": torch.tensor(target_rows, dtype=torch.long, device=device),
+        "image_patches": None, "audio_frames": None,
+        "image_coordinates": torch.empty((0, 2), dtype=torch.long, device=device),
+        "spans": [], "active_expert": "shared",
+    }
+
+
 def decode_owned_batch(
     record: dict[str, Any],
     config: RestartDecoderConfig,
@@ -112,6 +144,8 @@ def decode_owned_batch(
     """Decode explicit raw sequences, 2D coordinates, and exact-cover attention spans."""
 
     schema_version = record.get("schema_version")
+    if schema_version == "ember-owned-semantic-text-batch-v1":
+        return _decode_semantic_text_batch(record, config, device=device)
     if schema_version not in {"ember-owned-bootstrap-batch-v1", "ember-owned-semantic-text-v1", "ember-owned-semantic-record-v1"}:
         raise ValueError("unrecognized owned batch schema")
     token_ids = record.get("token_ids")
