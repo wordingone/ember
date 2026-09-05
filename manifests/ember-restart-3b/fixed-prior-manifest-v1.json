@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-09-04T08:03:39+00:00",
+  "ts": "2026-09-05T12:20:53+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,8 +12,8 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "13c2ad1024dadfb0eab32614a9c39216dde5ccf5",
-    "branch": "redacted-by-repo-policy (provenance = repo.commit)"
+    "commit": "3d78c2f87c5cd2cb6fbc8485633dc8a1fb4f9743",
+    "branch": "feat/issue2136-milestone-shape-micro-batch"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 3958695395775000)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 5815227489679170)",
         "reader_wired": true
       },
       {
@@ -91,8 +91,8 @@
       "kind": "file",
       "provenance": "Owned pretraining loop body; authored in-repo.",
       "path": "src/ember/training/pretrain.py",
-      "sha256": "b2321936c2eb77aba0e17f1ea9015bd7ec3c8a70d2d8ba1610c7f2716d19b472",
-      "size_bytes": 99772
+      "sha256": "61a4bc322e43503796501d7e91f69f27ca091fb37d618d6cc9a2c487a857c80b",
+      "size_bytes": 100752
     },
     {
       "category": "training_loop",
@@ -131,16 +131,16 @@
       "kind": "file",
       "provenance": "Owned unified decoder definition (clean random genesis, no imported weights).",
       "path": "src/ember/model/model.py",
-      "sha256": "fda829af68d786ba4a1dda3046f4489bb6c450d9558a9159c2160fee7940b479",
-      "size_bytes": 30391
+      "sha256": "5975c0f08ae947ed7702a1fe6bb3f642ece908af9a1ca018262c789b804e65df",
+      "size_bytes": 32126
     },
     {
       "category": "training_loop",
       "kind": "file",
       "provenance": "Batch assembly and data-cursor discipline.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
-      "sha256": "bc6e1b8fb1a384012391dbc26c940bbdeaf703e3944781a8c2c48a6b84863869",
-      "size_bytes": 13609
+      "sha256": "719984842f52e094020b138d6032f7ba549b33871cf6aefad4fe41e83f7575bf",
+      "size_bytes": 15337
     },
     {
       "category": "training_loop",
