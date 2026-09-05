@@ -424,6 +424,26 @@ def build_evaluation_consumer_catalog_fragment(
         or any(row.get("split") != "heldout" for row in memberships)
     ):
         raise ValueError("evaluation consumer admits only heldout datasets")
+    # A quarantined heldout membership carries no evaluation credit: the
+    # catalog quarantine (data-catalog-quarantine-overlaps) is the authority
+    # that removed it from the protected set, so the isolation proof below is
+    # taken over the admitted heldout memberships only. Any other non-admitted
+    # state is unknown to this builder and refuses.
+    unknown_states = {
+        row.get("admission_state")
+        for row in memberships
+        if row.get("admission_state") not in {"admitted", "quarantined"}
+    }
+    if unknown_states:
+        raise ValueError(
+            "evaluation dataset carries memberships in an unknown admission state"
+        )
+    quarantined_membership_ids = {
+        row["id"] for row in memberships if row.get("admission_state") == "quarantined"
+    }
+    membership_ids = set(membership_ids) - quarantined_membership_ids
+    if not membership_ids:
+        raise ValueError("evaluation dataset has no admitted heldout memberships")
     heldout_object_ids = {
         edge["to_id"]
         for edge in edges
