@@ -183,6 +183,7 @@ from training_acceleration import (
     TrainingSignatureCensus,
     compare_stage2_ab_receipts,
     disabled_fp8_installation_receipt,
+    install_fp8_shared_down_projections,
     install_fp8_up_gate_projections,
     set_fp8_scaling_mode,
     iter_fp8_down_projections,
@@ -4885,6 +4886,9 @@ def run_specialist(
         raise
 
 
+_FP8_W6_SCOPE = "all_decoder_layers_shared_swiglu_down_4h_to_h"
+
+
 def run_semantic(
     *, seed: int, artifact_root: Path, receipt_path: Path, shards_root: Path, tokenizer_path: Path,
     expected_receipt_sha256: str, expected_tokenizer_sha256: str, expected_architecture_sha256: str,
@@ -5144,7 +5148,16 @@ def run_semantic(
     if fp8_sites is not None:
         # #2167: explicit per-run install on the executed path (the Stage-1 policy is a
         # source-bound disabled constant; this flag is the only production FP8 entry here).
-        fp8_installation = install_fp8_up_gate_projections(model, installation_scope=fp8_sites)
+        # #2173: the scope string selects the site class. Routing every scope to one
+        # installer meant a correct W6 scope string would have installed W5's site, which
+        # is the failure mode a closed scope exists to prevent. Each installer still
+        # refuses any scope but its own, so an unknown string reaches neither.
+        _installer = (
+            install_fp8_shared_down_projections
+            if fp8_sites == _FP8_W6_SCOPE
+            else install_fp8_up_gate_projections
+        )
+        fp8_installation = _installer(model, installation_scope=fp8_sites)
         # #2173: per_tensor hands scalar scales to the kernel so its epilogue applies them,
         # removing a full-size pass over every site's output. It changes the numbers a site
         # produces, so it is never a default and the run receipt records which mode ran.
