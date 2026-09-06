@@ -129,3 +129,105 @@ def test_configure_refuses_aa_mode_and_split_heads():
             MODULE.main()
     finally:
         sys.argv = saved
+
+
+# --- #2167 scope item 5: the matched-loss bar is #1413 as written, not the inherited gate ---
+
+def _load_sibling_test(name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / filename)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+ROBUST_TESTS = _load_sibling_test("issue2081_robust_tests", "test_issue2081_position_robust_canary_v1.py")
+
+
+def _inherited_adjudicate(pairs):
+    return MODULE.ROBUST.adjudicate_pairs(pairs, aa_mode=False)
+
+
+def _live_limits():
+    return (
+        MODULE.BASE.LOSS_ABSOLUTE_LIMIT,
+        MODULE.BASE.LOSS_RELATIVE_LIMIT,
+        MODULE.ROBUST.AA_MEASURED_LOSS_RELATIVE_LIMIT,
+    )
+
+
+def _defaults():
+    return (
+        MODULE.BASE_DEFAULT_LOSS_ABSOLUTE_LIMIT,
+        MODULE.BASE_DEFAULT_LOSS_RELATIVE_LIMIT,
+        MODULE.ROBUST_DEFAULT_MEASURED_LOSS_RELATIVE_LIMIT,
+    )
+
+
+def test_w5_adopts_the_issue_matched_loss_bar_and_restores_the_inherited_limits():
+    # the inherited gates are the ones #2071/#2081 need for their own algebraically
+    # equivalent treatments; W5 must borrow the loss gates only for its own adjudication
+    assert _defaults() == (0.001, 0.001, 0.001)
+    assert MODULE.W5_LOSS_RELATIVE_LIMIT == 0.01
+    assert MODULE.W5_LOSS_ABSOLUTE_LIMIT == float("inf")
+    seen = {}
+
+    def inner(pairs):
+        seen["limits"] = _live_limits()
+        return {"result": "ok"}
+
+    before = _live_limits()
+    decision = MODULE.adjudicate_pairs_w5(["pairs"], inner)
+    assert seen["limits"] == (float("inf"), 0.01, 0.01)
+    assert _live_limits() == before == _defaults()
+    bar = decision["w5_matched_loss_bar"]
+    assert bar["relative_limit"] == 0.01
+    assert bar["source"] == MODULE.W5_LOSS_BAR_SOURCE
+    assert bar["inherited_row_loss_absolute_limit"] == 0.001
+    assert bar["inherited_measured_window_relative_limit"] == 0.001
+
+
+def test_w5_restores_the_inherited_limits_when_the_inner_adjudication_refuses():
+    # planted negative for the restore leg: a refusal must not leave the base harness
+    # carrying W5's bar for any later caller in this process
+    def inner(pairs):
+        raise ValueError("INNER_REFUSED")
+
+    with pytest.raises(ValueError, match="INNER_REFUSED"):
+        MODULE.adjudicate_pairs_w5(["pairs"], inner)
+    assert _live_limits() == _defaults()
+
+
+def test_w5_refuses_to_adjudicate_before_configure_binds_the_inherited_adjudicator():
+    MODULE._STATE["inherited_adjudicate"] = None
+    with pytest.raises(RuntimeError, match="W5_ADJUDICATION_NOT_CONFIGURED_REFUSED"):
+        MODULE.adjudicate_pairs_w5(["pairs"])
+
+
+def _pairs_with_row_loss_relative_delta(delta: float):
+    pairs = ROBUST_TESTS.cured_pairs()
+    for row in pairs[0]:
+        if row["arm"] == "treatment":
+            base_loss = float(next(r for r in pairs[0] if r["arm"] == "control")["loss"])
+            row["loss"] = base_loss * (1.0 + delta)
+            row["excluded_updates"][0]["loss"] = row["loss"]
+    return pairs
+
+
+def test_w5_bar_admits_the_cross_arm_delta_the_inherited_gate_refused():
+    # the observed worst row-loss relative delta over the eight probe pairs was 1.169e-3
+    # (probe issue2167-w5-ab-probe-32b5b927-20260906T1110Z, pair 5); the inherited gate
+    # sits at 1e-3 and refuses it, the issue's own bar sits at 1e-2 and admits it
+    observed = 0.0011687372976063911
+    with pytest.raises(ValueError, match="LOSS_DIVERGENCE_REFUSED:0"):
+        _inherited_adjudicate(_pairs_with_row_loss_relative_delta(observed))
+    decision = MODULE.adjudicate_pairs_w5(_pairs_with_row_loss_relative_delta(observed), _inherited_adjudicate)
+    assert decision["w5_matched_loss_bar"]["relative_limit"] == 0.01
+    assert _live_limits() == _defaults()
+
+
+def test_w5_bar_still_refuses_a_cross_arm_delta_outside_one_percent():
+    # planted negative for the bar itself: the unit is not exempt from #1413, it is held to it
+    with pytest.raises(ValueError, match="LOSS_DIVERGENCE_REFUSED:0"):
+        MODULE.adjudicate_pairs_w5(_pairs_with_row_loss_relative_delta(0.012), _inherited_adjudicate)
+    assert _live_limits() == _defaults()
