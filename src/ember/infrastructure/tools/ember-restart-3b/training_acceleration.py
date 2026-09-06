@@ -1003,7 +1003,13 @@ class DynamicFp8Projection(nn.Module):
         if scaling == self._scaling:
             return
         self._scaling = scaling
-        self.refresh_after_optimizer_step()
+        # Requantize, but do NOT count this as a step refresh. `validate_fp8_refresh_count`
+        # enforces one install refresh plus exactly one per optimizer step per site, which is what
+        # proves no step trained on a stale FP8 weight. A mode change is not an optimizer step;
+        # counting it as one inflated the receipt by one per site and would have weakened the
+        # invariant into "some refreshes happened". Found by the real governed path, which refused
+        # at 448 against 434 -- fourteen sites, one extra each.
+        self._requantize_persistent_weight()
 
     def arm_receipt(self) -> dict[str, object]:
         return {
@@ -1026,6 +1032,18 @@ class DynamicFp8Projection(nn.Module):
         longer stalls fourteen times to prove that it did not.
         """
 
+        self._requantize_persistent_weight()
+        self._refreshed_weight_version = self.weight._version
+        self._weight_refreshes += 1
+
+    def _requantize_persistent_weight(self) -> None:
+        """Rebuild the persistent FP8 weight from the BF16 master under the current scaling mode.
+
+        Shared by the optimizer-step refresh and by a mode change. It deliberately does NOT touch
+        the refresh counter or the step-freshness version: those two facts belong to the
+        optimizer-step contract, and only its caller is entitled to assert them.
+        """
+
         with torch.no_grad():
             if self._scaling == "per_tensor":
                 scale, finite = _FP8_REFRESH_TENSOR(self.weight.detach(), self._weight_fp8)
@@ -1037,8 +1055,6 @@ class DynamicFp8Projection(nn.Module):
                 self._weight_scale.copy_(scale.transpose(0, 1))
             if not bool(finite):
                 raise RuntimeError("FP8 weight scale is non-finite")
-        self._refreshed_weight_version = self.weight._version
-        self._weight_refreshes += 1
 
     def refresh_if_stale_after_optimizer_step(self) -> bool:
         if self.weight._version == self._refreshed_weight_version:
