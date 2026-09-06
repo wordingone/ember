@@ -691,7 +691,83 @@ class _CompiledOrEager:
 
 _FP8_RESCALE = _CompiledOrEager(_fp8_rescale_eager, "fp8_rescale")
 _FP8_REQUANTIZE = _CompiledOrEager(_fp8_requantize_eager, "fp8_requantize")
+def _fp8_weight_scale_tensor_eager(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Per-tensor variant of the weight scale: one scalar for the whole matrix (#2173)."""
+
+    absolute_max = weight.abs().amax().float()
+    finite = torch.isfinite(absolute_max)
+    scale = torch.where(
+        absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max)
+    ).reshape(())
+    return scale, finite
+
+
 _FP8_WEIGHT_SCALE = _CompiledOrEager(_fp8_weight_scale_eager, "fp8_weight_scale")
+_FP8_WEIGHT_SCALE_TENSOR = _CompiledOrEager(
+    _fp8_weight_scale_tensor_eager, "fp8_weight_scale_tensor"
+)
+
+
+def _fp8_quantize_activation_tensor_eager(
+    flat: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Per-tensor activation quantization, scale and operand together (#2173).
+
+    Returned as one pair from one compiled region so the absolute max, the divide, the clamp and
+    the cast fuse instead of making four separate passes over the activation.
+    """
+
+    absolute_max = flat.detach().abs().amax().float()
+    scale = torch.where(
+        absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max)
+    ).reshape(())
+    quantized = (flat / scale).clamp(-448.0, 448.0).to(torch.float8_e4m3fn).contiguous()
+    return quantized, scale
+
+
+def _fp8_refresh_tensor_eager(
+    weight: torch.Tensor, destination: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Per-tensor weight scale, finiteness and requantization, written in place (#2173).
+
+    The refresh used to call two separately compiled helpers and then copy their result into the
+    persistent FP8 buffer, so the master weight was read once for the scale, again for the
+    quantization, and the quantized bytes were written twice. Taking the destination as an
+    argument lets the store land in the buffer directly: same arithmetic, one fewer full pass over
+    the site's weight.
+
+    ``destination`` is mutated. That is the point of the function, and it is why the caller no
+    longer copies.
+    """
+
+    absolute_max = weight.abs().amax().float()
+    finite = torch.isfinite(absolute_max)
+    scale = torch.where(
+        absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max)
+    ).reshape(())
+    destination.copy_((weight / scale).clamp(-448.0, 448.0).to(torch.float8_e4m3fn))
+    return scale, finite
+
+
+_FP8_QUANTIZE_ACTIVATION_TENSOR = _CompiledOrEager(
+    _fp8_quantize_activation_tensor_eager, "fp8_quantize_activation_tensor"
+)
+_FP8_REFRESH_TENSOR = _CompiledOrEager(_fp8_refresh_tensor_eager, "fp8_refresh_tensor")
+
+#: Where the FP8 scales are applied.
+#:
+#: ``rowwise`` is the shipped scheme and stays the default: per-row scales, unit scales into the
+#: kernel, and a separate pass over the output to apply them. ``per_tensor`` quantizes both
+#: operands with a single scalar each and hands those scalars to the kernel, which applies them in
+#: its own epilogue -- so the output pass does not happen at all. The device refuses row-wise scale
+#: operands ("Rowwise scaling is not currently supported on your device"), which is why the fast
+#: path is per-tensor rather than a row-wise epilogue.
+#:
+#: This is the first change in the #2173 sequence that is NOT bit-identical to the shipped forward.
+#: At the site measured its difference from BF16 was indistinguishable from the row-wise path's
+#: (3.86e-02 max, 5.33e-03 mean, against 3.86e-02 and 5.34e-03) -- a statement about that site's
+#: tensors, not a general equivalence claim. The matched-loss bar decides.
+_FP8_SCALING_MODES = ("rowwise", "per_tensor")
 
 
 def fp8_fused_path_receipt() -> dict[str, object]:
@@ -702,6 +778,16 @@ def fp8_fused_path_receipt() -> dict[str, object]:
         "rescale": {"mode": _FP8_RESCALE.mode, "failure": _FP8_RESCALE.failure},
         "requantize": {"mode": _FP8_REQUANTIZE.mode, "failure": _FP8_REQUANTIZE.failure},
         "weight_scale": {"mode": _FP8_WEIGHT_SCALE.mode, "failure": _FP8_WEIGHT_SCALE.failure},
+        "weight_scale_tensor": {
+            "mode": _FP8_WEIGHT_SCALE_TENSOR.mode, "failure": _FP8_WEIGHT_SCALE_TENSOR.failure,
+        },
+        "quantize_activation_tensor": {
+            "mode": _FP8_QUANTIZE_ACTIVATION_TENSOR.mode,
+            "failure": _FP8_QUANTIZE_ACTIVATION_TENSOR.failure,
+        },
+        "refresh_tensor": {
+            "mode": _FP8_REFRESH_TENSOR.mode, "failure": _FP8_REFRESH_TENSOR.failure,
+        },
     }
 
 
@@ -718,10 +804,15 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         weight_scale: torch.Tensor,
         unit_scale: torch.Tensor,
         kernel: ScaledMmKernel,
+        per_tensor: bool = False,
     ) -> torch.Tensor:
         if activation.shape[-1] != weight.shape[1]:
             raise RuntimeError("FP8 down projection input width does not match the live weight")
         flat = activation.reshape(-1, activation.shape[-1])
+        if per_tensor:
+            return _DynamicFp8ScaledMm._forward_per_tensor(
+                ctx, activation, weight, weight_fp8, weight_scale, kernel, flat
+            )
         absolute_max = flat.detach().abs().amax(dim=1, keepdim=True).float()
         # Keep the captured region free of tensor-to-host branching. A non-finite
         # activation remains fail-closed at the authoritative loss check after
@@ -751,12 +842,54 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         return output.reshape(*activation.shape[:-1], weight.shape[0])
 
     @staticmethod
+    def _forward_per_tensor(
+        ctx: Any,
+        activation: torch.Tensor,
+        weight: torch.Tensor,
+        weight_fp8: torch.Tensor,
+        weight_scale: torch.Tensor,
+        kernel: ScaledMmKernel,
+        flat: torch.Tensor,
+    ) -> torch.Tensor:
+        """Scales into the kernel epilogue; no separate pass over the output (#2173).
+
+        The layout check is the same one the row-wise path performs, and it is applied to the same
+        operands for the same reason. Note that on both paths the activation branch of that check
+        cannot fail from caller input, because the activation is rebuilt with ``.contiguous()``
+        immediately above it; the weight branch is the one that refuses. That is recorded rather
+        than quietly relied upon.
+        """
+
+        activation_fp8, scale_a = _FP8_QUANTIZE_ACTIVATION_TENSOR(flat)
+        weight_transposed = weight_fp8.transpose(0, 1)
+        if (
+            not activation_fp8.is_contiguous()
+            or weight_transposed.stride() != (1, weight_fp8.shape[1])
+            or weight_transposed.untyped_storage().data_ptr()
+            != weight_fp8.untyped_storage().data_ptr()
+        ):
+            raise RuntimeError("FP8 operands do not satisfy the reviewed SM89 memory layout")
+        output = kernel(
+            activation_fp8,
+            weight_transposed,
+            scale_a,
+            weight_scale,
+            out_dtype=activation.dtype,
+            use_fast_accum=True,
+        )
+        if isinstance(output, tuple):
+            output = output[0]
+        ctx.save_for_backward(flat, weight)
+        ctx.input_shape = activation.shape
+        return output.reshape(*activation.shape[:-1], weight.shape[0])
+
+    @staticmethod
     def backward(ctx: Any, grad_output: torch.Tensor) -> tuple[torch.Tensor | None, ...]:
         flat, weight = ctx.saved_tensors
         grad = grad_output.reshape(-1, grad_output.shape[-1]).to(weight.dtype)
         grad_input = grad.matmul(weight).reshape(ctx.input_shape)
         grad_weight = grad.transpose(0, 1).matmul(flat.to(weight.dtype))
-        return grad_input, grad_weight, None, None, None, None
+        return grad_input, grad_weight, None, None, None, None, None
 
 
 class DynamicFp8Projection(nn.Module):
@@ -817,9 +950,15 @@ class DynamicFp8Projection(nn.Module):
             persistent=False,
         )
         self.register_buffer(
+            "_weight_scale_tensor",
+            torch.ones((), device=weight.device, dtype=torch.float32),
+            persistent=False,
+        )
+        self.register_buffer(
             "_unit_scale", torch.ones((), device=weight.device, dtype=torch.float32),
             persistent=False,
         )
+        self._scaling = "rowwise"
         self._dispatches = 0
         self._fallbacks = 0
         self._weight_refreshes = 0
@@ -847,10 +986,30 @@ class DynamicFp8Projection(nn.Module):
             raise ValueError("FP8 site arm must be one of fp8, bf16")
         self._arm = arm
 
+    @property
+    def scaling(self) -> str:
+        return self._scaling
+
+    def set_scaling_mode(self, scaling: str) -> None:
+        """Select where the FP8 scales are applied, and requantize to match (#2173).
+
+        The persistent FP8 weight is quantized differently under each mode, so a mode change
+        invalidates it. Refreshing here rather than deferring to the next optimizer step means a
+        site cannot be dispatched with a weight quantized for the mode it is no longer in.
+        """
+
+        if scaling not in _FP8_SCALING_MODES:
+            raise ValueError("FP8 scaling mode must be one of rowwise, per_tensor")
+        if scaling == self._scaling:
+            return
+        self._scaling = scaling
+        self.refresh_after_optimizer_step()
+
     def arm_receipt(self) -> dict[str, object]:
         return {
             "site_class": self.SITE_CLASS,
             "arm": self._arm,
+            "scaling": self._scaling,
             "fp8_dispatches": self._dispatches,
             "bf16_dispatches": self._bf16_dispatches,
         }
@@ -868,10 +1027,14 @@ class DynamicFp8Projection(nn.Module):
         """
 
         with torch.no_grad():
-            scale, finite = _FP8_WEIGHT_SCALE(self.weight.detach())
-            quantized = _FP8_REQUANTIZE(self.weight.detach(), scale)
-            self._weight_fp8.copy_(quantized)
-            self._weight_scale.copy_(scale.transpose(0, 1))
+            if self._scaling == "per_tensor":
+                scale, finite = _FP8_REFRESH_TENSOR(self.weight.detach(), self._weight_fp8)
+                self._weight_scale_tensor.copy_(scale)
+            else:
+                scale, finite = _FP8_WEIGHT_SCALE(self.weight.detach())
+                quantized = _FP8_REQUANTIZE(self.weight.detach(), scale)
+                self._weight_fp8.copy_(quantized)
+                self._weight_scale.copy_(scale.transpose(0, 1))
             if not bool(finite):
                 raise RuntimeError("FP8 weight scale is non-finite")
         self._refreshed_weight_version = self.weight._version
@@ -891,9 +1054,11 @@ class DynamicFp8Projection(nn.Module):
             return torch.nn.functional.linear(activation, self.weight)
         if self.weight._version != self._refreshed_weight_version:
             raise RuntimeError("stale FP8 weight: refresh_after_optimizer_step is required after every update")
+        per_tensor = self._scaling == "per_tensor"
         output = _DynamicFp8ScaledMm.apply(
-            activation, self.weight, self._weight_fp8, self._weight_scale,
-            self._unit_scale, self._kernel,
+            activation, self.weight, self._weight_fp8,
+            self._weight_scale_tensor if per_tensor else self._weight_scale,
+            self._unit_scale, self._kernel, per_tensor,
         )
         self._dispatches += 1
         return output
@@ -972,11 +1137,29 @@ def set_fp8_arm(model: nn.Module, arm: str) -> int:
     return len(sites)
 
 
+def set_fp8_scaling_mode(model: nn.Module, scaling: str) -> int:
+    """Switch every installed FP8 site to ``scaling`` (#2173); returns the site count.
+
+    ``rowwise`` is the shipped scheme and the default. ``per_tensor`` hands scalar scales to the
+    kernel so its epilogue applies them, which removes a full-size pass over every site's output.
+    Selecting it changes the numbers a site produces, so a run that selects it is making a claim
+    the matched-loss bar has to settle; that is why it is a deliberate call and not a default.
+    """
+
+    if scaling not in _FP8_SCALING_MODES:
+        raise ValueError("FP8 scaling mode must be one of rowwise, per_tensor")
+    sites = iter_fp8_down_projections(model)
+    for site in sites:
+        site.set_scaling_mode(scaling)
+    return len(sites)
+
+
 def fp8_arm_receipt(model: nn.Module) -> dict[str, object]:
     sites = iter_fp8_down_projections(model)
     return {
         "sites": len(sites),
         "arms": sorted({site.arm for site in sites}),
+        "scaling_modes": sorted({site.scaling for site in sites}),
         "fp8_dispatches": sum(int(site.arm_receipt()["fp8_dispatches"]) for site in sites),
         "bf16_dispatches": sum(int(site.arm_receipt()["bf16_dispatches"]) for site in sites),
         "fallbacks": sum(int(site.kernel_receipt()["fallbacks"]) for site in sites),
