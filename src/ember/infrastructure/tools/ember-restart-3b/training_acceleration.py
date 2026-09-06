@@ -48,6 +48,9 @@ _FP8_W2_FINAL_LAYER_INDEX = 13
 # issue #2167 (W5): the shared SwiGLU up+gate projection of every decoder layer (weight [8H, H], bias-free).
 _FP8_W5_INSTALLATION_SCOPE = "all_decoder_layers_shared_swiglu_up_gate_h_to_8h"
 _FP8_W5_LAYER_COUNT = 14
+# issue #2173 (W6): the shared SwiGLU down projection of every decoder layer (weight [H, 4H], bias-free).
+_FP8_W6_INSTALLATION_SCOPE = "all_decoder_layers_shared_swiglu_down_4h_to_h"
+_FP8_W6_LAYER_COUNT = 14
 _FP8_ARMS = ("fp8", "bf16")
 _CHECKPOINT_IDENTITY_KEYS = {
     "graph_signature_sha256", "fp8_kernel_receipt_sha256", "checkpoint_region_sha256",
@@ -1360,6 +1363,82 @@ def install_fp8_up_gate_projections(
         "layer_indexes": list(range(_FP8_W5_LAYER_COUNT)),
         "installed_sites": _FP8_W5_LAYER_COUNT,
         "sites": [name for name, _owner, _up_gate in targets],
+        "fallbacks": 0,
+    }
+
+
+def install_fp8_shared_down_projections(
+    model: nn.Module,
+    *,
+    kernel: ScaledMmKernel | None = None,
+    allow_test_device: bool = False,
+    installation_scope: str | None = None,
+) -> dict[str, object]:
+    """Install the explicit W6 scope (#2173): ``layers.{i}.shared_ffn.down`` in all 14 layers.
+
+    Distinct from ``install_fp8_down_projections``, which resolves the single final-layer shared
+    site or the W2 shared-plus-expert set. This scope resolves fourteen shared down projections
+    and nothing else.
+
+    Every refusal fires before any module is replaced. Expert down sites stay BF16 ``nn.Linear``
+    (W2 governs experts); a pre-installed expert site, a pre-installed shared site, a non-linear
+    or biased or non-[H, 4H] site, a non-BF16 master weight, an unknown scope string, or any
+    layer count other than 14 is refused.
+    """
+
+    if installation_scope != _FP8_W6_INSTALLATION_SCOPE:
+        raise ValueError("issue #2173 FP8 down installation requires the explicit W6 scope")
+    layers = getattr(model, "layers", None)
+    if not isinstance(layers, nn.ModuleList) or len(layers) != _FP8_W6_LAYER_COUNT:
+        raise ValueError("issue #2173 W6 requires exactly 14 decoder layers")
+    targets: list[tuple[str, nn.Module, nn.Linear]] = []
+    for index, layer in enumerate(layers):
+        shared = getattr(layer, "shared_ffn", None)
+        experts = getattr(layer, "experts", None)
+        if shared is None or not isinstance(experts, nn.ModuleDict):
+            raise ValueError("issue #2173 W6 requires closed SwiGLU expert sites")
+        for expert_name, expert in experts.items():
+            expert_down = getattr(expert, "down", None)
+            if isinstance(expert_down, DynamicFp8Projection):
+                raise RuntimeError(
+                    "issue #2173 W6 refuses an installed expert down site: "
+                    f"layers.{index}.experts.{expert_name}.down"
+                )
+            if not isinstance(expert_down, nn.Linear):
+                raise ValueError("issue #2173 W6 expert down site is not linear")
+        down = getattr(shared, "down", None)
+        if isinstance(down, DynamicFp8Projection):
+            raise RuntimeError("issue #2173 FP8 shared down projections are already installed")
+        if not isinstance(down, nn.Linear):
+            raise ValueError("issue #2173 FP8 site is not a linear down projection")
+        if down.bias is not None:
+            raise ValueError("issue #2173 FP8 down projections must be bias-free")
+        if not DynamicFp8DownProjection._shape_holds(down.weight):
+            raise ValueError("issue #2173 FP8 site must be a 4H-to-H down projection")
+        if down.weight.dtype is not torch.bfloat16:
+            raise ValueError("issue #2173 FP8 site requires a BF16 master weight")
+        targets.append((f"layers.{index}.shared_ffn.down", shared, down))
+    if len(targets) != _FP8_W6_LAYER_COUNT:
+        raise RuntimeError("issue #2173 W6 scope must resolve exactly 14 shared down projections")
+    replacements = [
+        (
+            owner,
+            DynamicFp8DownProjection.from_linear(
+                down,
+                kernel=kernel,
+                allow_test_device=allow_test_device,
+            ),
+        )
+        for _name, owner, down in targets
+    ]
+    for owner, replacement in replacements:
+        owner.down = replacement
+    return {
+        "schema_version": "ember-fp8-down-projection-installation-v2",
+        "scope": _FP8_W6_INSTALLATION_SCOPE,
+        "layer_indexes": list(range(_FP8_W6_LAYER_COUNT)),
+        "installed_sites": _FP8_W6_LAYER_COUNT,
+        "sites": [name for name, _owner, _down in targets],
         "fallbacks": 0,
     }
 
