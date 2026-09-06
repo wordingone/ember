@@ -67,7 +67,7 @@ OBJECT_CLASSES = ("prompt", "gold", "schema", "database")
 CLASS_SOURCE_ID = {
     "prompt": PROMPT_SOURCE_ID, "gold": GOLD_SOURCE_ID, "schema": SCHEMA_SOURCE_ID, "database": DATABASE_SOURCE_ID,
 }
-CLASS_DIR = {"prompt": "prompts", "gold": "golds", "schema": "schemas", "database": "databases"}
+CLASS_SUBDIRS = {"prompt": "prompts", "gold": "golds", "schema": "schemas", "database": "databases"}
 CLASS_SUFFIX = {"prompt": ".json", "gold": ".json", "schema": ".json", "database": ".sqlite"}
 CLASS_DOMAIN = {"prompt": "text", "gold": "text", "schema": "text", "database": "tool"}
 JSON_MEDIA_TYPE = "application/json"
@@ -451,7 +451,7 @@ def build_admission_plan(census: dict[str, Any], *, payloads_by_sha: dict[str, b
                 raise ValueError(f"PAYLOAD_DRIFT_REFUSED:{name}:{item['item_id']}")
             source = {"item_id": item["item_id"]} if name in ("prompt", "gold") else {"db_id": item["db_id"]}
             files[name][digest] = {
-                "path": f"{CLASS_DIR[name]}/{digest[:2]}/{digest}{CLASS_SUFFIX[name]}",
+                "path": f"{CLASS_SUBDIRS[name]}/{digest[:2]}/{digest}{CLASS_SUFFIX[name]}",
                 "bytes": entry["byte_count"], "sha256": digest, "source": source,
             }
     rows = {name: sorted(files[name].values(), key=lambda row: row["sha256"]) for name in OBJECT_CLASSES}
@@ -512,7 +512,7 @@ def _connector(
 
 
 def connector_paths(admission_dir: Path) -> dict[str, Path]:
-    return {name: admission_dir / f"connector-receipt-{CLASS_DIR[name]}-v1.json" for name in OBJECT_CLASSES}
+    return {name: admission_dir / f"connector-receipt-{CLASS_SUBDIRS[name]}-v1.json" for name in OBJECT_CLASSES}
 
 
 def write_admission_artifacts(
@@ -535,7 +535,7 @@ def write_admission_artifacts(
     output_root.mkdir(parents=True, exist_ok=False)
     connector_raws: dict[str, bytes] = {}
     for name in OBJECT_CLASSES:
-        class_root = output_root / CLASS_DIR[name]
+        class_root = output_root / CLASS_SUBDIRS[name]
         for row in plan["files"][name]:
             write_new(class_root / Path(row["path"]), payloads_by_sha[row["sha256"]])
         connector_raws[name] = _connector(
