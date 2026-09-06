@@ -1,0 +1,381 @@
+{
+  "class_count": 60,
+  "classes": {
+    ".bash": {
+      "count": 1,
+      "example": "cpp/6_Performance/cudaGraphsPerfScaling/dataCollection.bash",
+      "media_type": "application/x-sh; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".bib": {
+      "count": 2,
+      "example": "docs/references.bib",
+      "media_type": "text/x-bibtex; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".bmp": {
+      "count": 12,
+      "example": "cpp/2_Concepts_and_Techniques/dct8x8/data/teapot512.bmp",
+      "media_type": "image/bmp",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".c": {
+      "count": 14,
+      "example": "cpp/0_Introduction/matrixMulDynlinkJIT/cuda_drvapi_dynlink.c",
+      "media_type": "text/x-csrc; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".cff": {
+      "count": 1,
+      "example": "CITATION.cff",
+      "media_type": "application/yaml; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".cfg": {
+      "count": 1,
+      "example": "cpp/8_Platform_Specific/Tegra/cudaNvSciNvMedia/sample.cfg",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".cmake": {
+      "count": 7,
+      "example": "cmake/CPM.cmake",
+      "media_type": "text/x-cmake; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".cmd": {
+      "count": 1,
+      "example": "scripts/min.cmd",
+      "media_type": "text/x-msdos-batch; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".code-snippets": {
+      "count": 3,
+      "example": ".vscode/copyright.code-snippets",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".conf": {
+      "count": 1,
+      "example": "cpp/9_CUDA_Tile/tileMatmulAutotuner/autotuner_search_space.conf",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".config": {
+      "count": 1,
+      "example": "scripts/gource.config",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".csv": {
+      "count": 1,
+      "example": "book/templates/book-stats.csv",
+      "media_type": "text/csv; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".cuh": {
+      "count": 50,
+      "example": "cpp/0_Introduction/simpleAtomicIntrinsics/simpleAtomicIntrinsics_kernel.cuh",
+      "media_type": "text/x-cuda; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".dat": {
+      "count": 9,
+      "example": "cpp/2_Concepts_and_Techniques/eigenvalues/data/diagonal.dat",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    },
+    ".dds": {
+      "count": 2,
+      "example": "cpp/5_Domain_Specific/dxtc/data/teapot512_ref.dds",
+      "media_type": "image/vnd-ms.dds",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".doc": {
+      "count": 13,
+      "example": "cpp/2_Concepts_and_Techniques/convolutionSeparable/doc/convolutionSeparable.doc",
+      "media_type": "application/msword",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".docx": {
+      "count": 3,
+      "example": "cpp/0_Introduction/simpleHyperQ/doc/HyperQ.docx",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".dsl": {
+      "count": 2,
+      "example": "widget/src/penrose/commutative.dsl",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".flo": {
+      "count": 2,
+      "example": "cpp/5_Domain_Specific/HSOpticalFlow/FlowCPU.flo",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    },
+    ".frag": {
+      "count": 4,
+      "example": "cpp/4_CUDA_Libraries/oceanFFT/data/ocean.frag",
+      "media_type": "text/x-glsl; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".gif": {
+      "count": 24,
+      "example": "cpp/5_Domain_Specific/fluidsGL/doc/fluidsGL_lg.gif",
+      "media_type": "image/gif",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".glsl": {
+      "count": 6,
+      "example": "cpp/8_Platform_Specific/Tegra/fluidsGLES/mesh.frag.glsl",
+      "media_type": "text/x-glsl; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".hlsl": {
+      "count": 1,
+      "example": "cpp/5_Domain_Specific/simpleD3D12/shaders.hlsl",
+      "media_type": "text/x-hlsl; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".hpp": {
+      "count": 106,
+      "example": "cpp/0_Introduction/vectorAddMMAP/multidevicealloc_memmap.hpp",
+      "media_type": "text/x-c++hdr; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".html": {
+      "count": 15,
+      "example": "scripts/bench/build/lakeprof_report_template.html",
+      "media_type": "text/html; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".hxx": {
+      "count": 1,
+      "example": "Common/helper_nvJPEG.hxx",
+      "media_type": "text/x-c++hdr; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".in": {
+      "count": 1,
+      "example": "book/requirements.in",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".ini": {
+      "count": 1,
+      "example": "book/figures/logo/.picasa.ini",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".jpeg": {
+      "count": 18,
+      "example": "book/figures/accessible-learning-paths.jpeg",
+      "media_type": "image/jpeg",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".js": {
+      "count": 1,
+      "example": "book/website/analytics/web-analytics.js",
+      "media_type": "text/javascript; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".kra": {
+      "count": 4,
+      "example": "book/figures/main-branch.kra",
+      "media_type": "application/x-krita",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".lean": {
+      "count": 8890,
+      "example": "Archive.lean",
+      "media_type": "text/x-lean; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".ll": {
+      "count": 8,
+      "example": "cpp/7_libNVVM/cuda-shared-memory/extern_shared_memory.ll",
+      "media_type": "text/x-llvm-ir; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".lst": {
+      "count": 1,
+      "example": "book/.words.lst",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".makefile": {
+      "count": 1,
+      "example": "scripts/jobs.makefile",
+      "media_type": "text/x-makefile; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".mjs": {
+      "count": 1,
+      "example": "book/website/plugins/profile.mjs",
+      "media_type": "text/javascript; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".mk": {
+      "count": 1,
+      "example": "Bookml.mk",
+      "media_type": "text/x-makefile; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".mm": {
+      "count": 9,
+      "example": "big-unifier.mm",
+      "media_type": "text/x-metamath; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".mmts": {
+      "count": 1,
+      "example": "set-mathml.mmts",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".mp4": {
+      "count": 1,
+      "example": "book/_static/videos/contributors.mp4",
+      "media_type": "video/mp4",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".mtx": {
+      "count": 11,
+      "example": "cpp/4_CUDA_Libraries/cuSolverDn_LinearSolver/gr_900_900_crg.mtx",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".nv12": {
+      "count": 3,
+      "example": "cpp/5_Domain_Specific/NV12toBGRandResize/data/test1280x720.nv12",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    },
+    ".pgm": {
+      "count": 21,
+      "example": "Common/data/teapot512.pgm",
+      "media_type": "image/x-portable-graymap",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".ppm": {
+      "count": 54,
+      "example": "cpp/0_Introduction/simpleCUDA2GL/data/ref_simpleCUDA2GL.ppm",
+      "media_type": "image/x-portable-pixmap",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".ptx": {
+      "count": 2,
+      "example": "cpp/0_Introduction/matrixMulDynlinkJIT/extras/matrixMul_kernel_32.ptx",
+      "media_type": "text/x-ptx; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".raw": {
+      "count": 12,
+      "example": "Common/data/CT_skull_512x512_8u.raw",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    },
+    ".rgba": {
+      "count": 1,
+      "example": "cpp/8_Platform_Specific/Tegra/cudaNvSciNvMedia/teapot.rgba",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    },
+    ".spv": {
+      "count": 6,
+      "example": "cpp/5_Domain_Specific/simpleVulkan/frag.spv",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    },
+    ".sty": {
+      "count": 11,
+      "example": "fitch.sty",
+      "media_type": "text/x-tex; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".sub": {
+      "count": 3,
+      "example": "widget/src/penrose/others.sub",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".svg": {
+      "count": 49,
+      "example": "assets/forallx-coverart-full.svg",
+      "media_type": "image/svg+xml",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".tex": {
+      "count": 35,
+      "example": "forallx-yyc-accessibility.tex",
+      "media_type": "text/x-tex; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".toml": {
+      "count": 5,
+      "example": "pyproject.toml",
+      "media_type": "application/toml; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".vert": {
+      "count": 4,
+      "example": "cpp/4_CUDA_Libraries/oceanFFT/data/ocean.vert",
+      "media_type": "text/x-glsl; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".vsd": {
+      "count": 2,
+      "example": "cpp/2_Concepts_and_Techniques/convolutionSeparable/doc/convolutionSeparable.vsd",
+      "media_type": "application/vnd.visio",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".webmanifest": {
+      "count": 1,
+      "example": "book/figures/logo/site.webmanifest",
+      "media_type": "application/manifest+json",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".xls": {
+      "count": 2,
+      "example": "cpp/2_Concepts_and_Techniques/convolutionTexture/doc/Performance.xls",
+      "media_type": "application/vnd.ms-excel",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".xmpdata": {
+      "count": 2,
+      "example": "forallxyyc-accessible.xmpdata",
+      "media_type": "text/plain; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".yaml": {
+      "count": 18,
+      "example": ".pre-commit-config.yaml",
+      "media_type": "application/yaml; charset=utf-8",
+      "reason": "explicit census class; closed media binding"
+    },
+    ".yuv": {
+      "count": 5,
+      "example": "cpp/2_Concepts_and_Techniques/EGLStream_CUDA_Interop/cuda_f_1.yuv",
+      "media_type": "application/octet-stream",
+      "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+    }
+  },
+  "excluded_classes": {
+    ".bin": "host binary payload; no admissible text or media encoding, refused on the bulk route",
+    ".dll": "Windows shared library (host executable class); refused on the bulk route",
+    ".exe": "Windows executable (host executable class); refused on the bulk route",
+    ".lib": "Windows static library (host executable class); refused on the bulk route",
+    ".so": "ELF shared object (host executable class); refused on the bulk route"
+  },
+  "file_count": 9468,
+  "goal_id": "EMBER-02",
+  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+  "precedence": "PREDECESSOR_BINDING_GOVERNS_OVERLAPS; CONNECTOR_MAPPER_FIRST; CONTENT_SNIFF_FOR_TABLE_CLASSES; TABLE_TIE_BREAK",
+  "schema_version": "ember-issue1581-bulk-connector-media-types-v1",
+  "self_sha256": "fa70008c0410611c6561a6747c0e699204c2cf6ee1fe4c0dbaa2f9b5d6f3b254",
+  "source_census_self_sha256": "e18c0407ea762a4cd29acd41f782e5050aa4a0add56813fffb14ba5b11bcdd80",
+  "unknown_class_rule": "BULK_PROJECTION_MEDIA_CLASS_UNMAPPED",
+  "workstream_id": "EMBER-02B"
+}
