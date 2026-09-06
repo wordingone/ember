@@ -45,6 +45,29 @@ W5_SCOPE = "all_decoder_layers_shared_swiglu_up_gate_h_to_8h"
 W5_SCHEMA_VERSION = "ember-issue2167-w5-upgate-matched-loss-canary-v1"
 W5_SITE_COUNT = 14
 W5_ARM_KERNEL = {"control": "bf16", "treatment": "fp8"}
+# #2167 scope item 5 names the governing matched-loss bar: "#1413 as written
+# (treatment loss within 1% of control at matched tokens)". The base (#2071) and
+# robust (#2081) harnesses gate the cross-arm loss at 1e-3 absolute / 1e-3 relative,
+# because their treatments are algebraically equivalent reorderings whose two arms are
+# required to agree to rounding noise (#2081 records its arms as bit-identical on the
+# first post-switch update in all eight pairs). W5 changes the forward GEMM numeric
+# format at 14 sites, so a cross-arm difference at that scale IS the treatment, not
+# drift: the inherited gates assert a property this unit is not required to have and
+# are ten times tighter than its own bar. Real-path finding at merged head 32b5b927
+# (probe issue2167-w5-ab-probe-32b5b927-20260906T1110Z): the base row-loss gate refused
+# pair 0 at absolute 2.0294e-3 / relative 2.1678e-4, and the robust measured-window
+# gate would have refused pairs 0 and 6; worst observed relative delta across the eight
+# pairs was 1.169e-3 (row loss) and 1.087e-3 (measured window), both inside #1413 by
+# more than a factor of eight. The bar below is the issue's, adopted verbatim; it is
+# applied only for the duration of the W5 adjudication and restored afterwards, so the
+# base and robust harnesses keep their own limits for their own units.
+W5_LOSS_RELATIVE_LIMIT = 0.01
+# The written bar is relative only ("within 1% of control"); scope item 5 admits no
+# other estimator, so the inherited absolute gate is not re-derived, it is stood down.
+W5_LOSS_ABSOLUTE_LIMIT = float("inf")
+W5_LOSS_BAR_SOURCE = "issue 1413 as written, adopted verbatim by issue 2167 scope item 5"
+W5_LOSS_BAR_STATEMENT = "treatment loss within 1% of control at matched tokens"
+
 W5_CLAIM_BOUNDARY = (
     "EIGHT-PAIR POSITION-BALANCED, BOUNDARY-SYNCED WINDOWED MATCHED-LOSS CANARY FOR ONE "
     "FP8 SITE CLASS (SHARED SWIGLU UP+GATE, 14 SITES) ONLY; NO 20K, CAPABILITY, "
@@ -54,8 +77,12 @@ W5_CLAIM_BOUNDARY = (
 _ORIGINAL_ALLOCATE = BASE.allocate_semantic_runtime
 _ORIGINAL_UPDATE = ROBUST._BASE_RUN_ONE_UPDATE
 _ORIGINAL_CONFIGURE = ROBUST.configure_base
+BASE_DEFAULT_LOSS_ABSOLUTE_LIMIT = BASE.LOSS_ABSOLUTE_LIMIT
+BASE_DEFAULT_LOSS_RELATIVE_LIMIT = BASE.LOSS_RELATIVE_LIMIT
+ROBUST_DEFAULT_MEASURED_LOSS_RELATIVE_LIMIT = ROBUST.AA_MEASURED_LOSS_RELATIVE_LIMIT
 _STATE: dict[str, Any] = {
     "installation": None,
+    "inherited_adjudicate": None,
     "arm_fp8_dispatches": {"control": 0, "treatment": 0},
     "arm_updates": {"control": 0, "treatment": 0},
 }
@@ -137,6 +164,7 @@ def w5_block() -> dict[str, object]:
         "arm_fp8_dispatches": dict(_STATE["arm_fp8_dispatches"]),
         "arm_updates": dict(_STATE["arm_updates"]),
         "fallbacks": 0,
+        "matched_loss_bar": _w5_loss_bar_receipt(),
         "wrapper_source_sha256": wrapper_source_sha256(),
         "claim_boundary": W5_CLAIM_BOUNDARY,
     }
@@ -146,6 +174,49 @@ def bind_w5_receipt(value: Mapping[str, object]) -> dict[str, object]:
     bound = dict(value)
     bound["issue"] = W5_ISSUE
     bound["w5_fp8"] = w5_block()
+    return bound
+
+
+def _w5_loss_bar_receipt() -> dict[str, object]:
+    return {
+        "source": W5_LOSS_BAR_SOURCE,
+        "statement": W5_LOSS_BAR_STATEMENT,
+        "relative_limit": W5_LOSS_RELATIVE_LIMIT,
+        "absolute_limit": "stood_down_written_bar_is_relative_only",
+        "inherited_row_loss_absolute_limit": BASE_DEFAULT_LOSS_ABSOLUTE_LIMIT,
+        "inherited_row_loss_relative_limit": BASE_DEFAULT_LOSS_RELATIVE_LIMIT,
+        "inherited_measured_window_relative_limit": ROBUST_DEFAULT_MEASURED_LOSS_RELATIVE_LIMIT,
+        "reason": (
+            "the inherited gates are calibrated for algebraically equivalent arms; W5 "
+            "alternates the forward GEMM numeric format, so a cross-arm loss difference "
+            "at rounding scale is the treatment under test, not procedural drift"
+        ),
+    }
+
+
+def adjudicate_pairs_w5(pairs: Any, _inner: Any = None) -> dict[str, object]:
+    """Run the inherited adjudication with the issue's own loss bar, then restore.
+
+    Only the two loss gates move. Every other refusal in the base and robust
+    adjudicators (ABBA order, pair index, start identity, sampled parameters,
+    optimizer structure, scheduler / scaler / cursor / RNG / backend identity,
+    position balance) applies unchanged, at its own limit.
+    """
+    inner = _inner if _inner is not None else _STATE["inherited_adjudicate"]
+    if inner is None:
+        raise RuntimeError("W5_ADJUDICATION_NOT_CONFIGURED_REFUSED")
+    saved = (BASE.LOSS_ABSOLUTE_LIMIT, BASE.LOSS_RELATIVE_LIMIT,
+             ROBUST.AA_MEASURED_LOSS_RELATIVE_LIMIT)
+    BASE.LOSS_ABSOLUTE_LIMIT = W5_LOSS_ABSOLUTE_LIMIT
+    BASE.LOSS_RELATIVE_LIMIT = W5_LOSS_RELATIVE_LIMIT
+    ROBUST.AA_MEASURED_LOSS_RELATIVE_LIMIT = W5_LOSS_RELATIVE_LIMIT
+    try:
+        decision = inner(pairs)
+    finally:
+        (BASE.LOSS_ABSOLUTE_LIMIT, BASE.LOSS_RELATIVE_LIMIT,
+         ROBUST.AA_MEASURED_LOSS_RELATIVE_LIMIT) = saved
+    bound = dict(decision)
+    bound["w5_matched_loss_bar"] = _w5_loss_bar_receipt()
     return bound
 
 
@@ -171,6 +242,9 @@ def _configure_w5(**kwargs: Any) -> None:
     def write_w5_receipt(path: Path, value: dict[str, object]):
         return bound_write_receipt(path, bind_w5_receipt(value))
 
+    inherited_adjudicate = BASE.adjudicate_pairs
+    _STATE["inherited_adjudicate"] = inherited_adjudicate
+    BASE.adjudicate_pairs = adjudicate_pairs_w5
     BASE.allocate_semantic_runtime = _allocate_w5
     BASE.write_receipt = write_w5_receipt
     ROBUST._BASE_RUN_ONE_UPDATE = _update_w5
