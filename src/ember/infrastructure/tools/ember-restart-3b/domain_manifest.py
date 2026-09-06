@@ -101,6 +101,71 @@ def _connector_media_type(path: PurePosixPath) -> str:
     return media_type
 
 
+_BULK_MEDIA_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"%PDF-", "application/pdf"),
+    (b"\x1f\x8b", "application/gzip"),
+    (b"\x28\xb5\x2f\xfd", "application/zstd"),
+    (b"PAR1", "application/vnd.apache.parquet"),
+    (b"\x00asm", "application/wasm"),
+    (b"wOFF", "font/woff"),
+    (b"wOF2", "font/woff2"),
+    (b"OTTO", "font/otf"),
+    (b"\x00\x01\x00\x00", "font/ttf"),
+)
+
+
+def _bulk_media_class(path: PurePosixPath) -> str:
+    return path.suffix.lower() if path.suffix else f"<name:{path.name.lower()}>"
+
+
+def _sniffed_media_type(raw: bytes) -> str | None:
+    """Content-first classification, same shape as the train-partition route."""
+    for prefix, media_type in _BULK_MEDIA_SIGNATURES:
+        if raw.startswith(prefix):
+            return media_type
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if b"\x00" in raw:
+        return None
+    return "text/plain; charset=utf-8"
+
+
+def _bulk_media_type(
+    path: PurePosixPath,
+    digest: str,
+    physical: Path,
+    media_class_table: dict[str, Any] | None,
+    predecessor_media_types: dict[str, str] | None,
+) -> str:
+    """Precedence: an existing predecessor binding for the same object governs; then the
+    closed connector mapper; a class the mapper refuses is admissible only when the frozen
+    bulk media-class table names it, and is then content-sniffed first with the table row as
+    the tie-break. Classes absent from both stay refused."""
+    if predecessor_media_types is not None:
+        bound = predecessor_media_types.get(f"sha256:{digest}")
+        if bound is not None:
+            return bound
+    try:
+        return _connector_media_type(path)
+    except ValueError as error:
+        if media_class_table is None or "unsupported media type" not in str(error):
+            raise
+        key = _bulk_media_class(path)
+        row = media_class_table["classes"].get(key)
+        if row is None:
+            raise ValueError(
+                f"BULK_PROJECTION_MEDIA_CLASS_UNMAPPED:{key}:{path.as_posix()}"
+            ) from error
+        sniffed = _sniffed_media_type(physical.read_bytes())
+        return sniffed if sniffed is not None else row["media_type"]
+
+
 def load_bulk_domain_connector_receipt(
     *,
     receipt_path: Path,
@@ -110,6 +175,8 @@ def load_bulk_domain_connector_receipt(
     expected_license_text_sha256: str,
     domain: str,
     split: str,
+    media_class_table: dict[str, Any] | None = None,
+    predecessor_media_types: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Project one immutable bulk connector receipt without durable host paths."""
 
@@ -196,7 +263,9 @@ def load_bulk_domain_connector_receipt(
             or _sha256(physical) != digest
         ):
             raise ValueError("bulk domain connector physical file identity has drifted")
-        media_type = _connector_media_type(normalized)
+        media_type = _bulk_media_type(
+            normalized, digest, physical, media_class_table, predecessor_media_types
+        )
         normalized_files.append({
             "path": normalized.as_posix(),
             "bytes": byte_count,
