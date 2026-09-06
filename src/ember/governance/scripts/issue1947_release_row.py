@@ -747,6 +747,69 @@ def adapt_reasoning(contract_path: Path, source_paths: list[Path]) -> dict[str, 
     receipt["self_sha256"] = sha(canonical(receipt))
     return receipt
 
+TOOL_USE_ROW_ID = "E-MATRIX-TOOL-USE"
+TOOL_USE_CLAIM_BOUNDARY = "EXECUTION-MATCH RATE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT"
+
+
+def _tool_use_inference_module():
+    """The #2162 producer owns receipt verification; the adapter re-derives through it so the
+    executor and the producer can never disagree about what a verified receipt is."""
+
+    import importlib.util
+
+    module_path = Path(__file__).resolve().with_name("issue2162_tool_use_inference.py")
+    spec = importlib.util.spec_from_file_location("issue2162_tool_use_inference", module_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("TOOL_USE_INFERENCE_MODULE_MISSING_REFUSED")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def adapt_tool_use(
+    contract_path: Path, inference_receipt_path: Path, expected_checkpoint_manifest_sha256: str,
+) -> dict[str, object]:
+    """E-MATRIX-TOOL-USE from a verified checkpoint-inference receipt (#2162).
+
+    Every binding is re-derived: receipt self hash, checkpoint manifest binding against the
+    preflight's designation sha, contract binding (self + raw + decode contract), per-item order
+    against the contract's frozen items, and `matched` recomputed from the contract's
+    gold_result_sha256. The score is matched / 1,034 as produced; nothing here compares it to a bar.
+    """
+
+    if not isinstance(expected_checkpoint_manifest_sha256, str) or len(expected_checkpoint_manifest_sha256) != 64:
+        raise ValueError("TOOL_USE_INFERENCE_CHECKPOINT_BINDING_REFUSED")
+    module = _tool_use_inference_module()
+    verified = module.verify_receipt(
+        inference_receipt_path, contract_path,
+        expected_checkpoint_manifest_sha256=expected_checkpoint_manifest_sha256,
+    )
+    receipt = verified["receipt"]
+    items = verified["items"]
+    if len(items) != module.ITEM_COUNT:
+        raise ValueError("TOOL_USE_INFERENCE_TOTALITY_REFUSED")
+    row: dict[str, object] = {
+        "schema_version": "ember-issue2162-tool-use-row-receipt-v1",
+        "result": "TOOL_USE_HELDOUT_ROW_PRODUCED",
+        "row_id": TOOL_USE_ROW_ID,
+        "task_class": "checkpoint_inference",
+        "contract_raw_sha256": verified["contract_raw_sha256"],
+        "contract_self_sha256": verified["contract"]["self_sha256"],
+        "inference_receipt_raw_sha256": verified["receipt_raw_sha256"],
+        "inference_receipt_self_sha256": receipt["self_sha256"],
+        "checkpoint_manifest_raw_sha256": expected_checkpoint_manifest_sha256,
+        "decode_contract_sha256": receipt["decode_contract_sha256"],
+        "frozen_order_sha256": receipt["frozen_order_sha256"],
+        "item_count": len(items),
+        "executed_count": verified["executed_count"],
+        "matched_count": verified["matched_count"],
+        "items": items,
+        "score": verified["score"],
+        "claim_boundary": TOOL_USE_CLAIM_BOUNDARY,
+    }
+    row["self_sha256"] = sha(canonical(row))
+    return row
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -795,7 +858,36 @@ def main() -> int:
         help="connector receipt bound by the contract; repeat for every bound receipt",
     )
     reasoning.add_argument("--result", type=Path, required=True)
+    tool_use = subparsers.add_parser("adapt-tool-use")
+    tool_use.add_argument("--contract", type=Path, required=True)
+    tool_use.add_argument("--inference-receipt", type=Path, required=True)
+    tool_use.add_argument(
+        "--expected-checkpoint-manifest-sha256", required=True,
+        help="the preflight designation's checkpoint manifest raw sha256; the receipt must bind it",
+    )
+    tool_use.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
+    if args.operation == "adapt-tool-use":
+        try:
+            row = adapt_tool_use(args.contract, args.inference_receipt, args.expected_checkpoint_manifest_sha256)
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue2162-tool-use-row-refusal-v1",
+                "result": "TOOL_USE_HELDOUT_REFUSED",
+                "row_id": TOOL_USE_ROW_ID,
+                "task_class": "checkpoint_inference",
+                "reason": str(error),
+                "claim_boundary": "CHECKPOINT INFERENCE ROW REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
     if args.operation == "adapt-reasoning":
         try:
             row = adapt_reasoning(args.contract, list(args.source_receipt))
