@@ -70,6 +70,7 @@ def _connector_media_type(path: PurePosixPath) -> str:
     media_types = {
         ".json": "application/json",
         ".jsonl": "application/x-ndjson",
+        ".sqlite": "application/vnd.sqlite3",
         ".bat": "text/x-msdos-batch; charset=utf-8",
         ".code": "text/plain; charset=utf-8",
         ".cpp": "text/x-c++src; charset=utf-8",
