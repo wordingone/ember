@@ -4889,6 +4889,8 @@ def run_semantic(
     telemetry_path: Path | None = None, telemetry_run_id: str | None = None,
     admitted_row_set_sha256: str | None = None,
     receipt_custody_root: Path | None = None,
+    shard_ledger: Path | None = None,
+    expected_shard_ledger_sha256: str | None = None,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -4898,6 +4900,8 @@ def run_semantic(
         raise ValueError("semantic training telemetry requires telemetry_path and telemetry_run_id together")
     if telemetry_run_id is not None and (not telemetry_run_id or len(telemetry_run_id) > 128):
         raise ValueError("semantic training telemetry run id is invalid")
+    if (shard_ledger is None) != (expected_shard_ledger_sha256 is None):
+        raise ValueError("catalog data authority requires --shard-ledger and --expected-shard-ledger-sha256 together")
     if admitted_row_set_sha256 is not None and re.fullmatch(
         r"[0-9a-f]{64}", admitted_row_set_sha256
     ) is None:
@@ -4944,7 +4948,7 @@ def run_semantic(
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for the production semantic runner")
     stream = ManifestBoundTokenStream.from_receipt(
-        receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path
+        receipt_path=receipt_path, shards_root=shards_root, tokenizer_path=tokenizer_path, shard_ledger=shard_ledger
     )
     if stream.vocab_size != config.vocab_size:
         raise ValueError("semantic receipt tokenizer vocabulary does not match the production model config")
@@ -4973,6 +4977,16 @@ def run_semantic(
             f"tokenizer_match={stream.tokenizer_sha256 == expected_tokenizer_sha256}, "
             f"architecture_match={architecture_sha256 == expected_architecture_sha256})"
         )
+    # #2155 catalog data authority: when the ledger is the declared authority, pin its bytes and
+    # prove the planned span fits BEFORE model construction. A resumed run re-checks the span at
+    # its restored cursor below, since that cursor is only known after the checkpoint loads.
+    ledger_binding: dict[str, object] | None = None
+    cursor_span: dict[str, int] | None = None
+    start_cursor = {"shard_index": 0, "token_offset": 0}
+    if shard_ledger is not None:
+        ledger_binding = stream.bind_shard_ledger(expected_sha256=str(expected_shard_ledger_sha256))
+        if resume_checkpoint is None:
+            cursor_span = stream.check_cursor_span(shard_index=0, token_offset=0, tokens=steps * sequence_length)
     total_parameters = config.structural_parameter_count()
     shared_active_parameters = 1_020_589_568
     device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
@@ -5023,6 +5037,9 @@ def run_semantic(
         resume_cursor = dict(loaded["data_cursor"])
         initial_global_step = int(resume_cursor["global_step"])
         initial_tokens_seen = int(resume_cursor["tokens_seen"])
+        if ledger_binding is not None:
+            start_cursor = {"shard_index": int(resume_cursor["shard_index"]), "token_offset": int(resume_cursor["token_offset"])}
+            cursor_span = stream.check_cursor_span(tokens=steps * sequence_length, **start_cursor)
     checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=shared_active_parameters)
     publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=write_budget_bytes, initial_global_step=initial_global_step)
     torch.cuda.reset_peak_memory_stats()
@@ -5112,6 +5129,29 @@ def run_semantic(
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("semantic runner did not publish its required counter-verified checkpoint")
     counts = measure_parameter_counts(model)
+    data_authority: dict[str, object] | None = None
+    if ledger_binding is not None and cursor_span is not None:
+        # The ledger sha at run end must equal the sha pinned at run start: a ledger that grew or
+        # changed under a live consumer makes the consumed span unattributable to one identity.
+        ledger_sha256_end = stream.ledger_sha256_now()
+        if ledger_sha256_end != ledger_binding["shard_ledger_sha256"]:
+            raise RuntimeError("CATALOG_STREAM_LEDGER_CHANGED_DURING_RUN")
+        final_cursor = dict(segment["data_cursor"])
+        end_cursor = {"shard_index": int(final_cursor["shard_index"]), "token_offset": int(final_cursor["token_offset"])}
+        end_position = stream.absolute_token_position(**end_cursor)
+        tokens_consumed = end_position - int(cursor_span["token_start"])
+        if tokens_consumed != int(segment["tokens_seen"]) - initial_tokens_seen:
+            raise RuntimeError("CATALOG_STREAM_CONSUMPTION_ACCOUNTING_MISMATCH")
+        data_authority = {
+            "schema_version": "ember-catalog-data-authority-v1",
+            "kind": "catalog-train-stream-v1",
+            "stream_receipt_sha256": stream.receipt_sha256,
+            **ledger_binding,
+            "shard_ledger_sha256_end": ledger_sha256_end,
+            "cursor_start": {**start_cursor, "token_position": int(cursor_span["token_start"])},
+            "cursor_end": {**end_cursor, "token_position": end_position},
+            "tokens_consumed": tokens_consumed,
+        }
     return {
         "segment": segment,
         "counts": counts,
@@ -5127,6 +5167,7 @@ def run_semantic(
         "stream_receipt_sha256": stream.receipt_sha256,
         "tokenizer_sha256": stream.tokenizer_sha256,
         "resume_authority": resume_authority,
+        "data_authority": data_authority,
     }
 
 
@@ -5220,6 +5261,8 @@ def main() -> None:
     semantic.add_argument("--artifact-root", type=Path, required=True)
     semantic.add_argument("--receipt", type=Path, required=True)
     semantic.add_argument("--shards-root", type=Path, required=True)
+    semantic.add_argument("--shard-ledger", type=Path, help="#2155: shard ledger that is this run's data authority (with --expected-shard-ledger-sha256)")
+    semantic.add_argument("--expected-shard-ledger-sha256", help="#2155: sha256 of the ledger bytes; mismatch refuses before model construction")
     semantic.add_argument("--tokenizer", type=Path, required=True)
     semantic.add_argument("--expected-receipt-sha256", required=True)
     semantic.add_argument("--expected-tokenizer-sha256", required=True)
@@ -5336,6 +5379,8 @@ def main() -> None:
             receipt_path=args.receipt,
             shards_root=args.shards_root,
             tokenizer_path=args.tokenizer,
+            shard_ledger=args.shard_ledger,
+            expected_shard_ledger_sha256=args.expected_shard_ledger_sha256,
             expected_receipt_sha256=args.expected_receipt_sha256,
             expected_tokenizer_sha256=args.expected_tokenizer_sha256,
             expected_architecture_sha256=args.expected_architecture_sha256,
