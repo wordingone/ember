@@ -1177,14 +1177,8 @@ def run_pretraining_segment(
     data_shard_id: str = "owned-pretraining",
     require_complete_coverage: bool = True,
     max_records: int | None = None,
-    post_optimizer_step_callback: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    """Execute verified routed updates and bind counters needed for exact resume.
-
-    ``post_optimizer_step_callback`` (#2167) runs exactly once immediately after each
-    ``optimizer.step()`` (after the Stage-2 executor hook when one is installed); the
-    FP8 site refresh on the semantic path is its consumer.
-    """
+    """Execute verified routed updates and bind counters needed for exact resume."""
 
     if not records:
         raise ValueError("pretraining segment requires at least one owned record")
@@ -1331,8 +1325,6 @@ def run_pretraining_segment(
         optimizer.step()
         if stage2_executor is not None:
             stage2_executor.after_optimizer_step()
-        if post_optimizer_step_callback is not None:
-            post_optimizer_step_callback()
         optimizer_event = trainer_optimizer_step_event(initial_global_step + local_step)
         optimizer_step_events.append(optimizer_event)
         print(json.dumps(optimizer_event, sort_keys=True, separators=(",", ":")), flush=True)
@@ -1892,7 +1884,6 @@ def run_manifest_bound_semantic_segment(
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
     micro_batch: int = 1,
-    post_optimizer_step_callback: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Train bounded shared-text episodes while preserving receipt-bound shard resume state.
 
@@ -1994,7 +1985,6 @@ def run_manifest_bound_semantic_segment(
         initial_tokens_seen=initial_tokens_seen,
         data_shard_id="TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12],
         require_complete_coverage=False,
-        post_optimizer_step_callback=post_optimizer_step_callback,
     )
     result["data_cursor"] = bound_cursor(
         cursors[-1],

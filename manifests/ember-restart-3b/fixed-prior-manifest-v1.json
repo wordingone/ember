@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-09-06T09:59:51+00:00",
+  "ts": "2026-09-06T10:34:37+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,7 +12,7 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "5573b6e46f8967eab80f331298c9e1dbfe4b9698",
+    "commit": "970f7b7072584f8caf3537f4dc80e3858b227eef",
     "branch": "feat/issue2167-w5-upgate-fp8"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 7193643983908330)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 7231024449150000)",
         "reader_wired": true
       },
       {
@@ -91,8 +91,8 @@
       "kind": "file",
       "provenance": "Owned pretraining loop body; authored in-repo.",
       "path": "src/ember/training/pretrain.py",
-      "sha256": "bf63bf05059aad0b2b6c73336603d4c5c2106f0193d290a5e6b2c000675d521d",
-      "size_bytes": 101288
+      "sha256": "61a4bc322e43503796501d7e91f69f27ca091fb37d618d6cc9a2c487a857c80b",
+      "size_bytes": 100752
     },
     {
       "category": "training_loop",
@@ -115,8 +115,8 @@
       "kind": "file",
       "provenance": "Vertical-slice runner named by launch-packet output; never executed as a command string by ember-cli.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "e1d1a0408eb51656977a42389b374ad4b5f552c95e620a68ac2b21d26927798e",
-      "size_bytes": 322008
+      "sha256": "108b5c62bb4212fe361d6899e6ca64852dafb798814490a9d94baf5a33c8231b",
+      "size_bytes": 322826
     },
     {
       "category": "training_loop",

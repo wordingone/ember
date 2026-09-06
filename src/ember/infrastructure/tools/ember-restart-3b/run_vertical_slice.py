@@ -186,6 +186,7 @@ from training_acceleration import (
     install_fp8_up_gate_projections,
     iter_fp8_down_projections,
     refresh_fp8_after_optimizer_step,
+    validate_fp8_refresh_count,
     load_stage2_activation_authority,
     load_training_signature_census,
     stage1_policy,
@@ -5130,14 +5131,21 @@ def run_semantic(
         record_e4_step(progress)
 
     fp8_installation = disabled_fp8_installation_receipt()
-    post_optimizer_step_callback = None
+    fp8_step_hook_calls = 0
     if fp8_sites is not None:
         # #2167: explicit per-run install on the executed path (the Stage-1 policy is a
         # source-bound disabled constant; this flag is the only production FP8 entry here).
         fp8_installation = install_fp8_up_gate_projections(model, installation_scope=fp8_sites)
 
-        def post_optimizer_step_callback() -> None:
+        def _refresh_fp8_after_step(_optimizer: object, _args: object, _kwargs: object) -> None:
+            nonlocal fp8_step_hook_calls
+            fp8_step_hook_calls += 1
             refresh_fp8_after_optimizer_step(model)
+
+        # torch.optim.Optimizer step post-hook (honoured by the bitsandbytes subclass): fires
+        # exactly once after each optimizer.step(). The refresh is forced, because the 8-bit
+        # kernel updates parameter storage without bumping the tensor version counter.
+        optimizer.register_step_post_hook(_refresh_fp8_after_step)
 
     segment = run_manifest_bound_semantic_segment(
         model=model,
@@ -5154,7 +5162,6 @@ def run_semantic(
         initial_data_cursor=resume_cursor,
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
-        post_optimizer_step_callback=post_optimizer_step_callback,
     )
     fp8_kernels = [site.kernel_receipt() for site in iter_fp8_down_projections(model)]
     if fp8_sites is None and fp8_kernels:
@@ -5168,6 +5175,13 @@ def run_semantic(
         "fallbacks": fp8_fallbacks,
         "weight_refreshes": sum(int(item["weight_refreshes"]) for item in fp8_kernels),
     }
+    if fp8_sites is not None:
+        if fp8_step_hook_calls != int(steps):
+            raise RuntimeError(f"SEMANTIC_FP8_STEP_HOOK_COUNT_REFUSED:{fp8_step_hook_calls}!={int(steps)}")
+        validate_fp8_refresh_count(
+            installed_sites=int(fp8_installation["installed_sites"]), optimizer_steps=int(steps),
+            weight_refreshes=int(fp8_installation["weight_refreshes"]),
+        )
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("semantic runner did not publish its required counter-verified checkpoint")
     counts = measure_parameter_counts(model)
