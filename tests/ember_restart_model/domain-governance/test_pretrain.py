@@ -385,6 +385,32 @@ class PretrainingSegmentTests(unittest.TestCase):
         self.assertTrue(all(torch.equal(parameter.detach(), experts_before[name]) for name, parameter in model.named_parameters() if ".experts." in name))
         self.assertFalse(torch.equal(model.token_embedding.weight.detach(), shared_before))
 
+    def test_post_optimizer_step_callback_fires_exactly_once_after_each_step(self) -> None:
+        config = RestartDecoderConfig.small_for_tests(hidden_size=32, layers=2, attention_heads=4, vocab_size=64)
+        model = UnifiedDecoder(config, genesis_seed=2167)
+        optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
+        records = [
+            {"schema_version": "ember-owned-semantic-text-v1", "active_expert": "shared",
+             "token_ids": [8, 9, 10, 11], "target_ids": [9, 10, 11, 12]},
+            {"schema_version": "ember-owned-semantic-text-v1", "active_expert": "shared",
+             "token_ids": [3, 4, 5, 6], "target_ids": [4, 5, 6, 7]},
+        ]
+        seen: list[torch.Tensor] = []
+
+        def after_step() -> None:
+            # runs after optimizer.step(): the master weight has already moved this step
+            seen.append(model.token_embedding.weight.detach().clone())
+
+        result = run_pretraining_segment(
+            model=model, optimizer=optimizer, records=records, config=config, device=torch.device("cpu"),
+            checkpoint_every=1, checkpoint_callback=lambda _step, _result: None, require_complete_coverage=False,
+            post_optimizer_step_callback=after_step,
+        )
+        self.assertEqual(result["steps"], 2)
+        self.assertEqual(len(seen), 2)
+        self.assertFalse(torch.equal(seen[0], seen[1]))
+        self.assertTrue(torch.equal(seen[1], model.token_embedding.weight.detach()))
+
     def test_optional_signature_observer_sees_real_decoded_batch_without_changing_counters(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=32, layers=2, attention_heads=4, vocab_size=64,

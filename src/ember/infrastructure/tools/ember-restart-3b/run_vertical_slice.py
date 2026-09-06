@@ -182,6 +182,10 @@ from training_acceleration import (
     Stage1Policy,
     TrainingSignatureCensus,
     compare_stage2_ab_receipts,
+    disabled_fp8_installation_receipt,
+    install_fp8_up_gate_projections,
+    iter_fp8_down_projections,
+    refresh_fp8_after_optimizer_step,
     load_stage2_activation_authority,
     load_training_signature_census,
     stage1_policy,
@@ -4892,8 +4896,17 @@ def run_semantic(
     shard_ledger: Path | None = None,
     expected_shard_ledger_sha256: str | None = None,
     micro_batch: int = 1,
+    fp8_sites: str | None = None,
 ) -> dict[str, object]:
-    """Train receipt-bound semantic text through the shared nonlinear language path."""
+    """Train receipt-bound semantic text through the shared nonlinear language path.
+
+    ``fp8_sites`` (#2167) names an explicit FP8 installation scope for this run; absent, the
+    path is byte-identical to the BF16 production path. The installation and its live
+    counters are bound into the run receipt and any fallback fails the run closed.
+    """
+
+    if fp8_sites is not None and (type(fp8_sites) is not str or not fp8_sites):
+        raise ValueError("SEMANTIC_FP8_SITES_INVALID: --fp8-sites must be a non-empty scope string")
 
     if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
         raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
@@ -5116,6 +5129,16 @@ def run_semantic(
         })
         record_e4_step(progress)
 
+    fp8_installation = disabled_fp8_installation_receipt()
+    post_optimizer_step_callback = None
+    if fp8_sites is not None:
+        # #2167: explicit per-run install on the executed path (the Stage-1 policy is a
+        # source-bound disabled constant; this flag is the only production FP8 entry here).
+        fp8_installation = install_fp8_up_gate_projections(model, installation_scope=fp8_sites)
+
+        def post_optimizer_step_callback() -> None:
+            refresh_fp8_after_optimizer_step(model)
+
     segment = run_manifest_bound_semantic_segment(
         model=model,
         optimizer=optimizer,
@@ -5131,7 +5154,20 @@ def run_semantic(
         initial_data_cursor=resume_cursor,
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
+        post_optimizer_step_callback=post_optimizer_step_callback,
     )
+    fp8_kernels = [site.kernel_receipt() for site in iter_fp8_down_projections(model)]
+    if fp8_sites is None and fp8_kernels:
+        raise RuntimeError("SEMANTIC_FP8_UNDECLARED_SITE_REFUSED")
+    fp8_fallbacks = sum(int(item["fallbacks"]) for item in fp8_kernels)
+    if fp8_fallbacks:
+        raise RuntimeError(f"SEMANTIC_FP8_FALLBACK_REFUSED:{fp8_fallbacks}")
+    fp8_installation = {
+        **fp8_installation,
+        "dispatches": sum(int(item["dispatches"]) for item in fp8_kernels),
+        "fallbacks": fp8_fallbacks,
+        "weight_refreshes": sum(int(item["weight_refreshes"]) for item in fp8_kernels),
+    }
     if checkpoint is None or parameter_receipt is None:
         raise RuntimeError("semantic runner did not publish its required counter-verified checkpoint")
     counts = measure_parameter_counts(model)
@@ -5175,6 +5211,7 @@ def run_semantic(
         "resume_authority": resume_authority,
         "data_authority": data_authority,
         "launch_shape": {"steps": steps, "sequence_length": sequence_length, "micro_batch": micro_batch},
+        "fp8_installation": fp8_installation,
     }
 
 
@@ -5279,6 +5316,7 @@ def main() -> None:
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--micro-batch", type=int, default=1, help="#2159: consecutive receipt-bound episodes per optimizer step (segment micro_batch); default 1 preserves the current launch shape")
+    semantic.add_argument("--fp8-sites", default=None, help="#2167: explicit FP8 installation scope for this run (absent = BF16 production path)")
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
@@ -5390,6 +5428,7 @@ def main() -> None:
             shard_ledger=args.shard_ledger,
             expected_shard_ledger_sha256=args.expected_shard_ledger_sha256,
             micro_batch=args.micro_batch,
+            fp8_sites=args.fp8_sites,
             expected_receipt_sha256=args.expected_receipt_sha256,
             expected_tokenizer_sha256=args.expected_tokenizer_sha256,
             expected_architecture_sha256=args.expected_architecture_sha256,

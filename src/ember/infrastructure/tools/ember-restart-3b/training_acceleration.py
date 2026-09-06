@@ -45,6 +45,10 @@ _FP8_W2_INSTALLATION_SCOPE = (
 )
 _FP8_W2_EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 _FP8_W2_FINAL_LAYER_INDEX = 13
+# issue #2167 (W5): the shared SwiGLU up+gate projection of every decoder layer (weight [8H, H], bias-free).
+_FP8_W5_INSTALLATION_SCOPE = "all_decoder_layers_shared_swiglu_up_gate_h_to_8h"
+_FP8_W5_LAYER_COUNT = 14
+_FP8_ARMS = ("fp8", "bf16")
 _CHECKPOINT_IDENTITY_KEYS = {
     "graph_signature_sha256", "fp8_kernel_receipt_sha256", "checkpoint_region_sha256",
 }
@@ -655,13 +659,27 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         return grad_input, grad_weight, None, None, None, None
 
 
-class DynamicFp8DownProjection(nn.Module):
-    """Live-master FP8 down projection with a stable captured weight operand.
+class DynamicFp8Projection(nn.Module):
+    """Live-master FP8 projection with a stable captured weight operand.
 
     The persistent FP8 buffer is refreshed once after each optimizer update.
     Forward only takes a transposed view, so it performs zero weight
     materialization copies and keeps the graph operand address stable.
+
+    Subclasses bind one closed shape rule (``_shape_holds``); the FP8 forward,
+    the BF16 backward, the refresh discipline and the kernel receipt are shared.
+    The ``arm`` switch (#2167) selects the forward kernel at an installed site:
+    ``fp8`` dispatches ``torch._scaled_mm``; ``bf16`` runs ``F.linear`` on the
+    same BF16 master weight, which is the original module computation, so a
+    paired matched-loss harness can alternate arms on one model state.
     """
+
+    SITE_CLASS = "abstract"
+    _SHAPE_REFUSAL = "FP8 site shape rule is abstract"
+
+    @staticmethod
+    def _shape_holds(weight: torch.Tensor) -> bool:
+        raise NotImplementedError
 
     def __init__(
         self,
@@ -674,8 +692,8 @@ class DynamicFp8DownProjection(nn.Module):
         super().__init__()
         if bias is not None:
             raise ValueError("issue #1413 FP8 down projections must be bias-free")
-        if weight.ndim != 2 or weight.shape[1] != 4 * weight.shape[0]:
-            raise ValueError("issue #1413 FP8 site must be a 4H-to-H down projection")
+        if not self._shape_holds(weight):
+            raise ValueError(self._SHAPE_REFUSAL)
         if weight.dtype is not torch.bfloat16:
             raise ValueError("issue #1413 FP8 site requires a BF16 master weight")
         self.weight = weight
@@ -706,6 +724,8 @@ class DynamicFp8DownProjection(nn.Module):
         self._fallbacks = 0
         self._weight_refreshes = 0
         self._refreshed_weight_version = -1
+        self._arm = "fp8"
+        self._bf16_dispatches = 0
         self.refresh_after_optimizer_step()
 
     @classmethod
@@ -715,8 +735,25 @@ class DynamicFp8DownProjection(nn.Module):
         *,
         kernel: ScaledMmKernel | None = None,
         allow_test_device: bool = False,
-    ) -> "DynamicFp8DownProjection":
+    ) -> "DynamicFp8Projection":
         return cls(weight=linear.weight, bias=linear.bias, kernel=kernel, allow_test_device=allow_test_device)
+
+    @property
+    def arm(self) -> str:
+        return self._arm
+
+    def set_arm(self, arm: str) -> None:
+        if arm not in _FP8_ARMS:
+            raise ValueError("FP8 site arm must be one of fp8, bf16")
+        self._arm = arm
+
+    def arm_receipt(self) -> dict[str, object]:
+        return {
+            "site_class": self.SITE_CLASS,
+            "arm": self._arm,
+            "fp8_dispatches": self._dispatches,
+            "bf16_dispatches": self._bf16_dispatches,
+        }
 
     def refresh_after_optimizer_step(self) -> None:
         with torch.no_grad():
@@ -739,6 +776,9 @@ class DynamicFp8DownProjection(nn.Module):
     def forward(self, activation: torch.Tensor) -> torch.Tensor:
         if activation.dtype is not torch.bfloat16:
             raise RuntimeError("issue #1413 FP8 site requires a BF16 activation")
+        if self._arm == "bf16":
+            self._bf16_dispatches += 1
+            return torch.nn.functional.linear(activation, self.weight)
         if self.weight._version != self._refreshed_weight_version:
             raise RuntimeError("stale FP8 weight: refresh_after_optimizer_step is required after every update")
         output = _DynamicFp8ScaledMm.apply(
@@ -773,12 +813,64 @@ class DynamicFp8DownProjection(nn.Module):
         }
 
 
-def iter_fp8_down_projections(model: nn.Module) -> Sequence[DynamicFp8DownProjection]:
+class DynamicFp8DownProjection(DynamicFp8Projection):
+    """Issue #1413 site class: SwiGLU down projection, weight [H, 4H]."""
+
+    SITE_CLASS = "swiglu_down_4h_to_h"
+    _SHAPE_REFUSAL = "issue #1413 FP8 site must be a 4H-to-H down projection"
+
+    @staticmethod
+    def _shape_holds(weight: torch.Tensor) -> bool:
+        return weight.ndim == 2 and weight.shape[1] == 4 * weight.shape[0]
+
+
+class DynamicFp8UpGateProjection(DynamicFp8Projection):
+    """Issue #2167 (W5) site class: SwiGLU up+gate projection, weight [8H, H].
+
+    Output width is 8H so the caller ``chunk(2, dim=-1)`` into up / gate is untouched.
+    """
+
+    SITE_CLASS = "shared_swiglu_up_gate_h_to_8h"
+    _SHAPE_REFUSAL = "issue #2167 FP8 site must be an H-to-8H up+gate projection"
+
+    @staticmethod
+    def _shape_holds(weight: torch.Tensor) -> bool:
+        return weight.ndim == 2 and weight.shape[0] == 8 * weight.shape[1]
+
+
+def iter_fp8_down_projections(model: nn.Module) -> Sequence[DynamicFp8Projection]:
+    """Every installed FP8 site of any class (the name predates the W5 site class)."""
+
     return tuple(
         module
         for module in model.modules()
-        if isinstance(module, DynamicFp8DownProjection)
+        if isinstance(module, DynamicFp8Projection)
     )
+
+
+iter_fp8_projections = iter_fp8_down_projections
+
+
+def set_fp8_arm(model: nn.Module, arm: str) -> int:
+    """Switch every installed FP8 site to ``arm`` (#2167); returns the site count."""
+
+    if arm not in _FP8_ARMS:
+        raise ValueError("FP8 site arm must be one of fp8, bf16")
+    sites = iter_fp8_down_projections(model)
+    for site in sites:
+        site.set_arm(arm)
+    return len(sites)
+
+
+def fp8_arm_receipt(model: nn.Module) -> dict[str, object]:
+    sites = iter_fp8_down_projections(model)
+    return {
+        "sites": len(sites),
+        "arms": sorted({site.arm for site in sites}),
+        "fp8_dispatches": sum(int(site.arm_receipt()["fp8_dispatches"]) for site in sites),
+        "bf16_dispatches": sum(int(site.arm_receipt()["bf16_dispatches"]) for site in sites),
+        "fallbacks": sum(int(site.kernel_receipt()["fallbacks"]) for site in sites),
+    }
 
 
 def disabled_fp8_installation_receipt() -> dict[str, object]:
@@ -889,6 +981,78 @@ def install_fp8_down_projections(
     if treatment:
         receipt["newly_installed_sites"] = len(targets)
     return receipt
+
+
+def install_fp8_up_gate_projections(
+    model: nn.Module,
+    *,
+    kernel: ScaledMmKernel | None = None,
+    allow_test_device: bool = False,
+    installation_scope: str | None = None,
+) -> dict[str, object]:
+    """Install the explicit W5 scope (#2167): ``layers.{i}.shared_ffn.up_gate`` in all 14 layers.
+
+    Every refusal fires before any module is replaced. Expert up+gate sites stay
+    BF16 ``nn.Linear`` (W2 governs experts); a pre-installed expert site, a
+    pre-installed shared site, a non-linear or biased or non-[8H, H] site, an
+    unknown scope string, or any layer count other than 14 is refused.
+    """
+
+    if installation_scope != _FP8_W5_INSTALLATION_SCOPE:
+        raise ValueError("issue #2167 FP8 up+gate installation requires the explicit W5 scope")
+    layers = getattr(model, "layers", None)
+    if not isinstance(layers, nn.ModuleList) or len(layers) != _FP8_W5_LAYER_COUNT:
+        raise ValueError("issue #2167 W5 requires exactly 14 decoder layers")
+    targets: list[tuple[str, nn.Module, nn.Linear]] = []
+    for index, layer in enumerate(layers):
+        shared = getattr(layer, "shared_ffn", None)
+        experts = getattr(layer, "experts", None)
+        if shared is None or not isinstance(experts, nn.ModuleDict):
+            raise ValueError("issue #2167 W5 requires closed SwiGLU expert sites")
+        for expert_name, expert in experts.items():
+            expert_up_gate = getattr(expert, "up_gate", None)
+            if isinstance(expert_up_gate, DynamicFp8Projection):
+                raise RuntimeError(
+                    "issue #2167 W5 refuses an installed expert up+gate site: "
+                    f"layers.{index}.experts.{expert_name}.up_gate"
+                )
+            if not isinstance(expert_up_gate, nn.Linear):
+                raise ValueError("issue #2167 W5 expert up+gate site is not linear")
+        up_gate = getattr(shared, "up_gate", None)
+        if isinstance(up_gate, DynamicFp8Projection):
+            raise RuntimeError("issue #2167 FP8 up+gate projections are already installed")
+        if not isinstance(up_gate, nn.Linear):
+            raise ValueError("issue #2167 FP8 site is not a linear up+gate projection")
+        if up_gate.bias is not None:
+            raise ValueError("issue #2167 FP8 up+gate projections must be bias-free")
+        if not DynamicFp8UpGateProjection._shape_holds(up_gate.weight):
+            raise ValueError("issue #2167 FP8 site must be an H-to-8H up+gate projection")
+        if up_gate.weight.dtype is not torch.bfloat16:
+            raise ValueError("issue #2167 FP8 site requires a BF16 master weight")
+        targets.append((f"layers.{index}.shared_ffn.up_gate", shared, up_gate))
+    if len(targets) != _FP8_W5_LAYER_COUNT:
+        raise RuntimeError("issue #2167 W5 scope must resolve exactly 14 shared up+gate projections")
+    replacements = [
+        (
+            owner,
+            DynamicFp8UpGateProjection.from_linear(
+                up_gate,
+                kernel=kernel,
+                allow_test_device=allow_test_device,
+            ),
+        )
+        for _name, owner, up_gate in targets
+    ]
+    for owner, replacement in replacements:
+        owner.up_gate = replacement
+    return {
+        "schema_version": "ember-fp8-down-projection-installation-v2",
+        "scope": _FP8_W5_INSTALLATION_SCOPE,
+        "layer_indexes": list(range(_FP8_W5_LAYER_COUNT)),
+        "installed_sites": _FP8_W5_LAYER_COUNT,
+        "sites": [name for name, _owner, _up_gate in targets],
+        "fallbacks": 0,
+    }
 
 
 def fp8_installation_group_receipt(
