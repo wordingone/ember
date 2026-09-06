@@ -760,6 +760,152 @@ class Fp8DownProjectionTests(unittest.TestCase):
             wrapped(torch.randn(2, 16, dtype=torch.float32))
 
 
+W5_SCOPE = "all_decoder_layers_shared_swiglu_up_gate_h_to_8h"
+
+
+class Fp8UpGateProjectionTests(unittest.TestCase):
+    """Issue #2167 (W5): shared SwiGLU up+gate site class, installer, arm switch."""
+
+    @staticmethod
+    def _fake_scaled_mm(activation, weight_transposed, scale_a, scale_b, *, out_dtype, use_fast_accum):
+        del use_fast_accum
+        return (activation.float().matmul(weight_transposed.float()) * scale_a.float() * scale_b.float()).to(out_dtype)
+
+    @staticmethod
+    def _w5_model(layers: int = 14) -> UnifiedDecoder:
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=layers, attention_heads=2, vocab_size=16,
+        )
+        return UnifiedDecoder(config, genesis_seed=2167).to(dtype=torch.bfloat16)
+
+    @staticmethod
+    def _identity(model: UnifiedDecoder) -> tuple[object, ...]:
+        return (
+            tuple(model.state_dict()),
+            tuple((name, id(parameter)) for name, parameter in model.named_parameters()),
+            tuple((name, id(module), type(module)) for name, module in model.named_modules()),
+        )
+
+    def _install(self, model: UnifiedDecoder, **overrides) -> dict[str, object]:
+        kwargs = {"kernel": self._fake_scaled_mm, "allow_test_device": True, "installation_scope": W5_SCOPE}
+        kwargs.update(overrides)
+        return training_acceleration.install_fp8_up_gate_projections(model, **kwargs)
+
+    def test_w5_install_is_exact_preserves_state_keys_and_refuses_reinstall(self) -> None:
+        model = self._w5_model()
+        state_keys = list(model.state_dict())
+        receipt = self._install(model)
+        self.assertEqual(receipt, {
+            "schema_version": "ember-fp8-down-projection-installation-v2",
+            "scope": W5_SCOPE,
+            "layer_indexes": list(range(14)),
+            "installed_sites": 14,
+            "sites": [f"layers.{index}.shared_ffn.up_gate" for index in range(14)],
+            "fallbacks": 0,
+        })
+        self.assertEqual(list(model.state_dict()), state_keys)
+        for layer in model.layers:
+            self.assertIsInstance(layer.shared_ffn.up_gate, training_acceleration.DynamicFp8UpGateProjection)
+            self.assertIsInstance(layer.shared_ffn.down, torch.nn.Linear)
+            for expert in layer.experts.values():
+                self.assertIsInstance(expert.up_gate, torch.nn.Linear)
+                self.assertIsInstance(expert.down, torch.nn.Linear)
+        self.assertEqual(len(training_acceleration.iter_fp8_down_projections(model)), 14)
+        identity = self._identity(model)
+        with self.assertRaisesRegex(RuntimeError, "already installed"):
+            self._install(model)
+        self.assertEqual(self._identity(model), identity)
+        # the #1413 down installer still resolves its single final shared site beside the W5 sites
+        down_receipt = training_acceleration.install_fp8_down_projections(
+            model, kernel=self._fake_scaled_mm, allow_test_device=True,
+        )
+        self.assertEqual(down_receipt["installed_sites"], 1)
+        self.assertEqual(len(training_acceleration.iter_fp8_down_projections(model)), 15)
+
+    def test_w5_planted_negatives_refuse_before_any_mutation(self) -> None:
+        # (1) wrong-shape weight at the module boundary, both directions
+        with self.assertRaisesRegex(ValueError, "H-to-8H up\\+gate"):
+            training_acceleration.DynamicFp8UpGateProjection.from_linear(
+                torch.nn.Linear(16, 4, bias=False, dtype=torch.bfloat16),
+                kernel=self._fake_scaled_mm, allow_test_device=True,
+            )
+        with self.assertRaisesRegex(ValueError, "4H-to-H down"):
+            training_acceleration.DynamicFp8DownProjection.from_linear(
+                torch.nn.Linear(4, 32, bias=False, dtype=torch.bfloat16),
+                kernel=self._fake_scaled_mm, allow_test_device=True,
+            )
+        # (2) an expert up+gate already installed is refused, shared sites untouched
+        model = self._w5_model()
+        expert = model.layers[3].experts["tool"]
+        expert.up_gate = training_acceleration.DynamicFp8UpGateProjection.from_linear(
+            expert.up_gate, kernel=self._fake_scaled_mm, allow_test_device=True,
+        )
+        identity = self._identity(model)
+        with self.assertRaisesRegex(RuntimeError, "installed expert up\\+gate site: layers.3.experts.tool.up_gate"):
+            self._install(model)
+        self.assertEqual(self._identity(model), identity)
+        # (3) layer count other than 14, and an unknown scope string, refuse before mutation
+        small = self._w5_model(layers=2)
+        small_identity = self._identity(small)
+        with self.assertRaisesRegex(ValueError, "exactly 14 decoder layers"):
+            self._install(small)
+        self.assertEqual(self._identity(small), small_identity)
+        fresh = self._w5_model()
+        fresh_identity = self._identity(fresh)
+        with self.assertRaisesRegex(ValueError, "explicit W5 scope"):
+            self._install(fresh, installation_scope="final_decoder_layer_shared_swiglu_down_4h_to_h")
+        with self.assertRaisesRegex(ValueError, "explicit W5 scope"):
+            self._install(fresh, installation_scope=None)
+        self.assertEqual(self._identity(fresh), fresh_identity)
+        # (4) a biased site is refused before mutation
+        biased = self._w5_model()
+        biased.layers[7].shared_ffn.up_gate = torch.nn.Linear(8, 64, bias=True, dtype=torch.bfloat16)
+        biased_identity = self._identity(biased)
+        with self.assertRaisesRegex(ValueError, "bias-free"):
+            self._install(biased)
+        self.assertEqual(self._identity(biased), biased_identity)
+
+    def test_w5_arm_switch_bf16_is_the_original_computation_and_fp8_dispatches_only_in_fp8_arm(self) -> None:
+        model = self._w5_model()
+        self._install(model)
+        sample = torch.randn(3, 8, dtype=torch.bfloat16)
+        site = model.layers[0].shared_ffn.up_gate
+        self.assertEqual(training_acceleration.set_fp8_arm(model, "bf16"), 14)
+        self.assertTrue(torch.equal(site(sample), torch.nn.functional.linear(sample, site.weight)))
+        self.assertEqual(site.arm_receipt(), {
+            "site_class": "shared_swiglu_up_gate_h_to_8h", "arm": "bf16", "fp8_dispatches": 0, "bf16_dispatches": 1,
+        })
+        self.assertEqual(training_acceleration.set_fp8_arm(model, "fp8"), 14)
+        fp8_out = site(sample)
+        self.assertEqual(fp8_out.shape, (3, 64))
+        self.assertEqual(fp8_out.dtype, torch.bfloat16)
+        reference = torch.nn.functional.linear(sample, site.weight).detach().float()
+        self.assertLess(float((fp8_out.float() - reference).abs().max()), 0.2 * float(reference.abs().max()) + 1e-3)
+        self.assertEqual(site.arm_receipt()["fp8_dispatches"], 1)
+        with self.assertRaisesRegex(ValueError, "one of fp8, bf16"):
+            site.set_arm("fp16")
+        with self.assertRaisesRegex(ValueError, "one of fp8, bf16"):
+            training_acceleration.set_fp8_arm(model, "int8")
+        # the kernel receipt (closed keys) is unchanged by the arm switch
+        training_acceleration.validate_fp8_kernel_receipt({**site.kernel_receipt(), "compute_capability": "8.9"})
+        arm_receipt = training_acceleration.fp8_arm_receipt(model)
+        self.assertEqual((arm_receipt["sites"], arm_receipt["arms"], arm_receipt["fallbacks"]), (14, ["fp8"], 0))
+
+    def test_w5_refresh_after_step_touches_every_site_exactly_once(self) -> None:
+        model = self._w5_model()
+        self._install(model)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        tokens = torch.randint(0, 16, (1, 6))
+        loss = model(tokens, active_expert="shared").float().square().mean()
+        loss.backward()
+        optimizer.step()
+        with self.assertRaisesRegex(RuntimeError, "stale FP8 weight"):
+            model.layers[0].shared_ffn.up_gate(torch.randn(2, 8, dtype=torch.bfloat16))
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 14)
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 0)
+        self.assertEqual({site.kernel_receipt()["weight_refreshes"] for site in training_acceleration.iter_fp8_down_projections(model)}, {2})
+
+
 class CloseGateTests(unittest.TestCase):
     def test_close_gate_requires_both_mechanisms_zero_fallbacks_and_strict_floor(self) -> None:
         accepted = {
