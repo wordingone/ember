@@ -88,6 +88,7 @@ def _connector_media_type(path: PurePosixPath) -> str:
         ".py": "text/x-python; charset=utf-8",
         ".rst": "text/x-rst; charset=utf-8",
         ".sh": "application/x-sh; charset=utf-8",
+        ".sqlite": "application/vnd.sqlite3",
         ".swp": "application/x-vim-swap",
         ".txt": "text/plain; charset=utf-8",
         ".yml": "application/yaml; charset=utf-8",
