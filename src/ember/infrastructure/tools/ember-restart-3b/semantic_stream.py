@@ -166,6 +166,66 @@ class ManifestBoundTokenStream:
             appended += 1
         return appended
 
+    def ledger_sha256_now(self) -> str:
+        """Hash the ledger BYTES as they are on disk right now (#2155 data-authority pin)."""
+
+        if self.shard_ledger_path is None or not self.shard_ledger_path.is_file():
+            raise ValueError("CATALOG_STREAM_LEDGER_MISSING")
+        return hashlib.sha256(self.shard_ledger_path.read_bytes()).hexdigest()
+
+    def bind_shard_ledger(self, *, expected_sha256: str) -> dict[str, Any]:
+        """Pin the shard ledger as this run's data authority (#2155).
+
+        The immutable receipt names K shards; the ledger names every shard produced after it. A
+        run whose data authority is the catalog stream binds the ledger BYTES, not merely a chain
+        that happens to verify: an unexpected ledger (grown, regenerated, or altered in one row)
+        refuses here, before any model construction, with `CATALOG_STREAM_LEDGER_SHA_MISMATCH`.
+        On success every ledger row's shard bytes are verified and admitted to `shards`.
+        """
+
+        hexdigits = set("0123456789abcdef")
+        if not isinstance(expected_sha256, str) or len(expected_sha256) != 64 or set(expected_sha256) - hexdigits:
+            raise ValueError("CATALOG_STREAM_LEDGER_SHA_MISMATCH:expected-sha256-malformed")
+        actual = self.ledger_sha256_now()
+        if actual != expected_sha256:
+            raise ValueError(f"CATALOG_STREAM_LEDGER_SHA_MISMATCH:{actual}")
+        self.refresh_from_ledger()
+        return {
+            "schema_version": "ember-catalog-stream-ledger-binding-v1",
+            "shard_ledger_path": str(self.shard_ledger_path),
+            "shard_ledger_sha256": actual,
+            "ledger_rows": len(self.shards),
+            "total_stream_tokens": self.total_stream_tokens,
+        }
+
+    def absolute_token_position(self, *, shard_index: int, token_offset: int) -> int:
+        """Map a (shard_index, token_offset) cursor to its position in the whole verified stream."""
+
+        if type(shard_index) is not int or type(token_offset) is not int or shard_index < 0 or token_offset < 0:
+            raise ValueError("semantic stream cursor is malformed")
+        shards = self.shards
+        if shard_index > len(shards) or (shard_index == len(shards) and token_offset != 0):
+            raise ValueError(f"CATALOG_STREAM_CURSOR_BEYOND_LEDGER:shard={shard_index}:rows={len(shards)}")
+        if shard_index < len(shards) and token_offset > int(shards[shard_index]["n_tokens"]):
+            raise ValueError(f"CATALOG_STREAM_CURSOR_BEYOND_LEDGER:offset={token_offset}:shard={shard_index}")
+        return sum(int(item["n_tokens"]) for item in shards[:shard_index]) + token_offset
+
+    def check_cursor_span(self, *, shard_index: int, token_offset: int, tokens: int) -> dict[str, int]:
+        """Refuse a run whose planned consumption cannot be served by the verified stream (#2155).
+
+        `next_episode` reads `sequence_length + 1` tokens per episode (the final target), so a span
+        of `tokens` starting at the cursor needs `tokens + 1` tokens to exist from that position.
+        """
+
+        if type(tokens) is not int or tokens < 1:
+            raise ValueError("semantic stream cursor span must be a positive token count")
+        start = self.absolute_token_position(shard_index=shard_index, token_offset=token_offset)
+        end = start + tokens
+        total = self.total_stream_tokens
+        if end + 1 > total:
+            raise ValueError(f"CATALOG_STREAM_CURSOR_BEYOND_LEDGER:needs={end + 1}:total={total}")
+        return {"token_start": start, "token_end": end, "total_stream_tokens": total}
+
     def _read_tokens(self, *, shard_index: int, token_offset: int, count: int) -> list[int]:
         shards = self.shards
         index = shard_index
