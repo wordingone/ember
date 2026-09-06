@@ -803,6 +803,153 @@ _TRAIN_PARTITION_PROJECTION_ROW_FIELDS = {
     "supporting_receipts",
 }
 _SUPPORTING_RECEIPT_FIELDS = {"path", "sha256"}
+_BULK_PREDECESSOR_PROJECTION_ROW_FIELDS = _PROJECTION_ROW_FIELDS | {
+    "predecessor_media_bindings"
+}
+_BULK_MEDIA_TYPE_TABLE = Path(__file__).with_name("bulk_connector_media_types.json")
+_BULK_MEDIA_TABLE_SCHEMA = "ember-issue1581-bulk-connector-media-types-v1"
+_BULK_PREDECESSOR_BINDINGS_SCHEMA = "ember-issue1581-bulk-predecessor-media-types-v1"
+_BULK_EXCLUDED_MEDIA_CLASSES = {".bin", ".dll", ".exe", ".lib", ".so"}
+_GOAL_BINDING = {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02B",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+}
+
+
+def _goal_bound(table: dict[str, Any]) -> bool:
+    return all(table.get(key) == value for key, value in _GOAL_BINDING.items())
+
+
+def _load_bulk_media_type_table() -> dict[str, Any]:
+    """Frozen closed media-class table for the bulk (non-partition) projection route."""
+    raw = _read(_BULK_MEDIA_TYPE_TABLE)
+    table = json.loads(raw)
+    self_sha = table.pop("self_sha256", None)
+    if self_sha != _sha256(_canonical(table)):
+        raise ValueError("BULK_PROJECTION_MEDIA_TABLE_SELF_HASH_REFUSED")
+    table["self_sha256"] = self_sha
+    classes = table.get("classes")
+    excluded = table.get("excluded_classes")
+    if (
+        table.get("schema_version") != _BULK_MEDIA_TABLE_SCHEMA
+        or not _goal_bound(table)
+        or not isinstance(classes, dict)
+        or not classes
+        or not isinstance(excluded, dict)
+        or not _BULK_EXCLUDED_MEDIA_CLASSES <= set(excluded)
+        or set(excluded) & set(classes)
+        or table.get("class_count") != len(classes)
+        or table.get("file_count") != sum(row.get("count", 0) for row in classes.values())
+        or table.get("unknown_class_rule") != "BULK_PROJECTION_MEDIA_CLASS_UNMAPPED"
+        or any(
+            not isinstance(row, dict)
+            or not isinstance(row.get("media_type"), str)
+            or not row["media_type"]
+            for row in classes.values()
+        )
+    ):
+        raise ValueError("BULK_PROJECTION_MEDIA_TABLE_SCHEMA_REFUSED")
+    return table
+
+
+def _load_bulk_predecessor_media_bindings(
+    pin: object, *, expected_receipt_sha256: str
+) -> dict[str, str]:
+    """Hash-pinned, receipt-bound predecessor object->media-type bindings for one bulk row."""
+    if not isinstance(pin, dict) or set(pin) != _SUPPORTING_RECEIPT_FIELDS:
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_PIN_REFUSED")
+    raw = _read(Path(pin["path"]))
+    if _sha256(raw) != _require_sha(pin["sha256"], "predecessor media bindings identity"):
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_HASH_DRIFT")
+    try:
+        table = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_UNREADABLE") from error
+    if not isinstance(table, dict):
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_SCHEMA_REFUSED")
+    self_sha = table.pop("self_sha256", None)
+    if self_sha != _sha256(_canonical(table)):
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_SELF_HASH_REFUSED")
+    bindings = table.get("media_types_by_object_id")
+    if (
+        table.get("schema_version") != _BULK_PREDECESSOR_BINDINGS_SCHEMA
+        or not _goal_bound(table)
+        or not isinstance(bindings, dict)
+        or table.get("binding_count") != len(bindings)
+        or not _is_sha256_text(table.get("predecessor_catalog_export_sha256"))
+        or any(
+            not isinstance(object_id, str)
+            or not object_id.startswith("sha256:")
+            or not _is_sha256_text(object_id[7:])
+            or not isinstance(media_type, str)
+            or not media_type
+            for object_id, media_type in bindings.items()
+        )
+    ):
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_SCHEMA_REFUSED")
+    if table.get("connector_receipt_sha256") != expected_receipt_sha256:
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_RECEIPT_MISMATCH")
+    return dict(bindings)
+
+
+def _is_sha256_text(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def build_bulk_predecessor_media_bindings(
+    *, catalog_export_raw: bytes, connector_receipt_raw: bytes
+) -> bytes:
+    """Emit the receipt-bound predecessor bindings: for every object the connector receipt
+    names that the predecessor catalog export already binds, the export's media type. An
+    object absent from the export gets no row, so the mapper/table route decides it."""
+    try:
+        export = json.loads(catalog_export_raw)
+        receipt = json.loads(connector_receipt_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_INPUT_UNREADABLE") from error
+    if (
+        not isinstance(export, dict)
+        or not isinstance(export.get("records"), list)
+        or not isinstance(receipt, dict)
+        or receipt.get("schema") != "corpus-connector-receipt-v1"
+        or not isinstance(receipt.get("files"), list)
+    ):
+        raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_INPUT_SCHEMA_REFUSED")
+    bound: dict[str, str] = {}
+    for record in export["records"]:
+        if (
+            isinstance(record, dict)
+            and record.get("kind") == "immutable_object"
+            and isinstance(record.get("id"), str)
+            and isinstance(record.get("media_type"), str)
+            and record["media_type"]
+        ):
+            bound[record["id"]] = record["media_type"]
+    bindings: dict[str, str] = {}
+    for entry in receipt["files"]:
+        if not isinstance(entry, dict) or not _is_sha256_text(entry.get("sha256")):
+            raise ValueError("BULK_PREDECESSOR_MEDIA_BINDINGS_RECEIPT_ROW_REFUSED")
+        object_id = f"sha256:{entry['sha256']}"
+        media_type = bound.get(object_id)
+        if media_type is not None:
+            bindings[object_id] = media_type
+    table: dict[str, Any] = {
+        "schema_version": _BULK_PREDECESSOR_BINDINGS_SCHEMA,
+        **_GOAL_BINDING,
+        "precedence": "EXISTING_PREDECESSOR_BINDING_GOVERNS_OVERLAPS",
+        "predecessor_catalog_export_sha256": _sha256(catalog_export_raw),
+        "connector_receipt_sha256": _sha256(connector_receipt_raw),
+        "connector_file_count": len(receipt["files"]),
+        "binding_count": len(bindings),
+        "media_types_by_object_id": dict(sorted(bindings.items())),
+    }
+    table["self_sha256"] = _sha256(_canonical(table))
+    return _canonical(table)
 _PARTITION_MEDIA_TYPE_TABLE = Path(__file__).with_name("train_partition_media_types.json")
 _PREDECESSOR_MEDIA_TYPE_TABLE = Path(__file__).with_name(
     "train_partition_predecessor_media_types.json"
@@ -1060,6 +1207,7 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
         if not isinstance(row, dict) or set(row) not in (
             _PROJECTION_ROW_FIELDS,
             _TRAIN_PARTITION_PROJECTION_ROW_FIELDS,
+            _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS,
         ):
             raise ValueError("catalog projection row has an invalid closed schema")
         supporting_receipt_sha256 = []
@@ -1082,6 +1230,14 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
         if set(row) == _TRAIN_PARTITION_PROJECTION_ROW_FIELDS:
             projected = _load_train_partition_projection(row)
         else:
+            predecessor_media_types = None
+            if "predecessor_media_bindings" in row:
+                predecessor_media_types = _load_bulk_predecessor_media_bindings(
+                    row["predecessor_media_bindings"],
+                    expected_receipt_sha256=_require_sha(
+                        row["expected_receipt_sha256"], "connector receipt identity"
+                    ),
+                )
             projected = load_bulk_domain_connector_receipt(
                 receipt_path=Path(row["receipt_path"]),
                 expected_receipt_sha256=row["expected_receipt_sha256"],
@@ -1090,6 +1246,8 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
                 expected_license_text_sha256=row["expected_license_text_sha256"],
                 domain=row["domain"],
                 split=row["split"],
+                media_class_table=_load_bulk_media_type_table(),
+                predecessor_media_types=predecessor_media_types,
             )
         projected["supporting_receipt_sha256"] = supporting_receipt_sha256
         rows.append(projected)
@@ -1312,6 +1470,11 @@ def main(argv: list[str] | None = None) -> int:
     project.add_argument("--spec", required=True, type=Path)
     project.add_argument("--output", required=True, type=Path)
 
+    bindings = commands.add_parser("bulk-predecessor-media-bindings")
+    bindings.add_argument("--catalog-export", required=True, type=Path)
+    bindings.add_argument("--connector-receipt", required=True, type=Path)
+    bindings.add_argument("--output", required=True, type=Path)
+
     consumer = commands.add_parser("consumer")
     consumer.add_argument("--catalog-export", required=True, type=Path)
     consumer.add_argument("--dataset-import-receipt", required=True, type=Path)
@@ -1363,6 +1526,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.command == "project":
             output = project_catalog_spec(spec_raw=_read(arguments.spec))
+        elif arguments.command == "bulk-predecessor-media-bindings":
+            output = build_bulk_predecessor_media_bindings(
+                catalog_export_raw=_read(arguments.catalog_export),
+                connector_receipt_raw=_read(arguments.connector_receipt),
+            )
         elif arguments.command in {"consumer", "evaluation-consumer"}:
             builder = (
                 build_evaluation_consumer_catalog_fragment
