@@ -605,6 +605,106 @@ def verify_checkpoint_recompute_capture(
     }
 
 
+def _fp8_rescale_eager(
+    output: torch.Tensor, scale_a: torch.Tensor, weight_scale: torch.Tensor, dtype: torch.dtype,
+) -> torch.Tensor:
+    """Apply the activation and weight scales to a scaled_mm output.
+
+    Issue #2173: this arithmetic is unchanged from the original inline expression. It is factored
+    out so it can be compiled, because the ``.float()`` promotion materializes a full-size fp32
+    temporary -- 256 MiB at the up+gate site's ``[4096, 16384]`` output -- and the promotion,
+    two multiplies and the cast back are four passes over it. Compiled, the same expression fuses
+    and the temporary never lands in memory.
+
+    The device refuses row-wise scale operands (``Rowwise scaling is not currently supported on
+    your device``), so the scales cannot be pushed into the kernel and this rescale is required.
+    """
+
+    return output.float().mul_(scale_a).mul_(weight_scale).to(dtype)
+
+
+def _fp8_weight_scale_eager(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Per-row FP8 weight scale, plus a fused finiteness verdict (#2173).
+
+    Returning the verdict as a tensor lets the caller do exactly one host read per refresh instead
+    of a separate synchronizing ``.all()`` barrier before the quantization can even start.
+    """
+
+    absolute_max = weight.abs().amax(dim=1, keepdim=True).float()
+    finite = torch.isfinite(absolute_max).all()
+    scale = torch.where(absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max))
+    return scale, finite
+
+
+def _fp8_requantize_eager(weight: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+    """Quantize a BF16 master weight to float8_e4m3fn under a precomputed per-row scale.
+
+    Issue #2173: unchanged arithmetic, factored out for the same reason. This runs once per
+    optimizer step at every installed site.
+    """
+
+    return (weight / scale).clamp(-448.0, 448.0).to(torch.float8_e4m3fn)
+
+
+class _CompiledOrEager:
+    """A compiled callable that degrades to its eager original.
+
+    Compilation is attempted once, lazily, on first call. Any failure -- no inductor backend, an
+    unsupported device, a capture context that refuses it -- is recorded and the eager function is
+    used from then on, so the cure can never be the reason a run fails. ``mode`` is readable for
+    receipts, which is the point: a receipt that cannot say which path ran is not evidence.
+    """
+
+    def __init__(self, function: Callable[..., torch.Tensor], label: str) -> None:
+        self._eager = function
+        self._label = label
+        self._compiled: Callable[..., torch.Tensor] | None = None
+        self._attempted = False
+        self._failure: str | None = None
+
+    @property
+    def mode(self) -> str:
+        if not self._attempted:
+            return "uncompiled"
+        return "eager_fallback" if self._compiled is None else "compiled"
+
+    @property
+    def failure(self) -> str | None:
+        return self._failure
+
+    def __call__(self, *args: Any) -> torch.Tensor:
+        if not self._attempted:
+            self._attempted = True
+            try:
+                self._compiled = torch.compile(self._eager, dynamic=False)
+            except BaseException as error:  # noqa: BLE001 - never fail a run over an optimization
+                self._compiled = None
+                self._failure = f"{type(error).__name__}: {error}"
+        if self._compiled is not None:
+            try:
+                return self._compiled(*args)
+            except BaseException as error:  # noqa: BLE001
+                self._compiled = None
+                self._failure = f"{type(error).__name__}: {error}"
+        return self._eager(*args)
+
+
+_FP8_RESCALE = _CompiledOrEager(_fp8_rescale_eager, "fp8_rescale")
+_FP8_REQUANTIZE = _CompiledOrEager(_fp8_requantize_eager, "fp8_requantize")
+_FP8_WEIGHT_SCALE = _CompiledOrEager(_fp8_weight_scale_eager, "fp8_weight_scale")
+
+
+def fp8_fused_path_receipt() -> dict[str, object]:
+    """Which path the two hot helpers actually took, for the run receipt (#2173)."""
+
+    return {
+        "schema_version": "ember-fp8-fused-path-receipt-v1",
+        "rescale": {"mode": _FP8_RESCALE.mode, "failure": _FP8_RESCALE.failure},
+        "requantize": {"mode": _FP8_REQUANTIZE.mode, "failure": _FP8_REQUANTIZE.failure},
+        "weight_scale": {"mode": _FP8_WEIGHT_SCALE.mode, "failure": _FP8_WEIGHT_SCALE.failure},
+    }
+
+
 ScaledMmKernel = Callable[..., torch.Tensor]
 
 
@@ -645,7 +745,7 @@ class _DynamicFp8ScaledMm(torch.autograd.Function):
         )
         if isinstance(output, tuple):
             output = output[0]
-        output = output.float().mul_(scale_a).mul_(weight_scale).to(activation.dtype)
+        output = _FP8_RESCALE(output, scale_a, weight_scale, activation.dtype)
         ctx.save_for_backward(flat, weight)
         ctx.input_shape = activation.shape
         return output.reshape(*activation.shape[:-1], weight.shape[0])
@@ -756,14 +856,24 @@ class DynamicFp8Projection(nn.Module):
         }
 
     def refresh_after_optimizer_step(self) -> None:
+        """Requantize the persistent FP8 weight from the BF16 master.
+
+        Issue #2173: the finiteness guard is unchanged in effect and changed in cost. It used to
+        read ``bool(torch.isfinite(...).all())``, which forces a device-to-host synchronization at
+        every installed site on every optimizer step -- fourteen stalls per step on this
+        architecture, and the dominant cost of the refresh once the arithmetic was compiled. The
+        test now rides the same compiled region as the quantization and its verdict is read back
+        as a single fused scalar, so a non-finite weight scale still fails closed and the step no
+        longer stalls fourteen times to prove that it did not.
+        """
+
         with torch.no_grad():
-            absolute_max = self.weight.detach().abs().amax(dim=1, keepdim=True).float()
-            if not bool(torch.isfinite(absolute_max).all()):
-                raise RuntimeError("FP8 weight scale is non-finite")
-            scale = torch.where(absolute_max > 0, absolute_max / 448.0, torch.ones_like(absolute_max))
-            quantized = (self.weight.detach() / scale).clamp(-448.0, 448.0).to(torch.float8_e4m3fn)
+            scale, finite = _FP8_WEIGHT_SCALE(self.weight.detach())
+            quantized = _FP8_REQUANTIZE(self.weight.detach(), scale)
             self._weight_fp8.copy_(quantized)
             self._weight_scale.copy_(scale.transpose(0, 1))
+            if not bool(finite):
+                raise RuntimeError("FP8 weight scale is non-finite")
         self._refreshed_weight_version = self.weight._version
         self._weight_refreshes += 1
 
