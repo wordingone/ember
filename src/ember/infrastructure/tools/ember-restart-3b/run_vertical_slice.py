@@ -4891,6 +4891,7 @@ def run_semantic(
     receipt_custody_root: Path | None = None,
     shard_ledger: Path | None = None,
     expected_shard_ledger_sha256: str | None = None,
+    micro_batch: int = 1,
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path."""
 
@@ -4902,6 +4903,10 @@ def run_semantic(
         raise ValueError("semantic training telemetry run id is invalid")
     if (shard_ledger is None) != (expected_shard_ledger_sha256 is None):
         raise ValueError("catalog data authority requires --shard-ledger and --expected-shard-ledger-sha256 together")
+    if type(micro_batch) is not int or micro_batch < 1:
+        # #2159: the segment consumes micro_batch consecutive episodes per optimizer step; refuse a
+        # non-positive shape here, before any preflight, so a bad launch never reaches the GPU.
+        raise ValueError("SEMANTIC_MICRO_BATCH_INVALID: --micro-batch must be a positive integer")
     if admitted_row_set_sha256 is not None and re.fullmatch(
         r"[0-9a-f]{64}", admitted_row_set_sha256
     ) is None:
@@ -4986,7 +4991,7 @@ def run_semantic(
     if shard_ledger is not None:
         ledger_binding = stream.bind_shard_ledger(expected_sha256=str(expected_shard_ledger_sha256))
         if resume_checkpoint is None:
-            cursor_span = stream.check_cursor_span(shard_index=0, token_offset=0, tokens=steps * sequence_length)
+            cursor_span = stream.check_cursor_span(shard_index=0, token_offset=0, tokens=steps * sequence_length * micro_batch)
     total_parameters = config.structural_parameter_count()
     shared_active_parameters = 1_020_589_568
     device_free_bytes, _device_total_bytes = torch.cuda.mem_get_info()
@@ -5039,7 +5044,7 @@ def run_semantic(
         initial_tokens_seen = int(resume_cursor["tokens_seen"])
         if ledger_binding is not None:
             start_cursor = {"shard_index": int(resume_cursor["shard_index"]), "token_offset": int(resume_cursor["token_offset"])}
-            cursor_span = stream.check_cursor_span(tokens=steps * sequence_length, **start_cursor)
+            cursor_span = stream.check_cursor_span(tokens=steps * sequence_length * micro_batch, **start_cursor)
     checkpoint_byte_bound = checkpoint_serialization_byte_bound(config_path, active_parameters=shared_active_parameters)
     publication_plan = semantic_publication_plan(steps=steps, checkpoint_interval=checkpoint_interval, checkpoint_byte_bound=checkpoint_byte_bound, write_budget_bytes=write_budget_bytes, initial_global_step=initial_global_step)
     torch.cuda.reset_peak_memory_stats()
@@ -5119,6 +5124,7 @@ def run_semantic(
         device=torch.device("cuda"),
         sequence_length=sequence_length,
         steps=steps,
+        micro_batch=micro_batch,
         checkpoint_every=checkpoint_interval,
         checkpoint_callback=checkpoint_callback,
         progress_callback=progress_callback,
@@ -5168,6 +5174,7 @@ def run_semantic(
         "tokenizer_sha256": stream.tokenizer_sha256,
         "resume_authority": resume_authority,
         "data_authority": data_authority,
+        "launch_shape": {"steps": steps, "sequence_length": sequence_length, "micro_batch": micro_batch},
     }
 
 
@@ -5271,6 +5278,7 @@ def main() -> None:
     semantic.add_argument("--text-lab-receipt-custody-root", type=Path)
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
+    semantic.add_argument("--micro-batch", type=int, default=1, help="#2159: consecutive receipt-bound episodes per optimizer step (segment micro_batch); default 1 preserves the current launch shape")
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
@@ -5381,6 +5389,7 @@ def main() -> None:
             tokenizer_path=args.tokenizer,
             shard_ledger=args.shard_ledger,
             expected_shard_ledger_sha256=args.expected_shard_ledger_sha256,
+            micro_batch=args.micro_batch,
             expected_receipt_sha256=args.expected_receipt_sha256,
             expected_tokenizer_sha256=args.expected_tokenizer_sha256,
             expected_architecture_sha256=args.expected_architecture_sha256,
