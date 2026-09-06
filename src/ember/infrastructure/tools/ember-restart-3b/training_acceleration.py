@@ -1088,10 +1088,27 @@ def fp8_installation_group_receipt(
 
 
 def refresh_fp8_after_optimizer_step(model: nn.Module) -> int:
-    return sum(
-        int(site.refresh_if_stale_after_optimizer_step())
-        for site in iter_fp8_down_projections(model)
-    )
+    """Re-quantize every installed site's FP8 weight buffer; returns the site count.
+
+    Always forced (#2167 real-path probe finding): the production optimizer, bitsandbytes
+    AdamW8bit, writes parameter storage from its CUDA kernel without bumping the tensor version
+    counter, so a version-based staleness test observes no update and every site keeps
+    forwarding buffers quantized from an older weight. The version check in ``forward`` stays
+    as a guard for optimizers that do bump the counter; this function is the contract that
+    every optimizer step is followed by one refresh per installed site.
+    """
+    sites = iter_fp8_down_projections(model)
+    for site in sites:
+        site.refresh_after_optimizer_step()
+    return len(sites)
+
+
+def validate_fp8_refresh_count(*, installed_sites: int, optimizer_steps: int, weight_refreshes: int) -> int:
+    """Refuse a run whose receipted refresh count is not one install refresh plus one per step per site."""
+    expected = int(installed_sites) * (int(optimizer_steps) + 1)
+    if int(weight_refreshes) != expected:
+        raise RuntimeError(f"FP8_REFRESH_COUNT_REFUSED:{int(weight_refreshes)}!={expected}")
+    return expected
 
 
 def validate_fp8_kernel_receipt(value: Mapping[str, object]) -> dict[str, object]:

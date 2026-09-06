@@ -322,7 +322,7 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
         reasoning = sites["layers.13.experts.reasoning.down"]
         with torch.no_grad():
             reasoning.weight.add_(1)
-        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 1)
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 5)
         self.assertEqual(reasoning.kernel_receipt()["weight_refreshes"], 2)
 
         ids = torch.tensor([[1, 2]], dtype=torch.int64)
@@ -335,18 +335,18 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
         self.assertEqual(groups["new_active_expert"]["dispatches"], 4)
         self.assertEqual(groups["existing_shared"]["fallbacks"], 0)
         self.assertEqual(groups["new_active_expert"]["fallbacks"], 0)
-        self.assertEqual(groups["existing_shared"]["weight_refreshes"], 1)
-        self.assertEqual(groups["new_active_expert"]["weight_refreshes"], 5)
+        self.assertEqual(groups["existing_shared"]["weight_refreshes"], 2)
+        self.assertEqual(groups["new_active_expert"]["weight_refreshes"], 8)
 
         with torch.no_grad():
             for site in training_acceleration.iter_fp8_down_projections(model):
                 site.weight.add_(1)
         self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 5)
         groups = training_acceleration.fp8_installation_group_receipt(model, installation)
-        self.assertEqual(groups["existing_shared"]["weight_refreshes"], 2)
-        self.assertEqual(groups["new_active_expert"]["weight_refreshes"], 9)
+        self.assertEqual(groups["existing_shared"]["weight_refreshes"], 3)
+        self.assertEqual(groups["new_active_expert"]["weight_refreshes"], 12)
 
-    def test_post_optimizer_refresh_touches_only_stale_fp8_sites(self) -> None:
+    def test_post_optimizer_refresh_touches_every_fp8_site(self) -> None:
         config = RestartDecoderConfig.small_for_tests(
             hidden_size=16, layers=1, attention_heads=4, vocab_size=64,
         )
@@ -356,9 +356,9 @@ class TrainingAccelerationPolicyTests(unittest.TestCase):
         with torch.no_grad():
             sites[0].weight.add_(1)
         refreshed = training_acceleration.refresh_fp8_after_optimizer_step(model)
-        self.assertEqual(refreshed, 1)
-        self.assertEqual(sites[0].kernel_receipt()["weight_refreshes"], 2)
-        self.assertTrue(all(site.kernel_receipt()["weight_refreshes"] == 1 for site in sites[1:]))
+        # forced for every site (#2167): the production 8-bit optimizer never bumps the version counter
+        self.assertEqual(refreshed, len(sites))
+        self.assertTrue(all(site.kernel_receipt()["weight_refreshes"] == 2 for site in sites))
 
 
 class TrainingSignatureCensusTests(unittest.TestCase):
@@ -902,8 +902,29 @@ class Fp8UpGateProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "stale FP8 weight"):
             model.layers[0].shared_ffn.up_gate(torch.randn(2, 8, dtype=torch.bfloat16))
         self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 14)
-        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 0)
-        self.assertEqual({site.kernel_receipt()["weight_refreshes"] for site in training_acceleration.iter_fp8_down_projections(model)}, {2})
+        # forced, never if-stale: a second call re-quantizes again (#2167 probe finding)
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 14)
+        self.assertEqual({site.kernel_receipt()["weight_refreshes"] for site in training_acceleration.iter_fp8_down_projections(model)}, {3})
+
+    def test_w5_refresh_is_forced_when_the_optimizer_does_not_bump_the_version_counter(self) -> None:
+        # bitsandbytes AdamW8bit writes parameter storage from its kernel; the version counter
+        # does not move, so the forward guard is blind. Modelled here through the .data alias.
+        model = self._w5_model()
+        self._install(model)
+        site = model.layers[0].shared_ffn.up_gate
+        before = site._weight_fp8.clone()
+        with torch.no_grad():
+            site.weight.data.add_(1)
+        self.assertEqual(site.weight._version, site._refreshed_weight_version)
+        self.assertEqual(training_acceleration.refresh_fp8_after_optimizer_step(model), 14)
+        self.assertFalse(torch.equal(site._weight_fp8, before))
+        self.assertEqual(site.kernel_receipt()["weight_refreshes"], 2)
+
+    def test_refresh_count_validation_refuses_the_probe_signature(self) -> None:
+        # probe #2 at 970f7b70: 14 sites, 30 steps, 14 refreshes = install only, no per-step refresh
+        with self.assertRaisesRegex(RuntimeError, "FP8_REFRESH_COUNT_REFUSED:14!=434"):
+            training_acceleration.validate_fp8_refresh_count(installed_sites=14, optimizer_steps=30, weight_refreshes=14)
+        self.assertEqual(training_acceleration.validate_fp8_refresh_count(installed_sites=14, optimizer_steps=30, weight_refreshes=434), 434)
 
 
 class CloseGateTests(unittest.TestCase):
