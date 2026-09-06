@@ -184,6 +184,7 @@ from training_acceleration import (
     compare_stage2_ab_receipts,
     disabled_fp8_installation_receipt,
     install_fp8_up_gate_projections,
+    set_fp8_scaling_mode,
     iter_fp8_down_projections,
     refresh_fp8_after_optimizer_step,
     validate_fp8_refresh_count,
@@ -4898,6 +4899,7 @@ def run_semantic(
     expected_shard_ledger_sha256: str | None = None,
     micro_batch: int = 1,
     fp8_sites: str | None = None,
+    fp8_scaling: str = "rowwise",
 ) -> dict[str, object]:
     """Train receipt-bound semantic text through the shared nonlinear language path.
 
@@ -4908,6 +4910,13 @@ def run_semantic(
 
     if fp8_sites is not None and (type(fp8_sites) is not str or not fp8_sites):
         raise ValueError("SEMANTIC_FP8_SITES_INVALID: --fp8-sites must be a non-empty scope string")
+    if fp8_scaling not in ("rowwise", "per_tensor"):
+        raise ValueError("SEMANTIC_FP8_SCALING_INVALID: --fp8-scaling must be rowwise or per_tensor")
+    if fp8_scaling != "rowwise" and fp8_sites is None:
+        raise ValueError(
+            "SEMANTIC_FP8_SCALING_WITHOUT_SITES: --fp8-scaling selects how installed FP8 sites "
+            "apply their scales and is meaningless without --fp8-sites"
+        )
 
     if not isinstance(seed, int) or seed < 0 or not isinstance(steps, int) or steps < 1 or not isinstance(sequence_length, int) or sequence_length < 1 or not isinstance(checkpoint_interval, int) or checkpoint_interval < 1 or not isinstance(write_budget_bytes, int) or write_budget_bytes < 1:
         raise ValueError("semantic launch requires nonnegative seed and positive steps and sequence length")
@@ -5136,6 +5145,14 @@ def run_semantic(
         # #2167: explicit per-run install on the executed path (the Stage-1 policy is a
         # source-bound disabled constant; this flag is the only production FP8 entry here).
         fp8_installation = install_fp8_up_gate_projections(model, installation_scope=fp8_sites)
+        # #2173: per_tensor hands scalar scales to the kernel so its epilogue applies them,
+        # removing a full-size pass over every site's output. It changes the numbers a site
+        # produces, so it is never a default and the run receipt records which mode ran.
+        scaled_sites = set_fp8_scaling_mode(model, fp8_scaling)
+        if scaled_sites < 1:
+            raise RuntimeError("SEMANTIC_FP8_SCALING_NO_SITES: the mode reached no site")
+        fp8_installation = {**fp8_installation, "scaling": fp8_scaling,
+                            "scaling_sites": scaled_sites}
 
         def _refresh_fp8_after_step(_optimizer: object, _args: object, _kwargs: object) -> None:
             nonlocal fp8_step_hook_calls
@@ -5331,6 +5348,7 @@ def main() -> None:
     semantic.add_argument("--sequence-length", type=int, required=True)
     semantic.add_argument("--micro-batch", type=int, default=1, help="#2159: consecutive receipt-bound episodes per optimizer step (segment micro_batch); default 1 preserves the current launch shape")
     semantic.add_argument("--fp8-sites", default=None, help="#2167: explicit FP8 installation scope for this run (absent = BF16 production path)")
+    semantic.add_argument("--fp8-scaling", default="rowwise", choices=("rowwise", "per_tensor"), help="#2173: where installed FP8 sites apply their scales (per_tensor moves them into the kernel epilogue)")
     semantic.add_argument("--checkpoint-interval", type=int, required=True)
     semantic.add_argument("--write-budget-gib", type=int, required=True)
     semantic.add_argument("--resume-checkpoint", type=Path)
@@ -5443,6 +5461,7 @@ def main() -> None:
             expected_shard_ledger_sha256=args.expected_shard_ledger_sha256,
             micro_batch=args.micro_batch,
             fp8_sites=args.fp8_sites,
+            fp8_scaling=args.fp8_scaling,
             expected_receipt_sha256=args.expected_receipt_sha256,
             expected_tokenizer_sha256=args.expected_tokenizer_sha256,
             expected_architecture_sha256=args.expected_architecture_sha256,

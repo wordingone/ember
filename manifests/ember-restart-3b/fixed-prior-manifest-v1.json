@@ -115,8 +115,8 @@
       "kind": "file",
       "provenance": "Vertical-slice runner named by launch-packet output; never executed as a command string by ember-cli.",
       "path": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "108b5c62bb4212fe361d6899e6ca64852dafb798814490a9d94baf5a33c8231b",
-      "size_bytes": 322826
+      "sha256": "51c5fd37e1b04c037f998185be25a52fa070f93a01c2967104228c968bc18053",
+      "size_bytes": 324136
     },
     {
       "category": "training_loop",
