@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Iterable
 
 RETIRED_BOOTSTRAP_ARTIFACT = "owned-clean-curriculum-128-v1"
 RETIRED_BOOTSTRAP_SHARD = "data/ember-restart-3b/owned-curriculum-128.json"
@@ -177,8 +177,17 @@ def load_bulk_domain_connector_receipt(
     split: str,
     media_class_table: dict[str, Any] | None = None,
     predecessor_media_types: dict[str, str] | None = None,
+    excluded_media_classes: Iterable[str] | None = None,
+    excluded_object_sha256s: Iterable[str] | None = None,
 ) -> dict[str, Any]:
-    """Project one immutable bulk connector receipt without durable host paths."""
+    """Project one immutable bulk connector receipt without durable host paths.
+
+    #2168: a file whose media class is in ``excluded_media_classes`` or whose sha256 is in
+    ``excluded_object_sha256s`` is dropped from the projection and reported under
+    ``excluded_files`` with a reason; the connector identity (manifest hash, byte total,
+    ``connector_file_count``) is still derived from every file, so the exclusion is declared
+    and receipted, never inferred. A declared sha that names no file is refused.
+    """
 
     if not _is_sha256(expected_receipt_sha256) or _sha256(receipt_path) != expected_receipt_sha256:
         raise ValueError("bulk domain connector receipt bytes do not match the frozen identity")
@@ -232,6 +241,11 @@ def load_bulk_domain_connector_receipt(
     normalized_files: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
     total_bytes = 0
+    declared_classes = frozenset(excluded_media_classes or ())
+    declared_shas = frozenset(excluded_object_sha256s or ())
+    excluded_files: list[dict[str, Any]] = []
+    matched_shas: set[str] = set()
+    all_digests: list[str] = []
     for entry in files:
         if not isinstance(entry, dict) or set(entry) != {"path", "bytes", "sha256"}:
             raise ValueError("bulk domain connector file row has a closed-schema violation")
@@ -263,6 +277,21 @@ def load_bulk_domain_connector_receipt(
             or _sha256(physical) != digest
         ):
             raise ValueError("bulk domain connector physical file identity has drifted")
+        all_digests.append(digest)
+        media_class = _bulk_media_class(normalized)
+        if digest in declared_shas:
+            matched_shas.add(digest)
+            excluded_files.append({
+                "path": normalized.as_posix(), "sha256": digest,
+                "media_class": media_class, "reason": "TRAIN_OVERLAP_OBJECT",
+            })
+            continue
+        if media_class in declared_classes:
+            excluded_files.append({
+                "path": normalized.as_posix(), "sha256": digest,
+                "media_class": media_class, "reason": "HOST_EXECUTABLE_CLASS",
+            })
+            continue
         media_type = _bulk_media_type(
             normalized, digest, physical, media_class_table, predecessor_media_types
         )
@@ -274,8 +303,13 @@ def load_bulk_domain_connector_receipt(
         })
     if payload.get("total_bytes") != total_bytes:
         raise ValueError("bulk domain connector byte total does not match its files")
+    unmatched = sorted(declared_shas - matched_shas)
+    if unmatched:
+        raise ValueError(f"BULK_EXCLUSION_UNMATCHED:{unmatched[0]}")
+    if not normalized_files:
+        raise ValueError("BULK_EXCLUSION_EMPTY_PROJECTION")
     derived_manifest_sha256 = hashlib.sha256(
-        "\n".join(sorted(row["sha256"] for row in normalized_files)).encode("utf-8")
+        "\n".join(sorted(all_digests)).encode("utf-8")
     ).hexdigest()
     if manifest_sha256 != derived_manifest_sha256:
         raise ValueError("bulk domain connector manifest hash is not derived from its file rows")
@@ -293,6 +327,8 @@ def load_bulk_domain_connector_receipt(
         "receipt_sha256": expected_receipt_sha256,
         "total_bytes": total_bytes,
         "files": normalized_files,
+        "excluded_files": sorted(excluded_files, key=lambda row: (row["path"], row["sha256"])),
+        "connector_file_count": len(all_digests),
     }
 
 

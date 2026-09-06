@@ -810,6 +810,10 @@ _BULK_MEDIA_TYPE_TABLE = Path(__file__).with_name("bulk_connector_media_types.js
 _BULK_MEDIA_TABLE_SCHEMA = "ember-issue1581-bulk-connector-media-types-v1"
 _BULK_PREDECESSOR_BINDINGS_SCHEMA = "ember-issue1581-bulk-predecessor-media-types-v1"
 _BULK_EXCLUDED_MEDIA_CLASSES = {".bin", ".dll", ".exe", ".lib", ".so"}
+# #2168: optional per-row exclusion declarations on the bulk route (never on partition rows).
+_BULK_EXCLUSION_ROW_KEYS = {"excluded_media_classes", "excluded_object_sha256s"}
+_EXCLUSION_RECEIPT_SCHEMA = "ember-issue1581-projection-exclusion-receipt-v1"
+_EXCLUSION_REASONS = ("HOST_EXECUTABLE_CLASS", "TRAIN_OVERLAP_OBJECT")
 _GOAL_BINDING = {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02B",
@@ -1187,8 +1191,82 @@ def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def project_catalog_spec(*, spec_raw: bytes) -> bytes:
-    """Execute a closed projection spec and return only path-free catalog metadata."""
+def _bulk_exclusions_for_row(
+    declared: dict[str, Any], table: dict[str, Any]
+) -> tuple[list[str], list[str]]:
+    """Validate a row's declared exclusions against the frozen table (#2168)."""
+    classes = declared.get("excluded_media_classes", [])
+    shas = declared.get("excluded_object_sha256s", [])
+    if not isinstance(classes, list) or not isinstance(shas, list):
+        raise ValueError("BULK_EXCLUSION_DECLARATION_SCHEMA_REFUSED")
+    if len(set(classes)) != len(classes) or len(set(shas)) != len(shas):
+        raise ValueError("BULK_EXCLUSION_DECLARATION_DUPLICATE")
+    excludable = table["excluded_classes"]
+    for media_class in classes:
+        if not isinstance(media_class, str) or media_class not in excludable:
+            raise ValueError(f"BULK_EXCLUSION_CLASS_NOT_EXCLUDABLE:{media_class}")
+    for digest in shas:
+        if not _is_sha256_text(digest):
+            raise ValueError("BULK_EXCLUSION_SHA_MALFORMED")
+    return list(classes), list(shas)
+
+
+def _predecessor_export_sha256_of_pin(pin: object) -> str | None:
+    if not isinstance(pin, dict) or not isinstance(pin.get("path"), str):
+        return None
+    table = json.loads(_read(Path(pin["path"])))
+    value = table.get("predecessor_catalog_export_sha256") if isinstance(table, dict) else None
+    return value if _is_sha256_text(value) else None
+
+
+def build_projection_exclusion_receipt(records: list[dict[str, Any]]) -> bytes:
+    """Self-hashed per-row exclusion receipt (#2168); exactly one projected row per receipt."""
+    if len(records) != 1:
+        raise ValueError("BULK_EXCLUSION_RECEIPT_SINGLE_ROW_REQUIRED")
+    body = {"schema_version": _EXCLUSION_RECEIPT_SCHEMA, **_GOAL_BINDING, **records[0]}
+    body["self_sha256"] = _sha256(_canonical(body))
+    return _canonical(body) + b"\n"
+
+
+def verify_projection_exclusion_receipt(raw: bytes) -> dict[str, Any]:
+    """Refuse a receipt whose self hash, schema, reasons, or count invariant does not hold."""
+    try:
+        receipt = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("BULK_EXCLUSION_RECEIPT_UNREADABLE") from error
+    if not isinstance(receipt, dict):
+        raise ValueError("BULK_EXCLUSION_RECEIPT_SCHEMA_REFUSED")
+    self_sha = receipt.pop("self_sha256", None)
+    if self_sha != _sha256(_canonical(receipt)):
+        raise ValueError("BULK_EXCLUSION_RECEIPT_SELF_HASH_REFUSED")
+    receipt["self_sha256"] = self_sha
+    items = receipt.get("items")
+    if (
+        receipt.get("schema_version") != _EXCLUSION_RECEIPT_SCHEMA
+        or not _goal_bound(receipt)
+        or not isinstance(items, list)
+        or receipt.get("excluded_count") != len(items)
+        or receipt.get("projected_count", -1) + len(items) != receipt.get("connector_file_count")
+        or any(
+            not isinstance(item, dict)
+            or set(item) != {"path", "sha256", "media_class", "reason"}
+            or item["reason"] not in _EXCLUSION_REASONS
+            or not _is_sha256_text(item["sha256"])
+            for item in items
+        )
+    ):
+        raise ValueError("BULK_EXCLUSION_RECEIPT_SCHEMA_REFUSED")
+    return receipt
+
+
+def project_catalog_spec(
+    *, spec_raw: bytes, exclusion_records: list[dict[str, Any]] | None = None
+) -> bytes:
+    """Execute a closed projection spec and return only path-free catalog metadata.
+
+    ``exclusion_records`` (#2168), when given, receives one record per bulk row describing
+    the files its declared exclusions dropped (empty items when nothing was declared).
+    """
 
     try:
         spec = json.loads(spec_raw)
@@ -1203,13 +1281,19 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
     ):
         raise ValueError("catalog projection spec has an invalid closed schema")
     rows = []
+    media_class_table = None
     for row in spec["rows"]:
-        if not isinstance(row, dict) or set(row) not in (
+        if not isinstance(row, dict):
+            raise ValueError("catalog projection row has an invalid closed schema")
+        declared = {key: row[key] for key in _BULK_EXCLUSION_ROW_KEYS if key in row}
+        if set(row) - set(declared) not in (
             _PROJECTION_ROW_FIELDS,
             _TRAIN_PARTITION_PROJECTION_ROW_FIELDS,
             _BULK_PREDECESSOR_PROJECTION_ROW_FIELDS,
         ):
             raise ValueError("catalog projection row has an invalid closed schema")
+        if declared and set(row) - set(declared) == _TRAIN_PARTITION_PROJECTION_ROW_FIELDS:
+            raise ValueError("BULK_EXCLUSION_ROUTE_REFUSED")
         supporting_receipt_sha256 = []
         supporting_receipts = row["supporting_receipts"]
         if not isinstance(supporting_receipts, list):
@@ -1230,6 +1314,9 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
         if set(row) == _TRAIN_PARTITION_PROJECTION_ROW_FIELDS:
             projected = _load_train_partition_projection(row)
         else:
+            if media_class_table is None:
+                media_class_table = _load_bulk_media_type_table()
+            excluded_classes, excluded_shas = _bulk_exclusions_for_row(declared, media_class_table)
             predecessor_media_types = None
             if "predecessor_media_bindings" in row:
                 predecessor_media_types = _load_bulk_predecessor_media_bindings(
@@ -1246,9 +1333,34 @@ def project_catalog_spec(*, spec_raw: bytes) -> bytes:
                 expected_license_text_sha256=row["expected_license_text_sha256"],
                 domain=row["domain"],
                 split=row["split"],
-                media_class_table=_load_bulk_media_type_table(),
+                media_class_table=media_class_table,
                 predecessor_media_types=predecessor_media_types,
+                excluded_media_classes=excluded_classes,
+                excluded_object_sha256s=excluded_shas,
             )
+            excluded_files = projected.pop("excluded_files")
+            connector_file_count = projected.pop("connector_file_count")
+            if len(projected["files"]) + len(excluded_files) != connector_file_count:
+                raise ValueError("BULK_EXCLUSION_COUNT_INVARIANT_REFUSED")
+            if exclusion_records is not None:
+                exclusion_records.append({
+                    "row_source_id": row["source_id"],
+                    "split": row["split"],
+                    "connector_receipt_sha256": projected["receipt_sha256"],
+                    "predecessor_export_sha256": _predecessor_export_sha256_of_pin(
+                        row.get("predecessor_media_bindings")
+                    ),
+                    "excluded_media_classes": sorted(excluded_classes),
+                    "excluded_object_sha256s": sorted(excluded_shas),
+                    "items": excluded_files,
+                    "excluded_count": len(excluded_files),
+                    "projected_count": len(projected["files"]),
+                    "connector_file_count": connector_file_count,
+                    "reason_counts": {
+                        reason: sum(1 for item in excluded_files if item["reason"] == reason)
+                        for reason in _EXCLUSION_REASONS
+                    },
+                })
         projected["supporting_receipt_sha256"] = supporting_receipt_sha256
         rows.append(projected)
     return build_dataset_catalog_manifest(
@@ -1469,6 +1581,10 @@ def main(argv: list[str] | None = None) -> int:
     project = commands.add_parser("project")
     project.add_argument("--spec", required=True, type=Path)
     project.add_argument("--output", required=True, type=Path)
+    project.add_argument(
+        "--exclusion-receipt", type=Path, default=None,
+        help="#2168: write the self-hashed projection exclusion receipt (required when the spec declares exclusions)",
+    )
 
     bindings = commands.add_parser("bulk-predecessor-media-bindings")
     bindings.add_argument("--catalog-export", required=True, type=Path)
@@ -1525,7 +1641,22 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     try:
         if arguments.command == "project":
-            output = project_catalog_spec(spec_raw=_read(arguments.spec))
+            exclusion_records: list[dict[str, Any]] = []
+            output = project_catalog_spec(
+                spec_raw=_read(arguments.spec), exclusion_records=exclusion_records
+            )
+            declared_any = any(
+                record["excluded_media_classes"] or record["excluded_object_sha256s"]
+                for record in exclusion_records
+            )
+            if arguments.exclusion_receipt is None:
+                if declared_any:
+                    raise ValueError("BULK_EXCLUSION_RECEIPT_PATH_REQUIRED")
+            else:
+                write_new(
+                    arguments.exclusion_receipt,
+                    build_projection_exclusion_receipt(exclusion_records),
+                )
         elif arguments.command == "bulk-predecessor-media-bindings":
             output = build_bulk_predecessor_media_bindings(
                 catalog_export_raw=_read(arguments.catalog_export),

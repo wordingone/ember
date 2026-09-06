@@ -252,3 +252,126 @@ def test_cli_emits_bindings_file(tmp_path: Path) -> None:
     emitted = json.loads(out.read_bytes())
     assert emitted["schema_version"] == "ember-issue1581-bulk-predecessor-media-types-v1"
     assert emitted["binding_count"] == 1
+
+
+# --- #2168: declared bulk exclusions (host-executable classes, train-overlap objects) ---
+
+EXE = b"MZ\x90\x00host payload\n"
+LEAN = b"theorem t : True := trivial\n"
+
+
+def _exclusion_row(receipt_path, receipt_sha, **declared):
+    return bulk_row(receipt_path, receipt_sha, "candidate-formal_logic-heldout-9", **declared)
+
+
+def test_declared_class_exclusion_drops_host_executables_and_keeps_the_projection(tmp_path: Path) -> None:
+    files = [("Archive.lean", LEAN), ("bin/tool.exe", EXE), ("bin/helper.dll", EXE)]
+    receipt_path, receipt_sha = write_connector(tmp_path / "c", source="candidate-formal_logic-heldout-9", files=files)
+    # undeclared, the host-executable class is still the refusal it has always been
+    with pytest.raises(ValueError, match="BULK_PROJECTION_MEDIA_CLASS_UNMAPPED"):
+        project_catalog_spec(spec_raw=spec_bytes([_exclusion_row(receipt_path, receipt_sha)]))
+    records: list[dict] = []
+    manifest = project_catalog_spec(
+        spec_raw=spec_bytes([_exclusion_row(receipt_path, receipt_sha, excluded_media_classes=[".exe", ".dll"])]),
+        exclusion_records=records,
+    )
+    assert list(projected_media_types(manifest)) == [sha256(LEAN)]
+    assert len(records) == 1
+    record = records[0]
+    assert record["excluded_count"] == 2
+    assert record["projected_count"] == 1
+    assert record["connector_file_count"] == 3
+    assert record["projected_count"] + record["excluded_count"] == record["connector_file_count"]
+    assert {item["reason"] for item in record["items"]} == {"HOST_EXECUTABLE_CLASS"}
+    assert sorted(item["path"] for item in record["items"]) == ["bin/helper.dll", "bin/tool.exe"]
+
+
+def test_declared_object_exclusion_drops_a_named_sha_as_train_overlap(tmp_path: Path) -> None:
+    overlap = b"# markdown that also lives in train\n"
+    files = [("Archive.lean", LEAN), ("notes.md", overlap)]
+    receipt_path, receipt_sha = write_connector(tmp_path / "c", source="candidate-formal_logic-heldout-9", files=files)
+    records: list[dict] = []
+    manifest = project_catalog_spec(
+        spec_raw=spec_bytes([_exclusion_row(receipt_path, receipt_sha, excluded_object_sha256s=[sha256(overlap)])]),
+        exclusion_records=records,
+    )
+    assert list(projected_media_types(manifest)) == [sha256(LEAN)]
+    assert [item["reason"] for item in records[0]["items"]] == ["TRAIN_OVERLAP_OBJECT"]
+    assert records[0]["items"][0]["sha256"] == sha256(overlap)
+    assert records[0]["reason_counts"]["TRAIN_OVERLAP_OBJECT"] == 1
+
+
+def test_bulk_exclusion_planted_negatives(tmp_path: Path) -> None:
+    files = [("Archive.lean", LEAN), ("bin/tool.exe", EXE)]
+    receipt_path, receipt_sha = write_connector(tmp_path / "c", source="candidate-formal_logic-heldout-9", files=files)
+
+    # 1. a declared object sha that matches no file in the connector
+    absent = "0" * 64
+    with pytest.raises(ValueError, match=f"BULK_EXCLUSION_UNMATCHED:{absent}"):
+        project_catalog_spec(spec_raw=spec_bytes([
+            _exclusion_row(receipt_path, receipt_sha, excluded_media_classes=[".exe"], excluded_object_sha256s=[absent])
+        ]))
+
+    # 2. an exclusion set that would project nothing at all
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_EMPTY_PROJECTION"):
+        project_catalog_spec(spec_raw=spec_bytes([
+            _exclusion_row(
+                receipt_path, receipt_sha,
+                excluded_media_classes=[".exe"], excluded_object_sha256s=[sha256(LEAN)],
+            )
+        ]))
+
+    # 3. a class the frozen table does not list as excludable
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_CLASS_NOT_EXCLUDABLE:.pdf"):
+        project_catalog_spec(spec_raw=spec_bytes([
+            _exclusion_row(receipt_path, receipt_sha, excluded_media_classes=[".pdf"])
+        ]))
+
+    # 4. a malformed digest, and a duplicated declaration
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_SHA_MALFORMED"):
+        project_catalog_spec(spec_raw=spec_bytes([
+            _exclusion_row(receipt_path, receipt_sha, excluded_object_sha256s=["not-a-sha"])
+        ]))
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_DECLARATION_DUPLICATE"):
+        project_catalog_spec(spec_raw=spec_bytes([
+            _exclusion_row(receipt_path, receipt_sha, excluded_media_classes=[".exe", ".exe"])
+        ]))
+
+
+def test_exclusions_are_refused_on_the_train_partition_route() -> None:
+    # the exclusion keys are a bulk-route declaration only; the partition route has its own
+    # heldout accounting and must not gain a second, undeclared way to drop rows
+    row = {key: "x" for key in catalog_admission_module._TRAIN_PARTITION_PROJECTION_ROW_FIELDS}
+    row["excluded_media_classes"] = [".exe"]
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_ROUTE_REFUSED"):
+        project_catalog_spec(spec_raw=spec_bytes([row]))
+
+
+def test_exclusion_receipt_round_trips_and_refuses_a_tampered_body(tmp_path: Path) -> None:
+    files = [("Archive.lean", LEAN), ("bin/tool.exe", EXE)]
+    receipt_path, receipt_sha = write_connector(tmp_path / "c", source="candidate-formal_logic-heldout-9", files=files)
+    records: list[dict] = []
+    project_catalog_spec(
+        spec_raw=spec_bytes([_exclusion_row(receipt_path, receipt_sha, excluded_media_classes=[".exe"])]),
+        exclusion_records=records,
+    )
+    raw = catalog_admission_module.build_projection_exclusion_receipt(records)
+    verified = catalog_admission_module.verify_projection_exclusion_receipt(raw)
+    assert verified["excluded_count"] == 1
+    assert verified["self_sha256"] == json.loads(raw)["self_sha256"]
+
+    tampered = json.loads(raw)
+    tampered["excluded_count"] = 2
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_RECEIPT_SELF_HASH_REFUSED"):
+        catalog_admission_module.verify_projection_exclusion_receipt(canonical(tampered))
+
+    # a body whose count invariant does not hold, re-self-hashed so only the invariant fails
+    broken = json.loads(raw)
+    broken.pop("self_sha256")
+    broken["projected_count"] = 99
+    broken["self_sha256"] = sha256(canonical(broken))
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_RECEIPT_SCHEMA_REFUSED"):
+        catalog_admission_module.verify_projection_exclusion_receipt(canonical(broken))
+
+    with pytest.raises(ValueError, match="BULK_EXCLUSION_RECEIPT_SINGLE_ROW_REQUIRED"):
+        catalog_admission_module.build_projection_exclusion_receipt(records + records)
