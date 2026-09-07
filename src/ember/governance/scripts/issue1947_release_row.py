@@ -859,6 +859,32 @@ def adapt_routing_pathway(
     items = verified["items"]
     if len(items) != module.ITEM_COUNT:
         raise ValueError("ROUTING_PATHWAY_TOTALITY_REFUSED")
+    # The release executor's item schema (issue1947_release_execute.validate_row) is exactly
+    # {item_id, gold_item_sha256, prediction, score}, the same shape adapt_image and adapt_audio
+    # emit. Gold for this row is the frozen pathway pair plus the engagement rule -- what the
+    # contract freezes and what a verifier re-derives -- and the prediction is the required pass's
+    # prediction digest, which is what the model actually produced. The per-item pathway detail is
+    # deliberately NOT carried here: it lives in the inference receipt this row binds by hash, and a
+    # second copy could disagree with the first.
+    contract_items = {item["item_id"]: item for item in verified["contract"]["items"]}
+    records = {record["item_id"]: record for record in receipt["records"]}
+    plane_items: list[dict[str, object]] = []
+    for entry in items:
+        item_id = entry["item_id"]
+        contract_item = contract_items[item_id]
+        record = records[item_id]
+        gold = sha(canonical({
+            "item_id": item_id,
+            "required_pathway": contract_item["required_pathway"],
+            "control_pathway": contract_item.get("control_pathway"),
+            "engagement_rule": receipt["engagement_rule"],
+        }))
+        plane_items.append({
+            "item_id": item_id,
+            "gold_item_sha256": gold,
+            "prediction": record["required_pass"]["prediction_sha256"],
+            "score": 1.0 if entry["scored"] else 0.0,
+        })
     row: dict[str, object] = {
         "schema_version": "ember-issue2169-routing-pathway-row-receipt-v1",
         "result": "ROUTING_PATHWAY_ROW_PRODUCED",
@@ -876,7 +902,7 @@ def adapt_routing_pathway(
         "pathway_match_count": verified["pathway_match_count"],
         "engaged_count": verified["engaged_count"],
         "scored_count": verified["scored_count"],
-        "items": items,
+        "items": plane_items,
         "score": verified["score"],
         "claim_boundary": ROUTING_PATHWAY_CLAIM_BOUNDARY,
     }
