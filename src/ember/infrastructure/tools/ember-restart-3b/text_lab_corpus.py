@@ -262,6 +262,176 @@ def adapt_connector_receipt(receipt: dict[str, Any], *, evidence: dict[str, Any]
     }
 
 
+_PDF_V1_EXTRACTOR_FIELDS = frozenset({
+    "normalization", "producer_sha256", "pypdf_version", "pypdf_package_tree_sha256",
+    "pypdf_wheel_sha256", "python_major_minor", "python_version", "max_pages",
+    "max_decoded_content_bytes", "max_output_bytes", "zero_fallback",
+})
+_PDF_V2_INERT_AUDIT = {
+    "sanitized_pages": [], "pgf_removed_line_count": 0,
+    "surrogate_pair_count": 0, "escaped_surrogate_count": 0,
+}
+
+
+def _pdf_extractor_supersession_binding(
+    receipt: dict[str, Any], receipt_sha256: str, current_producer_sha: str
+) -> dict[str, Any] | None:
+    """The reviewed binding admitting this exact receipt under the v1 extractor identity, or None.
+
+    Read from the running repository for the same reason the partition supersession is: the chain
+    describes the CURRENT producer's lineage, so it belongs with the code doing the validating and
+    never with the evidence under validation. Every structural deviation returns None, so a table
+    that is absent, malformed, or does not name this receipt leaves the gate exactly as strict as
+    it is without one.
+    """
+
+    try:
+        table = json.loads(_path(_running_repo_root(), _PDF_EXTRACTOR_SUPERSESSIONS).read_bytes())
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(table, dict)
+        or set(table) != {
+            "schema_version", "issue", "path", "superseded_producer_sha256",
+            "successor_producer_sha256", "superseded_extractor_fields_absent",
+            "authorization_basis", "row_bindings",
+        }
+        or table.get("schema_version") != "ember-pdf-extractor-identity-supersessions-v1"
+        or table.get("issue") != 1581
+        or table.get("path") != "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py"
+        or table.get("superseded_extractor_fields_absent")
+        != ["extractor_semantics_version", "reader_strict"]
+        or not isinstance(table.get("authorization_basis"), str)
+    ):
+        return None
+    # The successor named by the table must be the producer actually running. A table written
+    # against some other successor says nothing about this code and must not admit anything.
+    if table.get("successor_producer_sha256") != current_producer_sha:
+        return None
+    superseded = table.get("superseded_producer_sha256")
+    if _HEX.fullmatch(superseded or "") is None:
+        return None
+
+    bindings = table.get("row_bindings")
+    if not isinstance(bindings, list) or not bindings:
+        return None
+    binding_fields = {
+        "source_id", "transform_receipt_sha256", "output_sha256", "recorded_producer_sha256",
+    }
+    previous_source_id: str | None = None
+    for binding in bindings:
+        if not isinstance(binding, dict) or set(binding) != binding_fields:
+            return None
+        source_id = binding.get("source_id")
+        if (
+            not isinstance(source_id, str)
+            or (previous_source_id is not None and source_id <= previous_source_id)
+            or _HEX.fullmatch(binding.get("transform_receipt_sha256", "")) is None
+            or _HEX.fullmatch(binding.get("output_sha256", "")) is None
+            or binding.get("recorded_producer_sha256") != superseded
+        ):
+            return None
+        previous_source_id = source_id
+
+    extractor = receipt.get("extractor")
+    if not isinstance(extractor, dict) or set(extractor) != set(_PDF_V1_EXTRACTOR_FIELDS):
+        return None
+    for binding in bindings:
+        if (
+            binding["transform_receipt_sha256"] == receipt_sha256
+            and extractor.get("producer_sha256") == binding["recorded_producer_sha256"]
+        ):
+            return binding
+    return None
+
+
+def _verify_pdf_text_receipt_v1(
+    module: Any,
+    *,
+    receipt_path: Path,
+    receipt: dict[str, Any],
+    connector_receipt: Path,
+    connector_receipt_sha256: str,
+    binding: dict[str, Any],
+) -> dict[str, Any]:
+    """Reopen one bound v1 receipt with every guarantee of the current verifier except the two
+    extractor fields the schema gained after it was written.
+
+    This does not reimplement the producer: every primitive here is the connector's own, so the
+    comparison is against the same extraction the current verifier would perform. What differs is
+    only which field set the extractor identity is required to close over, and that the producer
+    sha is checked against the reviewed table's superseded value rather than the live one.
+
+    The independent re-extraction stays mandatory, so the property the original check exists to
+    enforce -- that the stored output is what this PDF actually produces today -- is proven for
+    every admitted row rather than assumed.
+    """
+
+    output_dir = Path(receipt_path).parent
+    if _is_reparse_or_symlink(output_dir) or not output_dir.is_dir():
+        raise ValueError("PDF extraction output directory is not regular")
+    if {item.name for item in output_dir.iterdir()} != {module.OUTPUT_NAME, module.RECEIPT_NAME}:
+        raise ValueError("PDF extraction output custody contains missing or extra paths")
+
+    source, pdf_path, entry = module._source_pdf(
+        Path(connector_receipt), connector_receipt_sha256)
+    expected_source = {
+        "connector_receipt_sha256": connector_receipt_sha256,
+        "connector": source.get("connector"),
+        "source_id": source.get("source_id"),
+        "canonical_url": source.get("canonical_url"),
+        "revision": source.get("revision"),
+        "license": source.get("license"),
+        "pdf_path": entry["path"].replace(chr(92), "/"),
+        "pdf_bytes": entry["bytes"],
+        "pdf_sha256": entry["sha256"],
+    }
+    if receipt.get("source") != expected_source:
+        raise ValueError("PDF extraction source identity does not match custody")
+
+    extractor = receipt["extractor"]
+    pypdf = module._load_pypdf()
+    if (
+        extractor.get("normalization") != module.NORMALIZATION
+        or extractor.get("pypdf_version") != module.PYPDF_VERSION
+        or extractor.get("pypdf_package_tree_sha256") != module._package_tree_sha256(pypdf)
+        or extractor.get("pypdf_wheel_sha256") != module.PYPDF_WHEEL_SHA256
+        or extractor.get("python_major_minor") != module.PYTHON_MAJOR_MINOR
+        or extractor.get("python_version") != sys.version
+        or extractor.get("zero_fallback") is not True
+    ):
+        raise ValueError("PDF extraction extractor identity changed")
+
+    output_bytes, pages, decoded_content_bytes, audit = module._extract_pdf(
+        pdf_path,
+        max_pages=extractor["max_pages"],
+        max_decoded_content_bytes=extractor["max_decoded_content_bytes"],
+        max_output_bytes=extractor["max_output_bytes"],
+    )
+    # The successor's audit fields must be inert for this row. A row the successor semantics would
+    # actually change is outside what the reviewed basis covers, and is refused here rather than
+    # admitted on the strength of a table entry.
+    if any(audit.get(key) != value for key, value in _PDF_V2_INERT_AUDIT.items()):
+        raise ValueError("PDF extraction successor semantics change this row")
+
+    stored_output = module._regular_file(
+        output_dir / module.OUTPUT_NAME, "PDF extraction output").read_bytes()
+    expected_output = {
+        "path": module.OUTPUT_NAME,
+        "bytes": len(output_bytes),
+        "sha256": module._sha256(output_bytes),
+        "pages": pages,
+        "decoded_content_bytes": decoded_content_bytes,
+    }
+    if (
+        receipt.get("output") != expected_output
+        or stored_output != output_bytes
+        or expected_output["sha256"] != binding["output_sha256"]
+    ):
+        raise ValueError("PDF extraction output does not match independent re-extraction")
+    return receipt
+
+
 def adapt_pdf_extraction_receipt(
     *,
     receipt_path: Path,
@@ -285,7 +455,39 @@ def adapt_pdf_extraction_receipt(
             connector_receipt_sha256=connector_receipt_sha256,
         )
     except Exception as error:
-        raise ValueError(str(error)) from error
+        # The current verifier closes the extractor identity over thirteen fields. Three reviewed
+        # rows were produced before two of them existed, so they refuse at the field-set test before
+        # any comparison runs -- a refusal that says nothing about whether the evidence reproduces.
+        # A reviewed supersession admits exactly those rows, and only after this module has proven
+        # the reproduction itself. Any other refusal, and any row the table does not name, is
+        # re-raised untouched.
+        candidate: Any = None
+        binding = None
+        # Narrow deliberately. Only the conditions that mean "this receipt is not one the
+        # supersession covers" are swallowed here -- unreadable custody, unparseable JSON, a shape
+        # the producer itself rejects. A programming error inside the lookup must NOT be
+        # indistinguishable from an unbound row: a broad catch here silently disables the
+        # supersession and reports the original refusal, which reads exactly like a correct refusal.
+        try:
+            raw = module._regular_file(
+                Path(receipt_path), "PDF extraction receipt").read_bytes()
+            candidate = json.loads(raw)
+            if isinstance(candidate, dict):
+                module._validate_receipt_shape(candidate)
+                binding = _pdf_extractor_supersession_binding(
+                    candidate, _sha_bytes(raw), module._producer_sha256())
+        except (OSError, ValueError):
+            binding = None
+        if binding is None:
+            raise ValueError(str(error)) from error
+        receipt = _verify_pdf_text_receipt_v1(
+            module,
+            receipt_path=Path(receipt_path),
+            receipt=candidate,
+            connector_receipt=Path(connector_receipt),
+            connector_receipt_sha256=connector_receipt_sha256,
+            binding=binding,
+        )
     source = receipt.get("source")
     output = receipt.get("output")
     if not isinstance(source, dict) or not isinstance(output, dict):
@@ -576,6 +778,7 @@ _AUTHORITY_INDEX_SCHEMA_V1 = "ember-text-lab-authority-index-v1"
 _AUTHORITY_INDEX_SCHEMA_V2 = "ember-text-lab-authority-index-v2"
 _PARTITION_PRODUCER_SUPERSESSIONS = "data/ember-restart-3b/partition-producer-supersessions-v1.json"
 _PARTITION_PRODUCER_SUPERSESSIONS_V2 = "data/ember-restart-3b/partition-producer-supersessions-v2.json"
+_PDF_EXTRACTOR_SUPERSESSIONS = "data/ember-restart-3b/pdf-extractor-identity-supersessions-v1.json"
 _PARTITION_PRODUCER_PATH = "src/ember/infrastructure/tools/ember-restart-3b/mint_github_license_partition.py"
 _PARTITION_PRODUCER_LEGACY_PATH = "tools/ember-restart-3b/mint_github_license_partition.py"
 _UNRESOLVED_FIELDS = {"source_id", "domain", "split", "admission", "required_evidence", "allowed_license_spdx"}
@@ -867,10 +1070,60 @@ def validate_admitted_authority_subset(
 _PARTITION_AUTHORITY_WORKERS = 8
 
 
-def _load_partition_reopener(repo_root: Path) -> tuple[Any, str]:
-    producer_path = _path(
-        repo_root.resolve(), "src/ember/infrastructure/tools/ember-restart-3b/mint_github_license_partition.py"
-    )
+_PARTITION_BINDING_CURE = "tranche-admission-partition-binding-cure.json"
+
+
+def _canonical_receipt_spellings(authority_root: Path | None) -> dict[str, str]:
+    """Recorded receipt path -> the custody-relative spelling the supersession table uses.
+
+    Empty when the predecessor carries no cure, which leaves the gate's comparison exactly as it
+    was. A cure that is present but unreadable raises rather than degrading to an empty map: a
+    malformed governance artifact must not be indistinguishable from an absent one.
+    """
+
+    if authority_root is None:
+        return {}
+    path = Path(authority_root) / _PARTITION_BINDING_CURE
+    if not path.is_file():
+        return {}
+    cure = json.loads(path.read_bytes())
+    rows = cure.get("rows") if isinstance(cure, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("partition binding cure is unreadable")
+    spellings: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("partition binding cure is unreadable")
+        recorded = row.get("recorded_receipt_path")
+        canonical = row.get("custody_relative_receipt")
+        if not isinstance(recorded, str) or not isinstance(canonical, str):
+            raise ValueError("partition binding cure is unreadable")
+        spellings[recorded] = canonical
+    return spellings
+
+
+def _running_repo_root() -> Path:
+    """The repository this module is running out of, found by its own location.
+
+    Governance artifacts describing the CURRENT producer's lineage live here, never in the tree
+    under validation. Located by walking up to the directory carrying the data root rather than
+    by counting parents, so it holds under either producer layout.
+    """
+
+    here = Path(__file__).resolve()
+    for candidate in here.parents:
+        if (candidate / "data" / "ember-restart-3b").is_dir():
+            return candidate
+    raise ValueError("running repository root is unlocatable")
+
+
+def _load_partition_reopener() -> tuple[Any, str]:
+    # The reopener is the implementation doing the validating, never part of the evidence being
+    # validated -- so it comes from the running code's own directory, not from the tree under
+    # validation. A predecessor checkout predates this API and would refuse on a missing symbol.
+    producer_path = Path(__file__).resolve().parent / "mint_github_license_partition.py"
+    if not producer_path.is_file():
+        raise ValueError("partition receipt reopener is unavailable")
     spec = importlib.util.spec_from_file_location(
         "_ember_github_license_partition_reopener", producer_path
     )
@@ -922,13 +1175,22 @@ def _prepare_partition_authority_row(
 def _finalize_partition_authority_row(
     repo_root: Path,
     prepared: tuple[dict[str, Any], dict[str, Any], list[tuple[Path, int, str]], str],
+    *,
+    canonical_receipt_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     row, receipt, _, current_producer_sha = prepared
     content = row["content_sha256"]
     receipt_sha = row["license_partition_sha256"]
     recorded_producer_sha = receipt.get("producer_sha256")
+    # The supersession chain ends at the producer THIS code carries, so it is adjudicated from
+    # the running repository. The predecessor's checkout predates the chain by construction.
+    # The supersession table records receipts in their custody-relative spelling. A legacy row
+    # records the same file as an absolute path; the reviewed cure declares the correspondence and
+    # has already proven the two spellings name the same trailing path.
+    canonical = (canonical_receipt_names or {}).get(row.get("license_partition_receipt"))
+    gate_row = dict(row, license_partition_receipt=canonical) if canonical else row
     if recorded_producer_sha != current_producer_sha and not _partition_producer_supersession_allows_v2(
-        repo_root.resolve(), row, recorded_producer_sha, current_producer_sha
+        _running_repo_root(), gate_row, recorded_producer_sha, current_producer_sha
     ):
         raise ValueError("partition receipt producer bytes changed")
     if any(receipt.get(field) != row.get(field) for field in ("source_id", "split", "domain")):
@@ -969,7 +1231,7 @@ def _validate_partition_authority_rows(
     ordered_rows = list(rows)
     if not ordered_rows:
         return []
-    module, current_producer_sha = _load_partition_reopener(repo_root)
+    module, current_producer_sha = _load_partition_reopener()
 
     def prepare(row: dict[str, Any]):
         return _prepare_partition_authority_row(
@@ -987,7 +1249,13 @@ def _validate_partition_authority_rows(
     module._verify_blob_checks(blob_checks)
     for _, receipt, _, _ in prepared:
         module._validate_partition_receipt_aggregate(receipt)
-    return [_finalize_partition_authority_row(repo_root, item) for item in prepared]
+    canonical_receipt_names = _canonical_receipt_spellings(authority_root)
+    return [
+        _finalize_partition_authority_row(
+            repo_root, item, canonical_receipt_names=canonical_receipt_names
+        )
+        for item in prepared
+    ]
 
 
 def _validate_partition_authority_row(
@@ -1398,9 +1666,22 @@ def validate_authority_index(
     base_check = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", identity["source_base_commit"], "HEAD"], capture_output=True, check=False)
     if base_check.returncode != 0: raise ValueError("input identity source-base commit is not a live ancestor")
     code_files = identity.get("code_files")
-    expected_code = {"text_lab_corpus": "src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py", "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py", "run_vertical_slice": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py"}
+    # The producers moved to `src/ember/infrastructure/tools/` in the layout cutover. `root` here is
+    # the checkout the identity was recorded against, which for a historical predecessor predates
+    # that move and carries them at `tools/`. Both locations are named so each commit is read at its
+    # own layout; the bytes are still hashed and compared, only the lookup follows history.
+    expected_code = {
+        "text_lab_corpus": ("src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py", "tools/ember-restart-3b/text_lab_corpus.py"),
+        "train": ("src/ember/infrastructure/tools/ember-restart-3b/train.py", "tools/ember-restart-3b/train.py"),
+        "run_vertical_slice": ("src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py", "tools/ember-restart-3b/run_vertical_slice.py"),
+    }
     if not isinstance(code_files, dict) or set(code_files) != set(expected_code): raise ValueError("input identity code binding is invalid")
-    for name, relative in expected_code.items():
+    for name, candidates in expected_code.items():
+        for relative in candidates:
+            if (root / relative).is_file():
+                break
+        else:
+            raise ValueError("input identity producer layout is unrecognised")
         if code_files[name] != _sha_bytes(_path(root, relative).read_bytes()): raise ValueError("input identity code bytes changed")
     bound_receipt_root = _bound_receipt_custody_root(corpus, receipt_custody_root)
 

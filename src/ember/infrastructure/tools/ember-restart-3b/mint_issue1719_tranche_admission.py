@@ -19,7 +19,7 @@ import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -47,6 +47,8 @@ OUTPUT_RECEIPT = "tranche-admission-receipt.json"
 OUTPUT_LOG = "mint-log.json"
 OUTPUT_PLAN = "tranche-admission-plan.json"
 IDENTITY_CURE = "tranche-admission-source-identity-cure.json"
+PARTITION_BINDING_CURE = "tranche-admission-partition-binding-cure.json"
+PARTITION_BINDING_CURE_AUTHORITY = "github:issue:1581"
 OLD_RECEIPT_KEYS = {
     "admitted_row_count", "boundary", "generated_files", "minted_at",
     "negative_receipts", "overall_authority_result", "reopened_connector_file_count",
@@ -274,12 +276,38 @@ def _rewrite_packet_local_index(
     return canonical(rewritten)
 
 
+# The producers moved to `src/ember/infrastructure/tools/` in the layout cutover. A historical
+# predecessor is pinned to an older commit by construction, and one pinned before the cutover
+# carries them at `tools/`. Both locations are named so a commit is read at its own layout.
+PRODUCER_RELATIVES: dict[str, tuple[str, ...]] = {
+    "text_lab_corpus": (
+        "src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py",
+        "tools/ember-restart-3b/text_lab_corpus.py",
+    ),
+    "train": (
+        "src/ember/infrastructure/tools/ember-restart-3b/train.py",
+        "tools/ember-restart-3b/train.py",
+    ),
+    "run_vertical_slice": (
+        "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py",
+        "tools/ember-restart-3b/run_vertical_slice.py",
+    ),
+}
+
+
 def _code_files(repo: Path) -> dict[str, str]:
-    return {
-        "text_lab_corpus": sha256_file(repo / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "text_lab_corpus.py"),
-        "train": sha256_file(repo / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "train.py"),
-        "run_vertical_slice": sha256_file(repo / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / "run_vertical_slice.py"),
-    }
+    """Hash the three producers, reading each at whichever layout this checkout carries."""
+
+    resolved: dict[str, str] = {}
+    for name, candidates in PRODUCER_RELATIVES.items():
+        for relative in candidates:
+            path = repo.joinpath(*relative.split("/"))
+            if path.is_file():
+                resolved[name] = sha256_file(path)
+                break
+        else:
+            raise ValueError("historical predecessor producer layout is unrecognised")
+    return resolved
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -301,6 +329,133 @@ def _git_blob(repo: Path, commit: str, path: str) -> bytes:
     if result.returncode != 0:
         raise ValueError("source identity cure commit object is unavailable")
     return result.stdout
+
+
+def _projected_custody_root(canonical_receipts: dict[str, str]) -> Path:
+    """The one absolute root every cured row's recorded path resolves against.
+
+    Each entry maps a recorded absolute path to its corpus-relative tail, already proven by
+    `_validate_partition_binding_cure` to BE that path's tail. Stripping the tail yields the root,
+    and every row must yield the same one -- rows spanning two roots cannot be described by a single
+    runtime-supplied root and are refused rather than partially bound.
+    """
+
+    roots: set[str] = set()
+    for recorded, relative in canonical_receipts.items():
+        posix = PureWindowsPath(recorded).as_posix()
+        tail = "/" + relative
+        if not posix.endswith(tail):
+            raise ValueError("projected custody root does not match the recorded path")
+        roots.add(posix[: -len(tail)])
+    if len(roots) != 1:
+        raise ValueError("cured partition rows span more than one custody root")
+    root = Path(next(iter(roots)))
+    if not root.is_absolute():
+        raise ValueError("projected custody root is not absolute")
+    return root
+
+
+def _validate_partition_binding_cure(
+    *,
+    module: Any,
+    source_custody: Path,
+    predecessor_receipt_sha256: str,
+    predecessor_generated_files: dict[str, Any],
+    bound_partition_sidecars: dict[Any, Any],
+    legacy_names: set[str],
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Admit legacy partition rows whose evidence lives outside custody.
+
+    Returns the cured name -> sha map and the evidence to surface in the record. Every
+    enumerated row is re-verified: the cure's sha must equal the sha the corpus row itself
+    declares, the file must be present and not a reparse point, and its bytes must hash to
+    that sha. The cure must cover the legacy rows EXACTLY -- a cure naming a row that is
+    already canonical, or omitting one that is not, is refused rather than partially applied.
+    """
+
+    path = source_custody / PARTITION_BINDING_CURE
+    if not path.is_file() or module._is_reparse_or_symlink(path):
+        raise ValueError("partition binding cure receipt is invalid")
+    raw = path.read_bytes()
+    cure = json.loads(raw)
+    expected_keys = {
+        "schema_version", "result", "predecessor_receipt_sha256",
+        "predecessor_generated_files_sha256", "reviewer_reference",
+        "legacy_binding_kind", "data_bytes_status", "rows",
+    }
+    rows = cure.get("rows") if isinstance(cure, dict) else None
+    if (
+        not isinstance(cure, dict)
+        or set(cure) != expected_keys
+        or cure.get("schema_version") != "ember-issue1719-partition-binding-cure-v1"
+        or cure.get("result") != "VERIFIED_LEGACY_PARTITION_BINDING"
+        or cure.get("predecessor_receipt_sha256") != predecessor_receipt_sha256
+        or cure.get("predecessor_generated_files_sha256")
+        != sha256_bytes(canonical(predecessor_generated_files))
+        or cure.get("reviewer_reference") != PARTITION_BINDING_CURE_AUTHORITY
+        or cure.get("legacy_binding_kind") != "EXTERNAL_ABSOLUTE_PARTITION_RECEIPT_PATH"
+        or cure.get("data_bytes_status") != "UNCHANGED_AND_BOUND_BY_RECORDED_SHA256"
+        or not isinstance(rows, list)
+        or not rows
+    ):
+        raise ValueError("partition binding cure receipt is invalid")
+
+    cured: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"source_id", "recorded_receipt_path",
+                                                     "receipt_sha256",
+                                                     "custody_relative_receipt"}:
+            raise ValueError("partition binding cure receipt is invalid")
+        name = row["recorded_receipt_path"]
+        sha = row["receipt_sha256"]
+        # NOT named `canonical`: this module defines a module-level `canonical()` used earlier in
+        # this same function, and a local of that name would shadow it for the whole scope.
+        canonical_name = row["custody_relative_receipt"]
+        # The two spellings must name the same trailing path. Without this the cure could rebind a
+        # row to an unrelated receipt that merely hashes correctly for some other source.
+        if (
+            not isinstance(canonical_name, str)
+            or not canonical_name
+            or canonical_name.startswith("/")
+            or ".." in PurePosixPath(canonical_name).parts
+            or not PureWindowsPath(name).as_posix().endswith("/" + canonical_name)
+        ):
+            raise ValueError("partition binding cure spelling does not match the recorded path")
+        if (
+            not isinstance(name, str)
+            or not isinstance(sha, str)
+            or HEX64.fullmatch(sha) is None
+            or name in cured
+            or name not in bound_partition_sidecars
+            or bound_partition_sidecars[name] != sha
+        ):
+            raise ValueError("partition binding cure receipt is invalid")
+        receipt = Path(name)
+        if not receipt.is_file() or module._is_reparse_or_symlink(receipt):
+            raise ValueError("partition binding cure evidence is missing")
+        if sha256_bytes(receipt.read_bytes()) != sha:
+            raise ValueError("partition binding cure evidence bytes changed")
+        cured[name] = sha
+
+    if set(cured) != legacy_names:
+        raise ValueError("partition binding cure does not cover the legacy rows exactly")
+
+    evidence = {
+        "partition_binding_cure_path": str(path.resolve(strict=True)),
+        "partition_binding_cure_sha256": sha256_bytes(raw),
+        "partition_binding_cure_authority": cure["reviewer_reference"],
+        "legacy_binding_kind": cure["legacy_binding_kind"],
+        "data_bytes_status": cure["data_bytes_status"],
+        "cured_partition_rows": {
+            row["source_id"]: row["receipt_sha256"] for row in sorted(
+                rows, key=lambda r: r["source_id"])
+        },
+        "canonical_partition_receipts": {
+            row["recorded_receipt_path"]: row["custody_relative_receipt"]
+            for row in sorted(rows, key=lambda r: r["source_id"])
+        },
+    }
+    return cured, evidence
 
 
 def _validate_identity_cure(
@@ -351,15 +506,22 @@ def _validate_identity_cure(
     ancestry = _git(current_repo, "merge-base", "--is-ancestor", resolved_commit, current_source_commit)
     if ancestry.returncode != 0:
         raise ValueError("source identity cure commit is not an ancestor of current source")
-    paths = {
-        "text_lab_corpus": "src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py",
-        "train": "src/ember/infrastructure/tools/ember-restart-3b/train.py",
-        "run_vertical_slice": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py",
-    }
-    reopened = {
-        name: sha256_bytes(_git_blob(current_repo, resolved_commit, relative))
-        for name, relative in paths.items()
-    }
+    reopened = {}
+    for name, candidates in PRODUCER_RELATIVES.items():
+        for relative in candidates:
+            try:
+                blob = _git_blob(current_repo, resolved_commit, relative)
+            except ValueError:
+                # `_git_blob` raises exactly one error, for an object git could not produce.
+                # That is the same signal for "this commit uses the other layout" and for a
+                # genuinely unreadable object; the seam does not distinguish them. Trying the
+                # next candidate is therefore correct, and exhausting them still refuses loudly
+                # below rather than proceeding with a missing producer.
+                continue
+            reopened[name] = sha256_bytes(blob)
+            break
+        else:
+            raise ValueError("historical predecessor producer layout is unrecognised")
     if reopened != expected_code:
         raise ValueError("source identity cure git objects do not match executed code")
     return {
@@ -390,6 +552,7 @@ def _validate_authority_with_identity_cure(
     source_custody: Path,
     cure_evidence: dict[str, Any],
     expected_code: dict[str, str],
+    receipt_custody_root: Path | None = None,
 ) -> dict[str, Any]:
     paths = {
         "text_lab_corpus": "src/ember/infrastructure/tools/ember-restart-3b/text_lab_corpus.py",
@@ -422,6 +585,7 @@ def _validate_authority_with_identity_cure(
             validation_root,
             index_relative=ARTIFACT_NAMES["index"],
             external_authority_root=source_custody,
+            receipt_custody_root=receipt_custody_root,
         )
     finally:
         module._path = original_path
@@ -442,6 +606,7 @@ def _validate_predecessor_authority(
     predecessor_source_repo: Path | None,
     predecessor_receipt_sha256: str | None = None,
     predecessor_generated_files: dict[str, Any] | None = None,
+    receipt_custody_root: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     expected_code = source_identity.get("code_files")
     pinned_commit = source_identity.get("source_base_commit")
@@ -462,6 +627,7 @@ def _validate_predecessor_authority(
             current_repo,
             index_relative=ARTIFACT_NAMES["index"],
             external_authority_root=source_custody,
+            receipt_custody_root=receipt_custody_root,
         )
         if validation != stored_validation:
             raise ValueError("predecessor validation receipt changed")
@@ -548,12 +714,14 @@ def _validate_predecessor_authority(
             source_custody=source_custody,
             cure_evidence=cure_evidence,
             expected_code=expected_code,
+            receipt_custody_root=receipt_custody_root,
         )
         if cure_evidence is not None
         else module.validate_authority_index(
             historical,
             index_relative=ARTIFACT_NAMES["index"],
             external_authority_root=source_custody,
+            receipt_custody_root=receipt_custody_root,
         )
     )
     if validation != stored_validation:
@@ -590,6 +758,46 @@ def _read_plan(path: Path, expected_sha256: str, module: Any) -> tuple[dict[str,
     return plan, raw
 
 
+def _publish_partition_custody(
+    *,
+    module: Any,
+    receipt_path: Path,
+    expected_receipt_sha: str,
+    partition_sidecars: dict[str, bytes],
+) -> str:
+    """Copy a receipt's directory into custody under its content-addressed prefix.
+
+    Returns the published locator. Refuses a reparsed directory, a reparsed or non-regular file, a
+    name outside the expected pattern, or two different byte sequences under one published name.
+    """
+
+    authority_prefix = f"partition-authority-{expected_receipt_sha}"
+    for current, directories, names in os.walk(
+        receipt_path.parent, topdown=True, followlinks=False
+    ):
+        current_path = Path(current)
+        kept: list[str] = []
+        for directory in directories:
+            child = current_path / directory
+            if module._is_reparse_or_symlink(child) or not child.is_dir():
+                raise ValueError("partition custody tree is reparsed or non-regular")
+            kept.append(directory)
+        directories[:] = kept
+        for name in names:
+            child = current_path / name
+            if module._is_reparse_or_symlink(child) or not child.is_file():
+                raise ValueError("partition custody file is reparsed or non-regular")
+            relative = child.relative_to(receipt_path.parent).as_posix()
+            published_name = f"{authority_prefix}/{relative}"
+            if PARTITION_AUTHORITY_FILE.fullmatch(published_name) is None:
+                raise ValueError("partition custody contains an unexpected file")
+            raw = child.read_bytes()
+            existing = partition_sidecars.setdefault(published_name, raw)
+            if existing != raw:
+                raise ValueError("partition sidecar name has conflicting bytes")
+    return f"{authority_prefix}/partition-receipt.json"
+
+
 def _apply_cases(
     *,
     module: Any,
@@ -600,6 +808,8 @@ def _apply_cases(
     predecessor_file_count: int,
     predecessor_total_bytes: int,
     partition_sidecars: dict[str, bytes] | None = None,
+    legacy_partition_migration: dict[str, str] | None = None,
+    projected_custody_root: Path | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int]:
     row_map = {row.get("source_id"): copy.deepcopy(row) for row in rows if isinstance(row, dict)}
     if len(row_map) != len(rows):
@@ -651,31 +861,12 @@ def _apply_cases(
             content = partition.get("partition_root_sha256") if isinstance(partition, dict) else None
             published_receipt = str(receipt_path.resolve(strict=True))
             if partition_sidecars is not None:
-                authority_prefix = f"partition-authority-{expected_receipt_sha}"
-                published_receipt = f"{authority_prefix}/partition-receipt.json"
-                for current, directories, names in os.walk(
-                    receipt_path.parent, topdown=True, followlinks=False
-                ):
-                    current_path = Path(current)
-                    kept: list[str] = []
-                    for directory in directories:
-                        child = current_path / directory
-                        if module._is_reparse_or_symlink(child) or not child.is_dir():
-                            raise ValueError("partition custody tree is reparsed or non-regular")
-                        kept.append(directory)
-                    directories[:] = kept
-                    for name in names:
-                        child = current_path / name
-                        if module._is_reparse_or_symlink(child) or not child.is_file():
-                            raise ValueError("partition custody file is reparsed or non-regular")
-                        relative = child.relative_to(receipt_path.parent).as_posix()
-                        published_name = f"{authority_prefix}/{relative}"
-                        if PARTITION_AUTHORITY_FILE.fullmatch(published_name) is None:
-                            raise ValueError("partition custody contains an unexpected file")
-                        raw = child.read_bytes()
-                        existing = partition_sidecars.setdefault(published_name, raw)
-                        if existing != raw:
-                            raise ValueError("partition sidecar name has conflicting bytes")
+                published_receipt = _publish_partition_custody(
+                    module=module,
+                    receipt_path=receipt_path,
+                    expected_receipt_sha=expected_receipt_sha,
+                    partition_sidecars=partition_sidecars,
+                )
             admitted = {
                 **old,
                 "admission": "ADMITTED",
@@ -830,6 +1021,84 @@ def _apply_cases(
                 "l4_receipt_sha256": sha256_bytes(canonical(adapted["l4_receipt"])),
             }
         )
+    # The repository already owns this transformation. `project_text_lab_custody_paths.project_rows`
+    # rewrites the closed twelve-row class's receipt locators to the portable spelling that
+    # `receipt_custody_root_binding` declares, AND completes the PDF rows' evidence with
+    # `transform_receipt_raw_sha256`, which the projected-row validator requires.
+    #
+    # An earlier revision of this branch hand-rolled only the partition half and left the PDF half
+    # undone. That is why the staging validation refused with "projected PDF license evidence is not
+    # closed": the rows were routed down the projected path without being projected. Calling the
+    # producer keeps exactly one definition of what a projected row is, and it refuses outright
+    # unless the class is the reviewed twelve rows -- a check the hand-rolled rename could not make.
+    if projected_custody_root is not None:
+        projection = load_projection_module(repo)
+        subject = [
+            row for row in row_map.values()
+            if row["source_id"] in projection.PROJECTED_SOURCE_IDS
+        ]
+        for row in projection.project_rows(
+            subject, receipt_custody_root=projected_custody_root
+        ):
+            row_map[row["source_id"]] = row
+        if legacy_partition_migration:
+            # The cure independently proved the portable spelling for every legacy partition row.
+            # Requiring the producer to agree with it keeps the cure load-bearing rather than
+            # decorative: a disagreement means one of the two is wrong about the custody root.
+            spelled = {
+                row["license_partition_receipt"]
+                for row in row_map.values()
+                if row["source_id"] in projection.PARTITION_SOURCE_IDS
+            }
+            if spelled != set(legacy_partition_migration.values()):
+                raise ValueError("projected partition spelling does not match the cure")
+        # Projection rewrites evidence bytes, and an L4 receipt binds `evidence_sha256` precisely so
+        # that a claim cannot change underneath its receipt. So the receipt is re-derived here with
+        # the same function the validator re-derives with. That is derivation, not assertion: the
+        # receipt is a function of the evidence, so recomputing it after a rename preserves the
+        # invariant the check exists to enforce. Leaving it stale is what the validation refused.
+        #
+        # Only the PDF rows need this. A partition row's receipt binds `source_sha256` and
+        # `license_partition_sha256` and names no path at all, so renaming its locator cannot
+        # invalidate it.
+        for row in row_map.values():
+            if row["source_id"] not in projection.PDF_SOURCE_IDS:
+                continue
+            receipt = row.get("l4_receipt")
+            if not isinstance(receipt, dict):
+                raise ValueError("projected PDF row has no receipt to re-derive")
+            row["l4_receipt"] = module.local_license_provenance_v1(
+                content_sha256=row["content_sha256"],
+                license_spdx=row["license_spdx"],
+                evidence=row["license_evidence"],
+                generator=receipt.get("generator", ""),
+            )
+
+        # The predecessor's row receipts are carried forward verbatim (`copy.deepcopy` above) and
+        # nothing re-verifies them against the rows they describe. A migrated row whose locator,
+        # evidence, or receipt changed would therefore keep a row receipt still quoting the old
+        # values, and no check anywhere would catch it. The absence of a check is not permission to
+        # leave a false record, so the entries for exactly the migrated rows are updated here.
+        migrated_ids = projection.PROJECTED_SOURCE_IDS
+        seen_receipts: set[str] = set()
+        for receipt_row in row_receipts:
+            source_id = receipt_row.get("source_id")
+            if source_id not in migrated_ids:
+                continue
+            row = row_map[source_id]
+            seen_receipts.add(source_id)
+            if source_id in projection.PARTITION_SOURCE_IDS:
+                receipt_row["license_partition_receipt_path"] = row["license_partition_receipt"]
+                continue
+            evidence = row["license_evidence"]
+            receipt_row["connector_receipt_path"] = evidence["connector_receipt_path"]
+            receipt_row["transform_receipt_path"] = evidence["transform_receipt_path"]
+            receipt_row["license_evidence_sha256"] = sha256_bytes(canonical(evidence))
+            receipt_row["l4_receipt_sha256"] = sha256_bytes(canonical(row["l4_receipt"]))
+        if seen_receipts != set(migrated_ids):
+            raise ValueError("migrated rows are not all covered by predecessor row receipts")
+    elif legacy_partition_migration:
+        raise ValueError("legacy partition migration requires a projected custody root")
     return [row_map[row["source_id"]] for row in rows], sorted(row_receipts, key=lambda row: row["source_id"]), total_files, total_bytes
 
 
@@ -846,6 +1115,7 @@ def mint_successor(
     predecessor_source_repo: Path | None = None,
     predecessor_projection_receipt: Path | None = None,
     predecessor_projection_receipt_sha256: str | None = None,
+    predecessor_receipt_custody_root: Path | None = None,
 ) -> dict[str, Any]:
     if HEX40.fullmatch(source_commit) is None or HEX64.fullmatch(predecessor_receipt_sha256) is None:
         raise ValueError("source commit or predecessor receipt hash is invalid")
@@ -877,7 +1147,10 @@ def mint_successor(
     actual_partition_sidecars = {
         name for name in actual_source_files if PARTITION_AUTHORITY_FILE.fullmatch(name)
     }
-    packet_source_files = actual_source_files - actual_partition_sidecars
+    has_partition_cure = PARTITION_BINDING_CURE in actual_source_files
+    packet_source_files = (
+        actual_source_files - actual_partition_sidecars - {PARTITION_BINDING_CURE}
+    )
     expected_v3 = set(ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
     expected_v4 = set(PARTITION_ARTIFACT_NAMES.values()) | {predecessor_receipt_name, OUTPUT_LOG}
     allowed_source_sets = {
@@ -889,7 +1162,8 @@ def mint_successor(
     if frozenset(packet_source_files) not in allowed_source_sets:
         raise ValueError("predecessor custody file set is not exact")
     source_names = PARTITION_ARTIFACT_NAMES if set(PARTITION_ARTIFACT_NAMES.values()).issubset(packet_source_files) else ARTIFACT_NAMES
-    expected_source_files = set(source_names.values()) | {predecessor_receipt_name, OUTPUT_LOG} | actual_partition_sidecars
+    expected_source_files = set(source_names.values()) | {predecessor_receipt_name, OUTPUT_LOG} | actual_partition_sidecars | (
+        {PARTITION_BINDING_CURE} if has_partition_cure else set())
     predecessor_path = _exact_file(source_custody, predecessor_receipt_name, module)
     predecessor_raw = predecessor_path.read_bytes()
     if sha256_bytes(predecessor_raw) != predecessor_receipt_sha256:
@@ -946,8 +1220,34 @@ def mint_successor(
         for row in corpus.get("sources", [])
         if isinstance(row, dict) and "license_partition_receipt" in row
     }
+    legacy_partition_names = {
+        name for name in bound_partition_sidecars
+        if isinstance(name, str) and PARTITION_RECEIPT_LOCATOR.fullmatch(name) is None
+    }
+    cured_partition_names: dict[str, str] = {}
+    partition_binding_cure = None
+    if legacy_partition_names:
+        if not has_partition_cure:
+            raise ValueError("predecessor partition sidecar set is invalid")
+        cured_partition_names, partition_binding_cure = _validate_partition_binding_cure(
+            module=module,
+            source_custody=source_custody,
+            predecessor_receipt_sha256=predecessor_receipt_sha256,
+            predecessor_generated_files=generated_bindings,
+            bound_partition_sidecars=bound_partition_sidecars,
+            legacy_names=legacy_partition_names,
+        )
+    elif has_partition_cure:
+        # a cure with nothing to cure is a stale artifact, not a harmless extra file
+        raise ValueError("partition binding cure covers no legacy rows")
+    projected_custody_root = (
+        _projected_custody_root(partition_binding_cure["canonical_partition_receipts"])
+        if partition_binding_cure else None
+    )
     expected_partition_sidecars: set[str] = set()
     for name, expected_sha in bound_partition_sidecars.items():
+        if name in cured_partition_names:
+            continue
         match = PARTITION_RECEIPT_LOCATOR.fullmatch(name) if isinstance(name, str) else None
         if (
             match is None
@@ -996,6 +1296,7 @@ def mint_successor(
             predecessor_source_repo=predecessor_source_repo,
             predecessor_receipt_sha256=predecessor_receipt_sha256,
             predecessor_generated_files=generated_bindings,
+            receipt_custody_root=predecessor_receipt_custody_root,
         )
     elif predecessor_source_repo is not None:
         raise ValueError("historical predecessor source repo is forbidden for legacy predecessor")
@@ -1058,6 +1359,12 @@ def mint_successor(
         predecessor_file_count=predecessor_file_count,
         predecessor_total_bytes=predecessor_total_bytes,
         partition_sidecars=partition_sidecars,
+        # recorded absolute path -> portable custody-relative spelling, proven by the cure
+        legacy_partition_migration=(
+            partition_binding_cure["canonical_partition_receipts"]
+            if partition_binding_cure else {}
+        ),
+        projected_custody_root=projected_custody_root,
     )
     admitted_count = sum(row.get("admission") == "ADMITTED" for row in rows)
     registry_path = repo / "data" / "ember-restart-3b" / "protected-eval-registry-v2.json"
@@ -1080,6 +1387,11 @@ def mint_successor(
         "train_root_sha256": module._authority_split_root(rows, "train"),
         "heldout_root_sha256": module._authority_split_root(rows, "heldout"),
     }
+    # Projected locators and their root declaration travel together: the successor carries cured
+    # rows spelled relative to a corpus root, so it must say so, or every consumer resolves them
+    # inside the authority and finds nothing.
+    if projected_custody_root is not None:
+        corpus["receipt_custody_root_binding"] = "runtime-supplied-corpus-root-v1"
     corpus_raw = canonical(corpus)
 
     code_files = _code_files(repo)
@@ -1121,6 +1433,7 @@ def mint_successor(
             repo,
             index_relative=output_names["index"],
             external_authority_root=staging,
+            receipt_custody_root=projected_custody_root,
         )
         if staging_validation.get("result") != "NOT_ADMITTED_SOURCE_EVIDENCE_MISSING":
             raise ValueError("partial tranche successor did not remain fail-closed")
@@ -1198,10 +1511,16 @@ def mint_successor(
         )
         atomic_publish_no_replace(staging, output)
         published = True
+        # Same receipt custody root as the staged validation. The published corpus is the staged
+        # corpus byte-for-byte, so it declares the same root binding and resolves the same portable
+        # locators; only the authority root moves, from staging to the published custody. Passing a
+        # different root here -- or none -- would either refuse outright or, worse, return a result
+        # that differs from the staged one for a reason having nothing to do with the bytes.
         published_validation = module.validate_authority_index(
             repo,
             index_relative=output_names["index"],
             external_authority_root=output,
+            receipt_custody_root=projected_custody_root,
         )
         if published_validation != staging_validation:
             raise ValueError("published authority validation differs from staged validation")
@@ -1245,6 +1564,11 @@ def main() -> int:
     parser.add_argument("--predecessor-source-repo", type=Path)
     parser.add_argument("--predecessor-projection-receipt", type=Path)
     parser.add_argument("--predecessor-projection-receipt-sha256")
+    # A predecessor whose corpus declares `receipt_custody_root_binding` spells its receipt
+    # locators relative to a root the caller supplies -- that is what "runtime-supplied" means.
+    # Without this, the first successor minted with portable locators could never be reopened,
+    # which would strand the next tranche exactly as this tranche was stranded.
+    parser.add_argument("--predecessor-receipt-custody-root", type=Path)
     args = parser.parse_args()
     result = mint_successor(
         repo=args.repo,
@@ -1258,6 +1582,7 @@ def main() -> int:
         predecessor_source_repo=args.predecessor_source_repo,
         predecessor_projection_receipt=args.predecessor_projection_receipt,
         predecessor_projection_receipt_sha256=args.predecessor_projection_receipt_sha256,
+        predecessor_receipt_custody_root=args.predecessor_receipt_custody_root,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
