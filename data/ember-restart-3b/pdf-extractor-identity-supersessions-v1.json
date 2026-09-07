@@ -1,0 +1,32 @@
+{
+ "authorization_basis": "The three bound rows were produced by extractor identity b45ce5e6, whose recorded field set is exactly the eleven-field v1 identity: it predates the two fields the schema later gained and carries no others. Every field the two identities share still matches the live environment exactly -- normalization, pypdf version, package tree, wheel, Python major minor, full interpreter version, and zero_fallback -- so the divergence is confined to the producer's own bytes. Each row's PDF re-extracts to its stored output byte for byte under today's interpreter and pypdf, and the independent re-extraction comparison remains mandatory for every admitted row, so nothing the original verifier proved is given up. Admission is additionally conditional on the successor's new audit fields being at their inert values for the row, which makes the supersession self-limiting: it can only admit evidence that v2 semantics do not actually change.",
+ "issue": 1581,
+ "path": "src/ember/infrastructure/tools/corpus_connectors/pdf_to_utf8.py",
+ "row_bindings": [
+  {
+   "output_sha256": "6bca41747dcc348c008e58127bcb67ecdafcad201521d26c63a95a082ebcca4b",
+   "recorded_producer_sha256": "b45ce5e6a51fe0f2e0a86e7a14c9e3c950213f3bfc3407a6be8fb04fb6060979",
+   "source_id": "candidate-computer_science-train-0",
+   "transform_receipt_sha256": "e0b9ae9a9d0af645736c78c19b680eab6eb0f2be46457d5584c60e7e8e4aa413"
+  },
+  {
+   "output_sha256": "a1177857ec896e467a7e76fd7df2f63956d837393344a669c6d7079c0d3ec0fa",
+   "recorded_producer_sha256": "b45ce5e6a51fe0f2e0a86e7a14c9e3c950213f3bfc3407a6be8fb04fb6060979",
+   "source_id": "candidate-physics-heldout-0",
+   "transform_receipt_sha256": "c682646962f94aec293becc0be3a8b033782de84c728336646f5dc9c52b247ac"
+  },
+  {
+   "output_sha256": "5bd9caa66230e7a875100e2ab3cc63f0c22c4601e76c5fb1a4b7332c33ec7f67",
+   "recorded_producer_sha256": "b45ce5e6a51fe0f2e0a86e7a14c9e3c950213f3bfc3407a6be8fb04fb6060979",
+   "source_id": "candidate-scientific_method-heldout-0",
+   "transform_receipt_sha256": "3aca22b630a2f7b28fc6c8583f9ec8854875a9adeea7465bc391fdd8b21632fb"
+  }
+ ],
+ "schema_version": "ember-pdf-extractor-identity-supersessions-v1",
+ "successor_producer_sha256": "76a0a0f7aa667f030d8105790db4dfda19f13cc838d6d7ed80fcc64bc7408e12",
+ "superseded_extractor_fields_absent": [
+  "extractor_semantics_version",
+  "reader_strict"
+ ],
+ "superseded_producer_sha256": "b45ce5e6a51fe0f2e0a86e7a14c9e3c950213f3bfc3407a6be8fb04fb6060979"
+}
