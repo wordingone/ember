@@ -1559,5 +1559,223 @@ class PretrainingSegmentTests(unittest.TestCase):
 
 
 
+class StepPhaseRecorderTest(unittest.TestCase):
+    """#2177: host- and device-resolved phase attribution for the governed step loop."""
+
+    @staticmethod
+    def _recorder(enabled=True, device="cpu"):
+        return pretrain.StepPhaseRecorder(device=torch.device(device), enabled=enabled)
+
+    def test_disabled_recorder_is_inert(self):
+        """With the flag off nothing is recorded, so the instrumented loop is the old loop."""
+        recorder = self._recorder(enabled=False)
+        recorder.begin()
+        recorder.mark("data_readiness")
+        recorder.end(1.0)
+        self.assertEqual(recorder.host_rows, [])
+        self.assertEqual(recorder.device_rows, [])
+        receipt = recorder.receipt()
+        self.assertFalse(receipt["enabled"])
+        self.assertEqual(receipt["steps"], 0)
+
+    def test_named_phases_and_remainder_reconstruct_the_step(self):
+        """Every named phase plus the remainder equals the step time the caller measured."""
+        recorder = self._recorder()
+        recorder.begin()
+        for phase in ("data_readiness", "forward_backward", "gradient_clipping",
+                      "optimizer", "telemetry", "mandatory_synchronization"):
+            time.sleep(0.001)
+            recorder.mark(phase)
+        step_seconds = 0.5
+        recorder.end(step_seconds)
+
+        self.assertEqual(len(recorder.host_rows), 1)
+        row = recorder.host_rows[0]
+        self.assertIn("explicit_remainder", row)
+        self.assertAlmostEqual(sum(row.values()), step_seconds, places=6)
+        for phase in ("data_readiness", "forward_backward", "optimizer"):
+            self.assertGreater(row[phase], 0.0)
+
+    def test_unmarked_time_lands_in_the_remainder_and_not_in_a_named_phase(self):
+        """The load-bearing case: an under-marked step must SAY it is under-marked.
+
+        Only one boundary is marked here while the step is declared to have taken far longer. An
+        accounting that quietly distributed the difference across the named phases would report a
+        complete decomposition of a step it did not observe.
+        """
+        recorder = self._recorder()
+        recorder.begin()
+        time.sleep(0.002)
+        recorder.mark("data_readiness")
+        recorder.end(2.0)
+
+        row = recorder.host_rows[0]
+        self.assertEqual(set(row), {"data_readiness", "explicit_remainder"})
+        self.assertLess(row["data_readiness"], 0.5)
+        self.assertGreater(row["explicit_remainder"], 1.4)
+        self.assertAlmostEqual(sum(row.values()), 2.0, places=6)
+
+    def test_a_repeated_phase_accumulates_rather_than_overwrites(self):
+        """A phase entered twice in one step is the sum of both visits, not the last one."""
+        recorder = self._recorder()
+        recorder.begin()
+        time.sleep(0.002)
+        recorder.mark("forward_backward")
+        first = recorder._step_host["forward_backward"]
+        time.sleep(0.002)
+        recorder.mark("forward_backward")
+        self.assertGreater(recorder._step_host["forward_backward"], first)
+
+    def test_remainder_is_never_negative(self):
+        """A step time smaller than the marked total is clamped, not reported as negative time.
+
+        This happens when the caller's step clock and the recorder's marks bracket slightly
+        different regions. A negative bucket would be read as a phase giving time back.
+        """
+        recorder = self._recorder()
+        recorder.begin()
+        time.sleep(0.003)
+        recorder.mark("optimizer")
+        recorder.end(0.0)
+        self.assertEqual(recorder.host_rows[0]["explicit_remainder"], 0.0)
+
+    def test_cpu_device_rows_are_none_rather_than_zero(self):
+        """No CUDA means no device reading. Zeros would be indistinguishable from instant kernels."""
+        recorder = self._recorder(device="cpu")
+        recorder.begin()
+        recorder.mark("forward_backward")
+        recorder.end(0.1)
+        self.assertEqual(recorder.device_rows, [None])
+        self.assertFalse(recorder.receipt()["device_resolved"])
+
+    def test_receipt_carries_the_schema_and_both_readings(self):
+        recorder = self._recorder()
+        recorder.begin()
+        recorder.mark("forward_backward")
+        recorder.end(0.1)
+        receipt = recorder.receipt()
+        self.assertEqual(receipt["schema_version"],
+                         "ember-issue2177-step-phase-attribution-v1")
+        self.assertEqual(receipt["steps"], 1)
+        self.assertEqual(len(receipt["phase_host_seconds"]), 1)
+        self.assertEqual(len(receipt["phase_device_seconds"]), 1)
+        self.assertIn("explicit_remainder", receipt["reading"])
+
+    def test_segment_signatures_accept_the_flag_and_default_it_off(self):
+        """The governed wrapper and the loop both take the flag, and both default to off.
+
+        A flag that reaches only one of the two would leave the governed path silently
+        uninstrumented while the runner reported it as enabled.
+        """
+        import inspect
+
+        for function in (pretrain.run_pretraining_segment,
+                         pretrain.run_manifest_bound_semantic_segment):
+            parameters = inspect.signature(function).parameters
+            self.assertIn("phase_attribution", parameters, function.__name__)
+            self.assertIs(parameters["phase_attribution"].default, False, function.__name__)
+
+
+class StepPhaseRecorderPlantedPositiveTest(unittest.TestCase):
+    """#2177 scope item 3: a known device delay, planted into one phase, must come back from it.
+
+    The other recorder tests run on a CPU device, where there are no CUDA events and the device rows
+    are absent by construction -- so they exercise the host clock and the remainder arithmetic and
+    nothing else. The claim this unit rests on is that the device rows attribute real device time to
+    the phase that incurred it, and that needs a real device.
+
+    The planted delay is measured TWICE: once by an independent event pair placed immediately before
+    the recorder sequence, and once by the recorder itself. The assertion compares those two, not the
+    recorder against a wall-clock target. torch.cuda._sleep counts device cycles, so a millisecond
+    target depends on the card's clock rate holding steady between calibration and plant -- and it
+    does not: a settling clock moved the measured rate by eight percent across ten consecutive
+    iterations. Comparing two co-located measurements removes that entirely, and it is also the
+    sharper statement of what the recorder is for.
+    """
+
+    TARGET_MS = 8.0             # only sets the size of the plant; nothing is asserted against it
+    AGREEMENT = 0.05            # recorder against the independent reading of the same sleep
+    LEAKAGE_TOLERANCE = 0.05    # every other phase, under 5% of the planted delay
+    HOST_CEILING_MS = 1.5       # an asynchronous launch costs the host approximately nothing
+    REFERENCE_BAND_MS = (2.0, 40.0)
+
+    @staticmethod
+    def _cycles_per_millisecond() -> float:
+        """Rough conversion from milliseconds to device cycles, used only to size the plant."""
+        torch.cuda.synchronize()
+        start = torch.cuda.Event(enable_timing=True)
+        stop = torch.cuda.Event(enable_timing=True)
+        probe = 200_000_000
+        start.record()
+        torch.cuda._sleep(probe)
+        stop.record()
+        torch.cuda.synchronize()
+        return probe / start.elapsed_time(stop)
+
+    @staticmethod
+    def _time_sleep(cycles: int) -> float:
+        """Milliseconds the device spends on this exact sleep, measured independently."""
+        torch.cuda.synchronize()
+        start = torch.cuda.Event(enable_timing=True)
+        stop = torch.cuda.Event(enable_timing=True)
+        start.record()
+        torch.cuda._sleep(cycles)
+        stop.record()
+        torch.cuda.synchronize()
+        return start.elapsed_time(stop)
+
+    @unittest.skipUnless(torch.cuda.is_available(), "the planted positive measures a real device")
+    def test_a_planted_device_delay_lands_in_its_own_phase_and_not_in_the_host_row(self):
+        planted_cycles = int(self.TARGET_MS * self._cycles_per_millisecond())
+        reference_ms = self._time_sleep(planted_cycles)
+
+        # If calibration ever collapses, the plant becomes too small to distinguish from the
+        # recorder's own resolution and every assertion below passes vacuously. Catch that here
+        # rather than reporting a green that means nothing.
+        low, high = self.REFERENCE_BAND_MS
+        self.assertTrue(
+            low <= reference_ms <= high,
+            f"the planted delay measured {reference_ms:.3f} ms, outside [{low}, {high}]; the "
+            f"calibration is unusable and the rest of this test would prove nothing",
+        )
+
+        recorder = pretrain.StepPhaseRecorder(device=torch.device("cuda"), enabled=True)
+        recorder.begin()
+        recorder.mark("data_readiness")
+        torch.cuda._sleep(planted_cycles)      # the plant, inside forward_backward and nowhere else
+        recorder.mark("forward_backward")
+        recorder.mark("optimizer")
+        # The governed loop reads its events after its own end-of-step synchronization; the test
+        # stands in for that here. Reading them earlier would block on the device.
+        torch.cuda.synchronize()
+        recorder.end(0.5)
+
+        device_row = recorder.device_rows[0]
+        self.assertIsNotNone(device_row, "a CUDA device produced no event readings")
+        recovered_ms = device_row["forward_backward"] * 1000
+        self.assertAlmostEqual(
+            recovered_ms, reference_ms,
+            delta=reference_ms * self.AGREEMENT,
+            msg=f"independent reading {reference_ms:.3f} ms, recorder {recovered_ms:.3f} ms",
+        )
+
+        ceiling = reference_ms * self.LEAKAGE_TOLERANCE
+        for name in ("data_readiness", "optimizer"):
+            self.assertLess(
+                device_row[name] * 1000, ceiling,
+                f"{name} absorbed device time that was planted in forward_backward",
+            )
+
+        # The two clocks disagree here on purpose, and that disagreement is the instrument's whole
+        # reason for existing: _sleep launches a kernel and returns, so the host spent nothing while
+        # the device spent milliseconds. A host-only reading would have named no phase at all.
+        host_row = recorder.host_rows[0]
+        self.assertLess(
+            host_row["forward_backward"] * 1000, self.HOST_CEILING_MS,
+            "the host row absorbed an asynchronous device delay, so the two clocks are not "
+            "independent and the device rows carry no information the host rows lack",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
