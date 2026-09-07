@@ -811,6 +811,79 @@ def adapt_tool_use(
     return row
 
 
+ROUTING_PATHWAY_ROW_ID = "E-MATRIX-ROUTING-PATHWAY"
+ROUTING_PATHWAY_CLAIM_BOUNDARY = (
+    "PATHWAY ENGAGEMENT RATE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT"
+)
+
+
+def _routing_pathway_inference_module():
+    """The #2169 producer owns receipt verification; the adapter re-derives through it for the same
+    reason the tool-use adapter does -- a second implementation of the check would drift from the
+    one that produced the receipt, and then the disagreement would be silent."""
+
+    import importlib.util
+
+    module_path = Path(__file__).resolve().with_name("issue2169_routing_pathway_inference.py")
+    spec = importlib.util.spec_from_file_location("issue2169_routing_pathway_inference", module_path)
+    if spec is None or spec.loader is None:
+        raise ValueError("ROUTING_PATHWAY_PRODUCER_MODULE_REFUSED")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def adapt_routing_pathway(
+    contract_path: Path, inference_receipt_path: Path, expected_checkpoint_manifest_sha256: str,
+) -> dict[str, object]:
+    """E-MATRIX-ROUTING-PATHWAY from a verified routing-pathway inference receipt (#2169).
+
+    Every binding is re-derived: receipt self hash, checkpoint manifest binding against the
+    preflight's designation sha, contract binding, per-item order against the contract's frozen
+    items, and both verdicts recomputed -- `pathway_match` from the recorded path events and
+    `engaged` from the recorded predictions. The score is scored / 192 as recomputed here; the
+    producer's own count is checked against it and never substituted for it.
+
+    The row's number is an engagement rate. It says declared pathways execute and that deleting the
+    expert changes the prediction. It says nothing about whether the prediction is any good.
+    """
+
+    if not isinstance(expected_checkpoint_manifest_sha256, str) or len(expected_checkpoint_manifest_sha256) != 64:
+        raise ValueError("ROUTING_PATHWAY_CHECKPOINT_BINDING_REFUSED")
+    module = _routing_pathway_inference_module()
+    verified = module.verify_receipt(
+        inference_receipt_path, contract_path,
+        expected_checkpoint_manifest_sha256=expected_checkpoint_manifest_sha256,
+    )
+    receipt = verified["receipt"]
+    items = verified["items"]
+    if len(items) != module.ITEM_COUNT:
+        raise ValueError("ROUTING_PATHWAY_TOTALITY_REFUSED")
+    row: dict[str, object] = {
+        "schema_version": "ember-issue2169-routing-pathway-row-receipt-v1",
+        "result": "ROUTING_PATHWAY_ROW_PRODUCED",
+        "row_id": ROUTING_PATHWAY_ROW_ID,
+        "task_class": "checkpoint_inference",
+        "contract_raw_sha256": verified["contract_raw_sha256"],
+        "contract_self_sha256": verified["contract"]["self_sha256"],
+        "inference_receipt_raw_sha256": verified["receipt_raw_sha256"],
+        "inference_receipt_self_sha256": receipt["self_sha256"],
+        "checkpoint_manifest_raw_sha256": expected_checkpoint_manifest_sha256,
+        "decode_contract_sha256": receipt["decode_contract_sha256"],
+        "frozen_order_sha256": receipt["frozen_order_sha256"],
+        "engagement_rule": receipt["engagement_rule"],
+        "item_count": len(items),
+        "pathway_match_count": verified["pathway_match_count"],
+        "engaged_count": verified["engaged_count"],
+        "scored_count": verified["scored_count"],
+        "items": items,
+        "score": verified["score"],
+        "claim_boundary": ROUTING_PATHWAY_CLAIM_BOUNDARY,
+    }
+    row["self_sha256"] = sha(canonical(row))
+    return row
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="operation", required=True)
@@ -866,7 +939,37 @@ def main() -> int:
         help="the preflight designation's checkpoint manifest raw sha256; the receipt must bind it",
     )
     tool_use.add_argument("--result", type=Path, required=True)
+    routing_pathway = subparsers.add_parser("adapt-routing-pathway")
+    routing_pathway.add_argument("--contract", type=Path, required=True)
+    routing_pathway.add_argument("--inference-receipt", type=Path, required=True)
+    routing_pathway.add_argument(
+        "--expected-checkpoint-manifest-sha256", required=True,
+        help="the preflight designation's checkpoint manifest raw sha256; the receipt must bind it",
+    )
+    routing_pathway.add_argument("--result", type=Path, required=True)
     args = parser.parse_args()
+    if args.operation == "adapt-routing-pathway":
+        try:
+            row = adapt_routing_pathway(
+                args.contract, args.inference_receipt, args.expected_checkpoint_manifest_sha256)
+            returncode = 0
+        except (OSError, TypeError, ValueError) as error:
+            row = {
+                "schema_version": "ember-issue2169-routing-pathway-row-refusal-v1",
+                "result": "ROUTING_PATHWAY_REFUSED",
+                "row_id": ROUTING_PATHWAY_ROW_ID,
+                "task_class": "checkpoint_inference",
+                "reason": str(error),
+                "claim_boundary": "CHECKPOINT INFERENCE ROW REFUSAL ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR GOAL CREDIT",
+            }
+            row["self_sha256"] = sha(canonical(row))
+            returncode = 78
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        with args.result.open("x", encoding="utf-8", newline="\n") as stream:
+            json.dump(row, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        print(json.dumps({"result": row["result"], "row_id": row["row_id"]}, sort_keys=True))
+        return returncode
     if args.operation == "adapt-tool-use":
         try:
             row = adapt_tool_use(args.contract, args.inference_receipt, args.expected_checkpoint_manifest_sha256)
