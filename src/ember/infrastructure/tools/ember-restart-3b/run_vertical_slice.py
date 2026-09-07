@@ -4902,6 +4902,7 @@ def run_semantic(
     shard_ledger: Path | None = None,
     expected_shard_ledger_sha256: str | None = None,
     micro_batch: int = 1,
+    phase_attribution: bool = False,
     fp8_sites: str | None = None,
     fp8_scaling: str = "rowwise",
 ) -> dict[str, object]:
@@ -5192,6 +5193,7 @@ def run_semantic(
         initial_data_cursor=resume_cursor,
         initial_global_step=initial_global_step,
         initial_tokens_seen=initial_tokens_seen,
+        phase_attribution=phase_attribution,
     )
     fp8_kernels = [site.kernel_receipt() for site in iter_fp8_down_projections(model)]
     if fp8_sites is None and fp8_kernels:
@@ -5255,6 +5257,7 @@ def run_semantic(
         "resume_authority": resume_authority,
         "data_authority": data_authority,
         "launch_shape": {"steps": steps, "sequence_length": sequence_length, "micro_batch": micro_batch},
+        "phase_attribution": segment.get("phase_attribution"),
         "fp8_installation": fp8_installation,
     }
 
@@ -5359,6 +5362,7 @@ def main() -> None:
     semantic.add_argument("--text-lab-receipt-custody-root", type=Path)
     semantic.add_argument("--steps", type=int, required=True)
     semantic.add_argument("--sequence-length", type=int, required=True)
+    semantic.add_argument("--phase-attribution", action="store_true", help="#2177: record host- and device-resolved phase timings per optimizer step and emit them in the segment receipt. Off by default; with it off the step is behaviourally identical to today's")
     semantic.add_argument("--micro-batch", type=int, default=1, help="#2159: consecutive receipt-bound episodes per optimizer step (segment micro_batch); default 1 preserves the current launch shape")
     semantic.add_argument("--fp8-sites", default=None, help="#2167: explicit FP8 installation scope for this run (absent = BF16 production path)")
     semantic.add_argument("--fp8-scaling", default="rowwise", choices=("rowwise", "per_tensor"), help="#2173: where installed FP8 sites apply their scales (per_tensor moves them into the kernel epilogue)")
@@ -5473,6 +5477,7 @@ def main() -> None:
             shard_ledger=args.shard_ledger,
             expected_shard_ledger_sha256=args.expected_shard_ledger_sha256,
             micro_batch=args.micro_batch,
+            phase_attribution=bool(getattr(args, "phase_attribution", False)),
             fp8_sites=args.fp8_sites,
             fp8_scaling=args.fp8_scaling,
             expected_receipt_sha256=args.expected_receipt_sha256,
