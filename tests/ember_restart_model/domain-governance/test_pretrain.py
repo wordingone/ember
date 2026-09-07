@@ -1676,6 +1676,194 @@ class StepPhaseRecorderTest(unittest.TestCase):
             self.assertIs(parameters["phase_attribution"].default, False, function.__name__)
 
 
+class ForwardBackwardBoundaryTest(unittest.TestCase):
+    """#2183: the boundary between the forward and backward passes, and what it cannot prove.
+
+    Every test here runs on CPU. The boundary is a host mark, so the host clock is the reading under
+    test; the device reading over the same boundary is what the measurement leg answers and is not
+    claimed by any assertion in this class.
+    """
+
+    PLANT_SECONDS = 0.05
+
+    @staticmethod
+    def _model_and_batch(seed: int = 2183):
+        config = RestartDecoderConfig.small_for_tests(
+            hidden_size=8, layers=14, attention_heads=2, vocab_size=16,
+        )
+        model = UnifiedDecoder(config, genesis_seed=seed)
+        batch = {
+            "input_ids": torch.ones((1, 4), dtype=torch.int64),
+            "target_ids": torch.ones((1, 4), dtype=torch.int64),
+            "image_patches": None,
+            "audio_frames": None,
+            "image_coordinates": torch.empty((0, 2), dtype=torch.int64),
+            "spans": [],
+            "active_expert": "reasoning",
+        }
+        return model, batch, config
+
+    @staticmethod
+    def _gradient_count(model) -> int:
+        return sum(1 for parameter in model.parameters() if parameter.grad is not None)
+
+    def test_eager_path_fires_the_callback_once_and_before_any_gradient_exists(self):
+        """The mark must precede the backward pass, not merely precede the return.
+
+        Counting gradients at callback time is the check that catches a callback placed after
+        loss.backward(): a boundary that fires once and in the wrong place would satisfy a
+        call-count assertion on its own.
+        """
+        model, batch, config = self._model_and_batch()
+        gradients_at_boundary = []
+
+        pretrain._eager_forward_loss_backward(
+            model, batch, config,
+            on_forward_complete=lambda: gradients_at_boundary.append(
+                self._gradient_count(model),
+            ),
+        )
+
+        self.assertEqual(len(gradients_at_boundary), 1)
+        self.assertEqual(gradients_at_boundary[0], 0)
+        self.assertGreater(self._gradient_count(model), 0)
+
+    def test_the_absent_callback_leaves_the_eager_path_the_function_it_was(self):
+        """Same seed, same batch, with and without a callback: same loss and same gradients."""
+        without_callback, batch, config = self._model_and_batch()
+        with_callback, _, _ = self._model_and_batch()
+
+        plain = pretrain._eager_forward_loss_backward(without_callback, batch, config)
+        instrumented = pretrain._eager_forward_loss_backward(
+            with_callback, batch, config, on_forward_complete=lambda: None,
+        )
+
+        self.assertEqual(plain.item(), instrumented.item())
+        pairs = zip(
+            without_callback.parameters(), with_callback.parameters(), strict=True,
+        )
+        compared = 0
+        for plain_parameter, instrumented_parameter in pairs:
+            if plain_parameter.grad is None:
+                self.assertIsNone(instrumented_parameter.grad)
+                continue
+            self.assertTrue(
+                torch.equal(plain_parameter.grad, instrumented_parameter.grad),
+            )
+            compared += 1
+        self.assertGreater(compared, 0)
+
+    def test_the_executor_declares_a_boundary_only_on_the_eager_workspace_branch(self):
+        """The replay branch has no boundary to mark, and must say so rather than appear to.
+
+        Forward and backward are captured into one graph and replayed as a unit, so a callback fired
+        there would report a forward of nearly zero beside a backward carrying the whole graph --
+        two numbers that sum to the right total and locate nothing.
+        """
+        executor = object.__new__(pretrain.CensusBoundStage2Executor)
+        self.assertFalse(executor.provides_forward_boundary)
+        executor.diagnostic_eager_workspace = True
+        self.assertTrue(executor.provides_forward_boundary)
+
+    def test_static_loss_backward_fires_the_callback_once_before_the_backward_pass(self):
+        """The executor's eager-workspace branch carries the same boundary as the eager path."""
+        model, batch, config = self._model_and_batch(seed=2184)
+        executor = object.__new__(pretrain.CensusBoundStage2Executor)
+        executor.model = model
+        executor.config = config
+        gradients_at_boundary = []
+
+        executor._static_loss_backward(
+            batch,
+            marker_indices=(
+                torch.empty(0, dtype=torch.int64),
+                torch.empty(0, dtype=torch.int64),
+            ),
+            on_forward_complete=lambda: gradients_at_boundary.append(
+                self._gradient_count(model),
+            ),
+        )
+
+        self.assertEqual(len(gradients_at_boundary), 1)
+        self.assertEqual(gradients_at_boundary[0], 0)
+        self.assertGreater(self._gradient_count(model), 0)
+
+    def test_a_disabled_recorder_records_nothing_through_the_boundary_callback(self):
+        """The recorder is off by default, and the new call site must not change that."""
+        model, batch, config = self._model_and_batch(seed=2185)
+        recorder = pretrain.StepPhaseRecorder(device=torch.device("cpu"), enabled=False)
+
+        recorder.begin()
+        pretrain._eager_forward_loss_backward(
+            model, batch, config,
+            on_forward_complete=lambda: recorder.mark("forward"),
+        )
+        recorder.mark("backward")
+        recorder.end(1.0)
+
+        self.assertEqual(recorder.host_rows, [])
+        self.assertEqual(recorder.device_rows, [])
+        self.assertEqual(recorder.receipt()["steps"], 0)
+
+    def _split_step(self, *, displaced: bool, seed: int):
+        """One instrumented step with a known delay planted inside the backward pass.
+
+        The plant is a hook on one parameter, so it runs while loss.backward() is executing and
+        nowhere else. With the boundary in its place the delay belongs to backward; with the
+        boundary displaced past the backward launch it belongs to forward.
+        """
+        model, batch, config = self._model_and_batch(seed=seed)
+        planted_parameter = next(
+            parameter for parameter in model.parameters() if parameter.requires_grad
+        )
+
+        def plant(gradient):
+            time.sleep(self.PLANT_SECONDS)
+            return gradient
+
+        planted_parameter.register_hook(plant)
+
+        recorder = pretrain.StepPhaseRecorder(device=torch.device("cpu"), enabled=True)
+        recorder.begin()
+        if displaced:
+            pretrain._eager_forward_loss_backward(model, batch, config)
+            recorder.mark("forward")
+            recorder.mark("backward")
+        else:
+            pretrain._eager_forward_loss_backward(
+                model, batch, config,
+                on_forward_complete=lambda: recorder.mark("forward"),
+            )
+            recorder.mark("backward")
+        recorder.end(10.0)
+        return recorder.host_rows[0]
+
+    def test_a_planted_backward_delay_lands_in_backward_and_a_displaced_boundary_moves_it(self):
+        """Scope item 4, corrected: composition cannot detect a displaced boundary; a plant can.
+
+        The issue said a boundary marked after the backward launch would fail the composition check.
+        It does not. Moving the mark moves time from one bucket to the other, and the sum the
+        composition check reads is unchanged -- which is the whole reason this unit needs a planted
+        delay and not an arithmetic identity. Both arms are asserted here so the blind spot is an
+        executable fact rather than a caveat.
+        """
+        placed = self._split_step(displaced=False, seed=2186)
+        displaced = self._split_step(displaced=True, seed=2186)
+
+        floor = self.PLANT_SECONDS * 0.8
+        ceiling = self.PLANT_SECONDS * 0.5
+
+        self.assertGreater(placed["backward"], floor)
+        self.assertLess(placed["forward"], ceiling)
+
+        self.assertGreater(displaced["forward"], floor)
+        self.assertLess(displaced["backward"], ceiling)
+
+        # Composition passes for both: the two phases sum to the same measured region either way.
+        self.assertGreater(placed["forward"] + placed["backward"], floor)
+        self.assertGreater(displaced["forward"] + displaced["backward"], floor)
+
+
 class StepPhaseRecorderPlantedPositiveTest(unittest.TestCase):
     """#2177 scope item 3: a known device delay, planted into one phase, must come back from it.
 
