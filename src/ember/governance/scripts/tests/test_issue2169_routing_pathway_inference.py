@@ -256,5 +256,64 @@ class PathwayMatchArithmetic(unittest.TestCase):
         self.assertFalse(producer.pathway_match(summary, pathway="tool", layers=LAYERS))
 
 
+class RowIsAcceptedByTheReleaseExecutor(unittest.TestCase):
+    """The row the adapter produces must satisfy the executor that consumes it.
+
+    Every other test here checks the adapter against its own idea of a row, which is how an adapter
+    can be thirteen-for-thirteen green and still be refused by the chain: the executor requires each
+    item to be exactly {item_id, gold_item_sha256, prediction, score} and this adapter emitted its
+    own richer record. That cost a full run before it was found.
+
+    The executor's `validate_row` is imported rather than reimplemented. A copy of the rule here
+    would drift from the rule there exactly as the adapter did, and the test would keep passing
+    while the chain kept refusing.
+    """
+
+    def setUp(self) -> None:
+        self.tmp = Path(__file__).resolve().parent / "_tmp_issue2169_row"
+        self.tmp.mkdir(exist_ok=True)
+        self.contract = build_contract(self.tmp)
+        self.receipt_path, self.receipt = build_receipt(self.tmp, self.contract)
+
+    def tearDown(self) -> None:
+        for path in self.tmp.glob("*"):
+            path.unlink()
+        self.tmp.rmdir()
+
+    @staticmethod
+    def _load(name: str):
+        path = Path(__file__).resolve().parents[1] / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(f"{name}_under_test", path)
+        assert spec is not None and spec.loader is not None, path
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_produced_row_passes_the_executors_own_validate_row(self) -> None:
+        rows = self._load("issue1947_release_row")
+        executor = self._load("issue1947_release_execute")
+        row = rows.adapt_routing_pathway(
+            self.contract, self.receipt_path,
+            self.receipt["checkpoint_manifest_raw_sha256"],
+        )
+        validated = executor.validate_row(row, "E-MATRIX-ROUTING-PATHWAY")
+        self.assertEqual(len(validated["items"]), producer.ITEM_COUNT)
+        for item in row["items"]:
+            self.assertEqual(
+                set(item), {"item_id", "gold_item_sha256", "prediction", "score"},
+                "the executor refuses any other item key set with ITEM_SCHEMA_DRIFT",
+            )
+
+    def test_row_score_is_the_recomputed_rate_and_not_the_producers_count(self) -> None:
+        rows = self._load("issue1947_release_row")
+        row = rows.adapt_routing_pathway(
+            self.contract, self.receipt_path,
+            self.receipt["checkpoint_manifest_raw_sha256"],
+        )
+        scored = sum(1 for item in row["items"] if item["score"] == 1.0)
+        self.assertEqual(row["score"], scored / producer.ITEM_COUNT)
+        self.assertEqual(row["scored_count"], scored)
+
+
 if __name__ == "__main__":
     unittest.main()
