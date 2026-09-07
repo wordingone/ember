@@ -74,7 +74,15 @@ def sha_file(path: Path) -> str:
 
 
 def canonical(value: Any) -> bytes:
-    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode("utf-8")
+    """The family's canonical form: sorted keys, tight separators, ASCII, NO trailing newline.
+
+    The newline matters. An earlier version of this appended one, which made every self-hash here
+    disagree with the contract the builder minted and with both sibling producers. The unit tests
+    could not see it: they hash their fixtures through this same function, so they were
+    self-consistent by construction and green either way. The real contract found it in one second,
+    which is the whole argument for running the real consumer before the merge rather than after.
+    """
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
 
 
 def self_hash(document: dict[str, Any], field: str = "self_sha256") -> str:
@@ -137,10 +145,14 @@ def source_items_by_id(source: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def load_designation(path: Path, manifest_path: Path) -> tuple[dict[str, Any], str]:
     designation, _ = load_self_hashed(path, DESIGNATION_SCHEMA, "ROUTING_PATHWAY_DESIGNATION")
     manifest_sha = sha_file(manifest_path)
-    identity = designation.get("checkpoint_identity")
-    recorded = identity.get("manifest_raw_sha256") if isinstance(identity, dict) else None
-    if recorded is None:
-        recorded = designation.get("checkpoint_manifest_raw_sha256")
+    # The designation records its manifest digest under `manifest.raw_sha256`. The first version of
+    # this reader tried two other spellings and fell through to None on both, which produced a
+    # refusal that named the manifest correctly and the designation as `None` -- a refusal that
+    # blames the wrong artifact. A missing key is now its own refusal, not a silent None.
+    manifest_block = designation.get("manifest")
+    if not isinstance(manifest_block, dict) or "raw_sha256" not in manifest_block:
+        raise ValueError(f"ROUTING_PATHWAY_DESIGNATION_SHAPE_REFUSED: no manifest.raw_sha256 in {path}")
+    recorded = manifest_block["raw_sha256"]
     if recorded != manifest_sha:
         raise ValueError(f"ROUTING_PATHWAY_CHECKPOINT_BINDING_REFUSED: designation {recorded} manifest {manifest_sha}")
     return designation, manifest_sha
@@ -149,27 +161,35 @@ def load_designation(path: Path, manifest_path: Path) -> tuple[dict[str, Any], s
 def load_connector_payloads(receipt_paths: list[Path]) -> dict[str, Path]:
     """sha256 -> physical path, from the same connector receipts #2162 reads.
 
-    Only the digest is trusted: each candidate file is hashed before it is admitted to the map, so a
-    receipt row that points at replaced bytes drops out here rather than reaching a prompt.
+    This map is an index, not an authority: it says where a digest is believed to live. The digest is
+    verified in `prompt_bytes`, at the moment the bytes are read, which is the stronger place for it --
+    a file checked here and replaced afterwards would still reach a prompt.
     """
     by_sha: dict[str, Path] = {}
     for receipt_path in receipt_paths:
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-        if receipt.get("schema_version") != CONNECTOR_SCHEMA:
-            raise ValueError(f"ROUTING_PATHWAY_CONNECTOR_SCHEMA_REFUSED:{receipt_path}")
-        root_value = receipt.get("root") or receipt.get("root_path")
+        # The connector receipt names its schema under `schema`, its root under `dest_root`, and its
+        # rows under `files`. These field names were read off a real receipt rather than assumed:
+        # the first version of this loader guessed `schema_version`/`root`/`objects` and refused
+        # every receipt in the repository.
+        if receipt.get("schema") != CONNECTOR_SCHEMA:
+            raise ValueError(f"ROUTING_PATHWAY_CONNECTOR_SCHEMA_REFUSED:{receipt_path}:"
+                             f"{receipt.get('schema')}")
+        root_value = receipt.get("dest_root")
         if not root_value:
             raise ValueError(f"ROUTING_PATHWAY_CONNECTOR_ROOT_REFUSED:{receipt_path}")
         root = Path(root_value)
-        for row in receipt.get("objects", []) or receipt.get("rows", []):
+        for row in receipt.get("files", []):
             digest = row.get("sha256")
             relative = row.get("path")
             if not digest or not relative:
                 continue
-            physical = (root / Path(relative)).resolve()
+            physical = root / Path(relative)
             if digest in by_sha or not physical.is_file():
                 continue
             by_sha[digest] = physical
+    if not by_sha:
+        raise ValueError("ROUTING_PATHWAY_CONNECTOR_EMPTY: no payload resolved from any receipt")
     return by_sha
 
 
@@ -452,7 +472,16 @@ def verify_receipt(receipt_path: Path, contract_path: Path, *,
 def _load_module_from_bytes(source: bytes, path: Path, name: str) -> types.ModuleType:
     module = types.ModuleType(name)
     module.__file__ = str(path)
-    exec(compile(source, str(path), "exec"), module.__dict__)
+    # The module must be in sys.modules BEFORE its body executes. `@dataclass` resolves a field's
+    # annotation by looking its owning class's module up in sys.modules, so a module executed outside
+    # the table dies on the first dataclass in it with an AttributeError from inside dataclasses.py --
+    # a failure that names neither this loader nor the model file it is loading.
+    sys.modules[name] = module
+    try:
+        exec(compile(source, str(path), "exec"), module.__dict__)
+    except BaseException:
+        sys.modules.pop(name, None)
+        raise
     return module
 
 
@@ -469,9 +498,18 @@ def build_real_emitter(args: argparse.Namespace, contract: dict[str, Any]) -> tu
         raise ValueError("ROUTING_PATHWAY_MODEL_CONFIG_BINDING_REFUSED")
     tokenizer_raw = args.tokenizer.read_bytes()
     tokenizer_sha = sha(tokenizer_raw)
-    identity = designation.get("checkpoint_identity") if isinstance(designation.get("checkpoint_identity"), dict) else {}
-    if identity.get("tokenizer_sha256") not in (None, tokenizer_sha):
-        raise ValueError("ROUTING_PATHWAY_TOKENIZER_BINDING_REFUSED")
+    identity = designation.get("checkpoint_identity")
+    if not isinstance(identity, dict):
+        raise ValueError("ROUTING_PATHWAY_DESIGNATION_SHAPE_REFUSED: no checkpoint_identity")
+    # Both digests are compared against the designation's own identity block with no tolerance for a
+    # missing key. An earlier version accepted None here, which reads as "the designation did not say"
+    # but in practice would accept a designation whose shape had changed under us -- the same silent
+    # fall-through that made the manifest refusal above blame the wrong artifact.
+    for field, actual in (("tokenizer_sha256", tokenizer_sha),
+                          ("model_config_sha256", sha_file(args.model_config))):
+        if identity.get(field) != actual:
+            raise ValueError(f"ROUTING_PATHWAY_IDENTITY_BINDING_REFUSED:{field}:"
+                             f"designation {identity.get(field)} actual {actual}")
 
     # Every expert this contract names, plus the shared trunk. Both passes of every item run
     # against one loaded model, so the control differs from the required pass in the routing
