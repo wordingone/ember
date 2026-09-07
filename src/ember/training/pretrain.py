@@ -1158,6 +1158,98 @@ def trainer_optimizer_step_event(
     return {**event, **verified}
 
 
+class StepPhaseRecorder:
+    """Host- and device-resolved phase timing for one governed optimizer step (#2177).
+
+    Boundary-marking rather than region-wrapping: `begin()` opens a step, each `mark(name)` closes
+    the phase that was open and attributes its elapsed time to `name`, and `end(step_seconds)`
+    computes the unaccounted residue. The residue is REPORTED as `explicit_remainder`, never
+    distributed across the named phases, on the same principle the packed segment already applies:
+    a decomposition that always sums to the whole by construction cannot tell you it is incomplete.
+
+    Host time comes from `time.perf_counter()` and measures what the CPU spent, which for
+    asynchronous device work is launch cost. Device time comes from CUDA events recorded at the
+    same boundaries; because events execute in stream order, the elapsed time between consecutive
+    events is the device execution of the work queued between them. Keeping both is the point --
+    a phase that is cheap on the host and expensive on the device is work whose cost is paid
+    wherever the next synchronization happens to fall, which is how a per-site treatment can be
+    faster in isolation and slower in a governed step.
+
+    Disabled by default and inert when disabled: `mark` and `end` return immediately, so the
+    instrumented loop is behaviourally identical to the uninstrumented one.
+    """
+
+    def __init__(self, *, device: torch.device, enabled: bool) -> None:
+        self.enabled = bool(enabled)
+        self._cuda = self.enabled and device.type == "cuda"
+        self._device = device
+        self.host_rows: list[dict[str, float]] = []
+        self.device_rows: list[dict[str, float] | None] = []
+        self._host_mark: float = 0.0
+        self._step_host: dict[str, float] = {}
+        self._events: list[tuple[str, Any]] = []
+
+    def begin(self) -> None:
+        if not self.enabled:
+            return
+        self._step_host = {}
+        self._events = []
+        self._host_mark = time.perf_counter()
+        if self._cuda:
+            opening = torch.cuda.Event(enable_timing=True)
+            opening.record()
+            self._events.append(("__begin__", opening))
+
+    def mark(self, name: str) -> None:
+        if not self.enabled:
+            return
+        now = time.perf_counter()
+        self._step_host[name] = self._step_host.get(name, 0.0) + (now - self._host_mark)
+        self._host_mark = now
+        if self._cuda:
+            event = torch.cuda.Event(enable_timing=True)
+            event.record()
+            self._events.append((name, event))
+
+    def end(self, step_seconds: float) -> None:
+        """Close the step. Must be called after the loop's own end-of-step synchronization.
+
+        Every event recorded during the step has completed by then, so reading them adds no stall.
+        Calling this before the synchronization would block on the device and change the very
+        step time the caller just measured.
+        """
+        if not self.enabled:
+            return
+        accounted = sum(self._step_host.values())
+        row = dict(self._step_host)
+        row["explicit_remainder"] = max(0.0, float(step_seconds) - accounted)
+        self.host_rows.append(row)
+        if not self._cuda or len(self._events) < 2:
+            self.device_rows.append(None)
+            return
+        device_row: dict[str, float] = {}
+        for (_, previous), (name, current) in zip(self._events, self._events[1:]):
+            device_row[name] = device_row.get(name, 0.0) + previous.elapsed_time(current) / 1000.0
+        self.device_rows.append(device_row)
+
+    def receipt(self) -> dict[str, Any]:
+        return {
+            "schema_version": "ember-issue2177-step-phase-attribution-v1",
+            "enabled": self.enabled,
+            "device_resolved": self._cuda,
+            "steps": len(self.host_rows),
+            "phase_host_seconds": self.host_rows,
+            "phase_device_seconds": self.device_rows,
+            "reading": (
+                "host rows are perf_counter deltas at the phase boundaries and measure CPU cost, "
+                "which for asynchronous device work is launch cost. device rows are CUDA event "
+                "deltas at the same boundaries and measure device execution of the work queued in "
+                "that phase. explicit_remainder is the step's unaccounted residue and is reported, "
+                "never distributed."
+            ),
+        }
+
+
 def run_pretraining_segment(
     *,
     model: UnifiedDecoder,
@@ -1177,6 +1269,7 @@ def run_pretraining_segment(
     data_shard_id: str = "owned-pretraining",
     require_complete_coverage: bool = True,
     max_records: int | None = None,
+    phase_attribution: bool = False,
 ) -> dict[str, Any]:
     """Execute verified routed updates and bind counters needed for exact resume."""
 
@@ -1279,8 +1372,10 @@ def run_pretraining_segment(
     elapsed_step_seconds = 0.0
     step_timings_seconds: list[float] = []
     optimizer_step_events: list[dict[str, object]] = []
+    phase_recorder = StepPhaseRecorder(device=device, enabled=bool(phase_attribution))
     for local_step, record in enumerate(remaining_records, start=1):
         step_started = time.perf_counter()
+        phase_recorder.begin()
         batch = decode_owned_batch(record, config, device=device)
         active_expert = batch["active_expert"]
         capabilities = _verified_capabilities(record, active_expert=active_expert)
@@ -1291,6 +1386,7 @@ def run_pretraining_segment(
                     gradient_checkpointing=bool(config.gradient_checkpointing),
                 )
             )
+        phase_recorder.mark("data_readiness")
         if stage2_executor is None:
             optimizer.zero_grad(set_to_none=True)
             try:
@@ -1313,9 +1409,11 @@ def run_pretraining_segment(
             loss = stage2_executor.forward_loss_backward(
                 batch, cursor_identity=cursor_identity,
             )
+        phase_recorder.mark("forward_backward")
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {initial_global_step + local_step}")
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        phase_recorder.mark("gradient_clipping")
         if stage2_executor is not None:
             stage2_executor.assert_optimizer_membership()
         if optimizer_state_parameters:
@@ -1325,14 +1423,18 @@ def run_pretraining_segment(
         optimizer.step()
         if stage2_executor is not None:
             stage2_executor.after_optimizer_step()
+        phase_recorder.mark("optimizer")
         optimizer_event = trainer_optimizer_step_event(initial_global_step + local_step)
         optimizer_step_events.append(optimizer_event)
         print(json.dumps(optimizer_event, sort_keys=True, separators=(",", ":")), flush=True)
+        phase_recorder.mark("telemetry")
         if device.type == "cuda":
             torch.cuda.synchronize(device)
+        phase_recorder.mark("mandatory_synchronization")
         losses.append(float(loss.detach().cpu()))
         step_elapsed = time.perf_counter() - step_started
         step_timings_seconds.append(step_elapsed)
+        phase_recorder.end(step_elapsed)
         elapsed_step_seconds += step_elapsed
         step_tokens = int(batch["input_ids"].numel())
         tokens_seen += step_tokens
@@ -1395,6 +1497,7 @@ def run_pretraining_segment(
         ),
         "optimizer_step_events": optimizer_step_events,
         "stage2_runtime": stage2_executor.receipt() if stage2_executor is not None else None,
+        "phase_attribution": phase_recorder.receipt() if phase_attribution else None,
     }
 
 
@@ -1884,6 +1987,7 @@ def run_manifest_bound_semantic_segment(
     initial_global_step: int = 0,
     initial_tokens_seen: int = 0,
     micro_batch: int = 1,
+    phase_attribution: bool = False,
 ) -> dict[str, Any]:
     """Train bounded shared-text episodes while preserving receipt-bound shard resume state.
 
@@ -1985,6 +2089,7 @@ def run_manifest_bound_semantic_segment(
         initial_tokens_seen=initial_tokens_seen,
         data_shard_id="TOKEN-SHARDS-V0:" + stream.receipt_sha256[:12],
         require_complete_coverage=False,
+        phase_attribution=phase_attribution,
     )
     result["data_cursor"] = bound_cursor(
         cursors[-1],

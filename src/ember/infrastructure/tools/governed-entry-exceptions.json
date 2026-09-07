@@ -58,7 +58,7 @@
     },
     {
       "path": "src/ember/training/pretrain.py",
-      "sha256": "61a4bc322e43503796501d7e91f69f27ca091fb37d618d6cc9a2c487a857c80b",
+      "sha256": "11b5f17acfa04fdd51a1fb27522521d721b879640a8d433b94dbf3d20ab9357a",
       "reason": "issue #2092 moved (and #2136 repins after the micro-batch semantic segment) the existing governed pretraining entry from the restart tool directory into its canonical training domain; this exact content-addressed exception is equivalent to the legacy whole-directory exclusion and does not widen the governed-entry surface"
     },
     {

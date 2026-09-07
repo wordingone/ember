@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-09-06T10:34:37+00:00",
+  "ts": "2026-09-07T01:50:03+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,8 +12,8 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "970f7b7072584f8caf3537f4dc80e3858b227eef",
-    "branch": "feat/issue2167-w5-upgate-fp8"
+    "commit": "2bdf1893237e53c342cd0dab11e481dc752bc6f5",
+    "branch": "feat/issue2177-recorder-02a"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 7231024449150000)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 8145129502375000)",
         "reader_wired": true
       },
       {
@@ -91,8 +91,8 @@
       "kind": "file",
       "provenance": "Owned pretraining loop body; authored in-repo.",
       "path": "src/ember/training/pretrain.py",
-      "sha256": "61a4bc322e43503796501d7e91f69f27ca091fb37d618d6cc9a2c487a857c80b",
-      "size_bytes": 100752
+      "sha256": "11b5f17acfa04fdd51a1fb27522521d721b879640a8d433b94dbf3d20ab9357a",
+      "size_bytes": 105853
     },
     {
       "category": "training_loop",
@@ -170,7 +170,7 @@
           "import torch;print(torch.__version__)"
         ],
         "ok": true,
-        "output": "2.13.0+cpu",
+        "output": "2.10.0+cu126",
         "returncode": 0
       }
     },
@@ -186,7 +186,7 @@
           "import torch;print(torch.version.cuda)"
         ],
         "ok": true,
-        "output": "None",
+        "output": "12.6",
         "returncode": 0
       }
     },
@@ -202,7 +202,7 @@
           "import torch;print(torch.backends.cudnn.version())"
         ],
         "ok": true,
-        "output": "None",
+        "output": "91002",
         "returncode": 0
       }
     },
