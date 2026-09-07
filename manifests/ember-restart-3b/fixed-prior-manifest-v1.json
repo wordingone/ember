@@ -2,7 +2,7 @@
   "schema_version": "ember-fixed-prior-manifest-v1",
   "manifest_version": 1,
   "ticket": "R1-ENTRY-FIXED-PRIOR-MANIFEST",
-  "ts": "2026-09-07T03:10:00+00:00",
+  "ts": "2026-09-07T07:47:16+00:00",
   "invariant_sha256": "08a0eb7418c09a8088be4658e10785107abbb7507fc2dbcdc789936aa54e02a6",
   "goal_id": "EMBER-02",
   "workstream_id": "EMBER-02A",
@@ -12,8 +12,8 @@
   "sha_convention": "bytes on disk as-is (binary read, no line-ending normalization)",
   "tree_digest_convention": "combined_sha256 = sha256 over sorted '<name>\\t<sha256>\\t<size_bytes>\\n' lines (src/ember/governance/scripts/manifest_sha.py convention); git-tracked files only",
   "repo": {
-    "commit": "aa645c082e2b58673a4675c436cf92f524a4bc8c",
-    "branch": "feat/issue2177-step-phase-attribution"
+    "commit": "5bfdf2d206e7cd53d383b3e4f9e43a2f0aeee8aa",
+    "branch": "feat/issue2183-forward-backward-boundary"
   },
   "learned_import_attestation": "Every item in this manifest is a NON-LEARNED prior. Zero imported learned weights, embeddings, learned-parameter tokenizers, teacher outputs, learned filters or judges, or hidden accelerator services (docs/authority/INVARIANT.md clause 3, fail-closed on unknown provenance).",
   "energy_method": {
@@ -34,7 +34,7 @@
       {
         "leg": "windows_pdh_rapl_package",
         "available": true,
-        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 8230045327591670)",
+        "detail": "\\Energy Meter(rapl_package0_pkg)\\Energy readable (cumulative picowatt-hours; live read 8491367120420830)",
         "reader_wired": true
       },
       {
@@ -91,8 +91,8 @@
       "kind": "file",
       "provenance": "Owned pretraining loop body; authored in-repo.",
       "path": "src/ember/training/pretrain.py",
-      "sha256": "11b5f17acfa04fdd51a1fb27522521d721b879640a8d433b94dbf3d20ab9357a",
-      "size_bytes": 105853
+      "sha256": "30fb58aab4782c76ba8e720c83fbed09783628692b93657e238edcd72663c658",
+      "size_bytes": 108625
     },
     {
       "category": "training_loop",

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import functools
 import hashlib
 import json
 import math
@@ -150,7 +151,17 @@ def _eager_forward_loss_backward(
     model: UnifiedDecoder,
     batch: Mapping[str, object],
     config: RestartDecoderConfig,
+    *,
+    on_forward_complete: Callable[[], None] | None = None,
 ) -> torch.Tensor:
+    """Forward, loss, backward. `on_forward_complete` fires once at the boundary between them.
+
+    The callback exists so the phase recorder can close a `forward` phase where the loop cannot see
+    a boundary: this function does not return until after the backward pass. It fires after the
+    finiteness check so that the check's cost is billed to the forward side, which is where it is
+    paid, and immediately before the backward launch so nothing of the backward pass precedes it.
+    With no callback this is the function it was.
+    """
     logits = model(
         batch["input_ids"],
         image_patches=batch["image_patches"],
@@ -165,6 +176,8 @@ def _eager_forward_loss_backward(
     )
     if not torch.isfinite(loss):
         raise RuntimeError("pretraining preparation produced a non-finite loss")
+    if on_forward_complete is not None:
+        on_forward_complete()
     loss.backward()
     return loss
 
@@ -654,6 +667,7 @@ class CensusBoundStage2Executor:
         static: Mapping[str, object],
         *,
         marker_indices: tuple[torch.Tensor, torch.Tensor],
+        on_forward_complete: Callable[[], None] | None = None,
     ) -> torch.Tensor:
         image_marker_indices, audio_marker_indices = marker_indices
 
@@ -679,6 +693,8 @@ class CensusBoundStage2Executor:
                 loss_mask,
                 true_source_tokens=int(static["true_source_tokens"]),
             )
+        if on_forward_complete is not None:
+            on_forward_complete()
         loss.backward()
         return loss
 
@@ -772,8 +788,22 @@ class CensusBoundStage2Executor:
             "no_capture_in_measured_window": True,
         }
 
+    @property
+    def provides_forward_boundary(self) -> bool:
+        """Whether a boundary between the forward and backward passes exists on this path.
+
+        False on the default path, where the two are captured into one CUDA graph and replayed as a
+        unit: the host issues a single launch, and no event was recorded between them at capture
+        time, so there is nothing for a mark to sit at. Invoking a boundary callback there anyway
+        would yield a `forward` of nearly zero beside a `backward` carrying the whole graph -- two
+        numbers that sum to the right total and locate nothing. The caller reads this and records an
+        undivided phase instead.
+        """
+        return bool(getattr(self, "diagnostic_eager_workspace", False))
+
     def forward_loss_backward(
         self, batch: Mapping[str, object], *, cursor_identity: str,
+        on_forward_complete: Callable[[], None] | None = None,
     ) -> torch.Tensor:
         del cursor_identity
         if not self._measurement_prepared:
@@ -796,7 +826,9 @@ class CensusBoundStage2Executor:
             return self._static_loss_backward(
                 self._static_batches[signature],
                 marker_indices=self._marker_indices_by_signature[signature],
+                on_forward_complete=on_forward_complete,
             )
+        # The replay branch deliberately does not fire the callback; see provides_forward_boundary.
         self.graph_pool.replay(signature)
         return self._loss_outputs[signature]
 
@@ -1373,6 +1405,16 @@ def run_pretraining_segment(
     step_timings_seconds: list[float] = []
     optimizer_step_events: list[dict[str, object]] = []
     phase_recorder = StepPhaseRecorder(device=device, enabled=bool(phase_attribution))
+    # The boundary is real on the eager path and on the executor's eager-workspace branch, and absent
+    # inside a replayed graph, where forward and backward are captured together and the host issues
+    # one launch. `split` decides which phase names a step records, so a receipt from the replay path
+    # carries the undivided `forward_backward` it can actually measure rather than a split it cannot.
+    # Both are loop-invariant -- the executor and the recorder are fixed for the segment -- so they
+    # are bound once here rather than rebuilt per step.
+    forward_boundary = functools.partial(phase_recorder.mark, "forward")
+    split_forward_backward = (
+        stage2_executor is None or stage2_executor.provides_forward_boundary
+    )
     for local_step, record in enumerate(remaining_records, start=1):
         step_started = time.perf_counter()
         phase_recorder.begin()
@@ -1390,7 +1432,9 @@ def run_pretraining_segment(
         if stage2_executor is None:
             optimizer.zero_grad(set_to_none=True)
             try:
-                loss = _eager_forward_loss_backward(model, batch, config)
+                loss = _eager_forward_loss_backward(
+                    model, batch, config, on_forward_complete=forward_boundary,
+                )
             except RuntimeError as error:
                 if "non-finite loss" not in str(error):
                     raise
@@ -1408,8 +1452,11 @@ def run_pretraining_segment(
             ).hexdigest()
             loss = stage2_executor.forward_loss_backward(
                 batch, cursor_identity=cursor_identity,
+                on_forward_complete=forward_boundary,
             )
-        phase_recorder.mark("forward_backward")
+        phase_recorder.mark(
+            "backward" if split_forward_backward else "forward_backward"
+        )
         if not torch.isfinite(loss):
             raise RuntimeError(f"pretraining segment stopped on non-finite loss at step {initial_global_step + local_step}")
         grad_norm_tensor = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
