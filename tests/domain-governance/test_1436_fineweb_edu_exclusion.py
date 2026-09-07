@@ -37,7 +37,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-SCRIPTS = os.path.join(REPO, "scripts")
+# `fineweb_exclusion` and `token_shards_v0` live in the governance domain since the cutover.
+SCRIPTS = os.path.join(REPO, "src", "ember", "governance", "scripts")
 sys.path.insert(0, SCRIPTS)
 
 import fineweb_exclusion as fx          # noqa: E402
@@ -178,37 +179,43 @@ def _load_trainer_module():
     """Import PackedShardLoader out of the execution-denied trainer.
 
     src/ember/governance/scripts/timeshare_pretrain.py carries EMBER_ARTIFACT_CLASS=historical_only
-    and raises SystemExit at module scope (repo-wide authority lock,
-    2026-07-12), so the class cannot be imported normally. This shim compiles
-    the module source with ONLY that one top-level guard statement removed --
-    located via `ast` as the top-level `raise SystemExit(...)`, not by string
-    surgery -- and executes it under a private module name.
+    (repo-wide authority lock, 2026-07-12). The lock refuses inside `main` rather
+    than at module scope, so the module imports normally; this shim asserts the
+    refusal is still there and then imports it under a private module name.
 
     Scope: test-only, in-process, nothing written to disk, and no trainer entry
     point is invoked. PackedShardLoader is a pure data reader. The lock stays in
     force for every production import path; this exists so the exclusion can be
     tested by execution instead of by grepping source text."""
     import ast
-    import types
+    import importlib.util
 
     path = os.path.join(SCRIPTS, "timeshare_pretrain.py")
-    src = open(path, encoding="utf-8").read()
-    tree = ast.parse(src)
-    guards = [
-        i for i, node in enumerate(tree.body)
-        if isinstance(node, ast.Raise)
-        and isinstance(node.exc, ast.Call)
-        and isinstance(node.exc.func, ast.Name)
-        and node.exc.func.id == "SystemExit"
+    tree = ast.parse(open(path, encoding="utf-8").read())
+
+    # The lock no longer refuses at module scope. It refuses inside `main`, whose first statement
+    # calls `_historical_only_refusal`, so the module imports cleanly and this shim compiles nothing
+    # of its own -- no edited copy of a production module executes here.
+    #
+    # The lock is still checked, in the place it now lives. Without this the test would import a
+    # trainer with no assurance that the trainer is still execution-denied, and a change that removed
+    # the refusal outright would pass here unnoticed.
+    refusals = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "main"
+        for stmt in node.body[:1]
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)
+        and isinstance(stmt.value.func, ast.Name)
+        and stmt.value.func.id == "_historical_only_refusal"
     ]
-    assert len(guards) == 1, (
-        f"expected exactly one top-level SystemExit guard, found {len(guards)} "
-        "-- the historical_only lock changed shape; update this shim rather "
-        "than weakening it")
-    del tree.body[guards[0]]
-    mod = types.ModuleType("_timeshare_pretrain_under_test")
-    mod.__file__ = path
-    exec(compile(ast.fix_missing_locations(tree), path, "exec"), mod.__dict__)
+    assert len(refusals) == 1, (
+        "expected main() to open with the historical_only refusal, found "
+        f"{len(refusals)} -- the lock changed shape; update this shim rather than weakening it")
+
+    spec = importlib.util.spec_from_file_location("_timeshare_pretrain_under_test", path)
+    assert spec is not None and spec.loader is not None, path
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
     return mod
 
 
