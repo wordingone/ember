@@ -84,7 +84,9 @@ LINEAGE = "tests/fixtures/domain-governance/a1-lineage-manifest-example.json"
 def run(extra, out):
     # negatives 1-3 refuse before the split check, so a placeholder dir is fine there
     suite = SCAN_DIR or os.path.join(REPO, "data", "_no_eval_suite_")
-    cmd = [sys.executable, os.path.join(REPO, "scripts", "a1_freeze_consumer.py"),
+    # Post-cutover home; see the note in test_1436_fineweb_edu_exclusion.py.
+    cmd = [sys.executable, os.path.join(REPO, "src", "ember", "governance", "scripts",
+                                        "a1_freeze_consumer.py"),
            "--declaration", DECL, "--pointer-file", POINTER, "--amendment", AMEND,
            "--freeze-receipt", FREEZE, "--eval-suite-dir", suite,
            "--build-ref", "HEAD", "--out", out]
@@ -128,7 +130,8 @@ def main() -> int:
     with open(os.path.join(tdir, "MMLU-Pro", "test.jsonl"), "w", encoding="utf-8") as f:
         f.write('{"tampered": true}\n')
     r = subprocess.run(
-        [sys.executable, os.path.join(REPO, "scripts", "a1_freeze_consumer.py"),
+        [sys.executable, os.path.join(REPO, "src", "ember", "governance", "scripts",
+                                      "a1_freeze_consumer.py"),
          "--declaration", DECL, "--pointer-file", POINTER, "--amendment", AMEND,
          "--freeze-receipt", FREEZE, "--eval-suite-dir", tdir, "--build-ref", "HEAD",
          "--launch-ts", "2026-07-10T06:00:00Z", "--lineage-manifest", LINEAGE, "--out", out],

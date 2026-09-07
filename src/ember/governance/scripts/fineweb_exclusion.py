@@ -854,7 +854,12 @@ def _selftest_fail_closed_against_real_schema():
     with tempfile.TemporaryDirectory() as td:
         os.makedirs(f"{td}/receipts")
         os.makedirs(f"{td}/shards")
-        os.makedirs(f"{td}/tokenizer")
+        # The fixture writes and hashes its tokenizer at `domains/model/tokenizer/tokenizer.json`
+        # (below, and again in the receipt it builds), which is where the cutover moved it. The
+        # directory this creates was left at the pre-cutover `tokenizer/`, so the very next write
+        # raised FileNotFoundError and every test in this file that reaches the fail-closed
+        # selftest has been red since. Nothing reads the old path.
+        os.makedirs(f"{td}/domains/model/tokenizer")
         prem_names = {"assembly_receipt": "fixture-assembly.json",
                      "tokenizer_freeze_receipt": "fixture-tokfreeze.json"}
         for nm in prem_names.values():
