@@ -24,11 +24,44 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
-# Relative, not absolute. Real consumers reach this module as ``src.ember.model.model`` with
-# the repository root on sys.path -- the evaluation canary and its fixture builder both do --
-# and under that spelling there is no top-level ``ember`` package to import from. A relative
-# import resolves correctly under both spellings.
-from . import fp8_linear
+# Three different consumers reach this module three different ways, and no single import
+# statement satisfies all of them:
+#
+#   * the test suite puts ``src/`` on sys.path and imports ``ember.model.model``;
+#   * the evaluation canary, its fixture builder, and eval_canary_image.py put the repository
+#     ROOT on sys.path and import ``src.ember.model.model``, where no top-level ``ember``
+#     package exists at all;
+#   * the governed training entry -- the consumer that matters most -- loads this file directly
+#     with spec_from_file_location under a synthetic module name, so the module has no package
+#     context at all and a relative import raises outright.
+#
+# An absolute ``from ember...`` breaks the second. A relative ``from . import`` breaks the third.
+# Resolving by file path, with the package-relative form preferred when a package context exists,
+# is the only form that holds for all three. Each context ends up with exactly one instance: under
+# the first two the relative import binds the package's own module object, and under the third
+# there is no package instance for the fallback to duplicate.
+try:
+    from . import fp8_linear
+except ImportError:  # loaded as a standalone file, with no parent package
+    import importlib.util as _fp8_importlib
+    import sys as _fp8_sys
+
+    _FP8_MODULE_NAME = "_ember_model_fp8_linear"
+    fp8_linear = _fp8_sys.modules.get(_FP8_MODULE_NAME)
+    if fp8_linear is None:
+        _fp8_path = Path(__file__).resolve().parent / "fp8_linear.py"
+        _fp8_spec = _fp8_importlib.spec_from_file_location(_FP8_MODULE_NAME, _fp8_path)
+        if _fp8_spec is None or _fp8_spec.loader is None:
+            raise ImportError(f"FP8_LINEAR_SPEC_INVALID:{_fp8_path}")
+        fp8_linear = _fp8_importlib.module_from_spec(_fp8_spec)
+        # Registered before exec so the weight cache inside it is shared by every later load in
+        # this process rather than duplicated per import site.
+        _fp8_sys.modules[_FP8_MODULE_NAME] = fp8_linear
+        try:
+            _fp8_spec.loader.exec_module(fp8_linear)
+        except BaseException:
+            _fp8_sys.modules.pop(_FP8_MODULE_NAME, None)
+            raise
 
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
