@@ -153,6 +153,14 @@ def execute(
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise ReleaseExecutionRefusal(f"ROW_RESULT_INVALID_JSON:{row_id}") from exc
         row = validate_row(loaded_row, row_id)
+        # The producer writes its own self_sha256 into every rich row, and hashing a payload that
+        # still carries one stores a digest the verifier can never reproduce: issue1947_release_
+        # recompute.py strips the key before hashing, as it must, so the two sides disagree by
+        # construction. Every bundle this executor has ever produced was refused for exactly this,
+        # which is why no release-bundle.json has ever been committable and why the scheduled gate
+        # has never had an artifact to recompute from. Only E-MATRIX-TEXT-LANGUAGE verified, because
+        # its producer emits no hash for this line to hash over.
+        row.pop("self_sha256", None)
         row["self_sha256"] = sha(canonical(row))
         raw = json.dumps(row, indent=2, sort_keys=True).encode() + b"\n"
         destination = output / f"{row_id}.json"
