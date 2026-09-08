@@ -152,7 +152,13 @@ def _portable_locator(receipt_custody_root: Path, value: object) -> str:
         raise ValueError("projection source path is absent")
     source = Path(value)
     if not source.is_absolute():
-        raise ValueError("projection source path must be absolute")
+        # An already-projected locator: a successor re-projects its predecessor's rows against the
+        # same root, so every one of them arrives relative. That is a no-op rather than a refusal --
+        # and it is still proved, because `_receipt_custody_path` refuses any non-normalized or
+        # escaping value and resolves it strictly below the runtime root, which is exactly the check
+        # a freshly projected locator passes below.
+        _receipt_custody_path(receipt_custody_root, value)
+        return value
     try:
         relative = source.resolve(strict=True).relative_to(
             receipt_custody_root.resolve(strict=True)

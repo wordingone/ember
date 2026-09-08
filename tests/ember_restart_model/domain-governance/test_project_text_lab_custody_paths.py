@@ -500,3 +500,45 @@ class CustodyPathProjectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PortableLocatorIdempotenceTests(unittest.TestCase):
+    """A successor re-projects its predecessor's rows, so every locator arrives already relative.
+
+    Refusing that spelling makes the tranche after the first portable mint impossible, which is the
+    same stranding the runtime-supplied custody root exists to prevent. Re-projection is a no-op --
+    but never an unchecked one: the value is resolved strictly below the runtime root exactly as a
+    freshly projected locator is.
+    """
+
+    RELATIVE = "issue1719-license-partitions-wave10/K-heldout-2/partition-receipt.json"
+
+    def setUp(self):
+        self.module = load_module()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = pathlib.Path(self._tmp.name)
+        target = self.root / self.RELATIVE
+        target.parent.mkdir(parents=True)
+        target.write_text("{}\n", encoding="utf-8")
+
+    def test_already_projected_locator_is_returned_unchanged(self):
+        self.assertEqual(self.module._portable_locator(self.root, self.RELATIVE), self.RELATIVE)
+
+    def test_absolute_locator_still_projects_to_the_same_relative_form(self):
+        absolute = str((self.root / self.RELATIVE).resolve(strict=True))
+        self.assertEqual(self.module._portable_locator(self.root, absolute), self.RELATIVE)
+
+    def test_relative_locator_escaping_the_root_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.module._portable_locator(self.root, "../escape/partition-receipt.json")
+
+    def test_backslash_spelling_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.module._portable_locator(
+                self.root, "issue1719-license-partitions-wave10\\K-heldout-2\\partition-receipt.json"
+            )
+
+    def test_empty_locator_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.module._portable_locator(self.root, "")

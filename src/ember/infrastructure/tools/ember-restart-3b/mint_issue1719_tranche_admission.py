@@ -355,6 +355,71 @@ def _projected_custody_root(canonical_receipts: dict[str, str]) -> Path:
     return root
 
 
+PORTABLE_CUSTODY_ROOT_BINDING = "runtime-supplied-corpus-root-v1"
+
+
+def _portable_partition_names(
+    *,
+    names: set[str],
+    bound_partition_sidecars: dict[str, Any],
+    declared_binding: Any,
+    custody_root: Path | None,
+    module: Any,
+) -> set[str]:
+    """The locators a predecessor spells relative to a runtime-supplied corpus root.
+
+    A successor minted with portable locators records its partition receipts corpus-root-relative and
+    declares `receipt_custody_root_binding` to say so. Those names do not match
+    `PARTITION_RECEIPT_LOCATOR`, but they are not legacy bindings: they are the spelling this tool
+    itself produces, and the caller supplies the root they resolve against.
+
+    Treating them as legacy strands the tranche, because the cure that legacy rows fall back to
+    cannot be formed for a relative recorded path -- `_validate_partition_binding_cure` opens the
+    recorded path directly, and `_projected_custody_root` requires the stripped remainder to be one
+    absolute root. That is the exact stranding `--predecessor-receipt-custody-root` was added to
+    prevent.
+
+    A name is portable only when it resolves, under the supplied root, to a regular non-reparse file
+    whose bytes hash to the sha the corpus row itself records. That is the same content proof the
+    cure performs, so nothing is admitted on a weaker basis; what is dropped is the demand for a
+    hand-signed cure covering a spelling the tool wrote. Anything else -- an absolute recorded path,
+    a traversal, a missing or altered file -- is left to the legacy path untouched.
+    """
+
+    if not names or custody_root is None or declared_binding != PORTABLE_CUSTODY_ROOT_BINDING:
+        return set()
+    try:
+        root = custody_root.resolve(strict=True)
+    except OSError:
+        return set()
+    if not root.is_dir():
+        return set()
+    portable: set[str] = set()
+    for name in sorted(names):
+        expected_sha = bound_partition_sidecars.get(name)
+        if not isinstance(expected_sha, str) or HEX64.fullmatch(expected_sha) is None:
+            continue
+        # A drive letter or a backslash means an absolute recorded path, which is the cure's domain
+        # and never resolved against the supplied root.
+        if "\\" in name or ":" in name or name.startswith("/"):
+            continue
+        relative = PurePosixPath(name)
+        if ".." in relative.parts or not relative.parts:
+            continue
+        candidate = root.joinpath(*relative.parts)
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if not resolved.is_file() or module._is_reparse_or_symlink(resolved):
+            continue
+        if sha256_bytes(resolved.read_bytes()) != expected_sha:
+            continue
+        portable.add(name)
+    return portable
+
+
 def _validate_partition_binding_cure(
     *,
     module: Any,
@@ -1220,10 +1285,18 @@ def mint_successor(
         for row in corpus.get("sources", [])
         if isinstance(row, dict) and "license_partition_receipt" in row
     }
-    legacy_partition_names = {
+    non_canonical_partition_names = {
         name for name in bound_partition_sidecars
         if isinstance(name, str) and PARTITION_RECEIPT_LOCATOR.fullmatch(name) is None
     }
+    portable_partition_names = _portable_partition_names(
+        names=non_canonical_partition_names,
+        bound_partition_sidecars=bound_partition_sidecars,
+        declared_binding=corpus.get("receipt_custody_root_binding"),
+        custody_root=predecessor_receipt_custody_root,
+        module=module,
+    )
+    legacy_partition_names = non_canonical_partition_names - portable_partition_names
     cured_partition_names: dict[str, str] = {}
     partition_binding_cure = None
     if legacy_partition_names:
@@ -1240,13 +1313,18 @@ def mint_successor(
     elif has_partition_cure:
         # a cure with nothing to cure is a stale artifact, not a harmless extra file
         raise ValueError("partition binding cure covers no legacy rows")
-    projected_custody_root = (
-        _projected_custody_root(partition_binding_cure["canonical_partition_receipts"])
-        if partition_binding_cure else None
-    )
+    if partition_binding_cure:
+        projected_custody_root = _projected_custody_root(
+            partition_binding_cure["canonical_partition_receipts"])
+    elif portable_partition_names:
+        # Locators already portable stay portable: the successor re-declares the binding against the
+        # same root, so a consumer resolves them the way this mint just did.
+        projected_custody_root = predecessor_receipt_custody_root.resolve(strict=True)
+    else:
+        projected_custody_root = None
     expected_partition_sidecars: set[str] = set()
     for name, expected_sha in bound_partition_sidecars.items():
-        if name in cured_partition_names:
+        if name in cured_partition_names or name in portable_partition_names:
             continue
         match = PARTITION_RECEIPT_LOCATOR.fullmatch(name) if isinstance(name, str) else None
         if (
