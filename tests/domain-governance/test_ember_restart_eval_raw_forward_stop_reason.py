@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import torch
 
 
-SCRIPT = Path(__file__).parents[1] / "scripts" / "ember_restart_eval_raw_forward.py"
+SCRIPT = Path(__file__).parents[2] / "scripts" / "ember_restart_eval_raw_forward.py"
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("raw_forward_stop_reason", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tools import scratch_custody
+from src.ember.infrastructure.tools import scratch_custody
 
 
 def _run_hidden(*args, **kwargs):
