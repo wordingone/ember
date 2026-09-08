@@ -255,3 +255,66 @@ def test_canonical_validator_accepts_minted_pdf_case(tmp_path: Path, monkeypatch
     admitted = next(row for row in rows if row["source_id"] == old_row["source_id"])
     assert admitted["admission"] == "ADMITTED"
     assert reopened == result["validation_receipt"]
+
+
+# --- connector license deed-URL aliases -------------------------------------------------------
+#
+# arXiv records a paper's license as the Creative Commons deed URL rather than the SPDX
+# identifier, so the connector receipt for an arXiv tranche carries a URL where the rest of the
+# pipeline expects an SPDX value. `_CONNECTOR_LICENSE_ALIASES` bridges that, and it is a record of
+# spellings OBSERVED IN RECEIPTED CUSTODY -- not a convenience map of everything that looks like a
+# license URL. Each entry names the receipt that carries it.
+
+CC0_DEED_URL = "http://creativecommons.org/publicdomain/zero/1.0/"
+CC0_DEED_URL_RECEIPT_NAME = "20260818T202142Z-paper-list-paper-list.txt-939-ids.json"
+
+CC_BY_DEED_URL = "http://creativecommons.org/licenses/by/4.0/"
+CC_BY_DEED_URL_RECEIPT_NAME = "20260828T163424Z-paper-list-train2-paper-list.txt-53865-ids.json"
+CC_BY_DEED_URL_RECEIPT_SHA256 = "719c4f39b115eefa65d3b77643b8e09c01732101fd6cd5ae91e9fc504c7daf3d"
+
+
+@pytest.mark.parametrize(
+    ("spelling", "expected", "receipt_name"),
+    [
+        (CC0_DEED_URL, "CC0-1.0", CC0_DEED_URL_RECEIPT_NAME),
+        (CC_BY_DEED_URL, "CC-BY-4.0", CC_BY_DEED_URL_RECEIPT_NAME),
+    ],
+)
+def test_receipted_deed_urls_canonicalize_to_their_spdx_identity(
+    spelling: str, expected: str, receipt_name: str
+) -> None:
+    assert receipt_name.endswith("-ids.json")
+    assert text_lab_corpus._closed_connector_license(spelling) == expected
+    assert expected in ALLOWED
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "https://creativecommons.org/licenses/by/4.0/",
+        "http://creativecommons.org/licenses/by/4.0",
+        "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creativecommons.org/licenses/by/4.0/",
+    ],
+)
+def test_unreceipted_deed_url_spellings_are_refused(spelling: str) -> None:
+    """A spelling that plainly denotes an allow-listed identity is still refused without a receipt.
+
+    Every one of these reads as CC-BY-4.0 or CC0-1.0 to a person, which is exactly why the table
+    must not admit them on plausibility. Each becomes admissible when, and only when, a connector
+    receipt in custody is shown to record it.
+    """
+    with pytest.raises(ValueError, match="not on the text-lab allow-list"):
+        text_lab_corpus._closed_connector_license(spelling)
+
+
+def test_deed_url_alias_does_not_admit_a_non_allow_list_identity() -> None:
+    """The alias table must never become a second, wider allow-list.
+
+    CC-BY-NC-4.0 is a real Creative Commons deed and is deliberately not on the text-lab
+    allow-list. Adding deed URLs must not create a path that reaches it.
+    """
+    with pytest.raises(ValueError, match="not on the text-lab allow-list"):
+        text_lab_corpus._closed_connector_license("http://creativecommons.org/licenses/by-nc/4.0/")
+    assert "CC-BY-NC-4.0" not in ALLOWED
+    assert all(spdx in ALLOWED for spdx in text_lab_corpus._CONNECTOR_LICENSE_ALIASES.values())
