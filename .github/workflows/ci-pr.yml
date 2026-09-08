@@ -74,6 +74,8 @@ jobs:
             --event-base-sha "${BASE_SHA}" \
             --event-head-sha "${HEAD_SHA}" \
             --snapshot-output "${RUNNER_TEMP}/pr-policy-snapshot.json"
+      - name: Run CIA census and causal routing mechanics (#2163)
+        run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests -p 'test_issue2163_cia_*.py' -v
       - name: Run deterministic policy tests
         run: python -B -m unittest discover -s src/ember/governance/scripts/github -p "test_*.py" -v
       - name: Enforce Cond-4 battery surface transition

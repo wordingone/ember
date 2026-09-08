@@ -36,6 +36,17 @@ else:
     sys.path[0] = os.path.dirname(os.path.abspath(entry))
     runpy.run_path(entry, run_name="__main__")'
   bootstrap_base64="$(printf '%s' "$python_bootstrap" | base64 -w 0)" || exit 2
+  if [ -n "${EMBER_HEADLESS_PYTHON_LAUNCHER:-}" ]; then
+    # Optional host-owned launcher. Preserve the exact bootstrap/check and its
+    # exit status; an invalid configured launcher must fail, never fall back.
+    launcher_args=()
+    if [ -n "${EMBER_HEADLESS_PYTHON_BOOTSTRAP:-}" ]; then
+      launcher_args+=("$EMBER_HEADLESS_PYTHON_BOOTSTRAP")
+    fi
+    exec powershell.exe -NoLogo -NoProfile -NonInteractive \
+      -File "$EMBER_HEADLESS_PYTHON_LAUNCHER" -- "${launcher_args[@]}" \
+      -c 'import sys,base64;exec(base64.b64decode(sys.argv[1]))' "$bootstrap_base64"
+  fi
   command='$python = if ($env:EMBER_PYTHON_BIN) { $env:EMBER_PYTHON_BIN } else { (Get-Command python.exe -ErrorAction Stop).Source }; & $python'
   command+=" '-c' 'import sys,base64;exec(base64.b64decode(sys.argv[1]))' '$bootstrap_base64'; exit \$LASTEXITCODE"
   encoded_command="$(printf '%s' "$command" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0)" || exit 2
