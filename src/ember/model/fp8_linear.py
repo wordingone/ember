@@ -73,58 +73,58 @@ def fp8_supported(tensor: torch.Tensor) -> bool:
     return torch.cuda.get_device_capability(tensor.device) >= (8, 9)
 
 
-def _scale_and_cast(tensor: torch.Tensor, factor: torch.Tensor) -> torch.Tensor:
-    """Apply the scale and round into e4m3. Three eager kernels; one when compiled."""
-    return (tensor * factor).clamp(-E4M3_MAX, E4M3_MAX).to(torch.float8_e4m3fn)
+def _quantize_eager(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """The whole quantization -- reduction, scale, clamp, rounding cast -- as one function.
 
-
-#: Compiled form of the cast, and whether it is still trusted.
-#:
-#: Fusing matters here for a reason particular to this model rather than for general tidiness. The
-#: step is dominated by fixed per-call dispatch -- 66.8% of it by the campaign's own attribution --
-#: and this path adds kernels to every projection: a reduction, a scale, a clamp, a rounding cast,
-#: for the activation and again for the incoming gradient, at each of roughly 120 sites. That is on
-#: the order of a thousand extra launches per step, against a GEMM saving of 127.8 ms that the
-#: uncompiled arm was measured spending in full. Collapsing three of those kernels into one is the
-#: cheapest available test of whether dispatch is where the saving went.
-_COMPILED_CAST = torch.compile(_scale_and_cast, dynamic=True)
-_COMPILE_TRUSTED = True
-
-
-def _apply_scale(tensor: torch.Tensor, factor: torch.Tensor) -> torch.Tensor:
-    """``_scale_and_cast`` through the compiled path, falling back permanently if it refuses.
-
-    A compile failure must not take the training step with it, and it must not be retried once per
-    call either -- a path that raises and recovers at every projection would cost far more than the
-    fusion saves. One failure disables the compiled form for the life of the process.
-    """
-    global _COMPILE_TRUSTED
-    if _COMPILE_TRUSTED:
-        try:
-            return _COMPILED_CAST(tensor, factor)
-        except Exception:
-            _COMPILE_TRUSTED = False
-    return _scale_and_cast(tensor, factor)
-
-
-def _quantize(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """Cast to e4m3 with one per-tensor scale, returning the tensor and its DEQUANT scale.
-
-    The returned scale is what ``_scaled_mm`` multiplies back in, so it is the reciprocal of the
-    factor applied here.
-
-    The scale multiply stays in the tensor's own dtype rather than routing through fp32. The first
-    version wrote ``tensor.float() * scale``, which materializes a full fp32 copy of every tensor it
-    touches -- for the weights that is a second, doubled copy of most of the model every step, and
-    the measured arm came out 31% SLOWER than the path it replaced. bf16 carries eight mantissa
-    bits against e4m3's three, so the intermediate has five bits of headroom over the format it is
-    about to be rounded into and the fp32 trip bought nothing but traffic. The amax reduction is
-    still taken in fp32 because it is a scalar.
+    Written as one function so it can be compiled as one region. Splitting the reduction out and
+    compiling only the elementwise tail leaves the reduction reading the entire tensor on its own,
+    and then the cast reads it again.
     """
     amax = tensor.detach().abs().amax().float().clamp_min(_MIN_AMAX)
     scale = E4M3_MAX / amax
     factor = scale.to(tensor.dtype) if tensor.dtype in (torch.bfloat16, torch.float16) else scale
-    return _apply_scale(tensor, factor), (1.0 / scale).to(torch.float32)
+    quantized = (tensor * factor).clamp(-E4M3_MAX, E4M3_MAX).to(torch.float8_e4m3fn)
+    return quantized, (1.0 / scale).to(torch.float32)
+
+
+#: Compiled form of the whole quantization, and whether it is still trusted.
+#:
+#: Fusing matters here for a reason particular to this model. The step is dominated by fixed
+#: per-call dispatch -- 66.8% of it by the campaign's own attribution -- and this path adds kernels
+#: at each of roughly 120 routed sites, twice per site per step. Against a GEMM saving of 127.8 ms
+#: that the unfused arm was measured spending in full, collapsing those kernels is where the saving
+#: is recovered, and it has been recovered in two measured steps: 36 ms from fusing the scale, clamp
+#: and cast, then a further 40.7 ms from pulling the amax reduction into the same region.
+#:
+#: That second number was PREDICTED at 15 to 20 ms and came in at double. The prediction was built
+#: on launch count alone -- the amax removes about one kernel per tensor against the previous
+#: change's two -- and launch count turned out to be only part of what was being paid. An amax is a
+#: reduction over the whole tensor, so as a separate kernel it reads every byte and the cast then
+#: reads every byte again. Fusing removes an entire pass over each quantized tensor, not merely a
+#: launch. The corrected model of the remaining gap is dispatch AND redundant passes, which is worth
+#: writing down because it changes what the last named successor is worth: the three materialized
+#: transposes in the backward are also full passes, and were sized as copies alone.
+_COMPILED_QUANTIZE = torch.compile(_quantize_eager, dynamic=True)
+_COMPILE_TRUSTED = True
+
+
+def _quantize(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """``_quantize_eager`` through the compiled path, falling back permanently if it refuses.
+
+    A compile failure must not take the training step with it, and it must not be retried once per
+    call either -- a path that raises and recovers at every projection would cost far more than the
+    fusion saves. One failure disables the compiled form for the life of the process.
+
+    The returned scale is what ``_scaled_mm`` multiplies back in, so it is the reciprocal of the
+    factor applied inside.
+    """
+    global _COMPILE_TRUSTED
+    if _COMPILE_TRUSTED:
+        try:
+            return _COMPILED_QUANTIZE(tensor)
+        except Exception:
+            _COMPILE_TRUSTED = False
+    return _quantize_eager(tensor)
 
 
 #: Quantized weights, keyed by the parameter's identity and its version counter.
