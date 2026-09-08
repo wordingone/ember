@@ -24,7 +24,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
-from ember.model import fp8_linear
+# Relative, not absolute. Real consumers reach this module as ``src.ember.model.model`` with
+# the repository root on sys.path -- the evaluation canary and its fixture builder both do --
+# and under that spelling there is no top-level ``ember`` package to import from. A relative
+# import resolves correctly under both spellings.
+from . import fp8_linear
 
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
