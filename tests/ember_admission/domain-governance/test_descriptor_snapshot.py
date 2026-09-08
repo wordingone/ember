@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-PRODUCER_ROOT = REPO_ROOT / "scripts" / "ember_admission"
+PRODUCER_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission"
 sys.path.insert(0, str(PRODUCER_ROOT))
 
 from source_snapshot import snapshot_descriptor, verify_descriptor_snapshot  # noqa: E402

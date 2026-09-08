@@ -49,11 +49,11 @@ import pytest
 
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-ADMISSION_ROOT = REPO_ROOT / "scripts" / "ember_admission"
+ADMISSION_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission"
 RESTART_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_restart"
 sys.path.insert(0, str(ADMISSION_ROOT))
 sys.path.insert(0, str(RESTART_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "tests" / "ember_restart"))
+sys.path.insert(0, str(REPO_ROOT / "tests" / "ember_restart" / "domain-governance"))
 
 import produce_candidate  # noqa: E402
 import cli_seat  # noqa: E402

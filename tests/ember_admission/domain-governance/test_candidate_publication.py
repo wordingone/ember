@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-PRODUCER = REPO_ROOT / "scripts" / "ember_admission" / "produce_candidate.py"
+PRODUCER = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission" / "produce_candidate.py"
 REQUIRED_ROLES = (
     "artifact_bundle",
     "checkpoint",

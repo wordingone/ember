@@ -13,7 +13,7 @@ import pytest
 
 
 HERE = Path(__file__).resolve()
-MODULE_PATH = HERE.parents[1] / "scripts" / "verify_issue35_terminal_conservation.py"
+MODULE_PATH = HERE.parents[2] / "src" / "ember" / "governance" / "scripts" / "verify_issue35_terminal_conservation.py"
 SPEC = importlib.util.spec_from_file_location("issue35_terminal", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)

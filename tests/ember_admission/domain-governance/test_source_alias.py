@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-sys.path.insert(0, str(REPO_ROOT / "scripts" / "ember_admission"))
+sys.path.insert(0, str(REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission"))
 
 from source_snapshot import snapshot_sources  # noqa: E402
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-PRODUCER_ROOT = REPO_ROOT / "scripts" / "ember_admission"
+PRODUCER_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission"
 sys.path.insert(0, str(PRODUCER_ROOT))
 
 # issue2015 exact-local-import:src/ember/governance/scripts/ember_admission/consumers.py
@@ -67,7 +67,7 @@ from pathlib import Path as _ember_a9df580263ecd856_Path
 _ember_a9df580263ecd856_path = _ember_a9df580263ecd856_Path(__file__).resolve().parents[3].joinpath('src', 'ember', 'governance', 'scripts', 'ember_admission', 'receipt.py')
 if not _ember_a9df580263ecd856_path.is_file():
     raise ImportError('EXACT_LOCAL_IMPORT_TARGET_MISSING:src/ember/governance/scripts/ember_admission/receipt.py')
-_ember_a9df580263ecd856_aliases = ('_ember_issue2015_a9df580263ecd856', 'receipt', 'scripts.ember_admission.receipt', 'src.ember.governance.scripts.ember_admission.receipt')
+_ember_a9df580263ecd856_aliases = ('_ember_issue2015_a9df580263ecd856', 'scripts.ember_admission.receipt', 'src.ember.governance.scripts.ember_admission.receipt')
 _ember_a9df580263ecd856_existing = []
 for _ember_a9df580263ecd856_alias in _ember_a9df580263ecd856_aliases:
     _ember_a9df580263ecd856_candidate = _ember_a9df580263ecd856_sys.modules.get(_ember_a9df580263ecd856_alias)

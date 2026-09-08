@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tools import scratch_reference_scan as scan
+from src.ember.infrastructure.tools import scratch_reference_scan as scan
 
 
 def _run_hidden(*args, **kwargs):
