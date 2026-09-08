@@ -3941,3 +3941,215 @@ def read_cia_core_object(root, *, record, architecture_config):
         raise ValueError("CIA core object digest or size mismatch")
     payload = torch.load(io.BytesIO(snapshot), map_location="cpu", weights_only=True)
     return _validate_cia_core_payload(payload, architecture_sha256=architecture_sha256)
+
+
+def cia_optimizer_identity(model, optimizer) -> dict[str, Any]:
+    """Bind the native CPU conformance optimizer; not production qualification.
+
+    Parameter objects are mapped to the complete CIA inventory, not transient
+    optimizer integer IDs. Every group's ordered membership and effective
+    settings participate. Other realizations require their own strict versioned
+    adapter; this does not weaken the legacy checkpoint optimizer contract.
+    """
+    import math
+    from torch.optim import adam, adamw, optimizer as optimizer_module, _functional
+    import marshal
+    from src.ember.model.cia_decoder import CIADecoder
+    from src.ember.model.cia_contract import cia_architecture_config, cia_architecture_sha256, validate_cia_architecture
+
+    if type(model) is not CIADecoder:
+        raise ValueError("CIA optimizer identity requires the exact CIA decoder revision")
+    architecture_config = cia_architecture_config()
+    if model.config != validate_cia_architecture(architecture_config):
+        raise ValueError("CIA optimizer identity refuses a changed runtime revision")
+    if type(optimizer) is not torch.optim.AdamW:
+        raise ValueError("CIA optimizer identity currently supports native AdamW only")
+    for name in ('step', 'state_dict', 'load_state_dict', 'add_param_group', 'zero_grad'):
+        if name in vars(optimizer):
+            raise ValueError("CIA optimizer identity refuses an instance method override")
+    if any(value for name, value in vars(optimizer).items() if name.endswith('_hooks')):
+        raise ValueError("CIA optimizer identity refuses runtime hooks")
+    dependency_candidates = {module.__name__: module for module in (adam, adamw, optimizer_module, _functional)}
+    if (optimizer_module._global_optimizer_pre_hooks
+            or optimizer_module._global_optimizer_post_hooks):
+        raise ValueError("CIA optimizer identity refuses global runtime hooks")
+    parameters = model.parameter_inventory()
+    names_by_id = {id(parameter): name for name, parameter in parameters.items()}
+
+    def normalized(value):
+        if value is None or type(value) in (bool, str, int):
+            return value
+        if type(value) is float:
+            if not math.isfinite(value):
+                raise ValueError("CIA optimizer hyperparameter must be finite")
+            return value
+        if type(value) in (tuple, list):
+            return [normalized(item) for item in value]
+        raise ValueError("unsupported CIA optimizer hyperparameter type")
+
+    groups = []
+    seen = set()
+    for group in optimizer.param_groups:
+        members = []
+        for parameter in group['params']:
+            identity = id(parameter)
+            if identity not in names_by_id or identity in seen:
+                raise ValueError("CIA optimizer membership is foreign or duplicated")
+            seen.add(identity)
+            members.append(names_by_id[identity])
+        if not members:
+            raise ValueError("CIA optimizer membership contains an empty group")
+        if any(type(key) is not str for key in group):
+            raise ValueError("CIA optimizer hyperparameter keys must be strings")
+        groups.append({'params': members,
+                       'hyperparameters': {key: normalized(value) for key, value in group.items()
+                                           if key != 'params'}})
+    if seen != set(names_by_id):
+        raise ValueError("CIA optimizer membership does not cover the complete inventory")
+    if any(id(parameter) not in seen for parameter in optimizer.state):
+        raise ValueError("CIA optimizer state membership is foreign")
+    source = inspect.getsourcefile(type(optimizer))
+    if source is None or not Path(source).is_file():
+        raise ValueError("CIA optimizer implementation source cannot be content-addressed")
+    # Include inherited/decorated and functional implementations, not only the
+    # AdamW class's source file. Runtime code hashes also distinguish monkeypatches.
+    implementation_dependencies = {}
+    optimizer_classes = tuple(cls for cls in type(optimizer).__mro__
+                              if cls.__module__.startswith('torch.optim.'))
+    dependency_modules = {'torch.optim._functional',
+                          *(cls.__module__ for cls in optimizer_classes)}
+    effective_step = inspect.unwrap(type(optimizer).step)
+    dependency_modules.add(effective_step.__module__)
+    for module_name in sorted(dependency_modules):
+        if module_name not in dependency_candidates:
+            raise ValueError('CIA optimizer has an unsupported implementation dependency')
+        module = dependency_candidates[module_name]
+        module_source = inspect.getsourcefile(module)
+        if module_source is None or not Path(module_source).is_file():
+            raise ValueError("CIA optimizer dependency source is unavailable")
+        functions = {name: value for name, value in vars(module).items()
+                     if inspect.isfunction(value)}
+        for cls in optimizer_classes:
+            if cls.__module__ == module_name:
+                functions.update({f'{cls.__name__}.{name}': value
+                                  for name, value in vars(cls).items() if inspect.isfunction(value)})
+        code_hashes = {}
+        for name, function in sorted(functions.items()):
+            chain = []
+            visited = set()
+            while inspect.isfunction(function):
+                if id(function) in visited:
+                    raise ValueError("CIA optimizer implementation wrapper cycle")
+                visited.add(id(function))
+                chain.append(hashlib.sha256(marshal.dumps(function.__code__)).hexdigest())
+                function = getattr(function, '__wrapped__', None)
+            code_hashes[name] = chain
+        implementation_dependencies[module_name] = {
+            'source_sha256': _sha256(Path(module_source)), 'runtime_code_sha256': code_hashes}
+    return {
+        'schema_version': 'ember-cia-optimizer-identity-v1',
+        'architecture_sha256': cia_architecture_sha256(architecture_config),
+        'implementation': f'{type(optimizer).__module__}.{type(optimizer).__qualname__}',
+        'implementation_source_sha256': _sha256(Path(source)),
+        'torch_version': str(torch.__version__),
+        'implementation_dependencies': implementation_dependencies,
+        'defaults': {key: normalized(value) for key, value in optimizer.defaults.items()},
+        'parameter_elements': sum(parameter.numel() for parameter in parameters.values()),
+        'param_groups': groups,
+    }
+
+
+def _cia_named_optimizer_state(model, optimizer, state, *, max_state_bytes):
+    """Validate all named native BF16 CPU moments before creating a snapshot."""
+    if type(max_state_bytes) is not int or max_state_bytes <= 0:
+        raise ValueError('CIA optimizer state byte cap must be a positive integer')
+    if type(state) is not dict:
+        raise ValueError('CIA optimizer named state must be a dictionary')
+    parameters = model.parameter_inventory()
+    names = {id(parameter): name for name, parameter in parameters.items()}
+    groups = {names[id(parameter)]: group for group in optimizer.param_groups
+              for parameter in group['params']}
+    if any(group.get('capturable') or group.get('fused') or group.get('differentiable')
+           for group in optimizer.param_groups) or optimizer.defaults.get('differentiable'):
+        raise ValueError('CIA native CPU state does not support this optimizer execution mode')
+    total_bytes = 0
+    storage_ranges = []
+    for name, fields in state.items():
+        if name not in parameters or type(fields) is not dict:
+            raise ValueError('CIA optimizer state names an unknown parameter or invalid fields')
+        if not fields:
+            continue  # Preserve explicitly present but uninitialized lazy state.
+        expected = {'step', 'exp_avg', 'exp_avg_sq'}
+        if groups[name]['amsgrad']:
+            expected.add('max_exp_avg_sq')
+        if set(fields) != expected:
+            raise ValueError('CIA optimizer state fields do not match native AdamW')
+        for key, tensor in fields.items():
+            shape = () if key == 'step' else tuple(parameters[name].shape)
+            dtype = torch.float32 if key == 'step' else torch.bfloat16
+            if (type(tensor) is not torch.Tensor or tuple(tensor.shape) != shape
+                    or tensor.dtype != dtype or tensor.device.type != 'cpu'
+                    or tensor.requires_grad or not tensor.is_contiguous()
+                    or tensor.storage_offset() != 0
+                    or tensor.untyped_storage().nbytes() != tensor.numel() * tensor.element_size()):
+                raise ValueError('CIA optimizer tensor layout or dtype is invalid')
+            total_bytes += tensor.numel() * tensor.element_size()
+            if total_bytes > max_state_bytes:
+                raise ValueError('CIA optimizer state exceeds its byte cap')
+            pointer = tensor.untyped_storage().data_ptr()
+            storage_ranges.append((pointer, pointer + tensor.untyped_storage().nbytes()))
+            if not torch.isfinite(tensor).all().item():
+                raise ValueError('CIA optimizer state must be finite')
+            if key == 'step':
+                value = tensor.item()
+                if value < 0 or value != int(value) or value > 2**24:
+                    raise ValueError('CIA optimizer step is not an exact bounded clock')
+            elif key in ('exp_avg_sq', 'max_exp_avg_sq') and (tensor < 0).any().item():
+                raise ValueError('CIA optimizer second moment cannot be negative')
+        if groups[name]['amsgrad'] and (fields['max_exp_avg_sq'] < fields['exp_avg_sq']).any().item():
+            raise ValueError('CIA optimizer AMSGrad maximum is below its current second moment')
+    storage_ranges.sort()
+    if any(left[1] > right[0] for left, right in zip(storage_ranges, storage_ranges[1:])):
+        raise ValueError('CIA optimizer state has overlapping tensor storage')
+    return {name: {key: tensor.detach().clone() for key, tensor in fields.items()}
+            for name, fields in state.items()}
+
+
+def capture_cia_optimizer_state(model, optimizer, *, max_state_bytes):
+    """Snapshot a quiescent optimizer; checkpoint owner must exclude concurrent steps.
+
+    Native BF16 moments and FP32 scalar clocks only, without master weights.
+    This payload is not standalone checkpoint admission or a selected production
+    optimizer. Complete model, replay, lineage and custody bindings remain required.
+    """
+    identity = cia_optimizer_identity(model, optimizer)
+    names = {id(parameter): name for name, parameter in model.parameter_inventory().items()}
+    state = {names[id(parameter)]: fields for parameter, fields in optimizer.state.items()}
+    snapshot = _cia_named_optimizer_state(model, optimizer, state, max_state_bytes=max_state_bytes)
+    if cia_optimizer_identity(model, optimizer) != identity:
+        raise ValueError('CIA optimizer identity changed during capture')
+    return {'schema_version': 'ember-cia-native-optimizer-state-v1',
+            'identity': identity, 'master_weights': None, 'state': snapshot}
+
+
+def prepare_cia_optimizer_state(model, optimizer, payload, *, max_state_bytes):
+    """Prepare native load_state_dict input after full validation; mutate nothing."""
+    import copy
+    identity = cia_optimizer_identity(model, optimizer)
+    if (type(payload) is not dict or set(payload) != {'schema_version', 'identity', 'master_weights', 'state'}
+            or payload['schema_version'] != 'ember-cia-native-optimizer-state-v1'
+            or payload['master_weights'] is not None):
+        raise ValueError('CIA optimizer state payload schema is invalid')
+    try:
+        actual_identity = json.dumps(payload['identity'], sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise ValueError('CIA optimizer state identity is not canonical JSON') from error
+    if actual_identity != json.dumps(identity, sort_keys=True, allow_nan=False):
+        raise ValueError('CIA optimizer state identity differs from the runtime')
+    snapshot = _cia_named_optimizer_state(model, optimizer, payload['state'], max_state_bytes=max_state_bytes)
+    runtime_groups = optimizer.state_dict()['param_groups']
+    ids_by_name = {}
+    for named_group, runtime_group in zip(identity['param_groups'], runtime_groups):
+        ids_by_name.update(zip(named_group['params'], runtime_group['params']))
+    return {'state': {ids_by_name[name]: fields for name, fields in snapshot.items()},
+            'param_groups': copy.deepcopy(runtime_groups)}
