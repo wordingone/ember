@@ -378,14 +378,20 @@ class SharedAttention(nn.Module):
         self.output = nn.Linear(config.hidden_size, config.hidden_size, bias=False, device=device)
         self.rope = RotaryCoordinates(self.head_dim, device=device)
 
-    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor | None) -> torch.Tensor:
         batch, sequence, width = hidden_states.shape
         qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
         query, key, value = qkv.permute(2, 0, 3, 1, 4).unbind(dim=0)
         query = self.q_norm(query)
         key = self.k_norm(key)
         query, key, value = self.rope.apply_qk_sdpa(query, key, value, coordinates)
-        attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
+        # ``allowed`` is None exactly when the built mask would be the plain causal mask.
+        # Expressing that case as is_causal is the same computation and admits the fused
+        # attention kernels, which an explicit attn_mask disqualifies (issue #1945).
+        if allowed is None:
+            attended = F.scaled_dot_product_attention(query, key, value, attn_mask=None, is_causal=True)
+        else:
+            attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
         return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
 
 
@@ -426,7 +432,7 @@ class _DecoderLayer(nn.Module):
         self.shared_ffn = SwiGLUExpert(config.hidden_size, device=device)
         self.experts = nn.ModuleDict({name: SwiGLUExpert(config.hidden_size, device=device) for name in config.expert_names})
 
-    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor, active_expert: str) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor | None, active_expert: str) -> torch.Tensor:
         hidden_states = hidden_states + self.attention(self.pre_attention_norm(hidden_states), coordinates, allowed)
         hidden_states = hidden_states + self.shared_ffn(self.pre_ffn_norm(hidden_states))
         if active_expert == "shared":
@@ -505,14 +511,30 @@ class UnifiedDecoder(nn.Module):
         sequence_length: int,
         spans: Sequence[MultimodalSpan] | None,
         device: torch.device,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | None:
+        """The attention mask, or None when it would be exactly the causal mask.
+
+        Only ``bidirectional`` and ``isolated`` spans depart from causal; ``causal`` is the
+        default mode and leaves the mask untouched. When nothing departs, returning None lets
+        attention pass is_causal instead of a dense mask, which is the same computation and
+        admits the fused kernels an explicit mask disqualifies (issue #1945).
+
+        Every span is still validated on the None path -- the loop runs to completion before
+        the decision -- so a malformed span raises whether or not a mask is built.
+        """
+        departs_from_causal = False
+        for span in spans or ():
+            if span.start + span.length > sequence_length:
+                raise ValueError("multimodal span exceeds sequence length")
+            if span.attention_mode in {"bidirectional", "isolated"}:
+                departs_from_causal = True
+        if not departs_from_causal:
+            return None
         positions = torch.arange(sequence_length, device=device)
         allowed = positions.unsqueeze(0) <= positions.unsqueeze(1)
         allowed = allowed.expand(batch_size, -1, -1).clone()
         for span in spans or ():
             end = span.start + span.length
-            if end > sequence_length:
-                raise ValueError("multimodal span exceeds sequence length")
             if span.attention_mode in {"bidirectional", "isolated"}:
                 allowed[:, span.start:end, span.start:end] = True
             if span.attention_mode == "isolated":
