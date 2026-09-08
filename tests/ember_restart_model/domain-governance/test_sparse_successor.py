@@ -18,6 +18,7 @@ from src.ember.model.model import (  # noqa: E402
     EXPERT_NAMES,
     MultimodalSpan,
     RestartDecoderConfig,
+    SharedAttention,
     UnifiedDecoder,
     count_unique_trainable_parameters,
 )
@@ -176,6 +177,63 @@ class SparseSuccessorTests(unittest.TestCase):
         self.assertGreaterEqual(measured, 3_000_000_000)
         self.assertEqual(count_unique_trainable_parameters(model), 1_725_232_640)
 
+
+    def test_mask_is_none_when_nothing_departs_from_causal(self) -> None:
+        """The fused-kernel path is reachable exactly when the mask would be plain causal."""
+
+        model = UnifiedDecoder(self.config)
+        for label, spans in (
+            ("no spans", None),
+            ("empty", []),
+            ("an explicitly causal span",
+             [MultimodalSpan(start=1, length=2, modality="image", attention_mode="causal")]),
+        ):
+            with self.subTest(spans=label):
+                self.assertIsNone(model.build_attention_mask(
+                    batch_size=1, sequence_length=4, spans=spans, device=torch.device("cpu")))
+
+    def test_departing_spans_still_build_a_dense_mask(self) -> None:
+        model = UnifiedDecoder(self.config)
+        for mode in ("bidirectional", "isolated"):
+            with self.subTest(attention_mode=mode):
+                allowed = model.build_attention_mask(
+                    batch_size=1, sequence_length=4,
+                    spans=[MultimodalSpan(start=1, length=2, modality="image",
+                                          attention_mode=mode)],
+                    device=torch.device("cpu"))
+                self.assertIsNotNone(allowed)
+                self.assertEqual(tuple(allowed.shape), (1, 4, 4))
+
+    def test_span_length_is_validated_even_when_no_mask_is_built(self) -> None:
+        """The None path must not become a way to skip validation.
+
+        A causal-mode span is used deliberately: that is the shape which takes the early
+        return, so this fails if the length check ever moves behind the mask build.
+        """
+
+        model = UnifiedDecoder(self.config)
+        with self.assertRaises(ValueError):
+            model.build_attention_mask(
+                batch_size=1, sequence_length=4,
+                spans=[MultimodalSpan(start=3, length=9, modality="image",
+                                      attention_mode="causal")],
+                device=torch.device("cpu"))
+
+    def test_is_causal_path_computes_the_same_attention_as_the_dense_causal_mask(self) -> None:
+        """Equivalence at the changed call site, not merely at the mask that feeds it."""
+
+        torch.manual_seed(1945)
+        attention = SharedAttention(self.config).eval()
+        sequence = 6
+        hidden = torch.randn(2, sequence, self.config.hidden_size)
+        coordinates = torch.zeros(2, sequence, 2, dtype=torch.long)
+        positions = torch.arange(sequence)
+        dense = (positions.unsqueeze(0) <= positions.unsqueeze(1)).expand(2, -1, -1).clone()
+        with torch.no_grad():
+            through_flag = attention(hidden, coordinates, None)
+            through_mask = attention(hidden, coordinates, dense)
+        self.assertEqual(through_flag.shape, through_mask.shape)
+        self.assertTrue(torch.allclose(through_flag, through_mask, atol=1e-5, rtol=1e-4))
 
 if __name__ == "__main__":
     unittest.main()
