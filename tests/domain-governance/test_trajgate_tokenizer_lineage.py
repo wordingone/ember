@@ -14,7 +14,7 @@ import pytest
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SPEC = importlib.util.spec_from_file_location(
     "trajgate_tokenizer_lineage",
-    ROOT / "scripts" / "trajgate_tokenizer_lineage.py",
+    ROOT / "src" / "ember" / "governance" / "scripts" / "trajgate_tokenizer_lineage.py",
 )
 assert SPEC and SPEC.loader
 LINEAGE = importlib.util.module_from_spec(SPEC)

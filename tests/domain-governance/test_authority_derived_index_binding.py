@@ -11,7 +11,7 @@ from pathlib import Path
 REPO = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 SPEC = importlib.util.spec_from_file_location(
     "verify_authority_conservation",
-    REPO / "scripts" / "verify_authority_conservation.py",
+    REPO / "src" / "ember" / "governance" / "scripts" / "verify_authority_conservation.py",
 )
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
