@@ -48,6 +48,44 @@ class NumericalCIATests(unittest.TestCase):
             digests.append(h.hexdigest())
         self.assertEqual(len(set(digests)), 25)
 
+    def test_011_undeclared_physical_storage_refused(self):
+        key = 'experts__0__layers__1__up__weight'
+        original = self.model.weights[key]
+        backing = torch.zeros(original.numel() + 1, dtype=original.dtype)
+        self.model.weights[key] = torch.nn.Parameter(backing[:-1].view(original.shape), requires_grad=False)
+        try:
+            with self.assertRaisesRegex(ValueError, 'storage does not match'):
+                self.model.parameter_inventory()
+        finally:
+            self.model.weights[key] = original
+
+    def test_012_internally_overlapping_parameter_refused(self):
+        key = 'experts__0__layers__1__up__weight'
+        original = self.model.weights[key]
+        backing = torch.zeros_like(original)
+        overlapping = backing.as_strided(original.shape, (0, 1))
+        self.model.weights[key] = torch.nn.Parameter(overlapping, requires_grad=False)
+        try:
+            with self.assertRaisesRegex(ValueError, 'storage does not match'):
+                self.model.parameter_inventory()
+        finally:
+            self.model.weights[key] = original
+
+    def test_013_overlapping_external_storages_refused(self):
+        names = ('experts__0__layers__1__up__weight', 'experts__0__layers__1__gate__weight')
+        originals = [self.model.weights[name] for name in names]
+        count = originals[0].numel()
+        backing = bytearray(count * 2 + 2)
+        try:
+            for offset, name in enumerate(names):
+                tensor = torch.frombuffer(backing, dtype=torch.bfloat16, count=count, offset=offset * 2).view(originals[offset].shape)
+                self.model.weights[name] = torch.nn.Parameter(tensor, requires_grad=False)
+            with self.assertRaisesRegex(ValueError, 'storage alias'):
+                self.model.parameter_inventory()
+        finally:
+            for name, parameter in zip(names, originals):
+                self.model.weights[name] = parameter
+
     def test_02_real_causal_logits_and_document_isolation(self):
         with torch.no_grad():
             original, routes = self.run_tokens([1, 2, 3, 4], return_routes=True)

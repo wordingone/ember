@@ -3705,3 +3705,239 @@ def load_checkpoint_model_only_transition(
     if torch.cuda.is_available():
         torch.cuda.set_rng_state(replay_payload["rng_state"]["cuda"])
     return {"data_cursor": dict(replay_payload["data_cursor"])}
+
+
+def read_cia_expert_object(index_path, *, expected_index_sha256, expert_id):
+    """Read one exact CIA object from a caller-pinned generation index.
+
+    This is checkpoint deserialization, not generation admission or model mutation.
+    The activation owner must separately verify the complete generation and retain
+    its request lease. No integer-only object lookup or mutable slot identity exists.
+    """
+    import io
+    from src.ember.model.cia_inventory import equation_inventory
+
+    if type(expert_id) is not int or not 0 <= expert_id < 25:
+        raise ValueError("CIA expert identity must be an integer in [0,25)")
+    expected_index_sha256 = _sha256_value(expected_index_sha256, name="expected_index_sha256")
+    index_path = Path(index_path)
+    root = index_path.parent
+    if _path_has_link(index_path, root):
+        raise ValueError("CIA index is a symlink or reparse point")
+    with index_path.open("rb") as handle:
+        index_bytes = handle.read(65537)
+    if len(index_bytes) > 65536 or hashlib.sha256(index_bytes).hexdigest() != expected_index_sha256:
+        raise ValueError("CIA generation index digest mismatch or size bound exceeded")
+    index = json.loads(index_bytes)
+    if (type(index) is not dict or set(index) != {"schema_version", "candidate_revision", "experts"}
+        or index["schema_version"] != "ember-cia-expert-index-v1"
+        or index["candidate_revision"] != "CIA3-R1-N61"
+        or type(index["experts"]) is not list or len(index["experts"]) != 25):
+        raise ValueError("CIA expert index must use the closed 25-expert schema")
+    seen = set()
+    for identity, record in enumerate(index["experts"]):
+        if (type(record) is not dict or set(record) != {"expert_id", "sha256", "bytes"}
+            or type(record["expert_id"]) is not int or record["expert_id"] != identity
+            or type(record["bytes"]) is not int or not 1 <= record["bytes"] <= 113246208 * 2 + 4194304):
+            raise ValueError("CIA expert index record is invalid")
+        object_digest = _sha256_value(record["sha256"], name="expert object digest")
+        if object_digest in seen:
+            raise ValueError("CIA expert object identity reused across global experts")
+        seen.add(object_digest)
+    record = index["experts"][expert_id]
+    path = root / "objects" / (record["sha256"] + ".pt")
+    if _path_has_link(path, root):
+        raise ValueError("CIA expert object is a symlink or reparse point")
+    # Deserialize the same bounded byte snapshot that was hashed, even if the
+    # pathname is changed concurrently. No check-then-reopen loading path.
+    with path.open("rb") as handle:
+        snapshot = handle.read(record["bytes"] + 1)
+    if len(snapshot) != record["bytes"] or hashlib.sha256(snapshot).hexdigest() != record["sha256"]:
+        raise ValueError("CIA expert object digest or size mismatch")
+    payload = torch.load(io.BytesIO(snapshot), map_location="cpu", weights_only=True)
+    return _validate_cia_expert_payload(payload, expert_id=expert_id)
+
+
+def _validate_cia_expert_payload(payload, *, expert_id):
+    from src.ember.model.cia_inventory import equation_inventory
+    if type(expert_id) is not int or not 0 <= expert_id < 25:
+        raise ValueError("CIA expert identity must be an integer in [0,25)" )
+    if (type(payload) is not dict or set(payload) != {"schema_version", "candidate_revision", "expert_id", "model"}
+        or payload["schema_version"] != "ember-cia-expert-object-v1"
+        or payload["candidate_revision"] != "CIA3-R1-N61"
+        or type(payload["expert_id"]) is not int or payload["expert_id"] != expert_id):
+        raise ValueError("CIA expert payload identity mismatch")
+    expected = {spec.name: spec.shape for spec in equation_inventory() if spec.expert == expert_id}
+    return _validate_cia_tensor_inventory(payload["model"], expected, label="expert")
+
+
+def _validate_cia_tensor_inventory(tensors, expected, *, label):
+    if type(tensors) is not dict or set(tensors) != set(expected):
+        raise ValueError(f"CIA {label} tensor inventory mismatch")
+    addresses = set()
+    ranges = []
+    for name, shape in expected.items():
+        tensor = tensors[name]
+        if (type(tensor) is not torch.Tensor or tuple(tensor.shape) != shape
+            or tensor.dtype != torch.bfloat16 or tensor.device.type != "cpu"
+            or not tensor.is_contiguous() or tensor.storage_offset() != 0
+            or tensor.untyped_storage().nbytes() != tensor.numel() * tensor.element_size()
+            or not torch.isfinite(tensor).all()):
+            raise ValueError(f"CIA {label} tensor mismatch: {name}")
+        address = tensor.untyped_storage().data_ptr()
+        if address in addresses:
+            raise ValueError(f"CIA {label} tensor storage alias")
+        addresses.add(address)
+        ranges.append((address, address + tensor.untyped_storage().nbytes()))
+    ranges.sort()
+    if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
+        raise ValueError(f"CIA {label} tensor storage alias")
+    return tensors
+
+def write_cia_expert_object(candidate, *, expert_id, tensors, max_serialized_bytes):
+    """Create one immutable expert object inside the existing writer quarantine.
+
+    This does not publish/admit a checkpoint generation. The existing complete
+    checkpoint transaction owns the lease, index and eventual bundle admission.
+    """
+    import io
+    from durable_io import atomic_create_durable
+
+    candidate = _require_cia_writer_candidate(candidate)
+    if type(max_serialized_bytes) is not int or not 1 <= max_serialized_bytes <= 113246208 * 2 + 4194304:
+        raise ValueError("CIA object requires an explicit bounded serialized-byte allowance")
+    payload = {"schema_version": "ember-cia-expert-object-v1", "candidate_revision": "CIA3-R1-N61",
+               "expert_id": expert_id, "model": tensors}
+    _validate_cia_expert_payload(payload, expert_id=expert_id)
+    buffer = io.BytesIO()
+    torch.save(payload, _ScratchCappedWriter(buffer, max_serialized_bytes))
+    snapshot = buffer.getvalue()
+    digest = hashlib.sha256(snapshot).hexdigest()
+    objects = candidate / "objects"
+    objects.mkdir(exist_ok=True)
+    if _path_has_link(objects, candidate):
+        raise ValueError("CIA object directory is a symlink or reparse point")
+    # Existing durable no-replace primitive; a collision never overwrites bytes.
+    atomic_create_durable(objects / (digest + ".pt"), snapshot)
+    return {"expert_id": expert_id, "sha256": digest, "bytes": len(snapshot)}
+
+
+def _require_cia_writer_candidate(candidate):
+    candidate = Path(candidate)
+    if candidate.name.startswith("candidate-") is False or candidate.parent.name != ".checkpoint-quarantine":
+        raise ValueError("CIA objects require the checkpoint candidate quarantine")
+    if _path_has_link(candidate, candidate.parent):
+        raise ValueError("CIA candidate is a symlink or reparse point")
+    lease_path = candidate / _STAGING_LEASE
+    if _path_has_link(lease_path, candidate):
+        raise ValueError("CIA writer lease is a symlink or reparse point")
+    lease = json.loads(lease_path.read_bytes())
+    if type(lease) is not dict or type(lease.get("pid")) is not int or lease["pid"] != os.getpid():
+        raise ValueError("CIA candidate requires this process's writer lease")
+    return candidate
+
+def write_cia_expert_index(candidate, *, records, max_total_object_bytes):
+    """Verify all 25 expert objects before creating an immutable candidate index.
+
+    An index is not a complete checkpoint: core, optimizer, replay state and
+    qualification remain required by the existing bundle admission transaction.
+    """
+    from durable_io import atomic_create_durable
+    candidate = _require_cia_writer_candidate(candidate)
+    if type(max_total_object_bytes) is not int or max_total_object_bytes < 1:
+        raise ValueError("CIA index requires an explicit aggregate object-byte allowance")
+    if type(records) is not list or len(records) != 25:
+        raise ValueError("CIA index requires exactly 25 expert object records")
+    # Materialize plain JSON before validation; later caller mutations do not
+    # change the records that were checked or the index ultimately published.
+    snapshot = json.dumps({"schema_version": "ember-cia-expert-index-v1",
+                           "candidate_revision": "CIA3-R1-N61", "experts": records},
+                          sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    if len(snapshot) > 65536:
+        raise ValueError("CIA index exceeds its byte allowance")
+    frozen = json.loads(snapshot)
+    sizes = [record.get("bytes") if type(record) is dict else None for record in frozen["experts"]]
+    if any(type(size) is not int or size < 1 for size in sizes) or sum(sizes) > max_total_object_bytes:
+        raise ValueError("CIA index exceeds its aggregate object-byte allowance")
+    digest = hashlib.sha256(snapshot).hexdigest()
+    draft = _write_atomic(candidate, ".cia-index-" + uuid.uuid4().hex + ".json",
+                          lambda handle: handle.write(snapshot), max_transient_scratch_bytes=65536)
+    try:
+        for expert in range(25):
+            # Load, validate and release one full expert at a time; never retain
+            # all deserialized object tensors alongside the live population.
+            tensors = read_cia_expert_object(draft, expected_index_sha256=digest, expert_id=expert)
+            del tensors
+        _require_cia_writer_candidate(candidate)
+        target = candidate / ("expert-index-" + digest + ".json")
+        atomic_create_durable(target, snapshot)
+    finally:
+        draft.unlink(missing_ok=True)
+    return {"path": target.name, "sha256": digest, "bytes": len(snapshot), "expert_object_bytes": sum(sizes)}
+
+
+def _validate_cia_core_payload(payload, *, architecture_sha256):
+    from src.ember.model.cia_inventory import equation_inventory
+    if (type(payload) is not dict or set(payload) != {"schema_version", "architecture_sha256", "model"}
+        or payload["schema_version"] != "ember-cia-core-object-v1"
+        or payload["architecture_sha256"] != architecture_sha256):
+        raise ValueError("CIA core payload identity mismatch")
+    expected = {spec.name: spec.shape for spec in equation_inventory() if spec.expert is None}
+    return _validate_cia_tensor_inventory(payload["model"], expected, label="core")
+
+
+def write_cia_core_object(candidate, *, tensors, architecture_config, max_serialized_bytes):
+    """Snapshot shared core/router/adapters inside existing checkpoint quarantine.
+
+    This component cannot substitute for optimizer/RNG/cursor, the full expert
+    index or the complete checkpoint's existing admission transaction.
+    """
+    import io
+    from durable_io import atomic_create_durable
+    from src.ember.model.cia_contract import cia_architecture_sha256
+    candidate = _require_cia_writer_candidate(candidate)
+    if type(max_serialized_bytes) is not int or not 1 <= max_serialized_bytes <= 251383808 * 2 + 4194304:
+        raise ValueError("CIA core requires an explicit bounded serialized-byte allowance")
+    architecture_sha256 = cia_architecture_sha256(architecture_config)
+    payload = {"schema_version": "ember-cia-core-object-v1",
+               "architecture_sha256": architecture_sha256, "model": tensors}
+    _validate_cia_core_payload(payload, architecture_sha256=architecture_sha256)
+    buffer = io.BytesIO()
+    torch.save(payload, _ScratchCappedWriter(buffer, max_serialized_bytes))
+    snapshot = buffer.getvalue()
+    digest = hashlib.sha256(snapshot).hexdigest()
+    objects = candidate / "objects"
+    objects.mkdir(exist_ok=True)
+    if _path_has_link(objects, candidate):
+        raise ValueError("CIA core object directory is a symlink or reparse point")
+    atomic_create_durable(objects / (digest + ".pt"), snapshot)
+    return {"sha256": digest, "bytes": len(snapshot), "architecture_sha256": architecture_sha256}
+
+
+def read_cia_core_object(root, *, record, architecture_config):
+    """Read a caller-pinned core component; no model mutation or admission.
+
+    The caller must obtain this record from its verified complete checkpoint.
+    Hash and deserialize one bounded snapshot, never reopen a checked pathname.
+    """
+    import io
+    from src.ember.model.cia_contract import cia_architecture_sha256
+    architecture_sha256 = cia_architecture_sha256(architecture_config)
+    if type(record) is not dict or set(record) != {"sha256", "bytes", "architecture_sha256"}:
+        raise ValueError("CIA core record requires the closed component schema")
+    record = dict(record)
+    digest = _sha256_value(record["sha256"], name="core object digest")
+    if record["architecture_sha256"] != architecture_sha256:
+        raise ValueError("CIA core architecture identity mismatch")
+    if type(record["bytes"]) is not int or not 1 <= record["bytes"] <= 251383808 * 2 + 4194304:
+        raise ValueError("CIA core object byte bound invalid")
+    root = Path(root)
+    path = root / "objects" / (digest + ".pt")
+    if _path_has_link(path, root):
+        raise ValueError("CIA core object is a symlink or reparse point")
+    with path.open("rb") as handle:
+        snapshot = handle.read(record["bytes"] + 1)
+    if len(snapshot) != record["bytes"] or hashlib.sha256(snapshot).hexdigest() != digest:
+        raise ValueError("CIA core object digest or size mismatch")
+    payload = torch.load(io.BytesIO(snapshot), map_location="cpu", weights_only=True)
+    return _validate_cia_core_payload(payload, architecture_sha256=architecture_sha256)

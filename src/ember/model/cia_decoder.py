@@ -10,7 +10,7 @@ Production allocation, paging, generation admission and learning qualification r
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .cia_contract import CIA3R1N61, census
+from .cia_contract import census, cia_architecture_config, validate_cia_architecture
 from .cia_inventory import equation_inventory, update_support
 from .cia_routing import _global_scores, _local_scores, unit_task_gate, select_global, select_local
 
@@ -40,9 +40,13 @@ def rotate_three_axis(values, positions):
 class CIADecoder(nn.Module):
     """Complete parameter ownership, metadata traces and a numerical CPU reference."""
 
-    def __init__(self):
+    def __init__(self, *, architecture_config=None):
+        # Reject undeclared semantics before any parameter storage is created.
+        validated_config = validate_cia_architecture(
+            cia_architecture_config() if architecture_config is None else architecture_config
+        )
         super().__init__()
-        self.config = CIA3R1N61()
+        self.config = validated_config
         self._parameter_device = "meta"
         self.weights = nn.ParameterDict({
             spec.name.replace(".", "__"): nn.Parameter(torch.empty(spec.shape, device="meta", dtype=torch.bfloat16))
@@ -67,8 +71,11 @@ class CIADecoder(nn.Module):
         if sum(p.numel() for p in actual.values()) != census(self.config).total_unique:
             raise ValueError("candidate census mismatch")
         if self._parameter_device == "cpu":
+            if any(not p.is_contiguous() or p.storage_offset() != 0 or p.untyped_storage().nbytes() != p.numel() * p.element_size() for p in actual.values()):
+                raise ValueError("physical parameter storage does not match declared elements")
             addresses = [p.untyped_storage().data_ptr() for p in actual.values()]
-            if len(set(addresses)) != len(addresses):
+            ranges = sorted((p.untyped_storage().data_ptr(), p.untyped_storage().data_ptr() + p.untyped_storage().nbytes()) for p in actual.values())
+            if len(set(addresses)) != len(addresses) or any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
                 raise ValueError("physical parameter storage alias")
         return actual
 

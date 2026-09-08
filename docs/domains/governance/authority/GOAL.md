@@ -337,10 +337,38 @@ one 24 GiB GPU. A 30B model that performs like a 4B model fails.
 
 ## 4. Architecture and the headline research hypothesis
 
-The target is an owned sparse unified decoder: a shared core plus independently
-trainable differentiated expert banks, with only the episode-required expert
-set active. Vision, audio, reasoning, tool, and other domain experts coexist in
-the same decoder to limit cross-domain damage.
+Per the [2026-09-08 operator decision](https://github.com/wordingone/ember/issues/2163#issuecomment-5592762718), CIA-3B as corrected and evolved
+under #2163 is the canonical main architecture and EMBER-02 target. This selects
+the family, not every draft revision. Dimensions, expert counts, routing,
+paging, precision and optimizer choices remain versioned and evidence-driven.
+
+The target is one evolving owned shared multimodal decoder/core with typed
+modality boundaries and learned causal functional routing. Expert identities
+are global; experts are not permanently named or partitioned by modality.
+Active and resident capacity remain bounded. Immutable serving generations are
+separate from candidate updates. This supersedes the former permanent
+vision/audio/reasoning/tool expert binding while retaining every corresponding
+native capability and non-regression requirement. Task-level expert routing
+means causal context selects functional capacity, not operator-declared domain
+labels selecting permanent expert banks.
+
+Canonical selection is not executable integration or empirical qualification.
+Activate executable defaults only through a tested, reversible transition of
+selectors, validators and actual consumers. Preserve all #2163 correctness,
+state, full-scale learning, paging and recovery obligations and all EMBER-02
+acceptance requirements. No amendment, rename or meta graph earns credit.
+
+Retain ember-sparse-3b-v2 and its evidence as an identified comparison/recovery
+reference, not a second destination or prerequisite. Further v2 execution needs
+a bounded explicit CIA qualification, comparison or reusable-infrastructure
+purpose. Preserve historical records and useful in-flight results. Never
+transfer v2 weights, trained-token credit or certificates silently to CIA.
+Throughput #1945 and evaluation #1947 must integrate the canonical subject with
+their existing gates intact; actual CIA controls and strict identity validation
+are required. An architecture change is not an execution-equivalent kernel
+change. #2115/#2119 retain their trajectory, transfer and recovery obligations.
+There is one existing campaign and receipt authority for each responsibility,
+not a parallel CIA hierarchy.
 
 Raw image patches and audio frames project directly into decoder tokens. The
 interface uses soft-token splicing, multimodal-span attention, and

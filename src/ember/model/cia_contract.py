@@ -88,3 +88,74 @@ def history_window(*, position: int, document_start: int, period: int) -> tuple[
         raise ValueError("position precedes its document")
     boundary = document_start + ((position - document_start) // period) * period
     return max(document_start, boundary - period), boundary
+
+
+def cia_architecture_config() -> dict:
+    """Exact current architecture declaration, not a training/serving manifest.
+
+    Numerical optimizer, data/tokenizer lineage and checkpoint admission are
+    separate required bindings. This does not select a production runtime.
+    """
+    return {
+        "schema_version": "ember-cia-architecture-v1",
+        "architecture_revision": "CIA3-R1-N61",
+        "authority": {
+            "goal_id": "EMBER-02", "workstream_id": "EMBER-02A",
+            "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+            "artifact_class": "research_candidate", "execution_authority": "qualification_gated",
+            "total_parameters": 3_082_539_008,
+            "native_capabilities": ["text", "image", "audio", "reasoning", "structured_tool_use"],
+            "published_family_backbone": "none", "model_mediated_signals": [],
+            "capability_credit": "none",
+        },
+        "model": {
+            "hidden_size": 1024, "layers": 24, "vocab_size": 32768,
+            "attention_heads": 16, "kv_heads": 4, "head_dim": 64,
+            "shared_ffn_dim": 2048, "expert_ffn_dim": 3072, "sparse_every": 2,
+            "global_experts": 25, "resident_experts": 2, "selected_experts": 1,
+            "max_context": 4096, "global_epoch": 1024, "local_segment": 256,
+            "routing": "causal-per-document-functional-v1",
+            "modality_types": 8, "image_patch_size": 16,
+            "audio_sample_rate": 16000, "audio_frame_size": 640, "audio_stride": 320,
+            "rope_axis_dims": [32, 16, 16], "rope_theta": 10000,
+            "norm_vectors": 61, "norm_epsilon": 1e-6,
+            "tied_embeddings": True, "parameter_dtype": "bfloat16",
+            "total_unique_parameters": 3_082_539_008,
+        },
+    }
+
+
+def validate_cia_architecture(config: dict) -> CIA3R1N61:
+    """Reject any undeclared revision/semantic field before CIA consumption.
+
+    The existing architecture_revision selector names the exact revision. A
+    family alias or relabelled v2 contract is invalid. This validates only the
+    architecture declaration: it cannot admit checkpoint bytes or certificates.
+    """
+    def exact(actual, expected, path):
+        if type(actual) is not type(expected):
+            raise ValueError(f"CIA architecture type mismatch at {path}")
+        if isinstance(expected, dict):
+            if actual.keys() != expected.keys():
+                raise ValueError(f"CIA architecture fields mismatch at {path}")
+            for key, value in expected.items():
+                exact(actual[key], value, f"{path}.{key}")
+        elif isinstance(expected, list):
+            if len(actual) != len(expected):
+                raise ValueError(f"CIA architecture shape mismatch at {path}")
+            for index, value in enumerate(expected):
+                exact(actual[index], value, f"{path}[{index}]")
+        elif actual != expected:
+            raise ValueError(f"CIA architecture revision mismatch at {path}")
+
+    exact(config, cia_architecture_config(), "config")
+    return CIA3R1N61()
+
+
+def cia_architecture_sha256(config: dict) -> str:
+    """Bind validated architecture semantics; no weight/token/admission credit."""
+    import hashlib
+    import json
+    validate_cia_architecture(config)
+    encoded = json.dumps(config, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()

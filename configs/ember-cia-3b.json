@@ -1,0 +1,56 @@
+{
+  "schema_version": "ember-cia-architecture-v1",
+  "architecture_revision": "CIA3-R1-N61",
+  "authority": {
+    "goal_id": "EMBER-02",
+    "workstream_id": "EMBER-02A",
+    "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+    "artifact_class": "research_candidate",
+    "execution_authority": "qualification_gated",
+    "total_parameters": 3082539008,
+    "native_capabilities": [
+      "text",
+      "image",
+      "audio",
+      "reasoning",
+      "structured_tool_use"
+    ],
+    "published_family_backbone": "none",
+    "model_mediated_signals": [],
+    "capability_credit": "none"
+  },
+  "model": {
+    "hidden_size": 1024,
+    "layers": 24,
+    "vocab_size": 32768,
+    "attention_heads": 16,
+    "kv_heads": 4,
+    "head_dim": 64,
+    "shared_ffn_dim": 2048,
+    "expert_ffn_dim": 3072,
+    "sparse_every": 2,
+    "global_experts": 25,
+    "resident_experts": 2,
+    "selected_experts": 1,
+    "max_context": 4096,
+    "global_epoch": 1024,
+    "local_segment": 256,
+    "routing": "causal-per-document-functional-v1",
+    "modality_types": 8,
+    "image_patch_size": 16,
+    "audio_sample_rate": 16000,
+    "audio_frame_size": 640,
+    "audio_stride": 320,
+    "rope_axis_dims": [
+      32,
+      16,
+      16
+    ],
+    "rope_theta": 10000,
+    "norm_vectors": 61,
+    "norm_epsilon": 1e-06,
+    "tied_embeddings": true,
+    "parameter_dtype": "bfloat16",
+    "total_unique_parameters": 3082539008
+  }
+}
