@@ -5190,11 +5190,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "str(REPO_ROOT / 'scripts' / 'ember_admission')",
-      "expression_sha256": "a9fdc6b8da90722870dc7233e8d1340cfeeb45cccba51db42eee0334b8417af5",
+      "expression_sha256": "6af9cb5b70f5cdfade84417971f1614061599c99e522d24ff7a538d3091dc9d5",
       "line": 18,
       "path": "tests/ember_admission/domain-governance/test_candidate_staging.py",
       "status": "UNEVALUABLE",
@@ -5212,11 +5209,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 17,
       "path": "tests/ember_admission/domain-governance/test_consumer_validator_snapshot.py",
       "status": "UNEVALUABLE",
@@ -5278,11 +5272,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 14,
       "path": "tests/ember_admission/domain-governance/test_descriptor_snapshot.py",
       "status": "UNEVALUABLE",
@@ -5311,11 +5302,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 52,
       "path": "tests/ember_admission/domain-governance/test_designate_selection_produces_resolvable_seat.py",
       "status": "UNEVALUABLE",
@@ -5355,11 +5343,8 @@
       "target": "<sys.path.insert>"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "str(REPO_ROOT / 'tests' / 'ember_restart')",
-      "expression_sha256": "304ec4eca3f1dbf17de4ffd27d6df3534c0588ab0c373eb423f290fad0da5c7f",
+      "expression_sha256": "03c519dd7b12bd975114242c3be90cc15775b013e65288439f576bb2093d7764",
       "line": 56,
       "path": "tests/ember_admission/domain-governance/test_designate_selection_produces_resolvable_seat.py",
       "status": "UNEVALUABLE",
@@ -5377,11 +5362,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 18,
       "path": "tests/ember_admission/domain-governance/test_final_path_consumption.py",
       "status": "UNEVALUABLE",
@@ -5432,11 +5414,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_post_validation_drift.py",
       "status": "UNEVALUABLE",
@@ -5476,11 +5455,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_producer_receipt.py",
       "status": "UNEVALUABLE",
@@ -5520,11 +5496,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "REPO_ROOT / 'scripts' / 'ember_admission'",
-      "expression_sha256": "0d752250a526b4cf8a0ee3acbcc4acf68db9c33de50cc9ae3fceeb2c3bf243f2",
+      "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_restart_consumer.py",
       "status": "UNEVALUABLE",
@@ -5553,11 +5526,8 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "str(REPO_ROOT / 'scripts' / 'ember_admission')",
-      "expression_sha256": "a9fdc6b8da90722870dc7233e8d1340cfeeb45cccba51db42eee0334b8417af5",
+      "expression_sha256": "6af9cb5b70f5cdfade84417971f1614061599c99e522d24ff7a538d3091dc9d5",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_source_alias.py",
       "status": "UNEVALUABLE",
@@ -5730,6 +5700,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "a382b35d53232925b7dcfb0406334c7f7e17859dea10e23c5fa3c3b1fdedb0a8",
+  "self_sha256": "fddbeeb22a07bb97722c90a187de3934d9b1604e0e8f23833b6198cb8efa15bd",
   "workstream_id": "EMBER-02A"
 }

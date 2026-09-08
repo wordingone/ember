@@ -16,7 +16,6 @@ import pytest
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
 PRODUCER_ROOT = REPO_ROOT / "src" / "ember" / "governance" / "scripts" / "ember_admission"
 sys.path.insert(0, str(PRODUCER_ROOT))
-sys.path.insert(0, str(REPO_ROOT))
 
 from src.ember.governance.scripts.ember_admission import consumers  # noqa: E402
 
