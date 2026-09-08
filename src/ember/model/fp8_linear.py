@@ -18,7 +18,8 @@ counted as its true two additional GEMMs:
     e4m3 GEMMs   143.537 ms/step
     ceiling      127.766 ms/step
 
-Against a 330.4 ms step that leaves 202.6 ms, or 20,217 tok/s at 4,096 tokens per step. It is the
+Against a 330.4 ms step that leaves 202.6 ms, or 20,217 tok/s at 4,096 tokens per step. Measured
+realization at the governed precision configuration is 120.1 ms of that 127.766 ms, or 94%. It is the
 first treatment in this campaign whose ceiling contains the terminal: the captured-step lane acted on
 33.1 ms of launch overhead, and the earlier per-site lane acted on a forward that is 21.6% of the
 step. This one acts on 82% of it.
@@ -102,8 +103,12 @@ def _quantize_eager(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 #: reduction over the whole tensor, so as a separate kernel it reads every byte and the cast then
 #: reads every byte again. Fusing removes an entire pass over each quantized tensor, not merely a
 #: launch. The corrected model of the remaining gap is dispatch AND redundant passes, which is worth
-#: writing down because it changes what the last named successor is worth: the three materialized
-#: transposes in the backward are also full passes, and were sized as copies alone.
+#: writing down because it is what identified the last remaining cost. The three materialized
+#: transposes in the backward had been sized as copies -- a few milliseconds -- and dismissed. Under
+#: the corrected model they are full passes too, so they were measured instead: 81.0 ms/step at the
+#: model's real routed shapes, against 81.5 ms of ceiling the arm had not collected. They were not
+#: part of the remaining gap; they were essentially all of it. Removing them recovered 85.2 ms and
+#: took the realized saving to 120.1 ms of the 127.766 ms ceiling. See ``_quantize_pair_eager``.
 _COMPILED_QUANTIZE = torch.compile(_quantize_eager, dynamic=True)
 _COMPILE_TRUSTED = True
 
@@ -127,6 +132,44 @@ def _quantize(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return _quantize_eager(tensor)
 
 
+def _quantize_pair_eager(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Quantize, and write the transposed copy from the same scaled tensor.
+
+    The backward needs both layouts of every quantized activation and gradient: one operand of each
+    of its two GEMMs is the transpose of a tensor the other GEMM uses row-major. Materializing that
+    transpose afterwards reads the fp8 result and writes a second fp8 tensor -- a full extra pass
+    over each tensor, at every routed site, every step. Producing it here instead means both writes
+    come off ``scaled``, which the cast is already reading, so the separate read disappears.
+
+    That this is worth doing at all was measured rather than reasoned. Sized by an isolated-shape
+    probe at the model's real routed shapes, the three materialized transposes cost 81.0 ms/step
+    against 81.5 ms of ceiling that the arm had not yet collected -- so they were not part of the
+    remaining gap, they were essentially all of it.
+    """
+    amax = tensor.detach().abs().amax().float().clamp_min(_MIN_AMAX)
+    scale = E4M3_MAX / amax
+    factor = scale.to(tensor.dtype) if tensor.dtype in (torch.bfloat16, torch.float16) else scale
+    scaled = (tensor * factor).clamp(-E4M3_MAX, E4M3_MAX)
+    quantized = scaled.to(torch.float8_e4m3fn)
+    transposed = scaled.t().contiguous().to(torch.float8_e4m3fn)
+    return quantized, transposed, (1.0 / scale).to(torch.float32)
+
+
+_COMPILED_QUANTIZE_PAIR = torch.compile(_quantize_pair_eager, dynamic=True)
+_COMPILE_PAIR_TRUSTED = True
+
+
+def _quantize_pair(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """``_quantize_pair_eager`` through the compiled path, falling back permanently if it refuses."""
+    global _COMPILE_PAIR_TRUSTED
+    if _COMPILE_PAIR_TRUSTED:
+        try:
+            return _COMPILED_QUANTIZE_PAIR(tensor)
+        except Exception:
+            _COMPILE_PAIR_TRUSTED = False
+    return _quantize_pair_eager(tensor)
+
+
 #: Quantized weights, keyed by the parameter's identity and its version counter.
 #:
 #: A weight changes only when the optimizer writes it, and an in-place write bumps ``_version``. So
@@ -134,19 +177,25 @@ def _quantize(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 #: an optimizer step invalidates every entry it touched without anyone having to remember to. This
 #: is the difference between quantizing most of the model once per optimizer step and quantizing it
 #: once per projection call, and the second one costs more than the GEMMs it was meant to accelerate.
-_WEIGHT_CACHE: dict[int, tuple[int, torch.Tensor, torch.Tensor]] = {}
+#:
+#: The entry carries both layouts. The backward's grad_activation GEMM needs the weight column-major
+#: and no copy-free view of a row-major (out, in) tensor has that layout, so a transpose has to be
+#: materialized somewhere. Building it here makes it once per optimizer step instead of once per
+#: projection call, which at 14 to 28 calls per site per step is the whole of its 23 ms cost.
+_WEIGHT_CACHE: dict[int, tuple[int, torch.Tensor, torch.Tensor, torch.Tensor]] = {}
 
 
-def _quantize_weight(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """``_quantize`` for a parameter, memoized on (identity, version)."""
+def _quantize_weight(weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """``_quantize`` for a parameter, memoized on (identity, version), in both layouts."""
     key = id(weight)
     version = weight._version
     cached = _WEIGHT_CACHE.get(key)
     if cached is not None and cached[0] == version:
-        return cached[1], cached[2]
+        return cached[1], cached[2], cached[3]
     quantized, dequant_scale = _quantize(weight)
-    _WEIGHT_CACHE[key] = (version, quantized, dequant_scale)
-    return quantized, dequant_scale
+    column_major = quantized.t().contiguous().t()
+    _WEIGHT_CACHE[key] = (version, quantized, column_major, dequant_scale)
+    return quantized, column_major, dequant_scale
 
 
 def clear_weight_cache() -> None:
@@ -194,14 +243,16 @@ class _Fp8Linear(torch.autograd.Function):
         original_shape = activation.shape
         flat = activation.reshape(-1, original_shape[-1])
 
-        flat8, flat_scale = _quantize(flat)
-        weight8, weight_scale = _quantize_weight(weight)
+        flat8, flat8_transposed, flat_scale = _quantize_pair(flat)
+        weight8, weight8_column_major, weight_scale = _quantize_weight(weight)
 
         # ``weight`` is (out, in) and contiguous, so ``weight8.t()`` is (in, out) column-major --
         # exactly the layout the scaled GEMM wants, obtained without a copy.
         output = _scaled_matmul(flat8, flat_scale, weight8.t(), weight_scale, activation.dtype)
 
-        ctx.save_for_backward(flat8, flat_scale, weight8, weight_scale)
+        # Only the transposed activation is saved: the row-major form has no backward consumer, so
+        # keeping it would cost residency for nothing.
+        ctx.save_for_backward(flat8_transposed, flat_scale, weight8_column_major, weight_scale)
         ctx.original_shape = original_shape
         ctx.activation_dtype = activation.dtype
         ctx.weight_dtype = weight.dtype
@@ -210,35 +261,28 @@ class _Fp8Linear(torch.autograd.Function):
     @staticmethod
     @torch.amp.custom_bwd(device_type="cuda")
     def backward(ctx, grad_output: torch.Tensor):
-        flat8, flat_scale, weight8, weight_scale = ctx.saved_tensors
+        flat8_transposed, flat_scale, weight8_column_major, weight_scale = ctx.saved_tensors
         grad_flat = grad_output.reshape(-1, grad_output.shape[-1])
-        grad8, grad_scale = _quantize(grad_flat)
+        grad8, grad8_transposed, grad_scale = _quantize_pair(grad_flat)
 
-        # grad_activation = grad_output @ W, needing W as (out, in) in column-major layout.
-        # ``weight8`` is (out, in) row-major and no copy-free view of it has that layout, so this
-        # one transpose is materialized. It is the unavoidable copy on this path, and it is why the
-        # realized saving will land below the isolated-GEMM ceiling quoted above.
-        weight_column_major = weight8.t().contiguous().t()
+        # grad_activation = grad_output @ W, needing W as (out, in) column-major. That form comes
+        # from the weight cache, built once per optimizer step rather than once per call here.
         grad_activation = _scaled_matmul(
-            grad8, grad_scale, weight_column_major, weight_scale, ctx.activation_dtype
+            grad8, grad_scale, weight8_column_major, weight_scale, ctx.activation_dtype
         )
 
-        # grad_weight = grad_output^T @ x, which is (out, tokens) @ (tokens, in). The second
-        # operand is therefore ``flat8`` itself and not its transpose -- writing ``flat8.t()`` here
-        # was a shape error that only surfaced at the widest site, where (32000, 4096) met
-        # (2048, 4096) and the mismatch became impossible to miss. The narrower sites would have
-        # multiplied wrong shapes silently if they had happened to be square.
+        # grad_weight = grad_output^T @ x, which is (out, tokens) @ (tokens, in). ``grad8_transposed``
+        # is (out, tokens) row-major and ``flat8_transposed`` is (in, tokens) row-major, so its
+        # ``.t()`` is the (tokens, in) column-major operand the scaled GEMM wants -- a view, not a
+        # copy. Both operands therefore arrive already in the layout this GEMM needs.
         #
-        # Both backward operands need a materialized transpose: the left because ``grad8`` is
-        # (tokens, out) row-major, the right because ``flat8`` is (tokens, in) row-major and the
-        # scaled GEMM wants column-major. Two copies per site per step is the honest cost of this
-        # path today, and it is the main reason the realized saving will sit below the
-        # isolated-GEMM ceiling. Saving the activation in both layouts at forward time would trade
-        # them for fp8 memory equal to one bf16 copy; that is the next optimization, not this one.
+        # The right operand being ``x`` and not its transpose was a shape error once, and it only
+        # surfaced at the widest site where (32000, 4096) met (2048, 4096); the narrower sites would
+        # have multiplied wrong shapes silently had they happened to be square.
         grad_weight = _scaled_matmul(
-            grad8.t().contiguous(),
+            grad8_transposed,
             grad_scale,
-            flat8.t().contiguous().t(),
+            flat8_transposed.t(),
             flat_scale,
             ctx.weight_dtype,
         )
