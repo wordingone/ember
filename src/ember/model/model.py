@@ -24,6 +24,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
+from ember.model import fp8_linear
+
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
 
@@ -380,7 +382,9 @@ class SharedAttention(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor | None) -> torch.Tensor:
         batch, sequence, width = hidden_states.shape
-        qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
+        qkv = fp8_linear.linear(hidden_states, self.qkv.weight).view(
+            batch, sequence, 3, self.heads, self.head_dim
+        )
         query, key, value = qkv.permute(2, 0, 3, 1, 4).unbind(dim=0)
         query = self.q_norm(query)
         key = self.k_norm(key)
@@ -392,7 +396,9 @@ class SharedAttention(nn.Module):
             attended = F.scaled_dot_product_attention(query, key, value, attn_mask=None, is_causal=True)
         else:
             attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
-        return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
+        return fp8_linear.linear(
+            attended.transpose(1, 2).reshape(batch, sequence, width), self.output.weight
+        )
 
 
 class SwiGLUExpert(nn.Module):
@@ -404,8 +410,8 @@ class SwiGLUExpert(nn.Module):
         self.down = nn.Linear(4 * hidden_size, hidden_size, bias=False, device=device)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
-        return self.down(_swiglu_product(up, gate))
+        up, gate = fp8_linear.linear(hidden_states, self.up_gate.weight).chunk(2, dim=-1)
+        return fp8_linear.linear(_swiglu_product(up, gate), self.down.weight)
 
     def forward_fused(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """Fuse only the shared-FFN SiLU/multiply site on CUDA.
@@ -414,13 +420,13 @@ class SwiGLUExpert(nn.Module):
         immediate rollback. The active-expert path continues to call forward().
         """
 
-        up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
+        up, gate = fp8_linear.linear(hidden_states, self.up_gate.weight).chunk(2, dim=-1)
         product = (
             _FUSED_SWIGLU_PRODUCT(up, gate)
             if hidden_states.device.type == "cuda"
             else _swiglu_product(up, gate)
         )
-        return self.down(product)
+        return fp8_linear.linear(product, self.down.weight)
 
 
 class _DecoderLayer(nn.Module):
@@ -665,7 +671,7 @@ class UnifiedDecoder(nn.Module):
                 )
             else:
                 hidden_states = layer(hidden_states, coordinates, allowed, selected)
-        return self.lm_head(self.final_norm(hidden_states))
+        return fp8_linear.linear(self.final_norm(hidden_states), self.lm_head.weight)
 
 
 def count_unique_trainable_parameters(subject: nn.Module | RestartDecoderConfig, *, include_frozen: bool = False) -> int:
