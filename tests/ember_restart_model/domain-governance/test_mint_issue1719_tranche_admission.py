@@ -1018,3 +1018,103 @@ def test_generic_successor_refuses_postpublish_nonfile_and_rolls_back(tmp_path: 
             output=output,
         )
     assert not output.exists()
+
+
+# A locator a successor minted with portable spelling: corpus-root-relative, matching no
+# `partition-authority-<sha>/…` canonical form, and resolvable only against a root the caller
+# supplies. Classing it legacy strands the next tranche, because the cure legacy rows fall back to
+# cannot be formed for a relative recorded path.
+PORTABLE_LOCATOR = (
+    "issue1719-license-partitions-wave10-20260819T0215Z/K-heldout-2/partition-receipt.json"
+)
+
+
+def _portable_custody(tmp_path: Path) -> tuple[Path, str]:
+    root = tmp_path / "corpus"
+    target = root / PORTABLE_LOCATOR
+    target.parent.mkdir(parents=True)
+    raw = _canonical({"repositories": []})
+    target.write_bytes(raw)
+    return root, _sha(raw)
+
+
+def test_portable_partition_locator_resolves_under_the_supplied_root(tmp_path: Path):
+    module = _load_producer()
+    root, sha = _portable_custody(tmp_path)
+    assert module._portable_partition_names(
+        names={PORTABLE_LOCATOR},
+        bound_partition_sidecars={PORTABLE_LOCATOR: sha},
+        declared_binding="runtime-supplied-corpus-root-v1",
+        custody_root=root,
+        module=text_lab_corpus,
+    ) == {PORTABLE_LOCATOR}
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "sha_mismatch",
+        "undeclared_binding",
+        "no_custody_root",
+        "absolute_recorded_path",
+        "parent_traversal",
+        "missing_file",
+    ],
+)
+def test_portable_partition_locator_refusal_matrix(tmp_path: Path, mutation: str):
+    """Every way a locator fails to prove itself leaves it legacy, where the cure still governs.
+
+    The point of each row is that the name falls back rather than being admitted on a weaker
+    basis: a portable name is accepted only when it resolves under the supplied root AND its bytes
+    hash to the sha the corpus row itself records.
+    """
+
+    module = _load_producer()
+    root, sha = _portable_custody(tmp_path)
+    name = PORTABLE_LOCATOR
+    binding = "runtime-supplied-corpus-root-v1"
+    custody_root = root
+
+    if mutation == "sha_mismatch":
+        sha = "0" * 64
+    elif mutation == "undeclared_binding":
+        binding = None
+    elif mutation == "no_custody_root":
+        custody_root = None
+    elif mutation == "absolute_recorded_path":
+        name = str((root / PORTABLE_LOCATOR).resolve(strict=True))
+    elif mutation == "parent_traversal":
+        name = "../" + PORTABLE_LOCATOR
+    elif mutation == "missing_file":
+        (root / PORTABLE_LOCATOR).unlink()
+
+    assert module._portable_partition_names(
+        names={name},
+        bound_partition_sidecars={name: sha},
+        declared_binding=binding,
+        custody_root=custody_root,
+        module=text_lab_corpus,
+    ) == set()
+
+
+def test_canonical_partition_locator_is_left_to_the_canonical_path(tmp_path: Path):
+    """A locator already in canonical form is never routed through the portable branch.
+
+    `mint_successor` only offers non-canonical names here, so an empty result keeps the canonical
+    sidecar checks (receipt reopen, repository enumeration, published blob names) reachable.
+    """
+
+    module = _load_producer()
+    root, sha = _portable_custody(tmp_path)
+    canonical_name = f"partition-authority-{sha}/partition-receipt.json"
+    target = root / canonical_name
+    target.parent.mkdir(parents=True)
+    target.write_bytes(_canonical({"repositories": []}))
+
+    assert module._portable_partition_names(
+        names=set(),
+        bound_partition_sidecars={canonical_name: sha},
+        declared_binding="runtime-supplied-corpus-root-v1",
+        custody_root=root,
+        module=text_lab_corpus,
+    ) == set()
