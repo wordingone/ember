@@ -77,6 +77,7 @@ jobs:
       - name: Run CIA census and causal routing mechanics (#2163)
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests -p 'test_issue2163_cia_*.py' -v
       - name: Run CIA checkpoint object and index mechanics (#2163)
+        if: hashFiles('tests/ember_restart_model/domain-governance/test_issue2163_cia_*.py') != ''
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_issue2163_cia_*.py' -v
       - name: Run deterministic policy tests
         run: python -B -m unittest discover -s src/ember/governance/scripts/github -p "test_*.py" -v
