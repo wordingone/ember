@@ -28,7 +28,7 @@ if str(_HELPER_HOME) not in sys.path:
     sys.path.insert(0, str(_HELPER_HOME))
 
 from batch import DOMAIN_MODALITIES, decode_owned_batch, decode_owned_packed_batch
-from src.ember.model.model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.ember_v0_model import EXPERT_NAMES, RestartDecoderConfig, UnifiedDecoder
 # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py
 import importlib.util as _ember_61c7220b679f890b_importlib
 import sys as _ember_61c7220b679f890b_sys

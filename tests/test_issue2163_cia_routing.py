@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from ember.model.cia_routing import select_global, select_local
+from ember.model.ember_v0_routing import select_global, select_local
 
 
 class CIARoutingTests(unittest.TestCase):
@@ -141,7 +141,7 @@ class CIARoutingTests(unittest.TestCase):
         self.assertIsNotNone(weight.grad)
 
     def test_unit_task_gate_preserves_forward_and_softmax_gradient(self):
-        from ember.model.cia_routing import unit_task_gate
+        from ember.model.ember_v0_routing import unit_task_gate
         logits = torch.tensor([0.2, -0.4], requires_grad=True)
         gate = unit_task_gate(logits, 0)
         self.assertEqual(gate.item(), 1.0)
@@ -150,13 +150,13 @@ class CIARoutingTests(unittest.TestCase):
         torch.testing.assert_close(logits.grad, 3 * torch.stack((p[0] * p[1], -p[0] * p[1])))
 
     def test_unit_task_gate_rejects_invalid_state(self):
-        from ember.model.cia_routing import unit_task_gate
+        from ember.model.ember_v0_routing import unit_task_gate
         for values, index in (([0., 1.], True), ([0., 1.], 2), ([float('nan'), 1.], 0)):
             with self.assertRaises(ValueError):
                 unit_task_gate(torch.tensor(values), index)
 
     def test_unit_task_gate_preserves_finite_float64_range(self):
-        from ember.model.cia_routing import unit_task_gate
+        from ember.model.ember_v0_routing import unit_task_gate
         logits = torch.tensor([1e300, 0.0], dtype=torch.float64, requires_grad=True)
         gate = unit_task_gate(logits, 0)
         self.assertEqual(gate.item(), 1.0)

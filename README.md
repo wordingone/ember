@@ -67,7 +67,7 @@ path live and requires every tracked top-level directory to remain explained.
 | Domain | Lab | `domains/lab` | Cross-domain experiments and their declared interfaces. |
 | Domain | Infrastructure | `src/ember/infrastructure` | Operator tooling, launchers, and execution support. |
 | Domain | Governance/contracts | `src/ember/governance` | Policy enforcement and receipt-governance code. |
-| Artifact | Model | `src/ember/model/model.py` | Unified decoder definition. |
+| Artifact | Model | `src/ember/model/ember_v0_model.py` | Unified decoder definition. |
 | Artifact | Training loop | `src/ember/training/pretrain.py` | Owned pretraining loop. |
 | Artifact | Evaluator | `src/ember/evaluation/cbase_heldout_eval.py` | Held-out evaluation entry point. |
 | Artifact | Runtime entry | `src/ember/runtime/infer.py` | Inference entry point. |

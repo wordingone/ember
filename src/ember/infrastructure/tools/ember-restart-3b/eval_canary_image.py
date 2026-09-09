@@ -22,7 +22,7 @@ from tokenizers import Tokenizer, __version__ as tokenizers_version
 _REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
 if str(_REPO_IMPORT_HOME) not in sys.path:
     sys.path.insert(0, str(_REPO_IMPORT_HOME))
-from src.ember.model.model import MultimodalSpan, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.ember_v0_model import MultimodalSpan, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder
 _CANARY_MODULE_DIRECTORY = Path(__file__).resolve().parent
 if str(_CANARY_MODULE_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_CANARY_MODULE_DIRECTORY))
@@ -490,7 +490,7 @@ def terminal_suite_receipt(
             "config.json": sha256_bytes((fixture_root / "config.json").read_bytes()),
             "eval_canary_image.py": sha256_bytes(Path(__file__).read_bytes()),
             "mechanics-only-dispositions.json": sha256_bytes((fixture_root / "mechanics-only-dispositions.json").read_bytes()),
-            "model.py": sha256_bytes((ROOT / "src" / "ember" / "model" / "model.py").read_bytes()),
+            "model.py": sha256_bytes((ROOT / "src" / "ember" / "model" / "ember_v0_model.py").read_bytes()),
             "tokenizer.json": sha256_bytes(resolve_repository_authority(ROOT, "tokenizer").path.read_bytes()),
         },
     }

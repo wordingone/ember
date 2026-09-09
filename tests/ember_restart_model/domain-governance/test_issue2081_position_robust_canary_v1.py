@@ -929,7 +929,7 @@ def test_terminal_receipt_is_rebound_to_issue2131_and_rebased_heads():
 
 
 def test_pre_spine_hash_paths_translate_to_canonical_locations(tmp_path: Path):
-    canonical = tmp_path / "src" / "ember" / "model" / "model.py"
+    canonical = tmp_path / "src" / "ember" / "model" / "ember_v0_model.py"
     canonical.parent.mkdir(parents=True)
     canonical.write_text("model-bytes", encoding="utf-8")
     old = tmp_path / "tools" / "ember-restart-3b" / "model.py"
@@ -1212,9 +1212,9 @@ def test_configured_refusal_rebind_hashes_both_models_and_writes_sidecar(
 
     def fake_git(repo_root: Path, *args: str) -> bytes:
         assert repo_root == tmp_path
-        if args == ("show", f"{control_head}:src/ember/model/model.py"):
+        if args == ("show", f"{control_head}:src/ember/model/ember_v0_model.py"):
             return control_model
-        if args == ("show", f"{treatment_head}:src/ember/model/model.py"):
+        if args == ("show", f"{treatment_head}:src/ember/model/ember_v0_model.py"):
             return treatment_model
         raise AssertionError(args)
 
@@ -1256,7 +1256,7 @@ def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
 
     def fake_git(repo_root: Path, *args: str) -> bytes:
         assert repo_root == tmp_path
-        if args == ("show", f"{head}:src/ember/model/model.py"):
+        if args == ("show", f"{head}:src/ember/model/ember_v0_model.py"):
             return control_model
         if args == (
             "show",

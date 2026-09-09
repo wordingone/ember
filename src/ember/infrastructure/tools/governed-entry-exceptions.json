@@ -13,7 +13,7 @@
   "exceptions": [
     {
       "path": "src/ember/governance/scripts/build_fixed_prior_manifest.py",
-      "sha256": "80ea4d833d341da52fc2707b28df5c6a3e804cf8b723bd573aeed4ff483967d4",
+      "sha256": "213bc63dd9f394aa6806efece8785992b6b4c0fc031e27b93a7c138eaa2c6e4c",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition. Repinned 2026-09-03 from 859087333d2867938e86e0e51ab3e455bb8d5ca3a55ea95f5206a4f1f22092dc: content diff is exactly one INVENTORY literal, the ember_cli tree path tools/ember-cli/src -> src/ember/infrastructure/tools/ember-cli/src (the directory the cutover moved); no training-segment API reference changed. Planted test: src/ember/governance/scripts/tests/test_build_fixed_prior_manifest_inventory.py"
     },
     {
@@ -33,12 +33,12 @@
     },
     {
       "path": "src/ember/governance/scripts/legb_live_candidate_v5_scorer.py",
-      "sha256": "96e6d52440b73771633914c19e6c6073fc70aed8e224c8adb42542f1c9f1557e",
+      "sha256": "d2b13fefeffd0c70cf4be182da9faf40a1a185cc32d8ac2462ede6b6b0581838",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
       "path": "src/ember/governance/scripts/nativization_motion_trace.py",
-      "sha256": "4f5aa9af3376b6603f33516c2c50dd3c3351a714c40d11517a27614e7e14fbaf",
+      "sha256": "27f39bc152099f37333a82ee87435643a66e47207333582dc443b048ce9a0212",
       "reason": "canonical architecture migration of an existing governed restart entry; content-addressed exception retained during the base-kernel transition"
     },
     {
@@ -58,7 +58,7 @@
     },
     {
       "path": "src/ember/training/pretrain.py",
-      "sha256": "30fb58aab4782c76ba8e720c83fbed09783628692b93657e238edcd72663c658",
+      "sha256": "28530e8264eb6284caea4bbd8db84c069285bedc7ec8c9a41c85069d36d1d452",
       "reason": "issue #2092 moved (and #2136 repins after the micro-batch semantic segment) the existing governed pretraining entry from the restart tool directory into its canonical training domain; this exact content-addressed exception is equivalent to the legacy whole-directory exclusion and does not widen the governed-entry surface"
     },
     {

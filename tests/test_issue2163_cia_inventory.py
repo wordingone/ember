@@ -6,7 +6,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from ember.model.cia_inventory import equation_inventory, meta_inventory, update_support
+from ember.model.ember_v0_inventory import equation_inventory, meta_inventory, update_support
 
 class CIAInventoryTests(unittest.TestCase):
     def test_equations_expose_three_unassigned_reference_norms(self):

@@ -25,7 +25,7 @@ The specification item closes when the reference assigns real consumers or is ex
 
 Core plus one expert is 364,630,016; core plus two resident experts is 477,876,224. These are accounting envelopes, not measured operations or resident allocation. The 3,072-element difference from R1 is exactly three width-1024 vectors. Attention's Q/K head norms are already counted separately and must not be removed again.
 
-`src/ember/model/cia_inventory.py` enumerates each prospective tensor by name, shape, component role and global expert identity. Its meta-only materializer constructs no weight values and cannot prove initialization diversity, reachability, gradient flow, optimizer updates, serving engagement, or learning. The executable candidate must consume this inventory and supply those proofs before qualification. Names alone are not a traced runtime consumer certificate.
+`src/ember/model/ember_v0_inventory.py` enumerates each prospective tensor by name, shape, component role and global expert identity. Its meta-only materializer constructs no weight values and cannot prove initialization diversity, reachability, gradient flow, optimizer updates, serving engagement, or learning. The executable candidate must consume this inventory and supply those proofs before qualification. Names alone are not a traced runtime consumer certificate.
 
 The explicit update-support map excludes router parameters from core+expert-set and excludes inactive experts. It must later be checked against actual changed tensors, optimizer membership, stale gradients and preserved optimizer clocks. Topology mutation remains a separately governed transaction.
 
@@ -37,7 +37,7 @@ The initial inventory checks alone leave model ownership, decoder integration of
 
 ## CPU selection oracle
 
-`src/ember/model/cia_routing.py` consumes preceding-history boundaries for one request/document at a time. Global selection uses the detached preceding 1024-position embedding epoch; local selection uses only the shared-path vector at `segment_start - 1`, not a segment mean. Both first intervals use a fixed zero beginning state. Greedy ties resolve by global expert ID. Temperature is explicitly 1 in selector version `CIA3-R1-N61-cpu-greedy-v1`.
+`src/ember/model/ember_v0_routing.py` consumes preceding-history boundaries for one request/document at a time. Global selection uses the detached preceding 1024-position embedding epoch; local selection uses only the shared-path vector at `segment_start - 1`, not a segment mean. Both first intervals use a fixed zero beginning state. Greedy ties resolve by global expert ID. Temperature is explicitly 1 in selector version `CIA3-R1-N61-cpu-greedy-v1`.
 
 The oracle records history digests/cutoffs and checks generation, request, document, epoch, key content, prior content, selected IDs and selector version before local consumption. These checks detect stale or modified selection state; they do not authenticate a caller, certify loaded model objects, or replace residency/request leases. Tensor fields remain process-local objects and are not an immutable serving transaction.
 
@@ -45,7 +45,7 @@ Fixed full-width tensor tests cover suffix noninterference, visible-history sens
 
 ## Full-shape parameter-owning decoder graph
 
-`src/ember/model/cia_decoder.py` now instantiates all 3,082,539,008 declared elements as BF16 meta `nn.Parameter` objects. It checks exact registered names/shapes, rejects extra parameters and repeated Parameter objects, and uses the tied vocabulary matrix for both embedding and output. Distinct Parameter objects on meta are not proof of distinct physical storage. The optional full-population CPU extension below allocates physical weights and checks storage ownership.
+`src/ember/model/ember_v0_decoder.py` now instantiates all 3,082,539,008 declared elements as BF16 meta `nn.Parameter` objects. It checks exact registered names/shapes, rejects extra parameters and repeated Parameter objects, and uses the tied vocabulary matrix for both embedding and output. Distinct Parameter objects on meta are not proof of distinct physical storage. The optional full-population CPU extension below allocates physical weights and checks storage ownership.
 
 The graph implements raw patch/frame projections, modality offsets, 24 GQA/shared-SwiGLU layers, 12 expert depths, head Q/K normalization, 32/16/16 three-axis RoPE and final normalization. Explicit fixed-route metadata traces exercise these shapes, all 25 expert projection paths, and selected autograd connections. They are unpadded single-document fixtures. Router tensors are registered but not consumed by the fixed-route trace. The separate numerical CPU forward integrates the selection oracle and supplies real logits for conformance tests.
 

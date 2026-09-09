@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from ember.model.cia_contract import CIA3R1N61, census, history_window
+from ember.model.ember_v0_contract import CIA3R1N61, census, history_window
 
 
 class CIAContractTests(unittest.TestCase):
