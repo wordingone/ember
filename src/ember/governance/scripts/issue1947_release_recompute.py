@@ -13,7 +13,16 @@ import math
 from pathlib import Path
 from typing import Any
 
-from issue1947_release_execute import ROWS, canonical, forbid_protected_bytes, sha, validate_row
+from issue1947_release_execute import (
+    INTEGRITY_PLACEHOLDER,
+    MODEL_PREDICTION,
+    ROWS,
+    canonical,
+    evidence_kind,
+    forbid_protected_bytes,
+    sha,
+    validate_row,
+)
 
 
 class ReleaseRecomputeRefusal(ValueError):
@@ -68,13 +77,32 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
             raise ReleaseRecomputeRefusal(f"THRESHOLD_DRIFT:{row_id}")
         if not math.isfinite(float(threshold)):
             raise ReleaseRecomputeRefusal(f"THRESHOLD_NONFINITE:{row_id}")
-        results.append({"row_id": row_id, "item_count": len(scores), "mean_score": mean, "threshold": float(threshold), "passed": mean >= float(threshold)})
-    cert_007 = all(row["passed"] for row in results)
+        # Derived here from the producer table, not read from the bundle, so a bundle cannot
+        # promote its own rows. The bundle's copy is then required to agree, which turns any
+        # attempt to do so into a refusal instead of a silent upgrade.
+        kind = evidence_kind(row_id)
+        if binding.get("evidence_kind") != kind:
+            raise ReleaseRecomputeRefusal(f"EVIDENCE_KIND_BINDING_DRIFT:{row_id}")
+        results.append({"row_id": row_id, "item_count": len(scores), "mean_score": mean, "threshold": float(threshold), "passed": mean >= float(threshold), "evidence_kind": kind})
+    model_rows = [row for row in results if row["evidence_kind"] == MODEL_PREDICTION]
+    placeholder_rows = [row for row in results if row["evidence_kind"] == INTEGRITY_PLACEHOLDER]
+    # An empty model-evidence set fails. all([]) is True, and a bar that passed because there was
+    # nothing to check would be the same defect this cure exists to remove, wearing a new
+    # mechanism. Placeholder outcomes are reported beside it and never folded into it.
+    cert_007 = bool(model_rows) and all(row["passed"] for row in model_rows)
     receipt = {
         "schema_version": "ember-issue1947-release-independent-recompute-v1",
         "result": "PASS" if cert_007 else "FAIL",
         "bundle_raw_sha256": sha(bundle_path.read_bytes()),
         "rows": results,
+        "model_evidence_row_count": len(model_rows),
+        "integrity_placeholder_row_count": len(placeholder_rows),
+        "integrity_placeholder_rows_pass": all(row["passed"] for row in placeholder_rows),
+        "cert_007_basis": (
+            "no model-evidence row exists, so the bar is unmet rather than vacuously satisfied"
+            if not model_rows else
+            f"{len(model_rows)} model-evidence row(s) evaluated; {len(placeholder_rows)} integrity placeholder(s) reported separately"
+        ),
         "cert_007_all_required_rows_pass": cert_007,
         "cert_009_independent_raw_row_recomputation": True,
         "claim_boundary": "INDEPENDENT_RECOMPUTATION_ONLY; NO ISSUE_OR_GOAL_CREDIT",
