@@ -19,7 +19,7 @@ import torch.nn.functional as F
 _REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
 if str(_REPO_IMPORT_HOME) not in sys.path:
     sys.path.insert(0, str(_REPO_IMPORT_HOME))
-from src.ember.model.ember_v0_model import EXPERT_NAMES, MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import EXPERT_NAMES, MultimodalSpan, RestartDecoderConfig, UnifiedDecoder
 
 
 DOMAIN_MODALITIES = {

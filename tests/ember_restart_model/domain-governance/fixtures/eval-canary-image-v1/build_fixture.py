@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(MODEL_DIR))
 sys.path.insert(0, str(LAYOUT_DIR))
 
-from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 from repository_layout import resolve_repository_authority  # noqa: E402
 
 

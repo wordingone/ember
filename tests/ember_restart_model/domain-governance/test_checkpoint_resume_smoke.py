@@ -43,7 +43,7 @@ assert _checkpoint_fixture_spec is not None and _checkpoint_fixture_spec.loader 
 _checkpoint_fixture = importlib.util.module_from_spec(_checkpoint_fixture_spec)
 _checkpoint_fixture_spec.loader.exec_module(_checkpoint_fixture)
 fixture_counter_receipt = _checkpoint_fixture.fixture_counter_receipt
-from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 
 # Larger than any real host's commit headroom: forces the REAL preflight
 # (real available_host_commit_bytes() probe) into CheckpointDeferredLowCommit.
