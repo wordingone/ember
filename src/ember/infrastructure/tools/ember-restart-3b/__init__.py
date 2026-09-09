@@ -3,7 +3,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Owned Ember restart decoder implementation."""
 
-from ....model.ember_v0_model import (
+from .model import (
     RawAudioProjector,
     RawPatchProjector,
     RestartDecoderConfig,

@@ -27,7 +27,7 @@ _REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
 if str(_REPO_IMPORT_HOME) not in sys.path:
     sys.path.insert(0, str(_REPO_IMPORT_HOME))
 from batch import decode_owned_batch
-from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
 # issue2015 exact-local-import:src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py
 import importlib.util as _ember_1601eccb5605602b_importlib
 import sys as _ember_1601eccb5605602b_sys
@@ -285,10 +285,7 @@ def _validate_source_closure(closure: object) -> dict[str, str]:
 
 
 def _source_closure(root: Path) -> dict[str, str]:
-    # Preserve receipt role keys while hashing each current physical source.
-    paths = {name: root / "src/ember/infrastructure/tools/ember-restart-3b" / name for name in _SOURCE_NAMES}
-    paths["model.py"] = root / "src/ember/model/ember_v0_model.py"
-    return {name: _sha256(path) for name, path in paths.items()}
+    return {name: _sha256(root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b" / name) for name in _SOURCE_NAMES}
 
 
 def _assert_source_closure_stable(before: dict[str, str], after: dict[str, str]) -> None:

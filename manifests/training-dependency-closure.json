@@ -67,7 +67,14 @@
     "src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py",
     "src/ember/infrastructure/tools/ember-restart-3b/verify_capability_record.py",
     "src/ember/infrastructure/tools/ember-restart-3b/verify_training_data.py",
-    "tools/corpus_connectors/receipt.py"
+    "tools/corpus_connectors/receipt.py",
+    "src/ember/model/cia_contract.py",
+    "src/ember/model/cia_decoder.py",
+    "src/ember/model/cia_inventory.py",
+    "src/ember/model/cia_residency.py",
+    "src/ember/model/cia_routing.py",
+    "src/ember/model/fp8_linear.py",
+    "src/ember/model/model.py"
   ],
   "data": [
     "tools/launchers/Ember.cmd",

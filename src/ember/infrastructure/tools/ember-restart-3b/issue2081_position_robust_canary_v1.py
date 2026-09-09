@@ -916,7 +916,7 @@ def write_exclusive_refusal(
 def translate_pre_spine_path(root: Path, path: Path) -> Path:
     old_model = root / "tools" / "ember-restart-3b" / "model.py"
     if path.resolve() == old_model.resolve():
-        return root / "src" / "ember" / "model" / "ember_v0_model.py"
+        return root / "src" / "ember" / "model" / "model.py"
     old_test = root / "tests" / "ember_restart_model" / "test_model.py"
     if path.resolve() == old_test.resolve():
         return (
@@ -998,7 +998,7 @@ def configure_base(
         f"{BASE.CONTROL_HEAD}:tools/ember-restart-3b/model.py"
     )
     treatment_model_spec = (
-        f"{treatment_rebased_head}:src/ember/model/ember_v0_model.py"
+        f"{treatment_rebased_head}:src/ember/model/model.py"
     )
 
     def rebased_git(repo_root: Path, *args: str) -> bytes:
@@ -1006,7 +1006,7 @@ def configure_base(
             return original_git(
                 repo_root,
                 "show",
-                f"{control_rebased_head}:src/ember/model/ember_v0_model.py",
+                f"{control_rebased_head}:src/ember/model/model.py",
             )
         return original_git(repo_root, *args)
 
