@@ -10,7 +10,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_ROOT = ROOT / "src" / "ember" / "model"
+MODEL_DIR = ROOT / "src" / "ember" / "model"
 MODULES = {
     "contract": "validate_cia_architecture",
     "decoder": "CIADecoder",
@@ -25,7 +25,7 @@ MODULES = {
 @pytest.mark.parametrize("package", ("ember.model", "src.ember.model"))
 @pytest.mark.parametrize("suffix,symbol", MODULES.items())
 def test_versioned_module_imports_resolve_this_checkout(package, suffix, symbol, monkeypatch):
-    expected = MODEL_ROOT / f"ember_v0_{suffix}.py"
+    expected = MODEL_DIR / f"ember_v0_{suffix}.py"
     assert expected.is_file(), f"versioned module missing: {expected.name}"
     monkeypatch.syspath_prepend(str(ROOT))
     monkeypatch.syspath_prepend(str(ROOT / "src"))
@@ -35,7 +35,7 @@ def test_versioned_module_imports_resolve_this_checkout(package, suffix, symbol,
 
 
 def test_standalone_model_reuses_its_versioned_fp8_sibling(monkeypatch):
-    path = MODEL_ROOT / "ember_v0_model.py"
+    path = MODEL_DIR / "ember_v0_model.py"
     assert path.is_file(), "versioned standalone model missing"
     loaded = []
     for index in range(2):
@@ -45,7 +45,7 @@ def test_standalone_model_reuses_its_versioned_fp8_sibling(monkeypatch):
         monkeypatch.setitem(sys.modules, name, module)
         spec.loader.exec_module(module)
         loaded.append(module)
-    assert Path(loaded[0].fp8_linear.__file__).resolve() == (MODEL_ROOT / "ember_v0_fp8_linear.py").resolve()
+    assert Path(loaded[0].fp8_linear.__file__).resolve() == (MODEL_DIR / "ember_v0_fp8_linear.py").resolve()
     assert loaded[0].fp8_linear is loaded[1].fp8_linear
     assert callable(loaded[0].UnifiedDecoder)
 
@@ -53,7 +53,7 @@ def test_standalone_model_reuses_its_versioned_fp8_sibling(monkeypatch):
 def test_seven_old_filenames_are_retired():
     old = [f"cia_{suffix}.py" for suffix in ("contract", "decoder", "inventory", "residency", "routing")]
     old.extend(("fp8_linear.py", "model.py"))
-    assert not [name for name in old if (MODEL_ROOT / name).exists()]
+    assert not [name for name in old if (MODEL_DIR / name).exists()]
 
 
 def test_helper_package_exports_the_versioned_decoder(monkeypatch):
@@ -71,4 +71,4 @@ def test_native_source_identity_hashes_the_versioned_model(monkeypatch):
     screen = importlib.import_module("native_compute_screen")
     observed = screen._source_closure(ROOT)
     assert set(observed) == set(screen._SOURCE_NAMES)
-    assert observed["model.py"] == hashlib.sha256((MODEL_ROOT / "ember_v0_model.py").read_bytes()).hexdigest()
+    assert observed["model.py"] == hashlib.sha256((MODEL_DIR / "ember_v0_model.py").read_bytes()).hexdigest()
