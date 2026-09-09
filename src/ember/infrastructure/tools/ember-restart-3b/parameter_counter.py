@@ -271,14 +271,18 @@ def _lease_p2b_tokenizer_runtime(*, bundle_root: Path, manifest_path: Path) -> I
 
 def validate_realization_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the one closed receipt schema emitted by the counter."""
-    if not isinstance(receipt, Mapping) or set(receipt) != REALIZATION_RECEIPT_FIELDS:
+    cia = isinstance(receipt,Mapping) and receipt.get('schema_version') == 'ember-cia-realization-receipt-v1'
+    fields = REALIZATION_RECEIPT_FIELDS | ({'qualification'} if cia else set())
+    if not isinstance(receipt, Mapping) or set(receipt) != fields:
         raise ValueError("realization receipt has an invalid closed schema")
-    if receipt["schema_version"] != "ember-sparse-realization-receipt-v1":
+    if not cia and receipt["schema_version"] != "ember-sparse-realization-receipt-v1":
         raise ValueError("realization receipt has an unsupported schema")
     if receipt["verification_boundary"] != "VERIFIED_MEASURED" or receipt["result"] != "MEASURED":
         raise ValueError("realization receipt is not measured evidence")
-    if receipt["architecture_revision"] != ARCHITECTURE_REVISION:
+    if receipt['architecture_revision'] != ('CIA3-R1-N61' if cia else ARCHITECTURE_REVISION):
         raise ValueError("realization receipt architecture revision drifted")
+    if cia and receipt['qualification'] != {'clean_genesis':False,'trained':False,'served':False}:
+        raise ValueError('CIA object capacity receipt cannot grant model qualification')
     _validate_runtime_authority(receipt["runtime_authority"])
     for field in ("model_config_sha256", "subject_checkpoint_sha256", "counter_sha256"):
         value = receipt[field]
@@ -289,11 +293,11 @@ def validate_realization_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
         if type(value) is not int or value < 0:
             raise ValueError(f"realization receipt has an invalid {field}")
     active = receipt["active_expert_ids"]
-    if not isinstance(active, list) or len(active) != 1 or active[0] not in {"shared", *EXPERT_NAMES}:
+    if (not isinstance(active,list) or (active != [str(i) for i in range(25) if str(i) in active] if cia else (len(active) != 1 or active[0] not in {'shared', *EXPERT_NAMES}))):
         raise ValueError("realization receipt has an invalid active expert route")
     for field in ("expert_genesis_sha256", "expert_parameter_sha256"):
         mapping = receipt[field]
-        if not isinstance(mapping, Mapping) or set(mapping) != set(EXPERT_NAMES):
+        if not isinstance(mapping, Mapping) or set(mapping) != ({str(i) for i in range(25)} if cia else set(EXPERT_NAMES)):
             raise ValueError(f"realization receipt has an invalid {field} map")
         for expert, digest in mapping.items():
             if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
@@ -1184,6 +1188,17 @@ def execute_counter(
     must provide both the path and expected content hash.
     """
 
+    cia_manifest, cia_digest = _read_json_snapshot(checkpoint_manifest, label='checkpoint manifest')
+    if cia_manifest.get('schema_version') == 'ember-cia-checkpoint-v1':
+        if active_expert != 'all' or any(value is not None for value in (
+                parent_manifest,root_manifest,p2b_repo_root,p2b_stream_manifest,p2b_stream_build_receipt,
+                p2b_tokenizer_runtime_root,p2b_tokenizer_runtime_manifest,expert_genesis_authority,expert_genesis_authority_sha256)):
+            raise ValueError('CIA counter requires full-population scope without v2 lineage')
+        config, config_digest = _read_json_snapshot(model_config,label='model config')
+        if config != cia_manifest['architecture_config']:
+            raise ValueError('CIA counter architecture config differs from checkpoint')
+        return _cia_realization_receipt(checkpoint_manifest.parent,
+            dict(cia_manifest,checkpoint_manifest_sha256=cia_digest),model_config_sha256=config_digest)
     if active_expert not in {*EXPERT_NAMES, "shared"}:
         raise ValueError("active expert must be shared or one of the four authorized banks")
     if (expert_genesis_authority is None) != (expert_genesis_authority_sha256 is None):
@@ -1192,7 +1207,7 @@ def execute_counter(
     if config.get("architecture_revision") != ARCHITECTURE_REVISION:
         raise ValueError("model config revision is not ember-sparse-3b-v2")
     shape = _model_shape(config)
-    manifest_snapshot, subject_checkpoint_sha256 = _read_json_snapshot(checkpoint_manifest, label="checkpoint manifest")
+    manifest_snapshot, subject_checkpoint_sha256 = cia_manifest, cia_digest
     # Determined from the raw snapshot (not the post-inspection manifest) so the
     # discriminator can be threaded into `_inspect_realization` for the inverted
     # genesis byte-verification (Finding 2, issue #1329) in the same shard pass.
@@ -1398,6 +1413,14 @@ def execute_counter(
 def measure_parameter_counts(model: Any) -> dict[str, Any]:
     """Measure total allocated capacity and one active episode path in-process."""
 
+    from ember.model.ember_v0_decoder import CIADecoder
+    if type(model) is CIADecoder:
+        parameters = model.parameter_inventory()
+        total = sum(value.numel() for value in parameters.values())
+        active = sum(value.numel() for value in parameters.values() if value.requires_grad)
+        return dict(allocated_parameters=total,unique_parameters=total,trainable_parameters=total,
+            served_parameters=total,active_parameters=active,episode_trainable_parameters=active,
+            active_expert_ids=[str(i) for i in range(25) if any(name.startswith(f'experts.{i}.') and value.requires_grad for name,value in parameters.items())])
     total = model.count_unique_trainable_parameters(include_frozen=True)
     active = model.count_unique_trainable_parameters()
     return {
@@ -1500,6 +1523,281 @@ def write_parameter_receipt(
         **counts,
         "expert_genesis_sha256": dict(expert_genesis_sha256),
     }
+
+
+def _cia_counter_path(root, relative):
+    path = root / relative
+    current = path
+    while True:
+        metadata = current.lstat()
+        if current.is_symlink() or getattr(metadata,'st_file_attributes',0) & 0x400:
+            raise ValueError('CIA checkpoint path is a symlink or reparse point')
+        if current == root: break
+        current = current.parent
+    return path
+
+
+@contextmanager
+def _cia_counter_component(root, relative, record):
+    """Inspect the exact bounded object snapshot through the existing ZIP reader."""
+    path = _cia_counter_path(root,relative)
+    if type(record.get('bytes')) is not int or record['bytes'] < 1:
+        raise ValueError('CIA checkpoint component byte bound mismatch')
+    with path.open('rb') as handle:
+        raw = handle.read(record['bytes'] + 1)
+    if len(raw) != record['bytes'] or hashlib.sha256(raw).hexdigest() != record['sha256']:
+        raise ValueError('CIA checkpoint component digest mismatch')
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        entries = archive.infolist()
+        if (len({entry.filename for entry in entries}) != len(entries)
+                or any(entry.compress_type != zipfile.ZIP_STORED for entry in entries)
+                or sum(entry.file_size for entry in entries) > len(raw)):
+            raise ValueError('CIA checkpoint ZIP storage exceeds its bound')
+        yield archive, _load_checkpoint_metadata(archive)
+
+
+def _cia_counter_tensor(archive, tensor, shape, storage_type):
+    if (not isinstance(tensor,_TensorMetadata) or tensor.shape != shape
+            or tensor.storage.storage_type != storage_type):
+        raise ValueError('CIA tensor inventory mismatch')
+    return _tensor_raw_bytes(archive,tensor)
+
+
+def _cia_parent_snapshot(parent_checkpoint, *, max_restore_payload_bytes, expected_digest=None):
+    """Reopen an admitted zero-step CIA parent using the existing byte counter."""
+    parent_root = Path(parent_checkpoint)
+    if not parent_root.is_absolute() or parent_root.resolve(strict=True) != parent_root:
+        raise ValueError('CIA parent checkpoint requires its canonical absolute path')
+    path = _cia_counter_path(parent_root, 'checkpoint-manifest.json')
+    with path.open('rb') as handle: raw = handle.read(1048577)
+    if len(raw) > 1048576: raise ValueError('CIA parent manifest exceeds its byte bound')
+    parent = json.loads(raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    if expected_digest is not None and digest != expected_digest:
+        raise ValueError('CIA parent manifest digest differs from its bound identity')
+    if (parent.get('schema_version') != 'ember-cia-checkpoint-v1' or 'lineage' in parent
+            or parent.get('genesis_provenance') != {'kind':'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}
+            or parent.get('data_cursor',{}).get('global_step') != 0
+            or parent.get('data_cursor',{}).get('tokens_seen') != 0):
+        raise ValueError('CIA first descendant requires an admitted zero-step parent')
+    cap = parent.get('max_restore_payload_bytes')
+    if type(cap) is not int or cap < 1 or type(max_restore_payload_bytes) is not int or cap > max_restore_payload_bytes:
+        raise ValueError('CIA parent exceeds the explicit caller restore byte bound')
+    persisted_path = parent_root / 'parameter-counter-receipt.json'
+    if not persisted_path.is_file(): raise ValueError('CIA first descendant requires an admitted parent counter receipt')
+    _cia_counter_path(parent_root, 'parameter-counter-receipt.json')
+    with persisted_path.open('rb') as handle: persisted_raw = handle.read(1048577)
+    if len(persisted_raw) > 1048576: raise ValueError('CIA parent counter receipt exceeds its byte bound')
+    persisted = validate_realization_receipt(json.loads(persisted_raw))
+    parent = dict(parent, checkpoint_manifest_sha256=digest)
+    facts = {}
+    measured = _cia_realization_receipt(parent_root, parent,
+        model_config_sha256=parent['model_config_sha256'], _facts=facts, _allow_descendant=False)
+    if measured != persisted:
+        raise ValueError('CIA admitted parent counter receipt differs from reopened bytes')
+    parent['_parent_counter_receipt_sha256'] = hashlib.sha256(persisted_raw).hexdigest()
+    return parent, facts
+
+
+def _cia_derive_first_lineage(parent_root, parent, parent_facts, child, child_facts):
+    """Derive one mechanical transition from reopened parent state and child bytes."""
+    for name in ('architecture_config','model_config_sha256','contract_sha256','launch_seed','optimizer_identity','placement'):
+        if child.get(name) != parent.get(name): raise ValueError('CIA parent and child '+name+' differ')
+    old, new = parent['data_cursor'], child['data_cursor']
+    if any(type(cursor.get(name)) is not int or cursor[name] < 0
+           for cursor in (old,new) for name in ('global_step','tokens_seen')):
+        raise ValueError('CIA parent and child cursor counters must be nonnegative integers')
+    step_delta, token_delta = new['global_step']-old['global_step'], new['tokens_seen']-old['tokens_seen']
+    if step_delta <= 0 or token_delta < 0: raise ValueError('CIA descendant cursor must advance step without decreasing tokens')
+    if child['expert_genesis_sha256'] != parent['expert_genesis_sha256']:
+        raise ValueError('CIA descendant genesis differs from the reopened parent')
+    if set(child_facts['parameters']) != set(parent_facts['parameters']):
+        raise ValueError('CIA descendant parameter inventory differs from parent')
+    updated, changed = [], []
+    for name in sorted(parent_facts['parameters']):
+        before = parent_facts['optimizer'].get(name,{})
+        after = child_facts['optimizer'].get(name,{})
+        before_step, after_step = before.get('step',0), after.get('step',0)
+        if after_step == before_step + step_delta:
+            if not child['placement'][name]['requires_grad']:
+                raise ValueError('CIA frozen parameter has optimizer update support')
+            updated.append(name)
+        elif after != before:
+            raise ValueError('CIA descendant optimizer clock or inactive state differs from parent')
+        if child_facts['parameters'][name] != parent_facts['parameters'][name]:
+            if name not in updated: raise ValueError('CIA inactive parameter bytes differ from parent')
+            changed.append(name)
+    if not updated or not changed: raise ValueError('CIA descendant requires actual optimizer and parameter update support')
+    return {'schema_version':'ember-cia-first-descendant-v1','parent_checkpoint':str(parent_root),
+        'parent_manifest_sha256':parent['checkpoint_manifest_sha256'],
+        'parent_counter_receipt_sha256':parent['_parent_counter_receipt_sha256'],
+        'step_delta':step_delta,'token_delta':token_delta,'updated_parameters':updated,
+        'updated_parameter_elements':sum(child_facts['elements'][name] for name in updated),
+        'changed_parameters':changed,'changed_parameter_elements':sum(child_facts['elements'][name] for name in changed)}
+
+
+def _cia_realization_receipt(root, receipt, *, model_config_sha256, _facts=None, _allow_descendant=True):
+    """Measure CIA objects with the existing isolated, standard-library counter.
+
+    No torch import, model allocation, or qualification is needed to inspect
+    full-population serialized tensor metadata and its exact storage bytes.
+    """
+    from math import prod
+    source_root = Path(__file__).resolve().parents[4]
+    if str(source_root) not in sys.path: sys.path.insert(0,str(source_root))
+    from ember.model.ember_v0_contract import validate_cia_architecture, cia_architecture_sha256
+    from ember.model.ember_v0_inventory import equation_inventory
+    root = Path(root)
+    path = _cia_counter_path(root,'checkpoint-manifest.json')
+    with path.open('rb') as handle: raw = handle.read(1048577)
+    if len(raw) > 1048576 or hashlib.sha256(raw).hexdigest() != receipt['checkpoint_manifest_sha256']:
+        raise ValueError('CIA counter manifest snapshot mismatch')
+    manifest = json.loads(raw)
+    if any(receipt.get(key) != value for key,value in manifest.items()):
+        raise ValueError('CIA counter manifest differs from its snapshot')
+    descendant = 'lineage' in manifest
+    if descendant and not _allow_descendant: raise ValueError('CIA first descendant requires a zero-step parent')
+    fields = {'schema_version','architecture_revision','architecture_config','architecture','launch_seed',
+        'rng_state_sha256','data_cursor','model_config_sha256','contract_sha256','expert_genesis_sha256',
+        'expert_parameter_sha256','active_expert_ids','core','expert_index','optimizer','replay',
+        'optimizer_identity','placement','max_restore_payload_bytes','genesis_provenance','qualification'} | ({'lineage'} if descendant else set())
+    if set(manifest) != fields or manifest['schema_version'] != 'ember-cia-checkpoint-v1' or manifest['architecture_revision'] != 'CIA3-R1-N61':
+        raise ValueError('CIA counter manifest schema mismatch')
+    validate_cia_architecture(manifest['architecture_config'])
+    architecture_digest = cia_architecture_sha256(manifest['architecture_config'])
+    if manifest['model_config_sha256'] != model_config_sha256:
+        raise ValueError('CIA counter config digest differs from checkpoint')
+    if manifest['genesis_provenance'] != {'kind':'VERIFIED_ZERO_STEP_PARENT' if descendant else 'ZERO_STEP_OBJECT_BINDING','independently_qualified':False}:
+        raise ValueError('CIA counter requires unqualified object provenance')
+    if manifest['qualification'] != {'clean_genesis':False,'trained':False,'served':False}:
+        raise ValueError('CIA checkpoint bytes cannot grant model qualification')
+    if not descendant and (manifest['data_cursor'].get('global_step') != 0 or manifest['data_cursor'].get('tokens_seen') != 0):
+        raise ValueError('CIA counter descendants require verified parent lineage')
+    index = manifest['expert_index']
+    if set(index) != {'path','sha256','bytes','expert_object_bytes'} or index['path'] != 'expert-index-'+_sha256_value(index['sha256'],label='CIA index')+'.json':
+        raise ValueError('CIA counter expert index record mismatch')
+    with _cia_counter_path(root,index['path']).open('rb') as handle: index_raw=handle.read(65537)
+    if len(index_raw)>65536 or len(index_raw)!=index['bytes'] or hashlib.sha256(index_raw).hexdigest()!=index['sha256']:
+        raise ValueError('CIA counter expert index digest mismatch')
+    population=json.loads(index_raw)
+    if (set(population)!={'schema_version','candidate_revision','experts'}
+            or population['schema_version']!='ember-cia-expert-index-v1' or population['candidate_revision']!='CIA3-R1-N61'
+            or type(population['experts']) is not list or len(population['experts'])!=25):
+        raise ValueError('CIA counter requires all 25 expert objects')
+    records=population['experts']
+    for expert_id,record in enumerate(records):
+        if (set(record)!={'expert_id','sha256','bytes'} or type(record['expert_id']) is not int or record['expert_id']!=expert_id
+                or type(record['bytes']) is not int or not 1<=record['bytes']<=113246208*2+4194304):
+            raise ValueError('CIA counter expert object record mismatch')
+        _sha256_value(record['sha256'],label='CIA expert object')
+    if len({record['sha256'] for record in records})!=25 or sum(record['bytes'] for record in records)!=index['expert_object_bytes']:
+        raise ValueError('CIA counter expert index identity or byte arithmetic mismatch')
+    core=manifest['core']
+    if (set(core)!={'sha256','bytes','architecture_sha256'} or core['architecture_sha256']!=architecture_digest
+            or type(core['bytes']) is not int or not 1<=core['bytes']<=251383808*2+4194304):
+        raise ValueError('CIA counter core object record mismatch')
+    _sha256_value(core['sha256'],label='CIA core object')
+    for kind,name in (('optimizer','optimizer-state.pt'),('replay','replay-state.pt')):
+        record=manifest[kind]
+        if set(record)!={'path','sha256','bytes'} or record['path']!=name or type(record['bytes']) is not int or record['bytes']<1:
+            raise ValueError('CIA counter state object record mismatch')
+        _sha256_value(record['sha256'],label='CIA state object')
+    if (type(manifest['max_restore_payload_bytes']) is not int or sum(record['bytes'] for record in [core,*records,manifest['optimizer'],manifest['replay']])>manifest['max_restore_payload_bytes']):
+        raise ValueError('CIA counter checkpoint restore byte arithmetic mismatch')
+    expected={'checkpoint-manifest.json',index['path'],'optimizer-state.pt','replay-state.pt',
+        *('objects/'+record['sha256']+'.pt' for record in [core,*records])}
+    actual=set()
+    for item in root.rglob('*'):
+        relative=item.relative_to(root).as_posix()
+        _cia_counter_path(root,relative)
+        if item.is_dir():
+            if relative!='objects': raise ValueError('CIA counter directory closure mismatch')
+        else: actual.add(relative)
+    if actual-{'parameter-counter-receipt.json'}!=expected:
+        raise ValueError('CIA counter requires exact complete object closure')
+    specs=equation_inventory()
+    inventory={spec.name:spec.shape for spec in specs}
+    facts={'parameters':{},'elements':{name:prod(shape) for name,shape in inventory.items()},'optimizer':{}}
+    for expert_id,record in [(None,core),*enumerate(records)]:
+        with _cia_counter_component(root,'objects/'+record['sha256']+'.pt',record) as (archive,payload):
+            if expert_id is None:
+                if set(payload)!={'schema_version','architecture_sha256','model'} or payload['schema_version']!='ember-cia-core-object-v1' or payload['architecture_sha256']!=architecture_digest:
+                    raise ValueError('CIA counter core payload mismatch')
+            elif (set(payload)!={'schema_version','candidate_revision','expert_id','model'} or payload['schema_version']!='ember-cia-expert-object-v1'
+                    or payload['candidate_revision']!='CIA3-R1-N61' or payload['expert_id']!=expert_id):
+                raise ValueError('CIA counter expert payload mismatch')
+            shapes={spec.name:spec.shape for spec in specs if spec.expert==expert_id}
+            state=payload['model']
+            if set(state)!=set(shapes): raise ValueError('CIA tensor inventory mismatch')
+            storage=set()
+            for name,tensor in state.items():
+                raw = _cia_counter_tensor(archive,tensor,shapes[name],'BFloat16Storage')
+                facts['parameters'][name] = hashlib.sha256(raw).hexdigest()
+                if tensor.storage.key in storage: raise ValueError('CIA counter parameter storage alias')
+                storage.add(tensor.storage.key)
+    placement=manifest['placement']
+    if set(placement)!=set(inventory): raise ValueError('CIA counter placement inventory mismatch')
+    for entry in placement.values():
+        if set(entry)!={'device','requires_grad'} or type(entry['requires_grad']) is not bool:
+            raise ValueError('CIA counter placement record mismatch')
+    identity=manifest['optimizer_identity']
+    groups={}
+    for group in identity['param_groups']:
+        for name in group['params']:
+            if name in groups: raise ValueError('CIA counter duplicate optimizer membership')
+            groups[name]=group['hyperparameters']
+    if set(groups)!=set(inventory): raise ValueError('CIA counter optimizer full membership mismatch')
+    with _cia_counter_component(root,'optimizer-state.pt',manifest['optimizer']) as (archive,payload):
+        if (set(payload)!={'schema_version','identity','placement','master_weights','state'} or payload['schema_version']!='ember-cia-placed-optimizer-state-v2'
+                or payload['identity']!=identity or payload['placement']!=placement or payload['master_weights'] is not None):
+            raise ValueError('CIA counter native optimizer identity mismatch')
+        for name,state in payload['state'].items():
+            if name not in inventory or type(state) is not dict: raise ValueError('CIA counter optimizer state membership mismatch')
+            if not state: continue
+            observed={}
+            required={'step','exp_avg','exp_avg_sq'} | ({'max_exp_avg_sq'} if groups[name]['amsgrad'] else set())
+            if set(state)!=required: raise ValueError('CIA counter native optimizer fields mismatch')
+            for key,tensor in state.items():
+                raw = _cia_counter_tensor(archive,tensor,() if key=='step' else inventory[name], 'FloatStorage' if key=='step' else 'BFloat16Storage')
+                if key == 'step':
+                    import math, struct
+                    step = struct.unpack('<f',raw)[0]
+                    if not math.isfinite(step) or step < 0 or not step.is_integer(): raise ValueError('CIA native optimizer clock mismatch')
+                    observed[key] = int(step)
+                else: observed[key] = hashlib.sha256(raw).hexdigest()
+            facts['optimizer'][name]=observed
+    with _cia_counter_component(root,'replay-state.pt',manifest['replay']) as (archive,payload):
+        if set(payload)!={'rng_state','data_cursor'} or payload['data_cursor']!=manifest['data_cursor'] or set(payload['rng_state'])!={'cpu','cuda'}:
+            raise ValueError('CIA counter replay binding mismatch')
+        for name,tensor in payload['rng_state'].items():
+            if not isinstance(tensor,_TensorMetadata) or len(tensor.shape)!=1: raise ValueError('CIA counter RNG tensor mismatch')
+            raw=_cia_counter_tensor(archive,tensor,tensor.shape,'ByteStorage')
+            if hashlib.sha256(raw).hexdigest()!=manifest['rng_state_sha256'][name]: raise ValueError('CIA counter RNG digest mismatch')
+    objects={str(i):record['sha256'] for i,record in enumerate(records)}
+    if manifest['expert_parameter_sha256']!=objects or (not descendant and manifest['expert_genesis_sha256']!=objects):
+        raise ValueError('CIA counter expert object identity mismatch')
+    if descendant:
+        lineage=manifest['lineage']
+        if type(lineage) is not dict: raise ValueError('CIA descendant lineage schema mismatch')
+        parent_root=Path(lineage.get('parent_checkpoint',''))
+        parent,parent_facts=_cia_parent_snapshot(parent_root,max_restore_payload_bytes=manifest['max_restore_payload_bytes'],
+            expected_digest=lineage.get('parent_manifest_sha256'))
+        if lineage != _cia_derive_first_lineage(parent_root,parent,parent_facts,manifest,facts):
+            raise ValueError('CIA descendant lineage differs from reopened parent and child bytes')
+    total=sum(prod(shape) for shape in inventory.values())
+    active=sum(prod(shape) for name,shape in inventory.items() if placement[name]['requires_grad'])
+    counts=dict(allocated_parameters=total,unique_parameters=total,trainable_parameters=total,
+        served_parameters=total,active_parameters=active,episode_trainable_parameters=active)
+    routes=[str(i) for i in range(25) if any(spec.expert==i and placement[spec.name]['requires_grad'] for spec in specs)]
+    if counts!=manifest['architecture'] or routes!=manifest['active_expert_ids']:
+        raise ValueError('CIA counter measured capacity or update support mismatch')
+    if _facts is not None: _facts.update(facts)
+    return validate_realization_receipt(dict(schema_version='ember-cia-realization-receipt-v1',
+        verification_boundary='VERIFIED_MEASURED',result='MEASURED',architecture_revision='CIA3-R1-N61',
+        model_config_sha256=model_config_sha256,subject_checkpoint_sha256=receipt['checkpoint_manifest_sha256'],
+        counter_sha256=_sha256(Path(__file__)),**counts,active_expert_ids=routes,
+        expert_genesis_sha256=dict(manifest['expert_genesis_sha256']),expert_parameter_sha256=objects,
+        runtime_authority=dict(_RUNTIME_AUTHORITY_NONE),qualification=dict(manifest['qualification'])))
 
 
 def main(argv: list[str] | None = None) -> int:
