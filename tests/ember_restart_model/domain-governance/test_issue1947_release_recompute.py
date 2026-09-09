@@ -114,14 +114,24 @@ def test_bundle_schema_and_row_bindings_fail_closed(
     bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
     with pytest.raises(subject.ReleaseRecomputeRefusal, match=refusal):
         subject.recompute(bundle_path, thresholds())
-def test_an_all_placeholder_matrix_fails_the_bar_it_used_to_pass(tmp_path: Path) -> None:
+def test_an_all_placeholder_matrix_fails_the_bar_it_used_to_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The assertion this file carried, inverted, now that the producer says what a row is.
 
     Every row here scores 1.0 and none of them can fail, because each prediction is derived from
     the same admitted asset its gold digest was taken from. This file used to assert that such a
     matrix satisfies `cert_007_all_required_rows_pass`. It does not, and the reason is reported
     rather than implied.
+
+    The all-placeholder condition is CONSTRUCTED here rather than inherited from whatever the
+    live matrix happens to declare. A test that depends on every current row being a placeholder
+    is a test of today's matrix: it goes red the first time a row is correctly reclassified as
+    checkpoint-derived, which says nothing about the property this test exists to hold. Setting
+    the sources explicitly keeps the assertion aimed at the bar rather than at the census.
     """
+    for row_id in execute.ROWS:
+        monkeypatch.setitem(execute.PREDICTION_SOURCE, row_id, "admitted_asset_derived")
     receipt = subject.recompute(write_bundle(tmp_path), thresholds())
     assert all(row["passed"] for row in receipt["rows"])
     assert receipt["model_evidence_row_count"] == 0
