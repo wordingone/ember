@@ -893,9 +893,31 @@ pub fn evaluate_vram_wall_samples(
     }
 }
 
+const NUMERICAL_VRAM_PROVIDER: &str = "nvidia_smi_total_device_upper_bound";
+
+fn numerical_vram_profile_valid(
+    profile: DispatchWorkloadProfileId,
+    schema: &str,
+    wall: Option<&DispatchVramWall>,
+) -> bool {
+    let numerical = profile == DispatchWorkloadProfileId::NumericalConformance;
+    let selected = matches!(wall, Some(DispatchVramWall::Required(contract))
+        if contract.provider == NUMERICAL_VRAM_PROVIDER);
+    if numerical {
+        matches!(
+            schema,
+            "ember-lab-dispatch-manifest-v4" | "ember-lab-dispatch-manifest-v5"
+        ) && matches!(wall, Some(DispatchVramWall::Required(_)))
+    } else {
+        !selected
+    }
+}
+
 fn validate_vram_wall_contract(contract: &VramWallContract) -> Result<()> {
-    if contract.provider != "nvidia_smi_nvml"
-        || !contract.device_uuid.starts_with("GPU-")
+    if !matches!(
+        contract.provider.as_str(),
+        "nvidia_smi_nvml" | NUMERICAL_VRAM_PROVIDER
+    ) || !contract.device_uuid.starts_with("GPU-")
         || !(1..=1_000_000).contains(&contract.maximum_process_fraction_millionths)
         || contract.minimum_free_bytes == 0
         || contract.consecutive_breach_samples != 3
@@ -1153,6 +1175,7 @@ pub fn measure_disk_write_wall_sample(
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DispatchWorkloadProfileId {
+    NumericalConformance,
     GovernedVertical,
     JobMemoryCeilingProbe,
     OwnedServing,
@@ -1163,6 +1186,7 @@ pub enum DispatchWorkloadProfileId {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DispatchPinnedHostProducerKind {
+    NumericalCandidateState,
     TrainingDataLoader,
     JobMemoryProbeAllocator,
     CheckpointWriter,
@@ -4234,7 +4258,11 @@ impl Daemon {
             }
             _ => false,
         };
-        if !vram_declaration_valid
+        if !numerical_vram_profile_valid(
+            manifest.workload_profile.profile_id,
+            &manifest.schema_version,
+            manifest.vram_wall.as_ref(),
+        ) || !vram_declaration_valid
             || !disk_declaration_valid
             || manifest.job_id.trim().is_empty()
             || manifest.source_commit.len() != 40
@@ -4312,6 +4340,26 @@ impl Daemon {
             });
         }
         validate_resume_registry_binding_closure(&manifest.args, &verified_bindings)?;
+        if manifest.workload_profile.profile_id == DispatchWorkloadProfileId::NumericalConformance {
+            let args = &manifest.args;
+            for raw in [&args[1], &args[6]] {
+                let canonical = fs::canonicalize(raw)?;
+                if !verified_bindings
+                    .iter()
+                    .any(|(path, _, _)| path == &canonical)
+                {
+                    return Err(EmberLabError::InvalidDispatchManifest {
+                        detail: "numerical conformance launcher and helper require verified source bindings".into(),
+                    });
+                }
+            }
+            if fs::canonicalize(&args[4])? != custody_root {
+                return Err(EmberLabError::InvalidDispatchManifest {
+                    detail: "numerical conformance argv custody differs from manifest custody"
+                        .into(),
+                });
+            }
+        }
         for key in [
             "TEMP",
             "TMP",
@@ -4782,7 +4830,7 @@ impl Daemon {
                 (
                     json!({
                         "applicability":"required",
-                        "claim_boundary":"torch_allocator_fraction_plus_load_bearing_external_sentinel_not_total_vram_guarantee",
+                        "claim_boundary":vram_claim_boundary(&contract.provider),
                         "provider":capacity.provider,
                         "device_uuid":capacity.device_uuid,
                         "total_bytes":capacity.total_bytes,
@@ -9059,6 +9107,11 @@ fn validate_dispatch_workload_profile(
         });
     }
     let expected = match profile.profile_id {
+        DispatchWorkloadProfileId::NumericalConformance => {
+            [DispatchPinnedHostProducerKind::NumericalCandidateState]
+                .into_iter()
+                .collect()
+        }
         DispatchWorkloadProfileId::GovernedVertical => [
             DispatchPinnedHostProducerKind::TrainingDataLoader,
             DispatchPinnedHostProducerKind::CheckpointWriter,
@@ -9114,7 +9167,274 @@ fn validate_dispatch_workload_profile(
             detail: "dispatch workload profile does not match the certified-launch argv".into(),
         });
     }
+    let numerical_entry = args.iter().any(|arg| {
+        arg.replace('\\', "/")
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("cia_conformance_launch.py"))
+    });
+    if numerical_entry != (profile.profile_id == DispatchWorkloadProfileId::NumericalConformance) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "numerical run-body entry requires the numerical conformance profile".into(),
+        });
+    }
+    if profile.profile_id == DispatchWorkloadProfileId::NumericalConformance {
+        const BUDGET: u64 = 20 * 1024 * 1024 * 1024;
+        if memory_model_authority.is_some()
+            || maximum_job_memory_bytes != BUDGET
+            || total != BUDGET
+            || !numerical_conformance_args_valid(args)
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "numerical conformance requires its closed run-body argv, exact 20 GiB budget, and no memory-model authority".into(),
+            });
+        }
+    }
     Ok(())
+}
+
+fn numerical_conformance_args_valid(args: &[String]) -> bool {
+    if args.len() != 7
+        || args[0] != "-B"
+        || args[2] != "--daemon-run"
+        || args[3] != "--custody"
+        || args[5] != "--hidden-helper"
+    {
+        return false;
+    }
+    // Lexical validation is followed by canonical, authenticated file bindings
+    // and exact manifest-custody equality in dispatch validation.
+    let paths: Vec<String> = [1, 4, 6]
+        .iter()
+        .map(|&index| args[index].replace('\\', "/"))
+        .collect();
+    let absolute_windows = |path: &str| {
+        let bytes = path.as_bytes();
+        bytes.len() > 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1..3] == *b":/"
+            && !path
+                .split('/')
+                .any(|part| part == "." || part == ".." || part.is_empty())
+    };
+    paths.iter().all(|path| absolute_windows(path))
+        && paths[0].ends_with("/src/ember/governance/scripts/cia_conformance_launch.py")
+        && paths[1][..1].eq_ignore_ascii_case("B")
+}
+
+#[cfg(test)]
+mod numerical_conformance_profile_tests {
+    use super::*;
+
+    const BUDGET: u64 = 20 * 1024 * 1024 * 1024;
+
+    #[test]
+    fn total_device_provider_is_numerical_only_with_required_modern_wall() {
+        let contract = VramWallContract {
+            provider: NUMERICAL_VRAM_PROVIDER.into(),
+            device_uuid: "GPU-fixture".into(),
+            maximum_process_fraction_millionths: 800_000,
+            minimum_free_bytes: 1,
+            consecutive_breach_samples: 3,
+            sample_interval_ms: u64::from(RESOURCE_GUARD_SAMPLE_INTERVAL_MS),
+        };
+        assert!(validate_vram_wall_contract(&contract).is_ok());
+        let wall = DispatchVramWall::Required(contract);
+        for schema in [
+            "ember-lab-dispatch-manifest-v4",
+            "ember-lab-dispatch-manifest-v5",
+        ] {
+            assert!(numerical_vram_profile_valid(
+                DispatchWorkloadProfileId::NumericalConformance,
+                schema,
+                Some(&wall)
+            ));
+            assert!(!numerical_vram_profile_valid(
+                DispatchWorkloadProfileId::NumericalConformance,
+                schema,
+                None
+            ));
+            assert!(!numerical_vram_profile_valid(
+                DispatchWorkloadProfileId::NumericalConformance,
+                schema,
+                Some(&DispatchVramWall::NotApplicable)
+            ));
+            for ordinary in [
+                DispatchWorkloadProfileId::GovernedVertical,
+                DispatchWorkloadProfileId::JobMemoryCeilingProbe,
+                DispatchWorkloadProfileId::OwnedServing,
+                DispatchWorkloadProfileId::EvidenceVerifier,
+                DispatchWorkloadProfileId::Cockpit,
+            ] {
+                assert!(!numerical_vram_profile_valid(ordinary, schema, Some(&wall)));
+            }
+        }
+        for wall in [Some(&wall), None] {
+            assert!(!numerical_vram_profile_valid(
+                DispatchWorkloadProfileId::NumericalConformance,
+                "ember-lab-dispatch-manifest-v3",
+                wall
+            ));
+        }
+    }
+
+    #[test]
+    fn total_device_occupation_is_checked_and_conservatively_attributed() {
+        let mut capacity = VramDeviceCapacity {
+            provider: NUMERICAL_VRAM_PROVIDER.into(),
+            device_uuid: "GPU-fixture".into(),
+            total_bytes: 24,
+            free_bytes: 4,
+        };
+        assert_eq!(total_device_occupied_bytes(&capacity).unwrap(), 20);
+        capacity.free_bytes = 25;
+        assert!(total_device_occupied_bytes(&capacity).is_err());
+        capacity.total_bytes = 0;
+        capacity.free_bytes = 0;
+        assert!(total_device_occupied_bytes(&capacity).is_err());
+        assert!(vram_claim_boundary(NUMERICAL_VRAM_PROVIDER).contains("not_measured_per_process"));
+        assert_ne!(
+            vram_claim_boundary(NUMERICAL_VRAM_PROVIDER),
+            vram_claim_boundary("nvidia_smi_nvml")
+        );
+    }
+
+    fn args() -> Vec<String> {
+        [
+            "-B",
+            "A:/repo/src/ember/governance/scripts/cia_conformance_launch.py",
+            "--daemon-run",
+            "--custody",
+            "B:/candidate/run",
+            "--hidden-helper",
+            "C:/helpers/run_headless.py",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect()
+    }
+
+    fn profile() -> DispatchWorkloadProfile {
+        DispatchWorkloadProfile {
+            profile_id: DispatchWorkloadProfileId::NumericalConformance,
+            pinned_host_producers: vec![DispatchPinnedHostProducer {
+                kind: DispatchPinnedHostProducerKind::NumericalCandidateState,
+                maximum_bytes: BUDGET,
+            }],
+            requires_ui_responsiveness: false,
+            cpu_rate_percent: 90,
+        }
+    }
+
+    fn validate(
+        profile: &DispatchWorkloadProfile,
+        args: &[String],
+        ceiling: u64,
+        authority: Option<&DispatchMemoryModelAuthority>,
+    ) -> Result<()> {
+        validate_dispatch_workload_profile(
+            profile,
+            authority,
+            DispatchCpuPacingClass::Unpaced,
+            args,
+            ceiling,
+            BUDGET,
+        )
+    }
+
+    #[test]
+    fn numerical_profile_accepts_only_closed_run_body() {
+        assert!(validate(&profile(), &args(), BUDGET, None).is_ok());
+        for (index, replacement) in [
+            (0, "-c"),
+            (1, "A:/repo/cia_conformance_launch.py"),
+            (2, "--live"),
+            (3, "--other"),
+            (4, "C:/candidate/run"),
+            (5, "--other"),
+            (6, "relative_helper.py"),
+            (
+                1,
+                "A:/repo/../src/ember/governance/scripts/cia_conformance_launch.py",
+            ),
+        ] {
+            let mut changed = args();
+            changed[index] = replacement.into();
+            assert!(validate(&profile(), &changed, BUDGET, None).is_err());
+        }
+        let mut extra = args();
+        extra.push("--arbitrary".into());
+        assert!(validate(&profile(), &extra, BUDGET, None).is_err());
+        for length in 0..7 {
+            assert!(validate(&profile(), &args()[..length], BUDGET, None).is_err());
+        }
+        let windows: Vec<_> = args()
+            .into_iter()
+            .map(|arg| arg.replace('/', "\\"))
+            .collect();
+        assert!(validate(&profile(), &windows, BUDGET, None).is_ok());
+    }
+
+    #[test]
+    fn numerical_profile_requires_exact_budget_producer_and_no_borrowed_authority() {
+        assert!(validate(&profile(), &args(), BUDGET + 1, None).is_err());
+        assert!(validate(&profile(), &args(), BUDGET - 1, None).is_err());
+        let mut changed = profile();
+        changed.pinned_host_producers[0].maximum_bytes -= 1;
+        assert!(validate(&changed, &args(), BUDGET, None).is_err());
+        changed = profile();
+        changed.pinned_host_producers[0].kind = DispatchPinnedHostProducerKind::ReceiptVerifier;
+        assert!(validate(&changed, &args(), BUDGET, None).is_err());
+        changed = profile();
+        changed.requires_ui_responsiveness = true;
+        assert!(validate(&changed, &args(), BUDGET, None).is_err());
+        let authority = DispatchMemoryModelAuthority::JobMemoryCeilingProbe {
+            maximum_job_memory_bytes: BUDGET,
+            maximum_absolute_delta_bytes: 1,
+            signed_delta_bytes: 1,
+            allocation_target_bytes: BUDGET + 1,
+        };
+        assert!(validate(&profile(), &args(), BUDGET, Some(&authority)).is_err());
+        changed = profile();
+        changed.profile_id = DispatchWorkloadProfileId::EvidenceVerifier;
+        assert!(validate(&changed, &args(), BUDGET, None).is_err());
+    }
+
+    #[test]
+    fn ordinary_profiles_cannot_dispatch_numerical_entry() {
+        for (profile_id, producers) in [
+            (
+                DispatchWorkloadProfileId::EvidenceVerifier,
+                vec![DispatchPinnedHostProducerKind::ReceiptVerifier],
+            ),
+            (
+                DispatchWorkloadProfileId::OwnedServing,
+                vec![
+                    DispatchPinnedHostProducerKind::ModelServer,
+                    DispatchPinnedHostProducerKind::TelemetryBuffer,
+                ],
+            ),
+        ] {
+            let count = producers.len() as u64;
+            let ordinary = DispatchWorkloadProfile {
+                profile_id,
+                pinned_host_producers: producers
+                    .into_iter()
+                    .map(|kind| DispatchPinnedHostProducer {
+                        kind,
+                        maximum_bytes: BUDGET / count,
+                    })
+                    .collect(),
+                requires_ui_responsiveness: false,
+                cpu_rate_percent: 90,
+            };
+            assert!(validate(&ordinary, &["ordinary.py".into()], BUDGET, None).is_ok());
+            assert!(validate(&ordinary, &args(), BUDGET, None).is_err());
+            let mut embedded = vec!["ordinary.py".into()];
+            embedded.push(args()[1].clone());
+            assert!(validate(&ordinary, &embedded, BUDGET, None).is_err());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -10070,10 +10390,15 @@ fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceC
         "--query-gpu=uuid,memory.total,memory.free",
         "--format=csv,noheader,nounits",
     ])?;
-    if let Some(capacity) = parse_nvidia_vram_device_capacities(&stdout)?
+    if let Some(mut capacity) = parse_nvidia_vram_device_capacities(&stdout)?
         .into_iter()
         .find(|capacity| capacity.device_uuid == contract.device_uuid)
     {
+        validate_vram_wall_contract(contract)?;
+        capacity.provider = contract.provider.clone();
+        if contract.provider == NUMERICAL_VRAM_PROVIDER {
+            total_device_occupied_bytes(&capacity)?;
+        }
         return Ok(capacity);
     }
     Err(EmberLabError::InvalidDispatchManifest {
@@ -10082,6 +10407,28 @@ fn probe_vram_device_capacity(contract: &VramWallContract) -> Result<VramDeviceC
             contract.device_uuid
         ),
     })
+}
+
+fn total_device_occupied_bytes(capacity: &VramDeviceCapacity) -> Result<u64> {
+    if capacity.total_bytes == 0 {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "total-device VRAM capacity must be positive".into(),
+        });
+    }
+    capacity
+        .total_bytes
+        .checked_sub(capacity.free_bytes)
+        .ok_or_else(|| EmberLabError::InvalidDispatchManifest {
+            detail: "total-device VRAM free bytes exceed capacity".into(),
+        })
+}
+
+fn vram_claim_boundary(provider: &str) -> &'static str {
+    if provider == NUMERICAL_VRAM_PROVIDER {
+        "total_device_occupied_upper_bound_includes_foreign_and_descendant_allocations_not_measured_per_process"
+    } else {
+        "torch_allocator_fraction_plus_load_bearing_external_sentinel_not_total_vram_guarantee"
+    }
 }
 
 fn probe_process_vram_bytes(pid: u32, device_uuid: &str) -> Result<u64> {
@@ -13132,7 +13479,11 @@ fn sample_owned_vram_walls(
 
         let sampled = (|| -> Result<(VramDeviceCapacity, u64)> {
             let capacity = probe_vram_device_capacity(&contract)?;
-            let used_bytes = probe_process_vram_bytes(pid, &contract.device_uuid)?;
+            let used_bytes = if contract.provider == NUMERICAL_VRAM_PROVIDER {
+                total_device_occupied_bytes(&capacity)?
+            } else {
+                probe_process_vram_bytes(pid, &contract.device_uuid)?
+            };
             Ok((capacity, used_bytes))
         })();
         let (breach_class, observation) = match sampled {
@@ -13158,12 +13509,13 @@ fn sample_owned_vram_walls(
                         "total_bytes":capacity.total_bytes,
                         "available_free_bytes":capacity.free_bytes,
                         "minimum_free_bytes":contract.minimum_free_bytes,
-                        "used_process_bytes":used_bytes,
+                        "used_process_bytes":if contract.provider == NUMERICAL_VRAM_PROVIDER { None } else { Some(used_bytes) },
+                        "total_device_occupied_upper_bound_bytes":if contract.provider == NUMERICAL_VRAM_PROVIDER { Some(used_bytes) } else { None },
                         "maximum_process_vram_bytes":maximum_process_vram_bytes,
                         "maximum_process_fraction_millionths":contract.maximum_process_fraction_millionths,
                         "consecutive_breach_samples":contract.consecutive_breach_samples,
                         "sample_interval_ms":contract.sample_interval_ms,
-                        "claim_boundary":"torch_allocator_fraction_plus_load_bearing_external_sentinel_not_total_vram_guarantee",
+                        "claim_boundary":vram_claim_boundary(&contract.provider),
                         "foreign_process_control":false,
                     }),
                 )
