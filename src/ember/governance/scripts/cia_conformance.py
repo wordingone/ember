@@ -13,7 +13,7 @@ import subprocess
 import sys
 import types
 
-from ember.model.cia_contract import validate_cia_architecture, census
+from ember.model.ember_v0_contract import validate_cia_architecture, census
 from ember.governance.scripts import training_closure
 
 CONFIG = 'configs/ember-cia-3b.json'

@@ -122,7 +122,7 @@ def validate_source(root: Path, spec: Mapping[str, object]) -> dict[str, str]:
     if not isinstance(source, Mapping):
         raise TypeError("SPEC_SOURCE_INVALID")
     rows = {
-        "model": (root / "src/ember/model/model.py", source.get("treatment_model_blob")),
+        "model": (root / "src/ember/model/ember_v0_model.py", source.get("treatment_model_blob")),
         "pretrain": (root / "src/ember/training/pretrain.py", source.get("pretrain_blob")),
         "training_acceleration": (root / "src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py", source.get("training_acceleration_blob")),
     }

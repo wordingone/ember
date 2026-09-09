@@ -26,7 +26,7 @@ EXPECTED_DOMAINS = {
 }
 
 EXPECTED_ARTIFACTS = {
-    "Model": "src/ember/model/model.py",
+    "Model": "src/ember/model/ember_v0_model.py",
     "Training loop": "src/ember/training/pretrain.py",
     "Evaluator": "src/ember/evaluation/cbase_heldout_eval.py",
     "Runtime entry": "src/ember/runtime/infer.py",

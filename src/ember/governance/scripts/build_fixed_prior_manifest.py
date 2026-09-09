@@ -138,7 +138,7 @@ INVENTORY: tuple[dict, ...] = (
          path="src/ember/infrastructure/tools/ember-restart-3b/production_rung.py",
          provenance="Rung driver for the owned production run."),
     dict(category="training_loop", kind="file",
-         path="src/ember/model/model.py",
+         path="src/ember/model/ember_v0_model.py",
          provenance="Owned unified decoder definition (clean random genesis, no "
                     "imported weights)."),
     dict(category="training_loop", kind="file",

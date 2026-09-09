@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from ember.model.cia_decoder import CIADecoder
+from ember.model.ember_v0_decoder import CIADecoder
 
 
 def digest(tensor):
@@ -110,7 +110,7 @@ class NumericalCIATests(unittest.TestCase):
             self.assertTrue(any(row[2] == 256 for row in routes))
             self.assertTrue(any(row[2] == 1024 for row in routes))
             # Independently reproduce the global history selection at epoch two.
-            from ember.model.cia_routing import select_global
+            from ember.model.ember_v0_routing import select_global
             weights = self.model.parameter_inventory()
             keys = torch.stack([weights[f'router.layers.{layer}.keys'] for layer in range(1, 24, 2)])
             expected = select_global(self.model.embed_text(torch.tensor(tokens)),

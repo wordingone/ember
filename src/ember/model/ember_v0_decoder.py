@@ -11,9 +11,9 @@ and learning qualification require their own execution evidence.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .cia_contract import census, cia_architecture_config, validate_cia_architecture
-from .cia_inventory import equation_inventory, update_support
-from .cia_routing import _global_scores, _local_scores, unit_task_gate, select_global, select_local
+from .ember_v0_contract import census, cia_architecture_config, validate_cia_architecture
+from .ember_v0_inventory import equation_inventory, update_support
+from .ember_v0_routing import _global_scores, _local_scores, unit_task_gate, select_global, select_local
 
 
 def rotate_three_axis(values, positions):
@@ -135,7 +135,7 @@ class CIADecoder(nn.Module):
         parameters = self.parameter_inventory()
         if any(value.grad is not None for value in parameters.values()):
             raise ValueError('CUDA activation requires a quiescent population without gradients')
-        from .cia_residency import CUDAExecution
+        from .ember_v0_residency import CUDAExecution
         shared = {name: value for name, value in parameters.items() if not name.startswith('experts.')}
         original = {name: value.data for name, value in shared.items()}
         moved = {}

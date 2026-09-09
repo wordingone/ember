@@ -11,7 +11,7 @@ import sys
 import time
 import unittest
 import torch
-from ember.model.cia_decoder import CIADecoder
+from ember.model.ember_v0_decoder import CIADecoder
 from ember.governance.scripts.cia_conformance import fixed_input_values, require_current_dispatch
 
 LIVE = '--live' in sys.argv

@@ -10,11 +10,11 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import weakref
 import torch
-from ember.model.cia_decoder import CIADecoder
-from ember.model import cia_residency
+from ember.model.ember_v0_decoder import CIADecoder
+from ember.model import ember_v0_residency
 import test_issue2163_cia_residency as fixtures
-fixtures.ExpertCache = cia_residency.ExpertCache
-fixtures.paged_swiglu = cia_residency.paged_swiglu
+fixtures.ExpertCache = ember_v0_residency.ExpertCache
+fixtures.paged_swiglu = ember_v0_residency.paged_swiglu
 
 
 
@@ -28,7 +28,7 @@ class CUDAIntegrationTests(unittest.TestCase):
 
     def test_complete_bundle_mapping_preserves_global_names(self):
         parameters = CIADecoder().parameter_inventory()
-        bundles = cia_residency.expert_bundles(parameters)
+        bundles = ember_v0_residency.expert_bundles(parameters)
         self.assertEqual(set(bundles), set(range(25)))
         for expert, row in bundles.items():
             self.assertEqual(len(row), 36)
@@ -37,7 +37,7 @@ class CUDAIntegrationTests(unittest.TestCase):
                 self.assertTrue(name.startswith(f'experts.{expert}.'))
                 self.assertIs(value, parameters[name])
         del parameters['experts.24.layers.23.down.weight']
-        with self.assertRaises(ValueError): cia_residency.expert_bundles(parameters)
+        with self.assertRaises(ValueError): ember_v0_residency.expert_bundles(parameters)
 
     def test_generic_module_migration_cannot_bypass_placement(self):
         model = CIADecoder()
@@ -48,20 +48,20 @@ class CUDAIntegrationTests(unittest.TestCase):
         bank, _ = fixtures.ResidencyMechanics().make()
         owners = {f'{i}.{name}': value for i, row in bank.items() for name, value in row.items()}
         owners['core'] = torch.nn.Parameter(torch.ones(2))
-        cache = cia_residency.ExpertCache(bank, device=torch.device('cpu'), owner_parameters=lambda: owners)
+        cache = ember_v0_residency.ExpertCache(bank, device=torch.device('cpu'), owner_parameters=lambda: owners)
         with self.assertRaisesRegex(RuntimeError, 'changed'):
             with cache.step():
-                result = cia_residency.paged_swiglu(torch.ones(1, 4, dtype=torch.float64), cache, 0)
+                result = ember_v0_residency.paged_swiglu(torch.ones(1, 4, dtype=torch.float64), cache, 0)
                 owners['core'] = torch.nn.Parameter(torch.ones(2))
                 result.sum().backward()
 
     def test_owned_callback_does_not_hide_cache_bank_replacement(self):
         bank, _ = fixtures.ResidencyMechanics().make()
         owners = {f'{i}.{name}': value for i, row in bank.items() for name, value in row.items()}
-        cache = cia_residency.ExpertCache(bank, device=torch.device('cpu'), owner_parameters=lambda: owners)
+        cache = ember_v0_residency.ExpertCache(bank, device=torch.device('cpu'), owner_parameters=lambda: owners)
         with self.assertRaisesRegex(RuntimeError, 'changed|ownership'):
             with cache.step():
-                result = cia_residency.paged_swiglu(torch.ones(1, 4, dtype=torch.float64), cache, 0)
+                result = ember_v0_residency.paged_swiglu(torch.ones(1, 4, dtype=torch.float64), cache, 0)
                 bank[0]['up'] = torch.nn.Parameter(bank[0]['up'].detach().clone())
                 result.sum().backward()
 
@@ -82,7 +82,7 @@ class CUDAIntegrationTests(unittest.TestCase):
                 return copied
             with patch.object(torch.Tensor, 'to', transfer), \
                  patch('torch.cuda.synchronize', side_effect=RuntimeError('injected synchronize failure') if phase == 'synchronize' else None), \
-                 patch.object(cia_residency, 'CUDAExecution', side_effect=RuntimeError('injected execution failure')):
+                 patch.object(ember_v0_residency, 'CUDAExecution', side_effect=RuntimeError('injected execution failure')):
                 try:
                     CIADecoder.activate_cuda(model, 'cuda:0')
                 except RuntimeError as error:
@@ -103,7 +103,7 @@ class CUDAIntegrationTests(unittest.TestCase):
         bank, _ = fixtures.ResidencyMechanics().make()
         def invalid_owner():
             raise ValueError('invalid owner')
-        cache = cia_residency.ExpertCache(bank, device=torch.device('cpu'), owner_parameters=invalid_owner)
+        cache = ember_v0_residency.ExpertCache(bank, device=torch.device('cpu'), owner_parameters=invalid_owner)
         with self.assertRaisesRegex(ValueError, 'invalid owner'):
             with cache.step(): self.fail('invalid owner admitted')
         self.assertFalse(cache.active)

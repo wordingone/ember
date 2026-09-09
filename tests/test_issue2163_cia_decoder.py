@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from ember.model.cia_decoder import CIADecoder, rotate_three_axis
-from ember.model.cia_inventory import equation_inventory
+from ember.model.ember_v0_decoder import CIADecoder, rotate_three_axis
+from ember.model.ember_v0_inventory import equation_inventory
 
 
 class CIADecoderTests(unittest.TestCase):

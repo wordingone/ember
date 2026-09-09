@@ -1603,7 +1603,7 @@ describe("process-entry — main() end-to-end: stale owned-binding demotes the s
       argv: ["node", "ember", "-p", "hello"],
       loadOwnedIdentityFn: () => undefined,
       loadOwnedDevelopmentIdentityFn: () => {
-        throw new Error("trusted runtime source binding is invalid: src/ember/model/model.py");
+        throw new Error("trusted runtime source binding is invalid: src/ember/model/ember_v0_model.py");
       },
       spawnServer: async () => makeFakeHandle(29989),
       waitReady: async () => {},
@@ -1632,7 +1632,7 @@ describe("process-entry — main() end-to-end: stale owned-binding demotes the s
         argv: ["node", "ember", "-p", "hello"],
         loadOwnedIdentityFn: () => undefined,
         loadOwnedDevelopmentIdentityFn: () => {
-          throw new Error("runtime source does not match the embedded Git commit: src/ember/model/model.py");
+          throw new Error("runtime source does not match the embedded Git commit: src/ember/model/ember_v0_model.py");
         },
         spawnServer: async () => makeFakeHandle(29988),
         waitReady: async () => {},

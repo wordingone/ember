@@ -90,16 +90,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
-_MODEL_PKG = next(
-    candidate
-    for candidate in (
-        os.path.join(REPO_ROOT, "src", "ember", "infrastructure", "tools", "ember-restart-3b"),
-        os.path.join(REPO_ROOT, "tools", "ember-restart-3b"),
-    )
-    if os.path.isfile(os.path.join(candidate, "model.py"))
-)
-if _MODEL_PKG not in sys.path:
-    sys.path.insert(0, _MODEL_PKG)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 import torch  # noqa: E402
 
@@ -751,7 +743,7 @@ def build_live_candidate_scorer(*, checkpoint_dir: str, route: str,
 
     verified = load_verified_v5_checkpoint(checkpoint_dir)
 
-    from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+    from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
     config_path = os.path.join(REPO_ROOT, MODEL_CONFIG_REL)
     config = RestartDecoderConfig.from_contract(config_path)

@@ -53,12 +53,12 @@ class SubjectBinding(unittest.TestCase):
 
     def test_foreign_loaded_module_is_refused(self):
         with self.assertRaisesRegex(ValueError, 'foreign'):
-            verify_loaded_sources(ROOT, self.binding, {'ember.model.cia_decoder': SimpleNamespace(__file__=__file__)})
+            verify_loaded_sources(ROOT, self.binding, {'ember.model.ember_v0_decoder': SimpleNamespace(__file__=__file__)})
 
     def test_wrong_module_mapping_inside_declared_sources_is_refused(self):
-        wrong = ROOT / 'src/ember/model/cia_contract.py'
+        wrong = ROOT / 'src/ember/model/ember_v0_contract.py'
         with self.assertRaisesRegex(ValueError, 'module name'):
-            verify_loaded_sources(ROOT, self.binding, {'ember.model.cia_decoder': SimpleNamespace(__file__=str(wrong))})
+            verify_loaded_sources(ROOT, self.binding, {'ember.model.ember_v0_decoder': SimpleNamespace(__file__=str(wrong))})
 
     def test_actual_loaded_module_bytes_are_bound(self):
         verify_loaded_sources(ROOT, self.binding, {'ember.governance.scripts.cia_conformance': sys.modules['ember.governance.scripts.cia_conformance']})

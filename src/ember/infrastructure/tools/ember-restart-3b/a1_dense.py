@@ -23,7 +23,7 @@ import torch.utils.checkpoint as checkpoint_utils
 _REPO_IMPORT_HOME = Path(__file__).resolve().parents[5]
 if str(_REPO_IMPORT_HOME) not in sys.path:
     sys.path.insert(0, str(_REPO_IMPORT_HOME))
-from src.ember.model.model import RMSNorm, RawAudioProjector, RawPatchProjector, SharedAttention
+from src.ember.model.ember_v0_model import RMSNorm, RawAudioProjector, RawPatchProjector, SharedAttention
 
 
 class A1Tier(str, Enum):

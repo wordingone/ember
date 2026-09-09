@@ -110,7 +110,7 @@ for _ember_f5951795c08a31e2_alias in _ember_f5951795c08a31e2_aliases:
 load_checkpoint_artifacts = getattr(_ember_f5951795c08a31e2_module, 'load_checkpoint_artifacts')
 published_checkpoint_receipt = getattr(_ember_f5951795c08a31e2_module, 'published_checkpoint_receipt')
 # issue2015 exact-local-import-end:src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
 sys.path.insert(0, str(ROOT))
 from src.ember.governance.scripts.ember_restart.prediction_contract import (  # noqa: E402

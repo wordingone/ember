@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SPINE = (
-    ("src/ember/model/model.py", "src.ember.model.model", "UnifiedDecoder"),
+    ("src/ember/model/ember_v0_model.py", "src.ember.model.ember_v0_model", "UnifiedDecoder"),
     ("src/ember/training/pretrain.py", "src.ember.training.pretrain", "run_pretraining_segment"),
     ("src/ember/evaluation/cbase_heldout_eval.py", "src.ember.evaluation.cbase_heldout_eval", "evaluate_teacher_forced"),
     ("src/ember/runtime/infer.py", "src.ember.runtime.infer", "greedy_generate"),

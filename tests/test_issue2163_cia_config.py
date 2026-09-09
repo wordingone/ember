@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-from ember.model.cia_contract import validate_cia_architecture, cia_architecture_sha256
+from ember.model.ember_v0_contract import validate_cia_architecture, cia_architecture_sha256
 
 
 class CIAConfigTests(unittest.TestCase):
@@ -18,16 +18,16 @@ class CIAConfigTests(unittest.TestCase):
         self.config = json.loads((ROOT / 'configs/ember-cia-3b.json').read_text())
 
     def test_actual_decoder_consumes_the_validated_architecture(self):
-        from ember.model.cia_decoder import CIADecoder
+        from ember.model.ember_v0_decoder import CIADecoder
         model = CIADecoder(architecture_config=self.config)
         self.assertEqual(model.config, validate_cia_architecture(self.config))
         self.assertEqual(sum(p.numel() for p in model.parameter_inventory().values()), 3_082_539_008)
 
     def test_actual_decoder_rejects_changed_config_before_parameter_allocation(self):
-        from ember.model.cia_decoder import CIADecoder
+        from ember.model.ember_v0_decoder import CIADecoder
         from unittest.mock import patch
         self.config['model']['layers'] = 14
-        with patch('ember.model.cia_decoder.torch.empty') as allocation:
+        with patch('ember.model.ember_v0_decoder.torch.empty') as allocation:
             with self.assertRaises(ValueError):
                 CIADecoder(architecture_config=self.config)
             allocation.assert_not_called()
@@ -35,8 +35,8 @@ class CIAConfigTests(unittest.TestCase):
 
     def test_exact_revision_resolves_complete_equation_inventory(self):
         contract = validate_cia_architecture(self.config)
-        from ember.model.cia_contract import census
-        from ember.model.cia_inventory import equation_inventory
+        from ember.model.ember_v0_contract import census
+        from ember.model.ember_v0_inventory import equation_inventory
         self.assertEqual(contract.revision, 'CIA3-R1-N61')
         self.assertEqual(census(contract).total_unique, 3_082_539_008)
         self.assertEqual(sum(spec.numel for spec in equation_inventory()), census(contract).total_unique)

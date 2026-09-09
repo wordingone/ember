@@ -33,7 +33,7 @@ from checkpoint_artifacts import (
     published_checkpoint_receipt,
     write_checkpoint_artifacts,
 )
-from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder
+from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder
 from issue1946_complete_update_profile import (
     BoardEnergyTracker,
     build_arm_receipt as build_issue1946_arm_receipt,

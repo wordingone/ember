@@ -32,7 +32,7 @@ describe("owned seat loader", () => {
       "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
       "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
       "src/ember/runtime/infer.py",
-      "src/ember/model/model.py",
+      "src/ember/model/ember_v0_model.py",
       "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
       "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
     ];
@@ -96,7 +96,7 @@ describe("owned seat loader", () => {
         root,
         sourceCommit,
         (_repoRoot, _commit, relativePath) =>
-          relativePath === "src/ember/model/model.py"
+          relativePath === "src/ember/model/ember_v0_model.py"
             ? new TextEncoder().encode("forged\n")
             : readFileSync(join(root, relativePath)),
       )).toThrow("embedded Git commit");
@@ -124,7 +124,7 @@ describe("owned seat loader", () => {
         "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
         "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
         "src/ember/runtime/infer.py",
-        "src/ember/model/model.py",
+        "src/ember/model/ember_v0_model.py",
         "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
         "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
       ];
@@ -216,7 +216,7 @@ describe("owned seat loader", () => {
           ...index,
           files: {
             ...index.files,
-            "src/ember/model/model.py": { bytes: -1, sha256: "not-a-hash" },
+            "src/ember/model/ember_v0_model.py": { bytes: -1, sha256: "not-a-hash" },
           },
         };
         const corruptIndexBytes = new TextEncoder().encode(JSON.stringify(corruptIndex));
@@ -237,7 +237,7 @@ describe("owned seat loader", () => {
         }
         expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
         expect((caught as Error).message).toBe(
-          "trusted runtime source binding is invalid: src/ember/model/model.py",
+          "trusted runtime source binding is invalid: src/ember/model/ember_v0_model.py",
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -249,7 +249,7 @@ describe("owned seat loader", () => {
       try {
         const { sourceCommit, manifestPath } = buildFixture(root);
         const forgingReadGitBlob = (_repoRoot: string, _commit: string, relativePath: string) =>
-          relativePath === "src/ember/model/model.py"
+          relativePath === "src/ember/model/ember_v0_model.py"
             ? new TextEncoder().encode("forged\n")
             : readFileSync(join(root, relativePath));
         let caught: unknown;
@@ -260,7 +260,7 @@ describe("owned seat loader", () => {
         }
         expect(caught).not.toBeInstanceOf(OwnedSeatStaleBindingError);
         expect((caught as Error).message).toBe(
-          "runtime source does not match the embedded Git commit: src/ember/model/model.py",
+          "runtime source does not match the embedded Git commit: src/ember/model/ember_v0_model.py",
         );
       } finally {
         rmSync(root, { force: true, recursive: true });
@@ -416,7 +416,7 @@ describe("owned seat loader", () => {
       "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
       "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
       "src/ember/runtime/infer.py",
-      "src/ember/model/model.py",
+      "src/ember/model/ember_v0_model.py",
       "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
       "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
     ];

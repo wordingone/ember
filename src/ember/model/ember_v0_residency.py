@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import torch
 import torch.nn.functional as F
 from torch.autograd.function import once_differentiable
-from .cia_inventory import equation_inventory
+from .ember_v0_inventory import equation_inventory
 
 
 class ExpertCache:

@@ -58,7 +58,7 @@ RUNTIME_FILES = {
     "src/ember/infrastructure/tools/ember-restart-3b/batch.py",
     "src/ember/infrastructure/tools/ember-restart-3b/checkpoint_artifacts.py",
     "src/ember/runtime/infer.py",
-    "src/ember/model/model.py",
+    "src/ember/model/ember_v0_model.py",
     "src/ember/infrastructure/tools/ember-restart-3b/parameter_counter.py",
     "src/ember/infrastructure/tools/ember-restart-3b/serve_owned_openai.py",
 }
