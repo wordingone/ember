@@ -47,11 +47,25 @@ PREDICTION_SOURCE = {
     "E-MATRIX-AUDIO-TEXT": "admitted_asset_derived",
     "E-MATRIX-IMAGE-AUDIO-TEXT": "admitted_asset_derived",
     "E-MATRIX-REASONING": "admitted_asset_derived",
-    "E-MATRIX-TOOL-USE": "admitted_asset_derived",
-    "E-MATRIX-ROUTING-PATHWAY": "admitted_asset_derived",
+    # These two producers take an `expected_checkpoint_manifest_sha256`, verify the inference
+    # receipt binds to that designated checkpoint, and re-derive their verdicts from what the model
+    # produced.  Classifying them as asset-derived made the corrected bar under-count in exactly the
+    # way its predecessor over-counted, so the structural check in
+    # tests/test_issue1947_evidence_kind_matches_producer.py now refuses any drift in either
+    # direction: an adapter that binds a checkpoint may not be asset-derived, and one that does not
+    # may not claim to be checkpoint evidence.
+    "E-MATRIX-TOOL-USE": "owned_checkpoint_inference",
+    # The routing row is checkpoint-derived and still not capability evidence.  Its own claim
+    # boundary reads PATHWAY ENGAGEMENT RATE ONLY; NOT CAPABILITY, THRESHOLD, RELEASE, CAMPAIGN, OR
+    # GOAL CREDIT.  It says declared pathways execute and that deleting the expert changes the
+    # prediction -- it says nothing about whether the prediction is any good.  Counting it toward a
+    # bar named "all required rows pass" would launder that distinction, so it carries its own kind
+    # and is reported beside the bar.
+    "E-MATRIX-ROUTING-PATHWAY": "owned_checkpoint_pathway_engagement",
 }
 INTEGRITY_PLACEHOLDER = "INTEGRITY_PLACEHOLDER"
 MODEL_PREDICTION = "MODEL_PREDICTION"
+PATHWAY_ENGAGEMENT = "PATHWAY_ENGAGEMENT"
 
 
 def evidence_kind(row_id: str) -> str:
@@ -66,6 +80,8 @@ def evidence_kind(row_id: str) -> str:
         raise ReleaseExecutionRefusal(f"UNCLASSIFIED_PREDICTION_SOURCE:{row_id}")
     if source == "owned_checkpoint_inference":
         return MODEL_PREDICTION
+    if source == "owned_checkpoint_pathway_engagement":
+        return PATHWAY_ENGAGEMENT
     if source == "admitted_asset_derived":
         return INTEGRITY_PLACEHOLDER
     raise ReleaseExecutionRefusal(f"UNKNOWN_PREDICTION_SOURCE:{row_id}:{source}")

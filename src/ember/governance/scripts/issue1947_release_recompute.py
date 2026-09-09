@@ -16,6 +16,7 @@ from typing import Any
 from issue1947_release_execute import (
     INTEGRITY_PLACEHOLDER,
     MODEL_PREDICTION,
+    PATHWAY_ENGAGEMENT,
     ROWS,
     canonical,
     evidence_kind,
@@ -86,6 +87,7 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
         results.append({"row_id": row_id, "item_count": len(scores), "mean_score": mean, "threshold": float(threshold), "passed": mean >= float(threshold), "evidence_kind": kind})
     model_rows = [row for row in results if row["evidence_kind"] == MODEL_PREDICTION]
     placeholder_rows = [row for row in results if row["evidence_kind"] == INTEGRITY_PLACEHOLDER]
+    pathway_rows = [row for row in results if row["evidence_kind"] == PATHWAY_ENGAGEMENT]
     # An empty model-evidence set fails. all([]) is True, and a bar that passed because there was
     # nothing to check would be the same defect this cure exists to remove, wearing a new
     # mechanism. Placeholder outcomes are reported beside it and never folded into it.
@@ -98,10 +100,15 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
         "model_evidence_row_count": len(model_rows),
         "integrity_placeholder_row_count": len(placeholder_rows),
         "integrity_placeholder_rows_pass": all(row["passed"] for row in placeholder_rows),
+        # Checkpoint-derived and deliberately outside the bar.  Reported so the count is visible
+        # rather than absent -- an engagement rate that vanished from the receipt would be as
+        # misleading as one folded into the bar, in the opposite direction.
+        "pathway_engagement_row_count": len(pathway_rows),
+        "pathway_engagement_rows_pass": all(row["passed"] for row in pathway_rows),
         "cert_007_basis": (
             "no model-evidence row exists, so the bar is unmet rather than vacuously satisfied"
             if not model_rows else
-            f"{len(model_rows)} model-evidence row(s) evaluated; {len(placeholder_rows)} integrity placeholder(s) reported separately"
+            f"{len(model_rows)} model-evidence row(s) evaluated; {len(placeholder_rows)} integrity placeholder(s) and {len(pathway_rows)} pathway-engagement row(s) reported separately"
         ),
         "cert_007_all_required_rows_pass": cert_007,
         "cert_009_independent_raw_row_recomputation": True,
