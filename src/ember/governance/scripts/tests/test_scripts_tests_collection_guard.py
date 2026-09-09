@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts import check_scripts_tests_collection as guard
+from src.ember.governance.scripts import check_scripts_tests_collection as guard
 
 
 def test_parse_collection_count_requires_a_complete_summary() -> None:
@@ -53,7 +53,7 @@ def test_run_collection_uses_repo_scripts_tests_and_reports_count(monkeypatch: p
     monkeypatch.setattr(subprocess, "run", fake_run)
     report = guard.run_collection(Path("C:/repo"), minimum=380)
     assert report.collected == 386
-    assert captured["command"][-2:] == ["-q", "scripts/tests"]
+    assert captured["command"][-2:] == ["-q", "src/ember/governance/scripts/tests"]
     assert captured["cwd"] == Path("C:/repo")
 
 
