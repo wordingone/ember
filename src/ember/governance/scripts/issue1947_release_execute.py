@@ -31,6 +31,46 @@ class ReleaseExecutionRefusal(ValueError):
     pass
 
 
+# What each row's prediction is actually computed from. This is a property of the producer, not a
+# label a row may carry: six of these rows hash an admitted asset and compare the result to that
+# same asset's recorded digest, which is an integrity check and cannot fail unless the file on disk
+# is corrupt. Deriving the kind here means a producer that never opens a checkpoint cannot emit
+# model evidence, and no relabelling of its output changes that.
+#
+# A row moves to "owned_checkpoint_inference" only when its producer actually consumes the
+# designated checkpoint. That is the point at which the bar below starts to mean what its name says.
+PREDICTION_SOURCE = {
+    "E-MATRIX-TEXT-LANGUAGE": "admitted_asset_derived",
+    "E-MATRIX-IMAGE": "admitted_asset_derived",
+    "E-MATRIX-AUDIO": "admitted_asset_derived",
+    "E-MATRIX-IMAGE-TEXT": "admitted_asset_derived",
+    "E-MATRIX-AUDIO-TEXT": "admitted_asset_derived",
+    "E-MATRIX-IMAGE-AUDIO-TEXT": "admitted_asset_derived",
+    "E-MATRIX-REASONING": "admitted_asset_derived",
+    "E-MATRIX-TOOL-USE": "admitted_asset_derived",
+    "E-MATRIX-ROUTING-PATHWAY": "admitted_asset_derived",
+}
+INTEGRITY_PLACEHOLDER = "INTEGRITY_PLACEHOLDER"
+MODEL_PREDICTION = "MODEL_PREDICTION"
+
+
+def evidence_kind(row_id: str) -> str:
+    """Derive a row's evidence kind from what its producer computes the prediction from.
+
+    Fails closed on an unknown row rather than defaulting: a row nobody has classified is a row
+    whose evidence nobody has examined, and defaulting either way would be a guess recorded as a
+    certification input.
+    """
+    source = PREDICTION_SOURCE.get(row_id)
+    if source is None:
+        raise ReleaseExecutionRefusal(f"UNCLASSIFIED_PREDICTION_SOURCE:{row_id}")
+    if source == "owned_checkpoint_inference":
+        return MODEL_PREDICTION
+    if source == "admitted_asset_derived":
+        return INTEGRITY_PLACEHOLDER
+    raise ReleaseExecutionRefusal(f"UNKNOWN_PREDICTION_SOURCE:{row_id}:{source}")
+
+
 def canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
@@ -167,7 +207,7 @@ def execute(
         with destination.open("xb") as stream:
             stream.write(raw)
         threshold = spec_row.get("threshold")
-        row_bindings.append({"row_id": row_id, "path": destination.name, "bytes": len(raw), "raw_sha256": sha(raw), "self_sha256": row["self_sha256"], "threshold": float(threshold)})
+        row_bindings.append({"row_id": row_id, "path": destination.name, "bytes": len(raw), "raw_sha256": sha(raw), "self_sha256": row["self_sha256"], "threshold": float(threshold), "evidence_kind": evidence_kind(row_id)})
     bundle = {
         "schema_version": "ember-issue1947-redacted-release-bundle-v1",
         "result": "COMPLETE",
