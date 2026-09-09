@@ -26,6 +26,30 @@ minimum_new_network_parameters: 3000000000
 > bounded.
 
 
+## Canonical architecture decision — 2026-09-08
+
+The [operator-decision amendment](https://github.com/wordingone/ember/issues/2163#issuecomment-5592762718) selects CIA-3B as corrected and evolved
+under #2163 as this milestone's canonical architecture family. It supersedes
+optional-challenger, v2-destination and permanent modality-expert bindings, not
+the capability, clean-genesis, exact unique-parameter, protected-evaluation or
+single-4090 requirements below. Every dimension, expert count, routing, paging,
+precision and optimizer revision still owes evidence.
+
+Preserve one evolving shared multimodal core, typed modality boundaries,
+learned causal functional routing, bounded active/resident capacity, global
+expert identities, and immutable serving generations with separate candidate
+updates. Default activation requires tested, reversible executable integration;
+architectural selection alone does not qualify or birth a model. #2163's full
+correctness, state, learning, paging and recovery obligations remain binding.
+
+v2 remains separately identified comparison/recovery evidence. It is neither a
+second destination nor a pretraining/throughput prerequisite. Further execution
+requires a bounded CIA qualification, comparison or reusable-infrastructure
+purpose. No v2 weights, tokens, timings, loss results or certificates silently
+become CIA evidence. #1945/#1947 retain their gates and must integrate actual CIA
+subjects; #2115/#2119 retain persistent trajectory, transfer and recovery duties.
+Historical records remain unchanged.
+
 ## Outcome
 
 <!-- clause-id: EMBER-02.OUTCOME.001 -->
@@ -89,7 +113,7 @@ There is no smaller bootstrap-model milestone. Architecture, systems, data, and 
 <!-- clause-id: EMBER-02.WORK.002 -->
 2. Project raw image patches and audio frames directly into the decoder token space. Use soft-token splicing, explicit multimodal spans, causal and span-aware attention, and 2D-capable positional reasoning without separate pretrained modality encoders.
 <!-- clause-id: EMBER-02.WORK.003 -->
-3. Define one shared core plus differentiated expert-ready banks and task-level routing. Initialization must be asymmetric or partially reinitialized; exact expert twins are forbidden.
+3. Define one shared multimodal core plus globally identified differentiated functional expert banks, typed modality boundaries and learned causal routing with bounded active/resident capacity. Initialization must be asymmetric or partially reinitialized; exact expert twins are forbidden.
 <!-- clause-id: EMBER-02.WORK.004 -->
 4. Make text, image, audio, reasoning, and tool trajectories part of one training representation and one checkpoint identity.
 <!-- clause-id: EMBER-02.WORK.005 -->
