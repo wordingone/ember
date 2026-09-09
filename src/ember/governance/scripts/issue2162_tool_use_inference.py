@@ -56,9 +56,16 @@ DECODE_CONTRACT: dict[str, Any] = {
     "stop_rules": ["eos_token", "first_semicolon_in_decoded_text", "first_blank_line_in_decoded_text", "max_new_tokens"],
     "emission_extraction": "decoded text up to and including the first ';' if present, else up to the first blank line, else whole text; stripped",
     "prompt": "the contract's admitted prompt object bytes decoded as UTF-8, verbatim; no system prompt, no template, tokenizer default encoding",
+    "detokenization": (
+        "the generated ids are detokenized back to TEXT: the tokenizer's decoder must invert its "
+        "pre-tokenizer, verified at emitter construction by round-tripping a probe string through "
+        "encode/decode. A ByteLevel pre-tokenizer with no decoder does not invert -- it yields BPE "
+        "pieces joined by spaces with the byte-level markers intact -- and is refused."
+    ),
     "active_expert": ACTIVE_EXPERT,
     "parameter_dtype": "bfloat16",
 }
+DETOKENIZATION_PROBE = "SELECT name FROM singer WHERE age > 20;"
 RESULT_CANONICALIZATION = (
     "rows fetched fully; each cell -> null | int | float | str | hex(bytes); text decoded utf-8 with "
     "U+FFFD replacement; row order preserved when the emitted query contains ORDER BY, else rows "
@@ -352,14 +359,53 @@ def run_pass(
         raise ValueError("TOOL_USE_DATABASE_BYTES_CHANGED_REFUSED")
     if len(items) != ITEM_COUNT:
         raise ValueError(f"TOOL_USE_INFERENCE_TOTALITY_REFUSED:{len(items)}")
+    executed_count = sum(1 for item in items if item["executed"])
+    if items and executed_count == 0:
+        # Per-item tolerance is deliberate: one unparseable emission is a mismatch and must not
+        # abort a pass. Total tolerance is not. A row in which NOT ONE item reached the database
+        # is not a model scoring zero, it is the instrument never reaching the thing it measures --
+        # and the two are indistinguishable in a score. Receipted instance: the v15 release matrix
+        # carried E-MATRIX-TOOL-USE at 0.0 over 1,034 items whose emissions were BPE pieces joined
+        # by spaces, because the pinned tokenizer had a ByteLevel pre-tokenizer and a null decoder.
+        # Gold SQL emitted verbatim would have scored zero too. This refuses that as a condition.
+        classes = sorted({str(item["error_class"]) for item in items})
+        raise ValueError(f"TOOL_USE_ZERO_EXECUTION_REFUSED:{len(items)}:{','.join(classes)}")
     return {
         "items": items,
         "item_count": len(items),
         "emitted_count": len(items),
-        "executed_count": sum(1 for item in items if item["executed"]),
+        "executed_count": executed_count,
         "matched_count": sum(1 for item in items if item["matched"]),
         "database_bytes_unchanged": True,
     }
+
+
+def install_detokenizer(tokenizer: Any) -> str:
+    """Make the tokenizer's decode() invert its encode(), or refuse.
+
+    `tokenizers.Tokenizer.decode` is only the inverse of `encode` when the tokenizer carries a
+    decoder matching its pre-tokenizer. A ByteLevel pre-tokenizer with `"decoder": null` -- the
+    shape of the pinned serving tokenizer -- has no inverse, so decode() falls back to joining
+    token strings with a space and leaves U+0120 / U+010A in the text. Every emission is then
+    unparseable SQL no matter what the checkpoint produced, and the row's score is an artifact.
+
+    The probe is the check: encode the probe, decode it, and require the original string back.
+    Returns the strategy actually used, for the receipt; raises if no strategy inverts.
+    """
+    from tokenizers import decoders
+
+    def inverts() -> bool:
+        try:
+            return tokenizer.decode(tokenizer.encode(DETOKENIZATION_PROBE).ids) == DETOKENIZATION_PROBE
+        except Exception:
+            return False
+
+    if inverts():
+        return "tokenizer_native_decoder"
+    tokenizer.decoder = decoders.ByteLevel()
+    if inverts():
+        return "byte_level_decoder_attached"
+    raise ValueError("TOOL_USE_DETOKENIZATION_REFUSED")
 
 
 def frozen_order_sha256(item_ids: list[str]) -> str:
@@ -570,6 +616,7 @@ def build_real_emitter(args: argparse.Namespace) -> tuple[Emitter, dict[str, Any
     model._activate_expert(ACTIVE_EXPERT)
     model.eval()
     tokenizer = Tokenizer.from_str(tokenizer_raw.decode("utf-8"))
+    detokenization_strategy = install_detokenizer(tokenizer)
     eos = int(DECODE_CONTRACT["eos_token_id"])
     limit = int(DECODE_CONTRACT["max_new_tokens"])
 
@@ -612,6 +659,7 @@ def build_real_emitter(args: argparse.Namespace) -> tuple[Emitter, dict[str, Any
         "shared_shard_sha256": shards[SHARED_SHARD]["sha256"],
         "expert_shard_sha256": shards[EXPERT_SHARD]["sha256"],
         "active_expert": ACTIVE_EXPERT,
+        "detokenization_strategy": detokenization_strategy,
         "device": str(device),
         "torch_version": torch.__version__,
     }
