@@ -20,7 +20,11 @@ PRODUCER = SCRIPTS / "issue2162_tool_use_inference.py"
 ROW_SCRIPT = SCRIPTS / "issue1947_release_row.py"
 EXECUTE_SCRIPT = SCRIPTS / "issue1947_release_execute.py"
 MANIFEST_SHA = "255cdb164b770f868da9a6727b1067512b5ce9caecd968f4544389c5a908aeef"
-PINNED_DECODE_CONTRACT_SHA = "c20d478ad9deac029040e888309be8642b7a8be11ff5ccf00dac9e44e7d3e1df"
+# Repinned 2026-09-09 when the contract gained its `detokenization` clause. The prior value,
+# c20d478ad9deac029040e888309be8642b7a8be11ff5ccf00dac9e44e7d3e1df, belongs to a contract that
+# never said the tokenizer's decoder must invert its pre-tokenizer -- which is how a whole row
+# of BPE pieces reached the release matrix as a score of 0.0.
+PINNED_DECODE_CONTRACT_SHA = "e5e4cf5039edc7cf0f1eb918c1b3099c56009b8ffb309a6cdca0f180043d366b"
 
 
 def _load(path: Path, name: str):
@@ -341,6 +345,81 @@ def test_non_executing_and_timeout_emissions_count_as_mismatch(world: World) -> 
     assert result["executed_count"] == producer.ITEM_COUNT - 3
     assert result["matched_count"] == producer.ITEM_COUNT - 3
     assert result["database_bytes_unchanged"] is True
+
+
+def test_planted_negative_whole_row_zero_execution_is_a_refusal(world: World) -> None:
+    """Not one item reaching the database is an instrument condition, never a score of zero.
+
+    This is the planted negative for the defect that produced the v15 E-MATRIX-TOOL-USE row: the
+    emissions were BPE token pieces joined by spaces, sqlite refused every one of them, and the pass
+    still emitted TOOL_USE_INFERENCE_PASS with a score of 0.0. Gold SQL emitted verbatim would have
+    scored the same, so the row could not distinguish any model from any other.
+    """
+    by_sha, _supplied = world.sources()
+
+    def emit(prompt_text: str, position: int) -> dict:
+        # Exactly the shape a ByteLevel pre-tokenizer with no decoder produces from gold SQL.
+        mangled = world.gold_queries[position].replace(" ", " Ġ")
+        return {"decoded_text": mangled, "generated_token_count": 8, "prompt_token_count": 1,
+                "stop_reason": "eos_token"}
+
+    with pytest.raises(ValueError, match="TOOL_USE_ZERO_EXECUTION_REFUSED"):
+        producer.run_pass(world.contract, by_sha, emit, sql_timeout_seconds=0.5)
+
+
+def test_one_executing_item_is_enough_to_keep_the_pass(world: World) -> None:
+    """The refusal above is TOTAL-failure only; per-item tolerance is preserved deliberately."""
+    by_sha, _supplied = world.sources()
+
+    def emit(prompt_text: str, position: int) -> dict:
+        text = world.gold_queries[position] if position == 0 else "this is not sql"
+        return {"decoded_text": text, "generated_token_count": 4, "prompt_token_count": 1,
+                "stop_reason": "eos_token"}
+
+    result = producer.run_pass(world.contract, by_sha, emit, sql_timeout_seconds=0.5)
+    assert result["executed_count"] == 1 and result["matched_count"] == 1
+
+
+def test_detokenizer_is_installed_when_the_tokenizer_cannot_invert_itself() -> None:
+    """A ByteLevel pre-tokenizer with a null decoder is cured, and the cure is proven by round-trip."""
+    tokenizers = pytest.importorskip("tokenizers")
+    vocab = {chr(c): c - 32 for c in range(32, 127)}
+    for extra in ("Ġ", "Ċ"):
+        vocab.setdefault(extra, len(vocab))
+    raw = json.dumps({
+        "version": "1.0", "truncation": None, "padding": None, "added_tokens": [],
+        "normalizer": None,
+        "pre_tokenizer": {"type": "ByteLevel", "add_prefix_space": False, "trim_offsets": True,
+                          "use_regex": True},
+        "post_processor": None,
+        "decoder": None,
+        "model": {"type": "BPE", "dropout": None, "unk_token": None, "continuing_subword_prefix": None,
+                  "end_of_word_suffix": None, "fuse_unk": False, "byte_fallback": False,
+                  "vocab": vocab, "merges": []},
+    })
+    tokenizer = tokenizers.Tokenizer.from_str(raw)
+    assert tokenizer.decode(tokenizer.encode(producer.DETOKENIZATION_PROBE).ids) != producer.DETOKENIZATION_PROBE
+    assert producer.install_detokenizer(tokenizer) == "byte_level_decoder_attached"
+    assert tokenizer.decode(tokenizer.encode(producer.DETOKENIZATION_PROBE).ids) == producer.DETOKENIZATION_PROBE
+
+
+def test_detokenizer_refuses_a_tokenizer_that_still_does_not_invert() -> None:
+    """The guard is a real gate: a tokenizer no strategy can invert is refused, not silently used."""
+
+    class Stubborn:
+        decoder = None
+
+        class _Encoded:
+            ids = [1, 2, 3]
+
+        def encode(self, text: str):
+            return self._Encoded()
+
+        def decode(self, ids):
+            return "nothing like the probe"
+
+    with pytest.raises(ValueError, match="TOOL_USE_DETOKENIZATION_REFUSED"):
+        producer.install_detokenizer(Stubborn())
 
 
 def test_short_pass_is_a_totality_refusal(world: World) -> None:
