@@ -143,6 +143,79 @@ def test_all_placeholder_rows_scoring_one_do_not_satisfy_the_bar(
     assert receipt["result"] == "FAIL"
 
 
+def test_cert_007_can_pass_on_a_one_row_matrix_and_coverage_is_what_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hole cert_007 cannot see, and the field that closes it.
+
+    Promote exactly one row to model evidence and let it pass. cert_007 goes True -- correctly, on
+    its own terms, because every model-evidence row cleared its floor and there is one of them. The
+    other eight rows are integrity placeholders scoring 1.0, which reconcile a digest and say
+    nothing about any checkpoint.
+
+    So a receipt can report result PASS, cert_007 True and cert_009 True while one ninth of the
+    protected matrix carries model evidence. Nothing in the receipt said so until now. This is not
+    hypothetical: the v15 release matrix is exactly this shape at 1 of 9, and it took reading the
+    evidence-kind column by hand to see it.
+
+    The requirement being served is the issue's own -- the campaign terminal verifier refuses
+    partial-matrix evidence. Row-id completeness is enforced upstream and passes here; this asks the
+    different question of what kind of evidence the complete rows carry.
+    """
+    _all_placeholders(monkeypatch)
+    monkeypatch.setitem(execute.PREDICTION_SOURCE, execute.ROWS[0], "owned_checkpoint_inference")
+
+    receipt = subject.recompute(write_bundle(tmp_path), thresholds())
+
+    assert receipt["cert_007_all_required_rows_pass"] is True
+    assert receipt["cert_009_independent_raw_row_recomputation"] is True
+    assert receipt["result"] == "PASS"
+    # ... and yet:
+    assert receipt["model_evidence_row_count"] == 1
+    assert receipt["matrix_model_evidence_coverage"] == 1 / len(execute.ROWS)
+    assert receipt["terminal_eligible_on_matrix_coverage"] is False
+    assert "1 of {} protected matrix rows".format(len(execute.ROWS)) in receipt["matrix_coverage_basis"]
+
+
+def test_full_model_evidence_coverage_reports_eligible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other direction, so the field is a discriminator and not a constant False.
+
+    Every row promoted at the producer table. Coverage is 1.0 and the matrix is eligible on that
+    clause alone -- which says nothing about whether the model cleared any floor, and deliberately
+    so: that is cert_007's question and these two must not be able to stand in for each other.
+    """
+    for row_id in execute.ROWS:
+        monkeypatch.setitem(execute.PREDICTION_SOURCE, row_id, "owned_checkpoint_inference")
+
+    receipt = subject.recompute(write_bundle(tmp_path), thresholds())
+
+    assert receipt["model_evidence_row_count"] == len(execute.ROWS)
+    assert receipt["matrix_model_evidence_coverage"] == 1.0
+    assert receipt["terminal_eligible_on_matrix_coverage"] is True
+
+
+def test_coverage_is_reported_and_never_folded_into_either_certificate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Coverage must not become a third way to fail cert_007, or a way to rescue it.
+
+    An all-placeholder matrix has zero coverage AND an unmet bar, and the two facts have to arrive
+    separately. Folding coverage into cert_007 would make one boolean answer two questions, which is
+    the defect this whole evidence-kind line exists to remove -- reintroducing it one level up would
+    be the same error wearing a newer mechanism.
+    """
+    _all_placeholders(monkeypatch)
+    receipt = subject.recompute(write_bundle(tmp_path), thresholds())
+
+    assert receipt["cert_007_all_required_rows_pass"] is False
+    assert receipt["matrix_model_evidence_coverage"] == 0.0
+    assert receipt["terminal_eligible_on_matrix_coverage"] is False
+    # cert_009 is about the evaluator recomputing raw rows and is untouched by coverage.
+    assert receipt["cert_009_independent_raw_row_recomputation"] is True
+
+
 def test_the_bar_follows_the_model_evidence_rows_once_one_exists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
