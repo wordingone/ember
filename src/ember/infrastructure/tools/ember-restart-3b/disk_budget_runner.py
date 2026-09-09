@@ -36,7 +36,13 @@ actual = {name: os.environ.get(name) for name in bindings}
 if actual != bindings or any(not pathlib.Path(value).resolve().is_relative_to(custody) for value in actual.values()):
     raise SystemExit("disk-budget child cache binding mismatch")
 assertion_path.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": actual}, sort_keys=True) + chr(10), encoding="utf-8")
-raise SystemExit(subprocess.run(sys.argv[4:], env=os.environ, check=False).returncode)
+# CREATE_NO_WINDOW must still inherit the two explicitly bound pipe handles.
+# With no explicit stdio, a nested hidden Windows process can exit correctly
+# while losing both streams at this cache-bootstrap boundary.
+raise SystemExit(subprocess.run(
+    sys.argv[4:], env=os.environ, check=False, stdout=sys.stdout, stderr=sys.stderr,
+    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+).returncode)
 """
 
 def current_free_gib() -> dict[str, float]:

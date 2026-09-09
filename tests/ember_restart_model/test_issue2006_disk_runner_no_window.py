@@ -112,3 +112,48 @@ def test_pretermination_receipt_is_immutable_and_self_hashed(tmp_path):
         pass
     else:
         raise AssertionError("pretermination receipt overwrite was not refused")
+
+
+
+def test_cache_bootstrap_preserves_hidden_child_streams_and_exit(tmp_path):
+    """Exercise the actual bootstrap, including nested CREATE_NO_WINDOW on Windows."""
+    import os
+    import subprocess
+    import sys
+    import pytest
+
+    module = load_module()
+    helper = Path.home() / ".codex/headless-python.ps1"
+    if sys.platform == "win32" and not helper.is_file():
+        pytest.skip("requires the installed no-console Python helper on Windows")
+    cache = tmp_path / "tmp"
+    cache.mkdir()
+    assertion = tmp_path / "assertion.json"
+    environment = dict(os.environ, TEMP=str(cache))
+    bindings = json.dumps({"TEMP": str(cache)})
+    payload = "import sys; print('BOOTSTRAP_OUT', flush=True); print('BOOTSTRAP_ERR', file=sys.stderr, flush=True); raise SystemExit(17)"
+    if sys.platform == "win32":
+        prefix = ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
+                  "-File", str(helper), "--", "-B"]
+    else:
+        prefix = [sys.executable, "-B"]
+    # Match the existing hidden-child policy: no new console even if a nested
+    # call forgets creationflags. This does not supply or repair stdio handles.
+    policy = (
+        "import subprocess\n"
+        "_run = subprocess.run\n"
+        "def hidden_run(*args, **kwargs):\n"
+        "    kwargs.setdefault('creationflags', getattr(subprocess, 'CREATE_NO_WINDOW', 0))\n"
+        "    return _run(*args, **kwargs)\n"
+        "subprocess.run = hidden_run\n"
+    )
+    result = subprocess.run(
+        [*prefix, "-c", policy + module._CHILD_ENV_BOOTSTRAP,
+         bindings, str(assertion), "sentinel-nonce", *prefix, "-c", payload],
+        env=environment, capture_output=True, text=True, timeout=25,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    assert result.returncode == 17
+    assert result.stdout.strip() == "BOOTSTRAP_OUT"
+    assert result.stderr.strip() == "BOOTSTRAP_ERR"
+    assert json.loads(assertion.read_text())["nonce"] == "sentinel-nonce"
