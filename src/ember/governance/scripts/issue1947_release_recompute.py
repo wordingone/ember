@@ -92,6 +92,13 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
     # nothing to check would be the same defect this cure exists to remove, wearing a new
     # mechanism. Placeholder outcomes are reported beside it and never folded into it.
     cert_007 = bool(model_rows) and all(row["passed"] for row in model_rows)
+    # Evidence-kind coverage over the protected matrix. Row-id completeness is already enforced
+    # upstream (EXECUTION_SPEC_ROW_SET_DRIFT); this asks the different question of what KIND of
+    # evidence those complete rows carry. A matrix whose rows are present but whose model-evidence
+    # surface is a single row is partial-matrix evidence, which the campaign terminal must refuse --
+    # and which is invisible in every other field of this receipt.
+    matrix_coverage = len(model_rows) / len(results) if results else 0.0
+    terminal_eligible = bool(results) and len(model_rows) == len(results)
     receipt = {
         "schema_version": "ember-issue1947-release-independent-recompute-v1",
         "result": "PASS" if cert_007 else "FAIL",
@@ -112,6 +119,19 @@ def recompute(bundle_path: Path, thresholds: dict[str, Any] | None = None) -> di
         ),
         "cert_007_all_required_rows_pass": cert_007,
         "cert_009_independent_raw_row_recomputation": True,
+        # Reported beside the certificates and folded into neither. cert_007 asks whether the model
+        # cleared its floors and cert_009 whether the evaluator recomputed the raw rows; NEITHER asks
+        # whether the matrix carries model evidence at all, and a matrix can satisfy both while
+        # measuring almost nothing.
+        "matrix_model_evidence_coverage": matrix_coverage,
+        "terminal_eligible_on_matrix_coverage": terminal_eligible,
+        "matrix_coverage_basis": (
+            f"{len(model_rows)} of {len(results)} protected matrix rows carry {MODEL_PREDICTION} "
+            f"evidence; {len(placeholder_rows)} carry {INTEGRITY_PLACEHOLDER} and "
+            f"{len(pathway_rows)} carry {PATHWAY_ENGAGEMENT}. A placeholder row reconciles an "
+            "artifact against a gold digest and gives the model no credit, so it cannot stand in "
+            "for a model-evidence row when asking whether the matrix is whole."
+        ),
         "claim_boundary": "INDEPENDENT_RECOMPUTATION_ONLY; NO ISSUE_OR_GOAL_CREDIT",
     }
     receipt["self_sha256"] = sha(canonical(receipt))
