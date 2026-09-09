@@ -1,18 +1,18 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Full-shape CIA3-R1-N61 decoder graph for S0 metadata validation.
 
-Parameters exist on meta only. Fixed-route traces exercise operation shapes
+Parameters default to meta; explicit full-population CPU initialization enables numerical conformance. Fixed-route traces exercise operation shapes
 and autograd connectivity, not values, learned routing, causal logits or training.
-Governed numerical allocation/initialization and paging integration remain required.
+Production allocation, paging, generation admission and learning qualification remain required.
 """
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .cia_contract import CIA3R1N61, census
+from .cia_contract import census, cia_architecture_config, validate_cia_architecture
 from .cia_inventory import equation_inventory, update_support
-from .cia_routing import _global_scores, _local_scores, unit_task_gate
+from .cia_routing import _global_scores, _local_scores, unit_task_gate, select_global, select_local
 
 
 def rotate_three_axis(values, positions):
@@ -38,11 +38,16 @@ def rotate_three_axis(values, positions):
 
 
 class CIADecoder(nn.Module):
-    """Complete parameter ownership with a deliberately explicit meta-only trace."""
+    """Complete parameter ownership, metadata traces and a numerical CPU reference."""
 
-    def __init__(self):
+    def __init__(self, *, architecture_config=None):
+        # Reject undeclared semantics before any parameter storage is created.
+        validated_config = validate_cia_architecture(
+            cia_architecture_config() if architecture_config is None else architecture_config
+        )
         super().__init__()
-        self.config = CIA3R1N61()
+        self.config = validated_config
+        self._parameter_device = "meta"
         self.weights = nn.ParameterDict({
             spec.name.replace(".", "__"): nn.Parameter(torch.empty(spec.shape, device="meta", dtype=torch.bfloat16))
             for spec in equation_inventory()
@@ -61,11 +66,44 @@ class CIADecoder(nn.Module):
             raise ValueError("unexpected parameter alias between distinct consumers")
         if any(tuple(actual[name].shape) != shape for name, shape in expected.items()):
             raise ValueError("candidate parameter shape mismatch")
-        if any(p.dtype != torch.bfloat16 or p.device.type != "meta" for p in actual.values()):
-            raise ValueError("this candidate trace requires BF16 meta parameters")
+        if any(p.dtype != torch.bfloat16 or p.device.type != self._parameter_device for p in actual.values()):
+            raise ValueError("candidate requires BF16 parameters on its declared device")
         if sum(p.numel() for p in actual.values()) != census(self.config).total_unique:
             raise ValueError("candidate census mismatch")
+        if self._parameter_device == "cpu":
+            if any(not p.is_contiguous() or p.storage_offset() != 0 or p.untyped_storage().nbytes() != p.numel() * p.element_size() for p in actual.values()):
+                raise ValueError("physical parameter storage does not match declared elements")
+            addresses = [p.untyped_storage().data_ptr() for p in actual.values()]
+            ranges = sorted((p.untyped_storage().data_ptr(), p.untyped_storage().data_ptr() + p.untyped_storage().nbytes()) for p in actual.values())
+            if len(set(addresses)) != len(addresses) or any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
+                raise ValueError("physical parameter storage alias")
         return actual
+
+    def materialize_cpu(self, *, seed):
+        """Initialize the complete population for CPU conformance, never a smaller subject.
+
+        BF16 storage/computation; norms start at one, other tensors at N(0,.02),
+        residual output projections scaled by sqrt(48). No pretrained weights,
+        paging, production optimizer, generation admission or GPU launch implied.
+        A caller must reserve and enforce the full allocation envelope externally.
+        """
+        if type(seed) is not int or not 0 <= seed < 2**63:
+            raise ValueError("seed must be an integer in [0,2**63)")
+        if self._parameter_device != "meta":
+            raise ValueError("initialization is allowed only once on a meta graph")
+        self.parameter_inventory()
+        generator = torch.Generator(device="cpu").manual_seed(seed)
+        for spec in equation_inventory():
+            value = torch.empty(spec.shape, dtype=torch.bfloat16, device="cpu")
+            if len(spec.shape) == 1:
+                value.fill_(1)
+            else:
+                std = 0.02 / (48**0.5) if spec.name.endswith(("down.weight", "attention.o.weight")) else 0.02
+                value.normal_(0, std, generator=generator)
+            self.weights[spec.name.replace(".", "__")] = nn.Parameter(value, requires_grad=self.weights[spec.name.replace(".", "__")].requires_grad)
+        self._parameter_device = "cpu"
+        self.parameter_inventory()
+        return self
 
     def apply_update_support(self, locus, *, experts=()):
         """Set exact parameter flags and clear stale gradients at a step boundary.
@@ -82,14 +120,13 @@ class CIADecoder(nn.Module):
 
     def _weight(self, name):
         value = self.weights[name.replace(".", "__")]
-        if value.device.type != "meta":
-            raise ValueError("numerical allocation requires governed runtime integration")
+        if value.device.type != self._parameter_device:
+            raise ValueError("weight device differs from the declared model device")
         return value
 
-    @staticmethod
-    def _meta(value, trailing=None):
-        if not isinstance(value, torch.Tensor) or value.device.type != "meta":
-            raise ValueError("this S0 trace accepts metadata tensors only")
+    def _input(self, value, trailing=None):
+        if not isinstance(value, torch.Tensor) or value.device.type != self._parameter_device:
+            raise ValueError("input must share the declared model device")
         if trailing is not None and (value.ndim != 2 or value.shape[-1] != trailing):
             raise ValueError(f"expected [positions,{trailing}]")
 
@@ -101,23 +138,23 @@ class CIADecoder(nn.Module):
         return F.linear(values, self._weight(name))
 
     def add_modality(self, values, modality):
-        self._meta(values, 1024)
+        self._input(values, 1024)
         if type(modality) is not int or not 0 <= modality < 8:
             raise ValueError("modality must be an integer in [0,8)")
         return values + self._weight("modality.weight")[modality]
 
     def embed_text(self, tokens):
-        self._meta(tokens)
+        self._input(tokens)
         if tokens.ndim != 1 or tokens.dtype != torch.long:
             raise ValueError("one document of integer token IDs is required")
         return self.add_modality(F.embedding(tokens, self._weight("embedding.weight")), 0)
 
     def embed_image(self, patches):
-        self._meta(patches, 768)
+        self._input(patches, 768)
         return self.add_modality(self._linear(patches, "image.weight"), 1)
 
     def embed_audio(self, frames):
-        self._meta(frames, 640)
+        self._input(frames, 640)
         return self.add_modality(self._linear(frames, "audio.weight"), 2)
 
     def _swiglu(self, values, prefix):
@@ -126,7 +163,7 @@ class CIADecoder(nn.Module):
         return self._linear(F.silu(gate) * up, prefix + ".down.weight")
 
     def expert_block(self, values, *, expert, layer):
-        self._meta(values, 1024)
+        self._input(values, 1024)
         if type(expert) is not int or not 0 <= expert < 25:
             raise ValueError("global expert identity outside [0,25)")
         if type(layer) is not int or layer not in range(1, 24, 2):
@@ -148,8 +185,10 @@ class CIADecoder(nn.Module):
 
     def trace_fixed_route(self, embedded, positions, *, experts):
         """One unpadded document; forced IDs are shape fixtures, NOT semantic routing."""
-        self._meta(embedded, 1024)
-        self._meta(positions)
+        if self._parameter_device != "meta":
+            raise ValueError("fixed routes are metadata fixtures only")
+        self._input(embedded, 1024)
+        self._input(positions)
         if len(embedded) < 1 or len(embedded) > 4096:
             raise ValueError("trace context must contain 1..4096 positions")
         if type(experts) is not tuple or len(experts) != 12 or any(type(i) is not int or not 0 <= i < 25 for i in experts):
@@ -168,8 +207,10 @@ class CIADecoder(nn.Module):
     def trace_routing_gate(self, global_history, local_vector, *, sparse_depth, experts, selected_slot):
         """Meta score/gate graph; caller-specified winners are NOT causal selections."""
         self.parameter_inventory()
-        self._meta(global_history, 1024)
-        self._meta(local_vector)
+        if self._parameter_device != "meta":
+            raise ValueError("routing traces require a meta graph")
+        self._input(global_history, 1024)
+        self._input(local_vector)
         if tuple(local_vector.shape) != (1024,) or len(global_history) > 1024:
             raise ValueError("one local vector and at most one global history epoch required")
         if type(sparse_depth) is not int or not 0 <= sparse_depth < 12:
@@ -182,5 +223,64 @@ class CIADecoder(nn.Module):
         logits = _local_scores(local_vector, self._weight("router.local_query.weight"), keys[sparse_depth, list(experts)], prior[list(experts)])
         return unit_task_gate(logits, selected_slot)
 
-    def forward(self, *args, **kwargs):
-        raise ValueError("use trace_fixed_route for S0 metadata; governed numerical forward is not integrated")
+    def _document_forward(self, embedded, positions, document_index):
+        keys = torch.stack([self._weight(f"router.layers.{layer}.keys") for layer in range(1, 24, 2)])
+        request = f"cpu-conformance-document-{document_index}"
+        selections = {start: select_global(
+            embedded, self._weight("router.global_query.weight"), keys,
+            position=start, document_start=0, generation="cpu-conformance", request=request)
+            for start in range(0, len(embedded), 1024)}
+        values = embedded
+        routes = []
+        for layer in range(24):
+            prefix = f"layers.{layer}"
+            values = values + self._attention(self._norm(values, prefix + ".attention_norm.weight"), positions, prefix + ".attention")
+            shared = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"), prefix + ".shared")
+            if layer % 2:
+                pieces = []
+                for start in range(0, len(embedded), 256):
+                    selection = selections[(start // 1024) * 1024]
+                    local = select_local(shared, self._weight("router.local_query.weight"), keys,
+                        selection, position=start, document_start=0, generation="cpu-conformance",
+                        request=request, sparse_depth=layer // 2)
+                    slot = sorted(selection.experts).index(local.expert)
+                    residual = self.expert_block(
+                        self._norm(shared[start:start + 256], prefix + ".expert_norm.weight"),
+                        expert=local.expert, layer=layer)
+                    pieces.append(shared[start:start + 256] + residual * unit_task_gate(local.logits, slot))
+                    routes.append((document_index, layer, start, selection.experts, local.expert))
+                values = torch.cat(pieces)
+            else:
+                values = shared
+        return self._linear(self._norm(values, "final_norm.weight"), "embedding.weight"), routes
+
+    def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False):
+        """Numerical CPU reference over explicitly packed, unpadded documents.
+
+        Every document is evaluated independently. There is no co-batch pooling,
+        mutable route cache or caller-forced numerical expert. Replaying a prefix
+        recomputes its routes; this is not an incremental KV-cache implementation.
+        This reference holds all global weights on CPU, not two-slot paging.
+        """
+        if self._parameter_device != "cpu":
+            raise ValueError("numerical forward requires full CPU materialization")
+        self._input(embedded, 1024)
+        self._input(positions)
+        if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= 4096:
+            raise ValueError("1..4096 unpadded BF16 positions required")
+        if positions.dtype != torch.long or tuple(positions.shape) != (len(embedded), 3):
+            raise ValueError("three integer axes required at every position")
+        if not torch.isfinite(embedded).all() or (positions < 0).any():
+            raise ValueError("finite embeddings and nonnegative positions required")
+        if (type(document_starts) is not tuple or not document_starts or document_starts[0] != 0
+            or any(type(i) is not int or not 0 <= i < len(embedded) for i in document_starts)
+            or any(a >= b for a, b in zip(document_starts, document_starts[1:]))):
+            raise ValueError("strictly increasing document starts beginning at zero required")
+        self.parameter_inventory()
+        outputs, routes = [], []
+        for index, (start, end) in enumerate(zip(document_starts, document_starts[1:] + (len(embedded),))):
+            result, document_routes = self._document_forward(embedded[start:end], positions[start:end], index)
+            outputs.append(result)
+            routes.extend(document_routes)
+        logits = torch.cat(outputs)
+        return (logits, tuple(routes)) if return_routes else logits

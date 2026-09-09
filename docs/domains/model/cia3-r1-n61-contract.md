@@ -1,6 +1,6 @@
 # CIA3-R1-N61: equation-supported normalization inventory
 
-Relates to #2163 and #1116. This is a corrected research-candidate contract, not production adoption, realized weights, trained capacity, or completed S0.
+Relates to #2163 and #1116. The [2026-09-08 operator decision](https://github.com/wordingone/ember/issues/2163#issuecomment-5592762718) selects the CIA-derived family as canonical. CIA3-R1-N61 is a versioned revision still subject to qualification and correction; canonical selection does not establish production integration, trained capacity or model birth. Earlier candidate-only/non-default wording is superseded as an architecture-selection restriction, not as a qualification gate. Default activation requires tested, reversible consumer integration. v2 is an identified comparison/recovery reference only, with no inherited weights, token credit or certificates.
 
 ## CIA-NORM-001: three reference vectors lack specified consumers
 
@@ -33,7 +33,7 @@ The explicit update-support map excludes router parameters from core+expert-set 
 
 The CPU-only tests cover formula/inventory agreement with the declared correction, every global expert's shape inventory, metadata materialization, update-support separation, malformed expert identities, and preceding-history interval boundaries. These tests do not prove causal routing or logits: decoder integration must demonstrate suffix and co-batch noninterference, packed-document isolation, and incremental/prefill equivalence.
 
-Remaining S0 includes actual model/meta census with tied-storage ownership, decoder integration of route consumers, valid evidence predicates, immutable object and promotion integration, and optimizer mutation tests. Native crash recovery, full-scale learning, paging comparisons, coupled qualification, production throughput and the complete EMBER-02 certificate remain later unsatisfied obligations under the parent issues.
+The initial inventory checks alone leave model ownership, decoder integration of route consumers, valid evidence predicates, immutable object and promotion integration, and optimizer mutation unproved. Later sections distinguish the integrated CPU mechanics from the still-open identity and qualification obligations. Native crash recovery, full-scale learning, paging comparisons, coupled qualification, production throughput and the complete EMBER-02 certificate remain later unsatisfied obligations under the parent issues.
 
 ## CPU selection oracle
 
@@ -41,17 +41,17 @@ Remaining S0 includes actual model/meta census with tied-storage ownership, deco
 
 The oracle records history digests/cutoffs and checks generation, request, document, epoch, key content, prior content, selected IDs and selector version before local consumption. These checks detect stale or modified selection state; they do not authenticate a caller, certify loaded model objects, or replace residency/request leases. Tensor fields remain process-local objects and are not an immutable serving transaction.
 
-Fixed full-width tensor tests cover suffix noninterference, visible-history sensitivity, packed-document beginning states, separate requests, prefix replay, last-vector local semantics, changed keys/priors/IDs/version refusal and stopped global-history gradients. No optimizer update, small learned network, full decoder, or capability subject is created. Actual decoder logits, padded-input handling, route recomputation/backward binding, straight-through task gradients, and paging engagement remain unsatisfied integration tests. Caller-supplied shared-path provenance and re-embedding under the generation must become enforced decoder/runtime contracts.
+Fixed full-width tensor tests cover suffix noninterference, visible-history sensitivity, packed-document beginning states, separate requests, prefix replay, last-vector local semantics, changed keys/priors/IDs/version refusal and stopped global-history gradients. No optimizer update, small learned network, full decoder, or capability subject is created. The oracle alone does not establish actual decoder logits, padded-input handling, route recomputation/backward binding, straight-through task gradients, or paging engagement. The numerical CPU extension below integrates unpadded decoder routing and task gates; padding, durable route replay and paging remain outside its scope. Caller-supplied shared-path provenance and re-embedding under the generation must become enforced decoder/runtime contracts.
 
 ## Full-shape parameter-owning decoder graph
 
-`src/ember/model/cia_decoder.py` now instantiates all 3,082,539,008 declared elements as BF16 meta `nn.Parameter` objects. It checks exact registered names/shapes, rejects extra parameters and repeated Parameter objects, and uses the tied vocabulary matrix for both embedding and output. Distinct Parameter objects are not proof of distinct physical storage: no physical weights exist in this tranche.
+`src/ember/model/cia_decoder.py` now instantiates all 3,082,539,008 declared elements as BF16 meta `nn.Parameter` objects. It checks exact registered names/shapes, rejects extra parameters and repeated Parameter objects, and uses the tied vocabulary matrix for both embedding and output. Distinct Parameter objects on meta are not proof of distinct physical storage. The optional full-population CPU extension below allocates physical weights and checks storage ownership.
 
-The graph implements raw patch/frame projections, modality offsets, 24 GQA/shared-SwiGLU layers, 12 expert depths, head Q/K normalization, 32/16/16 three-axis RoPE and final normalization. Explicit fixed-route metadata traces exercise these shapes, all 25 expert projection paths, and selected autograd connections. They are unpadded single-document fixtures. Router tensors are registered but not consumed by the fixed-route trace; selection-oracle integration and numerical logit comparisons remain required.
+The graph implements raw patch/frame projections, modality offsets, 24 GQA/shared-SwiGLU layers, 12 expert depths, head Q/K normalization, 32/16/16 three-axis RoPE and final normalization. Explicit fixed-route metadata traces exercise these shapes, all 25 expert projection paths, and selected autograd connections. They are unpadded single-document fixtures. Router tensors are registered but not consumed by the fixed-route trace. The separate numerical CPU forward integrates the selection oracle and supplies real logits for conformance tests.
 
 `apply_update_support` applies the role map to the actual Parameter objects, clears stale gradients and returns the selected objects. It does not rebuild an optimizer, preserve its moments, serialize clocks, prove numerical updates or authorize state deletion. Actual optimizer integration must keep all those obligations.
 
-Numerical `forward` is deliberately unavailable pending governed allocation, initialization, routing and paging integration. There is no lower-scale model constructor and no physical model allocation in this tranche. Meta backward proves graph connectivity only, not finite nonzero numerical gradients or learning.
+The default constructor remains meta-only. Explicit `materialize_cpu(seed=...)` now initializes the complete 3,082,539,008-element BF16 population for CPU conformance. There is no lower-scale constructor. Numerical `forward` uses decoder-owned routing weights and preceding-history selection independently for each explicitly packed, unpadded document. It is a full-population CPU reference, not two-resident-slot paging, cached incremental serving, governed training, or production adoption. Meta backward alone still proves only graph connectivity.
 
 ## Routing graph and state integration boundary
 
@@ -69,3 +69,18 @@ The following existing consumers constrain the next S0/S1 carrier. Existing inte
 | Owned serving admission | `src/ember/infrastructure/tools/ember-cli/src/services/checkpoint-load.ts` | Current accepted schemas are sparse checkpoint v3/v4/v5 and expert names are vision/audio/reasoning/tool. A CIA schema needs explicit topology and artifact validation at each consumer. Merely permitting a new architecture string or renaming old weights is invalid. |
 
 For S4, consume #2115's persistent local-to-trajectory comparison with #1945/#2106 owners. Its required interrupted and uninterrupted arms compare subsequent applied updates from published bytes, including optimizer, RNG, cursor, routing/residency and accumulation state. The issue is an open experimental specification, not an existing CIA result. No additional trainer, evaluator, data catalog, or trajectory authority is introduced here.
+
+## Numerical CPU conformance boundary
+
+Initialization uses a local CPU generator: width norms start at one; other tensors use a normal distribution with standard deviation 0.02, divided by sqrt(48) for attention-output and SwiGLU-down residual projections. The operation preserves the selected update-support flags. Registered physical storage must be distinct across different named tensors; the vocabulary matrix remains tied through its two consumers.
+
+Numerical execution recomputes global selections from preceding 1024-position embedding epochs and local selections from the shared-path vector immediately before each 256-position segment. The selected unit-forward gate retains its task-gradient graph. Each packed document receives an independent attention and route computation. Inputs are explicitly unpadded: no validity-mask or incremental KV-cache contract is implied. Callers cannot force numerical expert IDs through the metadata fixture API.
+
+`tests/test_issue2163_cia_numerical.py` requires the explicit `EMBER_CIA_CPU_CONFORMANCE=1` resource opt-in. The complete population is allocated once per test class. Routine CI may collect these tests while skipping the physical allocation; a skipped test is not numerical evidence. The bounded local run must supply its source identity, complete output, enforced memory/time envelope and cleanup result independently of routine CI.
+
+The update-support test uses native PyTorch AdamW with BF16 parameters, gradients and moments, scalar optimizer clocks and no FP32 master weights. It is a changed-tensor and retained-state mechanics test only. It does not choose the production optimizer or establish full-state durable recovery, admitted learning, capability, useful-token throughput, or any EMBER-02 birth clause. Production master-weight/optimizer numerics and durable paging remain explicit qualification obligations.
+## Checkpoint integration remains a separate workstream
+
+The EMBER-02A architecture carrier supplies the decoder and strict revision interface. Immutable core/expert objects, named optimizer state, complete replay and checkpoint admission belong to the existing EMBER-02B checkpoint module and are not delivered by this carrier. Their implementation and execution evidence must be reviewed on that workstream before any recovery claim.
+
+CI discovery for the forthcoming checkpoint tests is prepared here because workflow configuration belongs to EMBER-02A. An empty discovery result before those tests land supplies no component execution evidence. The full checkpoint transaction, independent physical counter, fresh-process continuation and guarded generation activation remain qualification requirements.
