@@ -23,14 +23,9 @@ def write_bundle(root: Path, *, score: float = 1.0) -> Path:
         row["self_sha256"] = execute.sha(execute.canonical(row))
         raw = json.dumps(row, sort_keys=True).encode()
         path = root / f"{row_id}.json"; path.write_bytes(raw)
-        binding = {"row_id": row_id, "path": path.name, "bytes": len(raw), "raw_sha256": execute.sha(raw), "self_sha256": row["self_sha256"], "threshold": 0.5}
-        # Supplied only once the producer module exposes the derivation, so this fixture is
-        # valid both before and after the EMBER-02A certification change lands. Transition
-        # shim: it comes out in the follow-up that restores full assertions here.
-        derive = getattr(execute, "evidence_kind", None)
-        if derive is not None:
-            binding["evidence_kind"] = derive(row_id)
-        bindings.append(binding)
+        # Derived, never chosen: a fixture free to pick the kind would be testing a label rather
+        # than the property the label stands for.
+        bindings.append({"row_id": row_id, "path": path.name, "bytes": len(raw), "raw_sha256": execute.sha(raw), "self_sha256": row["self_sha256"], "threshold": 0.5, "evidence_kind": execute.evidence_kind(row_id)})
     bundle = {"schema_version": "ember-issue1947-redacted-release-bundle-v1", "result": "COMPLETE", "designation_manifest_raw_sha256": "a" * 64, "matrix_self_sha256": "b" * 64, "analysis_self_sha256": "c" * 64, "rows": bindings, "protected_bytes_present": False}
     bundle["self_sha256"] = execute.sha(execute.canonical(bundle))
     path = root / "release-bundle.json"; path.write_text(json.dumps(bundle), encoding="utf-8"); return path
@@ -119,3 +114,25 @@ def test_bundle_schema_and_row_bindings_fail_closed(
     bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
     with pytest.raises(subject.ReleaseRecomputeRefusal, match=refusal):
         subject.recompute(bundle_path, thresholds())
+def test_an_all_placeholder_matrix_fails_the_bar_it_used_to_pass(tmp_path: Path) -> None:
+    """The assertion this file carried, inverted, now that the producer says what a row is.
+
+    Every row here scores 1.0 and none of them can fail, because each prediction is derived from
+    the same admitted asset its gold digest was taken from. This file used to assert that such a
+    matrix satisfies `cert_007_all_required_rows_pass`. It does not, and the reason is reported
+    rather than implied.
+    """
+    receipt = subject.recompute(write_bundle(tmp_path), thresholds())
+    assert all(row["passed"] for row in receipt["rows"])
+    assert receipt["model_evidence_row_count"] == 0
+    assert receipt["integrity_placeholder_row_count"] == len(execute.ROWS)
+    assert receipt["cert_007_all_required_rows_pass"] is False
+    assert receipt["result"] == "FAIL"
+
+
+def test_a_failing_row_still_fails_under_the_corrected_bar(tmp_path: Path) -> None:
+    """The original negative, kept: a zero-scoring row must not recompute as a pass."""
+    receipt = subject.recompute(write_bundle(tmp_path, score=0.0), thresholds())
+    assert not any(row["passed"] for row in receipt["rows"])
+    assert receipt["cert_007_all_required_rows_pass"] is False
+    assert receipt["result"] == "FAIL"
