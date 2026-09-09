@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import errno
 import gc
 import hashlib
 import importlib.util
@@ -2548,12 +2549,26 @@ def _custody_ledger_write_lock(parent: Path) -> object:
         raise RuntimeError("POSIX custody ledger requires fcntl.flock kernel locking") from error
     lock_path = parent / _CUSTODY_LEDGER_LOCK
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    acquired = False
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        deadline = time.monotonic() + max(0.0, _LEDGER_LOCK_WAIT_SECONDS)
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except OSError as error:
+                if error.errno not in {errno.EACCES, errno.EAGAIN}:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("timed out waiting for the custody ledger writer lock") from error
+                time.sleep(min(0.01, remaining))
         yield parent
     finally:
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            if acquired:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
 def _canonical_frame_bytes(frame: Mapping[str, object]) -> bytes:
