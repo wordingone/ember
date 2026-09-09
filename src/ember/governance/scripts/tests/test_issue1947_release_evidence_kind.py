@@ -82,10 +82,26 @@ def thresholds(value: float = 0.5) -> dict:
     return {row_id: value for row_id in execute.ROWS}
 
 
-def test_every_current_row_derives_as_an_integrity_placeholder() -> None:
-    """No row in the present matrix computes its prediction from an owned checkpoint."""
+def test_todays_matrix_partitions_into_seven_placeholders_one_model_row_and_one_pathway_row() -> None:
+    """A statement about the present matrix, written so that changing it has to be deliberate.
+
+    This test previously asserted that every row was an integrity placeholder. That was wrong about
+    two rows: `adapt_tool_use` and `adapt_routing_pathway` both require an
+    `expected_checkpoint_manifest_sha256` and verify their inference receipt binds to the designated
+    checkpoint. Asserting the whole matrix was placeholders turned that misclassification into a
+    property, which is why the correction shows up here as a failure rather than as a finding.
+
+    The partition is exact on purpose. A set-membership assertion would have survived the very
+    mistake it is here to catch.
+    """
     kinds = {row_id: execute.evidence_kind(row_id) for row_id in execute.ROWS}
-    assert set(kinds.values()) == {execute.INTEGRITY_PLACEHOLDER}
+    placeholders = {r for r, k in kinds.items() if k == execute.INTEGRITY_PLACEHOLDER}
+    model = {r for r, k in kinds.items() if k == execute.MODEL_PREDICTION}
+    pathway = {r for r, k in kinds.items() if k == execute.PATHWAY_ENGAGEMENT}
+    assert model == {"E-MATRIX-TOOL-USE"}
+    assert pathway == {"E-MATRIX-ROUTING-PATHWAY"}
+    assert placeholders == set(execute.ROWS) - model - pathway
+    assert len(placeholders) == 7
 
 
 def test_an_unclassified_row_refuses_instead_of_defaulting() -> None:
@@ -98,12 +114,26 @@ def test_an_unclassified_row_refuses_instead_of_defaulting() -> None:
         execute.evidence_kind("E-MATRIX-NOT-A-ROW")
 
 
-def test_all_placeholder_rows_scoring_one_do_not_satisfy_the_bar(tmp_path: Path) -> None:
+def _all_placeholders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put the table in the all-placeholder state the next two tests are about.
+
+    Constructed rather than inherited. These tests assert what a matrix of rows that cannot fail
+    does to the bar; if they read that condition off the live table they would stop testing it the
+    moment the table is corrected, which is exactly what happened to them once already.
+    """
+    for row_id in execute.ROWS:
+        monkeypatch.setitem(execute.PREDICTION_SOURCE, row_id, "admitted_asset_derived")
+
+
+def test_all_placeholder_rows_scoring_one_do_not_satisfy_the_bar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The defect this change exists for, stated as a test.
 
     Every row scores 1.0 and none of them can fail. Before the derived evidence kind that produced
     cert_007 True. It has to produce False: a bar met by rows that cannot fail is met by nothing.
     """
+    _all_placeholders(monkeypatch)
     receipt = subject.recompute(write_bundle(tmp_path), thresholds())
     assert all(row["mean_score"] == 1.0 and row["passed"] for row in receipt["rows"])
     assert receipt["model_evidence_row_count"] == 0
@@ -122,6 +152,7 @@ def test_the_bar_follows_the_model_evidence_rows_once_one_exists(
     here at all. It follows the single model-evidence row in both directions, which is what makes
     the count load-bearing rather than decorative.
     """
+    _all_placeholders(monkeypatch)
     monkeypatch.setitem(execute.PREDICTION_SOURCE, execute.ROWS[0], "owned_checkpoint_inference")
 
     passing = tmp_path / "passing"
