@@ -162,9 +162,15 @@ AUTHORITY_LEGACY_DIRECTORY = PurePosixPath("docs/authority")
 AUTHORITY_DOMAIN_DIRECTORY = PurePosixPath("docs/domains/governance/authority")
 
 
+# Documents the authority migration deliberately did NOT move.  Their canonical home is the
+# legacy directory, because the migration's own exclusion list rules that the domain-directory
+# path will never exist -- so returning it would name a path nothing can resolve.
+AUTHORITY_UNMIGRATED_NAMES = frozenset({"INVARIANT.md"})
+
+
 def authority_canonical_relative_path(name: str) -> PurePosixPath:
-    if name in {"GOAL.md", "STATE.md"}:
-        return AUTHORITY_DOMAIN_DIRECTORY / name
+    if name in AUTHORITY_UNMIGRATED_NAMES:
+        return AUTHORITY_LEGACY_DIRECTORY / name
     return AUTHORITY_DIRECTORY / name
 
 

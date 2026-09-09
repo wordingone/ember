@@ -28,10 +28,9 @@ def test_issue1975_state_uses_governance_domain_authority_path():
     # directory, so the two constants now name the same place and there is no contrast left to
     # draw. Asserting the old literal asserts something that stopped being true.
     #
-    # Worth noting rather than fixing here: docs/authority/INVARIANT.md has not itself moved, so
-    # the file's canonical path and its actual location differ. Lookups still resolve because
-    # authority_candidate_relative_paths includes the legacy directory. Moving the file is a
-    # separate change with its own guard surface and is not made under a test repair.
+    # INVARIANT.md is one of the migration's excluded sources, so its domain-directory path is one
+    # the migration ruled would never exist. The canonicaliser now says so: an unmigrated document
+    # canonicalizes to where it actually is, and no tracked file names the excluded target.
     assert verifier.authority_canonical_relative_path("INVARIANT.md") == PurePosixPath(
-        "docs/domains/governance/authority/INVARIANT.md"
+        "docs/authority/INVARIANT.md"
     )
