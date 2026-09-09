@@ -532,7 +532,10 @@ class RunnerPreflightTests(unittest.TestCase):
             run_vertical_slice.semantic_publication_plan(steps=100, checkpoint_interval=32, checkpoint_byte_bound=10, write_budget_bytes=39)
 
     def _run_semantic_with_mocks(self, *, resume: bool, telemetry_path: Path | None = None, telemetry_run_id: str | None = None, atomic_json_mock: MagicMock | None = None) -> tuple[dict[str, object], dict[str, object], MagicMock, list[int]]:
-        model = SimpleNamespace(active_expert="reasoning")
+        # `modules` is read by the post-run FP8 accounting in run_semantic, which walks the
+        # model for down-projection sites. This double has none, and an empty walk says so
+        # rather than fabricating a site whose receipt no kernel produced.
+        model = SimpleNamespace(active_expert="reasoning", modules=lambda: ())
         model._activate_expert = lambda expert: setattr(model, "active_expert", expert)
         model.expert_bank_genesis_hashes = lambda: {name: name * 64 for name in ("vision", "audio", "reasoning", "tool")}
         optimizer = SimpleNamespace(param_groups=[{"lr": 1e-5}])
@@ -841,7 +844,10 @@ class RunnerPreflightTests(unittest.TestCase):
         parent_data_cursor: dict[str, object] | None = None,
         max_records: int | None = None,
     ) -> tuple[dict[str, object], dict[str, object], MagicMock]:
-        model = SimpleNamespace(active_expert="reasoning")
+        # `modules` is read by the post-run FP8 accounting in run_semantic, which walks the
+        # model for down-projection sites. This double has none, and an empty walk says so
+        # rather than fabricating a site whose receipt no kernel produced.
+        model = SimpleNamespace(active_expert="reasoning", modules=lambda: ())
         model.train = lambda: None
         model.activation_calls = []
         def activate(expert: str) -> None:
@@ -1129,6 +1135,12 @@ class RunnerPreflightTests(unittest.TestCase):
             receipt_path=Path("semantic/receipt.json"),
             shards_root=Path("semantic/shards"),
             tokenizer_path=Path("semantic/tokenizer.json"),
+            shard_ledger=None,
+            expected_shard_ledger_sha256=None,
+            micro_batch=1,
+            phase_attribution=False,
+            fp8_sites=None,
+            fp8_scaling="rowwise",
             expected_receipt_sha256="r" * 64,
             expected_tokenizer_sha256="t" * 64,
             expected_architecture_sha256="a" * 64,

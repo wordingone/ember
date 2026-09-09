@@ -16,7 +16,7 @@
     },
     {
       "path": "tests/ember_restart_model/domain-governance/test_runner_preflight.py",
-      "sha256": "a040dd8b5302cc87df2619e9ac8855d764ede5dfe4857f28f70f1aab7d0fac4d",
+      "sha256": "5c9b986adcbd16cdf86a72e3727a0a576bfae1857275a450ddd802d3125bec2c",
       "reason": "02B-owned production runner preflight suite after canonical consumer and tokenizer relocation; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry."
     },
     {
