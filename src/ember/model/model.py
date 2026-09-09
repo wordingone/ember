@@ -24,6 +24,45 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint_utils
 
+# Three different consumers reach this module three different ways, and no single import
+# statement satisfies all of them:
+#
+#   * the test suite puts ``src/`` on sys.path and imports ``ember.model.model``;
+#   * the evaluation canary, its fixture builder, and eval_canary_image.py put the repository
+#     ROOT on sys.path and import ``src.ember.model.model``, where no top-level ``ember``
+#     package exists at all;
+#   * the governed training entry -- the consumer that matters most -- loads this file directly
+#     with spec_from_file_location under a synthetic module name, so the module has no package
+#     context at all and a relative import raises outright.
+#
+# An absolute ``from ember...`` breaks the second. A relative ``from . import`` breaks the third.
+# Resolving by file path, with the package-relative form preferred when a package context exists,
+# is the only form that holds for all three. Each context ends up with exactly one instance: under
+# the first two the relative import binds the package's own module object, and under the third
+# there is no package instance for the fallback to duplicate.
+try:
+    from . import fp8_linear
+except ImportError:  # loaded as a standalone file, with no parent package
+    import importlib.util as _fp8_importlib
+    import sys as _fp8_sys
+
+    _FP8_MODULE_NAME = "_ember_model_fp8_linear"
+    fp8_linear = _fp8_sys.modules.get(_FP8_MODULE_NAME)
+    if fp8_linear is None:
+        _fp8_path = Path(__file__).resolve().parent / "fp8_linear.py"
+        _fp8_spec = _fp8_importlib.spec_from_file_location(_FP8_MODULE_NAME, _fp8_path)
+        if _fp8_spec is None or _fp8_spec.loader is None:
+            raise ImportError(f"FP8_LINEAR_SPEC_INVALID:{_fp8_path}")
+        fp8_linear = _fp8_importlib.module_from_spec(_fp8_spec)
+        # Registered before exec so the weight cache inside it is shared by every later load in
+        # this process rather than duplicated per import site.
+        _fp8_sys.modules[_FP8_MODULE_NAME] = fp8_linear
+        try:
+            _fp8_spec.loader.exec_module(fp8_linear)
+        except BaseException:
+            _fp8_sys.modules.pop(_FP8_MODULE_NAME, None)
+            raise
+
 EXPERT_NAMES = ("vision", "audio", "reasoning", "tool")
 
 
@@ -380,7 +419,9 @@ class SharedAttention(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor, coordinates: torch.Tensor, allowed: torch.Tensor | None) -> torch.Tensor:
         batch, sequence, width = hidden_states.shape
-        qkv = self.qkv(hidden_states).view(batch, sequence, 3, self.heads, self.head_dim)
+        qkv = fp8_linear.linear(hidden_states, self.qkv.weight).view(
+            batch, sequence, 3, self.heads, self.head_dim
+        )
         query, key, value = qkv.permute(2, 0, 3, 1, 4).unbind(dim=0)
         query = self.q_norm(query)
         key = self.k_norm(key)
@@ -392,7 +433,9 @@ class SharedAttention(nn.Module):
             attended = F.scaled_dot_product_attention(query, key, value, attn_mask=None, is_causal=True)
         else:
             attended = F.scaled_dot_product_attention(query, key, value, attn_mask=allowed.unsqueeze(1), is_causal=False)
-        return self.output(attended.transpose(1, 2).reshape(batch, sequence, width))
+        return fp8_linear.linear(
+            attended.transpose(1, 2).reshape(batch, sequence, width), self.output.weight
+        )
 
 
 class SwiGLUExpert(nn.Module):
@@ -404,8 +447,8 @@ class SwiGLUExpert(nn.Module):
         self.down = nn.Linear(4 * hidden_size, hidden_size, bias=False, device=device)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
-        return self.down(_swiglu_product(up, gate))
+        up, gate = fp8_linear.linear(hidden_states, self.up_gate.weight).chunk(2, dim=-1)
+        return fp8_linear.linear(_swiglu_product(up, gate), self.down.weight)
 
     def forward_fused(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """Fuse only the shared-FFN SiLU/multiply site on CUDA.
@@ -414,13 +457,13 @@ class SwiGLUExpert(nn.Module):
         immediate rollback. The active-expert path continues to call forward().
         """
 
-        up, gate = self.up_gate(hidden_states).chunk(2, dim=-1)
+        up, gate = fp8_linear.linear(hidden_states, self.up_gate.weight).chunk(2, dim=-1)
         product = (
             _FUSED_SWIGLU_PRODUCT(up, gate)
             if hidden_states.device.type == "cuda"
             else _swiglu_product(up, gate)
         )
-        return self.down(product)
+        return fp8_linear.linear(product, self.down.weight)
 
 
 class _DecoderLayer(nn.Module):
@@ -665,7 +708,7 @@ class UnifiedDecoder(nn.Module):
                 )
             else:
                 hidden_states = layer(hidden_states, coordinates, allowed, selected)
-        return self.lm_head(self.final_norm(hidden_states))
+        return fp8_linear.linear(self.final_norm(hidden_states), self.lm_head.weight)
 
 
 def count_unique_trainable_parameters(subject: nn.Module | RestartDecoderConfig, *, include_frozen: bool = False) -> int:
