@@ -125,7 +125,7 @@ they cannot reduce, defer, replace, or reinterpret it.
       "docs/domains/governance/contracts/goal-clear-protocol.md": "6A0A5D8BF04D22B374B197B2C6A380D80C893748BF38FAB706137EC47C33635C",
       "docs/domains/governance/contracts/goal-mode-mechanism.md": "F3D0A29007DB098FCEAEED650BCAE530A442E99598E8A9A092F47945A1C7D300",
       "docs/contracts/nc2-own-technique-contract.md": "A0A12328B2D96F6DF12BD7D51D029F88279436C9E1073835EDBC12E7C8B85B9C",
-      "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md": "6AC47945BAA555F159F4DE338D3E3241C9119E5684E5370707C3B3C11E90AF0F",
+      "docs/domains/governance/contracts/registry-dispatch-gate-spec-v0.md": "e307a1afcf12d458569aadac2e4123b60a4227a6457bab0ecdf3311fc994afe0",
       "docs/domains/governance/spec/autonomy-relinquishment-ladder-v1.md": "36C23511461DA3AD5E988D4ED0C2193340E0F523D25886461D6026442798E0CB",
       "docs/domains/governance/spec/conditions-v1.md": "7EB7D89F573E251916B531A6D3139DEA1CA6D3EA6898A264DEF6AFC4717CDC75"
     }
