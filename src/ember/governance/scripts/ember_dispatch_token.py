@@ -199,7 +199,12 @@ def _validate_env_shape(values: dict[str, str]) -> tuple[str, str, str, int, int
     if "EMBER_LAB_DISPATCH_VRAM_PROVIDER" in values:
         provider = values["EMBER_LAB_DISPATCH_VRAM_PROVIDER"]
         device_uuid = values["EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID"]
-        if provider != "nvidia_smi_nvml" or not device_uuid.startswith("GPU-"):
+        # Provider names describe distinct observations, never interchangeable
+        # per-process measurements. The authenticated native profile restricts
+        # total-device upper bounds to numerical conformance.
+        if provider not in (
+            "nvidia_smi_nvml", "nvidia_smi_total_device_upper_bound"
+        ) or not device_uuid.startswith("GPU-"):
             raise _refuse(
                 "EMBER_LAB_DISPATCH_TOKEN_INVALID",
                 "VRAM provider/device identity is invalid",

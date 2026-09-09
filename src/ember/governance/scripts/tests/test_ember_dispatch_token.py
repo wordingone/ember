@@ -243,9 +243,11 @@ def _vram_contract_env() -> dict[str, str]:
     }
 
 
-def test_daemon_vram_contract_is_validated_then_preserved_for_caged_child(monkeypatch, tmp_path):
+@pytest.mark.parametrize("provider", ["nvidia_smi_nvml", "nvidia_smi_total_device_upper_bound"])
+def test_daemon_vram_contract_is_validated_then_preserved_for_caged_child(monkeypatch, tmp_path, provider):
     fixture = _write_canonical_repo(tmp_path)
     vram = _vram_contract_env()
+    vram["EMBER_LAB_DISPATCH_VRAM_PROVIDER"] = provider
     monkeypatch.setattr(os, "environ", _env(**vram))
     envelope = _well_formed_envelope(fixture, int(VALID_DAEMON_PID))
     monkeypatch.setattr(token, "_call_consume_rpc", lambda *a, **k: envelope)
@@ -257,14 +259,17 @@ def test_daemon_vram_contract_is_validated_then_preserved_for_caged_child(monkey
         assert os.environ[name] == value
 
 
-def test_partial_or_noncanonical_vram_contract_refuses_before_rpc(monkeypatch, tmp_path):
+@pytest.mark.parametrize("provider", ["nvidia_smi_nvml", "nvidia_smi_total_device_upper_bound"])
+def test_partial_or_noncanonical_vram_contract_refuses_before_rpc(monkeypatch, tmp_path, provider):
     vram = _vram_contract_env()
+    vram["EMBER_LAB_DISPATCH_VRAM_PROVIDER"] = provider
     vram.pop("EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID")
     monkeypatch.setattr(os, "environ", _env(**vram))
     with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_REQUIRED"):
         token.consume_dispatch(tmp_path)
 
     malformed = _vram_contract_env()
+    malformed["EMBER_LAB_DISPATCH_VRAM_PROVIDER"] = provider
     malformed["EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS"] = "0500000"
     monkeypatch.setattr(os, "environ", _env(**malformed))
     with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_TOKEN_INVALID"):
@@ -507,3 +512,24 @@ def test_live_named_pipe_fixture_consumption_uses_true_client_pid(monkeypatch, t
     assert armed_cap == VALID_MAXIMUM_JOB_MEMORY_BYTES
     for name in token._REQUIRED_ENV:
         assert name not in os.environ
+
+
+@pytest.mark.parametrize("provider", ["nvidia_smi_nvml", "nvidia_smi_total_device_upper_bound"])
+@pytest.mark.parametrize("field,value", [
+    ("EMBER_LAB_DISPATCH_VRAM_PROVIDER", "nvidia_smi_total_device_upper_bound_unverified"),
+    ("EMBER_LAB_DISPATCH_VRAM_PROVIDER", " nvidia_smi_total_device_upper_bound"),
+    ("EMBER_LAB_DISPATCH_VRAM_DEVICE_UUID", "not-a-device"),
+    ("EMBER_LAB_DISPATCH_VRAM_FRACTION_MILLIONTHS", "0500000"),
+    ("EMBER_LAB_DISPATCH_MAXIMUM_PROCESS_VRAM_BYTES", "0"),
+    ("EMBER_LAB_DISPATCH_MINIMUM_FREE_VRAM_BYTES", str(2**64)),
+])
+def test_provider_compatibility_preserves_closed_contract_refusals(monkeypatch, tmp_path, provider, field, value):
+    vram = _vram_contract_env()
+    vram["EMBER_LAB_DISPATCH_VRAM_PROVIDER"] = provider
+    vram[field] = value
+    monkeypatch.setattr(os, "environ", _env(**vram))
+    def forbidden_rpc(*args):
+        pytest.fail("Malformed contract reached authenticated transport")
+    monkeypatch.setattr(token, "_call_consume_rpc", forbidden_rpc)
+    with pytest.raises(token.DispatchTokenError, match="EMBER_LAB_DISPATCH_TOKEN_INVALID"):
+        token.consume_dispatch(tmp_path)
