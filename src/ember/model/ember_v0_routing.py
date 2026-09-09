@@ -14,7 +14,7 @@ import hashlib
 import math
 import torch
 import torch.nn.functional as F
-from .cia_contract import history_window
+from .ember_v0_contract import history_window
 
 SELECTOR_VERSION = "CIA3-R1-N61-cpu-greedy-v1"
 CUDA_SELECTOR_VERSION = "CIA3-R1-N61-cuda-greedy-v1"

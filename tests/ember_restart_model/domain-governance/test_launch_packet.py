@@ -31,7 +31,7 @@ if str(_TOOLS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIRECTORY))
 from repository_layout import resolve_repository_authority  # noqa: E402
 
-_MODEL_PATH = Path(__file__).resolve().parents[3] / "src" / "ember" / "model" / "model.py"
+_MODEL_PATH = Path(__file__).resolve().parents[3] / "src" / "ember" / "model" / "ember_v0_model.py"
 _model_spec = importlib.util.spec_from_file_location("ember_restart_model_decl", _MODEL_PATH)
 _model_mod = importlib.util.module_from_spec(_model_spec)
 # Register before exec: model.py defines dataclasses, and dataclasses resolves a

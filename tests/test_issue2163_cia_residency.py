@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 import unittest
 import torch
 import torch.nn.functional as F
-from ember.model.cia_residency import ExpertCache, paged_swiglu
+from ember.model.ember_v0_residency import ExpertCache, paged_swiglu
 
 
 class ResidencyMechanics(unittest.TestCase):

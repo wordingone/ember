@@ -92,7 +92,7 @@ def _import_siblings(repo_root: Path):
     """Import the three existing authorities this writer reuses.
 
     checkpoint_artifacts.py has its own sibling imports (checkpoint_scratch,
-    durable_io) and an absolute ``from src.ember.model.model import ...``, so
+    durable_io) and an absolute ``from src.ember.model.ember_v0_model import ...``, so
     it is loaded as a plain top-level import with both its own directory and
     the repo root on sys.path -- exactly the pattern
     tests/ember_restart_model/domain-governance/test_checkpoint_artifacts.py

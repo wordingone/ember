@@ -27,9 +27,9 @@ import torch.utils.checkpoint as checkpoint_utils
 # Three different consumers reach this module three different ways, and no single import
 # statement satisfies all of them:
 #
-#   * the test suite puts ``src/`` on sys.path and imports ``ember.model.model``;
+#   * the test suite puts ``src/`` on sys.path and imports ``ember.model.ember_v0_model``;
 #   * the evaluation canary, its fixture builder, and eval_canary_image.py put the repository
-#     ROOT on sys.path and import ``src.ember.model.model``, where no top-level ``ember``
+#     ROOT on sys.path and import ``src.ember.model.ember_v0_model``, where no top-level ``ember``
 #     package exists at all;
 #   * the governed training entry -- the consumer that matters most -- loads this file directly
 #     with spec_from_file_location under a synthetic module name, so the module has no package
@@ -41,7 +41,7 @@ import torch.utils.checkpoint as checkpoint_utils
 # the first two the relative import binds the package's own module object, and under the third
 # there is no package instance for the fallback to duplicate.
 try:
-    from . import fp8_linear
+    from . import ember_v0_fp8_linear as fp8_linear
 except ImportError:  # loaded as a standalone file, with no parent package
     import importlib.util as _fp8_importlib
     import sys as _fp8_sys
@@ -49,7 +49,7 @@ except ImportError:  # loaded as a standalone file, with no parent package
     _FP8_MODULE_NAME = "_ember_model_fp8_linear"
     fp8_linear = _fp8_sys.modules.get(_FP8_MODULE_NAME)
     if fp8_linear is None:
-        _fp8_path = Path(__file__).resolve().parent / "fp8_linear.py"
+        _fp8_path = Path(__file__).resolve().parent / "ember_v0_fp8_linear.py"
         _fp8_spec = _fp8_importlib.spec_from_file_location(_FP8_MODULE_NAME, _fp8_path)
         if _fp8_spec is None or _fp8_spec.loader is None:
             raise ImportError(f"FP8_LINEAR_SPEC_INVALID:{_fp8_path}")
