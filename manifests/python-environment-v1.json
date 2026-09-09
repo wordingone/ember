@@ -335,6 +335,28 @@
       "platform_versions": null
     },
     {
+      "distribution": "packaging",
+      "version": "24.2",
+      "requirement": "packaging==24.2",
+      "imports": [
+        "packaging"
+      ],
+      "group": "runtime",
+      "source": {
+        "kind": "pypi",
+        "locator": null,
+        "commit": null,
+        "artifact_sha256": null
+      },
+      "install_by_default": true,
+      "compatibility": null,
+      "platform_profiles": [
+        "windows",
+        "linux"
+      ],
+      "platform_versions": null
+    },
+    {
       "distribution": "peft",
       "version": "0.18.1",
       "requirement": "peft==0.18.1",

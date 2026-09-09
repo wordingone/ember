@@ -1,9 +1,10 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""CPU reference selection for CIA3-R1-N61, with explicit causal cutoffs.
+"""CPU/CUDA selection for CIA3-R1-N61, with explicit causal cutoffs.
 
-This is a selection oracle, not a decoder, residency lease, immutable serving
-transaction or production-performance path. A unit task-gradient gate is provided
-as a separate tested operation, not a complete training integration.
+Selection alone is not a residency lease, immutable serving transaction or
+production-performance result. CUDA uses an explicit selector identity and
+same-device checks; detached receipt hashing incurs a host transfer whose cost
+must be included in the complete execution measurement.
 Inputs must be re-embedded under the supplied generation by the caller.
 """
 # goal_id: EMBER-02
@@ -16,6 +17,7 @@ import torch.nn.functional as F
 from .cia_contract import history_window
 
 SELECTOR_VERSION = "CIA3-R1-N61-cpu-greedy-v1"
+CUDA_SELECTOR_VERSION = "CIA3-R1-N61-cuda-greedy-v1"
 
 
 def _global_scores(summary, query_weight, keys):
@@ -33,15 +35,15 @@ def unit_task_gate(logits, selected_slot):
     """Unit forward residual scale with the selected softmax derivative.
 
     The selected index is discrete, not differentiable top-k. Meta inputs only
-    establish shape/graph behavior; numerical finite checks apply on CPU.
+    establish shape/graph behavior; physical inputs receive finite checks.
     """
     if not isinstance(logits, torch.Tensor) or tuple(logits.shape) != (2,) or not logits.is_floating_point():
         raise ValueError("two floating local logits required")
-    if logits.device.type not in {"cpu", "meta"}:
-        raise ValueError("gate oracle supports CPU or meta only")
+    if logits.device.type not in {"cpu", "cuda", "meta"}:
+        raise ValueError("gate supports CPU, CUDA or meta only")
     if type(selected_slot) is not int or selected_slot not in (0, 1):
         raise ValueError("selected slot must be zero or one")
-    if logits.device.type == "cpu":
+    if logits.device.type != "meta":
         _finite(logits, "local logits")
     # Preserve the finite range of double-precision fixed-tensor callers.
     working = logits if logits.dtype == torch.float64 else logits.float()
@@ -50,7 +52,7 @@ def unit_task_gate(logits, selected_slot):
 
 
 def _digest(value):
-    value = value.detach().contiguous()
+    value = value.detach().cpu().contiguous()
     metadata = f"{value.dtype}:{tuple(value.shape)}:".encode()
     return hashlib.sha256(metadata + value.view(torch.uint8).numpy().tobytes()).hexdigest()
 
@@ -58,8 +60,8 @@ def _digest(value):
 def _tensor(value, shape, name):
     if not isinstance(value, torch.Tensor) or tuple(value.shape) != shape:
         raise ValueError(f"{name} shape must be {shape}")
-    if value.device.type != "cpu" or not value.is_floating_point():
-        raise ValueError(f"{name} requires CPU floating tensors for this reference oracle")
+    if value.device.type not in {'cpu', 'cuda'} or not value.is_floating_point():
+        raise ValueError(f"{name} requires CPU or CUDA floating tensors")
 
 
 def _finite(value, name):
@@ -73,6 +75,8 @@ def _inputs(values, weight, keys, generation, request):
     _tensor(values, (len(values), 1024), "history")
     _tensor(weight, (1024, 1024), "query projection")
     _tensor(keys, (12, 25, 1024), "expert keys")
+    if values.device != weight.device or values.device != keys.device:
+        raise ValueError('routing inputs must share the exact device')
     for identity in (generation, request):
         if not isinstance(identity, str) or not identity:
             raise ValueError("nonempty generation and request identities required")
@@ -111,13 +115,14 @@ def select_global(embeddings, query_weight, keys, *, position, document_start, g
         raise ValueError("required preceding epoch is not available")
     history = embeddings[lo:hi].detach()
     _finite(history, "visible embeddings")
-    summary = history.float().mean(0) if hi > lo else torch.zeros(1024)
+    summary = history.float().mean(0) if hi > lo else torch.zeros(1024, device=embeddings.device)
     # The first reference uses temperature 1, deterministic ID-ordered ties.
     log_prior = _global_scores(summary, query_weight, keys)
     _finite(log_prior, "global prior")
     experts = tuple(torch.argsort(log_prior, descending=True, stable=True)[:2].tolist())
     return GlobalSelection(generation, request, document_start, hi, _digest(history),
-                           _digest(keys), _digest(log_prior), experts, log_prior)
+                           _digest(keys), _digest(log_prior), experts, log_prior,
+                           CUDA_SELECTOR_VERSION if embeddings.device.type == 'cuda' else SELECTOR_VERSION)
 
 
 def select_local(hidden, query_weight, keys, selection, *, position, document_start,
@@ -126,7 +131,7 @@ def select_local(hidden, query_weight, keys, selection, *, position, document_st
     _inputs(hidden, query_weight, keys, generation, request)
     if type(selection) is not GlobalSelection:
         raise ValueError("global selection required")
-    if selection.selector_version != SELECTOR_VERSION:
+    if selection.selector_version != (CUDA_SELECTOR_VERSION if hidden.device.type == 'cuda' else SELECTOR_VERSION):
         raise ValueError("incompatible selector version")
     if type(sparse_depth) is not int or not 0 <= sparse_depth < 12:
         raise ValueError("sparse_depth must be an integer in [0,12)")
@@ -141,9 +146,11 @@ def select_local(hidden, query_weight, keys, selection, *, position, document_st
         raise ValueError("preceding shared-path vector is unavailable")
     visible = hidden[segment_start - 1:segment_start] if segment_start > document_start else hidden[:0]
     _finite(visible, "visible hidden state")
-    summary = visible[0].float() if len(visible) else torch.zeros(1024)
+    summary = visible[0].float() if len(visible) else torch.zeros(1024, device=hidden.device)
     # Sort by global ID before argmax so ties do not depend on resident-slot order.
     _tensor(selection.log_prior, (25,), "global log prior")
+    if selection.log_prior.device != hidden.device:
+        raise ValueError('global prior must share the exact routing device')
     _finite(selection.log_prior, "global log prior")
     if _digest(selection.log_prior) != selection.prior_digest:
         raise ValueError("global prior changed after selection")

@@ -1,9 +1,10 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Full-shape CIA3-R1-N61 decoder graph for S0 metadata validation.
+"""Full-shape CIA3-R1-N61 decoder with explicit bounded candidate execution.
 
-Parameters default to meta; explicit full-population CPU initialization enables numerical conformance. Fixed-route traces exercise operation shapes
-and autograd connectivity, not values, learned routing, causal logits or training.
-Production allocation, paging, generation admission and learning qualification remain required.
+Parameters default to meta; full CPU materialization supplies the numerical
+reference. Explicit CUDA activation retains CPU expert ownership and leases two
+GPU bundles through recomputed backward. Runtime conformance, generation admission
+and learning qualification require their own execution evidence.
 """
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
@@ -38,7 +39,7 @@ def rotate_three_axis(values, positions):
 
 
 class CIADecoder(nn.Module):
-    """Complete parameter ownership, metadata traces and a numerical CPU reference."""
+    """Complete parameter ownership, CPU reference and guarded CUDA candidate path."""
 
     def __init__(self, *, architecture_config=None):
         # Reject undeclared semantics before any parameter storage is created.
@@ -48,6 +49,8 @@ class CIADecoder(nn.Module):
         super().__init__()
         self.config = validated_config
         self._parameter_device = "meta"
+        self._execution_device = torch.device('meta')
+        self._cuda_execution = None
         self.weights = nn.ParameterDict({
             spec.name.replace(".", "__"): nn.Parameter(torch.empty(spec.shape, device="meta", dtype=torch.bfloat16))
             for spec in equation_inventory()
@@ -66,18 +69,30 @@ class CIADecoder(nn.Module):
             raise ValueError("unexpected parameter alias between distinct consumers")
         if any(tuple(actual[name].shape) != shape for name, shape in expected.items()):
             raise ValueError("candidate parameter shape mismatch")
-        if any(p.dtype != torch.bfloat16 or p.device.type != self._parameter_device for p in actual.values()):
+        def expected_device(name):
+            return torch.device('cpu') if self._parameter_device == 'cuda' and name.startswith('experts.') else self._execution_device
+        if any(p.dtype != torch.bfloat16 or p.device != expected_device(name) for name, p in actual.items()):
             raise ValueError("candidate requires BF16 parameters on its declared device")
         if sum(p.numel() for p in actual.values()) != census(self.config).total_unique:
             raise ValueError("candidate census mismatch")
-        if self._parameter_device == "cpu":
+        if self._parameter_device != "meta":
             if any(not p.is_contiguous() or p.storage_offset() != 0 or p.untyped_storage().nbytes() != p.numel() * p.element_size() for p in actual.values()):
                 raise ValueError("physical parameter storage does not match declared elements")
-            addresses = [p.untyped_storage().data_ptr() for p in actual.values()]
-            ranges = sorted((p.untyped_storage().data_ptr(), p.untyped_storage().data_ptr() + p.untyped_storage().nbytes()) for p in actual.values())
-            if len(set(addresses)) != len(addresses) or any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
-                raise ValueError("physical parameter storage alias")
+            for device in {p.device for p in actual.values()}:
+                ranges = sorted((p.data_ptr(), p.data_ptr() + p.untyped_storage().nbytes()) for p in actual.values() if p.device == device)
+                if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
+                    raise ValueError("physical parameter storage alias")
         return actual
+
+    def _apply(self, fn, recurse=True):
+        raise ValueError('generic module migration cannot bypass explicit CIA placement')
+
+    def float(self):
+        # Retain the existing no-storage invalid-dtype fixture. Physical placement
+        # and precision changes must use a separately validated execution path.
+        if self._parameter_device != 'meta':
+            raise ValueError('physical dtype migration cannot bypass CIA placement')
+        return super()._apply(lambda value: value.float() if value.is_floating_point() else value)
 
     def materialize_cpu(self, *, seed):
         """Initialize the complete population for CPU conformance, never a smaller subject.
@@ -102,8 +117,54 @@ class CIADecoder(nn.Module):
                 value.normal_(0, std, generator=generator)
             self.weights[spec.name.replace(".", "__")] = nn.Parameter(value, requires_grad=self.weights[spec.name.replace(".", "__")].requires_grad)
         self._parameter_device = "cpu"
+        self._execution_device = torch.device('cpu')
         self.parameter_inventory()
         return self
+
+    def activate_cuda(self, device):
+        """Activate bounded execution before constructing the candidate optimizer.
+
+        Caller must reserve the complete host/device envelope. This neither admits
+        a generation nor grants launch, checkpoint, learning or throughput credit.
+        """
+        if self._parameter_device != 'cpu':
+            raise ValueError('CUDA activation requires the complete CPU population')
+        target = torch.device(device)
+        if target.type != 'cuda' or target.index is None:
+            raise ValueError('explicit indexed CUDA device required')
+        parameters = self.parameter_inventory()
+        if any(value.grad is not None for value in parameters.values()):
+            raise ValueError('CUDA activation requires a quiescent population without gradients')
+        from .cia_residency import CUDAExecution
+        shared = {name: value for name, value in parameters.items() if not name.startswith('experts.')}
+        original = {name: value.data for name, value in shared.items()}
+        moved = {}
+        try:
+            for name, value in shared.items():
+                moved[name] = value.detach().to(target, copy=True)
+            torch.cuda.synchronize(target)
+            for name, value in shared.items():
+                value.data = moved[name]
+            self._execution_device = target
+            self._parameter_device = 'cuda'
+            self._cuda_execution = CUDAExecution(self, target)
+            self.parameter_inventory()
+        except BaseException:
+            for name, value in shared.items():
+                value.data = original[name]
+            self._execution_device = torch.device('cpu')
+            self._parameter_device = 'cpu'
+            self._cuda_execution = None
+            raise
+        finally:
+            moved.clear()
+            original.clear()
+        return self
+
+    def candidate_step(self):
+        if self._cuda_execution is None:
+            raise ValueError('candidate step requires CUDA activation')
+        return self._cuda_execution.step()
 
     def apply_update_support(self, locus, *, experts=()):
         """Set exact parameter flags and clear stale gradients at a step boundary.
@@ -111,6 +172,8 @@ class CIADecoder(nn.Module):
         Returned objects define prospective optimizer membership. This does not
         rebuild an optimizer or authorize dropping its retained moment state.
         """
+        if self._cuda_execution is not None and self._cuda_execution.cache.active:
+            raise RuntimeError('update support cannot change during a candidate step')
         names = update_support(locus, experts=experts)
         parameters = self.parameter_inventory()
         for name, parameter in parameters.items():
@@ -120,12 +183,14 @@ class CIADecoder(nn.Module):
 
     def _weight(self, name):
         value = self.weights[name.replace(".", "__")]
-        if value.device.type != self._parameter_device:
+        if value.device != self._execution_device:
             raise ValueError("weight device differs from the declared model device")
         return value
 
     def _input(self, value, trailing=None):
-        if not isinstance(value, torch.Tensor) or value.device.type != self._parameter_device:
+        if self._cuda_execution is not None:
+            self._cuda_execution.cache.check()
+        if not isinstance(value, torch.Tensor) or value.device != self._execution_device:
             raise ValueError("input must share the declared model device")
         if trailing is not None and (value.ndim != 2 or value.shape[-1] != trailing):
             raise ValueError(f"expected [positions,{trailing}]")
@@ -168,6 +233,8 @@ class CIADecoder(nn.Module):
             raise ValueError("global expert identity outside [0,25)")
         if type(layer) is not int or layer not in range(1, 24, 2):
             raise ValueError("expert blocks exist only at sparse depths")
+        if self._cuda_execution is not None:
+            return self._cuda_execution.expert_block(values, expert, layer)
         return self._swiglu(values, f"experts.{expert}.layers.{layer}")
 
     def _attention(self, values, positions, prefix):
@@ -225,10 +292,12 @@ class CIADecoder(nn.Module):
 
     def _document_forward(self, embedded, positions, document_index):
         keys = torch.stack([self._weight(f"router.layers.{layer}.keys") for layer in range(1, 24, 2)])
-        request = f"cpu-conformance-document-{document_index}"
+        generation = ('cpu-conformance' if self._cuda_execution is None else
+                      f'cuda-candidate-step-{self._cuda_execution.cache.step_id}')
+        request = f"{generation}-document-{document_index}"
         selections = {start: select_global(
             embedded, self._weight("router.global_query.weight"), keys,
-            position=start, document_start=0, generation="cpu-conformance", request=request)
+            position=start, document_start=0, generation=generation, request=request)
             for start in range(0, len(embedded), 1024)}
         values = embedded
         routes = []
@@ -241,7 +310,7 @@ class CIADecoder(nn.Module):
                 for start in range(0, len(embedded), 256):
                     selection = selections[(start // 1024) * 1024]
                     local = select_local(shared, self._weight("router.local_query.weight"), keys,
-                        selection, position=start, document_start=0, generation="cpu-conformance",
+                        selection, position=start, document_start=0, generation=generation,
                         request=request, sparse_depth=layer // 2)
                     slot = sorted(selection.experts).index(local.expert)
                     residual = self.expert_block(
@@ -255,15 +324,17 @@ class CIADecoder(nn.Module):
         return self._linear(self._norm(values, "final_norm.weight"), "embedding.weight"), routes
 
     def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False):
-        """Numerical CPU reference over explicitly packed, unpadded documents.
+        """Numerical execution over explicitly packed, unpadded documents.
 
         Every document is evaluated independently. There is no co-batch pooling,
         mutable route cache or caller-forced numerical expert. Replaying a prefix
         recomputes its routes; this is not an incremental KV-cache implementation.
-        This reference holds all global weights on CPU, not two-slot paging.
+        CPU reference holds the full population locally. CUDA execution requires
+        a candidate_step context and leases expert bundles during both passes.
+        Neither path constitutes an admitted immutable serving generation.
         """
-        if self._parameter_device != "cpu":
-            raise ValueError("numerical forward requires full CPU materialization")
+        if self._parameter_device not in {'cpu', 'cuda'}:
+            raise ValueError("numerical forward requires full physical materialization")
         self._input(embedded, 1024)
         self._input(positions)
         if embedded.dtype != torch.bfloat16 or not 1 <= len(embedded) <= 4096:
