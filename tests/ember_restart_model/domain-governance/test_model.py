@@ -19,7 +19,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
-from src.ember.model.ember_v0_model import RMSNorm, RawAudioProjector, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from src.ember.model.model import RMSNorm, RawAudioProjector, RawPatchProjector, RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
 
 class RestartDecoderModelTests(unittest.TestCase):
@@ -257,7 +257,7 @@ class RestartDecoderModelTests(unittest.TestCase):
             attention.rope.apply_qk_sdpa(query, key[:, :, :-1], value, coordinates)
 
     def test_shared_qk_rope_helper_owns_no_layout_conversion(self) -> None:
-        source = (ROOT / "src" / "ember" / "model" / "ember_v0_model.py").read_text(
+        source = (ROOT / "src" / "ember" / "model" / "model.py").read_text(
             encoding="utf-8"
         )
         helper = source.split("    def apply_qk_sdpa(", 1)[1].split("\n\n\nclass SharedAttention", 1)[0]

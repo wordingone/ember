@@ -15,7 +15,7 @@ RUNNER_DIR = ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restar
 sys.path.insert(0, str(RUNNER_DIR))
 
 import training_acceleration  # noqa: E402
-from src.ember.model.ember_v0_model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
+from src.ember.model.model import RestartDecoderConfig, UnifiedDecoder  # noqa: E402
 
 
 def _load(name: str, filename: str):
