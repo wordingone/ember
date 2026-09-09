@@ -4606,7 +4606,7 @@
     },
     {
       "document": "docs/domains/governance/roadmap/milestones/EMBER-02.md",
-      "line": 131,
+      "line": 155,
       "resolution": {
         "disposition": "CLASSIFIER_ROW_OUTSIDE_CURRENT_NORMATIVE_ENTRY_SCOPE",
         "kind": "EXPLICIT_FILING_DISPOSITION",
@@ -6146,7 +6146,7 @@
       "target": "state/ember-telemetry.jsonl"
     }
   ],
-  "rows_sha256": "537681932dc057cc83010d6a43f95109c5e7ba3003c9c3c6ea216bff7fc9f2b7",
+  "rows_sha256": "2ae94ff1a3ec60b4275f14b1b9782d093e931a5bc6a6f6baafd6e5c9a36e84ed",
   "schema_version": "ember-current-reference-reconciliation-v1",
   "source": {
     "commit": "f78e05de04b375e87a2f385316fbbda385930272",
