@@ -929,7 +929,7 @@ class SpecialistStreamTests(unittest.TestCase):
     def test_issue898_specialist_remint_refuses_any_non_declared_field_change(self) -> None:
         from remint_specialist_stream import (
             _ISSUE898_FAMILY_TRANSITIONS,
-            _ISSUE898_ROOT_TRANSITION,
+            _ISSUE898_PATH_TRANSITION,
             _assert_manifest_remint,
         )
 
@@ -938,7 +938,7 @@ class SpecialistStreamTests(unittest.TestCase):
         original["model_config"]["sha256"] = (
             "33a82113cfa42fcd62d70688fea39c62b3793630c7ea48fdb5b884681a8e1781"
         )
-        original["corpus_root_sha256"] = _ISSUE898_ROOT_TRANSITION[0]
+        original["corpus_root_sha256"] = _ISSUE898_PATH_TRANSITION[0]
         for capability, transitions in _ISSUE898_FAMILY_TRANSITIONS.items():
             family = original["families"][capability]
             for field, (old, _new) in transitions.items():

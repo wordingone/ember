@@ -215,7 +215,7 @@ def test_genesis_producer_mints_physical_manifest_last_candidate(
         trusted_verifier_registry=target / "trusted-verifiers.json",
         custody_db=custody_db,
     )
-    from scripts.ember_restart import r1_launch_packet
+    from src.ember.governance.scripts.ember_restart import r1_launch_packet
 
     r1_launch_packet._validate_entry_shape(entry)
     assert entry["result"] == "PREP_ONLY"
