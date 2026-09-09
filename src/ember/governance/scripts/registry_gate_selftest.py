@@ -169,8 +169,8 @@ def main() -> int:
         cfg_path = cfg_dir / "v0-pretrain-config.json"
         cfg_path.write_text("{}", encoding="utf-8")
         got = normalize_config_path(str(cfg_path), root=troot)
-        if got != "domains/model/configs/v0-pretrain-config.json":
-            fails.append(f"case6 expected 'domains/model/configs/v0-pretrain-config.json', got {got!r}")
+        if got != "configs/v0-pretrain-config.json":
+            fails.append(f"case6 expected 'configs/v0-pretrain-config.json', got {got!r}")
         if DRIVE_LETTER_RE.search(got):
             fails.append(f"case6 leaked a drive-letter path: {got!r}")
 

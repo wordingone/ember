@@ -89,6 +89,11 @@
       "path": "src/ember/governance/scripts/install-ember-desktop.ps1",
       "sha256": "51e15be7122e7d1fae299f17552f116a5c0baa4b05da55d5b4df9fa85075cafb",
       "reason": "desktop installer, not a training launcher. It starts only the installed desktop application after copying the reviewed application/runtime bundle; it never selects or dispatches a model training run."
+    },
+    {
+      "path": "src/ember/governance/scripts/cia_conformance_launch.py",
+      "sha256": "a4fa55783b77e9bf6ce1fd8c1d940539a004bec6fe68f5c4ded66515090900fc",
+      "reason": "Authenticated daemon run body, not a standalone launcher. The closed --daemon-run entry consumes the existing one-use daemon dispatch token and exact native job cap before creating its owned numerical workers. The numerical profile verifies exact argv, launcher/helper source bindings and custody; the consumer binds the actual daemon parent and binary/source identities. No hermetic-fixture or production-qualification exemption is claimed."
     }
   ]
 }

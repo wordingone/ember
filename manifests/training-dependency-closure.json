@@ -49,6 +49,7 @@
     "src/ember/model/cia_contract.py",
     "src/ember/model/cia_decoder.py",
     "src/ember/model/cia_inventory.py",
+    "src/ember/model/cia_residency.py",
     "src/ember/model/cia_routing.py",
     "src/ember/model/fp8_linear.py",
     "src/ember/model/model.py",

@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
-REGISTRY = ROOT / "docs" / "ledgers" / "technique-registry.jsonl"
+REGISTRY = ROOT / "docs/domains/governance/ledgers/technique-registry.jsonl"
 RECEIPT_LOG = ROOT / "receipts" / "registry-gate.jsonl"
 
 # Evidence states preserve observations without deleting research families.
@@ -155,15 +155,23 @@ def check(config: dict, rows, today=None, root=ROOT):
 
 
 def check_dispatch_authority(
-    config: dict, active_goal: str, next_executed_outcome: str
+    config: dict, active_goal: str, next_executed_outcome: str, *, purpose: str = 'standard'
 ) -> tuple[bool, str]:
     """Config-specific authority gate; the tree-wide verifier runs separately."""
     if not isinstance(config, dict):
         return False, "config must be a JSON object"
+    if purpose not in {'standard', 'numerical_conformance'}:
+        return False, 'unknown dispatch purpose'
     authority = config.get("authority")
     if not isinstance(authority, dict):
         return False, "authority object missing"
     artifact_class = authority.get("artifact_class")
+    if purpose == 'numerical_conformance' and (
+        artifact_class != 'research_candidate'
+        or authority.get('execution_authority') != 'qualification_gated'
+        or authority.get('capability_credit') != 'none'
+    ):
+        return False, 'numerical conformance requires a qualification-gated zero-credit candidate'
     if artifact_class == "historical_only":
         return False, "historical config execution is denied"
     if authority.get("goal_id") != active_goal:
@@ -184,7 +192,7 @@ def check_dispatch_authority(
         return True, "frozen reference-seat authority binding passes"
     if artifact_class not in {"research_candidate", "model_milestone"}:
         return False, f"artifact_class {artifact_class!r} is not dispatchable"
-    if authority.get("execution_authority") != "allowed":
+    if purpose == 'standard' and authority.get("execution_authority") != "allowed":
         return False, "execution_authority is not allowed"
     total_parameters = authority.get("total_parameters")
     if not isinstance(total_parameters, int) or total_parameters < 3_000_000_000:
@@ -227,7 +235,7 @@ def load_goal_binding(root: Path = ROOT) -> tuple[str, str]:
 def run_authority_conservation(root: Path = ROOT) -> tuple[bool, str]:
     command = [
         sys.executable,
-        str(root / "scripts" / "verify_authority_conservation.py"),
+        str(root / "src/ember/governance/scripts/verify_authority_conservation.py"),
         "--root",
         str(root),
     ]

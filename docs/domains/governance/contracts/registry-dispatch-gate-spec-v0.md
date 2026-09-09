@@ -62,3 +62,89 @@ test gate logic but receive no neural or capability credit.
 
 The gate emits a receipt containing goal binding, authority verdict, config
 identity, and the next executed outcome.
+
+
+## 2026-09-09 fixed numerical conformance implementation
+
+# Existing registry dispatch: bounded numerical qualification
+
+This implements the 2026-09-08 canonical architecture decision. It does not
+replace that decision, create a campaign, or qualify the model. Amend the existing
+registry-dispatch-gate-spec-v0.md, registry_gate.py and the actual conformance
+entry consumer together. Current source defects: obsolete ledger and conservation
+verifier paths, and no purpose compatible with qualification_gated.
+
+## Closed purpose
+
+`numerical_conformance` is available only to a research_candidate declaring
+qualification_gated under the exact active goal. Standard dispatch retains its
+existing authority rules. No translation to allowed is made in the architecture
+config. This purpose permits only fixed-input full-population numerical forward,
+backward and one bounded in-memory component update for correctness checking.
+
+The numerical registry verdict is emitted by the existing gate checks and captured in the owned run stdout, whose subject digest binds this purpose and immutable run identity to:
+
+- Exact configuration bytes, complete source closure and source revision.
+- Exact consuming test entry, its semantic argv and interpreter/runtime identity.
+- Fixed input descriptor and digest, clean initialization recipe/seed, and at most
+  one applied update. No supplied pretrained weights or checkpoint ingress.
+- Owned wall-time, host memory, total-device supervision and allocator caps,
+  disk budgets and shared GPU lease. Limits come from the actual launch envelope;
+  an allocator fraction cannot stand in for total-device supervision.
+- A rollback consisting of process-tree cleanup and discard of in-memory candidate
+  state. No serving activation or retained learned checkpoint output is permitted.
+- Zero trained-token, throughput, capability, model-birth and serving credit.
+
+The actual consumer independently rechecks purpose and bound identities immediately
+before CUDA initialization. It checks loaded module origins against the declared
+source closure, not only files available on disk. Unsupported args, mutable inputs,
+identity drift, missing budgets/lease, extra update steps or a missing gate binding
+refuse execution. A caller-written PASS field is not sufficient: rerun the existing
+pure authority/mechanism/identity checks against current bytes.
+
+## Existing daemon dispatch requirement
+
+The numerical controller is an authenticated run body of the existing Ember
+daemon, not an independent launcher. Its closed entry consumes the daemon's
+one-use dispatch token before starting any worker and requires the exact 20 GiB
+native job ceiling. The subject binds the daemon binary and source identities;
+the consumer verifies the controller's actual daemon parent. The existing
+catalog, named pipe, custody, lease and manifest verification remain authoritative.
+
+The daemon's `numerical_conformance` profile accepts only the closed run-body
+arguments, verified launcher/helper bindings and matching custody directory.
+It requires a v4/v5 manifest with the external VRAM wall. Other profiles cannot
+dispatch this entry. No production memory-model certificate is borrowed.
+
+On WDDM, `nvidia_smi_total_device_upper_bound` uses total device occupation,
+including desktop and descendant allocations, as a conservative bound. It does
+not measure per-process usage: that receipt field is null and the separately
+named upper-bound field carries the observation. This provider is restricted to
+the numerical profile; existing production provider requirements are unchanged.
+
+## Preserved obligations
+
+Keep authority conservation, exact >=3B population, declared native boundaries,
+clean initialization, existing mechanism registry checks, operating disk reserves,
+and existing owned-process cleanup. Use documented per-mechanism exemptions only
+where actually necessary; never exempt the conformance purpose wholesale.
+The currently inspected ledger has no ADOPTED_CURRENT_CONFIG rows, but the gate
+must read the live ledger and preserve its future obligations.
+
+No corpus ingestion, pretraining campaign, evaluation certificate, external input
+acquisition, serving, generation admission or retained learned checkpoint is enabled
+by this purpose. Those keep their own complete production qualification gates.
+
+## Required implementation checks
+
+1. Standard and historical/reference dispatch behavior remains unchanged.
+2. qualification_gated refuses standard dispatch; the closed purpose refuses
+   incomplete/wrong plans, identities, budgets and commands.
+3. Wrong source/config/fixture/runtime bytes and wrong loaded module origins refuse.
+4. Mechanism and authority conservation failures remain refusals for conformance.
+5. The real consumer rejects forged/mismatched receipt fields and extra update
+   work; metadata-only gate tests do not establish that a CUDA run happened.
+6. Execute the full-population conformance only through the existing owned process,
+   disk budget, shared GPU lease and total-device supervision controls. Preserve
+   success/failure receipts, numerical tolerances and cleanup without shrinking
+   the model if the run exceeds a limit or fails correctness.
