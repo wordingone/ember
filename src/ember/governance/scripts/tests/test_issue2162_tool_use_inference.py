@@ -367,6 +367,42 @@ def test_planted_negative_whole_row_zero_execution_is_a_refusal(world: World) ->
         producer.run_pass(world.contract, by_sha, emit, sql_timeout_seconds=0.5)
 
 
+def test_the_same_zero_is_recorded_not_refused_once_the_decoder_is_proven(world: World) -> None:
+    """The refusal is about an unproven instrument, never about the number being zero.
+
+    Identical emissions to the planted negative above. The only thing that changes is that the
+    caller has proven its decoder inverts its pre-tokenizer, which is what build_real_emitter does
+    before any item runs. With that proof in hand the zero is attributable: the instrument reached
+    the model and the model emitted nothing executable.
+
+    This is the clause the unconditional refusal would have broken. #1947 calls a below-floor model
+    result terminal for evaluator execution and an unexecutable row nonterminal, so a refusal that
+    fired on every future zero would have made the row permanently unproducible -- the cure
+    becoming the blocker. The basis is carried in the result so no reader has to infer which of the
+    two conditions applied.
+    """
+    by_sha, _supplied = world.sources()
+
+    def emit(prompt_text: str, position: int) -> dict:
+        mangled = world.gold_queries[position].replace(" ", " Ġ")
+        return {"decoded_text": mangled, "generated_token_count": 8, "prompt_token_count": 1,
+                "stop_reason": "eos_token"}
+
+    result = producer.run_pass(world.contract, by_sha, emit, sql_timeout_seconds=0.5,
+                               detokenization_verified=True)
+    assert result["executed_count"] == 0
+    assert result["matched_count"] == 0
+    assert result["zero_execution_basis"] == "MODEL_EMITTED_NOTHING_EXECUTABLE"
+
+
+def test_a_row_that_executes_carries_no_zero_execution_basis(world: World) -> None:
+    """The field is a condition report, not a permanent annotation on every row."""
+    by_sha, _supplied = world.sources()
+    result = producer.run_pass(world.contract, by_sha, world.emit, sql_timeout_seconds=0.5)
+    assert result["executed_count"] > 0
+    assert result["zero_execution_basis"] is None
+
+
 def test_one_executing_item_is_enough_to_keep_the_pass(world: World) -> None:
     """The refusal above is TOTAL-failure only; per-item tolerance is preserved deliberately."""
     by_sha, _supplied = world.sources()

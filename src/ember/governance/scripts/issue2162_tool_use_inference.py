@@ -306,6 +306,7 @@ def run_pass(
     *,
     sql_timeout_seconds: float = 5.0,
     progress: Callable[[dict[str, Any]], None] | None = None,
+    detokenization_verified: bool = False,
 ) -> dict[str, Any]:
     frozen = contract["frozen_items"]
     database_digests = sorted({item["database_object"]["sha256"] for item in frozen})
@@ -360,7 +361,10 @@ def run_pass(
     if len(items) != ITEM_COUNT:
         raise ValueError(f"TOOL_USE_INFERENCE_TOTALITY_REFUSED:{len(items)}")
     executed_count = sum(1 for item in items if item["executed"])
+    zero_execution_basis = None
     if items and executed_count == 0:
+        zero_execution_basis = "MODEL_EMITTED_NOTHING_EXECUTABLE" if detokenization_verified else "INSTRUMENT_UNPROVEN"
+    if zero_execution_basis == "INSTRUMENT_UNPROVEN":
         # Per-item tolerance is deliberate: one unparseable emission is a mismatch and must not
         # abort a pass. Total tolerance is not. A row in which NOT ONE item reached the database
         # is not a model scoring zero, it is the instrument never reaching the thing it measures --
@@ -368,6 +372,14 @@ def run_pass(
         # carried E-MATRIX-TOOL-USE at 0.0 over 1,034 items whose emissions were BPE pieces joined
         # by spaces, because the pinned tokenizer had a ByteLevel pre-tokenizer and a null decoder.
         # Gold SQL emitted verbatim would have scored zero too. This refuses that as a condition.
+        #
+        # The refusal is conditional, and the condition is the whole point. Once the emitter has
+        # PROVEN its decoder inverts its pre-tokenizer -- install_detokenizer round-trips a probe
+        # before a single item runs -- a row of zero executions is no longer ambiguous: the
+        # instrument reached the model and the model emitted nothing executable. That is a
+        # below-floor model result, it is recorded with its basis, and it earns the model nothing.
+        # An unconditional refusal here would collapse that distinction in the other direction and
+        # make every future zero unexecutable, which is the one state #1947 calls nonterminal.
         classes = sorted({str(item["error_class"]) for item in items})
         raise ValueError(f"TOOL_USE_ZERO_EXECUTION_REFUSED:{len(items)}:{','.join(classes)}")
     return {
@@ -377,6 +389,10 @@ def run_pass(
         "executed_count": executed_count,
         "matched_count": sum(1 for item in items if item["matched"]),
         "database_bytes_unchanged": True,
+        # None unless the row executed nothing at all. When set, it states which of the two
+        # indistinguishable-in-a-score conditions produced the zero, so a reader of the receipt
+        # never has to infer it from a tokenizer file that may have moved.
+        "zero_execution_basis": zero_execution_basis,
     }
 
 
@@ -442,6 +458,7 @@ def build_receipt(
         "executed_count": pass_result["executed_count"],
         "matched_count": pass_result["matched_count"],
         "database_bytes_unchanged": pass_result["database_bytes_unchanged"],
+        "zero_execution_basis": pass_result.get("zero_execution_basis"),
         "items": pass_result["items"],
         "claim_boundary": CLAIM_BOUNDARY,
     }
@@ -720,7 +737,8 @@ def main() -> int:
             log.flush()
 
     try:
-        pass_result = run_pass(contract, by_sha, emit, sql_timeout_seconds=args.sql_timeout_seconds, progress=progress)
+        pass_result = run_pass(contract, by_sha, emit, sql_timeout_seconds=args.sql_timeout_seconds,
+                               progress=progress, detokenization_verified=True)
     finally:
         if log is not None:
             log.close()
