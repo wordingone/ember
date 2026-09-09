@@ -169,7 +169,7 @@ export interface IdleSoakResult {
  */
 export async function runIdleSoak(opts: IdleSoakOptions): Promise<IdleSoakResult> {
   const repoRoot = resolveCheckoutRoot();
-  const sourceRoot = join(repoRoot, "tools", "ember-cli", "src");
+  const sourceRoot = join(repoRoot, "src", "ember", "infrastructure", "tools", "ember-cli", "src");
   const bunExe = resolveBunExecutable();
   const home = mkdtempSync(join(tmpdir(), "issue1455-idle-soak-"));
   const inspectPort = 6779 + Math.floor(process.pid % 1000);
