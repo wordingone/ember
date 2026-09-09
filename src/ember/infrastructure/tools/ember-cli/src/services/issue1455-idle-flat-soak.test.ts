@@ -43,8 +43,90 @@
 //     reader does not mistake this ceiling for a general JS-heap-leak detector.
 
 import { describe, expect, test } from "bun:test";
-import { runIdleSoak } from "./issue1455-idle-soak-harness.ts";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { linearFit } from "./ols-fit.ts";
+
+// Exercise the real launch caller; intercept only the PTY boundary in an isolated
+// child so no terminal or soak starts and module mocks cannot affect other tests.
+for (const outsideCheckout of [false, true]) {
+  test(`idle soak uses its source checkout (${outsideCheckout ? "spaced checkout and foreign roots" : "local cwd"})`, () => {
+    if (process.platform !== "win32") return;
+    const scratch = mkdtempSync(join(tmpdir(), "ember-idle-path-test-"));
+    try {
+      let expectedSource = resolve(import.meta.dir, "..");
+      let expectedRepo = resolve(expectedSource, "..", "..", "..", "..", "..", "..");
+      if (outsideCheckout) {
+        expectedRepo = join(scratch, "checkout with spaces");
+        expectedSource = join(expectedRepo, "src", "ember", "infrastructure", "tools", "ember-cli", "src");
+        mkdirSync(join(expectedSource, "services"), { recursive: true });
+        mkdirSync(join(expectedSource, "cli"));
+        mkdirSync(join(expectedSource, "entrypoints"));
+        for (const name of ["issue1455-idle-soak-harness.ts", "headless-capture.ts"]) {
+          copyFileSync(join(import.meta.dir, name), join(expectedSource, "services", name));
+        }
+        copyFileSync(join(import.meta.dir, "..", "cli", "ready-sentinel.ts"), join(expectedSource, "cli", "ready-sentinel.ts"));
+        writeFileSync(join(expectedSource, "entrypoints", "main.ts"), 'throw new Error("fixture entrypoint must not execute");');
+        const initialized = spawnSync("git", ["init", "--quiet", expectedRepo], { encoding: "utf8", windowsHide: true, timeout: 5_000 });
+        expect(initialized.status).toBe(0);
+      }
+      const harness = pathToFileURL(join(expectedSource, "services", "issue1455-idle-soak-harness.ts")).href;
+      const code = `
+        import { mock } from "bun:test";
+        import { existsSync, rmSync } from "node:fs";
+        import { basename, dirname, join, resolve } from "node:path";
+        import { tmpdir } from "node:os";
+        let observed;
+        mock.module("node-pty", () => ({ spawn(executable, args, options) {
+          const home = resolve(options.env.EMBER_HOME);
+          if (dirname(home) !== resolve(tmpdir()) || !basename(home).startsWith("issue1455-idle-soak-")) {
+            throw new Error("unexpected fixture custody");
+          }
+          observed = { cwd: options.cwd, args,
+            entryExists: existsSync(join(options.cwd, args.at(-1))),
+            headless: options.env.EMBER_CLI_HEADLESS_CAPTURE,
+            repoRoot: options.env.EMBER_REPO_ROOT, sourceRoot: options.env.EMBER_SOURCE_ROOT };
+          rmSync(home, { recursive: true, force: true });
+          throw new Error("idle-path-boundary-observed");
+        }}));
+        const { runIdleSoak } = await import(${JSON.stringify(harness)});
+        try {
+          await runIdleSoak({ settleMs: 0, durationMs: 0, sampleIntervalMs: 1 });
+          throw new Error("PTY boundary was not observed");
+        } catch (error) {
+          if (error.message !== "idle-path-boundary-observed") throw error;
+        }
+        console.log(JSON.stringify(observed));
+      `;
+      const result = spawnSync(process.execPath, ["-e", code], {
+        cwd: outsideCheckout ? scratch : expectedSource,
+        env: { ...process.env,
+          PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`,
+          ...(outsideCheckout ? { EMBER_REPO_ROOT: scratch, EMBER_SOURCE_ROOT: scratch } : {}),
+          EMBER_CLI_HEADLESS_CAPTURE: "0" },
+        encoding: "utf8", windowsHide: true, timeout: 15_000,
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe("");
+      const observed = JSON.parse(result.stdout);
+      expect(resolve(observed.cwd)).toBe(expectedSource);
+      expect(observed.args[1]).toBe("./entrypoints/main.ts");
+      expect(observed.entryExists).toBe(true);
+      expect(observed.headless).toBe("1");
+      expect(resolve(observed.repoRoot)).toBe(expectedRepo);
+      expect(observed.sourceRoot).toBe(observed.repoRoot);
+    } finally {
+      if (dirname(resolve(scratch)) !== resolve(tmpdir()) || !basename(scratch).startsWith("ember-idle-path-test-")) {
+        throw new Error("unexpected fixture cleanup path");
+      }
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+}
 
 const MIB = 1024 ** 2;
 const GIB = 1024 ** 3;
@@ -61,6 +143,7 @@ describe("issue #1455 delivered-state regression (cured runaway, bounded residua
   test(
     "RSS growth stays under the runaway-class ceiling and the JS-managed heap floor stays flat",
     async () => {
+      const { runIdleSoak } = await import("./issue1455-idle-soak-harness.ts");
       const result = await runIdleSoak({
         settleMs: SETTLE_MS,
         durationMs: WINDOW_MS,
