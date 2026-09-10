@@ -368,6 +368,10 @@ def enforce_baseline(rows: list[dict[str, object]], baseline: dict[str, object],
     allowed = {_baseline_key(row) for row in baseline_rows}
     current = {_baseline_key(row) for row in failures}
     errors: list[str] = []
+    if any(not str(row.get("justification") or "").strip() for row in baseline_rows):
+        # Appended, never returned early: the report must carry every finding it has, because a
+        # gate that reveals one layer per run reads as a first report every time.
+        errors.append("BASELINE_ROW_UNJUSTIFIED")
     if today > expires and current:
         errors.append("BASELINE_EXPIRED_WITH_REMAINING_ROWS")
     if len(failures) > int(baseline.get("maximum_rows", -1)):
@@ -424,6 +428,10 @@ def mint_baseline(
     if minted_on > expires_on:
         raise ValueError("baseline expiry precedes mint date")
     failures = [row for row in rows if row["status"] != "MATCH"]
+    if justifications is None and failures:
+        # A mint that omits reasons writes a baseline the checker now refuses, so the tool would be
+        # producing its own gate's failure. Refuse here instead, where the caller still has the rows.
+        raise UnjustifiedRows(failures)
     if justifications is not None:
         missing = [row for row in failures
                    if not (justifications.get(_justification_key(row)) or "").strip()]
