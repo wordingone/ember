@@ -16,6 +16,7 @@ import pytest
 import torch
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "src" / "ember" / "model"))
 sys.path.insert(0, str(ROOT / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"))
 
 
@@ -33,7 +34,7 @@ def test_tier_mechanism_mismatch_has_a_closed_typed_refusal() -> None:
 
 def test_production_dense_contract_is_over_three_billion_and_has_no_experts() -> None:
     dense = importlib.import_module("a1_dense")
-    sparse_model = importlib.import_module("model")
+    sparse_model = importlib.import_module("ember_v0_model")
     config = dense.DenseA1Config.from_contract()
     assert config.structural_parameter_count() == 3_839_344_640
     assert config.declared_total_unique_trainable_parameters == 3_839_344_640
@@ -50,7 +51,7 @@ def test_production_dense_contract_is_over_three_billion_and_has_no_experts() ->
 
 def test_owned_dense_swiglu_is_forward_equivalent_with_identical_weights() -> None:
     dense = importlib.import_module("a1_dense")
-    sparse_model = importlib.import_module("model")
+    sparse_model = importlib.import_module("ember_v0_model")
     torch.manual_seed(24164)
     owned = dense.DenseSwiGLU(32)
     reference = sparse_model.SwiGLUExpert(32)

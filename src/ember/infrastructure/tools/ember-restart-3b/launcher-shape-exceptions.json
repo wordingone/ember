@@ -21,7 +21,7 @@
     },
     {
       "path": "src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py",
-      "sha256": "2eafac1b44895534451998921720f6b2c7abd577da42c587b1e2875a104a59a6",
+      "sha256": "441cae7fcad57e437a8b3d36c907118963ad4da5501fa585ddade56a5581ed38",
       "reason": "02B-owned production vertical runner after canonical governance and documentation consumer relocation; the per-workstream supplement repins its exact reviewed bytes without mutating the 02A base registry; issue #2167 repins after the explicit --fp8-sites W5 installation flag on the semantic command. Issue #2173 repins after --fp8-scaling on the semantic command, which selects how installed FP8 sites apply their scales."
     },
     {

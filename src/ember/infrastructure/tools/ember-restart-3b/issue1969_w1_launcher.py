@@ -122,7 +122,7 @@ def validate_source(root: Path, spec: Mapping[str, object]) -> dict[str, str]:
     if not isinstance(source, Mapping):
         raise TypeError("SPEC_SOURCE_INVALID")
     rows = {
-        "model": (root / "src/ember/model/model.py", source.get("treatment_model_blob")),
+        "model": (root / "src/ember/model/ember_v0_model.py", source.get("treatment_model_blob")),
         "pretrain": (root / "src/ember/training/pretrain.py", source.get("pretrain_blob")),
         "training_acceleration": (root / "src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py", source.get("training_acceleration_blob")),
     }
@@ -357,7 +357,8 @@ def _run_preflight(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError(f"{label}:PASS_REQUIRED")
     module_root = root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     sys.path.insert(0, str(module_root))
-    model_module = importlib.import_module("model")
+    sys.path.insert(0, str(root / "src" / "ember" / "model"))
+    model_module = importlib.import_module("ember_v0_model")
     torch = importlib.import_module("torch")
     if not torch.cuda.is_available():
         raise ValueError("CUDA_REQUIRED")
@@ -406,8 +407,9 @@ def _run_arm(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("W1_PREFLIGHT_INVALID")
     module_root = root / "src" / "ember" / "infrastructure" / "tools" / "ember-restart-3b"
     sys.path.insert(0, str(module_root))
+    sys.path.insert(0, str(root / "src" / "ember" / "model"))
     packed = importlib.import_module("packed_specialist_run")
-    model_module = importlib.import_module("model")
+    model_module = importlib.import_module("ember_v0_model")
     psutil = importlib.import_module("psutil")
     captured: dict[str, object] = {}
     original_segment = packed.run_packed_selection_pretraining_segment
