@@ -50,7 +50,7 @@
 
 **Files:**
 - Modify: `src/ember/infrastructure/tools/ember-restart-3b/training_acceleration.py`
-- Modify: `src/ember/model/model.py`
+- Planned modification: `model.py` under `src/ember/model/` (the August 22 filename); current successor: `src/ember/model/ember_v0_model.py` (#2213).
 - Modify: `src/ember/training/pretrain.py`
 - Modify: `src/ember/infrastructure/tools/ember-restart-3b/run_vertical_slice.py`
 - Test: `tests/ember_restart_model/domain-governance/test_training_acceleration.py`
