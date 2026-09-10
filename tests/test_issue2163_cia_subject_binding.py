@@ -67,6 +67,33 @@ class SubjectBinding(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'bytes'):
             verify_loaded_sources(ROOT, changed, {'ember.governance.scripts.cia_conformance': sys.modules['ember.governance.scripts.cia_conformance']})
 
+    def test_every_module_the_consumer_loads_is_pinned_by_the_binding(self):
+        """A governed unit refused because the split contract module was loaded and unpinned.
+
+        The instance was one name. The class is "the consumer imports something the binding does not
+        vouch for", and it recurs whenever this revision grows a module. So the assertion is over the
+        WHOLE control set rather than over the one name that failed, and it carries the planted
+        negative that proves the check still bites when a pinned module is dropped."""
+        from ember.governance.scripts import cia_conformance as conformance
+        self.assertIn('src/ember/governance/scripts/cia_numerical_split.py',
+                      conformance.CONTROL_PATHS)
+        loaded = {}
+        for relative in conformance.CONTROL_PATHS:
+            if not relative.startswith('src/ember/') or not relative.endswith('.py'):
+                continue
+            self.assertIn(relative, self.binding['sources'], relative)
+            name = relative[len('src/'):-len('.py')].replace('/', '.')
+            if name.endswith('.__init__'):
+                continue
+            loaded[name] = SimpleNamespace(__file__=str(ROOT / relative))
+        self.assertIn('ember.governance.scripts.cia_numerical_split', loaded)
+        verify_loaded_sources(ROOT, self.binding, loaded)
+        # Planted negative: drop one pinned module and the same set must be refused.
+        blind = copy.deepcopy(self.binding)
+        del blind['sources']['src/ember/governance/scripts/cia_numerical_split.py']
+        with self.assertRaisesRegex(ValueError, 'unbound or changed'):
+            verify_loaded_sources(ROOT, blind, loaded)
+
 
 if __name__ == '__main__':
     unittest.main()
