@@ -13,7 +13,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .ember_v0_contract import census, cia_architecture_config, validate_cia_architecture
 from .ember_v0_inventory import equation_inventory, update_support
-from .ember_v0_routing import _global_scores, _local_scores, unit_task_gate, select_global, select_local
+from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, select_global,
+                              select_local, observe_global, observe_local)
 
 
 def rotate_three_axis(values, positions):
@@ -290,7 +291,7 @@ class CIADecoder(nn.Module):
         logits = _local_scores(local_vector, self._weight("router.local_query.weight"), keys[sparse_depth, list(experts)], prior[list(experts)])
         return unit_task_gate(logits, selected_slot)
 
-    def _document_forward(self, embedded, positions, document_index):
+    def _document_forward(self, embedded, positions, document_index, *, observer=None, plan=None):
         keys = torch.stack([self._weight(f"router.layers.{layer}.keys") for layer in range(1, 24, 2)])
         generation = ('cpu-conformance' if self._cuda_execution is None else
                       f'cuda-candidate-step-{self._cuda_execution.cache.step_id}')
@@ -299,6 +300,9 @@ class CIADecoder(nn.Module):
             embedded, self._weight("router.global_query.weight"), keys,
             position=start, document_start=0, generation=generation, request=request)
             for start in range(0, len(embedded), 1024)}
+        if observer is not None:
+            for start in sorted(selections):
+                observer(observe_global(selections[start], document=document_index))
         values = embedded
         routes = []
         for layer in range(24):
@@ -311,19 +315,50 @@ class CIADecoder(nn.Module):
                     selection = selections[(start // 1024) * 1024]
                     local = select_local(shared, self._weight("router.local_query.weight"), keys,
                         selection, position=start, document_start=0, generation=generation,
-                        request=request, sparse_depth=layer // 2)
-                    slot = sorted(selection.experts).index(local.expert)
+                        request=request, sparse_depth=layer // 2, capture=observer is not None)
+                    if observer is not None:
+                        observer(observe_local(local, document=document_index, layer=layer))
+                    candidates = tuple(sorted(selection.experts))
+                    # Ascending global-ID order, matching what select_local scores and what a plan
+                    # records. selection.experts is prior-descending, which is a ranking rather
+                    # than an identity, and comparing a plan against it refuses on the ordering.
+                    chosen = local.expert if plan is None else self._planned_expert(
+                        plan, (document_index, layer, start), candidates)
+                    slot = candidates.index(chosen)
                     residual = self.expert_block(
                         self._norm(shared[start:start + 256], prefix + ".expert_norm.weight"),
-                        expert=local.expert, layer=layer)
+                        expert=chosen, layer=layer)
+                    # The gate still consumes the NATIVE logits, so the selector gradient graph a
+                    # planned execution builds is the one free execution would have built. Only the
+                    # discrete winner comes from the plan.
                     pieces.append(shared[start:start + 256] + residual * unit_task_gate(local.logits, slot))
-                    routes.append((document_index, layer, start, selection.experts, local.expert))
+                    routes.append((document_index, layer, start, selection.experts, chosen))
                 values = torch.cat(pieces)
             else:
                 values = shared
         return self._linear(self._norm(values, "final_norm.weight"), "embedding.weight"), routes
 
-    def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False):
+    @staticmethod
+    def _planned_expert(plan, key, candidates):
+        """Consume one planned winner, refusing every way the plan could fail to describe this run.
+
+        Candidate-pair drift is a refusal rather than a substitution: if the two executions did not
+        even consider the same experts, a matching winner would be a coincidence and a differing one
+        would be attributed to the selector, when in both cases the divergence is already upstream.
+        """
+        entry = plan.get(key)
+        if entry is None:
+            raise ValueError(f"fixed route plan has no entry for {key}")
+        planned_candidates, planned_expert = entry
+        if tuple(planned_candidates) != tuple(candidates):
+            raise ValueError(f"candidate pair drift at {key}: plan {tuple(planned_candidates)} "
+                             f"against measured {tuple(candidates)}")
+        if planned_expert not in tuple(candidates):
+            raise ValueError(f"planned expert {planned_expert} is not a candidate at {key}")
+        return planned_expert
+
+    def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False,
+                route_observer=None, route_plan=None):
         """Numerical execution over explicitly packed, unpadded documents.
 
         Every document is evaluated independently. There is no co-batch pooling,
@@ -350,7 +385,9 @@ class CIADecoder(nn.Module):
         self.parameter_inventory()
         outputs, routes = [], []
         for index, (start, end) in enumerate(zip(document_starts, document_starts[1:] + (len(embedded),))):
-            result, document_routes = self._document_forward(embedded[start:end], positions[start:end], index)
+            result, document_routes = self._document_forward(
+                embedded[start:end], positions[start:end], index,
+                observer=route_observer, plan=route_plan)
             outputs.append(result)
             routes.extend(document_routes)
         logits = torch.cat(outputs)
