@@ -13,6 +13,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+import traceback
 import uuid
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -247,7 +248,59 @@ def worker(path):
     os.environ['EMBER_CIA_CUDA_CONFORMANCE'] = '1'
     os.environ['EMBER_CIA_GPU_MAX_BYTES'] = str(resources.ALLOCATOR_BYTES)
     sys.argv = [str(ROOT / subject.ENTRY), '--live']
-    runpy.run_path(str(ROOT / subject.ENTRY), run_name='__main__')
+    # The worker's own account of what happened, written by the worker into custody.
+    #
+    # Measured 2026-09-10: a governed unit whose consumer refused after about 16 seconds landed in
+    # custody with `stdout.log` and `stderr.log` both zero bytes, while the identical command run
+    # outside the job object produced 1,245 bytes of refusal on stderr in 16.1 seconds. The
+    # predecessor unit, whose consumer ran 156 seconds before failing an assertion, relayed its
+    # output intact. The relay is four processes deep -- owned job to a PowerShell launcher to the
+    # disk-budget runner to a second PowerShell launcher -- and a fast refusal can be lost in it.
+    #
+    # A governed run that refuses and cannot say why is worse than one that does not run: the
+    # apparatus reports a clean, cleanly-cleaned-up failure with no content, and the next action is
+    # to spend another single-use unit to ask the same question. So the consumer records its own
+    # terminal state next to its other receipts, on the near side of every relay. This tees rather
+    # than redirects, so the existing captured logs keep whatever they already manage to carry.
+    custody = Path(binding['launch']['custody'])
+    with (custody / 'worker-stdout.log').open('w', encoding='utf-8') as out_log, \
+            (custody / 'worker-stderr.log').open('w', encoding='utf-8') as error_log:
+        stdout, stderr = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = _Tee(stdout, out_log), _Tee(stderr, error_log)
+        try:
+            runpy.run_path(str(ROOT / subject.ENTRY), run_name='__main__')
+        except BaseException as error:
+            # SystemExit included: unittest exits through it, and its code is the verdict.
+            (custody / 'worker-terminal.json').write_bytes(subject.canonical({
+                'terminal': type(error).__name__, 'detail': str(error),
+                'traceback': traceback.format_exc(),
+                'claim': 'consumer terminal state only; no qualification or training credit'}))
+            raise
+        finally:
+            sys.stdout, sys.stderr = stdout, stderr
+
+
+class _Tee:
+    """Write to both streams. Absent from the receipt path, so a log failure cannot mask a result."""
+
+    def __init__(self, stream, log):
+        self._stream = stream
+        self._log = log
+
+    def write(self, text):
+        count = self._stream.write(text)
+        try:
+            self._log.write(text)
+            self._log.flush()
+        except Exception:
+            pass
+        return count
+
+    def flush(self):
+        self._stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
 
 
 def launch(custody, hidden, dispatch):
