@@ -148,8 +148,18 @@ class FullPopulationCUDA(unittest.TestCase):
         torch.cuda.reset_peak_memory_stats(device)
 
         # ---- 2. CUDA free routing, measured against the CPU reference ----------------------
+        # No gradients here, and the reason is the residency contract rather than economy. A paged
+        # expert forward that will need a gradient registers a debt on the step, and the step
+        # refuses to close while any debt is outstanding -- because an expert whose backward never
+        # ran while grads were live is an expert whose weights the cache may already have evicted.
+        # This section measures routing decisions and logits, never gradients, so running it with
+        # grad enabled would register debts that nothing in the section could ever pay, and the
+        # step would refuse on a defect of the measurement rather than of the subject. Gradients
+        # are measured in section 4, against the fixed plan, where the backward actually runs.
+        # Autograd does not change forward arithmetic, so the comparison against the CPU reference
+        # is unaffected by the mode.
         cuda_observed = Collector()
-        with model.candidate_step():
+        with torch.no_grad(), model.candidate_step():
             free_logits, free_routes = model(model.embed_text(tokens), positions,
                                              return_routes=True, route_observer=cuda_observed)
         free_logits = free_logits.detach().cpu()
