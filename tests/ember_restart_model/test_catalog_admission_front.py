@@ -1359,7 +1359,7 @@ def test_train_partition_projection_dispatches_closed_schema_and_names_authority
     monkeypatch.setattr(
         catalog_admission_module,
         "_load_partition_media_type_table",
-        lambda: {
+        lambda _partition_receipt_sha256=None: {
             "classes": {
                 ".cmake": {
                     "count": 1,
@@ -1447,6 +1447,79 @@ def test_train_partition_media_table_is_goal_bound() -> None:
     assert predecessor["workstream_id"] == "EMBER-02B"
     assert predecessor["binding_count"] == 609
     assert predecessor["binding_count"] == len(predecessor["media_types_by_object_id"])
+
+
+def test_every_installed_partition_media_table_is_goal_bound_and_loadable() -> None:
+    """Each per-partition table is admitted by the loader itself, not by the mint's say-so."""
+
+    directory = catalog_admission_module._PARTITION_MEDIA_TYPE_TABLE.with_suffix("")
+    installed = sorted(directory.glob("*.json"))
+    assert installed, "the keyed table directory is empty"
+    for path in installed:
+        table = catalog_admission_module._load_partition_media_type_table(path.stem)
+        assert table["goal_id"] == "EMBER-02"
+        assert table["workstream_id"] == "EMBER-02B"
+        assert table["next_executed_outcome"] == (
+            "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember"
+        )
+        assert table["source_partition_receipt_sha256"] == path.stem
+
+
+def test_an_unkeyed_partition_still_resolves_to_the_shared_table() -> None:
+    """The fallback is what keeps an already-admitted partition on identical bytes.
+
+    A widening that quietly re-decided a passing projection would be a different and riskier
+    change than the one intended, so the no-identity and unknown-identity cases are asserted to
+    resolve to exactly the same file the route read before.
+    """
+
+    shared = catalog_admission_module._PARTITION_MEDIA_TYPE_TABLE
+    assert catalog_admission_module._partition_media_type_table_path(None) == shared
+    assert catalog_admission_module._partition_media_type_table_path("0" * 64) == shared
+    assert (
+        catalog_admission_module._load_partition_media_type_table(None)["self_sha256"]
+        == catalog_admission_module._load_partition_media_type_table("0" * 64)["self_sha256"]
+    )
+
+
+def test_planted_negative_a_keyed_table_that_does_not_hash_to_itself_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The keyed path is held to the incumbent's integrity check, not exempted by it.
+
+    Keying by identity adds a second place a table can come from; a table admitted there without
+    the self-hash and schema legs would be a hole in the same gate rather than an extension of it.
+    """
+
+    shared = tmp_path / "train_partition_media_types.json"
+    shared.write_bytes(catalog_admission_module._read(
+        catalog_admission_module._PARTITION_MEDIA_TYPE_TABLE))
+    monkeypatch.setattr(catalog_admission_module, "_PARTITION_MEDIA_TYPE_TABLE", shared)
+
+    keyed_directory = tmp_path / "train_partition_media_types"
+    keyed_directory.mkdir()
+    receipt_sha = "a" * 64
+
+    tampered = json.loads(shared.read_text(encoding="utf-8"))
+    tampered["classes"]["<name:tampered>"] = {"count": 1}
+    (keyed_directory / f"{receipt_sha}.json").write_text(
+        json.dumps(tampered, indent=1, sort_keys=True), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="PARTITION_PROJECTION_MEDIA_TABLE_SELF_HASH_REFUSED"):
+        catalog_admission_module._load_partition_media_type_table(receipt_sha)
+
+    # Self-consistent, so the hash leg passes -- and the schema leg must still refuse it, or a
+    # table could be minted into admissibility by recomputing its own digest over bad counts.
+    consistent = json.loads(shared.read_text(encoding="utf-8"))
+    consistent.pop("self_sha256")
+    consistent["class_count"] = consistent["class_count"] + 1
+    consistent["self_sha256"] = catalog_admission_module._sha256(
+        catalog_admission_module._canonical(consistent))
+    (keyed_directory / f"{receipt_sha}.json").write_text(
+        json.dumps(consistent, indent=1, sort_keys=True), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="PARTITION_PROJECTION_MEDIA_TABLE_SCHEMA_REFUSED"):
+        catalog_admission_module._load_partition_media_type_table(receipt_sha)
 
 
 def test_content_sniff_is_path_independent_and_extension_is_only_a_binary_tiebreak(

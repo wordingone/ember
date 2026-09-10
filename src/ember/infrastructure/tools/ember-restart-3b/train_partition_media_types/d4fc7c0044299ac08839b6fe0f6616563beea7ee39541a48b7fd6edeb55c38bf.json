@@ -1,0 +1,188 @@
+{
+ "class_count": 29,
+ "classes": {
+  ".3dl": {
+   "count": 1,
+   "example": "packages/sdk/public/resource/luts/Presetpro-Cinematic.3dl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cube": {
+   "count": 5,
+   "example": "packages/sdk/public/resource/luts/Bourbon 64.CUBE",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".defaults": {
+   "count": 1,
+   "example": ".env.defaults",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".development": {
+   "count": 2,
+   "example": "packages/editor/.env.development",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".example": {
+   "count": 1,
+   "example": ".env.example",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".exr": {
+   "count": 3,
+   "example": "packages/editor/public/static/resource/material/wallBrick/red_brick/red_brick_nor_gl_1k.exr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".glb": {
+   "count": 165,
+   "example": "packages/editor/public/static/model/animal/Rat_astral3d.optimize.glb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hdr": {
+   "count": 2,
+   "example": "packages/editor/public/static/resource/hdr/cloudy.hdr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".html": {
+   "count": 3,
+   "example": "packages/editor/index.html",
+   "media_type": "text/html; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".ifc": {
+   "count": 4,
+   "example": "apps/ifc-converter/public/test-ifc-files/01-duplex.ifc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".js": {
+   "count": 152,
+   "example": ".github/action_script/lintIssue.js",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".jsonc": {
+   "count": 1,
+   "example": "biome.jsonc",
+   "media_type": "application/json",
+   "reason": "explicit standard media type"
+  },
+  ".ktx2": {
+   "count": 62,
+   "example": "apps/editor/public/material/concrete/concrete_plate/concrete_plate_ao_512.ktx2",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".less": {
+   "count": 4,
+   "example": "packages/editor/src/assets/less/common.less",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lock": {
+   "count": 1,
+   "example": "bun.lock",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".mamd": {
+   "count": 1,
+   "example": "apps/editor/public/audios/sfx/grid_snap.mamd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".map": {
+   "count": 3,
+   "example": "packages/sdk/public/libs/web-ifc/IFCWorker.js.map",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".mjs": {
+   "count": 5,
+   "example": "apps/editor/env.mjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mp3": {
+   "count": 33,
+   "example": "apps/editor/public/audios/radios/classic/Ballroom in Miniature.mp3",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".production": {
+   "count": 2,
+   "example": "packages/editor/.env.production",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".svg": {
+   "count": 89,
+   "example": "packages/editor/public/static/images/logo/logo.svg",
+   "media_type": "image/svg+xml",
+   "reason": "explicit standard media type"
+  },
+  ".ts": {
+   "count": 1637,
+   "example": "common/build/src/index.ts",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tsx": {
+   "count": 475,
+   "example": "apps/editor/app/client-bootstrap.tsx",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ttf": {
+   "count": 3,
+   "example": "packages/sdk/public/resource/fonts/Alimama_DongFangDaKai_Regular.ttf",
+   "media_type": "font/ttf",
+   "reason": "explicit standard media type"
+  },
+  ".vue": {
+   "count": 177,
+   "example": "packages/docs/src/.vuepress/theme/components/Custom.vue",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".wasm": {
+   "count": 12,
+   "example": "packages/editor/public/libs/draco/draco_decoder.wasm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webp": {
+   "count": 356,
+   "example": "apps/editor/public/icons/HVAC.webp",
+   "media_type": "image/webp",
+   "reason": "explicit standard media type"
+  },
+  ".woff": {
+   "count": 2,
+   "example": "apps/editor/app/fonts/GeistMonoVF.woff",
+   "media_type": "font/woff",
+   "reason": "explicit standard media type"
+  },
+  ".yaml": {
+   "count": 2,
+   "example": "pnpm-lock.yaml",
+   "media_type": "application/yaml; charset=utf-8",
+   "reason": "explicit standard media type"
+  }
+ },
+ "file_count": 3204,
+ "goal_id": "EMBER-02",
+ "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+ "schema_version": "ember-issue1581-train-partition-media-types-v1",
+ "self_sha256": "47dc271ff0b899d438c39766cefbf269e0effd512c38793dae07d0124bf7c628",
+ "source_partition_receipt_sha256": "d4fc7c0044299ac08839b6fe0f6616563beea7ee39541a48b7fd6edeb55c38bf",
+ "source_partition_selector": "candidate-application_worlds-train-0",
+ "source_partition_split": "train",
+ "workstream_id": "EMBER-02B"
+}

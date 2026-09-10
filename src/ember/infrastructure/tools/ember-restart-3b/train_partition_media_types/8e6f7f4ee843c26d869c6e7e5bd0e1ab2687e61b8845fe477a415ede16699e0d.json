@@ -1,0 +1,3338 @@
+{
+ "class_count": 554,
+ "classes": {
+  ".0": {
+   "count": 2,
+   "example": "test/mitmproxy/data/servercert/9da13359.0",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".1": {
+   "count": 15,
+   "example": "man/heaptrace.1",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".1st": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/nsprpub/lib/tests/windows/readme.1st",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".3": {
+   "count": 6,
+   "example": "third_party/virtualbox/kBuild/doc/COPYING-FDL-1.3",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".32sunu": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.32sunu",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".4-ld-script": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Scripts/gcc4.4-ld-script",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".5": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/png.5",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".64sunu": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.64sunu",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".686": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/asm686/README.686",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".9-ld-script": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Scripts/gcc4.9-ld-script",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".a": {
+   "count": 12,
+   "example": "HyperHide/pluginsdk/DeviceNameResolver/DeviceNameResolver_x64.a",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ac": {
+   "count": 9,
+   "example": "third_party/googletest-1.8.1/configure.ac",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".acorn": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.acorn",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".adb": {
+   "count": 7,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/ada/buffer_demo.adb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".add": {
+   "count": 1,
+   "example": "third_party/retdec-3.2/include/retdec/fileformat-libdwarf-interface/dwarfdump.add",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ads": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/ada/zlib-streams.ads",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".afdesign": {
+   "count": 2,
+   "example": "static/logo.afdesign",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".aix": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.aix",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".am": {
+   "count": 20,
+   "example": "third_party/googletest-1.8.1/Makefile.am",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".amiga": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.amiga",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".api": {
+   "count": 1,
+   "example": "radiography/api/radiography.api",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".apns": {
+   "count": 1,
+   "example": "DemoApps/iOSDemo/watchOSDemo Extension/PushNotificationPayload.apns",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".app": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/Makefiles/ms.app",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".arch": {
+   "count": 1,
+   "example": "Dockerfile.arch",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".asl": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/OvmfPkg/AcpiTables/Dsdt.asl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".aslc": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/OvmfPkg/AcpiTables/Facp.aslc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".asm": {
+   "count": 740,
+   "example": "HyperHideDrv/vmintrin.asm",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".asm16": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/IntelFspPkg/FspSecCore/Ia32/ResetVec.asm16",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".astro": {
+   "count": 11,
+   "example": "landing/src/components/CTA.astro",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".atari": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.atari",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".au3": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/WINNT/Installer/VBoxWHQLFake.au3",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".awk": {
+   "count": 1,
+   "example": "third_party/libdwarf-20191104/scripts/UPD.awk",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".axaml": {
+   "count": 49,
+   "example": "Source/App.axaml",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".base": {
+   "count": 4,
+   "example": "src/styles/tailwind.base",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".base-apt": {
+   "count": 1,
+   "example": "Dockerfile.base-apt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bash": {
+   "count": 1,
+   "example": "extras/httpie-completion.bash",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".bazel": {
+   "count": 8,
+   "example": "BUILD.bazel",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".bbx": {
+   "count": 1,
+   "example": "docs/paper/ACM-Reference-Format.bbx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bc32": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.bc32",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bcb": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/Makefile.bcb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bcc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/NOTES.bcc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".beos": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.beos",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bib": {
+   "count": 1,
+   "example": "docs/paper/sample-base.bib",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".bin": {
+   "count": 15,
+   "example": "facet-singularize/data/ie_exceptions.bin",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bkgen": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/bakefile/Bakefiles.bkgen",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bkl": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/bakefile/libxml2.bkl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bmp": {
+   "count": 6,
+   "example": "install/CERT-blue-short.bmp",
+   "media_type": "image/bmp",
+   "reason": "explicit standard media type"
+  },
+  ".bor": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.bor",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bpf": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/projects/cbuilder5/libpng.bpf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bpg": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/projects/cbuilder5/libpng.bpg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bpr": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/projects/cbuilder5/libpng.bpr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".br": {
+   "count": 3,
+   "example": "facet-json-classics/fixtures/canada.json.br",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bsd-3": {
+   "count": 1,
+   "example": "mitmproxy/contrib/click/LICENSE.BSD-3",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bst": {
+   "count": 1,
+   "example": "docs/paper/ACM-Reference-Format.bst",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".build": {
+   "count": 2,
+   "example": "third_party/nlohmann_json/meson.build",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".c": {
+   "count": 4626,
+   "example": "examples/c_kmod/echo_service/echoservice.c",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".c16": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/bootsectors/bs3kit/bs3-cmn-instantiate-x0.c16",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".c32": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/bootsectors/bs3-cpu-basic-2-32.c32",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".c64": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/bootsectors/bs3kit/bs3-cmn-instantiate.c64",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cast": {
+   "count": 4,
+   "example": "docs/src/assets/recordings/mitmproxy_intercept_requests.cast",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cbp": {
+   "count": 1,
+   "example": "third_party/expected-lite/project/CodeBlocks/expected-lite.cbp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cbproj": {
+   "count": 3,
+   "example": "third_party/googletest-1.8.1/googletest/codegear/gtest.cbproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cbx": {
+   "count": 1,
+   "example": "docs/paper/ACM-Reference-Format.cbx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cc": {
+   "count": 179,
+   "example": "tests/test_dll.cc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cddl": {
+   "count": 1,
+   "example": "third_party/virtualbox/COPYING.CDDL",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cegcc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.cegcc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cer": {
+   "count": 2,
+   "example": "test/mitmproxy/data/confdir/mitmproxy-ca-cert.cer",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cert_type": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.cert_type",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cert_type_empty": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.cert_type_empty",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cff": {
+   "count": 1,
+   "example": "CITATION.cff",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cfg": {
+   "count": 64,
+   "example": "setup.cfg",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".chm": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/dotzlib/DotZLib.chm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cjs": {
+   "count": 12,
+   "example": ".yarn/releases/yarn-4.14.1.cjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cl": {
+   "count": 2,
+   "example": "intercept/kernels/builtin_kernels.cl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".clj": {
+   "count": 24,
+   "example": "gen-src/day8/re_frame_10x/inlined_deps/garden/v1v3v10/garden/def.clj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cljc": {
+   "count": 40,
+   "example": "gen-src/day8/re_frame_10x/inlined_deps/garden/v1v3v10/garden/arithmetic.cljc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cljs": {
+   "count": 96,
+   "example": "examples/todomvc/src/todomvc/core.cljs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cljs~": {
+   "count": 1,
+   "example": "src/day8/re_frame_10x/panels/flow/views.cljs~",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".clp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/as400/compile.clp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cls": {
+   "count": 1,
+   "example": "docs/paper/acmart.cls",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cmake": {
+   "count": 49,
+   "example": "cmake/FindIdaSdk.cmake",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cmakein": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/zconf.h.cmakein",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cmd": {
+   "count": 27,
+   "example": "scripts/setup-test-env.cmd",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cnf": {
+   "count": 2,
+   "example": "test/mitmproxy/data/clientcert/client.cnf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cocci": {
+   "count": 2,
+   "example": "third_party/mbedtls-2.16.1/scripts/find-mem-leak.cocci",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".code-workspace": {
+   "count": 1,
+   "example": "test/end-to-end-tests/multi-root-UI/project-workspace.code-workspace",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".com": {
+   "count": 14,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/Makefile.com",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".common": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/Makefiles/ms.common",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".conf": {
+   "count": 32,
+   "example": ".tmux.conf",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".config": {
+   "count": 14,
+   "example": "AntiCrack-DotNet/App.config",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".contrib": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/README.contrib",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".core": {
+   "count": 1,
+   "example": "third_party/virtualbox/Doxyfile.Core",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/macos/src/libxml2_GUSIConfig.cp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cppclean": {
+   "count": 1,
+   "example": "third_party/googletest-1.8.1/googlemock/scripts/generator/README.cppclean",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cppm": {
+   "count": 1,
+   "example": "src/cpptrace.cppm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".crt": {
+   "count": 191,
+   "example": "tests/client_certs/client.crt",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cs": {
+   "count": 950,
+   "example": "AntiCrack-DotNet/AntiDebug.cs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".csproj": {
+   "count": 35,
+   "example": "AntiCrack-DotNet/AntiCrack-DotNet.csproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".csr": {
+   "count": 2,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.csr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".csv": {
+   "count": 4,
+   "example": "partitions/app4M_spiffs_12M_16MB.csv",
+   "media_type": "text/csv; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".ctf": {
+   "count": 1,
+   "example": "TestData/LTTng/lttng-kernel-trace.ctf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cts": {
+   "count": 1,
+   "example": "test/consumer-fixtures/ts-jest-node16/smoke.cts",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".customoptions": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/NetworkServices/DHCP/README.customoptions",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cygwin": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/antlr/makefile.cygwin",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".d": {
+   "count": 1080,
+   "example": "third_party/virtualbox/src/VBox/Devices/build/VBoxDD.d",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".darwin": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.darwin",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".data": {
+   "count": 73,
+   "example": "PerfDataUnitTest/TestData/perf.data",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dbx": {
+   "count": 1,
+   "example": "docs/paper/ACM-Reference-Format.dbx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dec": {
+   "count": 22,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/AppPkg/AppPkg.dec",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".def": {
+   "count": 75,
+   "example": "intercept/src/clIntercept.def",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".depend": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/solaris/Installer/vboxguest.depend",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".der": {
+   "count": 58,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/ec_prv.pk8.der",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".desktop": {
+   "count": 4,
+   "example": "flatpak/io.github.chkr1011.mqttMultimeter.desktop",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dev": {
+   "count": 1,
+   "example": "third_party/retdec-3.2/Dockerfile.dev",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".devhelp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/doc/devhelp/libxml2.devhelp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".disas": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Runtime/testcase/tstRTLdrMachORelocs-1.disas",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dist": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Additions/darwin/Installer/VBoxGuestAdditions_mpkg/distribution.dist",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dj2": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.dj2",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dlg": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/antlr/parser.dlg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dll": {
+   "count": 41,
+   "example": "tests/samples/x64/ttddbg_test_dll.dll",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dmd": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/testmanager/db/TestManagerDatabase.dmd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dnf": {
+   "count": 1,
+   "example": "Dockerfile.dnf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".doc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/xpcom/tests/StringFactoringTests/ToDo.doc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".docs": {
+   "count": 2,
+   "example": "debian/heaptrace-docs.docs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".docx": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/IntelFspPkg/Tools/UserManuals/GenCfgOptUserManual.docx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dontprocess": {
+   "count": 9,
+   "example": "docs/react-todomvc/js/app.js.dontprocess",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dot": {
+   "count": 1,
+   "example": "test/pre_train/sample.dot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dotsettings": {
+   "count": 2,
+   "example": "Source/mqttMultimeter.csproj.DotSettings",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dox": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/doc/build_sys.dox",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".doxyfile": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/doxygen/mbedtls.doxyfile",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dsc": {
+   "count": 20,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/AppPkg/AppPkg.dsc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dsidx": {
+   "count": 1,
+   "example": "docs/docsets/InAppViewDebugger.docset/Contents/Resources/docSet.dsidx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dsl": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/vbox-cpuhotplug.dsl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dsp": {
+   "count": 5,
+   "example": "third_party/mbedtls-2.16.1/scripts/data_files/vs6-app-template.dsp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dsw": {
+   "count": 3,
+   "example": "third_party/mbedtls-2.16.1/scripts/data_files/vs6-workspace-template.dsw",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dsym": {
+   "count": 1,
+   "example": "third_party/libdwarf-20191104/dwarfdump/test-mach-o-32.dSYM",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dtd": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Main/idl/VirtualBox.dtd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".duckdb": {
+   "count": 1,
+   "example": "radar.duckdb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dylib": {
+   "count": 1,
+   "example": "src/viztracer/attach_process/attach_x86_64.dylib",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".edn": {
+   "count": 9,
+   "example": ".clj-kondo/config.edn",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".efi": {
+   "count": 9,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/FatBinPkg/EnhancedFatDxe/AArch64/Fat.efi",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".egg": {
+   "count": 1,
+   "example": "tests/data/watchpoints-0.1.5-py3.8.egg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".el": {
+   "count": 1,
+   "example": "third_party/virtualbox/.dir-locals.el",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".elf": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.elf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".emx": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/msdos/Makefile.emx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".enc": {
+   "count": 1,
+   "example": "release/installbuilder/license.xml.enc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".entitlements": {
+   "count": 3,
+   "example": "Example/Example/Example.entitlements",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".eot": {
+   "count": 8,
+   "example": "birdseye/static/css/proton/fonts/titillium/titilliumweb-bold-webfont.eot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".et": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/nsprpub/pr/src/misc/prerr.et",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ex": {
+   "count": 208,
+   "example": "dev/components.ex",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".example": {
+   "count": 6,
+   "example": "apps/evi/.env.example",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".examples": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/examples/README.examples",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".exe": {
+   "count": 130,
+   "example": "tests/samples/x64/ttddbg_test_exceptions.exe",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".exs": {
+   "count": 63,
+   "example": ".formatter.exs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".fd": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/FirmwareBin/VBoxEFI32.fd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".fdf": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/OvmfPkg/OvmfPkgIa32.fdf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".filters": {
+   "count": 25,
+   "example": "HyperHide/HyperHide.vcxproj.filters",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".fish": {
+   "count": 1,
+   "example": "extras/httpie-completion.fish",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".fmt": {
+   "count": 4,
+   "example": "third_party/mbedtls-2.16.1/scripts/data_files/error.fmt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".footer": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/linux/Makefile.include.footer",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".freebsd": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.freebsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".frm": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/testcase/VBoxVBTest/TestForm.frm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".frx": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/testcase/VBoxVBTest/TestForm.frx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".function": {
+   "count": 50,
+   "example": "third_party/mbedtls-2.16.1/tests/suites/helpers.function",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".g": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/antlr/antlr.g",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".g4": {
+   "count": 4,
+   "example": "CtfPlayback/Metadata/AntlrParser/Grammar/Ctf.g4",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".gcc": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.gcc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gcmmx": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.gcmmx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gdb": {
+   "count": 2,
+   "example": "third_party/mbedtls-2.16.1/tests/scripts/test_zeroize.gdb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gemfile": {
+   "count": 4,
+   "example": "gemfiles/http4.gemfile",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gemspec": {
+   "count": 2,
+   "example": "object_tracer.gemspec",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gif": {
+   "count": 108,
+   "example": "assets/evlog-banner.gif",
+   "media_type": "image/gif",
+   "reason": "explicit standard media type"
+  },
+  ".glsl": {
+   "count": 1,
+   "example": "example/shader.glsl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".glue": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Main/webservice/samples/java/jax-ws/Makefile.glue",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".go": {
+   "count": 683,
+   "example": "bindings/go/example/main.go",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".golden": {
+   "count": 3,
+   "example": "devtool/testdata/error.golden",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".gpr": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/ada/zlib.gpr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gradle": {
+   "count": 36,
+   "example": "app/build.gradle",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".graffle": {
+   "count": 1,
+   "example": "images/experiments.graffle",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".groupproj": {
+   "count": 1,
+   "example": "third_party/googletest-1.8.1/googletest/codegear/gtest.groupproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".guess": {
+   "count": 4,
+   "example": "third_party/libdwarf-20191104/config.guess",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".guestadditionspackaging": {
+   "count": 1,
+   "example": "third_party/virtualbox/README.GuestAdditionsPackaging",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gz": {
+   "count": 11,
+   "example": "src/tests/files/empty.tar.gz",
+   "media_type": "application/gzip",
+   "reason": "explicit standard media type"
+  },
+  ".har": {
+   "count": 17,
+   "example": "test/mitmproxy/data/corrupted_har/brokenfile.har",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hardcoded": {
+   "count": 1,
+   "example": "tests/binaries/host/check_ia32.i386.out.hardcoded",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hbs": {
+   "count": 3,
+   "example": "docs/book/theme/head.hbs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".head": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/RDP/client-1.8.4/proto.head",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".header": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/linux/Makefile.include.header",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".heapsnapshot": {
+   "count": 4,
+   "example": "tests/fixtures/example.heapsnapshot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hh": {
+   "count": 19,
+   "example": "ttddbg/include/resume_backwards_icon.hh",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".hlsl": {
+   "count": 1,
+   "example": "shader.hlsl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".housekeeping": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/Makefile.housekeeping",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hp64": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.hp64",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hpgcc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.hpgcc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hpp": {
+   "count": 199,
+   "example": "src_cpp/src_common/nlohmann/json.hpp",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".hpux": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.hpux",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hqx": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/macos/libxml2.mcp.xml.sit.hqx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".html": {
+   "count": 509,
+   "example": "stack/presentation/index.html",
+   "media_type": "text/html; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".http": {
+   "count": 1,
+   "example": "test_endpoints.http",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".i": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/IntelFrameworkModulePkg/Csm/LegacyBiosDxe/Ipf/IpfThunk.i",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".i386": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/arch/i386/README.i386",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ibmc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.ibmc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".icc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/libpng.icc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".icns": {
+   "count": 19,
+   "example": "CocoaDebugKit/CocoaDebugKit/Supporting Files/AlertCautionIcon.icns",
+   "media_type": "image/icns",
+   "reason": "explicit standard media type"
+  },
+  ".idl": {
+   "count": 267,
+   "example": "third_party/virtualbox/src/VBox/Devices/Graphics/shaderlib/wine/include/access.idl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ids": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Additions/x11/Installer/vboxvideo.ids",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".iml": {
+   "count": 1,
+   "example": "MTHawkeyeDemo/.idea/MTHawkeyeDemo.iml",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".imp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Runtime/r0drv/os2/os2imports.imp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".in": {
+   "count": 251,
+   "example": "MANIFEST.in",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".inc": {
+   "count": 23,
+   "example": "constants.inc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".inf": {
+   "count": 593,
+   "example": "utils/windows_usb_driver/hydrabus_usb_cdc.inf",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".info": {
+   "count": 1,
+   "example": "test/unit-tests/lcov.info",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ini": {
+   "count": 43,
+   "example": "configs/system.ini",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".inl": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/Graphics/shaderlib/wine/include/d3dvec.inl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ino": {
+   "count": 116,
+   "example": "lib/EEPROM_SPI_WE/examples/EEPROM_SPI_WE_basic_read_write/EEPROM_SPI_WE_basic_read_write.ino",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".input": {
+   "count": 1,
+   "example": "protocol/runtime/testdata/log.input",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".intel": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.intel",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ipynb": {
+   "count": 13,
+   "example": "examples/colab.ipynb",
+   "media_type": "application/x-ipynb+json",
+   "reason": "explicit standard media type"
+  },
+  ".jar": {
+   "count": 24,
+   "example": "gradle/wrapper/gradle-wrapper.jar",
+   "media_type": "application/java-archive",
+   "reason": "explicit standard media type"
+  },
+  ".jar-manifest": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/cmd/jdtrace/manifest/jdtrace.jar-manifest",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".java": {
+   "count": 168,
+   "example": "app/src/androidTest/java/com/balsikandar/crashreporter/sample/ExampleInstrumentedTest.java",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".jinja2": {
+   "count": 4,
+   "example": "docs/contributors/snippet.jinja2",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".jl": {
+   "count": 5,
+   "example": "docs/make.jl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".jlink": {
+   "count": 3,
+   "example": "jlink/templates/flash.jlink",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".jpeg": {
+   "count": 11,
+   "example": "images/bit_pirate_dock_board.jpeg",
+   "media_type": "image/jpeg",
+   "reason": "explicit standard media type"
+  },
+  ".js": {
+   "count": 472,
+   "example": "stack/presentation/js/app.js",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".json5": {
+   "count": 1,
+   "example": "renovate.json5",
+   "media_type": "application/json5",
+   "reason": "explicit standard media type"
+  },
+  ".jsonc": {
+   "count": 1,
+   "example": ".luarc.jsonc",
+   "media_type": "application/json",
+   "reason": "explicit standard media type"
+  },
+  ".jsx": {
+   "count": 1,
+   "example": "ui/.storybook/preview.jsx",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".jxl": {
+   "count": 1,
+   "example": "docs/static/logo.jxl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".kdl": {
+   "count": 2,
+   "example": "docs/data/versions.kdl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".key": {
+   "count": 54,
+   "example": "tests/client_certs/client.key",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".key_usage": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.key_usage",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".key_usage_empty": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.key_usage_empty",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".keys": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/solaris/virtualbox.keys",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".kmk": {
+   "count": 383,
+   "example": "third_party/virtualbox/Config.kmk",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".kms": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/linux/drm/Makefile.module.kms",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".knr": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.knr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ksh": {
+   "count": 220,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/buffering/tst.cputime.ksh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ksy": {
+   "count": 2,
+   "example": "mitmproxy/contrib/kaitaistruct/dtls_client_hello.ksy",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".kt": {
+   "count": 37,
+   "example": "compose-tests/src/androidTest/java/radiography/test/compose/ComposeTestRules.kt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".kts": {
+   "count": 10,
+   "example": "build.gradle.kts",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ku-ct": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.ku-ct",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".l": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/lib/libdtrace/common/dt_lex.l",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lds": {
+   "count": 5,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/arch/i386/scripts/i386-kir.lds",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".less": {
+   "count": 89,
+   "example": "web/src/css/app.less",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lib": {
+   "count": 19,
+   "example": "HyperHide/pluginsdk/DeviceNameResolver/DeviceNameResolver_x64.lib",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".link": {
+   "count": 124,
+   "example": "third_party/nlohmann_json/doc/examples/README.link",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".linux": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/arch/i386/Makefile.linux",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".list": {
+   "count": 4,
+   "example": "third_party/libdwarf-20191104/dwarfdump/tag_attr.list",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".listprobeswithfunctions": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.ListProbesWithFunctions",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".listprobeswithids": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.ListProbesWithIDs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".listprobeswithmodules": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.ListProbesWithModules",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".listprobeswithnames": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.ListProbesWithNames",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".listprobeswithproviders": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.ListProbesWithProviders",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".llnl": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/common/crOpenGL/COPYRIGHT.LLNL",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".local": {
+   "count": 1,
+   "example": "docs/README.local",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lock": {
+   "count": 170,
+   "example": "poetry.lock",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".log": {
+   "count": 32,
+   "example": "lib/IRremote/examples/ReceiveDemo/IRremote_SendDemo_ReceiveDemo.log",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".lst": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/cmd/jdtrace/exception.lst",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".ltp": {
+   "count": 1,
+   "example": "third_party/libdwarf-20191104/libdwarf/baseline.ltp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lua": {
+   "count": 234,
+   "example": "lua/debugmaster/cfg.lua",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".m": {
+   "count": 338,
+   "example": "Sources/ObjcExceptionBridging/ObjectiveCMarker.m",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".m4": {
+   "count": 21,
+   "example": "third_party/googletest-1.8.1/googletest/m4/acx_pthread.m4",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mac": {
+   "count": 77,
+   "example": "third_party/virtualbox/include/VBox/VBoxGuest.mac",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".main": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/Doxyfile.Main",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mak": {
+   "count": 11,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/antlr/AntlrDDK.mak",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".makefile": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/Makefiles/app.makefile",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".manifest": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/win/Stub/VBoxStub.manifest",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".map": {
+   "count": 19,
+   "example": "intercept/src/clIntercept.map",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".markdown": {
+   "count": 2,
+   "example": "Example/Debugo-Example-ObjectiveC/Pods/FMDB/README.markdown",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".mcp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/xpcom/tests/StringFactoringTests/StringTest.mcp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".md4": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.md4",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".md5": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.md5",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".md5sum": {
+   "count": 6,
+   "example": "third_party/virtualbox/src/VBox/Devices/Graphics/BIOS/VBoxVgaBiosAlternative286.md5sum",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mdc": {
+   "count": 2,
+   "example": ".cursor/rules/architecture.mdc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mdx": {
+   "count": 19,
+   "example": "docs/content/01-started/01-installation.mdx",
+   "media_type": "text/mdx; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".metadata": {
+   "count": 1,
+   "example": "Test/TestManagedCommon/Tests/NamespaceTests/ProviderTests.metadata",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mime": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/solaris/virtualbox.mime",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mingw": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.mingw",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mingw32": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/contrib/gregbook/Makefile.mingw32",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mips": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.mips",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mit": {
+   "count": 1,
+   "example": "third_party/nlohmann_json/LICENSE.MIT",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mitm": {
+   "count": 15,
+   "example": "test/mitmproxy/data/dumpfile-010.mitm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mjs": {
+   "count": 73,
+   "example": "test/assets/test-project/index.mjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mk": {
+   "count": 18,
+   "example": "src/board/board.mk",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mm": {
+   "count": 31,
+   "example": "MTHAllocationsReader/MTHAllocationsReader/main.mm",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mms": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/descrip.mms",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mod": {
+   "count": 24,
+   "example": "bindings/go/go.mod",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".module": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/linux/sharedfolders/Makefile.module",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".modulemap": {
+   "count": 1,
+   "example": "ResponseDetective/Resources/Framework.modulemap",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mp4": {
+   "count": 23,
+   "example": "plugins/icon-library/icon-library.mp4",
+   "media_type": "video/mp4",
+   "reason": "explicit standard media type"
+  },
+  ".msc": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.msc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".msvc": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/NOTES.msvc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mts": {
+   "count": 1,
+   "example": "app/vitest.config.mts",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".multiout": {
+   "count": 208,
+   "example": "test/outputs/1.10/anon.multiout",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".nasm": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/MdePkg/Library/BaseLib/Ia32/Thunk16.nasm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".nasmb": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/OvmfPkg/ResetVector/ResetVector.nasmb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".natvis": {
+   "count": 1,
+   "example": "third_party/nlohmann_json/nlohmann_json.natvis",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".ne12bsd": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.ne12bsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".netbsd": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.netbsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".nix": {
+   "count": 10,
+   "example": "shell.nix",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".nommx": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.nommx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".nsh": {
+   "count": 16,
+   "example": "third_party/virtualbox/src/VBox/Additions/WINNT/Installer/Languages/English.nsh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".nsi": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/WINNT/Installer/VBoxGuestAdditions.nsi",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".nuspec": {
+   "count": 2,
+   "example": "docs/packaging/windows-chocolatey/httpie.nuspec",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".o": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Runtime/testcase/tstRTLdrMachORelocs-1.o",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".obj": {
+   "count": 2,
+   "example": "third_party/libdwarf-20191104/dwarfdump/testuriLE64ELf.obj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ods": {
+   "count": 1,
+   "example": "third_party/libdwarf-20191104/tsearch/tsearchlibtimes.ods",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".old": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/makefile.old",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".openbsd": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.openbsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".opensslconf": {
+   "count": 5,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/cli.opensslconf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".opt": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/nsprpub/lib/ds/plds_symvec.opt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".order": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/xpcom/build/win32.order",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".os2": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.os2",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".otf": {
+   "count": 7,
+   "example": "apps/docs/public/fonts/Geist Pixel Line.otf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".output": {
+   "count": 124,
+   "example": "third_party/nlohmann_json/doc/examples/README.output",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ova": {
+   "count": 12,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/tests/api/tdAppliance1-t1.ova",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ovf": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/VBox/Main/testcase/ovf-joomla-0.9/joomla-1.1.4-ovf.ovf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".p12": {
+   "count": 1,
+   "example": "test/mitmproxy/data/confdir/mitmproxy-ca-cert.p12",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pas": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/delphi/ZLib.pas",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".patch": {
+   "count": 6,
+   "example": ".yarn/patches/electron-webpack-npm-2.8.2-1bda600605.patch",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".pbxproj": {
+   "count": 21,
+   "example": "DemoApps/iOSDemo/iOSDemo.xcodeproj/project.pbxproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pcbios": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/arch/i386/Makefile.pcbios",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pch": {
+   "count": 2,
+   "example": "Example/Debugo-Example-ObjectiveC/Debugo-Example-ObjectiveC/PrefixHeader.pch",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pdb": {
+   "count": 1,
+   "example": "fixtures/self/foo.pdb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pde": {
+   "count": 1,
+   "example": "tests/misc/ino2cpp/examples/multifiles/foo.pde",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pdn": {
+   "count": 2,
+   "example": "assets/projects/logo-merged.pdn",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pdx": {
+   "count": 1,
+   "example": "support/test/tcl/.tclpro/extensions/test.pdx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".peg": {
+   "count": 2,
+   "example": "web/src/js/filt/command.peg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pem": {
+   "count": 183,
+   "example": "tests/client_certs/client.pem",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".perfetto-trace": {
+   "count": 1,
+   "example": "TestData/Perfetto/test_trace.perfetto-trace",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pftrace": {
+   "count": 5,
+   "example": "TestData/Perfetto/androidBasicMemory.pftrace",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pgsql": {
+   "count": 37,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/testmanager/core/globalresource.pgsql",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".php": {
+   "count": 237,
+   "example": "Clockwork/Authentication/AuthenticatorInterface.php",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pk": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/contrib/blast/test.pk",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pkg": {
+   "count": 5,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/ipc/ipcd/ipc.pkg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pkginfo": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Additions/solaris/Installer/vboxguest.pkginfo",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pkgresponse": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/solaris/vbox.pkgresponse",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pl": {
+   "count": 61,
+   "example": "third_party/mbedtls-2.16.1/scripts/config.pl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".plantuml": {
+   "count": 2,
+   "example": "diagrams/high-level-architecture.plantuml",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".plist": {
+   "count": 89,
+   "example": "DemoApps/iOSDemo/iOSDemo.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".plugins": {
+   "count": 1,
+   "example": "Dockerfile.plugins",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pm": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/src/util/Option/ROM.pm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pnm": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Frontends/VBoxSDL/ico64x01.pnm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".po": {
+   "count": 258,
+   "example": "docs/locale/es/LC_MESSAGES/FAQ.po",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".podspec": {
+   "count": 10,
+   "example": "ObjcExceptionBridging.podspec",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pot": {
+   "count": 44,
+   "example": "docs/_build/gettext/FAQ.pot",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".pp": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Additions/linux/selinux-fedora/vbox_accel.pp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ppc": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/SCOPTIONS.ppc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pptx": {
+   "count": 2,
+   "example": "talks/tensor-sensor-old-msgs.pptx",
+   "media_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+   "reason": "explicit standard media type"
+  },
+  ".prefix": {
+   "count": 6,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/xpcom/tests/StringFactoringTests/StringTest.Prefix",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".prefs": {
+   "count": 1,
+   "example": "lib/PN532/examples/apduToBlackBerry/BlackBerry7/.settings/org.eclipse.jdt.core.prefs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".private": {
+   "count": 1,
+   "example": "Cartfile.private",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pro": {
+   "count": 13,
+   "example": "app/proguard-rules.pro",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".profraw": {
+   "count": 4,
+   "example": "facet-macro-parse/default_890431367543477343_0_52148.profraw",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".proj": {
+   "count": 4,
+   "example": "jobs/signing/SignFiles.proj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".projitems": {
+   "count": 1,
+   "example": "Utilities/Utilities.projitems",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".properties": {
+   "count": 38,
+   "example": "gradle.properties",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".props": {
+   "count": 4,
+   "example": "Directory.Build.props",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".proto": {
+   "count": 2,
+   "example": "PerfettoProcessor/Protobuf/descriptor.proto",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ps": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/history.ps",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ps1": {
+   "count": 113,
+   "example": "build.ps1",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ps1xml": {
+   "count": 18,
+   "example": "DbgProvider/Types.ps1xml",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".psd": {
+   "count": 1,
+   "example": "assets/logo.psd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".psd1": {
+   "count": 3,
+   "example": "DbgProvider/Debugger.psd1",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".psfmt": {
+   "count": 8,
+   "example": "DbgProvider/Debugger.DebuggeeTypes.ClrMd.psfmt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".psk": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/passwd.psk",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".psm1": {
+   "count": 5,
+   "example": "DbgProvider/Debugger.Formatting.psm1",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pub": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/format_gen.pub",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pubkey": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.pubkey",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pump": {
+   "count": 10,
+   "example": "third_party/googletest-1.8.1/googlemock/include/gmock/gmock-generated-actions.h.pump",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pup": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/amiga/Makefile.pup",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pwndbg": {
+   "count": 2,
+   "example": "themes/anthraxx.pwndbg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pyi": {
+   "count": 1,
+   "example": "src/viztracer/snaptrace.pyi",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".pyproj": {
+   "count": 2,
+   "example": "tensorwatch.pyproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".qpg": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/qnx/package.qpg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".qrc": {
+   "count": 6,
+   "example": "third_party/virtualbox/src/VBox/Frontends/VirtualBox/VirtualBox1.qrc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".r": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/VfrCompile/Pccts/antlr/antlr.r",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".raw": {
+   "count": 11,
+   "example": "src/backend/utils/highlighter.raw",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rb": {
+   "count": 69,
+   "example": "Example/ViewMonitorExample/generate_project.rb",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".rc": {
+   "count": 101,
+   "example": "HyperHide/resource.rc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".rc2": {
+   "count": 1,
+   "example": "cliconfig/CLIConfig_version.rc2",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rdef": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/haiku/VBoxTray/VBoxTray.rdef",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".redhat": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Additions/common/crOpenGL/COPYRIGHT.REDHAT",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".reg": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Additions/WINNT/VBoxCredProv/register.reg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".res": {
+   "count": 9,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/doc/examples/io1.res",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".resolved": {
+   "count": 5,
+   "example": "Package.resolved",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".resx": {
+   "count": 1,
+   "example": "DbgProvider/resources.resx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rgs": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/HostDrivers/VBoxNetFlt/win/nobj/VBoxNetFltNobj.rgs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rh": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Devices/Graphics/shaderlib/wine/include/commctrl.rh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".riscos": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/old/Makefile.riscos",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rom": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/PC/ipxe/iPxeBiosBin.rom",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rs": {
+   "count": 1429,
+   "example": "examples/server.rs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".rsrc": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/xpcom/typelib/xpidl/macplugin/compiler.rsrc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rtf": {
+   "count": 34,
+   "example": "third_party/virtualbox/doc/License-gpl-2.0.rtf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rule": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/BaseTools/Source/C/Makefiles/ms.rule",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rules": {
+   "count": 3,
+   "example": "utils/udev-rules/09-hydrabus-arch_linux.rules",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ruleset": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/VC10/RuleSet1.ruleset",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".run": {
+   "count": 6,
+   "example": "tests/samples/x64/ttddbg_test_dll.run",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rust161": {
+   "count": 1,
+   "example": "facet-cargo-toml/tests/fixtures-lockfile/camino__Cargo.lock.rust161",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".s": {
+   "count": 371,
+   "example": "src/drv/stm32cube/bsp_fault_handler_asm.s",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".sample": {
+   "count": 1,
+   "example": "docker-compose.yml.sample",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".sas": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/amiga/Makefile.sas",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".scm": {
+   "count": 8,
+   "example": "queries/bash/debugprint.scm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sco": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.sco",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".scss": {
+   "count": 32,
+   "example": "docs/sass/main.scss",
+   "media_type": "text/x-scss; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".sed": {
+   "count": 17,
+   "example": "third_party/virtualbox/include/VBox/err.sed",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".service": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ValidationKit/utils/TestExecServ/linux/vboxtxs.service",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".sggcc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.sggcc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sgi": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/contrib/gregbook/Makefile.sgi",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sha1": {
+   "count": 4,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.sha1",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sha224": {
+   "count": 3,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.sha224",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sha256": {
+   "count": 4,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1-ms.req.sha256",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sha384": {
+   "count": 3,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.sha384",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sha512": {
+   "count": 3,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.req.sha512",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".shproj": {
+   "count": 1,
+   "example": "Utilities/Utilities.shproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sif": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/UnattendedTemplates/win_nt5_unattended.sif",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".skip": {
+   "count": 1,
+   "example": "lib/SX126x-Arduino/examples/DeepSleep/.nrf52832.test.skip",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sln": {
+   "count": 27,
+   "example": "AntiCrack-DotNet.sln",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".snap": {
+   "count": 278,
+   "example": "packages/cli/test/map/__snapshots__/scan.test.ts.snap",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".snapshot": {
+   "count": 18,
+   "example": "tests/McpContext.test.js.snapshot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".so": {
+   "count": 6,
+   "example": "src/viztracer/attach_process/attach_linux_amd64.so",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".so9": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.so9",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sol": {
+   "count": 14,
+   "example": "crates/l1_sidecar/src/contracts/sol/IExecutor.sol",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".solaris": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.solaris",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".solaris-x86": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.solaris-x86",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".space": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Additions/solaris/Installer/vboxguest.space",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".spec": {
+   "count": 7,
+   "example": "release/specs/onedir.spec",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".spv": {
+   "count": 1,
+   "example": "example/shader.spv",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".spvasm": {
+   "count": 1,
+   "example": "example/shader.spvasm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sql": {
+   "count": 6,
+   "example": "apps/nuxthub-playground/server/db/migrations/sqlite/0000_melted_roulette.sql",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".src": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/libxml2.def.src",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".srl": {
+   "count": 1,
+   "example": "test/mitmproxy/net/data/verificationcerts/trusted-root.srl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".std": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/contrib/pngminus/makefile.std",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".storyboard": {
+   "count": 24,
+   "example": "DemoApps/iOSDemo/iOSDemo/Base.lproj/Main.storyboard",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".storyshot": {
+   "count": 707,
+   "example": "frontend/src/components/404/__snapshots__/NotFoundComponent.Default.stories.storyshot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".strings": {
+   "count": 7,
+   "example": "DebugSwift/Resources/Base.lproj/Localizable.strings",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".stub": {
+   "count": 1,
+   "example": "stubs/TelescopeServiceProvider.stub",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".styx": {
+   "count": 15,
+   "example": ".config/dodeca.styx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sub": {
+   "count": 4,
+   "example": "third_party/libdwarf-20191104/config.sub",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".subdirs": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/Makefile.subdirs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sublime-syntax": {
+   "count": 1,
+   "example": "third_party/fmt/support/C++.sublime-syntax",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".sum": {
+   "count": 17,
+   "example": "bindings/go/go.sum",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".sunos": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.sunos",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".suo": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/AppPkg/Applications/Sockets/OobRx/Windows/OobRx.suo",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".svelte": {
+   "count": 1,
+   "example": "examples/sveltekit/src/routes/+page.svelte",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".svg": {
+   "count": 493,
+   "example": "stack/images/0/jsx-to-vdom.svg",
+   "media_type": "image/svg+xml",
+   "reason": "explicit standard media type"
+  },
+  ".swift": {
+   "count": 643,
+   "example": "DemoApps/iOSDemo/iOSDemo/AppDelegate.swift",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".syms": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/libxml2.syms",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".t2": {
+   "count": 39,
+   "example": "src/benchmark.lua.t2",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".t4": {
+   "count": 1,
+   "example": "DbgProvider/FormatTemplate.t4",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".taf": {
+   "count": 12,
+   "example": "third_party/virtualbox/src/VBox/HostDrivers/Support/Certificates/AppleRoot-2bd06947947609fef46b8d2e40a6f7474d7f085e.taf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tail": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/RDP/client-1.8.4/proto.tail",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tape": {
+   "count": 4,
+   "example": "docs/assets/videos/context-up-down.tape",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".targ": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/nsprpub/pkg/solaris/Makefile.targ",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tc": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/zlib-1.2.8/msdos/Makefile.tc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tc3": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/contrib/pngminus/makefile.tc3",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tcl": {
+   "count": 1,
+   "example": "third_party/mbedtls-2.16.1/DartConfiguration.tcl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".te": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Additions/linux/selinux-fedora/vbox_accel.te",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".template": {
+   "count": 5,
+   "example": "third_party/libdwarf-20191104/bugxml/data.template",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".test": {
+   "count": 1,
+   "example": "docs/.env.test",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".testing": {
+   "count": 4,
+   "example": "third_party/virtualbox/src/VBox/Additions/linux/drm/README.testing",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tests": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/Makefile.tests",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tex": {
+   "count": 1,
+   "example": "docs/paper/main.tex",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tgz": {
+   "count": 1,
+   "example": "docs/docsets/InAppViewDebugger.tgz",
+   "media_type": "application/gzip",
+   "reason": "explicit standard media type"
+  },
+  ".tif": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/darwin/VirtualBox_mpkg/background.tif",
+   "media_type": "image/tiff",
+   "reason": "explicit standard media type"
+  },
+  ".tiff": {
+   "count": 5,
+   "example": "docs/raw/_explicit.graffle/image6.tiff",
+   "media_type": "image/tiff",
+   "reason": "explicit standard media type"
+  },
+  ".tmpl": {
+   "count": 3,
+   "example": "misc/README.tmpl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".toml": {
+   "count": 775,
+   "example": "pyproject.toml",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tool": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/VBox/Additions/darwin/Installer/DiskImage/Uninstall.tool",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tpl": {
+   "count": 34,
+   "example": "charts/headlamp/templates/_helpers.tpl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tracefunctions": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.TraceFunctions",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".traceids": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.TraceIDs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tracemodule": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.TraceModule",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tracenames": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.TraceNames",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".traceprovider": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/cmd/dtrace/test/tst/common/dtraceUtil/man.TraceProvider",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ts": {
+   "count": 3518,
+   "example": "scripts/append-lighthouse-notices.ts",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tstcapiglue": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/cbinding/makefile.tstCAPIGlue",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tstvboxapiwin": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/testcase/makefile.tstVBoxAPIWin",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tstvboxapixpcom": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/testcase/makefile.tstVBoxAPIXPCOM",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tsx": {
+   "count": 1573,
+   "example": "apps/next-playground/app/layout.tsx",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tt": {
+   "count": 2,
+   "example": "DbgProvider/Debugger.Format.Color.tt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ttc": {
+   "count": 1,
+   "example": "docs/_static/fonts/Helvetica.ttc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ttf": {
+   "count": 37,
+   "example": "apps/docs/public/fonts/GeistPixel-Line.ttf",
+   "media_type": "font/ttf",
+   "reason": "explicit standard media type"
+  },
+  ".ui": {
+   "count": 25,
+   "example": "third_party/virtualbox/src/VBox/Additions/linux/lightdm-greeter/vbox-greeter.ui",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".uni": {
+   "count": 687,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/CryptoPkg/Application/Cryptest/Cryptest.uni",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".unx": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/contrib/gregbook/Makefile.unx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".url": {
+   "count": 1,
+   "example": "Launcher/Windows/MicrosoftPerfToolsLinuxAndroid.url",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".user": {
+   "count": 2,
+   "example": "AntiCrack-DotNet/AntiCrack-DotNet.csproj.user",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".v3_ext": {
+   "count": 3,
+   "example": "third_party/mbedtls-2.16.1/tests/data_files/server1.cert_type.crt.openssl.v3_ext",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vb": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Frontends/VBoxShell/vboxinfo.vb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vbox": {
+   "count": 5,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/ReadMe.vbox",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vboxnet0": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/HostDrivers/VBoxNetAdp/solaris/hostname.vboxnet0",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vbp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/testcase/VBoxVBTest/VBoxVBTest.vbp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vbs": {
+   "count": 2,
+   "example": "third_party/virtualbox/configure.vbs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vc10": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/VC10/README.vc10",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcawin32": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.vcawin32",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcb": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/wince/libxml2.vcb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcl": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/wince/libxml2.vcl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vco": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/wince/libxml2.vco",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcp": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/wince/libxml2.vcp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcproj": {
+   "count": 16,
+   "example": "third_party/googletest-1.8.1/googlemock/msvc/2005/gmock.vcproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcw": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/win32/wince/libxml2.vcw",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcwin32": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.vcwin32",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcxproj": {
+   "count": 90,
+   "example": "HyperHide/HyperHide.vcxproj",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".vd": {
+   "count": 7,
+   "example": "third_party/virtualbox/src/VBox/Storage/testcase/tstVDCompact.vd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vfr": {
+   "count": 23,
+   "example": "third_party/virtualbox/src/VBox/Devices/EFI/Firmware/IntelFrameworkModulePkg/Universal/BdsDxe/BootMaint/Bm.vfr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vim": {
+   "count": 52,
+   "example": "autoload/vimspector.vim",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".vms": {
+   "count": 3,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/vms/config.vms",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vsdx": {
+   "count": 1,
+   "example": "docs/raw/proxy-modes.vsdx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vsprops": {
+   "count": 1,
+   "example": "third_party/googletest-1.8.1/googlemock/msvc/2005/gmock_config.vsprops",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vue": {
+   "count": 180,
+   "example": "apps/docs/app/components/AppHeaderCTA.vue",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".w32": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/contrib/gregbook/Makefile.w32",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wasm": {
+   "count": 4,
+   "example": "src/viztracer/web_dist/v52.0-6b9586def/trace_config_utils.wasm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".watcom": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libpng-1.2.54/scripts/makefile.watcom",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wbxml": {
+   "count": 2,
+   "example": "test/mitmproxy/contentviews/test_wbxml_data/data-formatted.wbxml",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wdbg": {
+   "count": 1,
+   "example": "src/WinDbgTest/TestsWinbagility.wdbg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webm": {
+   "count": 5,
+   "example": "docs/assets/videos/context-up-down.webm",
+   "media_type": "video/webm",
+   "reason": "explicit standard media type"
+  },
+  ".webmanifest": {
+   "count": 4,
+   "example": "apps/docs/public/site.webmanifest",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webp": {
+   "count": 34,
+   "example": "sample-compose/src/main/res/drawable/logo_inner.webp",
+   "media_type": "image/webp",
+   "reason": "explicit standard media type"
+  },
+  ".webtest": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/webservice/Makefile.webtest",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".win": {
+   "count": 2,
+   "example": "third_party/virtualbox/src/libs/xpcom18a4/nsprpub/gmakefile.win",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".woff": {
+   "count": 8,
+   "example": "birdseye/static/css/proton/fonts/titillium/titilliumweb-bold-webfont.woff",
+   "media_type": "font/woff",
+   "reason": "explicit standard media type"
+  },
+  ".woff2": {
+   "count": 30,
+   "example": "apps/docs/public/fonts/GeistPixel-Line.woff2",
+   "media_type": "font/woff2",
+   "reason": "explicit standard media type"
+  },
+  ".workspace": {
+   "count": 1,
+   "example": "third_party/expected-lite/project/CodeBlocks/expected-lite.workspace",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wprp": {
+   "count": 2,
+   "example": "assets/other/WTComTrace.wprp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wxi": {
+   "count": 30,
+   "example": "third_party/virtualbox/src/VBox/Installer/win/CommonProperties.wxi",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wxl": {
+   "count": 9,
+   "example": "third_party/virtualbox/src/VBox/Installer/win/NLS/de_DE.wxl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wxs": {
+   "count": 9,
+   "example": "third_party/virtualbox/src/VBox/Installer/win/VBoxMergeApp.wxs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".x": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Devices/Graphics/shaderlib/wine/include/rmxftmpl.x",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xccheckout": {
+   "count": 3,
+   "example": "CocoaDebugKit.xcworkspace/xcshareddata/CocoaDebugKit.xccheckout",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcconfig": {
+   "count": 37,
+   "example": "Example/ViewMonitorExample/Signing.xcconfig",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcf": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Installer/darwin/DiskImage/vbox_folder.xcf",
+   "media_type": "image/x-xcf",
+   "reason": "explicit standard media type"
+  },
+  ".xcplayground": {
+   "count": 1,
+   "example": "ResponseDetective.playground/contents.xcplayground",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcprivacy": {
+   "count": 3,
+   "example": "Sources/ObjcExceptionBridging/PrivacyInfo.xcprivacy",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcscheme": {
+   "count": 33,
+   "example": "DemoApps/iOSDemo/iOSDemo.xcodeproj/xcshareddata/xcschemes/iOSDemo.xcscheme",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcsettings": {
+   "count": 4,
+   "example": "CocoaDebugKit.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcstrings": {
+   "count": 1,
+   "example": "Sources/ErrorKit/Resources/Localizable.xcstrings",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xctestplan": {
+   "count": 1,
+   "example": "Example.xctestplan",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcuserstate": {
+   "count": 1,
+   "example": "netfox.xcodeproj/project.xcworkspace/xcuserdata/kasketis.xcuserdatad/UserInterfaceState.xcuserstate",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcworkspacedata": {
+   "count": 18,
+   "example": "DemoApps/iOSDemo/iOSDemo.xcodeproj/project.xcworkspace/contents.xcworkspacedata",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xib": {
+   "count": 8,
+   "example": "DemoApps/iOSDemo/iOSDemo/Base.lproj/LaunchScreen.xib",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xidl": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/Main/idl/VirtualBox.xidl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xml": {
+   "count": 340,
+   "example": "app/src/main/AndroidManifest.xml",
+   "media_type": "application/xml",
+   "reason": "explicit standard media type"
+  },
+  ".xsa": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/libs/libxml2-2.9.4/doc/libxml2.xsa",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xsd": {
+   "count": 3,
+   "example": "Test/TestManagedCommon/Pester/nunit_schema_2.5.xsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xsl": {
+   "count": 63,
+   "example": "tests/fixtures/xmldata/invalid/xalan_exec.xsl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xslt": {
+   "count": 1,
+   "example": "ResourcesTransform.xslt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".y": {
+   "count": 1,
+   "example": "third_party/virtualbox/src/VBox/ExtPacks/VBoxDTrace/onnv/lib/libdtrace/common/dt_grammar.y",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".yaml": {
+   "count": 226,
+   "example": "pnpm-lock.yaml",
+   "media_type": "application/yaml; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".yara": {
+   "count": 31,
+   "example": "third_party/retdec-3.2/support/yara_patterns/tools/elf/arm/compilers.yara",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".zhar": {
+   "count": 1,
+   "example": "test/mitmproxy/data/flows/compressed.zhar",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".zip": {
+   "count": 2,
+   "example": "test/mitmproxy/data/confdir/mitmproxy-magisk-module.zip",
+   "media_type": "application/zip",
+   "reason": "explicit standard media type"
+  }
+ },
+ "file_count": 29259,
+ "goal_id": "EMBER-02",
+ "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+ "schema_version": "ember-issue1581-train-partition-media-types-v1",
+ "self_sha256": "f8de5ff5e49de2754a76e292ba36324620c570807eb2a8251a43af9c46b9853e",
+ "source_partition_receipt_sha256": "8e6f7f4ee843c26d869c6e7e5bd0e1ab2687e61b8845fe477a415ede16699e0d",
+ "source_partition_selector": "candidate-software_engineering-heldout-0",
+ "source_partition_split": "heldout",
+ "workstream_id": "EMBER-02B"
+}

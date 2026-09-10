@@ -1,0 +1,608 @@
+{
+ "class_count": 99,
+ "classes": {
+  ".0": {
+   "count": 1,
+   "example": "website/static/fuse.js@7.0.0",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".alpine": {
+   "count": 1,
+   "example": "Dockerfile.alpine",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ambr": {
+   "count": 10,
+   "example": "rerun_py/tests/e2e_redap_tests/__snapshots__/test_dataset_query_select_pushdown.ambr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".asmdef": {
+   "count": 4,
+   "example": "unity/Editor/Mujoco.Editor.asmdef",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bats": {
+   "count": 1,
+   "example": "tests/docker.bats",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bib": {
+   "count": 4,
+   "example": "CITATION.bib",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".bin": {
+   "count": 12,
+   "example": "openpilot/selfdrive/pandad/tests/bootstub.panda_h7.bin",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".c": {
+   "count": 49,
+   "example": "scripts/waste.c",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".capnp": {
+   "count": 4,
+   "example": "openpilot/cereal/custom.capnp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cc": {
+   "count": 348,
+   "example": "openpilot/cereal/messaging/bridge.cc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cff": {
+   "count": 1,
+   "example": "CITATION.cff",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cfg": {
+   "count": 2,
+   "example": "examples/ros2/ros2_ws/src/gui/setup.cfg",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cjs": {
+   "count": 2,
+   "example": ".eslintrc.cjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cmake": {
+   "count": 33,
+   "example": "cmake/CheckAvxSupport.cmake",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".code-workspace": {
+   "count": 1,
+   "example": "nicegui.code-workspace",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".conf": {
+   "count": 4,
+   "example": "doc/docutils.conf",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cs": {
+   "count": 131,
+   "example": "unity/Editor/Bindings/MujocoBinaryRetriever.cs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".dae": {
+   "count": 2,
+   "example": "tests/assets/mesh/box.dae",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dockerfile": {
+   "count": 3,
+   "example": "development.dockerfile",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".eot": {
+   "count": 4,
+   "example": "website/fonts/fira-mono-v14-latin-regular.eot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gif": {
+   "count": 24,
+   "example": "docs/_static/img/breakout.gif",
+   "media_type": "image/gif",
+   "reason": "explicit standard media type"
+  },
+  ".glb": {
+   "count": 3,
+   "example": "examples/assets/example.glb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gltf": {
+   "count": 1,
+   "example": "examples/assets/example.gltf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".h264": {
+   "count": 1,
+   "example": "tests/assets/video/gif_as_h264_nobframes.h264",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".h5": {
+   "count": 3,
+   "example": "crates/store/re_hdf5/tests/assets/h5py_compat.h5",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hexpat": {
+   "count": 1,
+   "example": "crates/store/re_log_encoding/rrd.hexpat",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hpp": {
+   "count": 383,
+   "example": "rerun_cpp/src/rerun.hpp",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".html": {
+   "count": 39,
+   "example": "docs/template.html",
+   "media_type": "text/html; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".icns": {
+   "count": 3,
+   "example": "dist/mujoco.icns",
+   "media_type": "image/icns",
+   "reason": "explicit standard media type"
+  },
+  ".in": {
+   "count": 7,
+   "example": "cmake/mujocoConfig.cmake.in",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".inc": {
+   "count": 21,
+   "example": "src/render/classic/font/back100.inc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ini": {
+   "count": 6,
+   "example": "examples/python/_isolated/mypy.ini",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".inl": {
+   "count": 3,
+   "example": "python/mujoco/experimental/netimgui/Code/Client/Private/NetImgui_Client.inl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ino": {
+   "count": 1,
+   "example": "examples/webserial/sketch/sketch.ino",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ipynb": {
+   "count": 21,
+   "example": "tools/car_porting/examples/find_segments_with_message.ipynb",
+   "media_type": "application/x-ipynb+json",
+   "reason": "explicit standard media type"
+  },
+  ".jinja": {
+   "count": 2,
+   "example": "rerun_py/docs/templates/python/material/class.html.jinja",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".js": {
+   "count": 575,
+   "example": "skills/cad-viewer/scripts/viewer/dist/assets/BufferGeometryUtils-xu92ooFc.js",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ktx": {
+   "count": 2,
+   "example": "src/render/filament/assets/ibl.ktx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lance": {
+   "count": 2,
+   "example": "rerun_py/tests/e2e_redap_tests/resources/simple_datatypes/data/0101000110110100101111100713b14fa38c9a63c90f59698d.lance",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lock": {
+   "count": 10,
+   "example": "uv.lock",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".m": {
+   "count": 1,
+   "example": "doc/_static/FLV.m",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".manifest": {
+   "count": 2,
+   "example": "rerun_py/tests/e2e_redap_tests/resources/simple_datatypes/_versions/1.manifest",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".map": {
+   "count": 205,
+   "example": "skills/cad-viewer/scripts/viewer/dist/assets/BufferGeometryUtils-xu92ooFc.js.map",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".mat": {
+   "count": 25,
+   "example": "src/render/filament/assets/decor.mat",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mcap": {
+   "count": 22,
+   "example": "crates/store/re_importer/src/importer_mcap/tests/assets/foxglove_camera_calibration.mcap",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mdc": {
+   "count": 1,
+   "example": ".cursor/rules/general.mdc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".meta": {
+   "count": 171,
+   "example": "unity/CHANGELOG.md.meta",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mjs": {
+   "count": 78,
+   "example": "scripts/release/sync-version.mjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mjz": {
+   "count": 1,
+   "example": "test/testdata/model.mjz",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mm": {
+   "count": 5,
+   "example": "python/mujoco/mjpython/mjpython.mm",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".modulemap": {
+   "count": 1,
+   "example": "dist/module.modulemap",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mp4": {
+   "count": 16,
+   "example": "doc/_static/example.mp4",
+   "media_type": "video/mp4",
+   "reason": "explicit standard media type"
+  },
+  ".msh": {
+   "count": 22,
+   "example": "python/mujoco/testdata/abdomen_1_body.msh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mtl": {
+   "count": 2,
+   "example": "test/user/testdata/textured_torus/textured_torus.mtl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".obj": {
+   "count": 55,
+   "example": "mjx/mujoco/mjx/test_data/shadow_hand/assets/f_distal_pst.obj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".onbuild": {
+   "count": 1,
+   "example": "Dockerfile.onbuild",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".onnx": {
+   "count": 3,
+   "example": "openpilot/selfdrive/modeld/models/big_driving_supercombo.onnx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".otf": {
+   "count": 6,
+   "example": "openpilot/selfdrive/assets/fonts/NotoSansCJKjp-Regular.otf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".patch": {
+   "count": 8,
+   "example": "tools/scripts/profiling/clpeak/run_continuously.patch",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".pem": {
+   "count": 1,
+   "example": "openpilot/common/esim/gsma_ci_bundle.pem",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".plist": {
+   "count": 2,
+   "example": "python/mujoco/mjpython/Info.plist",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".ply": {
+   "count": 2,
+   "example": "examples/assets/example.ply",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".po": {
+   "count": 12,
+   "example": "openpilot/selfdrive/ui/translations/app_de.po",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".pot": {
+   "count": 1,
+   "example": "openpilot/selfdrive/ui/translations/app.pot",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".proto": {
+   "count": 8,
+   "example": "crates/store/re_protos/proto/rerun/v1alpha1/cloud.proto",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".pth": {
+   "count": 2,
+   "example": "rerun_py/rerun_dev_fixup/rerun_sdk_fixup.pth",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pyi": {
+   "count": 1,
+   "example": "rerun_py/rerun_bindings/rerun_bindings.pyi",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".qrc": {
+   "count": 2,
+   "example": "openpilot/selfdrive/assets/assets.qrc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rbl": {
+   "count": 2,
+   "example": "rerun_py/tests/e2e_redap_tests/resources/blueprints/table_blueprint.rbl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rc": {
+   "count": 3,
+   "example": "dist/mujoco.rc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ron": {
+   "count": 3,
+   "example": "crates/viewer/re_ui/data/color_table.ron",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rrd": {
+   "count": 194,
+   "example": "examples/assets/example.rrd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rs": {
+   "count": 2703,
+   "example": "crates/build/re_build_info/src/build_info.rs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".rvl": {
+   "count": 1,
+   "example": "tests/assets/encoded_depth_image.rvl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".schema": {
+   "count": 1,
+   "example": "src/xml/mjcf.schema",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".skn": {
+   "count": 2,
+   "example": "test/user/testdata/cube.skn",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".snap": {
+   "count": 632,
+   "example": "crates/store/re_chunk/tests/snapshots/formatting__format_chunk.snap",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".stl": {
+   "count": 57,
+   "example": "mjx/mujoco/mjx/test_data/barkour_v0/assets/abduction.stl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".supp": {
+   "count": 1,
+   "example": ".github/workflows/lsan_suppressions.supp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".svg": {
+   "count": 171,
+   "example": "docs/_static/img/colab-badge.svg",
+   "media_type": "image/svg+xml",
+   "reason": "explicit standard media type"
+  },
+  ".tex": {
+   "count": 1,
+   "example": "doc/dcmotor/dcmotor.tex",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".toml": {
+   "count": 245,
+   "example": "pyproject.toml",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ts": {
+   "count": 132,
+   "example": "wasm/demo_app/app.ts",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ttf": {
+   "count": 16,
+   "example": "openpilot/selfdrive/assets/fonts/Inter-Black.ttf",
+   "media_type": "font/ttf",
+   "reason": "explicit standard media type"
+  },
+  ".txn": {
+   "count": 2,
+   "example": "rerun_py/tests/e2e_redap_tests/resources/simple_datatypes/_transactions/0-828e81a3-bb94-44a2-bb8a-7cb9ea3e10b2.txn",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".typed": {
+   "count": 7,
+   "example": "skills/cad-viewer/scripts/viewer/packages/cadgen/src/cadgen/py.typed",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".urdf": {
+   "count": 6,
+   "example": "python/mujoco/testdata/model.urdf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".usda": {
+   "count": 5,
+   "example": "python/mujoco/testdata/simple_usd_preview_surface.usda",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vue": {
+   "count": 4,
+   "example": "examples/audio_recorder/audio_recorder.vue",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".wav": {
+   "count": 8,
+   "example": "openpilot/selfdrive/assets/sounds/critical.wav",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webmanifest": {
+   "count": 1,
+   "example": "website/favicon/site.webmanifest",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webp": {
+   "count": 67,
+   "example": "examples/3d_scene/screenshot.webp",
+   "media_type": "image/webp",
+   "reason": "explicit standard media type"
+  },
+  ".wgsl": {
+   "count": 38,
+   "example": "crates/viewer/re_renderer/shader/colormap.wgsl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".woff": {
+   "count": 4,
+   "example": "website/fonts/fira-mono-v14-latin-regular.woff",
+   "media_type": "font/woff",
+   "reason": "explicit standard media type"
+  },
+  ".woff2": {
+   "count": 20,
+   "example": "nicegui/static/fonts/0c19a63c7528cc1a.woff2",
+   "media_type": "font/woff2",
+   "reason": "explicit standard media type"
+  },
+  ".xml": {
+   "count": 426,
+   "example": "openpilot/tools/plotjuggler/layouts/CAN-bus-debug.xml",
+   "media_type": "application/xml",
+   "reason": "explicit standard media type"
+  },
+  ".xsd": {
+   "count": 1,
+   "example": "src/xml/generated/mjcf.xsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".yaml": {
+   "count": 29,
+   "example": ".github/labeler.yaml",
+   "media_type": "application/yaml; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".zip": {
+   "count": 3,
+   "example": "python/mujoco/testdata/MJCF_NoRoot.zip",
+   "media_type": "application/zip",
+   "reason": "explicit standard media type"
+  }
+ },
+ "file_count": 7166,
+ "goal_id": "EMBER-02",
+ "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+ "schema_version": "ember-issue1581-train-partition-media-types-v1",
+ "self_sha256": "52c772e4c85035ff7e0cad950991921f1bbbfd3a27c24f38f45d93803efdd7a3",
+ "source_partition_receipt_sha256": "588652eace359b457524dea64569ac0a4622dae42557d5e5d70d1e8d519ba88e",
+ "source_partition_selector": "candidate-application_worlds-train-1",
+ "source_partition_split": "train",
+ "workstream_id": "EMBER-02B"
+}

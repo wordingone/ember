@@ -974,8 +974,26 @@ def _partition_media_class(path: PurePosixPath) -> str:
     return path.suffix.lower() if path.suffix else f"<name:{path.name.lower()}>"
 
 
-def _load_partition_media_type_table() -> dict[str, Any]:
-    raw = _read(_PARTITION_MEDIA_TYPE_TABLE)
+def _partition_media_type_table_path(partition_receipt_sha256: str | None) -> Path:
+    """Resolve the media-class table for one partition, falling back to the shared table.
+
+    The table is a census OF a partition, so comparing every partition against a single table
+    admits exactly the one it was censused over. Keying by the receipt's own digest lets each
+    partition carry its own census. The fallback keeps the previously admitted partition on the
+    identical bytes and the identical path, so this resolution cannot change a passing projection.
+    """
+
+    if partition_receipt_sha256:
+        keyed = _PARTITION_MEDIA_TYPE_TABLE.with_suffix("") / f"{partition_receipt_sha256}.json"
+        if keyed.is_file():
+            return keyed
+    return _PARTITION_MEDIA_TYPE_TABLE
+
+
+def _load_partition_media_type_table(
+    partition_receipt_sha256: str | None = None,
+) -> dict[str, Any]:
+    raw = _read(_partition_media_type_table_path(partition_receipt_sha256))
     table = json.loads(raw)
     self_sha = table.pop("self_sha256", None)
     if self_sha != _sha256(_canonical(table)):
@@ -1129,7 +1147,7 @@ def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
         or not isinstance(source.get("fetched_at"), str)
     ):
         raise ValueError("PARTITION_PROJECTION_SOURCE_RECEIPT_SCHEMA_REFUSED")
-    media_table = _load_partition_media_type_table()
+    media_table = _load_partition_media_type_table(expected_sha)
     predecessor_media_table = _load_predecessor_media_type_table()
     unsupported_counts: dict[str, int] = {}
     files = []
