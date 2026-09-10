@@ -170,6 +170,30 @@ def _derive(node: ast.AST, file_path: Path, aliases: dict[str, DerivedPath]) -> 
         if right.depends_on_file:
             raise Unsupported("path suffix may not depend on __file__")
         return DerivedPath(left.path / str(right.path), left.depends_on_file)
+    if isinstance(node, ast.JoinedStr):
+        # An f-string that concatenates already-derivable parts is the same expression as the
+        # `/` and joinpath forms this grammar already resolves -- f"{NC}/scripts" and NC / "scripts"
+        # differ in spelling, not in what they denote. Each part must itself RESOLVE: a part the
+        # grammar cannot derive still raises, so this extension makes rows evaluable (and therefore
+        # able to FAIL on MATCH) rather than making them stop being counted.
+        segments: list[str] = []
+        depends = False
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                segments.append(value.value)
+                continue
+            if not isinstance(value, ast.FormattedValue):
+                raise Unsupported(
+                    f"f-string part outside closed grammar: {type(value).__name__}"
+                )
+            if value.conversion != -1 or value.format_spec is not None:
+                # !r / !s / :spec change the rendered text, so the path in the source is not the
+                # path the grammar would compute. Refuse rather than guess.
+                raise Unsupported("f-string part applies a conversion or format spec")
+            part = _derive(value.value, file_path, aliases)
+            segments.append(str(part.path))
+            depends = depends or part.depends_on_file
+        return DerivedPath(Path("".join(segments)), depends)
     raise Unsupported(f"node outside closed grammar: {type(node).__name__}")
 
 
@@ -196,7 +220,13 @@ def _row(
     )
     # A binding that joins segments onto a root names a subdirectory, whatever it is called, so
     # it makes no claim about where the repository is and cannot be measured against the root.
-    appends_segments = isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+    # f"{ROOT}/sub" appends segments exactly as ROOT / "sub" does, so the two spellings must
+    # get the same expectation. Without this a root-named target bound to a segment-appending
+    # f-string would be measured against the repository root and fail for appending a
+    # subdirectory -- a false MISMATCH the `/` form is explicitly exempted from.
+    appends_segments = (
+        isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+    ) or (isinstance(node, ast.JoinedStr) and len(node.values) > 1)
     expectation = (
         "repo_root" if root_like_name and not appends_segments else "derived_location_only"
     )
