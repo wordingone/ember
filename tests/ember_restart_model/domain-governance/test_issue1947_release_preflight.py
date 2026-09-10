@@ -474,3 +474,261 @@ def test_designation_and_every_checkpoint_shard_fail_closed(
         ).hexdigest()
     with pytest.raises(ReleasePreflightRefusal, match=refusal):
         build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+# --- planted negatives for refusals that had no demonstrated red -------------------------------
+#
+# Censused by observation rather than by grep: scripts/issue1947/refusal_probe.py wraps the three
+# refusal classes and records every token actually constructed during a run. 72 tokens are defined
+# across the four release modules; 34 fired. A refusal with no demonstrated red is not known to be
+# a refusal -- the standard this issue already applies to scorers, applied to its own gates.
+#
+# Each of these corrupts exactly ONE thing and re-derives every hash downstream of it, so the run
+# reaches the clause under test instead of stopping at an integrity check on the way. The probe is
+# what proves that actually happened; a green test only proves SOME refusal fired.
+
+
+def _rebind(binding: dict, path: Path) -> None:
+    """Re-derive a binding's raw hash after its file has been rewritten."""
+    binding["raw_sha256"] = _sha(path)
+
+
+def _reseal(designation: dict) -> dict:
+    """Re-derive the designation's own self hash after mutating it.
+
+    Without this the self-hash check fires first and the clause under test is never reached -- the
+    test is green either way, which is exactly why the token probe rather than the exit status is
+    the evidence that a planted negative plants what it claims.
+    """
+    designation.pop("self_sha256", None)
+    designation["self_sha256"] = hashlib.sha256(
+        json.dumps(designation, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return designation
+
+
+def test_tiers_that_are_not_a_mapping_refuse(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_TIERS"):
+        build_release_preflight(designation, composition, matrix, analysis, list(tiers.items()))
+
+
+def test_a_tier_spec_that_is_not_a_mapping_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    tiers["pr"] = "pr"
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_TIER:pr"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_binding_that_is_not_a_mapping_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    tiers["pr"]["workflow"] = str(tmp_path / "pr.yml")
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_BINDING:pr.workflow"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_binding_without_a_path_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    tiers["pr"]["workflow"]["path"] = ""
+    with pytest.raises(ReleasePreflightRefusal, match="MISSING_PATH:pr.workflow"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_an_uppercase_or_short_digest_refuses(tmp_path: Path) -> None:
+    """A digest is 64 lowercase hex characters or it is not a digest.
+
+    Uppercase is the interesting half: it is the same VALUE, and accepting it would make the
+    identity of every bound artifact depend on the case a caller happened to write.
+    """
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    tiers["pr"]["workflow"]["raw_sha256"] = tiers["pr"]["workflow"]["raw_sha256"].upper()
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_SHA256:pr.workflow"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path / "short")
+    tiers["pr"]["workflow"]["raw_sha256"] = "abc123"
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_SHA256:pr.workflow"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_bound_document_that_is_not_json_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(composition["path"])
+    path.write_text("not json", encoding="utf-8")
+    _rebind(composition, path)
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_JSON:composition_terminal"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_bound_document_that_is_json_but_not_an_object_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(composition["path"])
+    path.write_text("[]", encoding="utf-8")
+    _rebind(composition, path)
+    with pytest.raises(ReleasePreflightRefusal, match="INVALID_JSON_OBJECT:composition_terminal"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_bound_document_of_the_wrong_schema_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(composition["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["schema_version"] = "c2-e-composition-statistics-v2"
+    _write_self_hashed(path, payload)
+    _rebind(composition, path)
+    with pytest.raises(ReleasePreflightRefusal, match="SCHEMA_DRIFT:composition_terminal"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_designation_of_the_wrong_schema_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    designation["schema_version"] = "ember-issue1947-release-candidate-checkpoint-designation-v2"
+    _reseal(designation)
+    with pytest.raises(ReleasePreflightRefusal, match="DESIGNATION_SCHEMA_DRIFT"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_custody_root_that_is_absent_or_unnamed_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    designation["candidate_custody"] = str(tmp_path / "no-such-custody")
+    _reseal(designation)
+    with pytest.raises(ReleasePreflightRefusal, match="MISSING_CHECKPOINT_CUSTODY"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path / "unnamed")
+    designation["candidate_custody"] = ""
+    _reseal(designation)
+    with pytest.raises(ReleasePreflightRefusal, match="MISSING_CHECKPOINT_CUSTODY"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_an_empty_shard_list_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    designation["shards"] = []
+    _reseal(designation)
+    with pytest.raises(ReleasePreflightRefusal, match="MISSING_CHECKPOINT_SHARDS"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_shard_listed_twice_refuses(tmp_path: Path) -> None:
+    """Not a hash failure: both entries are honest and each verifies against its own bytes.
+
+    What is wrong is the COUNT -- a duplicate makes the shard set claim coverage it does not have,
+    and every per-shard check passes while it does so.
+    """
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    designation["shards"] = [designation["shards"][0], dict(designation["shards"][0])]
+    _reseal(designation)
+    with pytest.raises(ReleasePreflightRefusal, match="DUPLICATE_CHECKPOINT_SHARD"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_composition_terminal_that_did_not_pass_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(composition["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["result"] = "FAIL"
+    _write_self_hashed(path, payload)
+    _rebind(composition, path)
+    with pytest.raises(ReleasePreflightRefusal, match="COMPOSITION_TERMINAL_NOT_PASS"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_composition_whose_independent_recompute_did_not_pass_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(composition["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["independent_recomputation"] = dict(
+        payload["independent_recomputation"], result="FAIL"
+    )
+    _write_self_hashed(path, payload)
+    _rebind(composition, path)
+    with pytest.raises(ReleasePreflightRefusal, match="COMPOSITION_RECOMPUTE_NOT_PASS"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_composition_whose_controls_are_short_refuses(tmp_path: Path) -> None:
+    """Seven of eight planted refusals is not "nearly all" -- it is one gate with an unproven red."""
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(composition["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["control_summary"] = dict(payload["control_summary"], planted_refused_as_named=7)
+    _write_self_hashed(path, payload)
+    _rebind(composition, path)
+    with pytest.raises(ReleasePreflightRefusal, match="COMPOSITION_CONTROLS_NOT_PASS"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_matrix_that_did_not_pass_refuses(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(matrix["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["result"] = "FAIL"
+    _write_self_hashed(path, payload)
+    _rebind(matrix, path)
+    with pytest.raises(ReleasePreflightRefusal, match="MATRIX_NOT_PASS"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_an_analysis_that_is_not_frozen_refuses(tmp_path: Path) -> None:
+    """The whole point of a prospective analysis is that it was fixed before the outputs existed."""
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(analysis["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["status"] = "DRAFT"
+    _write_self_hashed(path, payload)
+    _rebind(analysis, path)
+    with pytest.raises(ReleasePreflightRefusal, match="ANALYSIS_NOT_FROZEN"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_an_execution_spec_missing_a_protected_row_refuses(tmp_path: Path) -> None:
+    """Exact tuple equality, so this one clause answers absent, extra, duplicated and reordered.
+
+    Worth stating because a census looking for a clause NAMED after each of those four finds
+    nothing and concludes the coverage is missing. The token is named for the class it catches.
+    """
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(tiers["release"]["execution_spec"]["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["rows"] = payload["rows"][:-1]
+    _write_self_hashed(path, payload)
+    reloaded = json.loads(path.read_text(encoding="utf-8"))
+    tiers["release"]["execution_spec"]["raw_sha256"] = _sha(path)
+    tiers["release"]["execution_spec"]["self_sha256"] = reloaded["self_sha256"]
+    with pytest.raises(ReleasePreflightRefusal, match="EXECUTION_SPEC_ROW_SET_DRIFT"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_reordered_execution_spec_refuses_under_the_same_clause(tmp_path: Path) -> None:
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    path = Path(tiers["release"]["execution_spec"]["path"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("self_sha256")
+    payload["rows"] = [payload["rows"][1], payload["rows"][0], *payload["rows"][2:]]
+    _write_self_hashed(path, payload)
+    reloaded = json.loads(path.read_text(encoding="utf-8"))
+    tiers["release"]["execution_spec"]["raw_sha256"] = _sha(path)
+    tiers["release"]["execution_spec"]["self_sha256"] = reloaded["self_sha256"]
+    with pytest.raises(ReleasePreflightRefusal, match="EXECUTION_SPEC_ROW_SET_DRIFT"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
+
+
+def test_a_preflight_bound_to_a_different_execution_spec_self_hash_refuses(tmp_path: Path) -> None:
+    """The file is intact and its raw hash agrees; only the BINDING disagrees.
+
+    Distinct from SELF_HASH_DRIFT, which is the document failing to hash to its own claim. Here
+    the document is honest and the authority points at a different one, which is the case a raw
+    byte check cannot see because the bytes it checks are the right bytes.
+    """
+    designation, composition, matrix, analysis, tiers = _inputs(tmp_path)
+    tiers["release"]["execution_spec"]["self_sha256"] = "0" * 64
+    with pytest.raises(ReleasePreflightRefusal, match="SELF_HASH_BINDING_DRIFT:release.execution_spec"):
+        build_release_preflight(designation, composition, matrix, analysis, tiers)
