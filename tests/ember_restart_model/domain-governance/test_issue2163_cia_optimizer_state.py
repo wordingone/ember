@@ -3,12 +3,11 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Named state fixtures on full meta inventory; not actual checkpoint recovery."""
 import copy
-import os
 import sys
 import unittest
 from pathlib import Path
 import torch
-ROOT = Path(os.environ.get('CIA_TEST_ROOT', Path(__file__).resolve().parents[3]))
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'src'))
 sys.path.insert(0, str(ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'))
