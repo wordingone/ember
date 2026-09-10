@@ -1,11 +1,11 @@
 {
-  "baselined_row_count": 520,
-  "expires_on": "2026-09-10",
+  "baselined_row_count": 508,
+  "expires_on": "2026-09-16",
   "expiry_change_authority": "OPERATOR_ONLY",
   "expiry_consequence": "after this date the gate fails on every baselined row, blocking all pull requests",
   "goal_id": "EMBER-02",
-  "maximum_rows": 520,
-  "minted_on": "2026-09-03",
+  "maximum_rows": 508,
+  "minted_on": "2026-09-10",
   "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
   "rows": [
     {
@@ -3760,17 +3760,6 @@
       "target": "ROOT"
     },
     {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "str(ROOT / 'tools' / 'ember-restart-3b')",
-      "expression_sha256": "652c7cd585553b7361f82071ee069dbb084e74076db4fb880aa6c108ea3fee34",
-      "line": 19,
-      "path": "src/ember/infrastructure/tools/corpus_connectors/tests/test_spdx_gate.py",
-      "status": "UNEVALUABLE",
-      "target": "<sys.path.insert>"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4794,17 +4783,6 @@
       "target": "SCRIPT_DIR"
     },
     {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "ROOT / 'tools' / 'ember-restart-3b'",
-      "expression_sha256": "6c81937084f43b6cdd3b6726ae10a5288e03cedac88df98c28bddaa7561102b8",
-      "line": 52,
-      "path": "tests/ember_01_identity/domain-governance/test_architecture_config_identity_roundtrip.py",
-      "status": "UNEVALUABLE",
-      "target": "COUNTER_DIR"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -4869,17 +4847,6 @@
       "path": "tests/ember_01_identity/domain-governance/test_checkpoint_save_load_identity_roundtrip.py",
       "status": "UNEVALUABLE",
       "target": "SCRIPT_DIR"
-    },
-    {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "ROOT / 'tools' / 'ember-restart-3b'",
-      "expression_sha256": "6c81937084f43b6cdd3b6726ae10a5288e03cedac88df98c28bddaa7561102b8",
-      "line": 57,
-      "path": "tests/ember_01_identity/domain-governance/test_checkpoint_save_load_identity_roundtrip.py",
-      "status": "UNEVALUABLE",
-      "target": "COUNTER_DIR"
     },
     {
       "error": "call outside closed grammar: next",
@@ -4981,17 +4948,6 @@
       "target": "ROOT"
     },
     {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "ROOT / 'tests' / 'ember_restart_model' / 'domain-governance'",
-      "expression_sha256": "56c83e173086da7b840ead968f04836ec1c0bf74f9de23c061bb1afe266e6c27",
-      "line": 34,
-      "path": "tests/ember_01_identity/domain-governance/test_parameter_identity_roundtrip.py",
-      "status": "UNEVALUABLE",
-      "target": "_FIXTURE_DIR"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -5001,17 +4957,6 @@
       "path": "tests/ember_01_identity/domain-governance/test_parameter_identity_verify_robustness.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "ROOT / 'tests' / 'ember_restart_model' / 'domain-governance'",
-      "expression_sha256": "56c83e173086da7b840ead968f04836ec1c0bf74f9de23c061bb1afe266e6c27",
-      "line": 39,
-      "path": "tests/ember_01_identity/domain-governance/test_parameter_identity_verify_robustness.py",
-      "status": "UNEVALUABLE",
-      "target": "_FIXTURE_DIR"
     },
     {
       "error": "call outside closed grammar: next",
@@ -5047,28 +4992,6 @@
       "target": "ROOT"
     },
     {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "ROOT / 'scripts'",
-      "expression_sha256": "3e9ef23dd8793bd480c94dbfde647ee5265051e705e3bb0f65f5aff75f64e604",
-      "line": 39,
-      "path": "tests/ember_01_identity/domain-governance/test_research_benchmark_harness_subject_identity.py",
-      "status": "UNEVALUABLE",
-      "target": "SCRIPTS_DIR"
-    },
-    {
-      "error": "unknown alias SCRIPTS_DIR",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "SCRIPTS_DIR / 'ember_01_identity'",
-      "expression_sha256": "83dc402c87a3f2e49c15969029328149db92d1caaa55800b0ba115a9ab9a115e",
-      "line": 40,
-      "path": "tests/ember_01_identity/domain-governance/test_research_benchmark_harness_subject_identity.py",
-      "status": "UNEVALUABLE",
-      "target": "IDENTITY_DIR"
-    },
-    {
       "error": "call outside closed grammar: next",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -5078,17 +5001,6 @@
       "path": "tests/ember_01_identity/domain-governance/test_resolve_parameter_identity_census.py",
       "status": "UNEVALUABLE",
       "target": "ROOT"
-    },
-    {
-      "error": "unknown alias ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "ROOT / 'scripts' / 'ember_01_identity'",
-      "expression_sha256": "f25b5b8e1da021d2b6cc06d82d73ae379d2d5763a00814befb9ce5e7af2a955e",
-      "line": 15,
-      "path": "tests/ember_01_identity/domain-governance/test_resolve_parameter_identity_census.py",
-      "status": "UNEVALUABLE",
-      "target": "_IDENTITY_DIR"
     },
     {
       "error": "call outside closed grammar: next",
@@ -5190,7 +5102,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "derived_location_only",
+      "expression": "str(REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission')",
       "expression_sha256": "6af9cb5b70f5cdfade84417971f1614061599c99e522d24ff7a538d3091dc9d5",
       "line": 18,
       "path": "tests/ember_admission/domain-governance/test_candidate_staging.py",
@@ -5209,7 +5124,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 17,
       "path": "tests/ember_admission/domain-governance/test_consumer_validator_snapshot.py",
@@ -5272,7 +5190,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 14,
       "path": "tests/ember_admission/domain-governance/test_descriptor_snapshot.py",
@@ -5302,7 +5223,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 52,
       "path": "tests/ember_admission/domain-governance/test_designate_selection_produces_resolvable_seat.py",
@@ -5343,7 +5267,10 @@
       "target": "<sys.path.insert>"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "derived_location_only",
+      "expression": "str(REPO_ROOT / 'tests' / 'ember_restart' / 'domain-governance')",
       "expression_sha256": "03c519dd7b12bd975114242c3be90cc15775b013e65288439f576bb2093d7764",
       "line": 56,
       "path": "tests/ember_admission/domain-governance/test_designate_selection_produces_resolvable_seat.py",
@@ -5362,7 +5289,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 18,
       "path": "tests/ember_admission/domain-governance/test_final_path_consumption.py",
@@ -5414,7 +5344,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_post_validation_drift.py",
@@ -5455,7 +5388,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_producer_receipt.py",
@@ -5496,7 +5432,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "repo_root",
+      "expression": "REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission'",
       "expression_sha256": "0a1d195df24edd4e9e9f411717e59c6ad29e1201cc77e729a64905ee8f53d5fe",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_restart_consumer.py",
@@ -5526,7 +5465,10 @@
       "target": "REPO_ROOT"
     },
     {
+      "error": "unknown alias REPO_ROOT",
       "evaluated_path": null,
+      "expectation": "derived_location_only",
+      "expression": "str(REPO_ROOT / 'src' / 'ember' / 'governance' / 'scripts' / 'ember_admission')",
       "expression_sha256": "6af9cb5b70f5cdfade84417971f1614061599c99e522d24ff7a538d3091dc9d5",
       "line": 15,
       "path": "tests/ember_admission/domain-governance/test_source_alias.py",
@@ -5644,50 +5586,6 @@
       "target": "REPO_ROOT"
     },
     {
-      "error": null,
-      "evaluated_path": "<root>/tools/ember-restart-3b",
-      "expectation": "repo_root",
-      "expression": "ROOT / 'tools' / 'ember-restart-3b'",
-      "expression_sha256": "6c81937084f43b6cdd3b6726ae10a5288e03cedac88df98c28bddaa7561102b8",
-      "line": 19,
-      "path": "tests/ember_restart_model/fixtures/eval-canary-image-v1/build_fixture.py",
-      "status": "MISMATCH",
-      "target": "MODEL_ROOT"
-    },
-    {
-      "error": null,
-      "evaluated_path": "<root>/tests/ember_restart_model",
-      "expectation": "repo_root",
-      "expression": "Path(__file__).resolve().parent",
-      "expression_sha256": "f763af07155c9656eb1f83a6043d3f437b8c2f8a9efcf59162e2875681bbff07",
-      "line": 12,
-      "path": "tests/ember_restart_model/test_import_seams.py",
-      "status": "MISMATCH",
-      "target": "TEST_ROOT"
-    },
-    {
-      "error": "call outside closed grammar: os.environ.get",
-      "evaluated_path": null,
-      "expectation": "repo_root",
-      "expression": "Path(os.environ.get('EMBER_SOURCE_ROOT', TEST_ROOT))",
-      "expression_sha256": "e34290fcd2fb9c620c31bc826f5f9833566933a48ab8291365ca96bef7c7df6e",
-      "line": 16,
-      "path": "tests/ember_restart_model/test_issue1413_checkpoint_projection_regression.py",
-      "status": "UNEVALUABLE",
-      "target": "SOURCE_ROOT"
-    },
-    {
-      "error": "unknown alias SOURCE_ROOT",
-      "evaluated_path": null,
-      "expectation": "derived_location_only",
-      "expression": "str(SOURCE_ROOT / 'tools' / 'ember-restart-3b')",
-      "expression_sha256": "70595a63e820839780fd6e48a881665a50cf88fa77eb3bf5334e531fe9265024",
-      "line": 17,
-      "path": "tests/ember_restart_model/test_issue1413_checkpoint_projection_regression.py",
-      "status": "UNEVALUABLE",
-      "target": "<sys.path.insert>"
-    },
-    {
       "error": "node outside closed grammar: Dict",
       "evaluated_path": null,
       "expectation": "repo_root",
@@ -5700,6 +5598,6 @@
     }
   ],
   "schema_version": "ember-self-location-baseline-v1",
-  "self_sha256": "fddbeeb22a07bb97722c90a187de3934d9b1604e0e8f23833b6198cb8efa15bd",
+  "self_sha256": "c72b044697408f52a96686fc16e11cc672f926e4c57af79ffc79dc8d9d93ef46",
   "workstream_id": "EMBER-02A"
 }
