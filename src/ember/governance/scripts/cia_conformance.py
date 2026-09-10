@@ -23,6 +23,10 @@ CONTROL_PATHS = (
     'src/ember/governance/scripts/cia_conformance.py',
     'src/ember/governance/scripts/cia_conformance_launch.py',
     'src/ember/governance/scripts/cia_conformance_resources.py',
+    # The split revision's frozen bounds. The consumer imports it, so the binding must pin it or
+    # verify_loaded_sources refuses a legitimate input -- and a unit that ran without it pinned
+    # would be judged against an expectation nobody froze.
+    'src/ember/governance/scripts/cia_numerical_split.py',
     'src/ember/governance/scripts/ember_dispatch_token.py',
     'runtime/ember-lab/src/lib.rs',
     'runtime/ember-lab/src/data_catalog.rs',
