@@ -86,9 +86,26 @@ def test_missing_or_reordered_row_refuses_before_execution(tmp_path: Path) -> No
         )
 
 
-def test_protected_bytes_and_item_schema_refuse(tmp_path: Path) -> None:
+def test_protected_bytes_refuse(tmp_path: Path) -> None:
+    """Was one assertion with an alternation; it is two because only one branch was ever firing.
+
+    `match="PROTECTED_BYTES_IN_BUNDLE|ITEM_SCHEMA_DRIFT"` passed on the first token and left the
+    second undemonstrated while counting as its coverage -- green either way, and a census of test
+    literals reports the token as tested. An alternation in an assertion lets one branch carry the
+    other; observing which refusal actually constructs is what tells them apart.
+
+    The two are also ordered: forbid_protected_bytes runs over the whole row before any per-item
+    schema check, so a row carrying a protected key can never reach the schema clause at all.
+    """
     row = {"row_id": subject.ROWS[0], "items": [{"item_id": "one", "gold_item_sha256": "c" * 64, "prediction": "x", "score": 1.0, "gold_bytes": "secret"}]}
-    with pytest.raises(subject.ReleaseExecutionRefusal, match="PROTECTED_BYTES_IN_BUNDLE|ITEM_SCHEMA_DRIFT"):
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="PROTECTED_BYTES_IN_BUNDLE"):
+        subject.validate_row(row, subject.ROWS[0])
+
+
+def test_item_schema_drift_refuses_on_its_own(tmp_path: Path) -> None:
+    """A missing key, not an extra one: the key set is compared for equality, both directions."""
+    row = {"row_id": subject.ROWS[0], "items": [{"item_id": "one", "gold_item_sha256": "c" * 64, "prediction": "x"}]}
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ITEM_SCHEMA_DRIFT"):
         subject.validate_row(row, subject.ROWS[0])
 
 
@@ -197,3 +214,131 @@ def test_duplicate_result_path_and_invalid_json_refuse_by_name(
             value, preflight(value), tmp_path / "invalid-out",
             spec_raw_sha256=subject.sha(raw_spec(value)),
         )
+
+
+# --- planted negatives for execute-side refusals that had no demonstrated red -------------------
+#
+# Companion to the preflight block. Coverage is measured by scripts/issue1947/refusal_probe.py,
+# which records the tokens actually constructed during a run, so a clause is counted only when it
+# is observed to fire.
+
+
+def _resealed(value: dict) -> dict:
+    """Re-derive a spec's self hash after mutating it, so the clause under test is reachable."""
+    value = {key: item for key, item in value.items() if key != "self_sha256"}
+    return self_hashed(value)
+
+
+def test_a_row_whose_identity_does_not_match_refuses() -> None:
+    row = {"row_id": subject.ROWS[1], "items": [{"item_id": "one", "gold_item_sha256": "c" * 64, "prediction": "x", "score": 1.0}]}
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ROW_IDENTITY_DRIFT"):
+        subject.validate_row(row, subject.ROWS[0])
+
+
+def test_a_row_with_no_items_refuses() -> None:
+    """An empty row scores vacuously well, which is the reason it cannot be allowed to score."""
+    row = {"row_id": subject.ROWS[0], "items": []}
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="EMPTY_ROW"):
+        subject.validate_row(row, subject.ROWS[0])
+
+
+def test_a_repeated_or_unnamed_item_id_refuses() -> None:
+    item = {"item_id": "one", "gold_item_sha256": "c" * 64, "prediction": "x", "score": 1.0}
+    row = {"row_id": subject.ROWS[0], "items": [item, dict(item)]}
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ITEM_ID_DRIFT"):
+        subject.validate_row(row, subject.ROWS[0])
+
+    row = {"row_id": subject.ROWS[0], "items": [dict(item, item_id="")]}
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ITEM_ID_DRIFT"):
+        subject.validate_row(row, subject.ROWS[0])
+
+
+def test_a_non_numeric_or_boolean_score_refuses() -> None:
+    """True is an int in Python and would average as 1.0, so it is excluded by name, not by type."""
+    item = {"item_id": "one", "gold_item_sha256": "c" * 64, "prediction": "x", "score": "1.0"}
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ITEM_SCORE_DRIFT"):
+        subject.validate_row({"row_id": subject.ROWS[0], "items": [item]}, subject.ROWS[0])
+
+    item = dict(item, score=True)
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ITEM_SCORE_DRIFT"):
+        subject.validate_row({"row_id": subject.ROWS[0], "items": [item]}, subject.ROWS[0])
+
+
+def test_an_unclassified_or_unknown_prediction_source_refuses(monkeypatch) -> None:
+    """Fails closed twice: a row nobody classified, and a classification nobody implemented."""
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="UNCLASSIFIED_PREDICTION_SOURCE"):
+        subject.evidence_kind("E-MATRIX-NOT-A-ROW")
+
+    monkeypatch.setitem(subject.PREDICTION_SOURCE, subject.ROWS[0], "a_source_nothing_implements")
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="UNKNOWN_PREDICTION_SOURCE"):
+        subject.evidence_kind(subject.ROWS[0])
+
+
+def test_a_preflight_that_did_not_pass_refuses(tmp_path: Path) -> None:
+    value = spec(tmp_path)
+    authority = dict(preflight(value), result="REFUSED")
+    authority = self_hashed({k: v for k, v in authority.items() if k != "self_sha256"})
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="PREFLIGHT_NOT_PASS"):
+        subject.execute(value, authority, tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_a_preflight_without_a_release_tier_refuses(tmp_path: Path) -> None:
+    value = spec(tmp_path)
+    authority = dict(preflight(value), tiers=[{"tier": "pr"}])
+    authority = self_hashed({k: v for k, v in authority.items() if k != "self_sha256"})
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="EXECUTION_SPEC_AUTHORITY_MISSING"):
+        subject.execute(value, authority, tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_an_execution_spec_of_the_wrong_schema_refuses(tmp_path: Path) -> None:
+    value = _resealed(dict(spec(tmp_path), schema_version="ember-issue1947-release-execution-spec-v2"))
+    authority = preflight(value)
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="EXECUTION_SPEC_SCHEMA_DRIFT"):
+        subject.execute(value, authority, tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_a_preflight_bound_to_a_different_execution_spec_refuses(tmp_path: Path) -> None:
+    """The raw bytes agree and the self hashes do not, which is the case a raw check cannot see."""
+    value = spec(tmp_path)
+    authority = preflight(value)
+    authority["tiers"][0]["execution_spec"]["self_sha256"] = "0" * 64
+    authority = self_hashed({k: v for k, v in authority.items() if k != "self_sha256"})
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="EXECUTION_SPEC_SELF_HASH_BINDING_DRIFT"):
+        subject.execute(value, authority, tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_an_empty_or_non_string_runner_command_refuses(tmp_path: Path) -> None:
+    value = spec(tmp_path)
+    value["rows"][0]["command"] = []
+    value = _resealed(value)
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="RUNNER_COMMAND_DRIFT"):
+        subject.execute(value, preflight(value), tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_a_missing_result_path_refuses(tmp_path: Path) -> None:
+    value = spec(tmp_path)
+    value["rows"][0]["result_path"] = ""
+    value = _resealed(value)
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ROW_RESULT_PATH_DRIFT"):
+        subject.execute(value, preflight(value), tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_a_non_numeric_threshold_refuses(tmp_path: Path) -> None:
+    value = spec(tmp_path)
+    value["rows"][0]["threshold"] = "0.5"
+    value = _resealed(value)
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="THRESHOLD_DRIFT"):
+        subject.execute(value, preflight(value), tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
+
+
+def test_a_runner_that_exits_non_zero_refuses(tmp_path: Path, monkeypatch) -> None:
+    """A failed runner is a refusal, never an absent row: a row that did not run has no result."""
+    def refusing_run(command, **_kwargs):
+        class Completed:
+            returncode = 3
+        return Completed()
+
+    monkeypatch.setattr(subject.subprocess, "run", refusing_run)
+    value = spec(tmp_path)
+    with pytest.raises(subject.ReleaseExecutionRefusal, match="ROW_EXECUTION_REFUSED"):
+        subject.execute(value, preflight(value), tmp_path / "out", spec_raw_sha256=subject.sha(raw_spec(value)))
