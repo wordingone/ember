@@ -80,6 +80,167 @@ def test_root_like_assignment_outside_grammar_is_unevaluable_without_file_refere
     ]
 
 
+NL = chr(10)
+MARKER_WALK = (
+    "next(parent for parent in Path(__file__).resolve().parents "
+    "if (parent / 'pyproject.toml').is_file())"
+)
+
+
+def _marker_tree(tmp_path: Path, body: str) -> Path:
+    """A two-deep source under a directory that carries the marker file."""
+
+    write(tmp_path / "pyproject.toml", "[project]" + NL + "name = 'probe'" + NL)
+    return write(tmp_path / "pkg" / "probe.py", "from pathlib import Path" + NL + body)
+
+
+def test_repo_marker_walk_resolves_to_the_directory_carrying_the_marker(tmp_path: Path) -> None:
+    source = _marker_tree(tmp_path, "ROOT = " + MARKER_WALK + NL)
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "MATCH")]
+
+
+def test_repo_marker_walk_reports_mismatch_when_a_nearer_parent_carries_the_marker(
+    tmp_path: Path,
+) -> None:
+    """The rule produces verdicts, not blanket approval: a nested marker is a real MISMATCH."""
+
+    write(tmp_path / "pyproject.toml", "[project]" + NL + "name = 'outer'" + NL)
+    write(tmp_path / "nested" / "pyproject.toml", "[project]" + NL + "name = 'inner'" + NL)
+    source = write(
+        tmp_path / "nested" / "pkg" / "probe.py",
+        "from pathlib import Path" + NL + "ROOT = " + MARKER_WALK + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "MISMATCH")]
+
+
+def test_a_walk_that_does_not_start_at_file_stays_unevaluable(tmp_path: Path) -> None:
+    """The refusal that matters most: resolving this against the checkout would report a verdict
+    for an expression the checker never actually evaluated."""
+
+    source = _marker_tree(
+        tmp_path,
+        "import os" + NL
+        + "ROOT = next(parent for parent in Path(os.environ['X']).parents "
+        + "if (parent / 'pyproject.toml').is_file())" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "UNEVALUABLE")]
+
+
+def test_no_parent_carrying_the_marker_is_unevaluable_never_the_filesystem_root(
+    tmp_path: Path,
+) -> None:
+    source = write(
+        tmp_path / "pkg" / "probe.py",
+        "from pathlib import Path" + NL + "ROOT = " + MARKER_WALK + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "UNEVALUABLE")]
+
+
+def test_two_argument_next_with_a_fallback_stays_unevaluable(tmp_path: Path) -> None:
+    source = _marker_tree(
+        tmp_path,
+        "ROOT = next((parent for parent in Path(__file__).resolve().parents "
+        + "if (parent / 'pyproject.toml').is_file()), Path('/'))" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "UNEVALUABLE")]
+
+
+def test_a_walk_yielding_something_other_than_the_parent_stays_unevaluable(
+    tmp_path: Path,
+) -> None:
+    source = _marker_tree(
+        tmp_path,
+        "ROOT = next(parent.parent for parent in Path(__file__).resolve().parents "
+        + "if (parent / 'pyproject.toml').is_file())" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "UNEVALUABLE")]
+
+
+def test_a_non_literal_marker_name_stays_unevaluable(tmp_path: Path) -> None:
+    source = _marker_tree(
+        tmp_path,
+        "MARKER = 'pyproject.toml'" + NL
+        + "ROOT = next(parent for parent in Path(__file__).resolve().parents "
+        + "if (parent / MARKER).is_file())" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert ("ROOT", "UNEVALUABLE") in [(row["target"], row["status"]) for row in rows]
+
+
+def test_a_condition_that_is_not_an_existence_predicate_stays_unevaluable(
+    tmp_path: Path,
+) -> None:
+    source = _marker_tree(
+        tmp_path,
+        "ROOT = next(parent for parent in Path(__file__).resolve().parents "
+        + "if (parent / 'pyproject.toml').name.startswith('py'))" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "UNEVALUABLE")]
+
+
+def test_a_walk_over_something_other_than_parents_stays_unevaluable(tmp_path: Path) -> None:
+    source = _marker_tree(
+        tmp_path,
+        "ROOT = next(parent for parent in Path(__file__).resolve().parent.iterdir() "
+        + "if (parent / 'pyproject.toml').is_file())" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT", "UNEVALUABLE")]
+
+
+def test_a_marker_joined_to_something_other_than_the_walk_target_stays_unevaluable(
+    tmp_path: Path,
+) -> None:
+    source = _marker_tree(
+        tmp_path,
+        "OTHER = Path(__file__).resolve().parent" + NL
+        + "ROOT = next(parent for parent in Path(__file__).resolve().parents "
+        + "if (OTHER / 'pyproject.toml').is_file())" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert ("ROOT", "UNEVALUABLE") in [(row["target"], row["status"]) for row in rows]
+
+
+def test_a_root_named_binding_that_appends_segments_is_a_derived_location(
+    tmp_path: Path,
+) -> None:
+    """PRODUCER_ROOT = REPO_ROOT / "src" names a subdirectory, whatever it is called. Demanding
+    that it equal the repository root reports a defect against a claim nobody made."""
+
+    source = _marker_tree(
+        tmp_path,
+        "REPO_ROOT = " + MARKER_WALK + NL + "PRODUCER_ROOT = REPO_ROOT / 'src' / 'ember'" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    by_target = {row["target"]: row for row in rows}
+    assert by_target["REPO_ROOT"]["expectation"] == "repo_root"
+    assert by_target["REPO_ROOT"]["status"] == "MATCH"
+    assert by_target["PRODUCER_ROOT"]["expectation"] == "derived_location_only"
+    assert by_target["PRODUCER_ROOT"]["status"] == "MATCH"
+
+
+def test_a_root_named_binding_with_no_join_still_owes_the_repository_root(
+    tmp_path: Path,
+) -> None:
+    """The joined-expression carve-out is not a licence for every name ending in ROOT."""
+
+    source = write(
+        tmp_path / "pkg" / "deep" / "probe.py",
+        "from pathlib import Path" + NL + "ROOT = Path(__file__).resolve().parent" + NL,
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [(row["target"], row["expectation"], row["status"]) for row in rows] == [
+        ("ROOT", "repo_root", "MISMATCH")
+    ]
+
+
 def test_exact_baseline_passes_but_expression_drift_and_growth_refuse(tmp_path: Path) -> None:
     source = write(tmp_path / "src" / "nested" / "probe.py", "from pathlib import Path\nROOT = Path(__file__).resolve().parents[1]\n")
     rows = subject.scan_files(tmp_path, [source])

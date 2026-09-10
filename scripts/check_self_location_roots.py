@@ -59,6 +59,66 @@ def _integer(node: ast.AST) -> int:
     raise Unsupported("parent index is not a nonnegative integer literal")
 
 
+def _marker_condition_name(test: ast.AST, target: str) -> str:
+    """Return the marker filename from `(target / "name").is_file()`, or refuse.
+
+    Only the three existence predicates are admitted, and only over a literal name joined to the
+    comprehension's own target. Anything else changes what the search means.
+    """
+
+    if not isinstance(test, ast.Call) or test.args or test.keywords:
+        raise Unsupported("repo-marker condition is not a bare existence call")
+    if not isinstance(test.func, ast.Attribute) or test.func.attr not in {
+        "is_file", "exists", "is_dir"
+    }:
+        raise Unsupported("repo-marker condition is not an existence predicate")
+    joined = test.func.value
+    if (
+        not isinstance(joined, ast.BinOp)
+        or not isinstance(joined.op, ast.Div)
+        or not isinstance(joined.left, ast.Name)
+        or joined.left.id != target
+        or not isinstance(joined.right, ast.Constant)
+        or not isinstance(joined.right.value, str)
+    ):
+        raise Unsupported("repo-marker condition is not target / literal")
+    return joined.right.value
+
+
+def _derive_repo_marker_walk(
+    node: ast.AST, file_path: Path, aliases: dict[str, DerivedPath]
+) -> DerivedPath:
+    """Evaluate `next(p for p in <__file__ derived>.parents if (p / "marker").is_file())`."""
+
+    if not isinstance(node, (ast.GeneratorExp, ast.ListComp)):
+        raise Unsupported("next() argument is not a comprehension over parents")
+    if len(node.generators) != 1:
+        raise Unsupported("repo-marker walk has more than one comprehension")
+    comprehension = node.generators[0]
+    if comprehension.is_async or len(comprehension.ifs) != 1:
+        raise Unsupported("repo-marker walk needs exactly one synchronous condition")
+    if not isinstance(comprehension.target, ast.Name):
+        raise Unsupported("repo-marker walk target is not a plain name")
+    target = comprehension.target.id
+    if not isinstance(node.elt, ast.Name) or node.elt.id != target:
+        raise Unsupported("repo-marker walk yields something other than the parent")
+    if not isinstance(comprehension.iter, ast.Attribute) or comprehension.iter.attr != "parents":
+        raise Unsupported("repo-marker walk does not iterate .parents")
+
+    base = _derive(comprehension.iter.value, file_path, aliases)
+    if not base.depends_on_file:
+        # The whole point of the rule is that the search STARTS at this file. A walk rooted
+        # anywhere else cannot be evaluated from the source alone, and answering it against this
+        # checkout would report a verdict for an expression never actually evaluated.
+        raise Unsupported("repo-marker walk does not start at __file__")
+
+    marker = _marker_condition_name(comprehension.ifs[0], target)
+    for parent in base.path.parents:
+        if (parent / marker).exists():
+            return DerivedPath(parent, True)
+    raise Unsupported(f"no parent carries the repo marker {marker}")
+
+
 def _derive(node: ast.AST, file_path: Path, aliases: dict[str, DerivedPath]) -> DerivedPath:
     if isinstance(node, ast.Name):
         if node.id == "__file__":
@@ -95,6 +155,8 @@ def _derive(node: ast.AST, file_path: Path, aliases: dict[str, DerivedPath]) -> 
             if any(part.depends_on_file for part in parts):
                 raise Unsupported("join suffix may not itself depend on __file__")
             return DerivedPath(base.path.joinpath(*(str(part.path) for part in parts)), base.depends_on_file)
+        if name == "next" and len(node.args) == 1 and not node.keywords:
+            return _derive_repo_marker_walk(node.args[0], file_path, aliases)
         raise Unsupported(f"call outside closed grammar: {name or type(node.func).__name__}")
     if isinstance(node, ast.Attribute) and node.attr == "parent":
         base = _derive(node.value, file_path, aliases)
@@ -129,10 +191,14 @@ def _row(
     relative = path.relative_to(root).as_posix()
     expression = ast.unparse(node)
     expression_sha = hashlib.sha256(ast.dump(node, include_attributes=False).encode()).hexdigest()
+    root_like_name = target != "<sys.path.insert>" and (
+        "ROOT" in target.upper() or target.upper() in {"REPO", "REPOSITORY"}
+    )
+    # A binding that joins segments onto a root names a subdirectory, whatever it is called, so
+    # it makes no claim about where the repository is and cannot be measured against the root.
+    appends_segments = isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
     expectation = (
-        "repo_root"
-        if target != "<sys.path.insert>" and ("ROOT" in target.upper() or target.upper() in {"REPO", "REPOSITORY"})
-        else "derived_location_only"
+        "repo_root" if root_like_name and not appends_segments else "derived_location_only"
     )
     if derived is None:
         status, evaluated = "UNEVALUABLE", None
