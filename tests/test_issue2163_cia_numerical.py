@@ -129,6 +129,88 @@ class NumericalCIATests(unittest.TestCase):
         self.assertGreater(torch.count_nonzero(gradient).item(), 0)
         self.assertTrue(all(p.grad is None for name, p in weights.items() if not name.startswith('router.')))
 
+    _observation_cache = None
+
+    def observed_fixture(self):
+        """Measure the fixed 1025-token forward once; every plan test reads the same measurement."""
+        if type(self)._observation_cache is None:
+            from ember.model.ember_v0_routing import GlobalObservation, LocalObservation
+            tokens = (torch.arange(1025) % 97 + 1).tolist()
+            observed = []
+            with torch.no_grad():
+                logits, routes = self.run_tokens(tokens, return_routes=True,
+                                                 route_observer=observed.append)
+            local = tuple(row for row in observed if type(row) is LocalObservation)
+            globals_ = tuple(row for row in observed if type(row) is GlobalObservation)
+            self.assertEqual(len(local) + len(globals_), len(observed))
+            type(self)._observation_cache = (tokens, logits, routes, local, globals_)
+        return type(self)._observation_cache
+
+    def test_027_observation_records_the_run_without_changing_it(self):
+        from ember.governance.scripts.cia_numerical_split import (
+            GLOBAL_SELECTIONS_PER_DOCUMENT, LOCAL_ROUTES)
+        tokens, logits, routes, local, globals_ = self.observed_fixture()
+        with torch.no_grad():
+            unobserved = self.run_tokens(tokens)
+        # An observer that perturbs the computation measures a run nobody else will ever make.
+        torch.testing.assert_close(logits, unobserved, rtol=0, atol=0)
+        self.assertEqual(len(local), LOCAL_ROUTES)
+        self.assertEqual(len(globals_), GLOBAL_SELECTIONS_PER_DOCUMENT)
+        self.assertEqual(len({row.key for row in local}), LOCAL_ROUTES)
+        self.assertEqual(sorted(row.epoch_start for row in globals_), [0, 1024])
+        by_key = {row.key: row for row in local}
+        for document, layer, start, candidates, chosen in routes:
+            row = by_key[(document, layer, start)]
+            # The record has to describe the route the run actually took, not a parallel selection.
+            self.assertEqual(row.candidates, tuple(sorted(candidates)))
+            self.assertEqual(row.chosen, chosen)
+            self.assertIn(chosen, row.candidates)
+            self.assertEqual(row.summary.shape, (1024,))
+            self.assertEqual(row.keys_slice.shape, (2, 1024))
+            self.assertEqual(row.prior_slice.shape, (2,))
+            self.assertEqual(row.margin, row.logits[0] - row.logits[1])
+            # Signed in ascending candidate order, ties to the lower ID. The fixture contains
+            # exact zeros, so a strict `> 0` reads the winner backwards at the closest decisions.
+            self.assertEqual(row.chosen, row.candidates[0 if row.margin >= 0 else 1])
+            self.assertTrue(torch.isfinite(row.summary).all())
+
+    def test_028_a_fixed_plan_is_consumed_and_steers_the_computation(self):
+        from ember.governance.scripts.cia_numerical_split import route_plan
+        tokens, logits, routes, local, _ = self.observed_fixture()
+        plan = route_plan(local)
+        self.assertEqual(len(plan), len(routes))
+        with torch.no_grad():
+            replayed, replayed_routes = self.run_tokens(tokens, return_routes=True, route_plan=plan)
+        self.assertEqual(replayed_routes, routes)
+        torch.testing.assert_close(replayed, logits, rtol=0, atol=0)
+        # A plan that cannot change the computation is decoration, so prove one that does.
+        steered = dict(plan)
+        key = next(row.key for row in local if row.chosen != row.candidates[0])
+        candidates, winner = steered[key]
+        other = candidates[0] if winner == candidates[1] else candidates[1]
+        steered[key] = (candidates, other)
+        with torch.no_grad():
+            forced, forced_routes = self.run_tokens(tokens, return_routes=True, route_plan=steered)
+        self.assertEqual(next(row[-1] for row in forced_routes if row[:3] == key), other)
+        self.assertFalse(torch.equal(forced, logits))
+
+    def test_029_a_plan_that_does_not_describe_this_run_is_refused(self):
+        from ember.governance.scripts.cia_numerical_split import route_plan
+        tokens, _, _, local, _ = self.observed_fixture()
+        plan = route_plan(local)
+        key = min(plan)
+        candidates, winner = plan[key]
+        absent = {name: value for name, value in plan.items() if name != key}
+        drifted = dict(plan)
+        drifted[key] = ((23, 24), winner)
+        impossible = dict(plan)
+        impossible[key] = (candidates, next(i for i in range(25) if i not in candidates))
+        for broken, expected in ((absent, 'has no entry for'),
+                                 (drifted, 'candidate pair drift'),
+                                 (impossible, 'is not a candidate')):
+            with torch.no_grad(), self.assertRaisesRegex(ValueError, expected):
+                self.run_tokens(tokens, route_plan=broken)
+
     def test_03_numerical_backward_and_exact_update_support(self):
         self.model.apply_update_support('core+expert-set', experts=(0,))
         parameters = self.model.parameter_inventory()

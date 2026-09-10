@@ -105,6 +105,95 @@ class LocalSelection:
     segment_start: int
     history_cutoff: int
     history_digest: str
+    # Capture is opt-in and defaults to absent. The same selection call runs inside the measured
+    # optimizer step, whose phase decomposition is a bound observation, so measurement material is
+    # never allocated unless a caller asks for it.
+    candidates: tuple[int, int] | None = None
+    summary: torch.Tensor | None = None
+    keys_slice: torch.Tensor | None = None
+    prior_slice: torch.Tensor | None = None
+
+
+@dataclass(frozen=True)
+class GlobalObservation:
+    """One global selection, as measured, with its inputs on the host."""
+    document: int
+    epoch_start: int
+    experts: tuple[int, int]
+    log_prior: torch.Tensor
+    history_digest: str
+    keys_digest: str
+    prior_digest: str
+    selector_version: str
+
+
+@dataclass(frozen=True)
+class LocalObservation:
+    """One free local selection, with the exact inputs its two scores came from.
+
+    `margin` is signed in ascending candidate-ID order, so its SIGN carries which candidate won and
+    its magnitude carries how close the decision was. A backend that selects the other candidate
+    flips the sign, which is why the pair of signed margins -- not a pair of winners -- is what the
+    admissibility bound is written against.
+
+    Exactly zero is a tie, and it does occur on the fixed fixture. A tie is resolved by argmax over
+    ID-sorted candidates, so a zero margin means the LOWER candidate ID won. Reading the winner
+    from a strict `> 0` therefore names the wrong candidate at exactly the closest decisions there
+    are, which is where a routing comparison most needs to be right.
+    """
+    document: int
+    layer: int
+    segment_start: int
+    candidates: tuple[int, int]
+    chosen: int
+    logits: tuple[float, float]
+    margin: float
+    summary: torch.Tensor
+    keys_slice: torch.Tensor
+    prior_slice: torch.Tensor
+    history_digest: str
+
+    @property
+    def key(self):
+        return (self.document, self.layer, self.segment_start)
+
+
+def _host(value):
+    """Float32 on the host: the two backends' records must be comparable without a second copy."""
+    return value.detach().to(device='cpu', dtype=torch.float32).clone()
+
+
+def observe_local(selection, *, document, layer):
+    """Build the record for a captured selection; refuses an uncaptured one rather than guessing."""
+    if type(selection) is not LocalSelection:
+        raise ValueError("local selection required")
+    if selection.candidates is None or selection.summary is None:
+        raise ValueError("selection was not captured; call select_local(capture=True)")
+    logits = _host(selection.logits)
+    # One arithmetic, in double, over the two scores this record publishes. Subtracting in float32
+    # and widening afterwards gives a different number -- measured -3.2118711471557617 against
+    # -3.211871027946472 on the fixed fixture -- so a reader recomputing the margin from the
+    # published pair would disagree with the margin the admissibility bound was applied to. The
+    # two float32 scores are exact in double, so their double difference is exact as well.
+    scores = (float(logits[0]), float(logits[1]))
+    return LocalObservation(document=document, layer=layer, segment_start=selection.segment_start,
+                            candidates=selection.candidates, chosen=selection.expert,
+                            logits=scores,
+                            margin=scores[0] - scores[1],
+                            summary=_host(selection.summary),
+                            keys_slice=_host(selection.keys_slice),
+                            prior_slice=_host(selection.prior_slice),
+                            history_digest=selection.history_digest)
+
+
+def observe_global(selection, *, document):
+    if type(selection) is not GlobalSelection:
+        raise ValueError("global selection required")
+    return GlobalObservation(document=document, epoch_start=selection.epoch_start,
+                             experts=selection.experts, log_prior=_host(selection.log_prior),
+                             history_digest=selection.history_digest,
+                             keys_digest=selection.keys_digest, prior_digest=selection.prior_digest,
+                             selector_version=selection.selector_version)
 
 
 def select_global(embeddings, query_weight, keys, *, position, document_start, generation, request):
@@ -126,7 +215,7 @@ def select_global(embeddings, query_weight, keys, *, position, document_start, g
 
 
 def select_local(hidden, query_weight, keys, selection, *, position, document_start,
-                 generation, request, sparse_depth):
+                 generation, request, sparse_depth, capture=False):
     """Use ONLY the shared-path vector at segment_start-1, before its expert residual."""
     _inputs(hidden, query_weight, keys, generation, request)
     if type(selection) is not GlobalSelection:
@@ -158,7 +247,18 @@ def select_local(hidden, query_weight, keys, selection, *, position, document_st
     if type(selection.experts) is not tuple or selection.experts != expected or any(type(i) is not int for i in selection.experts):
         raise ValueError("invalid global expert identities for this prior")
     ids = tuple(sorted(selection.experts))
-    logits = _local_scores(summary, query_weight, keys[sparse_depth, list(ids)], selection.log_prior[list(ids)])
+    keys_slice = keys[sparse_depth, list(ids)]
+    prior_slice = selection.log_prior[list(ids)]
+    logits = _local_scores(summary, query_weight, keys_slice, prior_slice)
     _finite(logits, "local logits")
     chosen = ids[int(torch.argmax(logits))]
-    return LocalSelection(chosen, logits, segment_start, segment_start, _digest(visible))
+    if type(capture) is not bool:
+        raise ValueError("capture must be a bool")
+    if not capture:
+        return LocalSelection(chosen, logits, segment_start, segment_start, _digest(visible))
+    # Detached copies: the captured material is evidence, and evidence that keeps the autograd
+    # graph alive would both retain the forward and let a later backward change what was recorded.
+    return LocalSelection(chosen, logits, segment_start, segment_start, _digest(visible),
+                          candidates=ids, summary=summary.detach().clone(),
+                          keys_slice=keys_slice.detach().clone(),
+                          prior_slice=prior_slice.detach().clone())

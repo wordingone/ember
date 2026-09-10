@@ -4,6 +4,7 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 from collections import OrderedDict
 from contextlib import contextmanager
+import time
 import torch
 import torch.nn.functional as F
 from torch.autograd.function import once_differentiable
@@ -35,6 +36,12 @@ class ExpertCache:
         self.pending = 0
         self.leased = set()
         self.peak_resident_bundles = 0
+        # Dispatch accounting for the bound phase decomposition; never a performance claim.
+        self.lease_count = 0
+        self.miss_count = 0
+        self.eviction_count = 0
+        self.transfer_bytes = 0
+        self.transfer_seconds = 0.0
         self.step_id = 0
         self.owner_parameters = owner_parameters
         self.poisoned = False
@@ -102,23 +109,32 @@ class ExpertCache:
             raise ValueError('unknown global expert identity')
         if expert in self.leased:
             raise RuntimeError('reentrant expert lease')
+        self.lease_count += 1
         if expert not in self.entries:
+            self.miss_count += 1
+            started = time.perf_counter()
             if len(self.entries) == 2:
                 available = next((key for key in self.entries if key not in self.leased), None)
                 if available is None:
                     raise RuntimeError('two expert slots are already leased')
                 self.synchronize()
+                self.eviction_count += 1
                 del self.entries[available]
             copied = {}
             try:
                 for name, source in self.bank[expert].items():
                     copied[name] = source.detach().to(device=self.device, copy=True)
+                    self.transfer_bytes += source.numel() * source.element_size()
+                # Timed with the synchronize inside: an asynchronous copy whose cost is measured
+                # before it lands is not a measurement of the transfer.
                 self.synchronize()
                 self.entries[expert] = copied
             except BaseException:
                 self.synchronize()
                 copied.clear()
                 raise
+            finally:
+                self.transfer_seconds += time.perf_counter() - started
             self.peak_resident_bundles = max(self.peak_resident_bundles, len(self.entries))
         self.entries.move_to_end(expert)
         self.leased.add(expert)
