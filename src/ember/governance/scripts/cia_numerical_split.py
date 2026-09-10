@@ -65,7 +65,10 @@ class LocalComparison:
     cpu_margin: float
     cuda_margin: float
     shared_vector_absolute_l2: float
-    shared_vector_relative_l2: float
+    #: None where the cpu reference is the defined empty summary: a relative delta against a
+    #: zero reference is undefined, and publishing it as 0.0 would claim an agreement nothing
+    #: measured. Such a route is bounded by absolute equality instead.
+    shared_vector_relative_l2: float | None
     admissible: bool
     reason: str
 
@@ -124,21 +127,38 @@ def compare_local_routes(cpu_observations, cuda_observations):
         delta = cuda.summary - cpu.summary
         reference = float(cpu.summary.norm())
         absolute = _finite(float(delta.norm()), f"shared-vector delta at {key}")
-        if reference == 0.0:
-            raise NumericalSplitRefusal(
-                f"cpu shared vector at {key} has zero norm; the relative delta is undefined and may "
-                "not be reported as zero")
-        relative = _finite(absolute / reference, f"shared-vector relative delta at {key}")
+        # A zero reference is structural here, not incidental. `select_local` publishes the defined
+        # empty summary -- a zero vector -- at a document's FIRST segment, where there is no
+        # preceding shared-path vector to summarize. On the fixed fixture that is 12 of the 60
+        # routes, exactly (0, layer, 0) for each routing layer, and the remaining 48 norms run from
+        # 2.57 to 10.57, so the class has no borderline members.
+        #
+        # The relative delta is genuinely undefined there, and reporting it as 0.0 would claim an
+        # agreement nothing measured. Refusing the whole comparison was the other error: it made a
+        # fifth of the routes permanently uncomputable, so no run could pass this gate on any
+        # inputs. The way out is not a weaker bound but a stronger one -- both backends are obliged
+        # to produce the SAME defined empty summary, so their absolute delta must be exactly zero,
+        # and any nonzero value is a real disagreement about what an absent history means. That is
+        # a tighter condition than the relative bound it replaces, and the undefined relative is
+        # published as null so a reader can see which routes it covers.
+        relative = None
+        if reference != 0.0:
+            relative = _finite(absolute / reference, f"shared-vector relative delta at {key}")
         cpu_margin = _finite(cpu.margin, f"cpu margin at {key}")
         cuda_margin = _finite(cuda.margin, f"cuda margin at {key}")
         differs = cpu.chosen != cuda.chosen
         reason = ""
         admissible = True
-        if relative > SHARED_VECTOR_RELATIVE_L2_MAX:
+        if relative is None:
+            if absolute != 0.0:
+                admissible = False
+                reason = (f"cpu shared vector is the defined empty summary while the cuda absolute "
+                          f"delta is {absolute:.10g}; the backends disagree about an absent history")
+        elif relative > SHARED_VECTOR_RELATIVE_L2_MAX:
             admissible = False
             reason = (f"shared-vector relative L2 {relative:.10g} exceeds "
                       f"{SHARED_VECTOR_RELATIVE_L2_MAX}")
-        elif differs and abs(cuda_margin) > DIFFERING_CUDA_MARGIN_MAX:
+        if admissible and differs and abs(cuda_margin) > DIFFERING_CUDA_MARGIN_MAX:
             admissible = False
             reason = (f"differing selection with candidate CUDA margin {abs(cuda_margin):.10g} "
                       f"exceeding {DIFFERING_CUDA_MARGIN_MAX}")
@@ -156,11 +176,22 @@ def local_route_report(comparisons):
             "differing_routes": sum(1 for row in comparisons if row.differs),
             "inadmissible_routes": sum(1 for row in comparisons if not row.admissible),
             "max_shared_vector_relative_l2": max((row.shared_vector_relative_l2
-                                                  for row in comparisons), default=None),
+                                                  for row in comparisons
+                                                  if row.shared_vector_relative_l2 is not None),
+                                                 default=None),
+            # Published so the maximum above cannot be read as covering every route: these are the
+            # routes whose reference is the defined empty summary, bounded by absolute equality.
+            "undefined_relative_routes": sum(1 for row in comparisons
+                                             if row.shared_vector_relative_l2 is None),
+            "max_zero_reference_absolute_l2": max((row.shared_vector_absolute_l2
+                                                   for row in comparisons
+                                                   if row.shared_vector_relative_l2 is None),
+                                                  default=None),
             "max_differing_cuda_margin": max((abs(row.cuda_margin) for row in comparisons
                                               if row.differs), default=None),
             "bounds": {"differing_cuda_margin_max": DIFFERING_CUDA_MARGIN_MAX,
-                       "shared_vector_relative_l2_max": SHARED_VECTOR_RELATIVE_L2_MAX},
+                       "shared_vector_relative_l2_max": SHARED_VECTOR_RELATIVE_L2_MAX,
+                       "zero_reference_absolute_l2_max": 0.0},
             "routes": [row.as_row() for row in comparisons]}
 
 
