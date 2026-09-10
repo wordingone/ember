@@ -111,7 +111,7 @@ def _tool_root(repo_root: Path) -> Path:
 def _production_module_path(repo_root: Path, name: str) -> Path:
     root = Path(repo_root).resolve(strict=True)
     canonical = {
-        "model": root / "src" / "ember" / "model" / "model.py",
+        "model": root / "src" / "ember" / "model" / "ember_v0_model.py",
         "pretrain": root / "src" / "ember" / "training" / "pretrain.py",
         "cbase_heldout_eval": root / "src" / "ember" / "evaluation" / "cbase_heldout_eval.py",
         "infer": root / "src" / "ember" / "runtime" / "infer.py",
