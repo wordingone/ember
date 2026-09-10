@@ -8,17 +8,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 EDITABLE_INSTALL = "python -m pip install --editable ."
+PYTEST_INVOCATION = "python -B -m pytest -q --import-mode=importlib"
+# One step per suite, in execution order. The step id is what the aggregate reads, so a
+# renamed step silently drops that suite from the failure aggregation unless both move.
+SUITE_STEPS = (
+    ("suite-scripts-tests", "scripts/tests"),
+    ("suite-governance-tests", "src/ember/governance/scripts/tests"),
+    ("suite-tests", "tests"),
+)
 
 
 def test_nightly_installs_checkout_once_before_collection_and_suites() -> None:
     nightly = (WORKFLOWS / "ci-nightly.yml").read_text(encoding="utf-8", errors="strict")
     dependency = 'python -m pip install "tokenizers==0.22.2" "huggingface_hub==1.22.0"'
     collection = "python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380"
-    suites = "python -B -m pytest -q --import-mode=importlib scripts/tests"
 
     assert nightly.count(EDITABLE_INSTALL) == 1
     assert nightly.index(dependency) < nightly.index(EDITABLE_INSTALL)
-    assert nightly.index(EDITABLE_INSTALL) < nightly.index(collection) < nightly.index(suites)
+    assert nightly.index(EDITABLE_INSTALL) < nightly.index(collection) < nightly.index(PYTEST_INVOCATION)
 
 
 def test_nightly_matches_main_and_pr_checkout_bootstrap() -> None:
@@ -27,24 +34,68 @@ def test_nightly_matches_main_and_pr_checkout_bootstrap() -> None:
         assert workflow.count(EDITABLE_INSTALL) == 1, workflow_name
 
 
-def _nightly_suite_commands():
-    import shlex
+def _extended_audit():
     import yaml
 
     nightly = yaml.safe_load((WORKFLOWS / "ci-nightly.yml").read_text(encoding="utf-8"))
-    steps = nightly["jobs"]["extended-audit"]["steps"]
-    suites = [step for step in steps if step.get("name") == "Extended CPU-safe suites"]
-    assert len(suites) == 1
-    return [shlex.split(line) for line in suites[0]["run"].splitlines() if line.strip()]
+    return nightly["jobs"]["extended-audit"]
 
 
-def test_nightly_executes_all_complete_suites_and_aggregates_failures() -> None:
-    expected = [["status=0"]]
-    for suite in ("scripts/tests", "src/ember/governance/scripts/tests", "tests"):
-        expected.append(["python", "-B", "-m", "pytest", "-q", "--import-mode=importlib",
-                         suite, "||", "status=1"])
-    expected.append(["exit", "${status}"])
-    assert _nightly_suite_commands() == expected
+def _suite_steps():
+    steps = {step.get("id"): step for step in _extended_audit()["steps"]}
+    return [steps[step_id] for step_id, _ in SUITE_STEPS]
+
+
+def _nightly_suite_commands():
+    import shlex
+
+    return [shlex.split(step["run"].strip()) for step in _suite_steps()]
+
+
+def test_nightly_executes_all_complete_suites() -> None:
+    commands = _nightly_suite_commands()
+    assert [command[-1] for command in commands] == [suite for _, suite in SUITE_STEPS]
+    for command in commands:
+        assert command[: len(PYTEST_INVOCATION.split())] == PYTEST_INVOCATION.split()
+        # Near-misses are what become the next stall, so they have to be visible before then.
+        assert "--durations=25" in command
+
+
+def test_nightly_gives_each_suite_a_bound_it_can_report_inside() -> None:
+    """A stall must name a test, not cancel the job.
+
+    Before this shape the three suites shared one step and one 90-minute job limit, so a suite
+    that stopped advancing took the whole job's cancellation with it: no terminal counts for any
+    suite, and nothing naming the test that stopped (#2211).
+    """
+    audit = _extended_audit()
+    budget = 0
+    for (step_id, suite), step in zip(SUITE_STEPS, _suite_steps()):
+        assert step["continue-on-error"] is True, step_id
+        limit_minutes = step["timeout-minutes"]
+        budget += limit_minutes
+        option = next(part for part in step["run"].split()
+                      if part.startswith("faulthandler_timeout="))
+        # The dump has to fire before the step is cancelled, or the hang stays anonymous.
+        assert int(option.split("=", 1)[1]) < limit_minutes * 60, suite
+    # ...and every step's own bound has to fit inside the job's, or the last suite is cancelled
+    # by the job limit exactly as it was before.
+    assert budget < audit["timeout-minutes"]
+
+
+def test_nightly_aggregates_every_suite_outcome() -> None:
+    steps = _extended_audit()["steps"]
+    order = [step.get("id") for step in steps]
+    aggregate = steps[order.index("aggregate-suites")]
+
+    assert aggregate["if"] == "always()"
+    # The aggregate is the job's verdict: it may not excuse itself from failing the run.
+    assert "continue-on-error" not in aggregate
+    for step_id, _ in SUITE_STEPS:
+        assert f"steps.{step_id}.outcome" in aggregate["run"], step_id
+        # Outcomes are unset until their step has run.
+        assert order.index(step_id) < order.index("aggregate-suites"), step_id
+    assert "exit 1" in aggregate["run"]
 
 
 def _collect_fixture_modules(tmp_path, monkeypatch, arguments):
@@ -95,10 +146,10 @@ def test_nightly_mode_collects_distinct_same_basename_modules(tmp_path, monkeypa
         expected.add((module.resolve(), marker))
 
     # Consume the actual nightly test command's options with only its suite replaced.
-    command = _nightly_suite_commands()[-2]
-    assert command[-3:] == ["tests", "||", "status=1"]
+    command = _nightly_suite_commands()[-1]
+    assert command[-1] == "tests"
     collected = _collect_fixture_modules(tmp_path, monkeypatch,
-                                         [*command[4:-3], str(tmp_path)])
+                                         [*command[4:-1], str(tmp_path)])
     assert len(collected.observed) == 2
     assert set(collected.observed) == expected
     assert len(set(collected.names)) == 2

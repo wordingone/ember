@@ -20,7 +20,10 @@ concurrency:
 jobs:
   extended-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # 180, not 90: the three suites now carry their own bounds (15 + 40 + 90 = 145) and the
+    # job limit has to sit above their sum plus setup, or the last suite is cancelled by the
+    # job exactly as it was before this change (#2211).
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -40,16 +43,55 @@ jobs:
       # derive the nightly's non-CUDA install set from the manifest instead.
       - name: Guard complete scripts/tests collection
         run: python -B src/ember/governance/scripts/check_scripts_tests_collection.py --minimum 380
-      # No -x, and no `set -e` abort between the three suites: a nightly exists to report
-      # everything that is broken in one pass. Fail-fast turned each night into a
-      # single-failure telescope and hid the rest until the next run (#1390).
-      - name: Extended CPU-safe suites
+      # One step per suite, each with its own bound. The single combined step could only fail
+      # one way once any suite stopped advancing: the JOB hit its limit and was cancelled, so
+      # no suite reported terminal counts and the quiet output never named the test that
+      # stopped. Three things make a stall self-describing now:
+      #   continue-on-error   every suite executes even after an earlier one fails, which is
+      #                       what the old `|| status=1` bought and what the aggregate keeps;
+      #   timeout-minutes     a stalled suite loses its own step, not the whole job, so the
+      #                       suites after it still report;
+      #   faulthandler_timeout  pytest dumps all-thread tracebacks and aborts when a single
+      #                       test exceeds the bound, so a hang arrives as a NAMED test rather
+      #                       than as a cancellation. Each bound sits below its step's limit,
+      #                       or the step is cancelled before the dump can fire.
+      # --durations=25 makes the near-misses visible before they become the next stall.
+      # Still no -x and no `set -e`: a nightly exists to report everything broken in one pass
+      # (#1390).
+      - name: Extended CPU-safe suite scripts/tests
+        id: suite-scripts-tests
+        continue-on-error: true
+        timeout-minutes: 15
+        run: python -B -m pytest -q --import-mode=importlib -o faulthandler_timeout=600 --durations=25 scripts/tests
+      - name: Extended CPU-safe suite src/ember/governance/scripts/tests
+        id: suite-governance-tests
+        continue-on-error: true
+        timeout-minutes: 40
+        run: python -B -m pytest -q --import-mode=importlib -o faulthandler_timeout=900 --durations=25 src/ember/governance/scripts/tests
+      - name: Extended CPU-safe suite tests
+        id: suite-tests
+        continue-on-error: true
+        timeout-minutes: 90
+        run: python -B -m pytest -q --import-mode=importlib -o faulthandler_timeout=1200 --durations=25 tests
+      - name: Aggregate suite outcomes
+        id: aggregate-suites
+        if: always()
         run: |
-          status=0
-          python -B -m pytest -q --import-mode=importlib scripts/tests || status=1
-          python -B -m pytest -q --import-mode=importlib src/ember/governance/scripts/tests || status=1
-          python -B -m pytest -q --import-mode=importlib tests || status=1
-          exit "${status}"
+          failed=""
+          for entry in "scripts/tests=${{ steps.suite-scripts-tests.outcome }}" \
+                       "src/ember/governance/scripts/tests=${{ steps.suite-governance-tests.outcome }}" \
+                       "tests=${{ steps.suite-tests.outcome }}"; do
+            suite="${entry%%=*}"
+            outcome="${entry#*=}"
+            echo "${suite}: ${outcome}"
+            if [ "${outcome}" != "success" ]; then
+              failed="${failed} ${suite}"
+            fi
+          done
+          if [ -n "${failed}" ]; then
+            echo "suites not reporting success:${failed}"
+            exit 1
+          fi
       - name: Explain scheduled boundary
         if: always()
         run: echo "Nightly failure is an actionable diagnostic, not a claim that recent work is worthless."
