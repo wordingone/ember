@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Bounds and refusals of revision CIA3-R1-N61-numerical-split-v1, on fixed tensors.
+"""Bounds and refusals of revision CIA3-R1-N62-numerical-split-v2, on fixed tensors.
 
 These are mechanics tests. They establish that each prospectively fixed bound actually refuses when
 it is crossed, and that the comparison cannot silently pass on absent evidence. They are not a
@@ -23,7 +23,7 @@ from ember.governance.scripts.cia_numerical_split import (
     DIFFERING_CUDA_MARGIN_MAX, LOCAL_ROUTES, NumericalSplitRefusal,
     SELECTOR_SCORE_ABSOLUTE_MAX, SHARED_VECTOR_RELATIVE_L2_MAX, compare_global_selections,
     compare_local_routes, cross_evaluate_selector, digest_of, local_route_report,
-    refuse_if_inadmissible, route_plan)
+    predict_downstream_attributable, refuse_if_inadmissible, route_plan)
 from ember.model.ember_v0_decoder import CIADecoder
 from ember.model.ember_v0_routing import GlobalObservation, LocalObservation
 
@@ -334,6 +334,78 @@ class FixedRoutePlan(unittest.TestCase):
     def test_planned_expert_outside_the_candidate_pair_is_refused(self):
         with self.assertRaisesRegex(ValueError, "is not a candidate"):
             CIADecoder._planned_expert({(0, 1, 0): ((3, 9), 4)}, (0, 1, 0), (3, 9))
+
+
+class DownstreamAttribution(unittest.TestCase):
+    """The N62 leg: a site downstream of an ADMITTED differing selection is not measuring noise.
+
+    The governed run this leg exists for is reproduced exactly in shape: one admitted near-tie at
+    (0, 21, 768), and one large shared-vector divergence at (0, 23, 1024) -- the single site whose
+    source position, 1023, lies inside segment 768, at the single routed layer after 21.
+    """
+
+    def _run(self, *, divergence, differing_margin=DIFFERING_CUDA_MARGIN_MAX / 2,
+             differing_key=(0, 21, 768), diverging_key=(0, 23, 1024)):
+        base = torch.ones(8)
+        moved = base.clone()
+        moved[0] += divergence * float(base.norm())
+        cpu = full_set({differing_key: {"chosen": 0, "margin": differing_margin},
+                        diverging_key: {"summary": base}})
+        cuda = full_set({differing_key: {"chosen": 1, "margin": -differing_margin},
+                         diverging_key: {"summary": moved}})
+        return compare_local_routes(cpu, cuda)
+
+    def test_the_predictor_names_exactly_the_site_the_structure_implies(self):
+        keys = {(0, layer, start) for layer in range(1, 24, 2) for start in range(0, 1280, 256)}
+        self.assertEqual(predict_downstream_attributable(keys, {(0, 21, 768)}), {(0, 23, 1024)})
+
+    def test_the_predictor_reads_no_magnitude_so_an_empty_differing_set_exempts_nothing(self):
+        keys = {(0, layer, start) for layer in range(1, 24, 2) for start in range(0, 1280, 256)}
+        self.assertEqual(predict_downstream_attributable(keys, set()), set())
+
+    def test_a_differing_selection_never_exempts_its_own_or_an_earlier_layer(self):
+        keys = {(0, layer, start) for layer in range(1, 24, 2) for start in range(0, 1280, 256)}
+        self.assertEqual(predict_downstream_attributable(keys, {(0, 23, 768)}), set())
+
+    def test_downstream_divergence_beyond_the_bound_is_exempt_and_says_why(self):
+        comparisons = self._run(divergence=SHARED_VECTOR_RELATIVE_L2_MAX * 8)
+        row = next(item for item in comparisons if item.key == (0, 23, 1024))
+        self.assertGreater(row.shared_vector_relative_l2, SHARED_VECTOR_RELATIVE_L2_MAX)
+        self.assertTrue(row.downstream_attributable)
+        self.assertTrue(row.admissible)
+        self.assertIn("exempt", row.reason)
+        refuse_if_inadmissible(comparisons)
+
+    def test_the_gating_maximum_excludes_the_exempt_site_and_is_reported_separately(self):
+        comparisons = self._run(divergence=SHARED_VECTOR_RELATIVE_L2_MAX * 8)
+        report = local_route_report(comparisons)
+        self.assertLessEqual(report["max_shared_vector_relative_l2"],
+                             SHARED_VECTOR_RELATIVE_L2_MAX)
+        self.assertEqual(report["downstream_attributable_routes"], 1)
+        self.assertGreater(report["max_downstream_attributable_relative_l2"],
+                           SHARED_VECTOR_RELATIVE_L2_MAX)
+        self.assertEqual(report["admitted_differing_routes"], [[0, 21, 768]])
+
+    def test_an_unattributable_site_beyond_the_bound_still_refuses(self):
+        # The deliberate red for this leg. Same magnitude, at a site no admitted divergence reaches.
+        comparisons = self._run(divergence=SHARED_VECTOR_RELATIVE_L2_MAX * 8,
+                                diverging_key=(0, 23, 512))
+        row = next(item for item in comparisons if item.key == (0, 23, 512))
+        self.assertFalse(row.downstream_attributable)
+        self.assertFalse(row.admissible)
+        with self.assertRaisesRegex(NumericalSplitRefusal, "shared-vector relative L2"):
+            refuse_if_inadmissible(comparisons)
+
+    def test_a_differing_selection_outside_its_own_band_confers_no_exemption(self):
+        # An inadmissible disagreement must not also buy an exemption for what it contaminated:
+        # the run fails on the disagreement AND on the divergence it caused.
+        comparisons = self._run(divergence=SHARED_VECTOR_RELATIVE_L2_MAX * 8,
+                                differing_margin=DIFFERING_CUDA_MARGIN_MAX * 10)
+        downstream = next(item for item in comparisons if item.key == (0, 23, 1024))
+        self.assertFalse(downstream.downstream_attributable)
+        self.assertFalse(downstream.admissible)
+        self.assertFalse(next(item for item in comparisons
+                              if item.key == (0, 21, 768)).admissible)
 
 
 if __name__ == "__main__":
