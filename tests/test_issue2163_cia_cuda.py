@@ -1,7 +1,26 @@
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-"""Opt-in full-population CUDA conformance, never trained capability or throughput."""
+"""Opt-in full-population CUDA conformance, never trained capability or throughput.
+
+Revision CIA3-R1-N61-numerical-split-v1. The preceding revision asserted exact free-route equality
+across backends and failed on one of 60 selections, which told us the winners differed and nothing
+about why. This revision separates the three questions that failure fused together:
+
+  1. MEASURED FREE ROUTING -- both backends select freely, and every corresponding selection is
+     compared on its shared vector, its candidate pair, and its two signed scores.
+  2. SELECTOR ISOLATION -- every recorded selector input is evaluated on both backends. Identical
+     inputs must give identical candidate and winner identities. Agreement here while the free runs
+     disagree places the divergence upstream of the selector.
+  3. FIXED-PLAN CONSUMPTION -- CUDA consumes the complete CPU route plan, so the logit and gradient
+     comparisons are made on one plan rather than on two. Exact route equality in that computation
+     establishes consumption of the control only; it can never substitute for step 1.
+
+Then two optimizer updates: an excluded warmup at learning rate 0.0 that allocates the moments and
+must leave every selected parameter's bytes untouched, and one measured update at 0.001 that must
+allocate no new optimizer state. Zero applied-training, admitted-token, throughput, paging,
+recovery, checkpoint or qualification credit is claimed by any of it.
+"""
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
@@ -12,7 +31,12 @@ import time
 import unittest
 import torch
 from ember.model.ember_v0_decoder import CIADecoder
+from ember.model.ember_v0_routing import GlobalObservation, LocalObservation, _local_scores
 from ember.governance.scripts.cia_conformance import fixed_input_values, require_current_dispatch
+from ember.governance.scripts.cia_numerical_split import (
+    FIXED_PLAN_LOGIT_ATOL, FIXED_PLAN_LOGIT_RTOL, GRADIENT_RELATIVE_L2_MAX, LOCAL_ROUTES, REVISION,
+    compare_global_selections, compare_local_routes, cross_evaluate_selector, digest_of,
+    local_route_report, refuse_if_inadmissible, route_plan)
 
 LIVE = '--live' in sys.argv
 if LIVE:
@@ -21,10 +45,47 @@ REQUESTED = os.environ.get('EMBER_CIA_CUDA_CONFORMANCE') == '1'
 if REQUESTED and (not LIVE or os.environ.get('EMBER_GATE_AUTHORIZED') != '1'):
     raise RuntimeError('full CUDA conformance requires --live and existing launch authorization')
 
+WARMUP_LEARNING_RATE = 0.0
+MEASURED_LEARNING_RATE = 0.001
+GRADIENT_NAMES = ('layers.0.attention.q.weight', 'router.global_query.weight',
+                  'router.local_query.weight')
+
+
+class Collector:
+    """Accumulates what the selector computed, separated by kind."""
+
+    def __init__(self):
+        self.local = []
+        self.globals = []
+
+    def __call__(self, observation):
+        if type(observation) is LocalObservation:
+            self.local.append(observation)
+        elif type(observation) is GlobalObservation:
+            self.globals.append(observation)
+        else:
+            raise ValueError(f'unexpected observation type {type(observation)!r}')
+
+
+def optimizer_state_identity(optimizer, parameters):
+    """Which state tensors exist and where they live.
+
+    Both halves matter. A new key means state was allocated; a moved data pointer means the state
+    was reallocated under the same key, which is the same failure wearing the old name.
+    """
+    identity = {}
+    for name, parameter in parameters.items():
+        state = optimizer.state.get(parameter)
+        if not state:
+            continue
+        identity[name] = {key: (tuple(value.shape), value.data_ptr())
+                          for key, value in state.items() if torch.is_tensor(value)}
+    return identity
+
 
 @unittest.skipUnless(REQUESTED, 'requires owned full-population CUDA resource window')
 class FullPopulationCUDA(unittest.TestCase):
-    def test_full_population_forward_backward_and_update(self):
+    def test_free_route_measurement_selector_isolation_and_fixed_plan_update(self):
         binding = json.loads(Path(os.environ["EMBER_CIA_SUBJECT_BINDING"]).read_text(encoding="utf-8"))
         require_current_dispatch(Path(__file__).resolve().parents[1], binding)
         torch.set_num_threads(1)
@@ -38,7 +99,8 @@ class FullPopulationCUDA(unittest.TestCase):
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         started = time.perf_counter()
-        print('CIA_CUDA_PHASE', {'phase': 'materialize_cpu', 'elapsed_seconds': 0}, flush=True)
+        print('CIA_CUDA_PHASE', {'revision': REVISION, 'phase': 'materialize_cpu',
+                                 'elapsed_seconds': 0}, flush=True)
         config_path = Path(__file__).resolve().parents[1] / "configs/ember-cia-3b.json"
         architecture_config = json.loads(config_path.read_text(encoding="utf-8"))
         model = CIADecoder(architecture_config=architecture_config).materialize_cpu(seed=2163)
@@ -46,17 +108,21 @@ class FullPopulationCUDA(unittest.TestCase):
         self.assertEqual(sum(value.numel() for value in parameters.values()), 3082539008)
         print('CIA_CUDA_PHASE', {'phase': 'cpu_reference', 'unique_parameters': 3082539008,
               'elapsed_seconds': time.perf_counter() - started}, flush=True)
+
+        # ---- 1. CPU reference: free routing, observed --------------------------------------
         token_values, position_values = fixed_input_values()
         tokens = torch.tensor(token_values, dtype=torch.long)
         positions = torch.tensor(position_values, dtype=torch.long)
-        cpu_logits, cpu_routes = model(model.embed_text(tokens), positions, return_routes=True)
+        cpu_observed = Collector()
+        cpu_logits, cpu_routes = model(model.embed_text(tokens), positions, return_routes=True,
+                                       route_observer=cpu_observed)
+        self.assertEqual(len(cpu_observed.local), LOCAL_ROUTES)
         experts = tuple(sorted({row[-1] for row in cpu_routes}))
         self.assertGreater(len(experts), 2, 'fixture must exercise eviction beyond two global experts')
         loss = cpu_logits[:, :64].float().square().mean()
         loss.backward()
         last_layer_expert = next(row[-1] for row in reversed(cpu_routes) if row[1] == 23)
-        names = ('layers.0.attention.q.weight', 'router.global_query.weight',
-                 'router.local_query.weight', f'experts.{last_layer_expert}.layers.23.up.weight')
+        names = GRADIENT_NAMES + (f'experts.{last_layer_expert}.layers.23.up.weight',)
         reference_gradients = {}
         for name in names:
             self.assertIsNotNone(parameters[name].grad, name)
@@ -64,57 +130,188 @@ class FullPopulationCUDA(unittest.TestCase):
             self.assertGreater(float(parameters[name].grad.float().abs().sum()), 0, name)
             reference_gradients[name] = parameters[name].grad.detach().clone()
         reference_logits = cpu_logits.detach()
+        # The host copy of the selector projection has to be taken BEFORE the model moves, because
+        # cross-evaluating a CUDA-recorded input on CPU needs a CPU parameter to evaluate it with,
+        # and after activation there is no longer one.
+        host_selector_projection = parameters['router.local_query.weight'].detach().cpu().clone()
         del loss, cpu_logits
         for value in parameters.values():
             value.grad = None
         print('CIA_CUDA_PHASE', {'phase': 'activate_cuda', 'visited_experts': experts,
+              'observed_local_routes': len(cpu_observed.local),
+              'observed_global_selections': len(cpu_observed.globals),
               'elapsed_seconds': time.perf_counter() - started}, flush=True)
         model.activate_cuda(device)
+        parameters = model.parameter_inventory()
         tokens = tokens.to(device)
         positions = positions.to(device)
         torch.cuda.reset_peak_memory_stats(device)
+
+        # ---- 2. CUDA free routing, measured against the CPU reference ----------------------
+        cuda_observed = Collector()
         with model.candidate_step():
-            logits, routes = model(model.embed_text(tokens), positions, return_routes=True)
-            self.assertEqual(routes, cpu_routes)
-            torch.testing.assert_close(logits.detach().cpu(), reference_logits, rtol=0.05, atol=0.05)
-            logits[:, :64].float().square().mean().backward()
+            free_logits, free_routes = model(model.embed_text(tokens), positions,
+                                             return_routes=True, route_observer=cuda_observed)
+        free_logits = free_logits.detach().cpu()
+        self.assertEqual(len(cuda_observed.local), LOCAL_ROUTES)
+        global_rows = compare_global_selections(cpu_observed.globals, cuda_observed.globals)
+        comparisons = compare_local_routes(cpu_observed.local, cuda_observed.local)
+        report = local_route_report(comparisons)
+        report['global_selections'] = list(global_rows)
+        report['free_logit_max_absolute_delta'] = float(
+            (free_logits.float() - reference_logits.float()).abs().max())
+        # Reported BEFORE the admissibility refusal, so a failing run publishes its measurement
+        # instead of only its verdict. A refused run whose numbers never reached the log is a run
+        # that has to be spent again to learn anything.
+        print('CIA_FREE_ROUTE_MEASUREMENT', json.dumps(report), flush=True)
+        refuse_if_inadmissible(comparisons)
+
+        # ---- 3. Selector isolation on identical inputs -------------------------------------
+        cross = cross_evaluate_selector(
+            tuple(cpu_observed.local) + tuple(cuda_observed.local),
+            {'cpu': host_selector_projection, 'cuda': parameters['router.local_query.weight']},
+            _local_scores)
+        print('CIA_SELECTOR_CROSS_EVALUATION', json.dumps(
+            {key: value for key, value in cross.items() if key != 'evaluations'}), flush=True)
+
+        # ---- 4. Fixed-plan CUDA computation ------------------------------------------------
+        plan = route_plan(cpu_observed.local)
+        with model.candidate_step():
+            planned_logits, planned_routes = model(model.embed_text(tokens), positions,
+                                                   return_routes=True, route_plan=plan)
+            # Equality here is consumption of the control, never a free-route result: the winners
+            # came from the plan. The free comparison above is the only routing measurement.
+            self.assertEqual(planned_routes, cpu_routes)
+            torch.testing.assert_close(planned_logits.detach().cpu(), reference_logits,
+                                       rtol=FIXED_PLAN_LOGIT_RTOL, atol=FIXED_PLAN_LOGIT_ATOL)
+            planned_logits[:, :64].float().square().mean().backward()
+        gradient_rows = {}
         for name, expected in reference_gradients.items():
             actual = parameters[name].grad.cpu()
             self.assertTrue(torch.isfinite(actual).all(), name)
             self.assertGreater(float(actual.float().abs().sum()), 0, name)
-            relative_error = (actual.float() - expected.float()).norm() / expected.float().norm()
-            self.assertLess(float(relative_error), 0.1, name)
+            relative_error = float((actual.float() - expected.float()).norm() / expected.float().norm())
+            gradient_rows[name] = relative_error
+            self.assertLess(relative_error, GRADIENT_RELATIVE_L2_MAX, name)
         self.assertLessEqual(model._cuda_execution.cache.peak_resident_bundles, 2)
         self.assertEqual(model._cuda_execution.cache.resident_count, 0)
-        print('CIA_CUDA_PHASE', {'phase': 'forward_backward_conforms',
-              'elapsed_seconds': time.perf_counter() - started}, flush=True)
-        del logits, reference_logits, reference_gradients
-        # A subsequent explicit support changes actual parameters. No production
-        # optimizer choice or full checkpoint/clock-recovery claim is made here.
+        print('CIA_FIXED_PLAN', json.dumps({'plan_entries': len(plan),
+              'gradient_relative_l2': gradient_rows, 'bound': GRADIENT_RELATIVE_L2_MAX,
+              'elapsed_seconds': time.perf_counter() - started}), flush=True)
+        del planned_logits, free_logits, reference_logits, reference_gradients
+
+        # ---- 5. Excluded warmup, then one measured update ----------------------------------
         selected = model.apply_update_support('core+expert-set', experts=experts)
-        optimizer = torch.optim.AdamW(selected, lr=1e-3, foreach=False)
+        optimizer = torch.optim.AdamW(selected, lr=WARMUP_LEARNING_RATE, foreach=False)
+        selected_names = {name for name, value in parameters.items() if value.requires_grad}
+        before_warmup = {name: digest_of(parameters[name]) for name in selected_names}
+        optimizer.zero_grad(set_to_none=True)
+        with model.candidate_step():
+            model(model.embed_text(tokens), positions,
+                  route_plan=plan)[:, :64].float().square().mean().backward()
+        warmup_gradients_finite = all(
+            parameters[name].grad is None or bool(torch.isfinite(parameters[name].grad).all())
+            for name in selected_names)
+        self.assertTrue(warmup_gradients_finite, 'warmup produced a nonfinite gradient')
+        optimizer.step()
+        torch.cuda.synchronize(device)
+        after_warmup = {name: digest_of(parameters[name]) for name in selected_names}
+        # A complete byte comparison over every selected parameter, not a sample: the warmup exists
+        # to allocate moments and clocks, and any byte it moved would change the inputs that define
+        # the plan the measured step is about to consume.
+        moved = sorted(name for name in selected_names if before_warmup[name] != after_warmup[name])
+        self.assertEqual(moved, [], 'the excluded warmup changed model inputs')
+        warmed_state = optimizer_state_identity(optimizer, parameters)
+        self.assertTrue(warmed_state, 'warmup allocated no optimizer state')
+
+        for group in optimizer.param_groups:
+            group['lr'] = MEASURED_LEARNING_RATE
         changed_name = 'layers.0.attention.q.weight'
         old = parameters[changed_name].detach().cpu().clone()
         inactive = next(expert for expert in range(25) if expert not in experts)
         inactive_name = f'experts.{inactive}.layers.1.up.weight'
         untouched = parameters[inactive_name].detach().clone()
+        cache = model._cuda_execution.cache
+        dispatch_before = (cache.transfer_seconds, cache.transfer_bytes, cache.lease_count,
+                           cache.miss_count, cache.eviction_count)
+
+        reset_started = time.perf_counter()
         optimizer.zero_grad(set_to_none=True)
+        reset_seconds = time.perf_counter() - reset_started
         update_started = time.perf_counter()
         with model.candidate_step():
-            logits = model(model.embed_text(tokens), positions)
-            logits[:, :64].float().square().mean().backward()
+            data_started = time.perf_counter()
+            embedded = model.embed_text(tokens)
+            torch.cuda.synchronize(device)
+            data_seconds = time.perf_counter() - data_started
+            forward_started = time.perf_counter()
+            measured_logits = model(embedded, positions, route_plan=plan)
+            objective = measured_logits[:, :64].float().square().mean()
+            torch.cuda.synchronize(device)
+            forward_seconds = time.perf_counter() - forward_started
+            backward_started = time.perf_counter()
+            objective.backward()
+            torch.cuda.synchronize(device)
+            backward_seconds = time.perf_counter() - backward_started
+        optimizer_started = time.perf_counter()
         optimizer.step()
         torch.cuda.synchronize(device)
+        optimizer_seconds = time.perf_counter() - optimizer_started
+        complete_step_seconds = time.perf_counter() - update_started
+
+        accounting_started = time.perf_counter()
         self.assertFalse(torch.equal(parameters[changed_name].detach().cpu(), old))
         self.assertTrue(torch.equal(parameters[inactive_name], untouched))
         self.assertIsNone(parameters[inactive_name].grad)
+        measured_state = optimizer_state_identity(optimizer, parameters)
+        # Warmed support: the measured update reuses the warmup's moments. A new key, or the same
+        # key at a new address, is a reallocation and fails the condition.
+        self.assertEqual(measured_state, warmed_state, 'the measured update allocated optimizer state')
+        accounting_seconds = time.perf_counter() - accounting_started
+
+        dispatch_after = (cache.transfer_seconds, cache.transfer_bytes, cache.lease_count,
+                          cache.miss_count, cache.eviction_count)
+        routing_dispatch_seconds = dispatch_after[0] - dispatch_before[0]
+        assigned = (data_seconds + forward_seconds + backward_seconds + optimizer_seconds)
         peak = torch.cuda.max_memory_allocated(device)
         self.assertLessEqual(peak, limit)
-        print('CIA_CUDA_CONFORMANCE', {'unique_parameters': 3082539008, 'visited_experts': experts,
-              'memory_scope': 'PyTorch allocator only; external total-device supervision required',
-              'gpu_peak_allocated_bytes': peak, 'gpu_peak_reserved_bytes': torch.cuda.max_memory_reserved(device),
-              'gpu_limit_bytes': limit, 'complete_update_seconds': time.perf_counter() - update_started,
-              'total_seconds': time.perf_counter() - started, 'claim': 'fixed-data correctness and update mechanics only'}, flush=True)
+        trainable = sum(value.numel() for value in parameters.values() if value.requires_grad)
+        print('CIA_MEASURED_UPDATE', json.dumps({
+            'revision': REVISION,
+            'learning_rates': {'warmup': WARMUP_LEARNING_RATE, 'measured': MEASURED_LEARNING_RATE},
+            'complete_step_seconds': complete_step_seconds,
+            'data_seconds': data_seconds, 'exclusive_forward_seconds': forward_seconds,
+            'backward_seconds': backward_seconds, 'optimizer_seconds': optimizer_seconds,
+            'gradient_reset_seconds': reset_seconds, 'accounting_seconds': accounting_seconds,
+            'routing_dispatch_seconds': routing_dispatch_seconds,
+            'routing_dispatch_included_in': 'exclusive_forward_seconds',
+            'unassigned_residual_seconds': complete_step_seconds - assigned,
+            'host_to_device_bytes': dispatch_after[1] - dispatch_before[1],
+            'expert_leases': dispatch_after[2] - dispatch_before[2],
+            'expert_bundle_fetches': dispatch_after[3] - dispatch_before[3],
+            'expert_evictions': dispatch_after[4] - dispatch_before[4],
+            'synchronization_observer_cost': 'included in every phase above',
+            'checkpoint': 'omitted; this unit writes no checkpoint and claims no recovery',
+            'sequence_length': len(token_values), 'microbatch': 1,
+            'allocated_parameters': 3082539008, 'trainable_parameters': trainable,
+            'active_experts': list(experts),
+            'numerical_positions_per_second': len(token_values) / complete_step_seconds,
+            'gpu_peak_allocated_bytes': peak,
+            'gpu_peak_reserved_bytes': torch.cuda.max_memory_reserved(device),
+            'gpu_limit_bytes': limit, 'memory_scope':
+                'PyTorch allocator only; external total-device supervision required',
+            'total_seconds': time.perf_counter() - started,
+            'claim': 'fixed-data numerical control and update mechanics only; '
+                     'zero admitted-training, throughput or qualification credit'}), flush=True)
+        print('CIA_CUDA_CONFORMANCE', json.dumps({
+            'revision': REVISION, 'unique_parameters': 3082539008,
+            'local_routes_measured_per_backend': LOCAL_ROUTES,
+            'differing_free_routes': report['differing_routes'],
+            'max_shared_vector_relative_l2': report['max_shared_vector_relative_l2'],
+            'max_absolute_selector_score_error': cross['max_absolute_selector_score_error'],
+            'selector_parameter_sha256': cross['parameter_sha256'],
+            'host_selector_projection_sha256': digest_of(host_selector_projection),
+            'claim': 'fixed-data correctness and update mechanics only'}), flush=True)
 
 
 if __name__ == '__main__':
