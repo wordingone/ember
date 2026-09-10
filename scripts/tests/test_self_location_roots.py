@@ -25,10 +25,15 @@ def write(path: Path, text: str) -> Path:
 
 
 def baseline(rows: list[dict[str, object]], expires: str = "2026-09-02") -> dict[str, object]:
+    # Every baselined row carries a reason, because after this leg a baseline without one is
+    # refused at mint. The fixture reflects the contract rather than exempting itself from it.
+    failures = [row for row in rows if row.get("status") != "MATCH"]
     return subject.mint_baseline(
         rows,
         minted_on=dt.date(2026, 9, 1),
         expires_on=dt.date.fromisoformat(expires),
+        justifications={subject._justification_key(row): "fixture row under test"
+                        for row in failures},
     )
 
 
@@ -528,7 +533,8 @@ def test_an_added_justification_does_not_change_any_row_identity(tmp_path: Path)
     rows = _failing_rows(tmp_path)
     key = subject._justification_key(rows[0])
     plain = subject.mint_baseline(
-        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30))
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+        justifications={key: "a different reason"})
     justified = subject.mint_baseline(
         rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
         justifications={key: "a reason"})
@@ -536,3 +542,69 @@ def test_an_added_justification_does_not_change_any_row_identity(tmp_path: Path)
         subject._baseline_key(row) for row in justified["rows"]
     ]
     assert subject.enforce_baseline(rows, justified, dt.date(2026, 9, 2)) == []
+
+
+def test_a_baselined_row_without_a_reason_refuses_the_gate(tmp_path: Path) -> None:
+    """The deliberate red this leg owes. A gate whose exit code gates nothing is the receipted
+    failure class, so the refusal is proven to FAIL the pipeline when its condition fails, not only
+    to pass when it is satisfied."""
+    rows = _failing_rows(tmp_path)
+    key = subject._justification_key(rows[0])
+    minted = subject.mint_baseline(
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+        justifications={key: "a reason"})
+    stripped = dict(minted)
+    stripped["rows"] = [dict(row, justification="") for row in minted["rows"]]
+    stripped.pop("self_sha256")
+    stripped["self_sha256"] = subject.hashlib.sha256(
+        subject.json.dumps(stripped, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    assert subject.enforce_baseline(rows, stripped, dt.date(2026, 9, 2)) == [
+        "BASELINE_ROW_UNJUSTIFIED"
+    ]
+
+
+def test_the_unjustified_refusal_does_not_mask_the_other_findings(tmp_path: Path) -> None:
+    """Appended rather than returned early. A gate that stops at its first finding hands the reader
+    one layer per run and every report looks like a first report -- the masked-failure treadmill,
+    which this repository has already paid for at a different gate."""
+    rows = _failing_rows(tmp_path)
+    key = subject._justification_key(rows[0])
+    minted = subject.mint_baseline(
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 2),
+        justifications={key: "a reason"})
+    stripped = dict(minted)
+    stripped["rows"] = [dict(row, justification="  ") for row in minted["rows"]]
+    stripped.pop("self_sha256")
+    stripped["self_sha256"] = subject.hashlib.sha256(
+        subject.json.dumps(stripped, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    assert subject.enforce_baseline(rows, stripped, dt.date(2026, 9, 3)) == [
+        "BASELINE_ROW_UNJUSTIFIED",
+        "BASELINE_EXPIRED_WITH_REMAINING_ROWS",
+    ]
+
+
+def test_the_mint_refuses_when_reasons_are_omitted_entirely(tmp_path: Path) -> None:
+    """Otherwise the tool writes a baseline its own gate rejects. The refusal carries the rows, so
+    the caller is handed a work list at the moment it still has them."""
+    rows = _failing_rows(tmp_path)
+    try:
+        subject.mint_baseline(rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30))
+    except subject.UnjustifiedRows as refused:
+        assert refused.rows == rows
+    else:
+        raise AssertionError("the mint wrote a baseline that the checker refuses")
+
+
+def test_a_baseline_with_no_rows_at_all_still_mints_without_reasons(tmp_path: Path) -> None:
+    """The refusal is about rows that were accepted with no reason. A tree with nothing to accept
+    has nothing to justify, and refusing it would make a clean repository unmintable."""
+    source = write(
+        tmp_path / "scripts" / "probe.py",
+        "from pathlib import Path\nHERE = Path(__file__).resolve().parent\nROOT = HERE.parent\n",
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert all(row["status"] == "MATCH" for row in rows)
+    minted = subject.mint_baseline(
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30))
+    assert minted["maximum_rows"] == 0
+    assert subject.enforce_baseline(rows, minted, dt.date(2026, 9, 2)) == []
