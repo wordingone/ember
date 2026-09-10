@@ -51,6 +51,33 @@ E4M3_MAX = 448.0
 #: enormous; falling back keeps a degenerate batch from producing infinities in a training step.
 _MIN_AMAX = 1e-12
 
+#: One counter per exit of :func:`linear`, so that "the arm was selected" and "the arm ran" are
+#: separately observable. They are not the same claim, and treating them as one is how an inert
+#: treatment gets published as a gain. Incremented by whichever thread executes the forward, under
+#: the interpreter's own lock; the counts are a diagnostic and never a control input, so a torn
+#: read costs nothing.
+_DISPATCH_COUNTS = {
+    "fp8": 0,
+    "not_selected": 0,
+    "unsupported_device": 0,
+    "full_precision": 0,
+}
+
+
+def dispatch_counts() -> dict[str, int]:
+    """A snapshot of the per-exit counts. A copy, so a caller cannot mutate the live tally."""
+    return dict(_DISPATCH_COUNTS)
+
+
+def reset_dispatch_counts() -> None:
+    """Zero every counter, so a measurement window starts from a known state.
+
+    A run that reports counts without resetting first is reporting the process's whole history, and
+    a warmup's dispatches would be indistinguishable from the measured region's.
+    """
+    for key in _DISPATCH_COUNTS:
+        _DISPATCH_COUNTS[key] = 0
+
 
 def fp8_enabled() -> bool:
     """Whether the e4m3 projection path is selected for this process.
@@ -297,7 +324,11 @@ def linear(activation: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
     process that did not opt in, or a dtype this path does not cover all produce the same numbers
     the model produced before this file existed.
     """
-    if not fp8_enabled() or not fp8_supported(activation):
+    if not fp8_enabled():
+        _DISPATCH_COUNTS["not_selected"] += 1
+        return F.linear(activation, weight)
+    if not fp8_supported(activation):
+        _DISPATCH_COUNTS["unsupported_device"] += 1
         return F.linear(activation, weight)
     # Under autocast the activation is still fp32 here -- ``custom_fwd`` casts it on the way in --
     # so this guard asks whether the arithmetic will be reduced precision, which is true if the
@@ -308,5 +339,7 @@ def linear(activation: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
         and torch.get_autocast_dtype("cuda") in (torch.bfloat16, torch.float16)
     )
     if not reduced_precision:
+        _DISPATCH_COUNTS["full_precision"] += 1
         return F.linear(activation, weight)
+    _DISPATCH_COUNTS["fp8"] += 1
     return _Fp8Linear.apply(activation, weight)
