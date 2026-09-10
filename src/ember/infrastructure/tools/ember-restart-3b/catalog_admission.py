@@ -813,7 +813,17 @@ _BULK_EXCLUDED_MEDIA_CLASSES = {".bin", ".dll", ".exe", ".lib", ".so"}
 # #2168: optional per-row exclusion declarations on the bulk route (never on partition rows).
 _BULK_EXCLUSION_ROW_KEYS = {"excluded_media_classes", "excluded_object_sha256s"}
 _EXCLUSION_RECEIPT_SCHEMA = "ember-issue1581-projection-exclusion-receipt-v1"
-_EXCLUSION_REASONS = ("HOST_EXECUTABLE_CLASS", "TRAIN_OVERLAP_OBJECT")
+# LICENSE_NOT_NAMEABLE (#1581) is the reason an object is dropped when its authoritative source
+# does not state a licence. The clause this issue closes under says no admitted object may exist
+# whose licence cannot be named, so the lawful response to one is to refuse it -- never to infer a
+# licence from the publisher, the funder, or the repository it was deposited in. Deposit rights and
+# access policies are not redistribution licences, and reading one as the other is how an unlicensed
+# object acquires a licence it was never granted.
+_EXCLUSION_REASONS = (
+    "HOST_EXECUTABLE_CLASS",
+    "LICENSE_NOT_NAMEABLE",
+    "TRAIN_OVERLAP_OBJECT",
+)
 _GOAL_BINDING = {
     "goal_id": "EMBER-02",
     "workstream_id": "EMBER-02B",
@@ -1157,6 +1167,15 @@ def _load_train_partition_projection(row: dict[str, Any]) -> dict[str, Any]:
                     "path_derived_media_type": path_derived,
                     "content_sniffed_media_type": content_derived,
                     "predecessor_binding_applied": predecessor_applied,
+                    # The partition receipt states a license per FILE, and the repository states
+                    # how that license was determined. Both were being dropped here, which is why
+                    # an admitted object's license could only be reached by walking to its source
+                    # record -- and that source record carries `license_verdict: "accepted"`, an
+                    # admission verdict rather than a license. Carry the real identifier instead.
+                    "declared_spdx": item.get("declared_spdx"),
+                    "source_repo": item.get("source_repo"),
+                    "source_revision": item.get("source_revision"),
+                    "license_authority_present": bool(repository.get("license_authority")),
                 }
             )
     for repository in receipt["repositories"]:
@@ -1259,13 +1278,107 @@ def verify_projection_exclusion_receipt(raw: bytes) -> dict[str, Any]:
     return receipt
 
 
+_LICENSE_INDEX_SCHEMA = "ember-issue1581-object-license-index-v1"
+
+
+def build_object_license_index(rows: list[dict[str, Any]]) -> bytes:
+    """Name every admitted object's license by content address, with no edge walk.
+
+    #1581's bar is that no admitted object exists whose license cannot be named, and it says in
+    as many words that deriving one by walking the edge graph does not satisfy it. The catalog
+    export cannot answer it: ``immutable_object`` carries no license field, and all 21 ``source``
+    records read ``license_verdict: "accepted"``, which is an admission verdict rather than a
+    license -- computed over the whole corpus with the graph walk fully permitted, the license
+    composition comes back as one entry, ``{"accepted": 295362}``.
+
+    Widening the object record is a frozen-schema change rather than an addition: ember-lab
+    validates both ``immutable_object`` and ``membership`` with an exact key set, so a new field
+    makes the binary refuse the entire catalog, and making it required refuses every export
+    already produced. The license is therefore emitted here as a companion artifact keyed by the
+    object's own sha256, so naming one is a dictionary lookup on the digest.
+
+    Two projection shapes reach this function and they name a license differently. A GitHub
+    license-partition row names one per FILE (``declared_spdx``, with the repository's
+    ``license_authority`` recording how it was determined); a bulk connector row names one for
+    the whole receipt (``license``), already verified against that row's frozen
+    ``expected_license_text_sha256``. Both are recorded with their basis, because they are not
+    equally strong evidence and collapsing them would hide that.
+    """
+
+    entries: dict[str, dict[str, Any]] = {}
+    for row in sorted(rows, key=lambda item: item["source_id"]):
+        row_license = row.get("license")
+        for item in row["files"]:
+            digest = item["sha256"]
+            declared = item.get("declared_spdx")
+            if declared:
+                license_text, basis = declared, "partition_receipt_declared_spdx"
+            elif row_license:
+                license_text, basis = row_license, "connector_receipt_license"
+            else:
+                license_text, basis = None, None
+            entry = entries.setdefault(
+                digest,
+                {
+                    "sha256": digest,
+                    "declared_licenses": [],
+                    "bases": [],
+                    "license_authority_present": False,
+                    "source_ids": [],
+                },
+            )
+            for value, field in ((license_text, "declared_licenses"), (basis, "bases")):
+                if value is not None and value not in entry[field]:
+                    entry[field].append(value)
+            if item.get("license_authority_present"):
+                entry["license_authority_present"] = True
+            if row["source_id"] not in entry["source_ids"]:
+                entry["source_ids"].append(row["source_id"])
+    objects = []
+    unnamed = []
+    conflicting = []
+    for digest in sorted(entries):
+        entry = entries[digest]
+        for field in ("declared_licenses", "bases", "source_ids"):
+            entry[field].sort()
+        # One object admitted from two sources that disagree is recorded AS disagreeing rather
+        # than resolved here. Choosing one of them would name a license the other source denies,
+        # and an unnoticed conflict is exactly the condition the clause exists to surface.
+        if not entry["declared_licenses"]:
+            entry["license_agreement"] = "unnamed"
+            unnamed.append(digest)
+        elif len(entry["declared_licenses"]) == 1:
+            entry["license_agreement"] = "single"
+        else:
+            entry["license_agreement"] = "conflicting"
+            conflicting.append(digest)
+        objects.append(entry)
+    payload = {
+        "schema_version": _LICENSE_INDEX_SCHEMA,
+        "object_count": len(objects),
+        "named_count": len(objects) - len(unnamed),
+        "unnamed_count": len(unnamed),
+        "unnamed_object_sha256s": unnamed,
+        "conflicting_object_sha256s": conflicting,
+        "objects": objects,
+    }
+    payload["self_sha256"] = _sha256(_canonical(payload))
+    return _canonical(payload)
+
+
 def project_catalog_spec(
-    *, spec_raw: bytes, exclusion_records: list[dict[str, Any]] | None = None
+    *,
+    spec_raw: bytes,
+    exclusion_records: list[dict[str, Any]] | None = None,
+    license_rows: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Execute a closed projection spec and return only path-free catalog metadata.
 
     ``exclusion_records`` (#2168), when given, receives one record per bulk row describing
     the files its declared exclusions dropped (empty items when nothing was declared).
+
+    ``license_rows`` (#1581), when given, receives the projected rows themselves so the caller
+    can build the object license index over the same projection this manifest was built from.
     """
 
     try:
@@ -1363,6 +1476,8 @@ def project_catalog_spec(
                 })
         projected["supporting_receipt_sha256"] = supporting_receipt_sha256
         rows.append(projected)
+    if license_rows is not None:
+        license_rows.extend(rows)
     return build_dataset_catalog_manifest(
         rows=rows,
         tokenizer_sha256=spec["tokenizer_sha256"],
@@ -1585,6 +1700,10 @@ def main(argv: list[str] | None = None) -> int:
         "--exclusion-receipt", type=Path, default=None,
         help="#2168: write the self-hashed projection exclusion receipt (required when the spec declares exclusions)",
     )
+    project.add_argument(
+        "--license-index", type=Path, default=None,
+        help="#1581: write the self-hashed object license index naming every admitted object's license by sha256",
+    )
 
     bindings = commands.add_parser("bulk-predecessor-media-bindings")
     bindings.add_argument("--catalog-export", required=True, type=Path)
@@ -1642,9 +1761,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.command == "project":
             exclusion_records: list[dict[str, Any]] = []
+            license_rows: list[dict[str, Any]] = []
             output = project_catalog_spec(
-                spec_raw=_read(arguments.spec), exclusion_records=exclusion_records
+                spec_raw=_read(arguments.spec),
+                exclusion_records=exclusion_records,
+                license_rows=license_rows,
             )
+            if arguments.license_index is not None:
+                write_new(
+                    arguments.license_index, build_object_license_index(license_rows)
+                )
             declared_any = any(
                 record["excluded_media_classes"] or record["excluded_object_sha256s"]
                 for record in exclusion_records
