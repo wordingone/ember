@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -1738,6 +1739,7 @@ class RunnerStorageTests(unittest.TestCase):
             class FakeFcntl:
                 LOCK_EX = 1
                 LOCK_UN = 2
+                LOCK_NB = 4
 
                 @staticmethod
                 def flock(descriptor: int, operation: int) -> None:
@@ -1747,8 +1749,119 @@ class RunnerStorageTests(unittest.TestCase):
                 with run_vertical_slice._custody_ledger_write_lock(parent) as canonical_parent:
                     self.assertEqual(canonical_parent, parent.resolve())
                     self.assertEqual(len(flock_calls), 1)
-                    self.assertEqual(flock_calls[0][1], FakeFcntl.LOCK_EX)
-            self.assertEqual([operation for _, operation in flock_calls], [FakeFcntl.LOCK_EX, FakeFcntl.LOCK_UN])
+                    self.assertEqual(flock_calls[0][1], FakeFcntl.LOCK_EX | FakeFcntl.LOCK_NB)
+            self.assertEqual([operation for _, operation in flock_calls], [FakeFcntl.LOCK_EX | FakeFcntl.LOCK_NB, FakeFcntl.LOCK_UN])
+    def test_posix_wait_budget_refuses_held_owner_without_unlock_or_file_change(self) -> None:
+        for budget, busy_errno in ((0.0, errno.EAGAIN), (-1.0, errno.EACCES), (0.025, errno.EAGAIN)):
+            with self.subTest(budget=budget), tempfile.TemporaryDirectory() as directory:
+                parent = Path(directory)
+                lock_path = parent / run_vertical_slice._CUSTODY_LEDGER_LOCK
+                lock_path.write_bytes(b"existing-owner")
+                clock = [100.0]
+                closed: list[int] = []
+                real_close = os.close
+
+                def close(descriptor: int) -> None:
+                    closed.append(descriptor)
+                    real_close(descriptor)
+
+                def sleep(seconds: float) -> None:
+                    self.assertGreater(seconds, 0.0)
+                    clock[0] += seconds
+                    self.assertLessEqual(clock[0], 100.1)
+
+                class HeldOwner:
+                    LOCK_EX, LOCK_UN, LOCK_NB = 1, 2, 4
+
+                    @staticmethod
+                    def flock(descriptor: int, operation: int) -> None:
+                        if operation == HeldOwner.LOCK_UN:
+                            raise AssertionError("An unsuccessful waiter must not release a lock")
+                        if not operation & HeldOwner.LOCK_NB:
+                            raise AssertionError("A blocking acquisition cannot honor the wait budget")
+                        raise BlockingIOError(busy_errno, "owner remains active")
+
+                with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.dict(sys.modules, {"fcntl": HeldOwner}), unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_WAIT_SECONDS", budget), unittest.mock.patch.object(run_vertical_slice.time, "monotonic", side_effect=lambda: clock[0]), unittest.mock.patch.object(run_vertical_slice.time, "sleep", side_effect=sleep), unittest.mock.patch.object(run_vertical_slice.os, "close", side_effect=close):
+                    with self.assertRaisesRegex(RuntimeError, "timed out"):
+                        with run_vertical_slice._custody_ledger_write_lock(parent):
+                            self.fail("A held owner must prevent entry")
+                self.assertEqual(len(closed), 1)
+                self.assertEqual(lock_path.read_bytes(), b"existing-owner")
+                self.assertAlmostEqual(clock[0] - 100.0, max(0.0, budget))
+
+    def test_posix_wait_budget_enters_after_owner_releases_before_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            clock = [100.0]
+            attempts: list[int] = []
+            releases: list[int] = []
+
+            class ReleasingOwner:
+                LOCK_EX, LOCK_UN, LOCK_NB = 1, 2, 4
+
+                @staticmethod
+                def flock(descriptor: int, operation: int) -> None:
+                    if operation == ReleasingOwner.LOCK_UN:
+                        releases.append(descriptor)
+                        return
+                    if not operation & ReleasingOwner.LOCK_NB:
+                        raise AssertionError("A blocking acquisition cannot honor the wait budget")
+                    attempts.append(descriptor)
+                    if len(attempts) < 3:
+                        raise BlockingIOError(errno.EAGAIN, "owner has not released yet")
+
+            def sleep(seconds: float) -> None:
+                clock[0] += seconds
+
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.dict(sys.modules, {"fcntl": ReleasingOwner}), unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_WAIT_SECONDS", 0.1), unittest.mock.patch.object(run_vertical_slice.time, "monotonic", side_effect=lambda: clock[0]), unittest.mock.patch.object(run_vertical_slice.time, "sleep", side_effect=sleep):
+                with run_vertical_slice._custody_ledger_write_lock(parent) as canonical_parent:
+                    self.assertEqual(canonical_parent, parent.resolve())
+                    self.assertEqual(releases, [])
+                self.assertEqual(len(attempts), 3)
+                self.assertEqual(releases, [attempts[-1]])
+                self.assertLess(clock[0] - 100.0, 0.1)
+
+    def test_posix_wait_zero_budget_still_acquires_free_lock_and_releases_on_body_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            operations: list[int] = []
+
+            class FreeLock:
+                LOCK_EX, LOCK_UN, LOCK_NB = 1, 2, 4
+
+                @staticmethod
+                def flock(descriptor: int, operation: int) -> None:
+                    operations.append(operation)
+
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.dict(sys.modules, {"fcntl": FreeLock}), unittest.mock.patch.object(run_vertical_slice, "_LEDGER_LOCK_WAIT_SECONDS", 0.0), unittest.mock.patch.object(run_vertical_slice.time, "sleep", side_effect=AssertionError("A free lock needs no wait")):
+                with self.assertRaisesRegex(ValueError, "body failed"):
+                    with run_vertical_slice._custody_ledger_write_lock(parent):
+                        raise ValueError("body failed")
+            self.assertEqual(operations, [FreeLock.LOCK_EX | FreeLock.LOCK_NB, FreeLock.LOCK_UN])
+
+    def test_posix_wait_unexpected_kernel_error_is_preserved_without_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            operations: list[int] = []
+            failure = OSError(errno.EIO, "fixture kernel failure")
+
+            class FailedKernel:
+                LOCK_EX, LOCK_UN, LOCK_NB = 1, 2, 4
+
+                @staticmethod
+                def flock(descriptor: int, operation: int) -> None:
+                    operations.append(operation)
+                    if operation == FailedKernel.LOCK_UN:
+                        raise AssertionError("Acquisition failure must not issue an unlock")
+                    raise failure
+
+            with unittest.mock.patch.object(run_vertical_slice.os, "name", "posix"), unittest.mock.patch.dict(sys.modules, {"fcntl": FailedKernel}), unittest.mock.patch.object(run_vertical_slice.time, "sleep", side_effect=AssertionError("A kernel failure must not be retried")):
+                with self.assertRaises(OSError) as raised:
+                    with run_vertical_slice._custody_ledger_write_lock(parent):
+                        self.fail("Acquisition failed")
+                self.assertIs(raised.exception, failure)
+            self.assertEqual(operations, [FailedKernel.LOCK_EX | FailedKernel.LOCK_NB])
+
     def test_timed_out_ledger_waiter_preserves_live_owner_lock(self) -> None:
         """A native waiter cannot append while another process owns the kernel mutex."""
         with tempfile.TemporaryDirectory() as directory:
