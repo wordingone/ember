@@ -159,9 +159,17 @@ def verify_controller_identity(root, binding, owner, rows):
     expected = [str(Path(sys.executable).resolve(strict=True)), '-B',
                 str(root / RELATIVE_ENTRY), '--daemon-run', '--custody',
                 str(Path(launch['custody']).parent), '--hidden-helper', hidden[0]]
-    if (not args or args[1:] != expected[1:]
+    # The image is compared by FILE IDENTITY, never by spelling. Windows reports this process's
+    # ExecutablePath in extended-length form (\\?\C:\...\python.exe) and Path.resolve preserves
+    # that prefix, so a string comparison refuses the interpreter that is actually running -- which
+    # is what happened on 2026-09-10, one line below an argv[0] limb that had already accepted the
+    # same file through samefile. samefile is the stricter comparison, not the looser one: it
+    # compares the file the OS opens, so a junction, a short name, a case difference or a prefix
+    # cannot change its answer. An absent image path refuses rather than raising.
+    image = owner.get('ExecutablePath') or ''
+    if (not args or args[1:] != expected[1:] or not image
             or not os.path.samefile(args[0], sys.executable)
-            or Path(owner.get('ExecutablePath') or '').resolve(strict=True) != Path(sys.executable).resolve(strict=True)):
+            or not os.path.samefile(image, sys.executable)):
         raise ValueError('controller exact executable or argv differs')
     parents = [row for row in rows if row['ProcessId'] == owner['ParentProcessId']]
     canonical = _canonical_ember_lab_binary(root)
