@@ -92,7 +92,7 @@
     },
     {
       "path": "src/ember/governance/scripts/cia_conformance_launch.py",
-      "sha256": "a4fa55783b77e9bf6ce1fd8c1d940539a004bec6fe68f5c4ded66515090900fc",
+      "sha256": "c79daa0567edf03b569a0d6225c56f68863a1714ad23ad307a6e690565f032c7",
       "reason": "Authenticated daemon run body, not a standalone launcher. The closed --daemon-run entry consumes the existing one-use daemon dispatch token and exact native job cap before creating its owned numerical workers. The numerical profile verifies exact argv, launcher/helper source bindings and custody; the consumer binds the actual daemon parent and binary/source identities. No hermetic-fixture or production-qualification exemption is claimed."
     }
   ]
