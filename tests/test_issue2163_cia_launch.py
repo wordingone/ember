@@ -93,6 +93,51 @@ class FixedLaunchTests(unittest.TestCase):
                           (custody / 'worker-stdout.log').read_text(encoding='utf-8'))
             self.assertFalse((custody / 'worker-terminal.json').exists())
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows extended-length image paths')
+    def test_the_controller_image_is_compared_by_identity_not_by_spelling(self):
+        r"""Windows reports a process image as \\?\C:\... and Path.resolve keeps that prefix, so a
+        string comparison refuses the interpreter that is running. A governed unit was spent
+        learning that. The gate must accept the same FILE however the path is spelled, and still
+        refuse a different file."""
+        import os
+        from tempfile import TemporaryDirectory
+        fixed = Path.home() / '.codex/headless-python.ps1'
+        if not fixed.exists():
+            self.skipTest('the fixed controller helper is not installed on this host')
+        extended = '\\\\?\\' + str(Path(sys.executable).resolve())
+        # The premise: these two spell one file and compare unequal as strings.
+        self.assertNotEqual(Path(extended).resolve(), Path(sys.executable).resolve())
+        self.assertTrue(os.path.samefile(extended, sys.executable))
+        with TemporaryDirectory() as temp:
+            hidden = Path(temp) / 'run_headless.py'
+            hidden.write_text('', encoding='utf-8')
+            custody = Path(temp) / 'unit' / 'numerical'
+            custody.mkdir(parents=True)
+            binding = {'launch': {'helpers': [str(fixed), str(hidden)], 'custody': str(custody)}}
+            argv = [extended, '-B', str(launch.ROOT / launch.RELATIVE_ENTRY), '--daemon-run',
+                    '--custody', str(custody.parent), '--hidden-helper', str(hidden)]
+            owner = {'ProcessId': 4242, 'ParentProcessId': 99, 'ExecutablePath': extended,
+                     'CommandLine': ' '.join('"%s"' % value for value in argv)}
+            self.assertEqual(launch.windows_command_args(owner['CommandLine']), argv)
+            # Passing the image/argv gate is proven by reaching the NEXT refusal, not by silence:
+            # rows is empty, so the canonical daemon parent cannot be found.
+            with self.assertRaisesRegex(ValueError, 'canonical daemon parent missing'):
+                launch.verify_controller_identity(launch.ROOT, binding, owner, [])
+            # Planted negative 1: a different file, spelled as an image path, is still refused.
+            wrong_image = dict(owner, ExecutablePath=str(hidden))
+            with self.assertRaisesRegex(ValueError, 'executable or argv differs'):
+                launch.verify_controller_identity(launch.ROOT, binding, wrong_image, [])
+            # Planted negative 2: the right file with a custody the manifest never named.
+            moved = list(argv)
+            moved[5] = str(Path(temp) / 'elsewhere')
+            wrong_argv = dict(owner, CommandLine=' '.join('"%s"' % v for v in moved))
+            with self.assertRaisesRegex(ValueError, 'executable or argv differs'):
+                launch.verify_controller_identity(launch.ROOT, binding, wrong_argv, [])
+            # Planted negative 3: no image path at all refuses rather than raising OSError.
+            with self.assertRaisesRegex(ValueError, 'executable or argv differs'):
+                launch.verify_controller_identity(launch.ROOT, binding,
+                                                  dict(owner, ExecutablePath=''), [])
+
 
 if __name__ == '__main__':
     unittest.main()
