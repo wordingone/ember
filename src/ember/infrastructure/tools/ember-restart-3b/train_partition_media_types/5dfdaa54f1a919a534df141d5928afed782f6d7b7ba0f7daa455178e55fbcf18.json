@@ -3,1201 +3,1001 @@
  "classes": {
   ".1": {
    "count": 4,
-   "example": "contrib/npm/hurl/docs/hurl.1",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".a": {
    "count": 1,
-   "example": "pkg/agent/hooks/windows/libwindows_redirector.a",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".acorn": {
    "count": 3,
-   "example": "art/logo-full.acorn",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".afpub": {
    "count": 1,
-   "example": "other/design files/cheat-sheet.afpub",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".ai": {
    "count": 1,
-   "example": "media/logo.ai",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".anatomy": {
    "count": 8,
-   "example": "docs/spec/packages/hurl-x.y.z-aarch64-apple-darwin.tar.gz.anatomy",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".applescript": {
    "count": 1,
-   "example": "code/core/assets/server/openBrowser.applescript",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".astro": {
    "count": 8,
-   "example": "docs/src/components/Badges.astro",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".avif": {
    "count": 18,
-   "example": "docs/assets/img/developer-tools.avif",
    "media_type": "image/avif",
    "reason": "explicit standard media type"
   },
   ".bar": {
    "count": 1,
-   "example": "test-tap/fixture/extensions/test.foo.bar",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".bash": {
    "count": 2,
-   "example": "completions/hurl.bash",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".bin": {
    "count": 5,
-   "example": "integration/hurl/tests_ok/assert/assert_body.bin",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".bmp": {
    "count": 2,
-   "example": "bin/windows/logo.bmp",
    "media_type": "image/bmp",
    "reason": "explicit standard media type"
   },
   ".br": {
    "count": 2,
-   "example": "integration/hurl/tests_ok/compressed/cat.jpg.br",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".bru": {
    "count": 721,
-   "example": "packages/bruno-cli/tests/runner/fixtures/collection-json-from-pathname/collection/collection.bru",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".build": {
    "count": 4,
-   "example": "browser_patches/firefox/juggler/components/moz.build",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".bz2": {
    "count": 1,
-   "example": "packages/browsers/test/fixtures/test.tar.bz2",
    "media_type": "application/x-bzip2",
    "reason": "explicit standard media type"
   },
   ".c": {
    "count": 2,
-   "example": "packages/hurl/native/libxml.c",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".caddyfile": {
    "count": 6,
-   "example": "aio-multiport-setup.Caddyfile",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".cast": {
    "count": 2,
-   "example": "docs/assets/cast/hurl.cast",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".cer": {
    "count": 1,
-   "example": "tests/collection/draft/fixtures/mitmproxy-ca-cert.cer",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".cff": {
    "count": 3,
-   "example": "CITATION.cff",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".cfg": {
    "count": 4,
-   "example": ".bumpversion.cfg",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".cjs": {
    "count": 290,
-   "example": "packages/hoppscotch-desktop/plugin-workspace/tauri-plugin-appload/dist-js/index.cjs",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".cnf": {
    "count": 1,
-   "example": "tests/config/testserver/san.cnf",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".code-workspace": {
    "count": 1,
-   "example": "storybook.code-workspace",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".coffee": {
    "count": 4,
-   "example": "test/compiler/test.coffee",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".compiled": {
    "count": 8,
-   "example": "test/compiler-cjs/test.js.compiled",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".conf": {
    "count": 3,
-   "example": "browser_patches/firefox/juggler/components/components.conf",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".config": {
    "count": 1,
-   "example": "contrib/ppa/debian/cargo.config",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".cookies": {
    "count": 1,
-   "example": "integration/hurl/tests_ok/cookie/cookie_file.cookies",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".crt": {
    "count": 2,
-   "example": "pkg/agent/proxy/tls/asset/ca.crt",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".cs": {
    "count": 2,
-   "example": "utils/doclint/linting-code-snippets/csharp/Program.cs",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".csproj": {
    "count": 1,
-   "example": "utils/doclint/linting-code-snippets/csharp/linting-code-snippets.csproj",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".csr": {
    "count": 1,
-   "example": "tests/assets/client-certificates/client/localhost/localhost.csr",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".csv": {
    "count": 22,
-   "example": "packages/hoppscotch-cli/src/__tests__/e2e/fixtures/environments/iteration-data-export.csv",
    "media_type": "text/csv; charset=utf-8",
    "reason": "explicit standard media type"
   },
   ".cts": {
    "count": 7,
-   "example": "e2e/test-match-default/__tests__/test.cts",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".curl": {
    "count": 91,
-   "example": "integration/hurl/tests_ok/assert/assert_body.curl",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".db": {
    "count": 1,
-   "example": "examples/redteam-api-top-10/data/swag_store.db",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".dev": {
    "count": 1,
-   "example": ".devcontainer/Dockerfile.dev",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".diff": {
    "count": 2,
-   "example": "browser_patches/firefox/patches/bootstrap.diff",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".dll": {
    "count": 1,
-   "example": "pkg/agent/hooks/windows/assets/WinDivert.dll",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".dockerfile": {
    "count": 1,
-   "example": "prod.Dockerfile",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".donotmockenforcer": {
    "count": 1,
-   "example": "mockito-integration-tests/extensions-tests/src/test/resources/mockito-extensions/org.mockito.plugins.DoNotMockEnforcer",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".drawio": {
    "count": 3,
-   "example": "docs/spec/runner/errors/errors.drawio",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".ejs": {
    "count": 6,
-   "example": "src/SpecRunner.html.ejs",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".el": {
    "count": 1,
-   "example": "contrib/emacs/hurl-mode.el",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".env": {
    "count": 9,
-   "example": "integration/hurl/tests_failed/variables_file/variables_file_invalid.env",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".erb": {
    "count": 2,
-   "example": "src/templates/example_project_jasmine_tags.html.erb",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".err": {
    "count": 133,
-   "example": "integration/hurl/tests_error_parser/base64.err",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".example": {
    "count": 5,
-   "example": ".env.example",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".exit": {
    "count": 193,
-   "example": "integration/hurl/tests_error_parser/base64.exit",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".expected": {
    "count": 2,
-   "example": "test-tap/fixture/snapshots/test-content/test.js.md.expected",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".ext": {
    "count": 1,
-   "example": "tests/assets/client-certificates/client/localhost/localhost.ext",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".extension": {
    "count": 2,
-   "example": "mockito-integration-tests/junit-jupiter-extension-tests/src/test/resources/META-INF/services/org.junit.jupiter.api.extension.Extension",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".feature": {
    "count": 1,
-   "example": "testing/plugins_integration/bdd_wallet.feature",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".filters": {
    "count": 1,
-   "example": "browser_patches/winldd/PrintDeps.vcxproj.filters",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".fish": {
    "count": 2,
-   "example": "completions/hurl.fish",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".fnt": {
    "count": 13,
-   "example": "apps/chrome-extension/static/fonts/open-sans/open-sans-10-black/open-sans-10-black.fnt",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".foo": {
    "count": 1,
-   "example": "test/compiler/test.foo",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".foobar": {
    "count": 2,
-   "example": "packages/jest-core/src/__tests__/test_root/__testtests__/test.foobar",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".gif": {
    "count": 36,
-   "example": "packages/jest-each/assets/default-demo.gif",
    "media_type": "image/gif",
    "reason": "explicit standard media type"
   },
   ".go": {
    "count": 1168,
-   "example": "packages/hoppscotch-selfhost-web/webapp-server/internal/bundle/builder.go",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".gohtml": {
    "count": 4,
-   "example": "blogrenderer/templates/blog.gohtml",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".gradle": {
    "count": 4,
-   "example": "packages/playwright-core/src/server/android/driver/app/build.gradle",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".grammar": {
    "count": 2,
-   "example": "docs/spec/grammar/hurl.grammar",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".graphql": {
    "count": 229,
-   "example": "packages/hoppscotch-common/src/helpers/backend/gql/mutations/AcceptTeamInvitation.graphql",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".grit": {
    "count": 1,
-   "example": "tools/biome/no-direct-process-env-mutation.grit",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".groovy": {
    "count": 2,
-   "example": "mockito-integration-tests/groovy-inline-tests/src/test/groovy/org/mockito/groovy/GroovyMockitoTest.groovy",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".gz": {
    "count": 1,
-   "example": "integration/hurl/tests_ok/parse_cache/parse_cache.html.gz",
    "media_type": "application/gzip",
    "reason": "explicit standard media type"
   },
   ".har": {
    "count": 3,
-   "example": "tests/assets/har-fulfill.har",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".hbs": {
    "count": 7,
-   "example": "packages/hoppscotch-backend/src/mailer/templates/team-invitation.hbs",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".header": {
    "count": 2,
-   "example": "config/checkstyle/java.header",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".hpp": {
    "count": 6,
-   "example": "packages/computer/native/rdp/include/rdp_helper_connection_policy.hpp",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".html": {
    "count": 525,
-   "example": "docs/standalone/hurl-5.0.1.html",
    "media_type": "text/html; charset=utf-8",
    "reason": "explicit standard media type"
   },
   ".hurl": {
    "count": 392,
-   "example": "contrib/emacs/test-syntax.hurl",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".icns": {
    "count": 5,
-   "example": "packages/hoppscotch-agent/src-tauri/icons/icon.icns",
    "media_type": "image/icns",
    "reason": "explicit standard media type"
   },
   ".idl": {
    "count": 2,
-   "example": "browser_patches/firefox/juggler/pipe/nsIRemoteDebuggingPipe.idl",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".ignore": {
    "count": 1,
-   "example": "integration/hurl/tests_error_parser/jsonpath.hurl.ignore",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".in": {
    "count": 3,
-   "example": "integration/hurlfmt/tests_ok/import_curl.in",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".ini": {
    "count": 7,
-   "example": "mypy.ini",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".install": {
    "count": 1,
-   "example": "contrib/ppa/debian/hurl.install",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".instantiatorprovider2": {
    "count": 1,
-   "example": "mockito-integration-tests/extensions-tests/src/test/resources/mockito-extensions/org.mockito.plugins.InstantiatorProvider2",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".j2": {
    "count": 1,
-   "example": "examples/config-custom-prompt-function/prompt.j2",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".jammy": {
    "count": 1,
-   "example": "utils/docker/Dockerfile.jammy",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".jar": {
    "count": 2,
-   "example": "packages/playwright-core/src/server/android/driver/gradle/wrapper/gradle-wrapper.jar",
    "media_type": "application/java-archive",
    "reason": "explicit standard media type"
   },
   ".java": {
    "count": 1005,
-   "example": "packages/playwright-core/src/server/android/driver/app/src/androidTest/java/com/microsoft/playwright/androiddriver/InstrumentedTest.java",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".jfc": {
    "count": 1,
-   "example": "config/jfr/jfr_config.jfc",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".jpeg": {
    "count": 29,
-   "example": "assets/amazon-visual-regression.jpeg",
    "media_type": "image/jpeg",
    "reason": "explicit standard media type"
   },
   ".js": {
    "count": 4521,
-   "example": "contrib/npm/hurl/archive.js",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".jsm": {
    "count": 2,
-   "example": "browser_patches/firefox/juggler/JugglerFrameParent.jsm",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".jsonc": {
    "count": 5,
-   "example": ".knip.jsonc",
    "media_type": "application/json",
    "reason": "explicit standard media type"
   },
   ".jsx": {
    "count": 200,
-   "example": "packages/enzyme-adapter-react-helper/src/safeSFC.jsx",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".key": {
    "count": 3,
-   "example": "pkg/agent/proxy/tls/asset/ca.key",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".kt": {
    "count": 13,
-   "example": "buildSrc/src/main/kotlin/Common.kt",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".kts": {
    "count": 43,
-   "example": "build.gradle.kts",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".less": {
    "count": 39,
-   "example": "apps/android-playground/src/App.less",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".license": {
    "count": 1,
-   "example": "packages/utils/webp/webp_codec.LICENSE",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".list": {
    "count": 51,
-   "example": "packages/html-reporter/src/DEPS.list",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".lock": {
    "count": 52,
-   "example": "Cargo.lock",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".log": {
    "count": 45,
-   "example": "test-tap/reporters/default.edgecases.v22.log",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".lua": {
    "count": 1,
-   "example": "fix-internal-links.lua",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".m": {
    "count": 6,
-   "example": "browser_patches/webkit/embedder/Playwright/MBToolbarItem.m",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".m4a": {
    "count": 1,
-   "example": "media/pronunciation.m4a",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".map": {
    "count": 13,
-   "example": "test-tap/fixture/snapshots/test-sourcemaps/build/feature/__tests__/test.js.map",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".mdc": {
    "count": 2,
-   "example": ".cursor/rules/cursor-cloud.mdc",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mdx": {
    "count": 389,
-   "example": "docs/src/content/docs/blog/2026-community-sponsorships.mdx",
    "media_type": "text/mdx; charset=utf-8",
    "reason": "explicit standard media type"
   },
   ".memberaccessor": {
    "count": 3,
-   "example": "mockito-extensions/mockito-android/src/main/resources/mockito-extensions/org.mockito.plugins.MemberAccessor",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mjs": {
    "count": 273,
-   "example": "test-tap/fixture/mjs.mjs",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".mmd": {
    "count": 1,
-   "example": "site/static/img/blog/openclaw-at-work/attack-chain.mmd",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mn": {
    "count": 1,
-   "example": "browser_patches/firefox/juggler/jar.mn",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mockitologger": {
    "count": 1,
-   "example": "mockito-integration-tests/extensions-tests/src/test/resources/mockito-extensions/org.mockito.plugins.MockitoLogger",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mockmaker": {
    "count": 6,
-   "example": "mockito-extensions/mockito-proxy/src/main/resources/mockito-extensions/org.mockito.plugins.MockMaker",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mockresolver": {
    "count": 1,
-   "example": "mockito-integration-tests/extensions-tests/src/test/resources/mockito-extensions/org.mockito.plugins.MockResolver",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mod": {
    "count": 8,
-   "example": "packages/hoppscotch-selfhost-web/webapp-server/go.mod",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mp3": {
    "count": 6,
-   "example": "tests/assets/example.mp3",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".mp4": {
    "count": 38,
-   "example": "tests/assets/movie.mp4",
    "media_type": "video/mp4",
    "reason": "explicit standard media type"
   },
   ".mts": {
    "count": 12,
-   "example": "packages/hoppscotch-common/vitest.config.mts",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".netrc": {
    "count": 1,
-   "example": "integration/hurl/tests_ok/netrc/netrc_file.netrc",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".nix": {
    "count": 4,
-   "example": "devenv.nix",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".noble": {
    "count": 1,
-   "example": "utils/docker/Dockerfile.noble",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".not_hurl": {
    "count": 1,
-   "example": "integration/hurl/tests_ok/input_dir/root/a/b/b.not_hurl",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".nsh": {
    "count": 1,
-   "example": "packages/bruno-electron/resources/installer.nsh",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".nsi": {
    "count": 1,
-   "example": "bin/windows/hurl.nsi",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".nuspec": {
    "count": 1,
-   "example": "contrib/windows/windows_package_managers/chocolatey/hurl/hurl.nuspec",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".o": {
    "count": 2,
-   "example": "pkg/agent/hooks/linux/bpf_arm64_bpfel.o",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".ogv": {
    "count": 1,
-   "example": "tests/assets/movie.ogv",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".option": {
    "count": 87,
-   "example": "docs/spec/options/hurl/aws_sigv4.option",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".opts": {
    "count": 2,
-   "example": "packages/enzyme-example-mocha/test/mocha.opts",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pac": {
    "count": 2,
-   "example": "tests/proxy/pac/fixtures/pac-files/test.pac",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".patch": {
    "count": 9,
-   "example": ".yarn/patches/@types-mdx-npm-2.0.14-ebb2ecb0d6.patch",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".pattern": {
    "count": 112,
-   "example": "integration/hurl/tests_failed/assert_match_utf8/assert_match_utf8.out.pattern",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pbxproj": {
    "count": 1,
-   "example": "browser_patches/webkit/embedder/Playwright/Playwright.xcodeproj/project.pbxproj",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pch": {
    "count": 1,
-   "example": "browser_patches/webkit/embedder/Playwright/mac/Playwright_Prefix.pch",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pem": {
    "count": 30,
-   "example": "integration/hurl/tests_ssl/certs/ca/cert.pem",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".pfx": {
    "count": 2,
-   "example": "tests/assets/client-certificates/client/trusted/cert-legacy.pfx",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".plist": {
    "count": 7,
-   "example": "browser_patches/webkit/embedder/Playwright/mac/Info.plist",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".pluginswitch": {
    "count": 1,
-   "example": "mockito-integration-tests/extensions-tests/src/test/resources/mockito-extensions/org.mockito.plugins.PluginSwitch",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pptx": {
    "count": 1,
-   "example": "assets/header.pptx",
    "media_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
    "reason": "explicit standard media type"
   },
   ".prisma": {
    "count": 1,
-   "example": "packages/hoppscotch-backend/prisma/schema.prisma",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pro": {
    "count": 1,
-   "example": "packages/playwright-core/src/server/android/driver/app/proguard-rules.pro",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".production": {
    "count": 1,
-   "example": "packages/bruno-app/.env.production",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".properties": {
    "count": 7,
-   "example": "packages/playwright-core/src/server/android/driver/gradle.properties",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".proto": {
    "count": 9,
-   "example": "src/tracing/proto/opentelemetry/proto/collector/trace/v1/trace_service.proto",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".ps1": {
    "count": 473,
-   "example": "bin/activate_python3_venv.ps1",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".psd": {
    "count": 1,
-   "example": "media/header.psd",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pug": {
    "count": 44,
-   "example": "test-storybooks/server-kitchen-sink/views/addons/a11y/contrast.pug",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pxm": {
    "count": 1,
-   "example": "epub-cover.pxm",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".pyi": {
    "count": 1,
-   "example": "faker/proxy.pyi",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".rb": {
    "count": 6,
-   "example": "examples/config-executable-prompts/template-prompt.rb",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".rc": {
    "count": 1,
-   "example": "browser_patches/webkit/embedder/Playwright/win/PlaywrightLib.rc",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".resolute": {
    "count": 1,
-   "example": "utils/docker/Dockerfile.resolute",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".rs": {
    "count": 382,
-   "example": "contrib/sample/src/main.rs",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".rules": {
    "count": 1,
-   "example": "firestore.rules",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".runtime": {
    "count": 1,
-   "example": "Dockerfile.runtime",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".sample": {
    "count": 3,
-   "example": "packages/hoppscotch-common/src/helpers/__tests__/postwomanTesting.sample",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".schema": {
    "count": 1,
-   "example": "scripts/bench/bench.schema",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".scss": {
    "count": 23,
-   "example": "packages/hoppscotch-common/assets/scss/styles.scss",
    "media_type": "text/x-scss; charset=utf-8",
    "reason": "explicit standard media type"
   },
   ".setup": {
    "count": 1,
-   "example": "tests/e2e/ca-bundle-merge/Dockerfile.setup",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".sln": {
    "count": 1,
-   "example": "browser_patches/winldd/PrintDeps.sln",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".snap": {
    "count": 261,
-   "example": "test-tap/fixture/assert.js.snap",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".snapshot": {
    "count": 430,
-   "example": "code/frameworks/angular-vite/src/client/docs/__testfixtures__/doc-button/argtypes.snapshot",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".sql": {
    "count": 49,
-   "example": "packages/hoppscotch-backend/prisma/migrations/20230406064219_init/migration.sql",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".srl": {
    "count": 1,
-   "example": "integration/hurl/tests_ssl/certs/ca/cert.srl",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".stacktracecleanerprovider": {
    "count": 1,
-   "example": "mockito-integration-tests/extensions-tests/src/test/resources/mockito-extensions/org.mockito.plugins.StackTraceCleanerProvider",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".sum": {
    "count": 5,
-   "example": "packages/hoppscotch-selfhost-web/webapp-server/go.sum",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".svelte": {
    "count": 82,
-   "example": "packages/hoppscotch-desktop/plugin-workspace/tauri-plugin-appload/examples/tauri-app/src/App.svelte",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".svg": {
    "count": 362,
-   "example": "art/logo-full-dark.svg",
    "media_type": "image/svg+xml",
    "reason": "explicit standard media type"
   },
   ".swift": {
    "count": 1,
-   "example": "packages/computer/tests/ai/fixtures/macos-desktop-smoke-app.swift",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".sys": {
    "count": 1,
-   "example": "pkg/agent/hooks/windows/assets/WinDivert64.sys",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".tap": {
    "count": 1,
-   "example": "integration/hurl/tests_failed/parse_error_tap/parse_error_tap.tap",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".template": {
    "count": 8,
-   "example": "contrib/ppa/debian/changelog.template",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".tex": {
    "count": 2,
-   "example": "meta.tmpl.tex",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".tmpl": {
    "count": 5,
-   "example": "packages/puppeteer-core/src/templates/injected.ts.tmpl",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".toml": {
    "count": 59,
-   "example": ".cargo/config.toml",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".tpl": {
    "count": 1,
-   "example": "helm/chart/promptfoo/templates/_helpers.tpl",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".ts": {
    "count": 10979,
-   "example": "entrypoints/internal.d.ts",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".tsx": {
    "count": 1827,
-   "example": "e2e/test-match-default/__tests__/test.tsx",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".ttf": {
    "count": 8,
-   "example": "packages/web/src/third_party/vscode/codicon.ttf",
    "media_type": "font/ttf",
    "reason": "explicit standard media type"
   },
   ".user": {
    "count": 1,
-   "example": "browser_patches/winldd/PrintDeps.vcxproj.user",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".vcxproj": {
    "count": 1,
-   "example": "browser_patches/winldd/PrintDeps.vcxproj",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
   },
   ".vim": {
    "count": 3,
-   "example": "contrib/vim/ftdetect/hurl.vim",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".vue": {
    "count": 468,
-   "example": "packages/hoppscotch-agent/src/App.vue",
    "media_type": "text/plain; charset=utf-8",
    "reason": "explicit source or build-language class; preserve as UTF-8 text"
   },
   ".wasm": {
    "count": 4,
-   "example": "e2e/native-esm/add.wasm",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".wav": {
    "count": 3,
-   "example": "examples/amazon-bedrock/models/assets/hello.wav",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".webapp": {
    "count": 1,
-   "example": "tests/assets/to-do-notifications/manifest.webapp",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".webm": {
    "count": 1,
-   "example": "tests/assets/movie.webm",
    "media_type": "video/webm",
    "reason": "explicit standard media type"
   },
   ".webmanifest": {
    "count": 3,
-   "example": "packages/trace-viewer/public/manifest.webmanifest",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".webp": {
    "count": 23,
-   "example": "docs/assets/img/developer-tools.webp",
    "media_type": "image/webp",
    "reason": "explicit standard media type"
   },
   ".woff2": {
    "count": 8,
-   "example": "tests/assets/network-tab/font.woff2",
    "media_type": "font/woff2",
    "reason": "explicit standard media type"
   },
   ".xcconfig": {
    "count": 4,
-   "example": "browser_patches/webkit/embedder/Playwright/Configurations/Base.xcconfig",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".xcscheme": {
    "count": 1,
-   "example": "browser_patches/webkit/embedder/Playwright/Playwright.xcodeproj/xcshareddata/xcschemes/Playwright.xcscheme",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".xib": {
    "count": 2,
-   "example": "browser_patches/webkit/embedder/Playwright/mac/BrowserWindow.xib",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".xlsx": {
    "count": 3,
-   "example": "examples/config-csv-metadata/tests.xlsx",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".xml": {
    "count": 18,
-   "example": "contrib/intellij/Hurl.xml",
    "media_type": "application/xml",
    "reason": "explicit standard media type"
   },
   ".xsd": {
    "count": 1,
-   "example": "testing/example_scripts/junit-10.xsd",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".xsl": {
    "count": 1,
-   "example": "config/checkstyle/checkstyle.xsl",
    "media_type": "application/octet-stream",
    "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
   },
   ".xz": {
    "count": 1,
-   "example": "packages/browsers/test/fixtures/test.tar.xz",
    "media_type": "application/x-xz",
    "reason": "explicit standard media type"
   },
   ".yaml": {
    "count": 712,
-   "example": "tea.yaml",
    "media_type": "application/yaml; charset=utf-8",
    "reason": "explicit standard media type"
   },
   ".zip": {
    "count": 15,
-   "example": "bin/windows/EnVar_plugin.zip",
    "media_type": "application/zip",
    "reason": "explicit standard media type"
   }
@@ -1206,7 +1006,7 @@
  "goal_id": "EMBER-02",
  "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
  "schema_version": "ember-issue1581-train-partition-media-types-v1",
- "self_sha256": "1489d8dd94eae990850079cd1010dd3d98d25c2b3b45ce8eef5deaf624b867e5",
+ "self_sha256": "3125b0289cac4aef580b65455d59802d4f98491dd7ff0afc634b6de257e54c78",
  "source_partition_receipt_sha256": "5dfdaa54f1a919a534df141d5928afed782f6d7b7ba0f7daa455178e55fbcf18",
  "source_partition_selector": "candidate-software_engineering-train-1",
  "source_partition_split": "train",
