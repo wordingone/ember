@@ -1905,3 +1905,253 @@ def test_evaluation_dataset_resolves_over_admitted_memberships_after_a_quarantin
             expected_split="heldout",
         )
 
+
+
+def test_object_license_index_names_every_admitted_object_by_content_address(
+    tmp_path: Path,
+) -> None:
+    """#1581: the licence is a dictionary lookup on the digest, never an edge walk."""
+
+    row_path, row_sha = write_connector(
+        tmp_path,
+        source="candidate-mathematics-train-1",
+        domain="mathematics",
+        files=[("a.pdf", b"pdf-a"), ("b.pdf", b"pdf-b")],
+    )
+    row = load_bulk_domain_connector_receipt(
+        receipt_path=row_path,
+        expected_receipt_sha256=row_sha,
+        source_id="candidate-mathematics-train-1",
+        expected_source_selector="candidate-mathematics-train-1",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="mathematics",
+        split="train",
+    )
+    row.pop("excluded_files", None)
+    row.pop("connector_file_count", None)
+    index = json.loads(catalog_admission_module.build_object_license_index([row]))
+    assert index["schema_version"] == "ember-issue1581-object-license-index-v1"
+    assert index["object_count"] == 2
+    assert index["named_count"] == 2
+    assert index["unnamed_count"] == 0
+    assert index["unnamed_object_sha256s"] == []
+    assert index["conflicting_object_sha256s"] == []
+    by_digest = {entry["sha256"]: entry for entry in index["objects"]}
+    assert set(by_digest) == {sha256(b"pdf-a"), sha256(b"pdf-b")}
+    for entry in by_digest.values():
+        assert entry["declared_licenses"] == ["CC-BY-4.0"]
+        assert entry["bases"] == ["connector_receipt_license"]
+        assert entry["license_agreement"] == "single"
+        assert entry["source_ids"] == ["candidate-mathematics-train-1"]
+    # The index is self-hashed over its own payload, so an edited entry is detectable.
+    payload = {key: value for key, value in index.items() if key != "self_sha256"}
+    assert index["self_sha256"] == sha256(canonical(payload))
+
+
+def test_planted_negative_an_object_with_no_license_is_reported_not_defaulted(
+    tmp_path: Path,
+) -> None:
+    """A file that no source names is the condition the clause exists to surface."""
+
+    named = {
+        "source_id": "candidate-a-train-1",
+        "license": "CC-BY-4.0",
+        "files": [{"sha256": sha256(b"named"), "bytes": 5, "media_type": "text/plain"}],
+    }
+    # No row-level license and no per-file declared_spdx: nothing names this object.
+    unnamed = {
+        "source_id": "candidate-b-train-1",
+        "files": [{"sha256": sha256(b"orphan"), "bytes": 6, "media_type": "text/plain"}],
+    }
+    index = json.loads(catalog_admission_module.build_object_license_index([named, unnamed]))
+    assert index["object_count"] == 2
+    assert index["named_count"] == 1
+    assert index["unnamed_count"] == 1
+    assert index["unnamed_object_sha256s"] == [sha256(b"orphan")]
+    orphan = next(e for e in index["objects"] if e["sha256"] == sha256(b"orphan"))
+    assert orphan["declared_licenses"] == []
+    assert orphan["bases"] == []
+    assert orphan["license_agreement"] == "unnamed"
+
+
+def test_planted_negative_two_sources_disagreeing_is_recorded_not_resolved() -> None:
+    """Choosing one of two disagreeing licences would name one the other source denies."""
+
+    digest = sha256(b"shared")
+    file_row = {"sha256": digest, "bytes": 6, "media_type": "text/plain"}
+    apache = {
+        "source_id": "candidate-a-train-1",
+        "files": [dict(file_row, declared_spdx="Apache-2.0")],
+    }
+    mit = {"source_id": "candidate-b-train-1", "files": [dict(file_row, declared_spdx="MIT")]}
+    index = json.loads(catalog_admission_module.build_object_license_index([apache, mit]))
+    assert index["object_count"] == 1
+    assert index["conflicting_object_sha256s"] == [digest]
+    entry = index["objects"][0]
+    assert entry["declared_licenses"] == ["Apache-2.0", "MIT"]
+    assert entry["license_agreement"] == "conflicting"
+    assert entry["source_ids"] == ["candidate-a-train-1", "candidate-b-train-1"]
+    assert entry["bases"] == ["partition_receipt_declared_spdx"]
+
+
+def test_partition_declared_spdx_and_authority_reach_the_index(tmp_path: Path) -> None:
+    """A licence-partition row names one licence per FILE, with its authority recorded."""
+
+    with_authority = {
+        "source_id": "candidate-training_infrastructure-train-1",
+        "files": [
+            {
+                "sha256": sha256(b"alpha"),
+                "bytes": 5,
+                "media_type": "text/x-python",
+                "declared_spdx": "Apache-2.0",
+                "source_repo": "example/repo",
+                "source_revision": "c" * 40,
+                "license_authority_present": True,
+            }
+        ],
+    }
+    index = json.loads(catalog_admission_module.build_object_license_index([with_authority]))
+    entry = index["objects"][0]
+    assert entry["declared_licenses"] == ["Apache-2.0"]
+    assert entry["bases"] == ["partition_receipt_declared_spdx"]
+    assert entry["license_authority_present"] is True
+    assert index["named_count"] == 1
+
+
+def test_immutable_object_and_membership_records_keep_their_frozen_key_sets(
+    tmp_path: Path,
+) -> None:
+    """ember-lab validates both record kinds with an exact key set.
+
+    The licence had to leave the catalog records for this reason: a new field on either kind
+    makes the Rust loader refuse the whole catalog, and a required one refuses every export
+    already produced. This test pins the two key sets so a later attempt to widen them fails
+    here, next to the reason, rather than at the binary.
+    """
+
+    row_path, row_sha = write_connector(
+        tmp_path,
+        source="candidate-mathematics-train-1",
+        domain="mathematics",
+        files=[("a.pdf", b"pdf-a")],
+    )
+    row = load_bulk_domain_connector_receipt(
+        receipt_path=row_path,
+        expected_receipt_sha256=row_sha,
+        source_id="candidate-mathematics-train-1",
+        expected_source_selector="candidate-mathematics-train-1",
+        expected_license_text_sha256=sha256(b"CC-BY-4.0"),
+        domain="mathematics",
+        split="train",
+    )
+    row.pop("excluded_files", None)
+    row.pop("connector_file_count", None)
+    manifest = json.loads(
+        build_dataset_catalog_manifest(rows=[row], tokenizer_sha256="4" * 64, created_at_ms=1)
+    )
+    objects = [r for r in manifest["records"] if r["kind"] == "immutable_object"]
+    memberships = [r for r in manifest["records"] if r["kind"] == "membership"]
+    assert objects and memberships
+    for record in objects:
+        assert set(record) == {
+            "byte_count",
+            "custody_state",
+            "id",
+            "kind",
+            "locator",
+            "media_type",
+            "sha256",
+        }
+    for record in memberships:
+        assert set(record) == {
+            "admission_state",
+            "domain",
+            "exact_sha256",
+            "id",
+            "kind",
+            "near_dedup_cluster",
+            "register",
+            "shard_id",
+            "split",
+            "tokenizer_sha256",
+            "window_end",
+            "window_start",
+        }
+
+
+def test_project_cli_writes_the_license_index_and_refuses_to_overwrite_it(
+    tmp_path: Path,
+) -> None:
+    """The index is produced by the same run that projects the manifest, from the same rows."""
+
+    row_path, row_sha = write_connector(
+        tmp_path,
+        source="candidate-mathematics-train-1",
+        domain="mathematics",
+        files=[("a.pdf", b"pdf-a"), ("b.pdf", b"pdf-b")],
+    )
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_bytes(
+        canonical(
+            {
+                "schema_version": "ember-issue1581-catalog-projection-spec-v1",
+                "tokenizer_sha256": "4" * 64,
+                "created_at_ms": 1,
+                "rows": [
+                    {
+                        "receipt_path": str(row_path),
+                        "expected_receipt_sha256": row_sha,
+                        "source_id": "candidate-mathematics-train-1",
+                        "expected_source_selector": "candidate-mathematics-train-1",
+                        "expected_license_text_sha256": sha256(b"CC-BY-4.0"),
+                        "domain": "mathematics",
+                        "split": "train",
+                        "supporting_receipts": [],
+                    }
+                ],
+            }
+        )
+    )
+    manifest_path = tmp_path / "manifest.json"
+    index_path = tmp_path / "license-index.json"
+    assert (
+        catalog_main(
+            [
+                "project",
+                "--spec",
+                str(spec_path),
+                "--output",
+                str(manifest_path),
+                "--license-index",
+                str(index_path),
+            ]
+        )
+        == 0
+    )
+    index = json.loads(index_path.read_bytes())
+    manifest = json.loads(manifest_path.read_bytes())
+    admitted = {
+        record["sha256"]
+        for record in manifest["records"]
+        if record["kind"] == "immutable_object"
+    }
+    # Every object the manifest admits is named by the index, over the same denominator.
+    assert {entry["sha256"] for entry in index["objects"]} == admitted
+    assert index["unnamed_count"] == 0
+    assert str(tmp_path).encode() not in index_path.read_bytes()
+    # An existing index path is refused rather than rewritten, like every other output here.
+    assert (
+        catalog_main(
+            [
+                "project",
+                "--spec",
+                str(spec_path),
+                "--output",
+                str(tmp_path / "manifest-2.json"),
+                "--license-index",
+                str(index_path),
+            ]
+        )
+        == 2
+    )
