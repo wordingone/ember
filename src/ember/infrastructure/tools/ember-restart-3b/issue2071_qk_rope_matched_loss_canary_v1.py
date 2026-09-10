@@ -1139,6 +1139,7 @@ def main() -> int:
     os.environ["EMBER_GATE_AUTHORIZED"] = "1"
     module_root = root / "tools/ember-restart-3b"
     sys.path.insert(0, str(module_root))
+    sys.path.insert(0, str(root / "src" / "ember" / "model"))
     torch = importlib.import_module("torch")
     try:
         interpreter_binding = bind_interpreter_for_mode(
@@ -1158,7 +1159,7 @@ def main() -> int:
     emit_progress(output, "PRE_ALLOCATION_INTERPRETER_BINDING_PASS", **interpreter_binding)
     packed = importlib.import_module("packed_specialist_run")
     pretrain = importlib.import_module("pretrain")
-    model_module = importlib.import_module("model")
+    model_module = importlib.import_module("ember_v0_model")
     checkpoint_module = importlib.import_module("checkpoint_artifacts")
     semantic_module = importlib.import_module("semantic_stream")
     text_lab_module = importlib.import_module("text_lab_corpus")

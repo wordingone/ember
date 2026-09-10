@@ -929,7 +929,7 @@ def test_terminal_receipt_is_rebound_to_issue2131_and_rebased_heads():
 
 
 def test_pre_spine_hash_paths_translate_to_canonical_locations(tmp_path: Path):
-    canonical = tmp_path / "src" / "ember" / "model" / "model.py"
+    canonical = tmp_path / "src" / "ember" / "model" / "ember_v0_model.py"
     canonical.parent.mkdir(parents=True)
     canonical.write_text("model-bytes", encoding="utf-8")
     old = tmp_path / "tools" / "ember-restart-3b" / "model.py"
@@ -1212,9 +1212,9 @@ def test_configured_refusal_rebind_hashes_both_models_and_writes_sidecar(
 
     def fake_git(repo_root: Path, *args: str) -> bytes:
         assert repo_root == tmp_path
-        if args == ("show", f"{control_head}:src/ember/model/model.py"):
+        if args == ("show", f"{control_head}:src/ember/model/ember_v0_model.py"):
             return control_model
-        if args == ("show", f"{treatment_head}:src/ember/model/model.py"):
+        if args == ("show", f"{treatment_head}:src/ember/model/ember_v0_model.py"):
             return treatment_model
         raise AssertionError(args)
 
@@ -1256,7 +1256,7 @@ def test_configured_aa_refusal_binds_control_bytes_into_both_arms(
 
     def fake_git(repo_root: Path, *args: str) -> bytes:
         assert repo_root == tmp_path
-        if args == ("show", f"{head}:src/ember/model/model.py"):
+        if args == ("show", f"{head}:src/ember/model/ember_v0_model.py"):
             return control_model
         if args == (
             "show",
@@ -1534,3 +1534,90 @@ def test_aa_adjudication_refuses_a_row_loss_that_is_not_the_common_start_update(
     with pytest.raises(ValueError, match="AA_ROW_LOSS_NOT_COMMON_START_REFUSED:2"):
         MODULE.adjudicate_pairs(pairs, aa_mode=True)
 
+
+
+@pytest.mark.parametrize("aa_mode", (False, True))
+def test_configured_retained_heads_resolve_historical_model_bytes(
+    monkeypatch, tmp_path: Path, aa_mode
+):
+    module = _load("issue2081_retained_model_head", "issue2081_position_robust_canary_v1.py")
+    control_head = "a" * 40
+    treatment_head = control_head if aa_mode else "b" * 40
+    versioned_path = "src/ember/model/ember_v0_model.py"
+    historical_path = "src/ember/model/model.py"
+    control_model = b"retained-control-model"
+    treatment_model = control_model if aa_mode else b"current-treatment-model"
+    calls = []
+
+    def fake_git(repo_root, *args):
+        assert repo_root == tmp_path
+        calls.append(args)
+        if args == ("show", f"{control_head}:{module.AA_CORPUS_REPO_PATH}"):
+            return b"retained-corpus"
+        if args == ("show", f"{control_head}:{versioned_path}"):
+            raise RuntimeError("GIT_REFUSED:versioned path absent")
+        if args == ("ls-tree", "--name-only", control_head, "--", versioned_path):
+            return b""
+        if args == ("show", f"{control_head}:{historical_path}"):
+            return control_model
+        if not aa_mode and args == ("show", f"{treatment_head}:{versioned_path}"):
+            return treatment_model
+        raise AssertionError(args)
+
+    monkeypatch.setattr(module.BASE, "git", fake_git)
+    module.configure_base(root=tmp_path, control_rebased_head=control_head,
+                          treatment_rebased_head=treatment_head, aa_mode=aa_mode)
+    output = tmp_path / "retained.json"
+    module.write_exclusive_refusal(output, ValueError("RETAINED_SOURCE_CHECK"))
+    receipt = json.loads(output.with_name("retained.refusal.json").read_text())
+    if aa_mode:
+        assert receipt["control_source_head"] == control_head
+        assert receipt["treatment_source_head"] == treatment_head
+    assert receipt["control_source_model_sha256"] == module.BASE.sha256_bytes(control_model)
+    assert receipt["treatment_source_model_sha256"] == module.BASE.sha256_bytes(treatment_model)
+    assert ("ls-tree", "--name-only", control_head, "--", versioned_path) in calls
+    assert ("show", f"{control_head}:{historical_path}") in calls
+
+
+@pytest.mark.parametrize("tree_state", ("versioned_path_exists", "head_unavailable"))
+def test_configured_retained_lookup_preserves_versioned_read_failure(
+    monkeypatch, tmp_path: Path, tree_state
+):
+    module = _load("issue2081_retained_read_failure", "issue2081_position_robust_canary_v1.py")
+    head = "a" * 40
+    versioned_path = "src/ember/model/ember_v0_model.py"
+
+    def fake_git(repo_root, *args):
+        assert repo_root == tmp_path
+        if args == ("show", f"{head}:{versioned_path}"):
+            raise RuntimeError("GIT_REFUSED:versioned read failure")
+        if args == ("ls-tree", "--name-only", head, "--", versioned_path):
+            if tree_state == "head_unavailable":
+                raise RuntimeError("GIT_REFUSED:head unavailable")
+            return (versioned_path + "\n").encode()
+        raise AssertionError(f"unexpected historical lookup: {args}")
+
+    monkeypatch.setattr(module.BASE, "git", fake_git)
+    module.configure_base(root=tmp_path, control_rebased_head=head,
+                          treatment_rebased_head="b" * 40)
+    with pytest.raises(RuntimeError, match="GIT_REFUSED"):
+        module.BASE.git(tmp_path, "show",
+                        f"{module.BASE.CONTROL_HEAD}:tools/ember-restart-3b/model.py")
+
+
+
+@pytest.mark.parametrize("relative", (
+    "src/ember/infrastructure/tools/ember-restart-3b/issue1969_w1_launcher.py",
+    "src/ember/infrastructure/tools/ember-restart-3b/issue2071_qk_rope_matched_loss_canary_v1.py",
+    "tests/ember_restart_model/domain-governance/test_a1_dense_cpu_offload.py",
+))
+def test_dynamic_model_callers_use_the_versioned_module(relative):
+    import ast
+    tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+    imports = [node.args[0].value for node in ast.walk(tree)
+               if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+               and node.func.attr == "import_module" and node.args
+               and isinstance(node.args[0], ast.Constant)]
+    assert "model" not in imports
+    assert "ember_v0_model" in imports
+    assert (ROOT / "src/ember/model/ember_v0_model.py").is_file()

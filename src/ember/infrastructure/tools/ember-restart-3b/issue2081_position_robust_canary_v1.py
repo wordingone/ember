@@ -916,7 +916,7 @@ def write_exclusive_refusal(
 def translate_pre_spine_path(root: Path, path: Path) -> Path:
     old_model = root / "tools" / "ember-restart-3b" / "model.py"
     if path.resolve() == old_model.resolve():
-        return root / "src" / "ember" / "model" / "model.py"
+        return root / "src" / "ember" / "model" / "ember_v0_model.py"
     old_test = root / "tests" / "ember_restart_model" / "test_model.py"
     if path.resolve() == old_test.resolve():
         return (
@@ -998,16 +998,29 @@ def configure_base(
         f"{BASE.CONTROL_HEAD}:tools/ember-restart-3b/model.py"
     )
     treatment_model_spec = (
-        f"{treatment_rebased_head}:src/ember/model/model.py"
+        f"{treatment_rebased_head}:src/ember/model/ember_v0_model.py"
     )
+
+    def model_bytes_at_head(repo_root: Path, source_head: str) -> bytes:
+        versioned_path = "src/ember/model/ember_v0_model.py"
+        try:
+            return original_git(repo_root, "show", f"{source_head}:{versioned_path}")
+        except RuntimeError:
+            # Retained source heads may predate the filename migration. Only
+            # absence at this same immutable head permits the historical path.
+            if original_git(
+                repo_root, "ls-tree", "--name-only", source_head, "--", versioned_path
+            ).strip():
+                raise
+            return original_git(
+                repo_root, "show", f"{source_head}:src/ember/model/model.py"
+            )
 
     def rebased_git(repo_root: Path, *args: str) -> bytes:
         if args == ("show", historical_control_spec):
-            return original_git(
-                repo_root,
-                "show",
-                f"{control_rebased_head}:src/ember/model/model.py",
-            )
+            return model_bytes_at_head(repo_root, control_rebased_head)
+        if args == ("show", treatment_model_spec):
+            return model_bytes_at_head(repo_root, treatment_rebased_head)
         return original_git(repo_root, *args)
 
     def validate_rebased_treatment(

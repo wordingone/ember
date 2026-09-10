@@ -38,7 +38,7 @@ def write_json(path: Path, payload: dict[str, object]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def fixture(tmp_path: Path) -> dict[str, Path | str]:
+def fixture(tmp_path: Path, model_basename: str = "model.py") -> dict[str, Path | str]:
     ledger = tmp_path / "ledger.json"
     ledger_raw = write_json(
         ledger,
@@ -61,8 +61,8 @@ def fixture(tmp_path: Path) -> dict[str, Path | str]:
                             "event_ordinal": 0,
                             "self_device_time_us": "60.0",
                             "source_stack": [
-                                "model.py(272): apply",
-                                "model.py(299): forward",
+                                f"{model_basename}(272): apply",
+                                f"{model_basename}(299): forward",
                                 "packed_specialist_run.py(2874): main",
                             ],
                         },
@@ -71,7 +71,7 @@ def fixture(tmp_path: Path) -> dict[str, Path | str]:
                             "event_ordinal": 1,
                             "self_device_time_us": "40.0",
                             "source_stack": [
-                                "model.py(299): forward",
+                                f"{model_basename}(299): forward",
                                 "packed_specialist_run.py(2874): main",
                             ],
                         },
@@ -115,7 +115,7 @@ def fixture(tmp_path: Path) -> dict[str, Path | str]:
             {
                 "schema_version": "ember-issue1945-source-owner-allowlist-v1",
                 "source_rules": [
-                    {"basename": "model.py", "class": "non_overhead"},
+                    {"basename": model_basename, "class": "non_overhead"},
                     {"basename": "pretrain.py", "class": "overhead"},
                     {"basename": "packed_specialist_run.py", "class": "overhead"},
                 ],
@@ -240,3 +240,14 @@ def test_selection_uses_lexical_source_site_tie_break(tmp_path: Path) -> None:
 
     receipt = build(subject, fx)
     assert receipt["selected_source_site"] == "model.py(272): apply"
+
+
+def test_current_source_rules_classify_versioned_model_filename(tmp_path: Path) -> None:
+    subject = load_subject()
+    fx = fixture(tmp_path, model_basename="ember_v0_model.py")
+    fx["allowlist"] = ROOT / "manifests/issue1945-source-owner-allowlist-v1.json"
+    receipt = build(subject, fx)
+    assert receipt["result"] == "PASS"
+    assert receipt["selected_source_site"] == "ember_v0_model.py(272): apply"
+    assert receipt["selected_source_device_time_us"] == "60.0"
+    assert receipt["named_attribution_ratio"] == "1"
