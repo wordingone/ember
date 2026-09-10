@@ -161,10 +161,54 @@ class SharedVectorBound(unittest.TestCase):
         with self.assertRaisesRegex(NumericalSplitRefusal, "not finite"):
             compare_local_routes(full_set(), full_set({key: {"summary": broken}}))
 
-    def test_zero_reference_norm_is_refused_rather_than_reported_as_zero_delta(self):
+    def test_one_sided_empty_summary_is_refused_rather_than_reported_as_zero_delta(self):
+        """cpu has no history to summarize and cuda does: a real disagreement, still refused.
+
+        The relative delta is undefined here, so the previous revision refused on the undefined
+        division alone. It still refuses, but now for the reason that is actually wrong: the two
+        backends disagree about what an absent history produces. Reporting a relative delta of
+        0.0 remains forbidden, which is the property this test has always been about.
+        """
         key = (0, 3, 512)
-        with self.assertRaisesRegex(NumericalSplitRefusal, "zero norm"):
-            compare_local_routes(full_set({key: {"summary": torch.zeros(8)}}), full_set())
+        comparisons = compare_local_routes(full_set({key: {"summary": torch.zeros(8)}}), full_set())
+        row = next(item for item in comparisons if item.key == key)
+        self.assertIsNone(row.shared_vector_relative_l2, 'an undefined ratio is never a number')
+        self.assertGreater(row.shared_vector_absolute_l2, 0)
+        self.assertFalse(row.admissible)
+        with self.assertRaisesRegex(NumericalSplitRefusal, "disagree about an absent history"):
+            refuse_if_inadmissible(comparisons)
+
+    def test_the_defined_empty_summary_on_both_backends_is_measured_not_refused(self):
+        """The fixture's own first segments, which no run could previously get past.
+
+        `select_local` publishes a zero vector at a document's first segment, where there is no
+        preceding shared-path vector. That is 12 of the fixed fixture's 60 routes -- one per
+        routing layer at segment 0 -- so refusing every zero reference made a fifth of the
+        comparison permanently uncomputable and the gate unpassable on any inputs.
+
+        Both backends are obliged to produce the SAME empty summary, so the bound here is absolute
+        equality, which is strictly tighter than the relative bound it replaces. The relative delta
+        is published as null rather than as a number nobody computed, and the report says how many
+        routes that covers so its maximum cannot be misread as covering all sixty.
+        """
+        empty = {key: {"summary": torch.zeros(8)}
+                 for key in ((0, layer, 0) for layer in range(1, 24, 2))}
+        comparisons = compare_local_routes(full_set(empty), full_set(empty))
+        refuse_if_inadmissible(comparisons)
+        undefined = [row for row in comparisons if row.shared_vector_relative_l2 is None]
+        self.assertEqual(len(undefined), 12)
+        self.assertEqual({row.key[2] for row in undefined}, {0})
+        for row in undefined:
+            self.assertEqual(row.shared_vector_absolute_l2, 0.0)
+            self.assertTrue(row.admissible)
+        report = local_route_report(comparisons)
+        self.assertEqual(report["undefined_relative_routes"], 12)
+        self.assertEqual(report["max_zero_reference_absolute_l2"], 0.0)
+        self.assertEqual(report["local_routes"], 60)
+        # The maximum is taken over the 48 routes that HAVE a defined ratio, never over a set
+        # silently padded with zeros for the twelve that do not.
+        self.assertIsNotNone(report["max_shared_vector_relative_l2"])
+        self.assertEqual(report["bounds"]["zero_reference_absolute_l2_max"], 0.0)
 
 
 class ContextAndCandidateRefusals(unittest.TestCase):
