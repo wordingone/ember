@@ -202,6 +202,37 @@ def _root_like(name: str) -> bool:
     return "ROOT" in upper or upper == "HERE" or upper.endswith("_DIR") or upper.endswith("DIR")
 
 
+# Recognised by NAME, exactly as _derive already recognises `Path` and `os.path.dirname`. A module
+# that rebound one of these to something returning a path would defeat the check, which is why the
+# set is closed and short rather than a general list of calls that look uninteresting.
+_NOT_A_PATH_CALLS = frozenset({"set", "frozenset", "re.compile"})
+
+
+def _provably_not_a_path(node: ast.AST) -> bool:
+    """Is this binding's value incapable of being a path, whatever its NAME suggests?
+
+    _root_like is purely name-based -- it matches any identifier containing ROOT or ending in DIR --
+    so a compiled regex called _DRIVE_ROOT_RE, a set of field names called ROOT_FIELDS and a dict of
+    exceptions called ROOT_EXCEPTIONS all enter the census by coincidence of naming. They refuse,
+    correctly, and then sit in the baseline as UNEVALUABLE rows about which no justification can say
+    anything truer than "this was never a path".
+
+    Dropping them is a scope reduction, so it owes the test that governs those: could any removed row
+    have failed? No. Each is UNEVALUABLE, a status that can never become MATCH or MISMATCH, and the
+    value is not a path. Nor is the watch lost. The census is recomputed from source on every run, so
+    repointing one of these names at a host path yields a fresh, unbaselined row on the next scan --
+    which is precisely the failure this gate exists to catch.
+
+    Set and Dict, not List and Tuple. The difference is not that a set of paths is unimaginable; it is
+    that a set and a dict have no element ORDER, so there is no stable per-element identity for a row
+    to be keyed on. A list or tuple has indices, and its elements here genuinely do reach __file__ --
+    those rows are a named successor (one row per element), not noise, and they stay.
+    """
+    if isinstance(node, (ast.Set, ast.SetComp, ast.Dict, ast.DictComp)):
+        return True
+    return isinstance(node, ast.Call) and _call_name(node.func) in _NOT_A_PATH_CALLS
+
+
 def _portable_evaluated_path(root: Path, resolved: Path) -> str:
     """Render a resolved path without serializing the host checkout location."""
     relative = os.path.relpath(resolved, root).replace("\\", "/")
@@ -267,7 +298,7 @@ def scan_files(root: Path, paths: Iterable[Path]) -> list[dict[str, object]]:
                 try:
                     derived = _derive(value, path, aliases)
                 except Unsupported as exc:
-                    if _root_like(target):
+                    if _root_like(target) and not _provably_not_a_path(value):
                         rows.append(_row(root=root, path=path, target=target, node=value, derived=None, error=str(exc)))
                     continue
                 if derived.depends_on_file:

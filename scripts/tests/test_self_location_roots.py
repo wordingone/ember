@@ -362,3 +362,56 @@ def test_ci_runs_regressions_before_enforcing_the_checked_in_baseline() -> None:
     assert workflow.count(regression) == 1
     assert workflow.count(gate) == 1
     assert workflow.index(regression) < workflow.index(gate)
+
+
+NOT_A_PATH_SOURCE = """\
+import re
+_DRIVE_ROOT_RE = re.compile('[A-Za-z]:')
+ROOT_FIELDS = {'schema_version', 'seat'}
+ROOT_EXCEPTIONS = {'.gitignore': 'lives at the repository root'}
+DYNAMIC_CALL_ROOTS = frozenset({'runpy'})
+_SIDECAR_ROOTS = set(['a', 'b'])
+"""
+
+COULD_BE_PATH_SOURCE = """\
+import os
+from pathlib import Path
+HERE = Path(__file__).resolve().parent
+EXTERNAL_ROOT = os.environ.get('EMBER_EXTERNAL_ROOT')
+FIXTURE_ROOTS = [HERE / 'a', HERE / 'b']
+SPEC_ROOTS = (HERE / 'c',)
+"""
+
+
+def test_root_named_bindings_that_cannot_be_paths_leave_the_census(tmp_path: Path) -> None:
+    """The root-like predicate is name-based, so it admits regexes, sets and dicts by coincidence
+    of naming. They leave rather than sit in the baseline as rows no justification can describe
+    more truthfully than "this was never a path"."""
+    source = write(tmp_path / "scripts" / "probe.py", NOT_A_PATH_SOURCE)
+    assert subject.scan_files(tmp_path, [source]) == []
+
+
+def test_the_reduction_does_not_reach_bindings_that_could_be_paths(tmp_path: Path) -> None:
+    """The narrowness is the whole point. A root-named binding that refuses for a REAL reason --
+    an environment read, an ordered collection whose elements reach __file__ -- keeps its row, so
+    the census keeps watching exactly what it was built to watch."""
+    source = write(tmp_path / "scripts" / "probe.py", COULD_BE_PATH_SOURCE)
+    unevaluable = {
+        row["target"]
+        for row in subject.scan_files(tmp_path, [source])
+        if row["status"] == "UNEVALUABLE"
+    }
+    assert unevaluable == {"EXTERNAL_ROOT", "FIXTURE_ROOTS", "SPEC_ROOTS"}
+
+
+def test_a_dropped_name_repointed_at_a_path_comes_back_as_a_fresh_row(tmp_path: Path) -> None:
+    """Why the reduction loses no watch: the census is recomputed from source on every run, so a
+    dropped binding returns the moment it becomes a path again -- as an unbaselined row, which is
+    the failure this gate exists to raise."""
+    probe = tmp_path / "scripts" / "probe.py"
+    assert subject.scan_files(tmp_path, [write(probe, "ROOT_FIELDS = {'schema_version'}\n")]) == []
+    rows = subject.scan_files(
+        tmp_path,
+        [write(probe, "from pathlib import Path\nROOT_FIELDS = Path(__file__).resolve().parent\n")],
+    )
+    assert [(row["target"], row["status"]) for row in rows] == [("ROOT_FIELDS", "MISMATCH")]
