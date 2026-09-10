@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]
+                     / 'src/ember/infrastructure/tools/ember-restart-3b'))
 """Opt-in full-population CUDA conformance, never trained capability or throughput.
 
 Revision CIA3-R1-N61-numerical-split-v1. The preceding revision asserted exact free-route equality
@@ -30,6 +32,7 @@ import sys
 import time
 import unittest
 import torch
+import checkpoint_artifacts as artifacts
 from ember.model.ember_v0_decoder import CIADecoder
 from ember.model.ember_v0_routing import GlobalObservation, LocalObservation, _local_scores
 from ember.governance.scripts.cia_conformance import fixed_input_values, require_current_dispatch
@@ -246,8 +249,16 @@ class FullPopulationCUDA(unittest.TestCase):
         del planned_logits, free_logits, reference_logits, reference_gradients
 
         # ---- 5. Excluded warmup, then one measured update ----------------------------------
-        selected = model.apply_update_support('core+expert-set', experts=experts)
-        optimizer = torch.optim.AdamW(selected, lr=WARMUP_LEARNING_RATE, foreach=False)
+        model.apply_update_support('core+expert-set', experts=experts)
+        # Membership is the COMPLETE inventory; the update support is expressed by requires_grad,
+        # not by membership. Building the group over apply_update_support's returned subset -- what
+        # this line did through revision N61 -- produces a shape whose state cannot be captured:
+        # cia_optimizer_identity refuses `seen != set(names_by_id)`, so the very shape this unit
+        # drove the decoder in was uncheckpointable, and section 6 below is what now proves it is
+        # not. AdamW skips a member whose .grad is None and allocates no moment for it, so the
+        # excluded-warmup and no-reallocation conditions below are unchanged by this.
+        optimizer = torch.optim.AdamW(list(parameters.values()), lr=WARMUP_LEARNING_RATE,
+                                      foreach=False)
         selected_names = {name for name, value in parameters.items() if value.requires_grad}
         before_warmup = {name: digest_of(parameters[name]) for name in selected_names}
         optimizer.zero_grad(set_to_none=True)
@@ -324,6 +335,50 @@ class FullPopulationCUDA(unittest.TestCase):
         if peak > limit:
             deferred_failures.append('measured update peak %d bytes exceeds the %d byte limit'
                                      % (peak, limit))
+        # ---- 6. The shape this unit drives must be a shape the checkpoint interface can capture --
+        # Through revision N61 this unit reported 'checkpoint: omitted; this unit writes no
+        # checkpoint and claims no recovery'. That sentence was true and it concealed a defect:
+        # the optimizer was built over the update-support subset, and cia_optimizer_identity refuses
+        # membership that does not cover the complete inventory -- so the live consumer's shape was
+        # not capturable at all, and nothing here would ever have said so. The two admission gates
+        # are called against the real optimizer at the real quiescent boundary, and the moments are
+        # captured, so a regression to subset membership fails this unit instead of surfacing at a
+        # checkpoint nobody writes here.
+        binding_started = time.perf_counter()
+        optimizer.zero_grad(set_to_none=True)
+        quiescent = artifacts._cia_quiescent_parameters(model)
+        self.assertEqual(sorted(quiescent), sorted(parameters))
+        optimizer_identity = artifacts.cia_optimizer_identity(model, optimizer)
+        moment_bytes = sum(value.numel() * value.element_size()
+                           for fields in optimizer.state.values() for value in fields.values())
+        placed = artifacts.capture_cia_placed_optimizer_state(
+            model, optimizer, max_state_bytes=moment_bytes)
+        captured_names = sorted(name for name, fields in placed['state'].items() if fields)
+        supported_names = {name for name, value in parameters.items() if value.requires_grad}
+        # Captured moments are a NON-EMPTY SUBSET of the update support, never an equality: a
+        # supported parameter that this fixture never engages -- the modality adapters, for one --
+        # receives no gradient, so AdamW allocates it no moment and there is nothing to capture.
+        # Measured on this fixture: 425 supported, 375 with moments. What must hold is that nothing
+        # OUTSIDE the support was captured, which is the containment below.
+        self.assertTrue(captured_names, 'no moments were captured')
+        self.assertEqual(sorted(set(captured_names) - supported_names), [],
+                         'a parameter outside the update support carried optimizer state')
+        binding_seconds = time.perf_counter() - binding_started
+        checkpoint_binding = {
+            'optimizer_membership': 'complete inventory',
+            'inventory_parameters': len(parameters),
+            'optimizer_identity_accepted': bool(optimizer_identity),
+            'quiescent_cache_admitted': True,
+            'placed_state_schema': placed['schema_version'],
+            'captured_moment_parameters': len(captured_names),
+            'supported_parameters': len(supported_names),
+            'supported_without_moments': len(supported_names) - len(captured_names),
+            'captured_moment_bytes': moment_bytes,
+            'capture_seconds': binding_seconds,
+            'boundary': 'this unit proves the driven shape is capturable; it publishes no '
+                        'checkpoint artifact and claims no recovery or continuation'}
+        del placed
+
         trainable = sum(value.numel() for value in parameters.values() if value.requires_grad)
         print('CIA_MEASURED_UPDATE', json.dumps({
             'revision': REVISION,
@@ -340,7 +395,7 @@ class FullPopulationCUDA(unittest.TestCase):
             'expert_bundle_fetches': dispatch_after[3] - dispatch_before[3],
             'expert_evictions': dispatch_after[4] - dispatch_before[4],
             'synchronization_observer_cost': 'included in every phase above',
-            'checkpoint': 'omitted; this unit writes no checkpoint and claims no recovery',
+            'checkpoint_binding': checkpoint_binding,
             'sequence_length': len(token_values), 'microbatch': 1,
             'allocated_parameters': 3082539008, 'trainable_parameters': trainable,
             'active_experts': list(experts),
