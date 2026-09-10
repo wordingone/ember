@@ -1482,6 +1482,55 @@ def test_an_unkeyed_partition_still_resolves_to_the_shared_table() -> None:
     )
 
 
+def test_installed_media_tables_carry_no_corpus_paths() -> None:
+    """Every installed table is machine-generated vocabulary, and nothing else.
+
+    repo-guard's names scan is scoped away from the keyed-table directory: a class key is a
+    file extension produced by `_partition_media_class`, and an extension that happens to spell
+    a name is an incidental token rather than written prose. That exemption holds only while the
+    directory contains no prose and no corpus paths. The tables originally carried an `example`
+    field holding a real path from the censused partition, which is exactly the kind of content
+    the scan exists to see -- so the field was removed, and this test is what keeps it removed.
+
+    Reading the installed directory rather than a fixed list means a newly minted table is
+    covered the moment it lands.
+    """
+
+    directory = catalog_admission_module._PARTITION_MEDIA_TYPE_TABLE.parent
+    installed = sorted((directory / 'train_partition_media_types').glob('*.json'))
+    installed.append(catalog_admission_module._PARTITION_MEDIA_TYPE_TABLE)
+    assert installed, 'no media tables installed; the scan scope would exempt nothing'
+
+    permitted = {'count', 'media_type', 'reason'}
+    offenders: list[str] = []
+    for path in installed:
+        table = json.loads(path.read_text(encoding='utf-8'))
+        for key, row in table['classes'].items():
+            extra = set(row) - permitted
+            if extra:
+                offenders.append(f'{path.name}:{key}:{sorted(extra)}')
+    assert not offenders, (
+        'installed media tables carry fields beyond the generated vocabulary, so the names-scan '
+        'exemption over their directory no longer describes them: ' + '; '.join(offenders[:10])
+    )
+
+
+def test_every_installed_keyed_table_loads_through_the_repositorys_own_validator() -> None:
+    """The twelfth table is admitted the same way the other eleven are.
+
+    Installing a table is a claim that the loader accepts it. Asserting that here rather than in
+    the authoring seat's notes means a table minted with a stale schema, a miscounted class, or a
+    digest over different bytes fails in CI instead of at the first partition that needs it.
+    """
+
+    directory = catalog_admission_module._PARTITION_MEDIA_TYPE_TABLE.parent
+    keyed = sorted((directory / 'train_partition_media_types').glob('*.json'))
+    assert keyed, 'no keyed tables installed'
+    for path in keyed:
+        table = catalog_admission_module._load_partition_media_type_table(path.stem)
+        assert table['class_count'] == len(table['classes'])
+        assert table['file_count'] == sum(row['count'] for row in table['classes'].values())
+
 def test_planted_negative_a_keyed_table_that_does_not_hash_to_itself_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
