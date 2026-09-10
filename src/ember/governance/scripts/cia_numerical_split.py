@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Comparison contract for revision CIA3-R1-N61-numerical-split-v1.
+"""Comparison contract for revision CIA3-R1-N62-numerical-split-v2.
 
 The preceding revision asserted exact free-route equality across backends and failed on one of 60
 selections, at layer 21, position 768, with a CUDA two-score margin of -0.000027179718 against a
@@ -23,6 +23,26 @@ isolates the selector: identical inputs must produce identical candidate and win
 scores within 2^-18. A selector that agrees on identical inputs while the run disagrees locates the
 divergence upstream, which is exactly the question the last execution could not answer.
 
+N62 adds one leg and loosens no bound. N61 refused a governed run at (0, 23, 1024) for a
+shared-vector relative L2 of 0.1604 against its 0.02 noise bound, while the same run's only
+differing selection -- (0, 21, 768), CUDA margin 2.7e-05 -- had been ADMITTED as a near-tie. An
+admitted near-tie still means the two backends applied different experts to positions 768-1023, and
+`select_local` reads the shared-path vector at segment_start - 1, so position 1023 is the one
+shared-vector source inside that segment and layer 23 is the one routed layer after 21. The refusing
+site was the single site the structure predicts. The contract admitted that the runs may compute
+different things and then refused them for having done so, and a noise bound is not measuring noise
+at a site downstream of a different expert. The 59 other sites sat at 0.0148-0.0151, so the bound is
+well calibrated for what it was designed to bound; the defect was its SCOPE.
+
+So a site is DOWNSTREAM-ATTRIBUTABLE when its shared-vector source position lies inside a segment for
+which an admitted differing selection was recorded at an earlier routed layer of the same document.
+Attribution is structural -- position and segment arithmetic over the recorded keys -- and never a
+magnitude, so it cannot be tuned to admit a site after the fact. Such a site is excluded from the
+noise bound and reported under its own heading with its own maximum; it is admitted for having a
+cause the run already admitted, never for being large. The gating maximum covers the unattributable
+sites alone, because fusing the two populations into one headline number is what made N61's single
+message unreadable.
+
 Every bound here is fixed prospectively by the issue body and may not be changed after observing a
 run. They are proposed numerical bounds, not empirical quality thresholds, and nothing in this
 module grants learning, paging, recovery, checkpoint, launch, throughput or completion credit.
@@ -33,7 +53,7 @@ import math
 
 import torch
 
-REVISION = "CIA3-R1-N61-numerical-split-v1"
+REVISION = "CIA3-R1-N62-numerical-split-v2"
 
 # --- prospectively fixed bounds (issue #2163 body, 2026-09-09) -----------------------------------
 LOCAL_ROUTES = 60
@@ -69,6 +89,11 @@ class LocalComparison:
     #: zero reference is undefined, and publishing it as 0.0 would claim an agreement nothing
     #: measured. Such a route is bounded by absolute equality instead.
     shared_vector_relative_l2: float | None
+    #: True where this site's shared-vector source position lies inside a segment carrying an
+    #: admitted differing selection from an earlier routed layer. Such a site is excluded from the
+    #: shared-vector noise bound, because what it measures is that admitted divergence rather than
+    #: numerical noise.
+    downstream_attributable: bool
     admissible: bool
     reason: str
 
@@ -79,7 +104,37 @@ class LocalComparison:
                 "cpu_margin": self.cpu_margin, "cuda_margin": self.cuda_margin,
                 "shared_vector_absolute_l2": self.shared_vector_absolute_l2,
                 "shared_vector_relative_l2": self.shared_vector_relative_l2,
+                "downstream_attributable": self.downstream_attributable,
                 "admissible": self.admissible, "reason": self.reason}
+
+
+LOCAL_SEGMENT = 256
+
+
+def predict_downstream_attributable(keys, admitted_differing):
+    """Which sites sit downstream of an admitted differing selection, from the KEYS alone.
+
+    Derived from the recorded route keys and the admitted differing keys only -- no measured
+    magnitude reaches this function, which is what stops the exemption from being fitted to the
+    numbers it exempts. `select_local` reads the shared-path vector at `segment_start - 1`, so a
+    site is attributable when that source position falls inside a differing segment of the same
+    document at a strictly earlier routed layer.
+
+    Computed independently of the comparison walk and checked against it, so a bug in either one
+    is a refusal rather than a silently wider exemption.
+    """
+    attributable = set()
+    for document, layer, start in keys:
+        source = start - 1
+        if source < 0:
+            continue
+        for other_document, other_layer, other_start in admitted_differing:
+            if other_document != document or other_layer >= layer:
+                continue
+            if other_start <= source < other_start + LOCAL_SEGMENT:
+                attributable.add((document, layer, start))
+                break
+    return attributable
 
 
 def _finite(value, what):
@@ -115,7 +170,10 @@ def compare_local_routes(cpu_observations, cuda_observations):
         missing = sorted(set(cpu_index) ^ set(cuda_index))
         raise NumericalSplitRefusal(f"local selections do not correspond at {missing}")
 
-    comparisons = []
+    # Pass one measures every site. Admissibility is decided in pass two, because whether a site's
+    # shared-vector divergence is noise or the consequence of an admitted differing selection is not
+    # knowable until every differing selection in the run has been read.
+    measured = {}
     for key in sorted(cpu_index):
         cpu, cuda = cpu_index[key], cuda_index[key]
         if cpu.candidates != cuda.candidates:
@@ -144,9 +202,25 @@ def compare_local_routes(cpu_observations, cuda_observations):
         relative = None
         if reference != 0.0:
             relative = _finite(absolute / reference, f"shared-vector relative delta at {key}")
-        cpu_margin = _finite(cpu.margin, f"cpu margin at {key}")
-        cuda_margin = _finite(cuda.margin, f"cuda margin at {key}")
-        differs = cpu.chosen != cuda.chosen
+        measured[key] = {
+            "candidates": cpu.candidates, "cpu_chosen": cpu.chosen, "cuda_chosen": cuda.chosen,
+            "differs": cpu.chosen != cuda.chosen,
+            "cpu_margin": _finite(cpu.margin, f"cpu margin at {key}"),
+            "cuda_margin": _finite(cuda.margin, f"cuda margin at {key}"),
+            "absolute": absolute, "relative": relative}
+
+    # A differing selection confers attribution only when it is itself ADMITTED. A differing site
+    # whose margin exceeds the bound is a real disagreement, the run fails on it, and it must not
+    # also buy an exemption for the sites it contaminated.
+    admitted_differing = {key for key, row in measured.items()
+                          if row["differs"] and abs(row["cuda_margin"]) <= DIFFERING_CUDA_MARGIN_MAX}
+    attributable = predict_downstream_attributable(set(measured), admitted_differing)
+
+    comparisons = []
+    for key in sorted(measured):
+        row = measured[key]
+        absolute, relative = row["absolute"], row["relative"]
+        downstream = key in attributable
         reason = ""
         admissible = True
         if relative is None:
@@ -154,19 +228,30 @@ def compare_local_routes(cpu_observations, cuda_observations):
                 admissible = False
                 reason = (f"cpu shared vector is the defined empty summary while the cuda absolute "
                           f"delta is {absolute:.10g}; the backends disagree about an absent history")
-        elif relative > SHARED_VECTOR_RELATIVE_L2_MAX:
+        elif relative > SHARED_VECTOR_RELATIVE_L2_MAX and not downstream:
             admissible = False
             reason = (f"shared-vector relative L2 {relative:.10g} exceeds "
                       f"{SHARED_VECTOR_RELATIVE_L2_MAX}")
-        if admissible and differs and abs(cuda_margin) > DIFFERING_CUDA_MARGIN_MAX:
+        elif relative > SHARED_VECTOR_RELATIVE_L2_MAX:
+            reason = (f"shared-vector relative L2 {relative:.10g} is exempt from "
+                      f"{SHARED_VECTOR_RELATIVE_L2_MAX}: this site reads position {key[2] - 1}, "
+                      f"inside a segment carrying an admitted differing selection at an earlier "
+                      f"routed layer")
+        if admissible and row["differs"] and abs(row["cuda_margin"]) > DIFFERING_CUDA_MARGIN_MAX:
             admissible = False
-            reason = (f"differing selection with candidate CUDA margin {abs(cuda_margin):.10g} "
-                      f"exceeding {DIFFERING_CUDA_MARGIN_MAX}")
+            reason = (f"differing selection with candidate CUDA margin "
+                      f"{abs(row['cuda_margin']):.10g} exceeding {DIFFERING_CUDA_MARGIN_MAX}")
         comparisons.append(LocalComparison(
-            key=key, candidates=cpu.candidates, cpu_chosen=cpu.chosen, cuda_chosen=cuda.chosen,
-            differs=differs, cpu_margin=cpu_margin, cuda_margin=cuda_margin,
-            shared_vector_absolute_l2=absolute, shared_vector_relative_l2=relative,
+            key=key, candidates=row["candidates"], cpu_chosen=row["cpu_chosen"],
+            cuda_chosen=row["cuda_chosen"], differs=row["differs"], cpu_margin=row["cpu_margin"],
+            cuda_margin=row["cuda_margin"], shared_vector_absolute_l2=absolute,
+            shared_vector_relative_l2=relative, downstream_attributable=downstream,
             admissible=admissible, reason=reason))
+
+    # The comparison walk and the structural predictor are two paths to the same set; disagreement
+    # means one of them is wrong, and neither is allowed to be the authority on its own.
+    if {row.key for row in comparisons if row.downstream_attributable} != attributable:
+        raise NumericalSplitRefusal("downstream attribution disagrees with its structural prediction")
     return tuple(comparisons)
 
 
@@ -175,10 +260,23 @@ def local_route_report(comparisons):
     return {"revision": REVISION, "local_routes": len(comparisons),
             "differing_routes": sum(1 for row in comparisons if row.differs),
             "inadmissible_routes": sum(1 for row in comparisons if not row.admissible),
+            # The GATING maximum, over unattributable sites alone. N61 published one fused
+            # maximum, so a site downstream of an admitted differing selection and a site carrying
+            # real numerical noise arrived as the same number.
             "max_shared_vector_relative_l2": max((row.shared_vector_relative_l2
                                                   for row in comparisons
-                                                  if row.shared_vector_relative_l2 is not None),
+                                                  if row.shared_vector_relative_l2 is not None
+                                                  and not row.downstream_attributable),
                                                  default=None),
+            "downstream_attributable_routes": sum(1 for row in comparisons
+                                                  if row.downstream_attributable),
+            "max_downstream_attributable_relative_l2": max(
+                (row.shared_vector_relative_l2 for row in comparisons
+                 if row.downstream_attributable and row.shared_vector_relative_l2 is not None),
+                default=None),
+            "admitted_differing_routes": sorted(
+                [row.key[0], row.key[1], row.key[2]] for row in comparisons
+                if row.differs and row.admissible),
             # Published so the maximum above cannot be read as covering every route: these are the
             # routes whose reference is the defined empty summary, bounded by absolute equality.
             "undefined_relative_routes": sum(1 for row in comparisons

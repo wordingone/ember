@@ -5,9 +5,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]
                      / 'src/ember/infrastructure/tools/ember-restart-3b'))
 """Opt-in full-population CUDA conformance, never trained capability or throughput.
 
-Revision CIA3-R1-N61-numerical-split-v1. The preceding revision asserted exact free-route equality
-across backends and failed on one of 60 selections, which told us the winners differed and nothing
-about why. This revision separates the three questions that failure fused together:
+Revision CIA3-R1-N62-numerical-split-v2. N60 asserted exact free-route equality across backends and
+failed on one of 60 selections, which told us the winners differed and nothing about why. N61
+separated the three questions that failure fused together, and its governed run then refused at
+(0, 23, 1024) for a shared-vector relative L2 of 0.1604 -- the single site downstream of the single
+differing selection N61 had itself admitted as a near-tie. N62 keeps every bound and adds the
+attribution that distinguishes those two populations. The three questions are unchanged:
 
   1. MEASURED FREE ROUTING -- both backends select freely, and every corresponding selection is
      compared on its shared vector, its candidate pair, and its two signed scores.
