@@ -146,6 +146,14 @@ def _derive(node: ast.AST, file_path: Path, aliases: dict[str, DerivedPath]) -> 
         if name in {"os.path.abspath", "abspath"} and len(node.args) == 1:
             base = _derive(node.args[0], file_path, aliases)
             return DerivedPath(Path(os.path.abspath(base.path)), base.depends_on_file)
+        if name in {"os.path.normpath", "normpath"} and len(node.args) == 1:
+            # Purely textual: normpath collapses `..` and redundant separators without consulting
+            # the filesystem, so the grammar can apply it exactly rather than approximate it. It
+            # carries depends_on_file through, which is what keeps the row EMITTED -- a derivation
+            # that loses that flag is dropped by scan_files, so a cure that severed it would delete
+            # the row instead of arming it.
+            base = _derive(node.args[0], file_path, aliases)
+            return DerivedPath(Path(os.path.normpath(base.path)), base.depends_on_file)
         if name in {"os.path.dirname", "dirname"} and len(node.args) == 1:
             base = _derive(node.args[0], file_path, aliases)
             return DerivedPath(base.path.parent, base.depends_on_file)
@@ -386,12 +394,43 @@ def build_report(root: Path, paths: Iterable[Path], baseline: dict[str, object],
     }
 
 
+class UnjustifiedRows(Exception):
+    """Raised when a mint is asked to baseline a row for which no reason was supplied.
+
+    Carries the rows themselves rather than a count, because the caller's next action is to write
+    those justifications and a count does not say which.
+    """
+
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        super().__init__(f"{len(rows)} baselined rows carry no justification")
+        self.rows = rows
+
+
+def _justification_key(row: dict[str, object]) -> tuple[object, object, object]:
+    """Justifications are keyed on where the binding IS, not on what it evaluated to.
+
+    Deliberately NOT `_baseline_key`: that key includes `status` and `evaluated_path`, so a row whose
+    status changes -- exactly what a grammar cure does -- would silently lose the reason someone
+    wrote for it. The reason belongs to the binding at a location, and the binding is what a person
+    read when they wrote it.
+    """
+    return (row.get("path"), row.get("line"), row.get("target"))
+
+
 def mint_baseline(
     rows: list[dict[str, object]], *, minted_on: dt.date, expires_on: dt.date,
+    justifications: dict[tuple[object, object, object], str] | None = None,
 ) -> dict[str, object]:
     if minted_on > expires_on:
         raise ValueError("baseline expiry precedes mint date")
     failures = [row for row in rows if row["status"] != "MATCH"]
+    if justifications is not None:
+        missing = [row for row in failures
+                   if not (justifications.get(_justification_key(row)) or "").strip()]
+        if missing:
+            raise UnjustifiedRows(missing)
+        failures = [dict(row, justification=justifications[_justification_key(row)])
+                    for row in failures]
     baseline: dict[str, object] = {
         "schema_version": BASELINE_SCHEMA,
         **BASELINE_GOAL_BINDING,
@@ -415,15 +454,37 @@ def main() -> int:
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--today", type=dt.date.fromisoformat, default=dt.datetime.now(dt.timezone.utc).date())
     parser.add_argument("--mint-baseline-expiry", type=dt.date.fromisoformat)
+    parser.add_argument(
+        "--justifications", type=Path,
+        help=("JSON array of {path, line, target, justification} objects. When given, the mint "
+              "refuses unless EVERY baselined row is covered, and names the ones that are not."),
+    )
     args = parser.parse_args()
     root = args.root.resolve(strict=True)
     paths = tracked_python_files(root)
     if args.mint_baseline_expiry is not None:
         if args.baseline.exists():
             parser.error("baseline mint is no-overwrite")
-        payload = mint_baseline(
-            scan_files(root, paths), minted_on=args.today, expires_on=args.mint_baseline_expiry,
-        )
+        supplied = None
+        if args.justifications is not None:
+            supplied = {
+                (row["path"], row["line"], row["target"]): row.get("justification") or ""
+                for row in json.loads(args.justifications.read_text(encoding="utf-8"))
+            }
+        try:
+            payload = mint_baseline(
+                scan_files(root, paths), minted_on=args.today,
+                expires_on=args.mint_baseline_expiry, justifications=supplied,
+            )
+        except UnjustifiedRows as unjustified:
+            print(json.dumps({
+                "result": "BASELINE_MINT_REFUSED",
+                "reason": "rows carry no justification",
+                "count": len(unjustified.rows),
+                "rows": [{k: row.get(k) for k in ("path", "line", "target", "status")}
+                         for row in unjustified.rows],
+            }, sort_keys=True))
+            return 2
         args.baseline.write_text(
             json.dumps(payload, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
