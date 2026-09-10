@@ -415,3 +415,124 @@ def test_a_dropped_name_repointed_at_a_path_comes_back_as_a_fresh_row(tmp_path: 
         [write(probe, "from pathlib import Path\nROOT_FIELDS = Path(__file__).resolve().parent\n")],
     )
     assert [(row["target"], row["status"]) for row in rows] == [("ROOT_FIELDS", "MISMATCH")]
+
+
+NORMPATH_SIBLING_SOURCE = """\
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+SIBLING_ROOT = os.path.normpath(os.path.join(ROOT, '..', 'other'))
+"""
+
+
+def test_normpath_makes_a_sibling_root_evaluable_and_it_mismatches(tmp_path: Path) -> None:
+    """The point of admitting normpath is that the row stays EMITTED and gains the capacity to
+    FAIL. scan_files appends a successful derivation only when depends_on_file is true, so a cure
+    that severed that flag would delete the row rather than arm it -- which is exactly why the
+    other residual bindings are left alone."""
+    source = write(tmp_path / "scripts" / "probe.py", NORMPATH_SIBLING_SOURCE)
+    rows = {row["target"]: row for row in subject.scan_files(tmp_path, [source])}
+    assert rows["SIBLING_ROOT"]["status"] == "MISMATCH"
+    assert rows["SIBLING_ROOT"]["expectation"] == "repo_root"
+    assert rows["SIBLING_ROOT"]["error"] is None
+
+
+def test_normpath_carries_the_file_dependence_through(tmp_path: Path) -> None:
+    """A normpath over something that does not reach __file__ must not start being recorded: the
+    grammar's job is to measure self-location, and a literal path normalised is still a literal."""
+    source = write(
+        tmp_path / "scripts" / "probe.py",
+        "import os\nCONFIG_ROOT = os.path.normpath('a/../b')\n",
+    )
+    assert subject.scan_files(tmp_path, [source]) == []
+
+
+def _failing_rows(tmp_path: Path) -> list[dict[str, object]]:
+    source = write(
+        tmp_path / "scripts" / "probe.py",
+        "from pathlib import Path\nROOT = Path(__file__).resolve().parent\n",
+    )
+    rows = subject.scan_files(tmp_path, [source])
+    assert [row["status"] for row in rows] == ["MISMATCH"]
+    return rows
+
+
+def test_the_mint_refuses_a_partial_justification_set_and_names_the_rows(tmp_path: Path) -> None:
+    """A baseline half-carrying reasons is worse than one carrying none: the empty entries read as
+    'checked, nothing to say'. The refusal carries the ROWS rather than a count, because the
+    caller's next action is to write those justifications and a count does not say which."""
+    rows = _failing_rows(tmp_path)
+    try:
+        subject.mint_baseline(
+            rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+            justifications={},
+        )
+    except subject.UnjustifiedRows as refused:
+        assert [row["target"] for row in refused.rows] == ["ROOT"]
+    else:
+        raise AssertionError("the mint accepted a row for which no reason was supplied")
+
+
+def test_a_whitespace_justification_is_not_a_justification(tmp_path: Path) -> None:
+    """The field exists to carry a reason. A space satisfies 'non-empty' and satisfies nothing
+    else, so the check is on the stripped value rather than on presence."""
+    rows = _failing_rows(tmp_path)
+    key = subject._justification_key(rows[0])
+    try:
+        subject.mint_baseline(
+            rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+            justifications={key: "   "},
+        )
+    except subject.UnjustifiedRows as refused:
+        assert refused.rows == rows
+    else:
+        raise AssertionError("whitespace was accepted as a reason")
+
+
+def test_a_complete_set_mints_and_every_baselined_row_carries_its_reason(tmp_path: Path) -> None:
+    rows = _failing_rows(tmp_path)
+    key = subject._justification_key(rows[0])
+    minted = subject.mint_baseline(
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+        justifications={key: "correct as emitted: this root is component-scoped"},
+    )
+    assert [row["justification"] for row in minted["rows"]] == [
+        "correct as emitted: this root is component-scoped"
+    ]
+    assert minted["maximum_rows"] == 1
+
+
+def test_the_justification_survives_a_status_change_because_its_key_excludes_status(
+    tmp_path: Path,
+) -> None:
+    """Deliberately NOT `_baseline_key`. That key includes status and evaluated_path, so a row whose
+    status changes -- exactly what a grammar cure does -- would silently lose the reason someone
+    wrote for it. The reason belongs to the binding at a location, and that is what a person read
+    when they wrote it."""
+    rows = _failing_rows(tmp_path)
+    key = subject._justification_key(rows[0])
+    drifted = dict(rows[0], status="UNEVALUABLE", evaluated_path=None)
+    assert subject._justification_key(drifted) == key
+    assert subject._baseline_key(drifted) != subject._baseline_key(rows[0])
+    minted = subject.mint_baseline(
+        [drifted], minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+        justifications={key: "still the same binding, still the same reason"},
+    )
+    assert minted["rows"][0]["justification"] == "still the same binding, still the same reason"
+
+
+def test_an_added_justification_does_not_change_any_row_identity(tmp_path: Path) -> None:
+    """The whole reason the field can live inside the baseline: `_baseline_key` reads six NAMED
+    fields, so the allowed/current comparison is blind to it and no baselined row is invalidated by
+    gaining a reason."""
+    rows = _failing_rows(tmp_path)
+    key = subject._justification_key(rows[0])
+    plain = subject.mint_baseline(
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30))
+    justified = subject.mint_baseline(
+        rows, minted_on=dt.date(2026, 9, 1), expires_on=dt.date(2026, 9, 30),
+        justifications={key: "a reason"})
+    assert [subject._baseline_key(row) for row in plain["rows"]] == [
+        subject._baseline_key(row) for row in justified["rows"]
+    ]
+    assert subject.enforce_baseline(rows, justified, dt.date(2026, 9, 2)) == []
