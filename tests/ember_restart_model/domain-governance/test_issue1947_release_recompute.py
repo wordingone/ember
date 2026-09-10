@@ -146,3 +146,85 @@ def test_a_failing_row_still_fails_under_the_corrected_bar(tmp_path: Path) -> No
     assert not any(row["passed"] for row in receipt["rows"])
     assert receipt["cert_007_all_required_rows_pass"] is False
     assert receipt["result"] == "FAIL"
+
+
+# --- the last of the undemonstrated refusals ---------------------------------------------------
+
+
+def _reseal_bundle(path: Path, mutate) -> None:
+    bundle = json.loads(path.read_text())
+    bundle.pop("self_sha256", None)
+    mutate(bundle)
+    bundle["self_sha256"] = execute.sha(execute.canonical(bundle))
+    path.write_text(json.dumps(bundle))
+
+
+def test_a_bundle_that_is_not_complete_or_claims_protected_bytes_refuses(tmp_path: Path) -> None:
+    """Two conditions under one token, and the second is the one worth planting.
+
+    `protected_bytes_present is not False` refuses a bundle that merely OMITS the field as firmly
+    as one that sets it True -- absence is not a claim of redaction, and treating it as one would
+    let a producer earn the guarantee by saying nothing.
+    """
+    bundle_path = write_bundle(tmp_path)
+    _reseal_bundle(bundle_path, lambda b: b.__setitem__("result", "PARTIAL"))
+    with pytest.raises(subject.ReleaseRecomputeRefusal, match="BUNDLE_NOT_COMPLETE_OR_REDACTED"):
+        subject.recompute(bundle_path, thresholds())
+
+    other = tmp_path / "unstated"; other.mkdir()
+    bundle_path = write_bundle(other)
+    _reseal_bundle(bundle_path, lambda b: b.pop("protected_bytes_present"))
+    with pytest.raises(subject.ReleaseRecomputeRefusal, match="BUNDLE_NOT_COMPLETE_OR_REDACTED"):
+        subject.recompute(bundle_path, thresholds())
+
+
+def test_a_mean_that_overflows_finite_scores_refuses(tmp_path: Path) -> None:
+    """Every item score is finite and the mean is not.
+
+    This is why the check sits on the MEAN rather than only on the items: per-item finiteness is
+    not closed under summation, so an all-finite row can still produce a non-finite statistic.
+    """
+    bundle_path = write_bundle(tmp_path, score=1e308)
+    row_id = execute.ROWS[0]
+    row_path = tmp_path / f"{row_id}.json"
+    row = json.loads(row_path.read_text())
+    row.pop("self_sha256")
+    item = row["items"][0]
+    row["items"] = [dict(item), dict(item)]
+    row["items"][1]["item_id"] = "two"
+    row["self_sha256"] = execute.sha(execute.canonical(row))
+    raw = json.dumps(row, sort_keys=True).encode()
+    row_path.write_bytes(raw)
+    _reseal_bundle(bundle_path, lambda b: [
+        binding.update({"bytes": len(raw), "raw_sha256": execute.sha(raw), "self_sha256": row["self_sha256"]})
+        for binding in b["rows"] if binding["row_id"] == row_id
+    ])
+    with pytest.raises(subject.ReleaseRecomputeRefusal, match="MEAN_SCORE_NONFINITE"):
+        subject.recompute(bundle_path, thresholds())
+
+
+def test_an_evidence_kind_the_bundle_asserts_for_itself_refuses(tmp_path: Path) -> None:
+    """The kind is derived from the producer table here, so the bundle's copy can only agree.
+
+    A bundle that names a stronger kind than its row's producer supports is trying to promote its
+    own evidence; the refusal is what makes that an error rather than a silent upgrade.
+    """
+    bundle_path = write_bundle(tmp_path)
+    _reseal_bundle(bundle_path, lambda b: b["rows"][0].__setitem__(
+        "evidence_kind", "owned_checkpoint_inference"
+        if b["rows"][0]["evidence_kind"] != "owned_checkpoint_inference" else "admitted_asset_derived"))
+    with pytest.raises(subject.ReleaseRecomputeRefusal, match="EVIDENCE_KIND_BINDING_DRIFT"):
+        subject.recompute(bundle_path, thresholds())
+
+
+def test_a_bundle_bound_to_different_expected_identities_refuses(tmp_path: Path, monkeypatch) -> None:
+    """Reached only through the command line, which is where an operator states what they expect."""
+    bundle_path = write_bundle(tmp_path)
+    monkeypatch.setattr(sys, "argv", [
+        "issue1947_release_recompute",
+        "--bundle", str(bundle_path),
+        "--receipt", str(tmp_path / "receipt.json"),
+        "--expected-matrix-self-sha256", "9" * 64,
+    ])
+    with pytest.raises(subject.ReleaseRecomputeRefusal, match="EXPECTED_IDENTITY_DRIFT:matrix_self_sha256"):
+        subject.main()
