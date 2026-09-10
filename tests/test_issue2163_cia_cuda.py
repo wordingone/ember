@@ -174,7 +174,12 @@ class FullPopulationCUDA(unittest.TestCase):
         # instead of only its verdict. A refused run whose numbers never reached the log is a run
         # that has to be spent again to learn anything.
         print('CIA_FREE_ROUTE_MEASUREMENT', json.dumps(report), flush=True)
-        refuse_if_inadmissible(comparisons)
+        # The admissibility refusal is deferred to the end of the method, deliberately. Raising
+        # here aborts before sections 3, 4 and 5 ever run, so a single nonconforming route costs
+        # the selector isolation, the fixed-plan gradient comparison and the measured update --
+        # three obligations that the route in question does not bear on. Nothing inadmissible is
+        # admitted by the move: the same comparisons are refused at the same bounds, after every
+        # section has published what it was able to measure.
 
         # ---- 3. Selector isolation on identical inputs -------------------------------------
         cross = cross_evaluate_selector(
@@ -185,6 +190,14 @@ class FullPopulationCUDA(unittest.TestCase):
             {key: value for key, value in cross.items() if key != 'evaluations'}), flush=True)
 
         # ---- 4. Fixed-plan CUDA computation ------------------------------------------------
+        # The numerical comparisons here are measured and collected rather than asserted in place,
+        # for the reason the section-2 refusal is deferred: an assertion aborts the method, so a
+        # logit difference would cost the gradient comparison -- the only measurement in this unit
+        # that exercises the paged expert backward against a CPU reference. Bounds are unchanged
+        # and every failing condition still fails the test, at the end, after publication.
+        # Structural conditions stay as assertions: a plan that did not force its routing, or a
+        # nonfinite gradient, makes what follows meaningless rather than merely unmeasured.
+        deferred_failures = []
         plan = route_plan(cpu_observed.local)
         with model.candidate_step():
             planned_logits, planned_routes = model(model.embed_text(tokens), positions,
@@ -192,8 +205,22 @@ class FullPopulationCUDA(unittest.TestCase):
             # Equality here is consumption of the control, never a free-route result: the winners
             # came from the plan. The free comparison above is the only routing measurement.
             self.assertEqual(planned_routes, cpu_routes)
-            torch.testing.assert_close(planned_logits.detach().cpu(), reference_logits,
-                                       rtol=FIXED_PLAN_LOGIT_RTOL, atol=FIXED_PLAN_LOGIT_ATOL)
+            planned_cpu = planned_logits.detach().cpu().float()
+            expected_logits = reference_logits.float()
+            logit_delta = (planned_cpu - expected_logits).abs()
+            logit_max_absolute = float(logit_delta.max())
+            # The same tolerance assert_close applies, evaluated elementwise so the COUNT of
+            # exceeding elements is reported and not only the largest one's magnitude. Twenty-four
+            # elements and three million elements are different findings about the same maximum.
+            allowed = FIXED_PLAN_LOGIT_ATOL + FIXED_PLAN_LOGIT_RTOL * expected_logits.abs()
+            exceeding = int((logit_delta > allowed).sum())
+            compared = int(expected_logits.numel())
+            if exceeding:
+                deferred_failures.append(
+                    'fixed-plan logits: %d of %d elements exceed atol %g + rtol %g; max absolute '
+                    'delta %.10g' % (exceeding, compared, FIXED_PLAN_LOGIT_ATOL,
+                                     FIXED_PLAN_LOGIT_RTOL, logit_max_absolute))
+            del planned_cpu, expected_logits, logit_delta, allowed
             planned_logits[:, :64].float().square().mean().backward()
         gradient_rows = {}
         for name, expected in reference_gradients.items():
@@ -202,11 +229,19 @@ class FullPopulationCUDA(unittest.TestCase):
             self.assertGreater(float(actual.float().abs().sum()), 0, name)
             relative_error = float((actual.float() - expected.float()).norm() / expected.float().norm())
             gradient_rows[name] = relative_error
-            self.assertLess(relative_error, GRADIENT_RELATIVE_L2_MAX, name)
+            if not relative_error < GRADIENT_RELATIVE_L2_MAX:
+                deferred_failures.append(
+                    'fixed-plan gradient %s: relative L2 %.10g exceeds %g'
+                    % (name, relative_error, GRADIENT_RELATIVE_L2_MAX))
         self.assertLessEqual(model._cuda_execution.cache.peak_resident_bundles, 2)
         self.assertEqual(model._cuda_execution.cache.resident_count, 0)
         print('CIA_FIXED_PLAN', json.dumps({'plan_entries': len(plan),
+              'logit_max_absolute_delta': logit_max_absolute,
+              'logit_elements_exceeding_tolerance': exceeding,
+              'logit_elements_compared': compared,
+              'logit_atol': FIXED_PLAN_LOGIT_ATOL, 'logit_rtol': FIXED_PLAN_LOGIT_RTOL,
               'gradient_relative_l2': gradient_rows, 'bound': GRADIENT_RELATIVE_L2_MAX,
+              'deferred_failures': list(deferred_failures),
               'elapsed_seconds': time.perf_counter() - started}), flush=True)
         del planned_logits, free_logits, reference_logits, reference_gradients
 
@@ -284,7 +319,11 @@ class FullPopulationCUDA(unittest.TestCase):
         routing_dispatch_seconds = dispatch_after[0] - dispatch_before[0]
         assigned = (data_seconds + forward_seconds + backward_seconds + optimizer_seconds)
         peak = torch.cuda.max_memory_allocated(device)
-        self.assertLessEqual(peak, limit)
+        # Judged below with the other deferred verdicts: asserting here would suppress the only
+        # record of what the measured update cost, which is the reason the section exists.
+        if peak > limit:
+            deferred_failures.append('measured update peak %d bytes exceeds the %d byte limit'
+                                     % (peak, limit))
         trainable = sum(value.numel() for value in parameters.values() if value.requires_grad)
         print('CIA_MEASURED_UPDATE', json.dumps({
             'revision': REVISION,
@@ -321,7 +360,24 @@ class FullPopulationCUDA(unittest.TestCase):
             'max_absolute_selector_score_error': cross['max_absolute_selector_score_error'],
             'selector_parameter_sha256': cross['parameter_sha256'],
             'host_selector_projection_sha256': digest_of(host_selector_projection),
+            'inadmissible_local_routes': report['inadmissible_routes'],
+            'admissible': report['inadmissible_routes'] == 0,
             'claim': 'fixed-data correctness and update mechanics only'}), flush=True)
+
+        # Deferred from sections 2, 4 and 5. A refused run is still a refused run; it has simply
+        # reported every measurement it could reach first, and the tag above carries its own
+        # verdict so a consumer cannot mistake a published measurement for a conforming one.
+        # Both findings publish before either is raised, so a run never reports one nonconformance
+        # while silently holding another.
+        print('CIA_DEFERRED_VERDICTS', json.dumps({
+            'revision': REVISION,
+            'inadmissible_local_routes': report['inadmissible_routes'],
+            'local_route_reasons': [row['reason'] for row in report['routes']
+                                    if not row['admissible']],
+            'fixed_plan_and_update_failures': list(deferred_failures)}), flush=True)
+        refuse_if_inadmissible(comparisons)
+        if deferred_failures:
+            self.fail('; '.join(deferred_failures))
 
 
 if __name__ == '__main__':
