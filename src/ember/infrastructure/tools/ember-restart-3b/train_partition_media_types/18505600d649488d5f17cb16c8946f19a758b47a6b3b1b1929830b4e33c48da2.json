@@ -1,0 +1,986 @@
+{
+ "class_count": 162,
+ "classes": {
+  ".3dl": {
+   "count": 4,
+   "example": "packages/tools/playground/public/textures/ColorGrading.3DL",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".6": {
+   "count": 1,
+   "example": "misc/dist/linux/godot.6",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".adoc": {
+   "count": 2,
+   "example": "thirdparty/libktx/LICENSE.dfdutils.adoc",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".atlas": {
+   "count": 14,
+   "example": "extensions/gdx-tools/assets/uiskin.atlas",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".babylon": {
+   "count": 10,
+   "example": "packages/tools/playground/public/scenes/Dude/dude.babylon",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bash-completion": {
+   "count": 1,
+   "example": "misc/dist/shell/godot.bash-completion",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".basis": {
+   "count": 2,
+   "example": "packages/tools/playground/public/textures/houseWithAlpha.basis",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bin": {
+   "count": 30,
+   "example": "packages/tools/playground/public/scenes/Alien/Alien.bin",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bmp": {
+   "count": 3,
+   "example": "tests/data/images/icon.bmp",
+   "media_type": "image/bmp",
+   "reason": "explicit standard media type"
+  },
+  ".bullet": {
+   "count": 1,
+   "example": "tests/gdx-tests-android/assets/data/g3d/btscene1.bullet",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".bvh": {
+   "count": 1,
+   "example": "packages/dev/serializers/test/fixtures/dataset-1_walk_normal_001.bvh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".c": {
+   "count": 929,
+   "example": "drivers/alsa/asound-so_wrap.c",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".car": {
+   "count": 1,
+   "example": "misc/dist/macos_tools.app/Contents/Resources/Assets.car",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".cc": {
+   "count": 102,
+   "example": "thirdparty/harfbuzz/src/OT/Var/VARC/VARC.cc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cfg": {
+   "count": 131,
+   "example": "modules/gdscript/tests/scripts/completion/argument_options/connect.cfg",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cjs": {
+   "count": 7,
+   "example": "packages/public/@babylonjs/core/watcher.cjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cmd": {
+   "count": 1,
+   "example": "packages/public/@babylonjs/core/node.cmd",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".cppm": {
+   "count": 2,
+   "example": "thirdparty/vulkan/include/vulkan/vulkan.cppm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".crt": {
+   "count": 1,
+   "example": "thirdparty/certs/ca-bundle.crt",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".cs": {
+   "count": 309,
+   "example": "modules/mono/editor/Godot.NET.Sdk/Godot.SourceGenerators.Sample/Bar.cs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".csproj": {
+   "count": 16,
+   "example": "modules/mono/editor/Godot.NET.Sdk/Godot.NET.Sdk/Godot.NET.Sdk.csproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".csv": {
+   "count": 2,
+   "example": "tests/data/testdata.csv",
+   "media_type": "text/csv; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".ctex": {
+   "count": 1,
+   "example": "platform/android/java/app/src/instrumented/assets/.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".custom": {
+   "count": 1,
+   "example": "assets/data/asset.custom",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dat": {
+   "count": 1,
+   "example": "thirdparty/icu4c/icudt_godot.dat",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".dds": {
+   "count": 33,
+   "example": "packages/tools/playground/public/textures/Runyon_Canyon_A_2k_cube_specular.dds",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".desktop": {
+   "count": 1,
+   "example": "misc/dist/linux/org.godotengine.Godot.desktop",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".dotsettings": {
+   "count": 3,
+   "example": "modules/mono/glue/GodotSharp/GodotSharp.sln.DotSettings",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".emscripten": {
+   "count": 6,
+   "example": "examples/example_glfw_opengl3/Makefile.emscripten",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".entitlements": {
+   "count": 3,
+   "example": "misc/dist/apple_embedded_xcode/godot_apple_embedded/godot_apple_embedded.entitlements",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".env": {
+   "count": 10,
+   "example": "packages/public/@babylonjs/viewer/assets/photoStudio.env",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".etc1": {
+   "count": 1,
+   "example": "tests/gdx-tests-android/assets/data/test.etc1",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".exr": {
+   "count": 4,
+   "example": "packages/tools/playground/public/textures/normal-pxr24.exr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".filters": {
+   "count": 29,
+   "example": "extensions/gdx-bullet/jni/vs/gdxBullet/collision/collision.vcxproj.filters",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".fish": {
+   "count": 1,
+   "example": "misc/dist/shell/godot.fish",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".fixed": {
+   "count": 1,
+   "example": "tools/compile_fail_utils/tests/example_tests/basic_test.fixed",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".fnt": {
+   "count": 13,
+   "example": "packages/tools/playground/public/textures/DemageFont.fnt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".frag": {
+   "count": 15,
+   "example": "tests/gdx-tests-android/assets/data/g2d/monochrome.frag",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".fx": {
+   "count": 782,
+   "example": "packages/dev/addons/src/atmosphere/Shaders/ShadersInclude/atmosphereFragmentDeclaration.fx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".g3db": {
+   "count": 7,
+   "example": "extensions/gdx-tools/assets/monkey.g3db",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".g3dj": {
+   "count": 31,
+   "example": "tests/gdx-tests-android/assets/data/g3d/btscene1.g3dj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gd": {
+   "count": 697,
+   "example": "modules/gdscript/editor/script_templates/CharacterBody2D/basic_movement.gd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gdb": {
+   "count": 1,
+   "example": "misc/debuggers/imgui.gdb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gdextension": {
+   "count": 1,
+   "example": "tests/compatibility_test/godot/compatibility_test.gdextension",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".glb": {
+   "count": 30,
+   "example": "packages/tools/playground/public/scenes/BoomBox.glb",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gliffy": {
+   "count": 1,
+   "example": "thirdparty/jolt_physics/Jolt/Physics/Collision/Shape/TaperedCapsuleShape.gliffy",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".glsl": {
+   "count": 212,
+   "example": "packages/dev/smartFilterBlocks/src/blocks/babylon/demo/effects/blackAndWhiteBlock.block.glsl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".gltf": {
+   "count": 35,
+   "example": "packages/tools/playground/public/scenes/Alien/Alien.gltf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".godot": {
+   "count": 3,
+   "example": "modules/gdscript/tests/scripts/project.godot",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".gradle": {
+   "count": 50,
+   "example": "examples/mobile/android_example/app/build.gradle",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".gz": {
+   "count": 1,
+   "example": "assets/data/compressed_image.png.gz",
+   "media_type": "application/gzip",
+   "reason": "explicit standard media type"
+  },
+  ".hdr": {
+   "count": 8,
+   "example": "packages/tools/playground/public/textures/country.hdr",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".hh": {
+   "count": 258,
+   "example": "thirdparty/harfbuzz/src/OT/Color/CBDT/CBDT.hh",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".hpp": {
+   "count": 224,
+   "example": "thirdparty/etcpak/DecodeRGB.hpp",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".hpp11": {
+   "count": 1,
+   "example": "thirdparty/spirv-headers/include/spirv/unified1/spirv.hpp11",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".html": {
+   "count": 167,
+   "example": "packages/dev/inspector-v2/index.html",
+   "media_type": "text/html; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".i": {
+   "count": 59,
+   "example": "extensions/gdx-bullet/jni/swig-src/collision/classes.i",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".icns": {
+   "count": 7,
+   "example": "misc/dist/macos_template.app/Contents/Resources/icon.icns",
+   "media_type": "image/icns",
+   "reason": "explicit standard media type"
+  },
+  ".ijg": {
+   "count": 1,
+   "example": "thirdparty/libjpeg-turbo/README.ijg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".import": {
+   "count": 1,
+   "example": "platform/android/java/app/src/instrumented/assets/icon.svg.import",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".inc": {
+   "count": 102,
+   "example": "core/core_bind.compat.inc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".inl": {
+   "count": 21,
+   "example": "thirdparty/jolt_physics/Jolt/Core/FixedSizeFreeList.inl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".iss": {
+   "count": 1,
+   "example": "misc/dist/windows/godot.iss",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".jar": {
+   "count": 5,
+   "example": "examples/mobile/android_example/gradle/wrapper/gradle-wrapper.jar",
+   "media_type": "application/java-archive",
+   "reason": "explicit standard media type"
+  },
+  ".java": {
+   "count": 2601,
+   "example": "examples/mobile/android_example/app/src/main/java/org/bevyengine/example/MainActivity.java",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".jpeg": {
+   "count": 1,
+   "example": "assets/models/AnisotropyBarnLamp/AnisotropyBarnLamp_basecolor.jpeg",
+   "media_type": "image/jpeg",
+   "reason": "explicit standard media type"
+  },
+  ".js": {
+   "count": 457,
+   "example": ".github/scripts/visual-testing/read-snippet.js",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".key": {
+   "count": 2,
+   "example": "tests/data/crypto/in.key",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".keystore": {
+   "count": 1,
+   "example": "platform/android/java/editor/src/main/assets/keystores/debug.keystore",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".kt": {
+   "count": 56,
+   "example": "platform/android/java/app/src/androidTestInstrumented/java/com/godot/game/GodotAppTest.kt",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ktx": {
+   "count": 38,
+   "example": "packages/tools/playground/public/textures/BJS-logo_v3-astc.ktx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ktx2": {
+   "count": 37,
+   "example": "packages/tools/playground/public/textures/ktx2/sample_etc1s.ktx2",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lib": {
+   "count": 6,
+   "example": "extensions/gdx-bullet/jni/vs/Glut/glew32s.lib",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".license": {
+   "count": 5,
+   "example": "packages/tools/babylonServer/public/Oimo.license",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".lua": {
+   "count": 8,
+   "example": "extensions/gdx-bullet/jni/src/bullet/BulletCollision/premake4.lua",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".m": {
+   "count": 1,
+   "example": "thirdparty/sdl/joystick/apple/SDL_mfijoystick.m",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".manifest": {
+   "count": 1,
+   "example": "platform/windows/godot.manifest",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".map": {
+   "count": 7,
+   "example": "packages/tools/babylonServer/public/uiControls/babylon.uiControls.max.js.map",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".md5": {
+   "count": 1,
+   "example": "platform/android/java/app/src/instrumented/assets/.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.md5",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".md5anim": {
+   "count": 1,
+   "example": "tests/gdx-tests-android/assets/data/walk1.md5anim",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".md5mesh": {
+   "count": 1,
+   "example": "tests/gdx-tests-android/assets/data/zfat.md5mesh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".meta": {
+   "count": 2,
+   "example": "examples/asset/files/bevy_pixel_dark_with_meta.png.meta",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mjs": {
+   "count": 97,
+   "example": "eslint.config.mjs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mk": {
+   "count": 2,
+   "example": "examples/example_qnx_opengl3/common.mk",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mm": {
+   "count": 78,
+   "example": "drivers/apple/foundation_helpers.mm",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".mmd": {
+   "count": 1,
+   "example": "crates/bevy_color/docs/diagrams/model_graph.mmd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mp3": {
+   "count": 4,
+   "example": "packages/tools/playground/public/sounds/6sounds.mp3",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mp4": {
+   "count": 4,
+   "example": "packages/tools/playground/public/textures/babylonjs.mp4",
+   "media_type": "video/mp4",
+   "reason": "explicit standard media type"
+  },
+  ".mtl": {
+   "count": 6,
+   "example": "packages/tools/playground/public/scenes/Box/Box.mtl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".mts": {
+   "count": 2,
+   "example": "packages/tools/tests/vitest.es6.config.mts",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".natstepfilter": {
+   "count": 1,
+   "example": "misc/debuggers/imgui.natstepfilter",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".natvis": {
+   "count": 4,
+   "example": "platform/windows/godot.natvis",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".obj": {
+   "count": 11,
+   "example": "packages/tools/playground/public/scenes/Box/Box.obj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ogg": {
+   "count": 15,
+   "example": "examples/test/cursor/shot.ogg",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".otf": {
+   "count": 1,
+   "example": "assets/fonts/EBGaramond12-Regular.otf",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".p": {
+   "count": 3,
+   "example": "tests/gdx-tests-android/assets/data/particle-animation.p",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pas": {
+   "count": 1,
+   "example": "misc/dist/windows/modpath.pas",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".patch": {
+   "count": 85,
+   "example": "tools/example-showcase/asset-source-website.patch",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".pbxproj": {
+   "count": 6,
+   "example": "examples/mobile/bevy_mobile_example.xcodeproj/project.pbxproj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pfx": {
+   "count": 1,
+   "example": "extensions/gdx-tools/assets/defaultTemplate.pfx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".plist": {
+   "count": 17,
+   "example": "examples/mobile/ios-src/Info.plist",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".po": {
+   "count": 107,
+   "example": "doc/translations/ca.po",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".pot": {
+   "count": 1,
+   "example": "editor/translations/extractable/extractable.pot",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".prefs": {
+   "count": 2,
+   "example": ".settings/org.eclipse.jdt.libgdx.prefs",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".properties": {
+   "count": 31,
+   "example": "examples/mobile/android_example/gradle.properties",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".props": {
+   "count": 6,
+   "example": "misc/msvs/nmake.substitution.props",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ps1": {
+   "count": 1,
+   "example": ".github/workflows/build_windows_vulkan_libs.ps1",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".psh": {
+   "count": 1,
+   "example": "tests/gdx-tests-android/assets/data/tree.psh",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".pub": {
+   "count": 2,
+   "example": "tests/data/crypto/in.prime256v1.pub",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rc": {
+   "count": 4,
+   "example": "platform/windows/godot_res.rc",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".rl": {
+   "count": 4,
+   "example": "gdx/res/com/badlogic/gdx/utils/JsonReader.rl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".ron": {
+   "count": 12,
+   "example": ".github/example-run/ambiguity_detection.ron",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".rs": {
+   "count": 1847,
+   "example": "benches/benches/bevy_camera/main.rs",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".s": {
+   "count": 1,
+   "example": "thirdparty/zstd/decompress/huf_decompress_amd64.S",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".scss": {
+   "count": 138,
+   "example": "packages/dev/inspector/src/components/actionTabs/actionTabs.scss",
+   "media_type": "text/x-scss; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".sln": {
+   "count": 5,
+   "example": "modules/mono/editor/Godot.NET.Sdk/Godot.NET.Sdk.sln",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".stderr": {
+   "count": 43,
+   "example": "crates/bevy_derive/compile_fail/tests/deref_derive/invalid_attribute_fail.stderr",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".storyboard": {
+   "count": 6,
+   "example": "misc/dist/apple_embedded_xcode/godot_apple_embedded/Launch Screen.storyboard",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".strings": {
+   "count": 1,
+   "example": "misc/dist/apple_embedded_xcode/godot_apple_embedded/en.lproj/InfoPlist.strings",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".svg": {
+   "count": 1673,
+   "example": "packages/dev/inspector/src/components/actionTabs/lines/delete.svg",
+   "media_type": "image/svg+xml",
+   "reason": "explicit standard media type"
+  },
+  ".swift": {
+   "count": 4,
+   "example": "drivers/apple_embedded/godot_swiftui_view_controller.swift",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".targets": {
+   "count": 4,
+   "example": "modules/mono/Directory.Build.targets",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".temp": {
+   "count": 2,
+   "example": "packages/dev/core/test/unit/Cameras/babylon.pointerInput.tests.temp",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".template": {
+   "count": 5,
+   "example": "misc/dist/macos/editor_info_plist.template",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".tga": {
+   "count": 1,
+   "example": "tests/data/images/icon.tga",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tide": {
+   "count": 1,
+   "example": "tests/gdx-tests-android/assets/data/maps/tide/Map01.tide",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tiled-project": {
+   "count": 3,
+   "example": "tests/gdx-tests-android/assets/data/maps/tiled-atlas-processed/tiled-prop-test.tiled-project",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tilemaps": {
+   "count": 1,
+   "example": "packages/tools/playground/public/textures/spriteMap/none_trimmed/levelStage.tilemaps",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tj": {
+   "count": 9,
+   "example": "tests/gdx-tests-android/assets/data/maps/tiled-objects/template objects/Ellipse.tj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tmj": {
+   "count": 13,
+   "example": "tests/gdx-tests-android/assets/data/maps/tiled-atlas-processed/test.tmj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tmx": {
+   "count": 41,
+   "example": "tests/gdx-tests-android/assets/data/maps/tiled-animations/test-load-animations.tmx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".toml": {
+   "count": 104,
+   "example": ".cargo/config_aliases.toml",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tpl": {
+   "count": 2,
+   "example": "docs-template/EXAMPLE_README.md.tpl",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ts": {
+   "count": 4540,
+   "example": "packages/dev/addons/src/atmosphere/atmosphere.ts",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".tscn": {
+   "count": 3,
+   "example": "modules/gdscript/tests/scripts/completion/argument_options/argument_options.tscn",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tsj": {
+   "count": 3,
+   "example": "tests/gdx-tests-android/assets/data/maps/tiled-json/tiles.tsj",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".tsx": {
+   "count": 791,
+   "example": "packages/dev/inspector-v2/src/components/curveEditor/bottomBar.tsx",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".ttf": {
+   "count": 24,
+   "example": "assets/fonts/FiraMono-Medium.ttf",
+   "media_type": "font/ttf",
+   "reason": "explicit standard media type"
+  },
+  ".tx": {
+   "count": 9,
+   "example": "tests/gdx-tests-android/assets/data/maps/tiled-objects/template objects/Ellipse.tx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".uid": {
+   "count": 6,
+   "example": "platform/android/java/app/src/instrumented/assets/main.gd.uid",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".user": {
+   "count": 6,
+   "example": "extensions/gdx-bullet/jni/vs/gdxBullet/collision/collision.vcxproj.user",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".vcxproj": {
+   "count": 29,
+   "example": "extensions/gdx-bullet/jni/vs/gdxBullet/collision/collision.vcxproj",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit configuration, metadata, or documentation class; preserve as UTF-8 text"
+  },
+  ".vert": {
+   "count": 13,
+   "example": "tests/gdx-tests-android/assets/data/g2d/batchCommon.vert",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".wasm": {
+   "count": 27,
+   "example": "packages/tools/babylonServer/public/ammo.wasm.wasm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".wav": {
+   "count": 18,
+   "example": "packages/tools/playground/public/sounds/bounce.wav",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webm": {
+   "count": 1,
+   "example": "packages/tools/playground/public/textures/babylonjs.webm",
+   "media_type": "video/webm",
+   "reason": "explicit standard media type"
+  },
+  ".webmanifest": {
+   "count": 1,
+   "example": "packages/tools/sandbox/public/manifest.webmanifest",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".webp": {
+   "count": 32,
+   "example": "platform/android/java/editor/src/main/res/mipmap-hdpi/ic_play_window.webp",
+   "media_type": "image/webp",
+   "reason": "explicit standard media type"
+  },
+  ".wesl": {
+   "count": 202,
+   "example": "assets/shaders/animate_shader.wesl",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".woff": {
+   "count": 1,
+   "example": "packages/tools/sandbox/Assets/font.woff",
+   "media_type": "font/woff",
+   "reason": "explicit standard media type"
+  },
+  ".woff2": {
+   "count": 28,
+   "example": "thirdparty/fonts/DroidSansFallback.woff2",
+   "media_type": "font/woff2",
+   "reason": "explicit standard media type"
+  },
+  ".xcprivacy": {
+   "count": 2,
+   "example": "misc/dist/apple_embedded_xcode/PrivacyInfo.xcprivacy",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcscheme": {
+   "count": 2,
+   "example": "examples/mobile/bevy_mobile_example.xcodeproj/xcshareddata/xcschemes/bevy_mobile_example.xcscheme",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xcworkspacedata": {
+   "count": 1,
+   "example": "misc/dist/apple_embedded_xcode/godot_apple_embedded.xcodeproj/project.xcworkspace/contents.xcworkspacedata",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xml": {
+   "count": 1262,
+   "example": "examples/mobile/android_example/app/src/main/AndroidManifest.xml",
+   "media_type": "application/xml",
+   "reason": "explicit standard media type"
+  },
+  ".xpm": {
+   "count": 1,
+   "example": "editor/import/atlas_import_failed.xpm",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".xsd": {
+   "count": 1,
+   "example": "doc/class.xsd",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".y": {
+   "count": 1,
+   "example": "thirdparty/glslang/glslang/MachineIndependent/glslang.y",
+   "media_type": "text/plain; charset=utf-8",
+   "reason": "explicit source or build-language class; preserve as UTF-8 text"
+  },
+  ".yaml": {
+   "count": 1,
+   "example": ".pre-commit-config.yaml",
+   "media_type": "application/yaml; charset=utf-8",
+   "reason": "explicit standard media type"
+  },
+  ".zip": {
+   "count": 1,
+   "example": "modules/zip/tests/data/test.zip",
+   "media_type": "application/zip",
+   "reason": "explicit standard media type"
+  },
+  ".zktx": {
+   "count": 2,
+   "example": "tests/gdx-tests-android/assets/data/cubemap.zktx",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  },
+  ".zsh-completion": {
+   "count": 1,
+   "example": "misc/dist/shell/_godot.zsh-completion",
+   "media_type": "application/octet-stream",
+   "reason": "explicit census class with no authoritative text encoding; preserve as opaque bytes"
+  }
+ },
+ "file_count": 19048,
+ "goal_id": "EMBER-02",
+ "next_executed_outcome": "EMBER-02 first sufficiently pretrained clean-genesis 3B Ember",
+ "schema_version": "ember-issue1581-train-partition-media-types-v1",
+ "self_sha256": "3e6e7b37227d1a5bb9d646d8d6b6a9760597970b4955d245925ca5de8c8d33a8",
+ "source_partition_receipt_sha256": "18505600d649488d5f17cb16c8946f19a758b47a6b3b1b1929830b4e33c48da2",
+ "source_partition_selector": "candidate-application_worlds-heldout-1",
+ "source_partition_split": "heldout",
+ "workstream_id": "EMBER-02B"
+}
