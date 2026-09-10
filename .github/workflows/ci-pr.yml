@@ -79,6 +79,12 @@ jobs:
       - name: Run CIA checkpoint object and index mechanics (#2163)
         if: hashFiles('tests/ember_restart_model/domain-governance/test_issue2163_cia_*.py') != ''
         run: python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 -- python -B -m unittest discover -s tests/ember_restart_model/domain-governance -p 'test_issue2163_cia_*.py' -v
+      - name: Verify bounded POSIX checkpoint ledger acquisition (#2211)
+        run: >-
+          python -B src/ember/governance/scripts/owned_process.py --timeout-seconds 60 --
+          python -B -m pytest -q -p no:cacheprovider
+          tests/ember_restart_model/domain-governance/test_runner_storage.py
+          -k "posix_wait_ or posix_custody_ledger_lock_yields or timed_out_ledger_waiter_preserves_live_owner_lock"
       - name: Run deterministic policy tests
         run: python -B -m unittest discover -s src/ember/governance/scripts/github -p "test_*.py" -v
       - name: Enforce Cond-4 battery surface transition
