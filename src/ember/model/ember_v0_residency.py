@@ -415,7 +415,14 @@ def _validate_resident_group(parameters, storage):
             raise ValueError('resident Parameter does not own its exact declared group slice')
 
 
-def _grouped_swiglu(value, up, gate, down, offsets):
+def _grouped_swiglu(value, up, gate, down, offsets, backend='native'):
+    if backend == 'dynamic':
+        from .ember_v0_grouped_capture import grouped_mm
+        hidden = F.silu(grouped_mm(value, gate.transpose(1, 2), offsets))
+        hidden = hidden * grouped_mm(value, up.transpose(1, 2), offsets)
+        return grouped_mm(hidden, down.transpose(1, 2), offsets)
+    if backend != 'native':
+        raise ValueError('unknown resident grouped backend')
     hidden = F.silu(F.grouped_mm(value, gate.transpose(1, 2), offs=offsets))
     hidden = hidden * F.grouped_mm(value, up.transpose(1, 2), offs=offsets)
     return F.grouped_mm(hidden, down.transpose(1, 2), offs=offsets)
@@ -424,15 +431,16 @@ def _grouped_swiglu(value, up, gate, down, offsets):
 class _ResidentGroupedSwiGLU(torch.autograd.Function):
     """Grouped kernels share storage; gradients belong to the actual Parameters."""
     @staticmethod
-    def forward(ctx, value, offsets, execution, layer, *parameters):
+    def forward(ctx, value, offsets, execution, layer, backend, *parameters):
         execution.check()
         ctx.execution, ctx.layer, ctx.step_id = execution, layer, execution.step_id
         ctx.completed = False
+        ctx.backend = backend
         ctx.save_for_backward(value, offsets, *parameters)
-        ctx.counted = ctx.needs_input_grad[0] or any(ctx.needs_input_grad[4:])
+        ctx.counted = ctx.needs_input_grad[0] or any(ctx.needs_input_grad[5:])
         if ctx.counted:
             execution.pending += 1
-        return _grouped_swiglu(value, *execution.layer_groups(layer), offsets)
+        return _grouped_swiglu(value, *execution.layer_groups(layer), offsets, backend)
 
     @staticmethod
     @once_differentiable
@@ -445,16 +453,16 @@ class _ResidentGroupedSwiGLU(torch.autograd.Function):
         with torch.enable_grad():
             inputs = [value.detach().requires_grad_(True)]
             inputs.extend(group.detach().requires_grad_(True) for group in execution.layer_groups(ctx.layer))
-            result = _grouped_swiglu(*inputs, offsets)
+            result = _grouped_swiglu(*inputs, offsets, ctx.backend)
             gradients = torch.autograd.grad(result, inputs, output_gradient)
         returned = tuple(gradient[index] if required else None
                          for gradient, requirements in zip(gradients[1:],
-                             (ctx.needs_input_grad[4:8], ctx.needs_input_grad[8:12], ctx.needs_input_grad[12:16]))
+                             (ctx.needs_input_grad[5:9], ctx.needs_input_grad[9:13], ctx.needs_input_grad[13:17]))
                          for index, required in enumerate(requirements))
         if ctx.counted:
             execution.pending -= 1
         ctx.completed = True
-        return (gradients[0] if ctx.needs_input_grad[0] else None, None, None, None, *returned)
+        return (gradients[0] if ctx.needs_input_grad[0] else None, None, None, None, None, *returned)
 
 
 def _resident_bindings(model, parameters):
@@ -717,19 +725,21 @@ class ResidentExecution:
     def layer_groups(self, layer):
         return tuple(self.model._resident_groups[(layer, projection)] for projection in ('up', 'gate', 'down'))
 
-    def grouped_block(self, values, experts, layer):
+    def grouped_block(self, values, experts, layer, *, backend='native'):
         self.check()
         if (type(layer) is not int or layer not in range(1, 24, 2)
                 or values.ndim != 2 or values.shape[1] != 1024 or values.dtype != torch.bfloat16
                 or values.device != self.device or len(experts) != len(values)):
             raise ValueError('resident grouped block requires aligned full-width rows at a sparse layer')
+        if backend not in ('native', 'dynamic'):
+            raise ValueError('unknown resident grouped backend')
         slots = self.validate_routed(experts)
         order = torch.argsort(slots, stable=True)
         offsets = (slots[:, None] == self.slot_tensor[None, :]).sum(0, dtype=torch.int32).cumsum(0, dtype=torch.int32)
         ordered = values.index_select(0, order)
         parameters = tuple(self.model.weights[f'experts.{expert}.layers.{layer}.{projection}.weight'.replace('.', '__')]
                            for projection in ('up', 'gate', 'down') for expert in self.ids)
-        result = _ResidentGroupedSwiGLU.apply(ordered, offsets, self, layer, *parameters)
+        result = _ResidentGroupedSwiGLU.apply(ordered, offsets, self, layer, backend, *parameters)
         return result.index_select(0, torch.argsort(order))
 
     def expert_block(self, values, expert, layer):

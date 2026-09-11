@@ -6,15 +6,18 @@
 The resident decoder forward is a fixed sequence of 13 segments (accepted carry contract, 2026-09-11): S0 takes
 (embedded, positions) and returns a ten-slot carry; S1..S11 take and return the same ten slots with slot 1 holding the
 normed expert input; the decoder's eager grouped expert block runs BETWEEN segments and replaces slot 1 with the expert
-residual (its shapes depend on the step's winners, so it is the one region that stays eager); S12 returns
-(logits, ranked, winner_history). The decoder never computes a loss: the runner owns it, either as a captured tail
-segment or as an eager callback on the logits.
+residual under the default native grouped backend. With explicit capture_experts=True the dynamic-offset
+grouped backend executes inside each segment and slot 1 already contains that residual; the segment registers the
+actual resident expert owner Parameters and routing validity state. S12 returns (logits, ranked, winner_history).
+The decoder never computes a loss: the runner owns it, either as a captured tail segment or as an eager callback.
 
 `SegmentedStep` owns the capture. Every segment is graphed forward AND backward through torch.cuda.make_graphed_callables
 against sample inputs RECORDED from one real eager step (the exemplar), so an ordinary loss.backward() flows from the
 runner's loss through the graphed S12, the eager grouped blocks, and the graphed S11..S0 into the owner parameters'
-`.grad`. Grad mode 'static-accumulate': owner grads keep their storage across steps (`zero_grad(set_to_none=False)`),
-so accumulation is in place and the replayed backward allocates nothing.
+`.grad`. Grad mode 'static-accumulate' retains the graph's internal gradient storage. Dense owner gradients are
+zeroed in place between steps. For captured experts, the caller must release an unrouted expert owner's `.grad` to None
+before AdamW so its moments, decay and step counter do not advance; a subsequent backward returns its next gradient to
+the same Parameter owner. Capture-time storage checks still apply to every registered owner.
 
 Refusal, never fallback: a later call whose inputs differ from the exemplar in shape, dtype, device or grad role refuses
 before touching the graphs; a segment recorded under one geometry is invalidated by `bind_geometry`; the capture's own
