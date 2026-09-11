@@ -30,7 +30,7 @@ POPULATION = 3_082_539_008
 CLAIM = 'measurement rows only; no checkpoint publication, learning or throughput qualification'
 JOB_NAMESPACE = 'EmberCIAMeasurement'
 LIMITS = {
-    'host_memory_bytes': 20 * GIB, 'total_gpu_bytes': 20 * GIB,
+    'host_memory_bytes': 40 * GIB, 'total_gpu_bytes': 20 * GIB,
     'allocator_bytes': 18 * GIB, 'wall_seconds': 600,
     'min_c_free_bytes': 150 * GIB, 'min_b_free_bytes': 250 * GIB,
     'min_free_commit_bytes': 42 * GIB, 'max_c_write_gib': 0.125, 'max_b_write_gib': 2.0,
