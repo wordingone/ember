@@ -36,7 +36,14 @@ actual = {name: os.environ.get(name) for name in bindings}
 if actual != bindings or any(not pathlib.Path(value).resolve().is_relative_to(custody) for value in actual.values()):
     raise SystemExit("disk-budget child cache binding mismatch")
 assertion_path.write_text(json.dumps({"schema_version": 1, "nonce": nonce, "bindings": actual}, sort_keys=True) + chr(10), encoding="utf-8")
-raise SystemExit(subprocess.run(sys.argv[4:], env=os.environ, check=False).returncode)
+hidden = {}
+if sys.platform == 'win32':
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = subprocess.SW_HIDE
+    hidden = {'creationflags': subprocess.CREATE_NO_WINDOW, 'startupinfo': startup}
+raise SystemExit(subprocess.run(sys.argv[4:], env=os.environ, check=False, shell=False,
+                              stdout=sys.stdout, stderr=sys.stderr, **hidden).returncode)
 """
 
 def current_free_gib() -> dict[str, float]:
@@ -270,6 +277,15 @@ def _scan_cost(snapshot: Mapping[str, Mapping[str, object]]) -> dict[str, object
 
 def _no_window_creationflags() -> int:
     return subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+
+def _hidden_startupinfo():
+    if sys.platform != 'win32':
+        return None
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = subprocess.SW_HIDE
+    return startup
 
 
 class _JobObjectBasicLimitInformation(ctypes.Structure):
@@ -593,6 +609,8 @@ def run_budgeted(
         stdout=sys.stdout,
         stderr=sys.stderr,
         creationflags=_no_window_creationflags(),
+        startupinfo=_hidden_startupinfo(),
+        shell=False,
     )
     retained_job: _RetainedWindowsJob | None = None
     if sys.platform == "win32":

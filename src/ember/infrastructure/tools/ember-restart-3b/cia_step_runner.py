@@ -1,0 +1,695 @@
+"""Daemon-dispatched CIA-3B step measurements; no checkpoint or qualification credit."""
+# goal_id: EMBER-02
+# workstream_id: EMBER-02B
+# next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
+from __future__ import annotations
+
+import argparse
+import ctypes
+from dataclasses import asdict, replace
+import hashlib
+import importlib.util
+import json
+import math
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import time
+import traceback
+
+
+ROOT = Path(__file__).resolve().parents[5]
+ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py'
+CONFIG = 'configs/ember-cia-3b.json'
+DISK_ENTRY = 'src/ember/infrastructure/tools/ember-restart-3b/disk_budget_runner.py'
+GIB = 1024 ** 3
+POPULATION = 3_082_539_008
+CLAIM = 'measurement rows only; no checkpoint publication, learning or throughput qualification'
+JOB_NAMESPACE = 'EmberCIAMeasurement'
+LIMITS = {
+    'host_memory_bytes': 20 * GIB, 'total_gpu_bytes': 20 * GIB,
+    'allocator_bytes': 18 * GIB, 'wall_seconds': 600,
+    'min_c_free_bytes': 150 * GIB, 'min_b_free_bytes': 250 * GIB,
+    'min_free_commit_bytes': 42 * GIB, 'max_c_write_gib': 0.125, 'max_b_write_gib': 2.0,
+}
+CACHE_DIRS = {'TEMP': 'tmp', 'TMP': 'tmp', 'TORCH_HOME': 'torch', 'TRITON_CACHE_DIR': 'triton',
+              'CUDA_CACHE_PATH': 'cuda', 'HF_HOME': 'hf', 'XDG_CACHE_HOME': 'xdg-cache'}
+SOURCES = (
+    ENTRY, DISK_ENTRY,
+    'src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py',
+    'src/ember/governance/scripts/ember_dispatch_token.py',
+    'src/ember/governance/scripts/owned_process.py',
+    'src/ember/governance/scripts/cia_conformance_resources.py',
+    'src/ember/governance/scripts/gpu_lock_guard.py',
+    'src/ember/model/ember_v0_decoder.py', 'src/ember/model/ember_v0_contract.py',
+    'src/ember/model/ember_v0_inventory.py', 'src/ember/model/ember_v0_residency.py',
+    'src/ember/model/ember_v0_routing.py',
+)
+DATA_KEYS = {'receipt_path', 'receipt_sha256', 'tokenizer_path', 'tokenizer_sha256',
+             'shards_root', 'shard_ledger_path', 'shard_ledger_sha256', 'cursor'}
+INPUT_FIELDS = ('token_ids', 'target_ids', 'positions', 'document_starts')
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def checked_sha(value):
+    if not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value):
+        raise ValueError('explicit expected sha256 is required')
+    return value
+
+
+def positive_int(value, name, maximum):
+    if type(value) is not int or not 1 <= value <= maximum:
+        raise ValueError(f'{name} is outside its fixed positive bound')
+    return value
+
+
+def geometry_counts(geometry):
+    if set(geometry) != {'sequence_length', 'documents_per_step', 'warm_steps', 'measured_steps'}:
+        raise ValueError('geometry fields differ')
+    sequence = positive_int(geometry['sequence_length'], 'sequence length', 1024)
+    documents = positive_int(geometry['documents_per_step'], 'documents per step', 4)
+    warm = geometry['warm_steps']
+    if type(warm) is not int or not 0 <= warm <= 2:
+        raise ValueError('warm count is outside its fixed bound')
+    measured = positive_int(geometry['measured_steps'], 'measured steps', 8)
+    return sequence, documents, warm, measured
+
+
+def _pack_digest(packs):
+    body = [{name: pack[name] for name in INPUT_FIELDS} for pack in packs]
+    return hashlib.sha256(canonical(body)).hexdigest()
+
+
+def prepare_inputs(data, geometry):
+    """Open the real stream and freeze the whole plan before model allocation."""
+    if not isinstance(data, dict) or set(data) != DATA_KEYS:
+        raise ValueError('data plan fields differ')
+    semantic_path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/semantic_stream.py'
+    spec = importlib.util.spec_from_file_location('cia_measurement_semantic_stream', semantic_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    ManifestBoundTokenStream = module.ManifestBoundTokenStream
+    receipt = Path(data['receipt_path']).resolve(strict=True)
+    tokenizer = Path(data['tokenizer_path']).resolve(strict=True)
+    if file_sha256(receipt) != checked_sha(data['receipt_sha256']):
+        raise ValueError('receipt sha256 differs')
+    if file_sha256(tokenizer) != checked_sha(data['tokenizer_sha256']):
+        raise ValueError('tokenizer sha256 differs')
+    explicit_ledger = Path(data['shard_ledger_path']).resolve(strict=True) if data['shard_ledger_path'] else None
+    stream = ManifestBoundTokenStream.from_receipt(
+        receipt_path=receipt, shards_root=Path(data['shards_root']), tokenizer_path=tokenizer,
+        shard_ledger=explicit_ledger)
+    if stream.receipt_sha256 != data['receipt_sha256'] or stream.tokenizer_sha256 != data['tokenizer_sha256']:
+        raise ValueError('stream changed while opening bound inputs')
+    ledger = stream.shard_ledger_path
+    if ledger is not None:
+        expected = checked_sha(data['shard_ledger_sha256'])
+        stream.bind_shard_ledger(expected_sha256=expected)
+        if file_sha256(ledger) != expected:
+            raise ValueError('ledger changed while binding')
+    elif data['shard_ledger_sha256'] is not None or data['shard_ledger_path'] is not None:
+        raise ValueError('ledger declaration has no corresponding file')
+    # The existing stream may refresh at shard boundaries. A detached verified
+    # list, with no ledger path, makes every later read bounded by this plan.
+    stream = replace(stream, shards=[dict(item) for item in stream.shards], shard_ledger_path=None)
+    sequence, documents, warm, measured = geometry_counts(geometry)
+    cursor = dict(data['cursor'])
+    if set(cursor) != {'shard_index', 'token_offset'}:
+        raise ValueError('cursor fields differ')
+    planned_positions = (warm + measured) * documents * sequence
+    span = stream.check_cursor_span(**cursor, tokens=planned_positions)
+    packs = []
+    for index in range(warm + measured):
+        pack = {'token_ids': [], 'target_ids': [], 'positions': [], 'document_starts': [],
+                'index': index, 'phase': 'warm' if index < warm else 'measured'}
+        for _ in range(documents):
+            episode, next_cursor = stream.next_episode(**cursor, sequence_length=sequence)
+            pack['document_starts'].append(len(pack['token_ids']))
+            pack['token_ids'].extend(episode['token_ids'])
+            pack['target_ids'].extend(episode['target_ids'])
+            pack['positions'].extend([[position, 0, 0] for position in range(sequence)])
+            cursor = {key: next_cursor[key] for key in ('shard_index', 'token_offset')}
+        packs.append(pack)
+    if file_sha256(receipt) != data['receipt_sha256'] or file_sha256(tokenizer) != data['tokenizer_sha256']:
+        raise ValueError('receipt or tokenizer changed during input preparation')
+    if ledger is not None and file_sha256(ledger) != data['shard_ledger_sha256']:
+        raise ValueError('ledger changed during input preparation')
+    binding = {'cursor_start': dict(data['cursor']), 'cursor_end': cursor, 'span': span,
+               'planned_positions': planned_positions, 'input_sha256': _pack_digest(packs),
+               'shard_ledger_path': str(ledger) if ledger is not None else None,
+               'shard_ledger_sha256': data['shard_ledger_sha256']}
+    return {'packs': packs, 'binding': binding, 'geometry': dict(geometry)}
+
+
+def verify_prepared_inputs(prepared):
+    sequence, documents, warm, measured = geometry_counts(prepared['geometry'])
+    packs = prepared['packs']
+    if len(packs) != warm + measured or _pack_digest(packs) != prepared['binding']['input_sha256']:
+        raise ValueError('prepared input bytes or plan length changed')
+    for index, pack in enumerate(packs):
+        if (pack['index'] != index or pack['phase'] != ('warm' if index < warm else 'measured')
+                or len(pack['token_ids']) != sequence * documents
+                or len(pack['target_ids']) != sequence * documents
+                or pack['document_starts'] != [step * sequence for step in range(documents)]):
+            raise ValueError('prepared pack geometry or phase changed')
+
+
+def validate_prediction(prediction, *, expected_identity, positions_per_step):
+    if (not isinstance(prediction, dict) or set(prediction) != {
+            'schema', 'identity', 'expected_step_seconds', 'expected_positions_per_second', 'basis'}
+            or prediction['schema'] != 'ember-cia-step-prediction-v1'):
+        raise ValueError('prediction fields or schema differ')
+    if not isinstance(prediction['basis'], str) or not prediction['basis'].strip():
+        raise ValueError('prediction requires an explicit basis')
+    if canonical(prediction['identity']) != canonical(expected_identity):
+        raise ValueError('prediction identity differs from opened inputs and execution')
+    if canonical(expected_identity.get('resources')) != canonical(LIMITS):
+        raise ValueError('prediction resource envelope differs')
+    wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
+    if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
+        raise ValueError('prediction timing and rate must be finite positive numbers')
+    positive_int(positions_per_step, 'counted step positions', 4096)
+    if not math.isclose(rate * wall, positions_per_step, rel_tol=1e-9, abs_tol=1e-9):
+        raise ValueError('prediction arithmetic differs from counted positions')
+    _, _, warm, measured = geometry_counts(expected_identity['geometry'])
+    if (warm + measured) * wall >= LIMITS['wall_seconds']:
+        raise ValueError('predicted steps do not fit the fixed wall bound')
+
+
+def hidden_kwargs():
+    if os.name != 'nt':
+        return {'shell': False}
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = subprocess.SW_HIDE
+    return {'creationflags': subprocess.CREATE_NO_WINDOW, 'startupinfo': startup, 'shell': False}
+
+
+def run_readonly(command, *, timeout=20):
+    return subprocess.run(command, check=True, capture_output=True, text=True, timeout=timeout, **hidden_kwargs())
+
+
+def process_census():
+    result = run_readonly(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
+        "$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,ExecutablePath,PageFileUsage,CreationDate) | ConvertTo-Json -Compress"])
+    rows = json.loads(result.stdout)
+    if not isinstance(rows, list) or not rows:
+        raise ValueError('process census is missing')
+    return rows
+
+
+def windows_command_args(command):
+    from ctypes import wintypes
+    shell = ctypes.WinDLL('shell32', use_last_error=True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    shell.CommandLineToArgvW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+    shell.CommandLineToArgvW.restype = ctypes.POINTER(wintypes.LPWSTR)
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
+    count = ctypes.c_int()
+    values = shell.CommandLineToArgvW(command, ctypes.byref(count))
+    if not values:
+        raise ValueError('cannot parse actual process argv')
+    try:
+        return [values[index] for index in range(count.value)]
+    finally:
+        kernel.LocalFree(values)
+
+
+def resource_census():
+    result = run_readonly(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'], timeout=5)
+    values = [value.strip() for value in result.stdout.splitlines() if value.strip()]
+    if any(not value.isdecimal() for value in values):
+        raise ValueError('GPU process identity is unreadable')
+    gpu_pids = {int(value) for value in values}
+    rows = process_census()
+    by_pid = {row['ProcessId']: row for row in rows}
+    current, ancestors = os.getpid(), set()
+    while current in by_pid and current not in ancestors:
+        ancestors.add(current)
+        current = by_pid[current]['ParentProcessId']
+    training_entries = {'cia_step_runner.py', 'cia_conformance_launch.py', 'train.py', 'pretrain.py',
+                        'certified_train_launch.py', 'timeshare_pretrain.py', 'train_multimodal_v0.py'}
+    for row in rows:
+        if row['ProcessId'] in ancestors or str(row['Name']).lower() not in {'python.exe', 'pythonw.exe', 'py.exe'}:
+            continue
+        if row.get('PageFileUsage') is None or not row.get('CommandLine'):
+            raise ValueError('cannot classify model process resources')
+        argv = windows_command_args(row['CommandLine'])
+        if (row['ProcessId'] in gpu_pids or int(row['PageFileUsage']) >= 1024 ** 2
+                or any(Path(arg).name.lower() in training_entries for arg in argv[1:])):
+            raise ValueError(f'unowned model resource process requires coordination: {row["ProcessId"]}')
+    return rows
+
+
+def headroom():
+    if os.name != 'nt':
+        raise ValueError('measurement resource envelope requires Windows')
+    class Performance(ctypes.Structure):
+        _fields_ = [('cb', ctypes.c_ulong)] + [(name, ctypes.c_size_t) for name in (
+            'CommitTotal', 'CommitLimit', 'CommitPeak', 'PhysicalTotal', 'PhysicalAvailable',
+            'SystemCache', 'KernelTotal', 'KernelPaged', 'KernelNonpaged', 'PageSize')] + [
+            ('HandleCount', ctypes.c_ulong), ('ProcessCount', ctypes.c_ulong), ('ThreadCount', ctypes.c_ulong)]
+    info = Performance()
+    info.cb = ctypes.sizeof(info)
+    if not ctypes.windll.psapi.GetPerformanceInfo(ctypes.byref(info), info.cb):
+        raise ValueError('cannot read system commit headroom')
+    free = (info.CommitLimit - info.CommitTotal) * info.PageSize
+    disks = {drive: shutil.disk_usage(drive + ':/').free for drive in ('C', 'B')}
+    if (free < LIMITS['min_free_commit_bytes'] or disks['C'] < LIMITS['min_c_free_bytes']
+            or disks['B'] < LIMITS['min_b_free_bytes']):
+        raise ValueError('measurement operating reserve is unavailable')
+    return {'free_commit_bytes': free, 'free_disk_bytes': disks}
+
+
+def daemon_identity():
+    from ember.governance.scripts import ember_dispatch_token as dispatch
+    binary = dispatch._canonical_ember_lab_binary(ROOT)
+    source = dispatch._canonical_ember_lab_source_sha256(ROOT)
+    if binary is None or source is None:
+        raise ValueError('canonical daemon identity is missing')
+    return {'path': str(binary.resolve(strict=True)), 'binary_sha256': file_sha256(binary), 'source_sha256': source}
+
+
+def load_prediction(path, digest):
+    raw = Path(path).read_bytes()
+    if hashlib.sha256(raw).hexdigest() != checked_sha(digest):
+        raise ValueError('prediction bytes differ from authenticated dispatch')
+    if len(raw) > 512 * 1024:
+        raise ValueError('prediction exceeds bounded metadata size')
+    return json.loads(raw), raw
+
+
+def prepare_execution(prediction):
+    identity = prediction.get('identity')
+    keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
+            'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
+            'dispatch_resources'}
+    if not isinstance(identity, dict) or set(identity) != keys:
+        raise ValueError('measurement identity fields differ')
+    sequence, documents, _, _ = geometry_counts(identity['geometry'])
+    validate_prediction(prediction, expected_identity=identity, positions_per_step=sequence * documents)
+    outer = identity['dispatch_resources']
+    if (not isinstance(outer, dict) or outer.get('profile') != 'cia_measurement'
+            or outer.get('maximum_job_memory_bytes') != LIMITS['host_memory_bytes']
+            or outer.get('window_contract') != 'headless_no_windows'):
+        raise ValueError('authenticated outer resource projection differs')
+    if not re.fullmatch('[0-9a-f]{32}', identity['run_id']):
+        raise ValueError('run identity must be 32 lowercase hex characters')
+    if type(identity['seed']) is not int or not 0 <= identity['seed'] < 2 ** 63:
+        raise ValueError('seed is outside its integer bound')
+    if type(identity['batch_documents']) is not bool:
+        raise ValueError('batch_documents must be an explicit boolean')
+    if not isinstance(identity['gpu_uuid'], str) or not re.fullmatch('GPU-[0-9a-fA-F-]+', identity['gpu_uuid']):
+        raise ValueError('exact GPU UUID is required')
+    wall = outer.get('vram_wall')
+    contract = wall.get('contract') if isinstance(wall, dict) else None
+    if (not isinstance(wall, dict) or wall.get('applicability') != 'required'
+            or not isinstance(contract, dict) or contract.get('device_uuid') != identity['gpu_uuid']):
+        raise ValueError('measurement GPU UUID differs from the required VRAM contract')
+    if set(identity['source_sha256']) != set(SOURCES):
+        raise ValueError('complete measurement source binding is required')
+    for relative, digest in identity['source_sha256'].items():
+        if file_sha256(ROOT / relative) != checked_sha(digest):
+            raise ValueError(f'bound source changed: {relative}')
+    head = run_readonly(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).stdout.strip()
+    if head != identity['source_commit']:
+        raise ValueError('source commit differs from prediction')
+    config_path = ROOT / CONFIG
+    if file_sha256(config_path) != checked_sha(identity['config_sha256']):
+        raise ValueError('config bytes differ from prediction')
+    config = json.loads(config_path.read_bytes())
+    if (config.get('authority', {}).get('total_parameters') != POPULATION
+            or config.get('model', {}).get('total_unique_parameters') != POPULATION):
+        raise ValueError('complete canonical CIA-3B population is required')
+    support = identity['support']
+    if not isinstance(support, dict) or set(support) != {'locus', 'experts'}:
+        raise ValueError('update support fields differ')
+    if support['locus'] != 'core+expert-set' or not isinstance(support['experts'], list):
+        raise ValueError('explicit core and expert-set measurement support required')
+    experts = support['experts']
+    if (not 1 <= len(experts) <= 4
+            or any(type(value) is not int or not 0 <= value < 25 for value in experts)
+            or experts != sorted(set(experts))):
+        raise ValueError('measurement expert support is outside its fixed bound')
+    optimizer = identity['optimizer']
+    expected = {'name': 'AdamW', 'foreach': False, 'lr': 0.001, 'betas': [0.9, 0.999],
+                'eps': 1e-8, 'weight_decay': 0.01, 'membership': 'complete_parameter_inventory'}
+    if canonical(optimizer) != canonical(expected):
+        raise ValueError('fixed optimizer definition differs')
+    prepared = prepare_inputs(identity['data'], identity['geometry'])
+    actual = dict(identity, input_binding=prepared['binding'], resources=dict(LIMITS))
+    sequence, documents, _, _ = geometry_counts(identity['geometry'])
+    validate_prediction(prediction, expected_identity=actual, positions_per_step=sequence * documents)
+    verify_prepared_inputs(prepared)
+    return config, prepared
+
+
+def _cache_values(cache):
+    return {name: getattr(cache, name) for name in ('lease_count', 'miss_count', 'eviction_count',
+                                                  'transfer_bytes', 'transfer_seconds')}
+
+
+def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None):
+    """Return one row only after context exit, successful update and synchronization."""
+    import torch
+    if device.type == 'cuda':
+        if not isinstance(run_id, str) or not re.fullmatch('[0-9a-f]{32}', run_id):
+            raise ValueError('CUDA step requires the bound owned run')
+        from ember.governance.scripts import cia_conformance_resources as resources
+        resources.require_owned_job(run_id, namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+    synchronize = (lambda: torch.cuda.synchronize(device)) if device.type == 'cuda' else (lambda: None)
+    synchronize()
+    if device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats(device)
+    before = _cache_values(model._cuda_execution.cache)
+    started = time.perf_counter()
+    tokens = torch.tensor(pack['token_ids'], dtype=torch.long, device=device)
+    targets = torch.tensor(pack['target_ids'], dtype=torch.long, device=device)
+    positions = torch.tensor(pack['positions'], dtype=torch.long, device=device)
+    starts = tuple(pack['document_starts'])
+    optimizer.zero_grad(set_to_none=True)
+    staged = time.perf_counter()
+    events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if device.type == 'cuda' else None
+    with model.candidate_step():
+        if events is not None:
+            events[0].record()
+        logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                               return_routes=True, batch_documents=batch_documents)
+        loss = torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
+        if events is not None:
+            events[1].record()
+        forwarded = time.perf_counter()
+        loss.backward()
+        if events is not None:
+            events[2].record()
+        backwarded = time.perf_counter()
+    exited = time.perf_counter()
+    if not math.isfinite(float(loss.detach())):
+        raise ValueError('nonfinite step loss')
+    optimizer.step()
+    if events is not None:
+        events[3].record()
+    synchronize()
+    finished = time.perf_counter()
+    after = _cache_values(model._cuda_execution.cache)
+    wall = finished - started
+    if not math.isfinite(wall) or wall <= 0:
+        raise ValueError('complete step wall observation is invalid')
+    allocator = ({'allocated_bytes': torch.cuda.memory_allocated(device),
+                  'reserved_bytes': torch.cuda.memory_reserved(device),
+                  'peak_allocated_bytes': torch.cuda.max_memory_allocated(device),
+                  'peak_reserved_bytes': torch.cuda.max_memory_reserved(device)} if device.type == 'cuda' else None)
+    return {'index': pack.get('index', 0), 'phase': pack['phase'], 'batch_documents': batch_documents,
+            'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
+            'positions_per_second': len(pack['token_ids']) / wall,
+            'staging_seconds': staged - started, 'forward_seconds': forwarded - staged,
+            'backward_seconds': backwarded - forwarded, 'context_exit_seconds': exited - backwarded,
+            'optimizer_and_sync_seconds': finished - exited, 'loss': float(loss.detach()),
+            'cuda_phase_seconds': ({'forward': events[0].elapsed_time(events[1]) / 1000,
+                                   'backward': events[1].elapsed_time(events[2]) / 1000,
+                                   'context_exit_and_optimizer': events[2].elapsed_time(events[3]) / 1000}
+                                  if events is not None else None),
+            'routes_sha256': hashlib.sha256(canonical(routes)).hexdigest(),
+            'expert_leases': after['lease_count'] - before['lease_count'],
+            'expert_bundle_fetches': after['miss_count'] - before['miss_count'],
+            'expert_evictions': after['eviction_count'] - before['eviction_count'],
+            'host_to_device_bytes': after['transfer_bytes'] - before['transfer_bytes'],
+            'cache': {key: after[key] - before[key] for key in before}, 'allocator': allocator, 'claim': CLAIM}
+
+
+def load_disk_module():
+    spec = importlib.util.spec_from_file_location('cia_measurement_disk_runner', ROOT / DISK_ENTRY)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _python_command(helper, hidden, *args):
+    return ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(helper),
+            '--', '-B', str(hidden), *map(str, args)]
+
+
+def _write_new(path, value):
+    with Path(path).open('xb') as stream:
+        stream.write(canonical(value))
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def verify_worker(binding, binding_path):
+    from ember.governance.scripts import cia_conformance_resources as resources
+    launch = binding['launch']
+    run_id = binding_path.parent.name.removeprefix('measurement-')
+    resources.require_owned_job(run_id, namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+    if (binding.get('claim') != CLAIM or launch['run_id'] != run_id
+            or canonical(launch['limits']) != canonical(LIMITS)
+            or launch['worker_argv'] != sys.argv
+            or sys.argv != [str(ROOT / ENTRY), '--worker', str(binding_path)]):
+        raise ValueError('worker command, identity or resource envelope differs')
+    custody = binding_path.parent.resolve(strict=True)
+    if custody.drive.upper() != 'B:' or str(custody) != launch['custody']:
+        raise ValueError('measurement custody differs')
+    rows = process_census()
+    by_pid = {row['ProcessId']: row for row in rows}
+    owner = by_pid.get(launch['owner_pid'])
+    if owner is None:
+        raise ValueError('measurement controller is not alive')
+    args = windows_command_args(owner.get('CommandLine') or '')
+    expected = [str(Path(sys.executable).resolve(strict=True)), '-B', str(ROOT / ENTRY),
+                '--daemon-run', '--live', '--custody', launch['parent_custody'],
+                '--hidden-helper', launch['hidden_helper'], '--prediction', launch['prediction_path'],
+                '--prediction-sha256', launch['prediction_sha256']]
+    if (not args or args[1:] != expected[1:] or not owner.get('ExecutablePath')
+            or not os.path.samefile(args[0], sys.executable)
+            or not os.path.samefile(owner['ExecutablePath'], sys.executable)):
+        raise ValueError('measurement controller executable or argv differs')
+    daemon = daemon_identity()
+    parent = by_pid.get(owner['ParentProcessId'])
+    dispatch = launch['dispatch']
+    if (parent is None or not parent.get('ExecutablePath') or daemon != binding['daemon']
+            or not os.path.samefile(parent['ExecutablePath'], daemon['path'])
+            or dispatch != {'job_id': run_id, 'daemon_pid': owner['ParentProcessId'],
+                            'memory_cap': LIMITS['host_memory_bytes']}):
+        raise ValueError('controller is not the bound canonical daemon child')
+    current, visited = os.getpid(), set()
+    while current != owner['ProcessId'] and current in by_pid and current not in visited:
+        visited.add(current)
+        current = by_pid[current]['ParentProcessId']
+    if current != owner['ProcessId']:
+        raise ValueError('worker is outside controller ancestry')
+    helper = str((Path.home() / '.codex/headless-python.ps1').resolve(strict=True))
+    if set(launch['helpers']) != {helper, launch['hidden_helper']}:
+        raise ValueError('fixed hidden helper identities differ')
+    for raw, digest in launch['helpers'].items():
+        if file_sha256(raw) != checked_sha(digest):
+            raise ValueError('hidden helper bytes changed')
+    lock_path = Path(os.environ.get('EMBER_GPU_LOCK_PATH', '')).resolve(strict=True)
+    if str(lock_path) != launch['gpu_lock']:
+        raise ValueError('shared GPU lock path differs')
+    lock = json.loads(lock_path.read_bytes())
+    if lock.get('daemon_pid') != owner['ProcessId'] or lock.get('side') != 'windows' or lock.get('active_jobs') != 1:
+        raise ValueError('controller does not own the shared GPU lock')
+    cache = {name: str((custody / directory).resolve()) for name, directory in CACHE_DIRS.items()}
+    if any(os.environ.get(name) != value for name, value in cache.items()):
+        raise ValueError('measurement cache custody differs')
+    assertion = custody / 'child-env-startup.json'
+    if os.environ.get('EMBER_DISK_BUDGET_ENV_ASSERTION') != str(assertion):
+        raise ValueError('disk assertion path differs')
+    _, _, error = load_disk_module()._load_child_cache_assertion(
+        assertion, cache, os.environ.get('EMBER_DISK_BUDGET_ENV_NONCE', ''))
+    if error:
+        raise ValueError(error)
+    if os.environ.get('EMBER_GATE_AUTHORIZED') != '1':
+        raise ValueError('explicit live gate condition missing')
+    headroom()
+    resource_census()
+    resources.sample_device(launch['gpu_uuid'], total_gpu_bytes=LIMITS['total_gpu_bytes'])
+
+
+def worker(binding_path):
+    """Direct worker calls fail at actual job membership, before artifact reads."""
+    from ember.governance.scripts import cia_conformance_resources as resources
+    binding_path = Path(binding_path)
+    if not binding_path.parent.name.startswith('measurement-'):
+        raise ValueError('worker custody is not a measurement run')
+    run_id = binding_path.parent.name.removeprefix('measurement-')
+    resources.require_owned_job(run_id, namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+    binding = json.loads(binding_path.read_bytes())
+    verify_worker(binding, binding_path)
+    custody = binding_path.parent
+    applied_positions = 0
+    try:
+        prediction, _ = load_prediction(custody / 'prediction.json', binding['launch']['prediction_sha256'])
+        if prediction['identity']['run_id'] != run_id or prediction['identity']['gpu_uuid'] != binding['launch']['gpu_uuid']:
+            raise ValueError('prediction differs from owned run or selected GPU')
+        config, prepared = prepare_execution(prediction)
+        import torch
+        from ember.model.ember_v0_decoder import CIADecoder
+        from ember.model.ember_v0_contract import validate_cia_architecture
+        validate_cia_architecture(config)
+        if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
+            raise ValueError('one explicitly bound CUDA device is required')
+        selected = run_readonly(['nvidia-smi', '-i', '0', '--query-gpu=uuid', '--format=csv,noheader'], timeout=5).stdout.strip()
+        if selected != prediction['identity']['gpu_uuid']:
+            raise ValueError('CUDA index differs from bound device UUID')
+        device = torch.device('cuda:0')
+        total = torch.cuda.get_device_properties(device).total_memory
+        torch.cuda.set_per_process_memory_fraction(LIMITS['allocator_bytes'] / total, device)
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        torch.manual_seed(prediction['identity']['seed'])
+        model = CIADecoder(architecture_config=config).materialize_cpu(seed=prediction['identity']['seed'])
+        model.activate_cuda(device)
+        inventory = model.parameter_inventory()
+        if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:
+            raise ValueError('full CIA-3B population is missing')
+        support = prediction['identity']['support']
+        model.apply_update_support(support['locus'], experts=tuple(support['experts']))
+        definition = prediction['identity']['optimizer']
+        optimizer = torch.optim.AdamW(list(inventory.values()), lr=definition['lr'],
+            betas=tuple(definition['betas']), eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False)
+        membership = [parameter for group in optimizer.param_groups for parameter in group['params']]
+        if len(membership) != len(inventory) or {id(parameter) for parameter in membership} != {id(parameter) for parameter in inventory.values()}:
+            raise ValueError('optimizer membership differs from complete population')
+        supported = {name: parameter.numel() for name, parameter in inventory.items() if parameter.requires_grad}
+        _write_new(custody / 'model.json', {'population': POPULATION, 'parameter_count': len(inventory),
+            'trainable_parameters': sum(supported.values()), 'trainable_support': supported,
+            'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'claim': CLAIM})
+        with (custody / 'rows.jsonl').open('xb') as rows:
+            for pack in prepared['packs']:
+                verify_prepared_inputs(prepared)
+                row = measure_step(model, optimizer, pack, device=device,
+                                   batch_documents=prediction['identity']['batch_documents'], run_id=run_id)
+                row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
+                           input_sha256=prepared['binding']['input_sha256'])
+                rows.write(canonical(row) + b'\n')
+                rows.flush()
+                os.fsync(rows.fileno())
+                applied_positions += row['applied_positions']
+        _write_new(custody / 'worker-terminal.json', {'status': 'completed', 'applied_positions': applied_positions,
+                                                    'claim': CLAIM})
+        return 0
+    except BaseException as error:
+        _write_new(custody / 'worker-terminal.json', {'status': 'failed', 'error_type': type(error).__name__,
+            'error': str(error), 'traceback': traceback.format_exc(), 'applied_positions': applied_positions,
+            'claim': CLAIM})
+        raise
+
+
+def launch(args, dispatch):
+    from ember.governance.scripts import cia_conformance_resources as resources, gpu_lock_guard
+    from ember.governance.scripts.owned_process import OwnedProcessRunner
+    if not args.live or os.environ.get('EMBER_GATE_AUTHORIZED') != '1':
+        raise ValueError('explicit live conditions are missing')
+    prediction, prediction_bytes = load_prediction(args.prediction, args.prediction_sha256)
+    run_id = prediction['identity']['run_id']
+    if not isinstance(run_id, str) or not re.fullmatch('[0-9a-f]{32}', run_id):
+        raise ValueError('run identity must be 32 lowercase hex characters')
+    if dispatch['job_id'] != run_id:
+        raise ValueError('prediction run identity differs from authenticated dispatch')
+    parent = args.custody.resolve(strict=True)
+    if parent.drive.upper() != 'B:' or not parent.is_dir():
+        raise ValueError('daemon custody must be an existing B directory')
+    custody = parent / ('measurement-' + run_id)
+    custody.mkdir()  # Exclusive creation is the one-use run-custody boundary.
+    helper = (Path.home() / '.codex/headless-python.ps1').resolve(strict=True)
+    hidden = args.hidden_helper.resolve(strict=True)
+    preflight = headroom()
+    census = resource_census()
+    _, prepared = prepare_execution(prediction)
+    gpu_uuid = prediction['identity']['gpu_uuid']
+    resources.sample_device(gpu_uuid, total_gpu_bytes=LIMITS['total_gpu_bytes'])
+    with (custody / 'prediction.json').open('xb') as stream:
+        stream.write(prediction_bytes)
+    _write_new(custody / 'preflight.json', {'headroom': preflight, 'processes': census,
+                                          'input_binding': prepared['binding'], 'claim': CLAIM})
+    worker_argv = [str(ROOT / ENTRY), '--worker', str(custody / 'launch.json')]
+    binding = {'daemon': daemon_identity(), 'claim': CLAIM, 'launch': {
+        'run_id': run_id, 'owner_pid': os.getpid(), 'parent_custody': str(parent), 'custody': str(custody),
+        'hidden_helper': str(hidden), 'helpers': {str(path): file_sha256(path) for path in (helper, hidden)},
+        'prediction_path': str(args.prediction), 'prediction_sha256': args.prediction_sha256,
+        'gpu_uuid': gpu_uuid, 'gpu_lock': str(Path(gpu_lock_guard._require_lock_path()).resolve()),
+        'limits': dict(LIMITS), 'worker_argv': worker_argv, 'dispatch': dispatch}}
+    _write_new(custody / 'launch.json', binding)
+    command = _python_command(helper, hidden, ROOT / DISK_ENTRY,
+        '--max-c-write-gib', str(LIMITS['max_c_write_gib']), '--max-b-write-gib', str(LIMITS['max_b_write_gib']),
+        '--receipt', custody / 'disk.json', '--write-root', f'custody={custody}',
+        '--', *_python_command(helper, hidden, *worker_argv))
+    jobs = []
+    def factory():
+        job = resources.ResourceJob(run_id, gpu_uuid, namespace=JOB_NAMESPACE,
+                                    host_memory_bytes=LIMITS['host_memory_bytes'], total_gpu_bytes=LIMITS['total_gpu_bytes'])
+        jobs.append(job)
+        return job
+    try:
+        with gpu_lock_guard.acquire(script=ENTRY):
+            headroom()
+            resource_census()
+            result = OwnedProcessRunner(windows_job_factory=factory).run(command,
+                timeout_s=LIMITS['wall_seconds'], cwd=ROOT)
+    except BaseException as error:
+        _write_new(custody / 'owned-failure.json', {'status': 'exception', 'error_type': type(error).__name__,
+            'error': str(error), 'cleanup_verified': False, 'claim': CLAIM,
+            'device_samples': jobs[0].samples if jobs else [],
+            'supervisor_failure': jobs[0].failure if jobs else None})
+        raise
+    (custody / 'stdout.log').write_text(result.stdout, encoding='utf-8')
+    (custody / 'stderr.log').write_text(result.stderr, encoding='utf-8')
+    receipt = asdict(result)
+    receipt.pop('stdout')
+    receipt.pop('stderr')
+    receipt.update(prediction_sha256=args.prediction_sha256, claim=CLAIM,
+                   device_samples=jobs[0].samples, supervisor_failure=jobs[0].failure)
+    _write_new(custody / 'owned.json', receipt)
+    return 0 if result.returncode == 0 and result.cleanup_verified and not jobs[0].failure else 1
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if len(argv) == 2 and argv[0] == '--worker':
+        return worker(Path(argv[1]))
+    # First controller operation: authenticate and consume the real daemon token.
+    # Preserve only non-secret dispatch identity; consumption removes token env.
+    from ember.governance.scripts.ember_dispatch_token import consume_dispatch
+    dispatch = {'job_id': os.environ.get('EMBER_LAB_DISPATCH_JOB_ID'),
+                'daemon_pid': os.environ.get('EMBER_LAB_DISPATCH_DAEMON_PID')}
+    cap = consume_dispatch(ROOT)
+    if type(cap) is not int or cap != LIMITS['host_memory_bytes']:
+        raise ValueError('authenticated daemon host cap differs from measurement envelope')
+    dispatch.update(daemon_pid=int(dispatch['daemon_pid']), memory_cap=cap)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--daemon-run', action='store_true', required=True)
+    parser.add_argument('--live', action='store_true', required=True)
+    parser.add_argument('--custody', type=Path, required=True)
+    parser.add_argument('--hidden-helper', type=Path, required=True)
+    parser.add_argument('--prediction', type=Path, required=True)
+    parser.add_argument('--prediction-sha256', required=True)
+    args = parser.parse_args(argv)
+    expected = ['--daemon-run', '--live', '--custody', str(args.custody), '--hidden-helper', str(args.hidden_helper),
+                '--prediction', str(args.prediction), '--prediction-sha256', args.prediction_sha256]
+    if argv != expected:
+        raise ValueError('controller argv differs from fixed measurement dispatch')
+    return launch(args, dispatch)
+
+
+if __name__ == '__main__':
+    sys.path.insert(0, str(ROOT / 'src'))
+    sys.path.insert(0, str(ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'))
+    sys.exit(main())
