@@ -78,7 +78,9 @@ def positive_int(value, name, maximum):
     return value
 
 
-def geometry_counts(geometry):
+def geometry_counts(geometry, *, trajectory=False):
+    if type(trajectory) is not bool:
+        raise ValueError('explicit boolean trajectory geometry selection required')
     if set(geometry) != {'sequence_length', 'documents_per_step', 'warm_steps', 'measured_steps'}:
         raise ValueError('geometry fields differ')
     sequence = positive_int(geometry['sequence_length'], 'sequence length', 1024)
@@ -86,7 +88,9 @@ def geometry_counts(geometry):
     warm = geometry['warm_steps']
     if type(warm) is not int or not 0 <= warm <= 2:
         raise ValueError('warm count is outside its fixed bound')
-    measured = positive_int(geometry['measured_steps'], 'measured steps', 8)
+    measured = positive_int(geometry['measured_steps'], 'measured steps', 63 if trajectory else 8)
+    if trajectory and (sequence, documents, warm, measured) != (1024, 4, 1, 63):
+        raise ValueError('trajectory requires exactly 64 complete 4x1024 updates with one warm exemplar')
     return sequence, documents, warm, measured
 
 
@@ -95,7 +99,7 @@ def _pack_digest(packs):
     return hashlib.sha256(canonical(body)).hexdigest()
 
 
-def prepare_inputs(data, geometry):
+def prepare_inputs(data, geometry, *, trajectory=False):
     """Open the real stream and freeze the whole plan before model allocation."""
     if not isinstance(data, dict) or set(data) != DATA_KEYS:
         raise ValueError('data plan fields differ')
@@ -128,7 +132,7 @@ def prepare_inputs(data, geometry):
     # The existing stream may refresh at shard boundaries. A detached verified
     # list, with no ledger path, makes every later read bounded by this plan.
     stream = replace(stream, shards=[dict(item) for item in stream.shards], shard_ledger_path=None)
-    sequence, documents, warm, measured = geometry_counts(geometry)
+    sequence, documents, warm, measured = geometry_counts(geometry, trajectory=trajectory)
     cursor = dict(data['cursor'])
     if set(cursor) != {'shard_index', 'token_offset'}:
         raise ValueError('cursor fields differ')
@@ -154,11 +158,14 @@ def prepare_inputs(data, geometry):
                'planned_positions': planned_positions, 'input_sha256': _pack_digest(packs),
                'shard_ledger_path': str(ledger) if ledger is not None else None,
                'shard_ledger_sha256': data['shard_ledger_sha256']}
-    return {'packs': packs, 'binding': binding, 'geometry': dict(geometry)}
+    prepared = {'packs': packs, 'binding': binding, 'geometry': dict(geometry)}
+    if trajectory:
+        prepared['trajectory'] = True
+    return prepared
 
 
 def verify_prepared_inputs(prepared):
-    sequence, documents, warm, measured = geometry_counts(prepared['geometry'])
+    sequence, documents, warm, measured = geometry_counts(prepared['geometry'], trajectory=prepared.get('trajectory', False))
     packs = prepared['packs']
     if len(packs) != warm + measured or _pack_digest(packs) != prepared['binding']['input_sha256']:
         raise ValueError('prepared input bytes or plan length changed')
@@ -179,7 +186,7 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
         raise ValueError('prediction requires an explicit basis')
     if canonical(prediction['identity']) != canonical(expected_identity):
         raise ValueError('prediction identity differs from opened inputs and execution')
-    if canonical(expected_identity.get('resources')) != canonical(LIMITS):
+    if canonical(expected_identity.get('resources')) != canonical(resource_limits(expected_identity)):
         raise ValueError('prediction resource envelope differs')
     wall, rate = prediction['expected_step_seconds'], prediction['expected_positions_per_second']
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (wall, rate)):
@@ -187,7 +194,8 @@ def validate_prediction(prediction, *, expected_identity, positions_per_step):
     positive_int(positions_per_step, 'counted step positions', 4096)
     if not math.isclose(rate * wall, positions_per_step, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError('prediction arithmetic differs from counted positions')
-    _, _, warm, measured = geometry_counts(expected_identity['geometry'])
+    trajectory = trajectory_mode(expected_identity)
+    _, _, warm, measured = geometry_counts(expected_identity['geometry'], trajectory=trajectory)
     if (warm + measured) * wall >= LIMITS['wall_seconds']:
         raise ValueError('predicted steps do not fit the fixed wall bound')
 
@@ -316,7 +324,47 @@ def execution_mode(identity):
 
 def required_sources(identity):
     """The complete measurement source binding for this identity: SOURCES plus the selected mode's modules."""
-    return SOURCES + MODE_SOURCES.get(execution_mode(identity), ())
+    additional = ('src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py',) if trajectory_mode(identity) else ()
+    return SOURCES + MODE_SOURCES.get(execution_mode(identity), ()) + additional
+
+
+def trajectory_mode(identity):
+    if 'trajectory' not in identity:
+        return False
+    arms = {'R1': None, 'R2': None, 'Tsegmented': 'resident-segmented-capture',
+            'Tdynamic': 'resident-dynamic-capture', 'Tfused': 'resident-dynamic-capture'}
+    value = identity['trajectory']
+    if (not isinstance(value, dict) or set(value) != {'schema', 'arm', 'comparison_id'}
+            or value['schema'] != 'reference-noise-floor-64-v1' or value['arm'] not in arms
+            or not isinstance(value['comparison_id'], str) or not re.fullmatch('[0-9a-f]{32}', value['comparison_id'])
+            or execution_mode(identity) != arms[value['arm']]):
+        raise ValueError('trajectory requires a bound comparison and matching 64-update arm')
+    return True
+
+
+def resource_limits(identity):
+    limits = dict(LIMITS)
+    if trajectory_mode(identity):
+        limits['max_b_write_gib'] = 8
+    return limits
+
+
+def validate_trajectory_resources(identity):
+    if trajectory_mode(identity):
+        walls = identity['dispatch_resources'].get('disk_write_walls')
+        if (not isinstance(walls, list) or len(walls) != 1 or not isinstance(walls[0], dict)
+                or walls[0].get('volume_root') != 'B:/'
+                or walls[0].get('maximum_write_bytes') != 8 * GIB):
+            raise ValueError('trajectory requires its matching eight GiB native disk wall')
+
+
+def load_trajectory_module():
+    path = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b/cia_trajectory.py'
+    spec = importlib.util.spec_from_file_location('cia_measurement_trajectory', path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
 
 
 def prepare_execution(prediction):
@@ -324,10 +372,12 @@ def prepare_execution(prediction):
     keys = {'run_id', 'source_commit', 'source_sha256', 'config_sha256', 'data', 'seed',
             'support', 'optimizer', 'geometry', 'batch_documents', 'resources', 'input_binding', 'gpu_uuid',
             'dispatch_resources'}
-    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode'}:
+    if not isinstance(identity, dict) or not keys <= set(identity) <= keys | {'execution_mode', 'trajectory'}:
         raise ValueError('measurement identity fields differ')
     execution_mode(identity)
-    sequence, documents, _, _ = geometry_counts(identity['geometry'])
+    trajectory = trajectory_mode(identity)
+    validate_trajectory_resources(identity)
+    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory)
     validate_prediction(prediction, expected_identity=identity, positions_per_step=sequence * documents)
     outer = identity['dispatch_resources']
     if (not isinstance(outer, dict) or outer.get('profile') != 'cia_measurement'
@@ -377,11 +427,13 @@ def prepare_execution(prediction):
     optimizer = identity['optimizer']
     expected = {'name': 'AdamW', 'foreach': False, 'lr': 0.001, 'betas': [0.9, 0.999],
                 'eps': 1e-8, 'weight_decay': 0.01, 'membership': 'complete_parameter_inventory'}
+    if trajectory and identity['trajectory']['arm'] == 'Tfused':
+        expected['fused'] = True
     if canonical(optimizer) != canonical(expected):
         raise ValueError('fixed optimizer definition differs')
-    prepared = prepare_inputs(identity['data'], identity['geometry'])
-    actual = dict(identity, input_binding=prepared['binding'], resources=dict(LIMITS))
-    sequence, documents, _, _ = geometry_counts(identity['geometry'])
+    prepared = prepare_inputs(identity['data'], identity['geometry'], trajectory=trajectory)
+    actual = dict(identity, input_binding=prepared['binding'], resources=resource_limits(identity))
+    sequence, documents, _, _ = geometry_counts(identity['geometry'], trajectory=trajectory)
     validate_prediction(prediction, expected_identity=actual, positions_per_step=sequence * documents)
     verify_prepared_inputs(prepared)
     return config, prepared
@@ -603,7 +655,7 @@ def capture_prerequisites(identity):
         raise ValueError('segmented capture needs exactly four declared resident experts')
     if identity.get('batch_documents') is not True:
         raise ValueError('segmented capture needs document-batched steps')
-    _, _, warm, _ = geometry_counts(identity['geometry'])
+    _, _, warm, _ = geometry_counts(identity['geometry'], trajectory=trajectory_mode(identity))
     if warm < 1:
         raise ValueError('segmented capture needs one warm step as the recorded exemplar')
     return experts
@@ -646,7 +698,7 @@ def document_lengths(starts, total):
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
-                 capture=None, record=False, expert_owners=None):
+                 capture=None, record=False, expert_owners=None, route_observer=None, route_snapshot=None):
     """Return one row only after context exit, successful update and synchronization.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
@@ -667,6 +719,10 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             raise ValueError('CUDA step requires the bound owned run')
         from ember.governance.scripts import cia_conformance_resources as resources
         resources.require_owned_job(run_id, namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+    if route_observer is not None and not callable(route_observer):
+        raise ValueError('reference routing observer must be callable')
+    if route_snapshot is not None and type(route_snapshot) is not dict:
+        raise ValueError('trajectory routing snapshot requires a plain output dictionary')
     synchronize = (lambda: torch.cuda.synchronize(device)) if device.type == 'cuda' else (lambda: None)
     synchronize()
     if device.type == 'cuda':
@@ -678,6 +734,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     positions = torch.tensor(pack['positions'], dtype=torch.long, device=device)
     starts = tuple(pack['document_starts'])
     resident = bool(getattr(model, '_resident_experts', None))
+    if (route_snapshot is not None and not resident) or (route_observer is not None and resident):
+        raise ValueError('routing observation interface differs from the selected execution mode')
     buffers = routing_buffers(document_lengths(starts, len(pack['token_ids'])), device) if resident else None
     if buffers is not None:
         buffers.begin_step()
@@ -702,7 +760,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                                    return_device_routes=True, device_route_collector=buffers.collector)
         else:
             logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
-                                   return_routes=True, batch_documents=batch_documents)
+                                   return_routes=True, batch_documents=batch_documents,
+                                   **({'route_observer': route_observer} if route_observer is not None else {}))
         loss = torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
         if events is not None:
             events[1].record()
@@ -753,6 +812,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                   'reserved_bytes': torch.cuda.memory_reserved(device),
                   'peak_allocated_bytes': torch.cuda.max_memory_allocated(device),
                   'peak_reserved_bytes': torch.cuda.max_memory_reserved(device)} if device.type == 'cuda' else None)
+    if route_snapshot is not None:
+        route_snapshot.update(buffers=buffers, snapshot=snapshot)
     return {'index': pack.get('index', 0), 'phase': pack['phase'], 'batch_documents': batch_documents,
             'applied_positions': len(pack['token_ids']), 'wall_seconds': wall,
             'positions_per_second': len(pack['token_ids']) / wall,
@@ -801,8 +862,9 @@ def verify_worker(binding, binding_path):
     launch = binding['launch']
     run_id = binding_path.parent.name.removeprefix('measurement-')
     resources.require_owned_job(run_id, namespace=JOB_NAMESPACE, host_memory_bytes=LIMITS['host_memory_bytes'])
+    prediction, _ = load_prediction(binding_path.parent / 'prediction.json', launch['prediction_sha256'])
     if (binding.get('claim') != CLAIM or launch['run_id'] != run_id
-            or canonical(launch['limits']) != canonical(LIMITS)
+            or canonical(launch['limits']) != canonical(resource_limits(prediction['identity']))
             or launch['worker_argv'] != sys.argv
             or sys.argv != [str(ROOT / ENTRY), '--worker', str(binding_path)]):
         raise ValueError('worker command, identity or resource envelope differs')
@@ -901,6 +963,18 @@ def worker(binding_path):
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         torch.manual_seed(prediction['identity']['seed'])
+        if trajectory_mode(prediction['identity']):
+            def applied(count):
+                nonlocal applied_positions
+                if type(count) is not int or count != 4096:
+                    raise ValueError('trajectory applied count differs from bound geometry')
+                applied_positions += count
+            load_trajectory_module().run_trajectory_arm(runner=sys.modules[__name__], config=config,
+                prepared=prepared, prediction=prediction, binding=binding, custody=custody,
+                device=device, compiler=c_compiler, applied=applied)
+            _write_new(custody / 'worker-terminal.json', dict(status='completed',
+                applied_positions=applied_positions, claim=CLAIM))
+            return 0
         model = CIADecoder(architecture_config=config).materialize_cpu(seed=prediction['identity']['seed'])
         mode = execution_mode(prediction['identity'])
         definition = prediction['identity']['optimizer']
@@ -1003,10 +1077,10 @@ def launch(args, dispatch):
         'hidden_helper': str(hidden), 'helpers': {str(path): file_sha256(path) for path in (helper, hidden)},
         'prediction_path': str(args.prediction), 'prediction_sha256': args.prediction_sha256,
         'gpu_uuid': gpu_uuid, 'gpu_lock': str(Path(gpu_lock_guard._require_lock_path()).resolve()),
-        'limits': dict(LIMITS), 'worker_argv': worker_argv, 'dispatch': dispatch}}
+        'limits': resource_limits(prediction['identity']), 'worker_argv': worker_argv, 'dispatch': dispatch}}
     _write_new(custody / 'launch.json', binding)
     command = _python_command(helper, hidden, ROOT / DISK_ENTRY,
-        '--max-c-write-gib', str(LIMITS['max_c_write_gib']), '--max-b-write-gib', str(LIMITS['max_b_write_gib']),
+        '--max-c-write-gib', str(LIMITS['max_c_write_gib']), '--max-b-write-gib', str(resource_limits(prediction['identity'])['max_b_write_gib']),
         '--receipt', custody / 'disk.json', '--write-root', f'custody={custody}',
         '--', *_python_command(helper, hidden, *worker_argv))
     jobs = []
