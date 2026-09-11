@@ -3,12 +3,13 @@
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
 """Triton C-compiler binding for the CIA fused elementwise path (#1945).
 
-The governed measurement-2 worker refused on 2026-09-11 with Triton's "Failed to find C compiler": Triton looks for
-its bundled TinyCC under sysconfig's platlib (the system site) while the wheel is installed in the user site, and the
-governed environment carries no cl/gcc/clang on PATH. These CPU-only cases prove `bind_triton_c_compiler` resolves the
-INSTALLED Triton package's bundled tcc module-relatively, records its sha256, exports it as CC exactly once, honours an
-explicit CC that exists, refuses a missing compiler without falling back, and runs before the first inductor compile.
-They do not compile anything and establish no throughput or conformance claim.
+The governed measurement-2 worker refused on 2026-09-11 with Triton's "Failed to find C compiler": on Windows, Triton
+looks for its bundled TinyCC under sysconfig's platlib (the system site) while the wheel is installed in the user site,
+and the worker's PATH carries no cl/gcc/clang. These CPU-only cases prove `bind_triton_c_compiler` resolves, on Windows,
+the INSTALLED Triton package's bundled tcc module-relatively, records its sha256, exports it as CC exactly once, honours
+an explicit CC that exists on any platform, refuses a missing compiler without falling back, leaves Triton's ordinary
+discovery untouched off Windows, and runs before the first inductor compile. They do not compile anything and establish
+no throughput or conformance claim.
 """
 import hashlib
 import os
@@ -27,14 +28,19 @@ RUNNER = Path(__file__).resolve().parents[1] / "src" / "ember" / "infrastructure
 class _Env:
     """Save/restore CC, the module cache and the fake triton module around each case."""
 
+    def __init__(self, windows=True):
+        self.windows = windows
+
     def __enter__(self):
         self.cc = os.environ.get("CC")
         self.triton = sys.modules.get("triton")
         self.compiler = subject._C_COMPILER
         self.fused = dict(subject._FUSED)
+        self.platform = subject._windows
         os.environ.pop("CC", None)
         subject._C_COMPILER = None
         subject._FUSED.clear()
+        subject._windows = lambda: self.windows  # the platform is a fixture, so every case runs on every CI host
         return self
 
     def __exit__(self, *exc):
@@ -49,6 +55,7 @@ class _Env:
         subject._C_COMPILER = self.compiler
         subject._FUSED.clear()
         subject._FUSED.update(self.fused)
+        subject._windows = self.platform
 
 
 def fake_triton(root, *, with_tcc=True):
@@ -96,6 +103,29 @@ class BundledCompilerTests(unittest.TestCase):
             self.assertIn("bundled TinyCC", str(caught.exception))
             self.assertNotIn("CC", os.environ)
             self.assertIsNone(subject._C_COMPILER)
+
+
+class PlatformTests(unittest.TestCase):
+    def test_off_windows_leaves_triton_discovery_untouched(self):
+        with _Env(windows=False), tempfile.TemporaryDirectory() as root:
+            fake_triton(root, with_tcc=False)  # a Linux Triton carries no tcc.exe and must not be asked for one
+            binding = subject.bind_triton_c_compiler()
+            self.assertEqual(binding, {"path": None, "sha256": None, "source": "triton default discovery"})
+            self.assertNotIn("CC", os.environ)
+            self.assertEqual(subject.bind_triton_c_compiler(), binding)
+
+    def test_off_windows_explicit_cc_is_still_validated(self):
+        with _Env(windows=False), tempfile.TemporaryDirectory() as root:
+            os.environ["CC"] = str(Path(root) / "absent-cc")
+            with self.assertRaises(RuntimeError):
+                subject.bind_triton_c_compiler()
+            explicit = Path(root) / "cc"
+            explicit.write_bytes(b"cc")
+            os.environ["CC"] = str(explicit)
+            self.assertEqual(subject.bind_triton_c_compiler()["source"], "explicit CC")
+
+    def test_platform_predicate_reads_os_name(self):
+        self.assertEqual(subject._windows(), os.name == "nt")
 
 
 class ExplicitCompilerTests(unittest.TestCase):
