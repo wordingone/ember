@@ -260,6 +260,137 @@ class CapturingTests(unittest.TestCase):
         self.assertFalse(buffers.capturing)
 
 
+class SkipSemanticsTests(unittest.TestCase):
+    """Reference AdamW skip semantics: an expert owner with no routed rows in its layer this step carries no gradient
+    into the update; membership is per (layer, expert), read from the same snapshot that validated the report set."""
+
+    def test_unrouted_is_per_layer_from_winners_and_ignores_invalid_winners(self):
+        lengths = (300, 520)
+        geometry, global_payload, locals_ = fixture_payloads(lengths, 3)
+        buffers = subject.RoutingStatisticsBuffers(lengths, device='cpu')
+        feed(buffers, global_payload, locals_)
+        unrouted = buffers.unrouted(buffers.snapshot())
+        for layer in LAYERS:
+            used = {int(w) for w in locals_[layer]['winners'].tolist()}
+            self.assertEqual(set(unrouted.get(layer, ())), set(range(25)) - used, layer)
+            self.assertEqual(list(unrouted.get(layer, ())), sorted(unrouted.get(layer, ())))
+        # a per-layer difference: force layer 13 to use only one expert while other layers are unchanged
+        changed = dict(locals_)
+        only = int(locals_[13]['winners'][0])
+        changed[13] = dict(locals_[13], winners=torch.full_like(locals_[13]['winners'], only))
+        other = subject.RoutingStatisticsBuffers(lengths, device='cpu')
+        feed(other, global_payload, changed)
+        again = other.unrouted(other.snapshot())
+        self.assertEqual(set(again[13]), set(range(25)) - {only})
+        self.assertEqual(again.get(15), unrouted.get(15))
+
+    def test_expert_owner_index_parses_layer_and_expert_and_skips_frozen_owners(self):
+        frozen = torch.nn.Parameter(torch.zeros(2), requires_grad=False)
+        live = torch.nn.Parameter(torch.zeros(2))
+        inventory = {'experts.7.layers.13.up.weight': live, 'experts.7.layers.13.down.weight': live,
+                     'experts.8.layers.13.up.weight': frozen, 'layers.13.attention.q.weight': live,
+                     'experts.7.layers.15.gate.weight': live}
+        index = subject.expert_owner_index(inventory)
+        self.assertEqual(set(index), {(13, 7), (15, 7)})
+        self.assertEqual(len(index[(13, 7)]), 2)
+
+    def test_release_sets_only_unrouted_owner_grads_to_none_and_reports_membership(self):
+        params = {key: torch.nn.Parameter(torch.zeros(3)) for key in ('a', 'b', 'c', 'd')}
+        for p in params.values():
+            p.grad = torch.zeros(3)
+        params['d'].grad = None  # never routed since the last release: nothing to report
+        owners = {(13, 1): [params['a']], (13, 2): [params['b']], (15, 1): [params['c']], (15, 3): [params['d']]}
+        released = subject.release_unrouted_expert_grads(owners, {13: (1, 5), 15: (3,)})
+        self.assertIsNone(params['a'].grad)          # unrouted in 13
+        self.assertIsNotNone(params['b'].grad)       # routed in 13
+        self.assertIsNotNone(params['c'].grad)       # expert 1 is unrouted in 13 but routed in 15: per-layer membership
+        self.assertEqual(released, {13: [1]})
+
+    def test_measure_step_releases_after_the_snapshot_and_before_the_update(self):
+        source = SOURCE.read_text(encoding='utf-8')
+        start = source.index('def measure_step(')
+        body = source[start:source.index('\ndef ', start + 1)]
+        snapshot = body.index('snapshot = buffers.snapshot()')
+        release = body.index('release_unrouted_expert_grads(expert_owners, buffers.unrouted(snapshot))')
+        self.assertLess(snapshot, release)
+        self.assertLess(body.index("raise ValueError('device routing buffers differ from the model trace')"), release)
+        self.assertLess(release, body.index('\n    optimizer.step()\n'))  # the call, not the docstring mention
+        self.assertIn("'unrouted_expert_grads_released'", body)
+        worker = source[source.index('def worker('):]
+        self.assertLess(worker.index('expert_owners = expert_owner_index(inventory)'), worker.index("open('xb') as rows"))
+        self.assertIn('expert_owners=expert_owners', worker)
+
+
+class _RecordingModel:
+    """Records the real preparation calls in order with their arguments (no CUDA on the CPU suite)."""
+
+    def __init__(self):
+        self.calls = []
+        self._cuda_execution = None
+        self._inventory = {'a': torch.nn.Parameter(torch.zeros(2))}
+
+    def apply_update_support(self, locus, *, experts=()):
+        self.calls.append(('support', locus, tuple(experts)))
+
+    def parameter_inventory(self):
+        self.calls.append(('inventory',))
+        return dict(self._inventory)
+
+    def activate_cuda(self, device, *, resident_capacity=2, resident_experts=(), optimizer=None):
+        self.calls.append(('activate', str(device), resident_capacity, resident_experts, optimizer is not None))
+        model = self
+
+        class Execution:
+            def bind_geometry(self, lengths):
+                model.calls.append(('geometry', lengths))
+        self._cuda_execution = Execution()
+
+
+class PrepareModelTests(unittest.TestCase):
+    """The worker's preparation reaches resident execution in capture mode and keeps the baseline order otherwise."""
+
+    def setUp(self):
+        self.identity = {'support': {'locus': 'core+expert-set', 'experts': [0, 1, 8, 18]}, 'batch_documents': True,
+                         'geometry': {'sequence_length': 1024, 'documents_per_step': 4, 'warm_steps': 1,
+                                      'measured_steps': 3}}
+        self.factory_calls = []
+
+    def factory(self, inventory):
+        self.factory_calls.append(sorted(inventory))
+        return 'optimizer'
+
+    def test_capture_mode_declares_support_and_optimizer_on_cpu_then_activates_resident_and_binds_geometry(self):
+        model = _RecordingModel()
+        inventory, optimizer = subject.prepare_model(model, self.identity, (300, 520), 'cuda:0',
+                                                     mode='resident-segmented-capture', optimizer_factory=self.factory)
+        self.assertEqual(optimizer, 'optimizer')
+        self.assertEqual(sorted(inventory), ['a'])
+        self.assertEqual(model.calls, [('support', 'core+expert-set', (0, 1, 8, 18)), ('inventory',),
+                                       ('activate', 'cuda:0', 4, (0, 1, 8, 18), True), ('geometry', (300, 520))])
+        dynamic = _RecordingModel()
+        subject.prepare_model(dynamic, self.identity, (300, 520), 'cuda:0', mode='resident-dynamic-capture',
+                              optimizer_factory=self.factory)
+        self.assertEqual(dynamic.calls, model.calls)  # same resident activation for both declared capture modes
+
+    def test_legacy_mode_keeps_the_baseline_order(self):
+        model = _RecordingModel()
+        subject.prepare_model(model, self.identity, (300, 520), 'cuda:0', mode=None, optimizer_factory=self.factory)
+        self.assertEqual(model.calls, [('activate', 'cuda:0', 2, (), False), ('inventory',),
+                                       ('support', 'core+expert-set', (0, 1, 8, 18))])
+
+    def test_capture_prerequisites_refuse_before_any_allocation(self):
+        for change in ({'support': {'locus': 'core+expert-set', 'experts': [0, 1, 8]}}, {'batch_documents': False},
+                       {'geometry': dict(self.identity['geometry'], warm_steps=0)}):
+            identity = dict(self.identity, **change)
+            model = _RecordingModel()
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                subject.prepare_model(model, identity, (300, 520), 'cuda:0', mode='resident-segmented-capture',
+                                      optimizer_factory=self.factory)
+            self.assertEqual(model.calls, [])
+            self.assertEqual(self.factory_calls, [])
+        self.assertEqual(subject.capture_prerequisites(self.identity), (0, 1, 8, 18))
+
+
 class ExecutionModeTests(unittest.TestCase):
     """execution_mode is an OPTIONAL identity key with a fixed value set: the exact-key-set check must admit it (or the
     capture selection is unreachable from a real prediction) and an unknown value must refuse rather than run eager."""
@@ -268,7 +399,22 @@ class ExecutionModeTests(unittest.TestCase):
         self.assertIsNone(subject.execution_mode({}))
         self.assertEqual(subject.execution_mode({'execution_mode': 'resident-segmented-capture'}),
                          'resident-segmented-capture')
-        self.assertEqual(subject.EXECUTION_MODES, ('resident-segmented-capture',))
+        self.assertEqual(subject.EXECUTION_MODES, ('resident-segmented-capture', 'resident-dynamic-capture'))
+
+    def test_required_sources_extend_per_mode_and_dynamic_is_a_distinct_declared_treatment(self):
+        base = set(subject.SOURCES)
+        self.assertEqual(set(subject.required_sources({})), base)
+        g1 = set(subject.required_sources({'execution_mode': 'resident-segmented-capture'}))
+        self.assertEqual(g1 - base, {'src/ember/model/ember_v0_capture.py'})
+        dyn = set(subject.required_sources({'execution_mode': 'resident-dynamic-capture'}))
+        self.assertEqual(dyn - g1, {'src/ember/model/ember_v0_grouped_capture.py'})
+        source = SOURCE.read_text(encoding='utf-8')
+        body = source[source.index('def prepare_execution('):]
+        self.assertIn('set(required_sources(identity))', body)
+        self.assertLess(body.index('execution mode needs a source absent at this head'), body.index('bound source changed'))
+        worker = source[source.index('def worker('):]
+        self.assertIn("{'capture_experts': True} if mode == 'resident-dynamic-capture' else {}", worker)
+        self.assertIn('warmup_steps=2, **dynamic)', worker)
 
     def test_unknown_mode_refuses(self):
         with self.assertRaises(ValueError):
@@ -294,22 +440,24 @@ class WorkerSourceOrderTests(unittest.TestCase):
 
     def test_triton_c_compiler_binds_before_activation_and_is_recorded(self):
         bind = self.body.index('bind_triton_c_compiler()')
-        self.assertLess(bind, self.body.index('model.activate_cuda(device)'))
+        self.assertLess(bind, self.body.index('prepare_model(model, prediction'))
         self.assertLess(bind, self.body.index('measure_step('))
         self.assertIn("'c_compiler': c_compiler", self.body)
 
-    def test_capture_binds_after_optimizer_and_captures_after_the_exemplar_pack(self):
+    def test_capture_binds_after_preparation_and_the_warm_row_is_counted_before_capture(self):
         body = self.body
-        self.assertIn("mode == 'resident-segmented-capture'", body)
-        self.assertLess(body.index('model.activate_cuda(device)'), body.index('model.bind_segmented_capture('))
+        self.assertIn('if mode in MODE_SOURCES:', body)  # every declared capture mode, eager when absent
+        self.assertLess(body.index('prepare_model(model, prediction'), body.index('model.bind_segmented_capture('))
         self.assertLess(body.index('model.bind_segmented_capture('), body.index("open('xb') as rows"))
         capture = body.index('capture.capture(optimizer=optimizer)')
         self.assertLess(body.index('record=(capture is not None and index == 0)'), capture)
+        self.assertLess(body.index("applied_positions += row['applied_positions']"), capture)  # counted before capture
+        self.assertLess(body.index('os.fsync(rows.fileno())'), capture)                          # persisted before capture
         self.assertLess(body.index('optimizer.zero_grad(set_to_none=False)'), capture)  # full membership, eager experts too
         self.assertLess(body.index('buffers.capturing = True'), capture)
         self.assertLess(capture, body.index('buffers.capturing = False'))
         self.assertLess(capture, body.index("custody / 'capture.json'"))
-        self.assertIn("raise ValueError('segmented capture needs one warm step as the recorded exemplar')", body)
+        self.assertNotIn('model.activate_cuda(device)', body)  # activation order is prepare_model's, per mode
 
     def test_measure_step_zeroes_in_place_when_capturing_and_rows_carry_captured(self):
         source = SOURCE.read_text(encoding='utf-8')

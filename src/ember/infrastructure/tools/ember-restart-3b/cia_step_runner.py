@@ -296,7 +296,13 @@ def load_prediction(path, digest):
     return json.loads(raw), raw
 
 
-EXECUTION_MODES = ('resident-segmented-capture',)
+EXECUTION_MODES = ('resident-segmented-capture', 'resident-dynamic-capture')
+# Sources a mode binds IN ADDITION to SOURCES: the G1 segmented-capture module for every capture mode, the dynamic
+# grouped-kernel module only for the dynamic treatment. A mode whose module is absent at the measured head refuses.
+MODE_SOURCES = {
+    'resident-segmented-capture': ('src/ember/model/ember_v0_capture.py',),
+    'resident-dynamic-capture': ('src/ember/model/ember_v0_capture.py', 'src/ember/model/ember_v0_grouped_capture.py'),
+}
 
 
 def execution_mode(identity):
@@ -306,6 +312,11 @@ def execution_mode(identity):
     if mode is not None and mode not in EXECUTION_MODES:
         raise ValueError('execution mode is outside its fixed set')
     return mode
+
+
+def required_sources(identity):
+    """The complete measurement source binding for this identity: SOURCES plus the selected mode's modules."""
+    return SOURCES + MODE_SOURCES.get(execution_mode(identity), ())
 
 
 def prepare_execution(prediction):
@@ -336,9 +347,11 @@ def prepare_execution(prediction):
     if (not isinstance(wall, dict) or wall.get('applicability') != 'required'
             or not isinstance(contract, dict) or contract.get('device_uuid') != identity['gpu_uuid']):
         raise ValueError('measurement GPU UUID differs from the required VRAM contract')
-    if set(identity['source_sha256']) != set(SOURCES):
+    if set(identity['source_sha256']) != set(required_sources(identity)):
         raise ValueError('complete measurement source binding is required')
     for relative, digest in identity['source_sha256'].items():
+        if not (ROOT / relative).is_file():
+            raise ValueError(f'execution mode needs a source absent at this head: {relative}')
         if file_sha256(ROOT / relative) != checked_sha(digest):
             raise ValueError(f'bound source changed: {relative}')
     head = run_readonly(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).stdout.strip()
@@ -525,6 +538,19 @@ class RoutingStatisticsBuffers:
                 for index, (document, offset, start, size, epoch) in enumerate(self.chunks)]
         return tuple(sorted(rows, key=lambda row: row[:3]))
 
+    def unrouted(self, snapshot):
+        """Per sparse layer, the global expert identities that won no chunk this step (zero routed rows), as
+        {layer: (expert, ...)}; layers where every expert won at least one chunk are absent. Invalid winners (< 0) are
+        not routes. Membership is per layer: an expert used in another layer is still unrouted here."""
+        fields = self._decode(snapshot)
+        out = {}
+        for depth, layer in enumerate(self.LAYERS):
+            used = {int(winner) for winner in fields['winners'][depth].tolist() if winner >= 0}
+            zero = tuple(expert for expert in range(25) if expert not in used)
+            if zero:
+                out[layer] = zero
+        return out
+
     def statistics(self, snapshot):
         import numpy
         fields = self._decode(snapshot)
@@ -533,6 +559,76 @@ class RoutingStatisticsBuffers:
                 'mean_gate': [float(x) for x in fields['gates'].mean(axis=1)],
                 'valid': [bool(x) for x in fields['valid']],
                 'ranked_pairs': fields['ranked'].tolist()}
+
+
+EXPERT_OWNER = re.compile(r'^experts\.(\d+)\.layers\.(\d+)\.')
+
+
+def expert_owner_index(inventory):
+    """{(layer, expert): [Parameter, ...]} over the expert-layer owners of the complete inventory that can carry a
+    gradient (requires_grad); parsed from the equation-inventory names experts.<expert>.layers.<layer>.<...>."""
+    index = {}
+    for name, parameter in inventory.items():
+        match = EXPERT_OWNER.match(name)
+        if match and parameter.requires_grad:
+            index.setdefault((int(match.group(2)), int(match.group(1))), []).append(parameter)
+    return index
+
+
+def release_unrouted_expert_grads(expert_owners, unrouted):
+    """Reference AdamW skip semantics at the pre-update boundary: an expert owner that routed no rows in its layer this
+    step has NO gradient, so its grad is None before optimizer.step. (The grouped resident backward materialises zeros
+    for every supported owner of the group; a zero gradient would apply weight decay, moment decay and a step count the
+    reference paged path never applies.) Returns {layer: [expert, ...]} of the owners actually released."""
+    released = {}
+    for (layer, expert), parameters in sorted(expert_owners.items()):
+        if expert not in unrouted.get(layer, ()):
+            continue
+        found = False
+        for parameter in parameters:
+            if parameter.grad is not None:
+                parameter.grad = None
+                found = True
+        if found:
+            released.setdefault(layer, []).append(expert)
+    return released
+
+
+def capture_prerequisites(identity):
+    """Refuse the capture mode before any device allocation unless the identity declares what resident execution
+    needs: exactly four ascending expert identities (the resident capacity), document-batched steps, and at least one
+    warm step (the recorded exemplar). Returns the resident expert tuple."""
+    experts = tuple(identity['support']['experts'])
+    if len(experts) != 4 or experts != tuple(sorted(set(experts))):
+        raise ValueError('segmented capture needs exactly four declared resident experts')
+    if identity.get('batch_documents') is not True:
+        raise ValueError('segmented capture needs document-batched steps')
+    _, _, warm, _ = geometry_counts(identity['geometry'])
+    if warm < 1:
+        raise ValueError('segmented capture needs one warm step as the recorded exemplar')
+    return experts
+
+
+def prepare_model(model, identity, first_lengths, device, *, mode, optimizer_factory):
+    """Activation order per execution mode; returns (inventory, optimizer).
+
+    Legacy (mode None): activate the paged execution (capacity 2), then declare support, then build the optimizer over
+    the device population — the official baseline order, unchanged. Capture mode: prerequisites first (no allocation
+    on refusal), support and optimizer declared on the CPU population, resident activation with the four declared
+    experts retaining that optimizer, geometry bound to the first pack so the segment factory sees it."""
+    support = identity['support']
+    if mode in MODE_SOURCES:
+        experts = capture_prerequisites(identity)
+        model.apply_update_support(support['locus'], experts=experts)
+        inventory = model.parameter_inventory()
+        optimizer = optimizer_factory(inventory)
+        model.activate_cuda(device, resident_capacity=4, resident_experts=experts, optimizer=optimizer)
+        model._cuda_execution.bind_geometry(tuple(first_lengths))
+        return inventory, optimizer
+    model.activate_cuda(device)
+    inventory = model.parameter_inventory()
+    model.apply_update_support(support['locus'], experts=tuple(support['experts']))
+    return inventory, optimizer_factory(inventory)
 
 
 def routing_buffers(lengths, device):
@@ -550,7 +646,7 @@ def document_lengths(starts, total):
 
 
 def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False,
-                 capture=None, record=False):
+                 capture=None, record=False, expert_owners=None):
     """Return one row only after context exit, successful update and synchronization.
 
     On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
@@ -623,11 +719,16 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     # optimizer.step() can mutate the model. The copy is step work and stays inside the wall; the digest and the
     # statistics are decoded from the retained snapshot after timing, without a second copy.
     snapshot = None
+    released = None
     routing_boundary_started = time.perf_counter()
     if buffers is not None:
         snapshot = buffers.snapshot()
         if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
             raise ValueError('device routing buffers differ from the model trace')
+        if expert_owners is not None:
+            # Reference skip semantics: unrouted expert owners carry no gradient into the update (per layer, per expert,
+            # from the same snapshot that validated the report set). Captured dense owners are not in this index.
+            released = release_unrouted_expert_grads(expert_owners, buffers.unrouted(snapshot))
     routing_digest_seconds = time.perf_counter() - routing_boundary_started
     if capture is not None and record:
         # The exemplar step's autograd graph must not outlive the record: the harness captures on a side stream and a
@@ -665,6 +766,8 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
             'routes_sha256': routes_sha256, 'routes_digest_grammar': grammar,
             'routing_digest_seconds': routing_digest_seconds, 'routing_statistics': routing_statistics,
             'route_host_reads': route_host_reads,
+            'unrouted_expert_grads_released': ({str(layer): experts for layer, experts in released.items()}
+                                               if released is not None else None),
             'expert_leases': after['lease_count'] - before['lease_count'],
             'expert_bundle_fetches': after['miss_count'] - before['miss_count'],
             'expert_evictions': after['eviction_count'] - before['eviction_count'],
@@ -799,15 +902,20 @@ def worker(binding_path):
         torch.backends.cudnn.allow_tf32 = False
         torch.manual_seed(prediction['identity']['seed'])
         model = CIADecoder(architecture_config=config).materialize_cpu(seed=prediction['identity']['seed'])
-        model.activate_cuda(device)
-        inventory = model.parameter_inventory()
-        if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:
-            raise ValueError('full CIA-3B population is missing')
-        support = prediction['identity']['support']
-        model.apply_update_support(support['locus'], experts=tuple(support['experts']))
+        mode = execution_mode(prediction['identity'])
         definition = prediction['identity']['optimizer']
-        optimizer = torch.optim.AdamW(list(inventory.values()), lr=definition['lr'],
-            betas=tuple(definition['betas']), eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False)
+        first = prepared['packs'][0]
+        first_lengths = document_lengths(tuple(first['document_starts']), len(first['token_ids']))
+
+        def optimizer_factory(inventory):
+            if sum(parameter.numel() for parameter in inventory.values()) != POPULATION:
+                raise ValueError('full CIA-3B population is missing')
+            return torch.optim.AdamW(list(inventory.values()), lr=definition['lr'], betas=tuple(definition['betas']),
+                                     eps=definition['eps'], weight_decay=definition['weight_decay'], foreach=False)
+
+        inventory, optimizer = prepare_model(model, prediction['identity'], first_lengths, device, mode=mode,
+                                             optimizer_factory=optimizer_factory)
+        support = prediction['identity']['support']
         membership = [parameter for group in optimizer.param_groups for parameter in group['params']]
         if len(membership) != len(inventory) or {id(parameter) for parameter in membership} != {id(parameter) for parameter in inventory.values()}:
             raise ValueError('optimizer membership differs from complete population')
@@ -815,25 +923,34 @@ def worker(binding_path):
         _write_new(custody / 'model.json', {'population': POPULATION, 'parameter_count': len(inventory),
             'trainable_parameters': sum(supported.values()), 'trainable_support': supported,
             'optimizer_membership': list(inventory), 'input_binding': prepared['binding'], 'c_compiler': c_compiler,
+            'execution_mode': mode, 'resident_experts': (list(support['experts']) if mode is not None else None),
             'claim': CLAIM})
+        expert_owners = expert_owner_index(inventory)
         capture = None
-        mode = execution_mode(prediction['identity'])
-        if mode == 'resident-segmented-capture':
-            _, _, warm, _ = geometry_counts(prediction['identity']['geometry'])
-            if warm < 1:
-                raise ValueError('segmented capture needs one warm step as the recorded exemplar')
-            first = prepared['packs'][0]
-            buffers = routing_buffers(document_lengths(tuple(first['document_starts']), len(first['token_ids'])), device)
+        if mode in MODE_SOURCES:
+            buffers = routing_buffers(first_lengths, device)
+            # The dynamic treatment is an explicit option on the same factory (grouped kernels inside each segment,
+            # expert owners in the segment surface); the published G1 default takes no such argument.
+            dynamic = {'capture_experts': True} if mode == 'resident-dynamic-capture' else {}
             capture = model.bind_segmented_capture(
                 collector=buffers.collector,
                 loss_fn=lambda logits, targets: torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean'),
-                static_state=(buffers.raw,), warmup_steps=2)
+                static_state=(buffers.raw,), warmup_steps=2, **dynamic)
         with (custody / 'rows.jsonl').open('xb') as rows:
             for index, pack in enumerate(prepared['packs']):
                 verify_prepared_inputs(prepared)
                 row = measure_step(model, optimizer, pack, device=device,
                                    batch_documents=prediction['identity']['batch_documents'], run_id=run_id,
-                                   capture=capture, record=(capture is not None and index == 0))
+                                   capture=capture, record=(capture is not None and index == 0),
+                                   expert_owners=expert_owners)
+                # The applied update is persisted and counted BEFORE any synthetic capture work, so a capture refusal
+                # after the successful warm update leaves a truthful applied count in the terminal record.
+                row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
+                           input_sha256=prepared['binding']['input_sha256'])
+                rows.write(canonical(row) + b'\n')
+                rows.flush()
+                os.fsync(rows.fileno())
+                applied_positions += row['applied_positions']
                 if capture is not None and index == 0:
                     optimizer.zero_grad(set_to_none=False)  # full retained membership, eager expert owners included
                     capture.zero_grad()
@@ -843,12 +960,6 @@ def worker(binding_path):
                     finally:
                         buffers.capturing = False
                     _write_new(custody / 'capture.json', dict(capture.receipt(), claim=CLAIM))
-                row.update(run_id=run_id, prediction_sha256=binding['launch']['prediction_sha256'],
-                           input_sha256=prepared['binding']['input_sha256'])
-                rows.write(canonical(row) + b'\n')
-                rows.flush()
-                os.fsync(rows.fileno())
-                applied_positions += row['applied_positions']
         _write_new(custody / 'worker-terminal.json', {'status': 'completed', 'applied_positions': applied_positions,
                                                     'claim': CLAIM})
         return 0
