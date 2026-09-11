@@ -365,8 +365,170 @@ def _cache_values(cache):
                                                   'transfer_bytes', 'transfer_seconds')}
 
 
-def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None):
-    """Return one row only after context exit, successful update and synchronization."""
+ROUTES_DIGEST_GRAMMARS = ('legacy-rows-v1', 'device-buffers-v1')
+_ROUTING_BUFFERS = {}
+
+
+class RoutingStatisticsBuffers:
+    """Fixed device buffers for one static document geometry (issue 1945 device routing statistics).
+
+    The resident decoder reports each step's routing through a collector callback: one 'global' call
+    (priors FP32 [E,25], ranked and candidates int64 [E,2] over the E=sum(ceil(len/1024)) epochs) and one
+    'local' call per sparse layer (winners int64 [C], logits FP32 [C,2], gates FP32 [C], valid bool over the
+    C=sum(ceil(len/256)) chunks). The collector copies every payload into ONE preallocated device byte
+    buffer with copy_ and never reads it on the host, so the step keeps zero route-induced host reads;
+    the receipt digest, the legacy route rows and the per-step statistics all come from ONE device-to-host
+    copy of that buffer taken after the step's own final synchronization. Grammar 'device-buffers-v1'.
+    """
+    LAYERS = tuple(range(1, 24, 2))
+    GRAMMAR = 'device-buffers-v1'
+
+    def __init__(self, lengths, *, device):
+        import torch
+        if (type(lengths) is not tuple or not lengths or any(type(n) is not int or n <= 0 for n in lengths)
+                or sum(lengths) > 4096):
+            raise ValueError('complete positive document geometry within context required')
+        self.lengths = lengths
+        chunks, offset, epochs = [], 0, 0
+        for document, length in enumerate(lengths):
+            for start in range(0, length, 1024):
+                chunks.extend((document, offset, segment, min(256, length - segment), epochs)
+                              for segment in range(start, min(start + 1024, length), 256))
+                epochs += 1
+            offset += length
+        self.chunks, self.epochs, self.chunk_count = tuple(chunks), epochs, len(chunks)
+        E, C, L = epochs, len(chunks), len(self.LAYERS)
+        # int64 sections first (8-byte alignment at offset 0), then float32, then bool; every section padded to 8.
+        sections = (('ranked', torch.int64, (E, 2)), ('candidates', torch.int64, (E, 2)), ('winners', torch.int64, (L, C)),
+                    ('priors', torch.float32, (E, 25)), ('logits', torch.float32, (L, C, 2)), ('gates', torch.float32, (L, C)),
+                    ('valid', torch.bool, (L,)))
+        self.layout, cursor = [], 0
+        for name, dtype, shape in sections:
+            size = torch.tensor([], dtype=dtype).element_size()
+            count = 1
+            for n in shape:
+                count *= n
+            nbytes = -(-count * size // 8) * 8
+            self.layout.append((name, str(dtype).replace('torch.', ''), tuple(shape), cursor, nbytes))
+            cursor += nbytes
+        self.nbytes = cursor
+        self.device = torch.device(device)
+        self.raw = torch.zeros(cursor, dtype=torch.uint8, device=self.device)
+        self.views = {}
+        for name, dtype, shape in sections:
+            start, nbytes = next((row[3], row[4]) for row in self.layout if row[0] == name)
+            count = 1
+            for n in shape:
+                count *= n
+            self.views[name] = self.raw[start:start + nbytes].view(dtype)[:count].view(*shape)
+        self.header = canonical({'grammar': self.GRAMMAR, 'lengths': list(lengths), 'epochs': E, 'chunks': C,
+                                 'layers': list(self.LAYERS), 'layout': self.layout, 'byteorder': sys.byteorder})
+        self.route_host_reads = 0
+        self._global_calls, self._local_layers = 0, []
+
+    def begin_step(self):
+        self._global_calls, self._local_layers = 0, []
+        self.views['valid'].fill_(False)
+
+    def _receive(self, name, tensor, index=None):
+        import torch
+        target = self.views[name] if index is None else self.views[name][index]
+        if not isinstance(tensor, torch.Tensor) or tuple(tensor.shape) != tuple(target.shape):
+            raise ValueError(f'routing statistic {name} must be a tensor of shape {tuple(target.shape)}')
+        if tensor.device != self.device:
+            raise ValueError(f'routing statistic {name} must live on {self.device}')
+        target.copy_(tensor.detach(), non_blocking=True)
+
+    def collector(self, kind, payload):
+        if type(payload) is not dict:
+            raise ValueError('routing collector payload must be a dict')
+        if kind == 'global':
+            geometry = payload['geometry']
+            if tuple(getattr(geometry, 'lengths', ())) != self.lengths or tuple(getattr(geometry, 'chunks', ())) != self.chunks:
+                raise ValueError('routing geometry differs from the bound statistics buffers')
+            if self._global_calls:
+                raise ValueError('duplicate global routing report within one step')
+            self._global_calls += 1
+            for name in ('priors', 'ranked', 'candidates'):
+                self._receive(name, payload[name])
+            return
+        if kind == 'local':
+            layer = payload['layer']
+            if type(layer) is not int or layer not in self.LAYERS:
+                raise ValueError('local routing report requires an odd sparse layer in 1..23')
+            if layer in self._local_layers:
+                raise ValueError(f'duplicate local routing report for layer {layer}')
+            self._local_layers.append(layer)
+            index = layer // 2
+            for name in ('winners', 'logits', 'gates'):
+                self._receive(name, payload[name], index)
+            self._receive('valid', payload['valid'].reshape(()), index)
+            return
+        raise ValueError(f'unknown routing report kind {kind!r}')
+
+    def complete(self):
+        if self._global_calls != 1 or sorted(self._local_layers) != list(self.LAYERS):
+            raise RuntimeError('incomplete routing statistics for the step')
+
+    def snapshot(self):
+        """ONE device-to-host copy of the whole buffer (the step's final synchronization has drained the stream)."""
+        self.complete()
+        return bytes(self.raw.cpu().numpy().tobytes())
+
+    def digest(self, snapshot):
+        return hashlib.sha256(self.header + b'\0' + snapshot).hexdigest()
+
+    def _decode(self, snapshot):
+        import numpy
+        out = {}
+        for name, dtype, shape, start, nbytes in self.layout:
+            count = 1
+            for n in shape:
+                count *= n
+            out[name] = numpy.frombuffer(snapshot, dtype=dtype, count=count, offset=start).reshape(shape)
+        return out
+
+    def routes(self, snapshot):
+        """Legacy route rows (document, layer, start, ranked pair, winner) in the resident trace's materialize() order."""
+        fields = self._decode(snapshot)
+        ranked, winners = fields['ranked'].tolist(), fields['winners'].tolist()
+        rows = [(document, 2 * depth + 1, start, tuple(ranked[epoch]), winners[depth][index])
+                for depth in range(len(self.LAYERS))
+                for index, (document, offset, start, size, epoch) in enumerate(self.chunks)]
+        return tuple(sorted(rows, key=lambda row: row[:3]))
+
+    def statistics(self, snapshot):
+        import numpy
+        fields = self._decode(snapshot)
+        return {'grammar': self.GRAMMAR, 'epochs': self.epochs, 'chunks': self.chunk_count,
+                'winner_histogram': [numpy.bincount(row.clip(min=0), minlength=25).tolist() for row in fields['winners']],
+                'mean_gate': [float(x) for x in fields['gates'].mean(axis=1)],
+                'valid': [bool(x) for x in fields['valid']],
+                'ranked_pairs': fields['ranked'].tolist()}
+
+
+def routing_buffers(lengths, device):
+    """One buffer set per static geometry per device, allocated once (the collector then only copies)."""
+    import torch
+    key = (tuple(lengths), str(torch.device(device)))
+    if key not in _ROUTING_BUFFERS:
+        _ROUTING_BUFFERS[key] = RoutingStatisticsBuffers(tuple(lengths), device=device)
+    return _ROUTING_BUFFERS[key]
+
+
+def document_lengths(starts, total):
+    starts = tuple(starts)
+    return tuple(b - a for a, b in zip(starts, starts[1:] + (total,)))
+
+
+def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_id=None, verify_routes=False):
+    """Return one row only after context exit, successful update and synchronization.
+
+    On a resident-expert model the step reports its routes through RoutingStatisticsBuffers (zero host reads
+    inside the step; one device-to-host copy after the final synchronization serves the digest and the
+    statistics). verify_routes additionally materializes the model's own trace and requires it to equal the
+    rows decoded from the buffers (the reference path; never on the measured path).
+    """
     import torch
     if device.type == 'cuda':
         if not isinstance(run_id, str) or not re.fullmatch('[0-9a-f]{32}', run_id):
@@ -383,14 +545,23 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     targets = torch.tensor(pack['target_ids'], dtype=torch.long, device=device)
     positions = torch.tensor(pack['positions'], dtype=torch.long, device=device)
     starts = tuple(pack['document_starts'])
+    resident = bool(getattr(model, '_resident_experts', None))
+    buffers = routing_buffers(document_lengths(starts, len(pack['token_ids'])), device) if resident else None
+    if buffers is not None:
+        buffers.begin_step()
     optimizer.zero_grad(set_to_none=True)
     staged = time.perf_counter()
     events = [torch.cuda.Event(enable_timing=True) for _ in range(4)] if device.type == 'cuda' else None
     with model.candidate_step():
         if events is not None:
             events[0].record()
-        logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
-                               return_routes=True, batch_documents=batch_documents)
+        if buffers is not None:
+            logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                                   return_routes=True, batch_documents=batch_documents,
+                                   return_device_routes=True, device_route_collector=buffers.collector)
+        else:
+            logits, routes = model(model.embed_text(tokens), positions, document_starts=starts,
+                                   return_routes=True, batch_documents=batch_documents)
         loss = torch.nn.functional.cross_entropy(logits.float(), targets, reduction='mean')
         if events is not None:
             events[1].record()
@@ -409,6 +580,17 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
     finished = time.perf_counter()
     after = _cache_values(model._cuda_execution.cache)
     wall = finished - started
+    digest_started = time.perf_counter()
+    if buffers is not None:
+        snapshot = buffers.snapshot()
+        routes_sha256, grammar = buffers.digest(snapshot), buffers.GRAMMAR
+        routing_statistics, route_host_reads = buffers.statistics(snapshot), buffers.route_host_reads
+        if verify_routes and buffers.routes(snapshot) != tuple(routes.materialize()):
+            raise ValueError('device routing buffers differ from the model trace')
+    else:
+        routes_sha256, grammar, routing_statistics, route_host_reads = (
+            hashlib.sha256(canonical(routes)).hexdigest(), ROUTES_DIGEST_GRAMMARS[0], None, None)
+    routing_digest_seconds = time.perf_counter() - digest_started
     if not math.isfinite(wall) or wall <= 0:
         raise ValueError('complete step wall observation is invalid')
     allocator = ({'allocated_bytes': torch.cuda.memory_allocated(device),
@@ -425,7 +607,9 @@ def measure_step(model, optimizer, pack, *, device, batch_documents=False, run_i
                                    'backward': events[1].elapsed_time(events[2]) / 1000,
                                    'context_exit_and_optimizer': events[2].elapsed_time(events[3]) / 1000}
                                   if events is not None else None),
-            'routes_sha256': hashlib.sha256(canonical(routes)).hexdigest(),
+            'routes_sha256': routes_sha256, 'routes_digest_grammar': grammar,
+            'routing_digest_seconds': routing_digest_seconds, 'routing_statistics': routing_statistics,
+            'route_host_reads': route_host_reads,
             'expert_leases': after['lease_count'] - before['lease_count'],
             'expert_bundle_fetches': after['miss_count'] - before['miss_count'],
             'expert_evictions': after['eviction_count'] - before['eviction_count'],
