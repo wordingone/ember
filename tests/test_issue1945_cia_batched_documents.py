@@ -170,7 +170,7 @@ class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
     def test_batched_path_matches_serial_path(self):
         """Routes exact; logits within the declared rel-L2 bound (0.05) on both attention branches."""
         with torch.no_grad():
-            for tokens, starts in (([1, 2, 9, 8, 5, 6], (0, 2, 4)),        # equal lengths: batched 4-D attention
+            for tokens, starts in (([1, 2, 9, 8, 5, 6], (0, 2, 4)),        # equal lengths (same per-document path)
                                    ([1, 2, 9, 8, 5, 6, 7], (0, 2, 5)),     # unequal lengths: per-document fallback
                                    # 257 + 513 tokens: partial 1-row chunks in both documents, non-uniform gate
                                    # repetition and the inverse scatter over a concatenated member.
@@ -187,28 +187,31 @@ class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
             self.run_tokens([1, 2], batch_documents=1)
 
     def test_batched_path_calls_each_expert_once_per_sparse_layer(self):
-        """The grouped call site issues exactly one expert_block_group per (layer, expert) with one member."""
+        """One expert_block_group call per (layer, expert); its members are the routed chunks at their
+        ORIGINAL sizes (256, shorter tail), in chunk order -- the serial path's GEMM shapes under one lease."""
         calls = []
         original = type(self.model).expert_block_group
 
         def counting(model, values, *, expert, layer):
-            calls.append((layer, expert, len(values), tuple(len(v) for v in values)))
+            calls.append((layer, expert, tuple(len(v) for v in values)))
             return original(model, values, expert=expert, layer=layer)
         type(self.model).expert_block_group = counting
+        lengths = (257, 513)   # chunks 256+1 and 256+256+1: shared experts get several members
+        tokens = list(range(5, 5 + sum(lengths)))
         try:
             with torch.no_grad():
-                _, routes = self.run_tokens([1, 2, 9, 8, 5, 6], document_starts=(0, 2, 4),
+                _, routes = self.run_tokens(tokens, document_starts=(0, lengths[0]),
                                             return_routes=True, batch_documents=True)
         finally:
             type(self.model).expert_block_group = original
-        expected = {(layer, expert) for _, layer, _, _, expert in routes}
-        self.assertEqual({(layer, expert) for layer, expert, _, _ in calls}, expected)
+        expected = {}
+        for document, layer, start, _, expert in sorted(routes):
+            expected.setdefault((layer, expert), []).append(min(256, lengths[document] - start))
         self.assertEqual(len(calls), len(expected))
-        self.assertTrue(all(members == 1 for _, _, members, _ in calls))
-        rows = {(layer, expert): 0 for layer, expert in expected}
-        for document, layer, start, _, expert in routes:
-            rows[(layer, expert)] += 2   # every document here is 2 tokens, one chunk each
-        self.assertEqual({(layer, expert): sizes[0] for layer, expert, _, sizes in calls}, rows)
+        self.assertEqual({(layer, expert): sizes for layer, expert, sizes in calls},
+                         {key: tuple(sizes) for key, sizes in expected.items()})
+        self.assertTrue(any(len(sizes) > 1 for _, _, sizes in calls), 'no shared expert exercised')
+        self.assertTrue(any(1 in sizes for _, _, sizes in calls), 'partial tail chunk not exercised')
 
 if __name__ == '__main__':
     unittest.main()

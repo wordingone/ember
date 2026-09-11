@@ -230,6 +230,16 @@ class CIADecoder(nn.Module):
         gate = self._linear(values, prefix + ".gate.weight")
         return self._linear(F.silu(gate) * up, prefix + ".down.weight")
 
+    def _per_document(self, function, values, lengths):
+        """Apply a GEMM-bearing function to each document's rows separately and concatenate.
+
+        cuBLAS chooses its algorithm from M, so identical rows come back with different bf16 bytes when
+        they are projected as part of a larger batch (receipt: linear-m-dependence, 2026-09-11). Row-wise
+        work (norms, rotation) is shared on the concatenated tensor; every GEMM runs at the serial path's
+        M so the batched forward is the serial computation, not an approximation of it.
+        """
+        return torch.cat([function(piece) for piece in torch.split(values, lengths)])
+
     def expert_block(self, values, *, expert, layer):
         self._input(values, 1024)
         if type(expert) is not int or not 0 <= expert < 25:
@@ -357,36 +367,29 @@ class CIADecoder(nn.Module):
     def _batched_attention(self, values, positions, lengths, prefix):
         """Attention over several documents at once; per-document causality is preserved exactly.
 
-        Projections, norms and the three-axis rotation are per-position, so they run once on the
-        concatenated [total,1024] tensor. Only the attention product needs document separation:
-        equal-length documents stack on a batch axis (a 4-D call, which is also what lets the fused
-        kernels apply instead of the 3-D math path); unequal lengths fall back to one call per document.
+        Norms and the three-axis rotation are per-position, so they run once on the concatenated
+        [total,1024] tensor; the projections run per document (_per_document: cuBLAS bytes depend on M).
+        The attention product itself runs one 3-D call per document,
+        exactly as _attention does: a 4-D equal-length stack would select the fused bf16 kernels instead
+        of the 3-D math path, and on CUDA that changed regime flipped routes (rel-L2 0.09 on logits at
+        4x1024). Fusing attention is a named successor with its own equivalence proof, not this unit.
         """
         total = len(values)
-        q = self._linear(values, prefix + ".q.weight").view(total, 16, 64)
-        k = self._linear(values, prefix + ".k.weight").view(total, 4, 64)
-        v = self._linear(values, prefix + ".v.weight").view(total, 4, 64)
+        q = self._per_document(lambda piece: self._linear(piece, prefix + ".q.weight"), values, lengths).view(total, 16, 64)
+        k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"), values, lengths).view(total, 4, 64)
+        v = self._per_document(lambda piece: self._linear(piece, prefix + ".v.weight"), values, lengths).view(total, 4, 64)
         q = rotate_three_axis(self._norm(q, prefix + ".q_norm.weight"), positions)
         k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
         k = k.repeat_interleave(4, dim=1)
         v = v.repeat_interleave(4, dim=1)
-        if len(set(lengths)) == 1:
-            documents, length = len(lengths), lengths[0]
-            out = F.scaled_dot_product_attention(
-                q.view(documents, length, 16, 64).transpose(1, 2),
-                k.view(documents, length, 16, 64).transpose(1, 2),
-                v.view(documents, length, 16, 64).transpose(1, 2), is_causal=True)
-            out = out.transpose(1, 2).reshape(total, 1024)
-        else:
-            pieces, offset = [], 0
-            for length in lengths:
-                piece = F.scaled_dot_product_attention(
-                    q[offset:offset + length].transpose(0, 1), k[offset:offset + length].transpose(0, 1),
-                    v[offset:offset + length].transpose(0, 1), is_causal=True)
-                pieces.append(piece.transpose(0, 1).reshape(length, 1024))
-                offset += length
-            out = torch.cat(pieces)
-        return self._linear(out, prefix + ".o.weight")
+        pieces, offset = [], 0
+        for length in lengths:
+            piece = F.scaled_dot_product_attention(
+                q[offset:offset + length].transpose(0, 1), k[offset:offset + length].transpose(0, 1),
+                v[offset:offset + length].transpose(0, 1), is_causal=True)
+            pieces.append(piece.transpose(0, 1).reshape(length, 1024))
+            offset += length
+        return self._per_document(lambda piece: self._linear(piece, prefix + ".o.weight"), torch.cat(pieces), lengths)
 
     def _route_local_layer(self, hidden, chunks, *, keys, generation, sparse_depth, capture):
         """Local routing for every 256-row chunk of one sparse layer across all documents.
@@ -452,7 +455,9 @@ class CIADecoder(nn.Module):
             prefix = f"layers.{layer}"
             values = values + self._batched_attention(
                 self._norm(values, prefix + ".attention_norm.weight"), positions_all, lengths, prefix + ".attention")
-            shared = values + self._swiglu(self._norm(values, prefix + ".shared_norm.weight"), prefix + ".shared")
+            shared = values + self._per_document(
+                lambda piece: self._swiglu(piece, prefix + ".shared"),
+                self._norm(values, prefix + ".shared_norm.weight"), lengths)
             if not layer % 2:
                 values = shared
                 continue
@@ -471,24 +476,24 @@ class CIADecoder(nn.Module):
                 slots.append(candidates.index(winner))
                 routes.append((chunk['index'], layer, chunk['start'], chunk['selection'].experts, winner))
             normed = self._norm(shared, prefix + ".expert_norm.weight")
-            # Row order grouped by expert: one gather per expert, one member, one lease, one GEMM triple.
-            order, spans, cursor = [], [], 0
+            # Grouped by expert, ONE lease per expert per layer; the members are the ORIGINAL contiguous
+            # chunks (256 rows, tail shorter), so every per-chunk GEMM has the serial path's shape and its
+            # accumulation. One concatenated member per expert was a different GEMM shape and missed the
+            # post-step bar on CUDA (rel-L2 0.0505 at mixed lengths); chunk-shaped members keep the lease
+            # saving and the serial numerics.
+            order, outputs = [], []
             for expert in sorted(set(chosen)):
+                members = []
                 for chunk, winner in zip(chunk_specs, chosen):
                     if winner == expert:
                         first = chunk['offset'] + chunk['start']
                         order.extend(range(first, first + chunk['size']))
-                spans.append((expert, cursor, len(order)))
-                cursor = len(order)
+                        members.append(normed[first:first + chunk['size']])
+                outputs.extend(self.expert_block_group(tuple(members), expert=expert, layer=layer))
             inverse = [0] * total
             for rank, row in enumerate(order):
                 inverse[row] = rank
-            order_tensor = torch.tensor(order, dtype=torch.long, device=device)
             inverse_tensor = torch.tensor(inverse, dtype=torch.long, device=device)
-            outputs = []
-            for expert, lo, hi in spans:
-                member = normed.index_select(0, order_tensor[lo:hi])
-                outputs.append(self.expert_block_group((member,), expert=expert, layer=layer)[0])
             residual = torch.cat(outputs).index_select(0, inverse_tensor)
             # The gate consumes the NATIVE logits per chunk (unit forward, selected-softmax derivative),
             # broadcast over that chunk's rows; only the discrete winner may come from a plan.
@@ -500,8 +505,8 @@ class CIADecoder(nn.Module):
             else:
                 gate = torch.repeat_interleave(factor, size_tensor, output_size=total)
             values = shared + residual * gate[:, None].to(residual.dtype)
-        logits_out = self._linear(self._norm(values, "final_norm.weight"), "embedding.weight")
-        outputs = list(torch.split(logits_out, lengths))
+        outputs = [self._linear(piece, "embedding.weight")
+                   for piece in torch.split(self._norm(values, "final_norm.weight"), lengths)]
         return outputs, sorted(routes, key=lambda row: row[:3])
 
     @staticmethod
