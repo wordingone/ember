@@ -900,7 +900,10 @@ fn numerical_vram_profile_valid(
     schema: &str,
     wall: Option<&DispatchVramWall>,
 ) -> bool {
-    let numerical = profile == DispatchWorkloadProfileId::NumericalConformance;
+    let numerical = matches!(
+        profile,
+        DispatchWorkloadProfileId::NumericalConformance | DispatchWorkloadProfileId::CiaMeasurement
+    );
     let selected = matches!(wall, Some(DispatchVramWall::Required(contract))
         if contract.provider == NUMERICAL_VRAM_PROVIDER);
     if numerical {
@@ -1003,17 +1006,100 @@ fn validate_disk_write_wall_contract(contract: &DiskWriteWallContract) -> Result
 
 #[cfg(windows)]
 fn windows_file_link_count(path: &Path) -> Result<u32> {
+    use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Storage::FileSystem::{
-        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_SHARE_DELETE, FILE_SHARE_READ,
+        FILE_SHARE_WRITE,
     };
 
-    let file = fs::File::open(path)?;
+    // Query metadata without requesting data access to an exclusively held writer lock.
+    // Sharing this metadata handle does not relax the existing writer handle's share mode.
+    let file = OpenOptions::new()
+        .access_mode(0)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .open(path)?;
     let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
     if unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut information) } == 0 {
         return Err(std::io::Error::last_os_error().into());
     }
     Ok(information.nNumberOfLinks)
+}
+
+#[cfg(all(test, windows))]
+mod disk_wall_locked_metadata_tests {
+    use super::*;
+
+    struct Scratch(PathBuf);
+    impl Scratch {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "ember-disk-metadata-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn disk_wall_counts_bytes_with_exclusive_state_writer_lock() {
+        let scratch = Scratch::new();
+        let database = scratch.0.join("ember-lab.sqlite3");
+        let writer = acquire_state_writer_lock(&database).unwrap();
+        fs::write(scratch.0.join("payload.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let measured =
+            measure_disk_write_tree(&root, &root, Instant::now(), Duration::from_secs(5)).unwrap();
+        assert_eq!(measured, 7);
+        assert!(matches!(
+            acquire_state_writer_lock(&database),
+            Err(EmberLabError::StateWriterBusy { .. })
+        ));
+        drop(writer);
+        let successor = acquire_state_writer_lock(&database).unwrap();
+        drop(successor);
+    }
+
+    #[test]
+    fn disk_wall_metadata_still_refuses_two_link_files() {
+        let scratch = Scratch::new();
+        let original = scratch.0.join("original.bin");
+        fs::write(&original, b"payload").unwrap();
+        fs::hard_link(&original, scratch.0.join("second.bin")).unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let result = measure_disk_write_tree(&root, &root, Instant::now(), Duration::from_secs(5));
+        assert!(
+            matches!(result, Err(EmberLabError::InvalidDispatchManifest { detail })
+            if detail.contains("hard-linked file attribution"))
+        );
+    }
+
+    #[test]
+    fn disk_wall_metadata_retains_duration_limit() {
+        let scratch = Scratch::new();
+        fs::write(scratch.0.join("payload.bin"), b"payload").unwrap();
+        let root = fs::canonicalize(&scratch.0).unwrap();
+        let result = measure_disk_write_tree(
+            &root,
+            &root,
+            Instant::now() - Duration::from_secs(1),
+            Duration::from_nanos(1),
+        );
+        assert!(matches!(
+            result,
+            Err(EmberLabError::DiskWallMeasurementDuration { .. })
+        ));
+    }
 }
 
 #[cfg(windows)]
@@ -1176,6 +1262,7 @@ pub fn measure_disk_write_wall_sample(
 #[serde(rename_all = "snake_case")]
 pub enum DispatchWorkloadProfileId {
     NumericalConformance,
+    CiaMeasurement,
     GovernedVertical,
     JobMemoryCeilingProbe,
     OwnedServing,
@@ -1187,6 +1274,7 @@ pub enum DispatchWorkloadProfileId {
 #[serde(rename_all = "snake_case")]
 pub enum DispatchPinnedHostProducerKind {
     NumericalCandidateState,
+    MeasurementCandidateState,
     TrainingDataLoader,
     JobMemoryProbeAllocator,
     CheckpointWriter,
@@ -4359,6 +4447,28 @@ impl Daemon {
                         .into(),
                 });
             }
+        }
+        if manifest.workload_profile.profile_id == DispatchWorkloadProfileId::CiaMeasurement {
+            let resources = json!({
+                "profile": "cia_measurement",
+                "maximum_job_memory_bytes": manifest.maximum_job_memory_bytes,
+                "simulated_peak_commit_bytes": manifest.simulated_peak_commit_bytes,
+                "required_available_maximum_commit_bytes": manifest.required_available_maximum_commit_bytes,
+                "storage_reserves": manifest.storage_reserves,
+                "vram_wall": manifest.vram_wall,
+                "disk_write_walls": manifest.disk_write_walls,
+                "cpu_pacing_class": manifest.cpu_pacing_class,
+                "cpu_rate_percent": manifest.workload_profile.cpu_rate_percent,
+                "window_contract": manifest.window_contract,
+            });
+            validate_cia_measurement_bindings(
+                &manifest.args,
+                &custody_root,
+                &verified_bindings,
+                &manifest.source_commit,
+                &manifest.job_id,
+                &resources,
+            )?;
         }
         for key in [
             "TEMP",
@@ -9107,6 +9217,11 @@ fn validate_dispatch_workload_profile(
         });
     }
     let expected = match profile.profile_id {
+        DispatchWorkloadProfileId::CiaMeasurement => {
+            [DispatchPinnedHostProducerKind::MeasurementCandidateState]
+                .into_iter()
+                .collect()
+        }
         DispatchWorkloadProfileId::NumericalConformance => {
             [DispatchPinnedHostProducerKind::NumericalCandidateState]
                 .into_iter()
@@ -9178,6 +9293,29 @@ fn validate_dispatch_workload_profile(
             detail: "numerical run-body entry requires the numerical conformance profile".into(),
         });
     }
+    let measurement_entry = args.iter().any(|arg| {
+        arg.replace('\\', "/")
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("cia_step_runner.py"))
+    });
+    if measurement_entry != (profile.profile_id == DispatchWorkloadProfileId::CiaMeasurement) {
+        return Err(EmberLabError::InvalidDispatchManifest {
+            detail: "CIA measurement entry requires its explicit measurement profile".into(),
+        });
+    }
+    if profile.profile_id == DispatchWorkloadProfileId::CiaMeasurement {
+        const BUDGET: u64 = 20 * 1024 * 1024 * 1024;
+        if memory_model_authority.is_some()
+            || maximum_job_memory_bytes != BUDGET
+            || total != BUDGET
+            || !cia_measurement_args_valid(args)
+        {
+            return Err(EmberLabError::InvalidDispatchManifest {
+                detail: "CIA measurement requires closed argv, exact 20 GiB host budget, and no training memory authority".into(),
+            });
+        }
+    }
     if profile.profile_id == DispatchWorkloadProfileId::NumericalConformance {
         const BUDGET: u64 = 20 * 1024 * 1024 * 1024;
         if memory_model_authority.is_some()
@@ -9220,6 +9358,453 @@ fn numerical_conformance_args_valid(args: &[String]) -> bool {
     paths.iter().all(|path| absolute_windows(path))
         && paths[0].ends_with("/src/ember/governance/scripts/cia_conformance_launch.py")
         && paths[1][..1].eq_ignore_ascii_case("B")
+}
+
+fn cia_measurement_args_valid(args: &[String]) -> bool {
+    if args.len() != 12
+        || args[0] != "-B"
+        || args[2] != "--daemon-run"
+        || args[3] != "--live"
+        || args[4] != "--custody"
+        || args[6] != "--hidden-helper"
+        || args[8] != "--prediction"
+        || args[10] != "--prediction-sha256"
+        || !is_sha256(&args[11])
+    {
+        return false;
+    }
+    let paths: Vec<String> = [1, 5, 7, 9]
+        .iter()
+        .map(|&i| args[i].replace('\\', "/"))
+        .collect();
+    let absolute = |path: &str| {
+        let bytes = path.as_bytes();
+        bytes.len() > 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1..3] == *b":/"
+            && !path
+                .split('/')
+                .any(|part| part == "." || part == ".." || part.is_empty())
+    };
+    paths.iter().all(|path| absolute(path))
+        && paths[0].ends_with("/src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py")
+        && paths[1][..1].eq_ignore_ascii_case("B")
+        && paths[3].starts_with(&(paths[1].clone() + "/"))
+}
+
+fn validate_cia_measurement_bindings(
+    args: &[String],
+    custody_root: &Path,
+    bindings: &[(PathBuf, String, DispatchBindingKind)],
+    source_commit: &str,
+    job_id: &str,
+    dispatch_resources: &serde_json::Value,
+) -> Result<()> {
+    let refuse = || EmberLabError::InvalidDispatchManifest {
+        detail: "CIA measurement exact source, prediction, data or custody binding differs".into(),
+    };
+    // Lexical argv validation runs before this function in the production path.
+    if args.len() != 12 || fs::canonicalize(&args[5])? != custody_root {
+        return Err(refuse());
+    }
+    let bound = |raw: &Path, kind: Option<DispatchBindingKind>| -> Result<(PathBuf, String)> {
+        let canonical = fs::canonicalize(raw)?;
+        let digest = bindings
+            .iter()
+            .find(|(path, _, actual)| {
+                path == &canonical && kind.is_none_or(|required| required == *actual)
+            })
+            .map(|(_, digest, _)| digest.clone())
+            .ok_or_else(refuse)?;
+        if hash_file(&canonical)? != digest {
+            return Err(refuse());
+        }
+        Ok((canonical, digest))
+    };
+    let (entry, _) = bound(Path::new(&args[1]), None)?;
+    bound(Path::new(&args[7]), None)?;
+    let root = entry.ancestors().nth(6).ok_or_else(refuse)?;
+    if entry != root.join("src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py") {
+        return Err(refuse());
+    }
+    let (prediction_path, prediction_sha) =
+        bound(Path::new(&args[9]), Some(DispatchBindingKind::Manifest))?;
+    if !prediction_path.starts_with(custody_root) || prediction_sha != args[11] {
+        return Err(refuse());
+    }
+    let raw = fs::read(&prediction_path)?;
+    if hash_bytes(&raw) != prediction_sha {
+        return Err(refuse());
+    }
+    let prediction: serde_json::Value = serde_json::from_slice(&raw).map_err(|_| refuse())?;
+    let identity = &prediction["identity"];
+    if prediction["schema"].as_str() != Some("ember-cia-step-prediction-v1")
+        || identity["source_commit"].as_str() != Some(source_commit)
+        || identity["run_id"].as_str() != Some(job_id)
+        || &identity["dispatch_resources"] != dispatch_resources
+    {
+        return Err(refuse());
+    }
+    let device_uuid = identity["gpu_uuid"].as_str().ok_or_else(refuse)?;
+    let wall = &dispatch_resources["vram_wall"];
+    if wall["applicability"].as_str() != Some("required")
+        || wall["contract"]["device_uuid"].as_str() != Some(device_uuid)
+    {
+        return Err(refuse());
+    }
+    let (_, config_sha) = bound(
+        &root.join("configs/ember-cia-3b.json"),
+        Some(DispatchBindingKind::Config),
+    )?;
+    if identity["config_sha256"].as_str() != Some(config_sha.as_str()) {
+        return Err(refuse());
+    }
+    let sources = identity["source_sha256"].as_object().ok_or_else(refuse)?;
+    if !sources.contains_key("src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py") {
+        return Err(refuse());
+    }
+    for (relative, digest) in sources {
+        if Path::new(relative).is_absolute()
+            || relative
+                .split(['/', '\\'])
+                .any(|part| part == ".." || part == "." || part.is_empty())
+        {
+            return Err(refuse());
+        }
+        let (canonical, actual) = bound(&root.join(relative), None)?;
+        if !canonical.starts_with(root) || digest.as_str() != Some(actual.as_str()) {
+            return Err(refuse());
+        }
+    }
+    let data = &identity["data"];
+    for (path_key, sha_key) in [
+        ("receipt_path", "receipt_sha256"),
+        ("tokenizer_path", "tokenizer_sha256"),
+    ] {
+        let (_, actual) = bound(Path::new(data[path_key].as_str().ok_or_else(refuse)?), None)?;
+        if data[sha_key].as_str() != Some(actual.as_str()) {
+            return Err(refuse());
+        }
+    }
+    match (
+        data["shard_ledger_path"].as_str(),
+        data["shard_ledger_sha256"].as_str(),
+    ) {
+        (Some(path), Some(digest)) => {
+            if bound(Path::new(path), None)?.1 != digest {
+                return Err(refuse());
+            }
+        }
+        (None, None)
+            if data["shard_ledger_path"].is_null() && data["shard_ledger_sha256"].is_null() => {}
+        _ => return Err(refuse()),
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod cia_measurement_profile_tests {
+    use super::*;
+
+    const BUDGET: u64 = 20 * 1024 * 1024 * 1024;
+
+    fn args() -> Vec<String> {
+        [
+            "-B",
+            "A:/repo/src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py",
+            "--daemon-run",
+            "--live",
+            "--custody",
+            "B:/candidate/run",
+            "--hidden-helper",
+            "C:/helpers/run_headless.py",
+            "--prediction",
+            "B:/candidate/run/prediction.json",
+            "--prediction-sha256",
+            &"a".repeat(64),
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect()
+    }
+
+    fn profile(id: DispatchWorkloadProfileId) -> DispatchWorkloadProfile {
+        let producers = match id {
+            DispatchWorkloadProfileId::CiaMeasurement => {
+                vec![DispatchPinnedHostProducerKind::MeasurementCandidateState]
+            }
+            DispatchWorkloadProfileId::NumericalConformance => {
+                vec![DispatchPinnedHostProducerKind::NumericalCandidateState]
+            }
+            DispatchWorkloadProfileId::GovernedVertical => vec![
+                DispatchPinnedHostProducerKind::TrainingDataLoader,
+                DispatchPinnedHostProducerKind::CheckpointWriter,
+                DispatchPinnedHostProducerKind::TelemetryBuffer,
+            ],
+            DispatchWorkloadProfileId::JobMemoryCeilingProbe => {
+                vec![DispatchPinnedHostProducerKind::JobMemoryProbeAllocator]
+            }
+            DispatchWorkloadProfileId::OwnedServing => vec![
+                DispatchPinnedHostProducerKind::ModelServer,
+                DispatchPinnedHostProducerKind::TelemetryBuffer,
+            ],
+            DispatchWorkloadProfileId::EvidenceVerifier => {
+                vec![DispatchPinnedHostProducerKind::ReceiptVerifier]
+            }
+            DispatchWorkloadProfileId::Cockpit => {
+                vec![DispatchPinnedHostProducerKind::TelemetryBuffer]
+            }
+        };
+        let count = producers.len() as u64;
+        DispatchWorkloadProfile {
+            profile_id: id,
+            pinned_host_producers: producers
+                .into_iter()
+                .enumerate()
+                .map(|(index, kind)| DispatchPinnedHostProducer {
+                    kind,
+                    maximum_bytes: BUDGET / count + if index == 0 { BUDGET % count } else { 0 },
+                })
+                .collect(),
+            requires_ui_responsiveness: id == DispatchWorkloadProfileId::Cockpit,
+            cpu_rate_percent: 90,
+        }
+    }
+
+    #[test]
+    fn measurement_entry_is_refused_under_every_other_profile() {
+        let valid = |id, argv: &[String]| {
+            validate_dispatch_workload_profile(
+                &profile(id),
+                None,
+                DispatchCpuPacingClass::Unpaced,
+                argv,
+                BUDGET,
+                BUDGET,
+            )
+        };
+        assert!(valid(DispatchWorkloadProfileId::CiaMeasurement, &args()).is_ok());
+        for id in [
+            DispatchWorkloadProfileId::NumericalConformance,
+            DispatchWorkloadProfileId::GovernedVertical,
+            DispatchWorkloadProfileId::JobMemoryCeilingProbe,
+            DispatchWorkloadProfileId::OwnedServing,
+            DispatchWorkloadProfileId::EvidenceVerifier,
+            DispatchWorkloadProfileId::Cockpit,
+        ] {
+            assert!(valid(id, &args()).is_err(), "profile {id:?}");
+        }
+        for replacement in [
+            "ordinary.py",
+            "A:/repo/src/ember/governance/scripts/cia_conformance_launch.py",
+            "A:/repo/src/ember/infrastructure/tools/ember-restart-3b/certified_train_launch.py",
+        ] {
+            let mut changed = args();
+            changed[1] = replacement.into();
+            assert!(valid(DispatchWorkloadProfileId::CiaMeasurement, &changed).is_err());
+        }
+        for (index, replacement) in [
+            (0, "-c"),
+            (3, "--other"),
+            (5, "C:/run"),
+            (10, "--other"),
+            (11, ""),
+        ] {
+            let mut changed = args();
+            changed[index] = replacement.into();
+            assert!(valid(DispatchWorkloadProfileId::CiaMeasurement, &changed).is_err());
+        }
+    }
+
+    #[test]
+    fn measurement_device_wall_requires_modern_explicit_admission() {
+        let wall = DispatchVramWall::Required(VramWallContract {
+            provider: NUMERICAL_VRAM_PROVIDER.into(),
+            device_uuid: "GPU-fixture".into(),
+            maximum_process_fraction_millionths: 800_000,
+            minimum_free_bytes: 1,
+            consecutive_breach_samples: 3,
+            sample_interval_ms: u64::from(RESOURCE_GUARD_SAMPLE_INTERVAL_MS),
+        });
+        assert!(numerical_vram_profile_valid(
+            DispatchWorkloadProfileId::CiaMeasurement,
+            "ember-lab-dispatch-manifest-v5",
+            Some(&wall)
+        ));
+        for schema in ["ember-lab-dispatch-manifest-v3", "unknown"] {
+            assert!(!numerical_vram_profile_valid(
+                DispatchWorkloadProfileId::CiaMeasurement,
+                schema,
+                Some(&wall)
+            ));
+        }
+        assert!(!numerical_vram_profile_valid(
+            DispatchWorkloadProfileId::CiaMeasurement,
+            "ember-lab-dispatch-manifest-v5",
+            None
+        ));
+        assert!(!numerical_vram_profile_valid(
+            DispatchWorkloadProfileId::CiaMeasurement,
+            "ember-lab-dispatch-manifest-v5",
+            Some(&DispatchVramWall::NotApplicable)
+        ));
+        let mut changed = profile(DispatchWorkloadProfileId::CiaMeasurement);
+        changed.pinned_host_producers[0].maximum_bytes -= 1;
+        assert!(validate_dispatch_workload_profile(
+            &changed,
+            None,
+            DispatchCpuPacingClass::Unpaced,
+            &args(),
+            BUDGET,
+            BUDGET
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn measurement_dispatch_checks_actual_prediction_and_canonical_bindings() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("cia-measurement-profile-tests")
+            .join(format!(
+                "ember-cia-measurement-{}-{}",
+                std::process::id(),
+                atomic_temp_name("binding")
+            ));
+        let entry = root.join("src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py");
+        let config = root.join("configs/ember-cia-3b.json");
+        let custody = root.join("custody");
+        fs::create_dir_all(entry.parent().unwrap()).unwrap();
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::create_dir_all(&custody).unwrap();
+        let helper = root.join("hidden.py");
+        let receipt = root.join("receipt.json");
+        let tokenizer = root.join("tokenizer.json");
+        for path in [&entry, &config, &helper, &receipt, &tokenizer] {
+            fs::write(path, b"fixture").unwrap();
+        }
+        let prediction_path = custody.join("prediction.json");
+        let source_commit = "b".repeat(40);
+        let job_id = "a".repeat(32);
+        let resources = json!({
+            "profile": "cia_measurement",
+            "maximum_job_memory_bytes": BUDGET,
+            "vram_wall": {
+                "applicability": "required",
+                "contract": {"device_uuid": "GPU-ab12"}
+            }
+        });
+        let prediction = json!({"schema": "ember-cia-step-prediction-v1", "identity": {
+            "source_commit": source_commit, "run_id": job_id,
+            "gpu_uuid": "GPU-ab12",
+            "dispatch_resources": resources,
+            "config_sha256": hash_file(&config).unwrap(),
+            "source_sha256": {"src/ember/infrastructure/tools/ember-restart-3b/cia_step_runner.py": hash_file(&entry).unwrap()},
+            "data": {"receipt_path": receipt, "receipt_sha256": hash_file(&receipt).unwrap(),
+                     "tokenizer_path": tokenizer, "tokenizer_sha256": hash_file(&tokenizer).unwrap(),
+                     "shard_ledger_path": null, "shard_ledger_sha256": null}
+        }});
+        fs::write(&prediction_path, serde_json::to_vec(&prediction).unwrap()).unwrap();
+        let mut argv = args();
+        argv[1] = entry.to_string_lossy().into_owned();
+        argv[5] = custody.to_string_lossy().into_owned();
+        argv[7] = helper.to_string_lossy().into_owned();
+        argv[9] = prediction_path.to_string_lossy().into_owned();
+        argv[11] = hash_file(&prediction_path).unwrap();
+        let bindings: Vec<_> = [
+            &entry,
+            &helper,
+            &receipt,
+            &tokenizer,
+            &config,
+            &prediction_path,
+        ]
+        .into_iter()
+        .map(|path| {
+            (
+                fs::canonicalize(path).unwrap(),
+                hash_file(path).unwrap(),
+                if path == &config {
+                    DispatchBindingKind::Config
+                } else {
+                    DispatchBindingKind::Manifest
+                },
+            )
+        })
+        .collect();
+        let validate = |args: &[String], rows: &[(PathBuf, String, DispatchBindingKind)]| {
+            validate_cia_measurement_bindings(
+                args,
+                &fs::canonicalize(&custody).unwrap(),
+                rows,
+                &source_commit,
+                &job_id,
+                &resources,
+            )
+        };
+        assert!(validate(&argv, &bindings).is_ok());
+        assert!(validate_cia_measurement_bindings(
+            &argv,
+            &fs::canonicalize(&custody).unwrap(),
+            &bindings,
+            &source_commit,
+            &job_id,
+            &json!({"profile": "cia_measurement", "maximum_job_memory_bytes": BUDGET + 1})
+        )
+        .is_err());
+        for index in 0..bindings.len() {
+            let mut changed = bindings.clone();
+            changed.remove(index);
+            assert!(
+                validate(&argv, &changed).is_err(),
+                "missing binding {index}"
+            );
+        }
+        let mut changed = argv.clone();
+        changed[11] = "0".repeat(64);
+        assert!(validate(&changed, &bindings).is_err());
+        changed = argv.clone();
+        changed[5] = root.to_string_lossy().into_owned();
+        assert!(validate(&changed, &bindings).is_err());
+        for wall in [
+            json!({"applicability": "required", "contract": {"device_uuid": "GPU-cd34"}}),
+            json!({"applicability": "not_applicable"}),
+            json!({"applicability": "required", "contract": null}),
+            json!({"applicability": "required", "contract": {}}),
+            serde_json::Value::Null,
+        ] {
+            let mut changed_resources = resources.clone();
+            changed_resources["vram_wall"] = wall;
+            let mut changed_prediction = prediction.clone();
+            changed_prediction["identity"]["dispatch_resources"] = changed_resources.clone();
+            fs::write(
+                &prediction_path,
+                serde_json::to_vec(&changed_prediction).unwrap(),
+            )
+            .unwrap();
+            let mut changed_args = argv.clone();
+            changed_args[11] = hash_file(&prediction_path).unwrap();
+            let mut changed_bindings = bindings.clone();
+            let canonical_prediction = fs::canonicalize(&prediction_path).unwrap();
+            for (path, digest, _) in &mut changed_bindings {
+                if path == &canonical_prediction {
+                    *digest = changed_args[11].clone();
+                }
+            }
+            assert!(validate_cia_measurement_bindings(
+                &changed_args,
+                &fs::canonicalize(&custody).unwrap(),
+                &changed_bindings,
+                &source_commit,
+                &job_id,
+                &changed_resources,
+            )
+            .is_err());
+        }
+        fs::write(&prediction_path, b"{}").unwrap();
+        assert!(validate(&argv, &bindings).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[cfg(test)]
