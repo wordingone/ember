@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from .ember_v0_contract import census, cia_architecture_config, validate_cia_architecture
 from .ember_v0_inventory import equation_inventory, update_support
 from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, select_global,
-                              select_local, observe_global, observe_local)
+                              select_local, observe_global, observe_local, ChunkSpec, StepRouting)
 
 
 def rotate_three_axis(values, positions):
@@ -391,35 +391,31 @@ class CIADecoder(nn.Module):
             offset += length
         return self._per_document(lambda piece: self._linear(piece, prefix + ".o.weight"), torch.cat(pieces), lengths)
 
-    def _route_local_layer(self, hidden, chunks, *, keys, generation, sparse_depth, capture):
+    def _route_local_layer(self, hidden, chunks, *, routing, sparse_depth, capture):
         """Local routing for every 256-row chunk of one sparse layer across all documents.
 
-        Returns (experts, logits, records): the winner per chunk, the [chunks,2] float logits in
-        ascending global-ID order, and the per-chunk LocalSelection records. Today this loops the
-        legacy selector per chunk (state/issue1945-routing-interface-20260910.md names the batched
-        replacement this call site is shaped for); the decoder never reads anything else from routing.
+        One StepRouting.select_local_batch call per sparse layer: the winners of every chunk cross to the
+        host in ONE transfer (the legacy select_local loop crossed once per chunk). Returns
+        (experts, logits, gates, records): the winner per chunk, the [chunks,2] float logits in ascending
+        global-ID order, the native unit_task_gate factor per chunk, and the per-chunk LocalSelection
+        records (None unless capture). The decoder never reads anything else from routing.
         """
-        records = []
-        for chunk in chunks:
-            document = hidden[chunk['offset']:chunk['offset'] + chunk['length']]
-            records.append(select_local(
-                document, self._weight("router.local_query.weight"), keys, chunk['selection'],
-                position=chunk['start'], document_start=0, generation=generation,
-                request=chunk['request'], sparse_depth=sparse_depth, capture=capture))
-        logits = torch.stack([record.logits for record in records])
-        return tuple(record.expert for record in records), logits, tuple(records)
+        batch = routing.select_local_batch(hidden, [chunk['spec'] for chunk in chunks],
+                                           sparse_depth=sparse_depth, capture=capture)
+        return batch.experts, batch.logits, batch.gates, (batch.locals() if capture else None)
 
     def _batched_documents_forward(self, documents, *, observer=None, plan=None):
         """Document-batched core path with one expert call per expert per sparse layer.
 
-        Per document the computation is the one _document_forward performs: the same routing calls see
-        the same per-document state, and every position's norms, projections, rotation, shared SwiGLU and
-        expert SwiGLU are the same per-row operations. What changes is only the batching: the core ops
-        run once on the concatenation of all documents, attention batches equal-length documents on a
-        batch axis (per-document causality intact), and at each sparse layer every row routed to an
-        expert, across all chunks and documents, is gathered into ONE input for one lease and one GEMM
-        triple, then scattered back. Routes are returned in (document, layer, start) order, which is the
-        serial order. Observer calls arrive layer-major rather than document-major.
+        Per document the computation is the one _document_forward performs: norms and the three-axis
+        rotation run once over the concatenation of all documents; every GEMM (q/k/v/o, shared SwiGLU,
+        unembedding) runs per document at the serial path's M (_per_document); attention is one 3-D call
+        per document. Routing goes through one StepRouting per step: select_global per document epoch,
+        then ONE select_local_batch call per sparse layer for every chunk. At each sparse layer the chunks
+        routed to an expert, across all documents, are the members of one expert_block_group call (one
+        lease per expert per layer, per-chunk GEMMs at the serial 256-row shape) and the residual is
+        scattered back under the per-chunk gate. Routes are returned in (document, layer, start) order,
+        which is the serial order. Observer calls arrive layer-major rather than document-major.
         """
         keys = torch.stack([self._weight(f"router.layers.{layer}.keys") for layer in range(1, 24, 2)])
         generation = ('cpu-conformance' if self._cuda_execution is None else
@@ -429,12 +425,22 @@ class CIADecoder(nn.Module):
         embedded_all = torch.cat([embedded for embedded, _, _ in documents])
         positions_all = torch.cat([positions for _, positions, _ in documents])
         device = embedded_all.device
+        routing = StepRouting(self._weight("router.global_query.weight"),
+                              self._weight("router.local_query.weight"), keys, generation)
+        try:
+            return self._batched_documents_body(
+                documents, lengths, total, embedded_all, positions_all, device, keys, generation,
+                routing, observer=observer, plan=plan)
+        finally:
+            routing.close()
+
+    def _batched_documents_body(self, documents, lengths, total, embedded_all, positions_all, device,
+                                keys, generation, routing, *, observer, plan):
         metas, offset = [], 0
         for (embedded, positions, document_index), length in zip(documents, lengths):
             request = f"{generation}-document-{document_index}"
-            selections = {start: select_global(
-                embedded, self._weight("router.global_query.weight"), keys,
-                position=start, document_start=0, generation=generation, request=request)
+            selections = {start: routing.select_global(
+                embedded, position=start, document_start=0, request=request)
                 for start in range(0, length, 1024)}
             if observer is not None:
                 for start in sorted(selections):
@@ -444,7 +450,10 @@ class CIADecoder(nn.Module):
             offset += length
         chunk_specs = [dict(index=meta['index'], request=meta['request'], offset=meta['offset'],
                             length=meta['length'], start=start, size=min(256, meta['length'] - start),
-                            selection=meta['selections'][(start // 1024) * 1024])
+                            selection=meta['selections'][(start // 1024) * 1024],
+                            spec=ChunkSpec(document_offset=meta['offset'], start=start,
+                                           selection=meta['selections'][(start // 1024) * 1024],
+                                           request=meta['request']))
                        for meta in metas for start in range(0, meta['length'], 256)]
         sizes = [chunk['size'] for chunk in chunk_specs]
         uniform = len(set(sizes)) == 1
@@ -461,13 +470,14 @@ class CIADecoder(nn.Module):
             if not layer % 2:
                 values = shared
                 continue
-            experts, logits, records = self._route_local_layer(
-                shared, chunk_specs, keys=keys, generation=generation, sparse_depth=layer // 2,
+            experts, logits, gates, records = self._route_local_layer(
+                shared, chunk_specs, routing=routing, sparse_depth=layer // 2,
                 capture=observer is not None)
-            chosen, slots = [], []
-            for chunk, record, expert in zip(chunk_specs, records, experts):
-                if observer is not None:
+            if observer is not None:
+                for chunk, record in zip(chunk_specs, records):
                     observer(observe_local(record, document=chunk['index'], layer=layer))
+            chosen, slots = [], []
+            for chunk, expert in zip(chunk_specs, experts):
                 candidates = tuple(sorted(chunk['selection'].experts))
                 # Ascending global-ID order, matching what select_local scores and what a plan records.
                 winner = expert if plan is None else self._planned_expert(
@@ -496,10 +506,16 @@ class CIADecoder(nn.Module):
             inverse_tensor = torch.tensor(inverse, dtype=torch.long, device=device)
             residual = torch.cat(outputs).index_select(0, inverse_tensor)
             # The gate consumes the NATIVE logits per chunk (unit forward, selected-softmax derivative),
-            # broadcast over that chunk's rows; only the discrete winner may come from a plan.
-            working = logits if logits.dtype == torch.float64 else logits.float()
-            probability = working.softmax(1).gather(1, torch.tensor(slots, dtype=torch.long, device=device)[:, None])[:, 0]
-            factor = (probability - probability.detach()) + 1.0
+            # broadcast over that chunk's rows; only the discrete winner may come from a plan. Without a
+            # plan the routing batch's own gates (row-wise, the scalar helper's arithmetic) are used; a
+            # plan recomputes the factor at the planned slot from the same native logits.
+            if plan is None:
+                factor = gates
+            else:
+                working = logits if logits.dtype == torch.float64 else logits.float()
+                probability = working.softmax(1).gather(
+                    1, torch.tensor(slots, dtype=torch.long, device=device)[:, None])[:, 0]
+                factor = (probability - probability.detach()) + 1.0
             if uniform:
                 gate = factor.repeat_interleave(sizes[0])
             else:
