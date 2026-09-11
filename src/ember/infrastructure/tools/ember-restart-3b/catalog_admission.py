@@ -1810,7 +1810,7 @@ def main(argv: list[str] | None = None) -> int:
             output = project_catalog_spec(
                 spec_raw=_read(arguments.spec),
                 exclusion_records=exclusion_records,
-                license_rows=license_rows,
+                license_rows=license_rows if arguments.license_index is not None else None,
             )
             if arguments.license_index is not None:
                 write_new(

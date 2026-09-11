@@ -135,3 +135,11 @@ def test_license_only_cli_emits_separate_manifest_and_index(projection, tmp_path
     heldout_only = digest(b'fixture-0\n')
     assert heldout_only.encode() not in manifest.read_bytes()
     assert heldout_only.encode() in index.read_bytes()
+
+
+def test_license_only_cli_requires_index_output(projection, tmp_path):
+    spec = tmp_path / 'projection.json'
+    spec.write_bytes(canonical(projection))
+    manifest = tmp_path / 'manifest.json'
+    assert catalog.main(['project', '--spec', str(spec), '--output', str(manifest)]) == 2
+    assert not manifest.exists()
