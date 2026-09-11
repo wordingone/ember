@@ -19,6 +19,8 @@ import unittest
 import numpy
 import torch
 
+SOURCE = Path(__file__).resolve().parents[2] / 'src' / 'ember' / 'infrastructure' / 'tools' / 'ember-restart-3b' / 'cia_step_runner.py'
+
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = ROOT / 'src/ember/infrastructure/tools/ember-restart-3b'
@@ -233,6 +235,93 @@ class CollectorTests(unittest.TestCase):
             host_reading_collector('local', device_only(locals_[1]))
 
 
+class CapturingTests(unittest.TestCase):
+    """torch.cuda.make_graphed_callables invokes every segment three times inside one capture() with no begin_step()
+    between; the per-step duplicate guards are Python state and must be suspended for exactly that window."""
+
+    def test_duplicate_reports_are_admitted_only_while_capturing(self):
+        lengths = (300, 520)
+        geometry, payload, locals_ = fixture_payloads(lengths, 11)
+        buffers = subject.RoutingStatisticsBuffers(lengths, device='cpu')
+        buffers.begin_step()
+        buffers.collector('global', payload)
+        with self.assertRaises(ValueError):
+            buffers.collector('global', payload)
+        buffers.capturing = True
+        buffers.collector('global', payload)  # synthetic repeat: admitted, still written
+        local = locals_[LAYERS[0]]
+        buffers.collector('local', local)
+        buffers.collector('local', local)
+        buffers.capturing = False
+        with self.assertRaises(ValueError):
+            buffers.collector('local', local)
+        self.assertEqual(int(buffers.views['reports'][0]), 2)  # device counters count every write; static state restores them
+        self.assertEqual(int(buffers.views['reports'][1]), 2)
+        self.assertFalse(buffers.capturing)
+
+
+class ExecutionModeTests(unittest.TestCase):
+    """execution_mode is an OPTIONAL identity key with a fixed value set: the exact-key-set check must admit it (or the
+    capture selection is unreachable from a real prediction) and an unknown value must refuse rather than run eager."""
+
+    def test_absent_means_eager_and_the_capture_mode_is_admitted(self):
+        self.assertIsNone(subject.execution_mode({}))
+        self.assertEqual(subject.execution_mode({'execution_mode': 'resident-segmented-capture'}),
+                         'resident-segmented-capture')
+        self.assertEqual(subject.EXECUTION_MODES, ('resident-segmented-capture',))
+
+    def test_unknown_mode_refuses(self):
+        with self.assertRaises(ValueError):
+            subject.execution_mode({'execution_mode': 'paged'})
+
+    def test_prepare_execution_admits_execution_mode_and_still_refuses_unknown_keys(self):
+        source = SOURCE.read_text(encoding='utf-8')
+        start = source.index('def prepare_execution(')
+        body = source[start:source.index('\ndef ', start + 1)]
+        self.assertIn("keys <= set(identity) <= keys | {'execution_mode'}", body)
+        self.assertIn('execution_mode(identity)', body)
+        worker = source[source.index('def worker('):]
+        self.assertIn("mode = execution_mode(prediction['identity'])", worker)
+
+
+class WorkerSourceOrderTests(unittest.TestCase):
+    """Source-order contract of the measurement worker for the compiler binding and the segmented capture."""
+
+    def setUp(self):
+        source = SOURCE.read_text(encoding='utf-8')
+        start = source.index('def worker(')
+        self.body = source[start:source.index('\ndef ', start + 1)]
+
+    def test_triton_c_compiler_binds_before_activation_and_is_recorded(self):
+        bind = self.body.index('bind_triton_c_compiler()')
+        self.assertLess(bind, self.body.index('model.activate_cuda(device)'))
+        self.assertLess(bind, self.body.index('measure_step('))
+        self.assertIn("'c_compiler': c_compiler", self.body)
+
+    def test_capture_binds_after_optimizer_and_captures_after_the_exemplar_pack(self):
+        body = self.body
+        self.assertIn("mode == 'resident-segmented-capture'", body)
+        self.assertLess(body.index('model.activate_cuda(device)'), body.index('model.bind_segmented_capture('))
+        self.assertLess(body.index('model.bind_segmented_capture('), body.index("open('xb') as rows"))
+        capture = body.index('capture.capture(optimizer=optimizer)')
+        self.assertLess(body.index('record=(capture is not None and index == 0)'), capture)
+        self.assertLess(body.index('optimizer.zero_grad(set_to_none=False)'), capture)  # full membership, eager experts too
+        self.assertLess(body.index('buffers.capturing = True'), capture)
+        self.assertLess(capture, body.index('buffers.capturing = False'))
+        self.assertLess(capture, body.index("custody / 'capture.json'"))
+        self.assertIn("raise ValueError('segmented capture needs one warm step as the recorded exemplar')", body)
+
+    def test_measure_step_zeroes_in_place_when_capturing_and_rows_carry_captured(self):
+        source = SOURCE.read_text(encoding='utf-8')
+        start = source.index('def measure_step(')
+        body = source[start:source.index('\ndef ', start + 1)]
+        branch = body.index('if capture is not None:')
+        self.assertLess(branch, body.index('optimizer.zero_grad(set_to_none=False)'))
+        self.assertLess(body.index('optimizer.zero_grad(set_to_none=False)'), body.index('capture.zero_grad()'))
+        self.assertIn("'captured': bool(capture is not None and capture.captured)", body)
+        self.assertIn('with model.candidate_step(), recording:', body)
+
+
 class ReplayTests(unittest.TestCase):
     """Completion is decided by device report counts in the buffer, the way a captured replay would leave them."""
 
@@ -282,8 +371,8 @@ class FakeTrace:
 
 class ResidentModel:
     """Stands in for the resident decoder's forward contract: device collector in, provisional trace out."""
-    def __init__(self, lengths, seed, *, corrupt_trace=False):
-        self.lengths, self.seed, self.corrupt_trace = lengths, seed, corrupt_trace
+    def __init__(self, lengths, seed, *, corrupt_trace=False, skip_layer=None):
+        self.lengths, self.seed, self.corrupt_trace, self.skip_layer = lengths, seed, corrupt_trace, skip_layer
         self._resident_experts = (0, 1, 2, 3)
         self._cuda_execution = SimpleNamespace(cache=Cache())
         self.weight = torch.nn.Parameter(torch.zeros(8))
@@ -305,7 +394,8 @@ class ResidentModel:
         geometry, global_payload, locals_ = fixture_payloads(self.lengths, self.seed)
         device_route_collector('global', device_only(global_payload))
         for layer in LAYERS:
-            device_route_collector('local', device_only(locals_[layer]))
+            if layer != self.skip_layer:  # a captured segment that skipped its collector leaves one report missing
+                device_route_collector('local', device_only(locals_[layer]))
         rows = reference_rows(geometry, global_payload, locals_)
         if self.corrupt_trace:
             rows = rows[1:] + rows[:1]
@@ -323,6 +413,17 @@ class LegacyModel(ResidentModel):
             raise ValueError('device routing options require explicit resident execution')
         logits = self.weight.expand(len(embedded), 8) + 0.0
         return logits, ((0, 1, 0, (2, 5), 5), (1, 1, 0, (1, 3), 1))
+
+
+class CountingSGD(torch.optim.SGD):
+    """Records whether the update ran: the refusals must fire before it."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.steps = 0
+
+    def step(self, closure=None):
+        self.steps += 1
+        return super().step(closure)
 
 
 def pack_for(lengths):
@@ -358,14 +459,32 @@ class MeasureStepTests(unittest.TestCase):
         self.assertEqual(second['routes_sha256'], row['routes_sha256'])
         self.assertEqual(len(subject._ROUTING_BUFFERS), 1)
 
-    def test_verify_routes_refuses_a_trace_that_differs(self):
+    def test_verify_routes_refuses_a_trace_that_differs_before_the_update(self):
         lengths = (300, 520)
         model = ResidentModel(lengths, 4, corrupt_trace=True)
-        optimizer = torch.optim.SGD([model.weight], lr=0.1)
+        optimizer = CountingSGD([model.weight], lr=0.1)
         with self.assertRaises(ValueError):
             subject.measure_step(model, optimizer, pack_for(lengths), device=torch.device('cpu'), verify_routes=True)
+        self.assertEqual(optimizer.steps, 0)
         row = subject.measure_step(model, optimizer, pack_for(lengths), device=torch.device('cpu'))
         self.assertEqual(row['routes_digest_grammar'], 'device-buffers-v1')
+        self.assertEqual(optimizer.steps, 1)
+
+    def test_missing_device_report_refuses_before_the_update(self):
+        lengths = (300, 520)
+        model = ResidentModel(lengths, 6, skip_layer=7)
+        optimizer = CountingSGD([model.weight], lr=0.1)
+        before = model.weight.detach().clone()
+        with self.assertRaises(RuntimeError) as caught:
+            subject.measure_step(model, optimizer, pack_for(lengths), device=torch.device('cpu'))
+        self.assertIn('incomplete routing statistics', str(caught.exception))
+        self.assertEqual(optimizer.steps, 0)
+        self.assertTrue(torch.equal(model.weight.detach(), before))
+        # The same model with every report present completes, updates once, and the boundary copy is inside the wall.
+        model.skip_layer = None
+        row = subject.measure_step(model, optimizer, pack_for(lengths), device=torch.device('cpu'))
+        self.assertEqual(optimizer.steps, 1)
+        self.assertLessEqual(row['routing_digest_seconds'], row['wall_seconds'])
 
     def test_legacy_model_keeps_legacy_grammar(self):
         model = LegacyModel()
