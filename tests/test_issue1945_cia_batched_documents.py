@@ -213,5 +213,41 @@ class BatchedDocumentsCPUReferenceTests(unittest.TestCase):
         self.assertTrue(any(len(sizes) > 1 for _, _, sizes in calls), 'no shared expert exercised')
         self.assertTrue(any(1 in sizes for _, _, sizes in calls), 'partial tail chunk not exercised')
 
+    def test_batched_path_routes_once_per_sparse_layer(self):
+        """One StepRouting.select_local_batch call per sparse layer covering every chunk; the legacy per-chunk
+        select_local is never called on the batched path; observer records arrive per chunk per layer."""
+        import ember.model.ember_v0_decoder as decoder_module
+        from ember.model.ember_v0_routing import StepRouting
+        calls = []
+        original = StepRouting.select_local_batch
+
+        def counting(routing, hidden, chunks, **kwargs):
+            calls.append((kwargs['sparse_depth'], len(chunks), kwargs['capture']))
+            return original(routing, hidden, chunks, **kwargs)
+
+        def refused(*args, **kwargs):
+            raise AssertionError('legacy select_local called on the batched path')
+        StepRouting.select_local_batch = counting
+        legacy = decoder_module.select_local
+        decoder_module.select_local = refused
+        observations = []
+        lengths = (257, 513)
+        tokens = list(range(5, 5 + sum(lengths)))
+        try:
+            with torch.no_grad():
+                self.run_tokens(tokens, document_starts=(0, lengths[0]), batch_documents=True)
+                self.run_tokens(tokens, document_starts=(0, lengths[0]), batch_documents=True,
+                                route_observer=observations.append)
+        finally:
+            StepRouting.select_local_batch = original
+            decoder_module.select_local = legacy
+        chunks = sum(-(-length // 256) for length in lengths)
+        self.assertEqual(calls, [(depth, chunks, False) for depth in range(12)]
+                         + [(depth, chunks, True) for depth in range(12)])
+        locals_seen = [o for o in observations if type(o).__name__ == 'LocalObservation']
+        self.assertEqual(len(locals_seen), 12 * chunks)
+        self.assertEqual(sorted({(o.document, o.layer) for o in locals_seen}),
+                         sorted({(d, layer) for d in range(2) for layer in range(1, 24, 2)}))
+
 if __name__ == '__main__':
     unittest.main()
