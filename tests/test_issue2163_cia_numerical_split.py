@@ -1,7 +1,7 @@
 # goal_id: EMBER-02
 # workstream_id: EMBER-02A
 # next_executed_outcome: EMBER-02 first sufficiently pretrained clean-genesis 3B Ember
-"""Bounds and refusals of revision CIA3-R1-N62-numerical-split-v2, on fixed tensors.
+"""Bounds and refusals of revision CIA3-R1-N63-numerical-split-v3, on fixed tensors.
 
 These are mechanics tests. They establish that each prospectively fixed bound actually refuses when
 it is crossed, and that the comparison cannot silently pass on absent evidence. They are not a
@@ -20,8 +20,9 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ember.governance.scripts.cia_numerical_split import (
-    DIFFERING_CUDA_MARGIN_MAX, LOCAL_ROUTES, NumericalSplitRefusal,
-    SELECTOR_SCORE_ABSOLUTE_MAX, SHARED_VECTOR_RELATIVE_L2_MAX, compare_global_selections,
+    DIFFERING_CUDA_MARGIN_MAX, FIXED_PLAN_LOGIT_RELATIVE_L2_MAX, LOCAL_ROUTES,
+    NumericalSplitRefusal, SELECTOR_SCORE_ABSOLUTE_MAX, SHARED_VECTOR_RELATIVE_L2_MAX,
+    compare_fixed_plan_logits, compare_global_selections,
     compare_local_routes, cross_evaluate_selector, digest_of, local_route_report,
     predict_downstream_attributable, refuse_if_inadmissible, route_plan)
 from ember.model.ember_v0_decoder import CIADecoder
@@ -406,6 +407,59 @@ class DownstreamAttribution(unittest.TestCase):
         self.assertFalse(downstream.admissible)
         self.assertFalse(next(item for item in comparisons
                               if item.key == (0, 21, 768)).admissible)
+
+
+class FixedPlanLogitBound(unittest.TestCase):
+    """N63: the fixed-plan logit gate is the whole-logit relative L2; elementwise is reported only."""
+
+    def _reference(self):
+        generator = torch.Generator().manual_seed(2163)
+        return torch.randn(4, 64, generator=generator)
+
+    def test_a_candidate_inside_the_bound_is_measured_and_reports_the_retained_count(self):
+        reference = self._reference()
+        candidate = reference * (1 + FIXED_PLAN_LOGIT_RELATIVE_L2_MAX / 2)
+        row = compare_fixed_plan_logits(reference, candidate)
+        self.assertLess(row["relative_l2"], FIXED_PLAN_LOGIT_RELATIVE_L2_MAX)
+        self.assertEqual(row["bound"], FIXED_PLAN_LOGIT_RELATIVE_L2_MAX)
+        self.assertEqual(row["elements_compared"], reference.numel())
+        # The retained atol/rtol count is still there -- reported, not gating.
+        self.assertIn("elements_exceeding_retained_atol_rtol", row)
+
+    def test_a_candidate_beyond_the_bound_is_refused(self):
+        reference = self._reference()
+        candidate = reference * (1 + FIXED_PLAN_LOGIT_RELATIVE_L2_MAX * 2)
+        with self.assertRaises(NumericalSplitRefusal) as refused:
+            compare_fixed_plan_logits(reference, candidate)
+        self.assertIn("relative L2", str(refused.exception))
+
+    def test_the_retained_elementwise_count_does_not_gate_on_its_own(self):
+        # One element far outside atol+rtol contributes a relative L2 well inside the bound on a
+        # 256-element tensor: the N63 gate admits it and the count reports it. This is the exact
+        # behaviour change from N62, stated as a test so it cannot drift back silently.
+        reference = self._reference()
+        candidate = reference.clone()
+        candidate[0, 0] += 0.5
+        row = compare_fixed_plan_logits(reference, candidate)
+        self.assertGreaterEqual(row["elements_exceeding_retained_atol_rtol"], 1)
+        self.assertLess(row["relative_l2"], FIXED_PLAN_LOGIT_RELATIVE_L2_MAX)
+
+    def test_nonfinite_logits_are_refused_not_measured(self):
+        reference = self._reference()
+        candidate = reference.clone()
+        candidate[1, 2] = float("nan")
+        with self.assertRaises(NumericalSplitRefusal):
+            compare_fixed_plan_logits(reference, candidate)
+
+    def test_shape_drift_is_refused_rather_than_broadcast(self):
+        reference = self._reference()
+        with self.assertRaises(NumericalSplitRefusal):
+            compare_fixed_plan_logits(reference, reference[:, :32])
+
+    def test_a_zero_reference_is_refused_because_relative_l2_is_undefined(self):
+        reference = torch.zeros(4, 64)
+        with self.assertRaises(NumericalSplitRefusal):
+            compare_fixed_plan_logits(reference, reference)
 
 
 if __name__ == "__main__":
