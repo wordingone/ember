@@ -18,6 +18,27 @@ from .ember_v0_routing import (_global_scores, _local_scores, unit_task_gate, se
                               select_local, observe_global, observe_local, ChunkSpec, StepRouting)
 
 
+def _document_sdpa(q, k, v, lengths):
+    """One causal 4-D attention call with independent, possibly ragged documents."""
+    if (not lengths or any(type(length) is not int or length <= 0 for length in lengths)
+            or sum(lengths) != q.shape[0]
+            or q.shape != k.shape or q.shape != v.shape or q.ndim != 3):
+        raise ValueError('attention requires aligned QKV and complete positive document lengths')
+    count, longest = len(lengths), max(lengths)
+    if all(length == longest for length in lengths):
+        packed = tuple(tensor.reshape(count, longest, *tensor.shape[1:]).transpose(1, 2)
+                       for tensor in (q, k, v))
+        result = F.scaled_dot_product_attention(*packed, is_causal=True)
+        return result.transpose(1, 2).reshape_as(q)
+    # Padding follows each document, so causal attention cannot see padded keys
+    # from a valid query. Discarding padded queries also discards their gradients.
+    packed = tuple(torch.stack(tuple(F.pad(piece, (0, 0, 0, 0, 0, longest - length))
+                                    for piece, length in zip(tensor.split(lengths), lengths))).transpose(1, 2)
+                   for tensor in (q, k, v))
+    result = F.scaled_dot_product_attention(*packed, is_causal=True).transpose(1, 2)
+    return torch.cat(tuple(result[index, :length] for index, length in enumerate(lengths)))
+
+
 def rotate_three_axis(values, positions):
     """RoPE on disjoint temporal/vertical/horizontal dimensions 32/16/16.
 
@@ -83,6 +104,9 @@ class CIADecoder(nn.Module):
         self._parameter_device = "meta"
         self._execution_device = torch.device('meta')
         self._cuda_execution = None
+        self._resident_experts = ()
+        self._resident_capacity = 2
+        self._resident_groups = {}
         self.weights = nn.ParameterDict({
             spec.name.replace(".", "__"): nn.Parameter(torch.empty(spec.shape, device="meta", dtype=torch.bfloat16))
             for spec in equation_inventory()
@@ -101,17 +125,32 @@ class CIADecoder(nn.Module):
             raise ValueError("unexpected parameter alias between distinct consumers")
         if any(tuple(actual[name].shape) != shape for name, shape in expected.items()):
             raise ValueError("candidate parameter shape mismatch")
+        if type(self._resident_groups) is not dict or type(self._resident_capacity) is not int or self._resident_capacity < 2:
+            raise ValueError('resident layout and capacity must retain their exact declarations')
+        if type(self._resident_experts) is not tuple:
+            raise ValueError('resident identities must retain their exact tuple declaration')
+        resident_names = {spec.name for spec in equation_inventory() if spec.expert in self._resident_experts}
+        if self._resident_experts:
+            if self._parameter_device != 'cuda':
+                raise ValueError('resident owners require declared CUDA placement')
+            from .ember_v0_residency import validate_resident_layout
+            validate_resident_layout(self, actual)
+        elif self._resident_groups:
+            raise ValueError('undeclared resident backing groups')
         def expected_device(name):
-            return torch.device('cpu') if self._parameter_device == 'cuda' and name.startswith('experts.') else self._execution_device
+            return (torch.device('cpu') if self._parameter_device == 'cuda'
+                    and name.startswith('experts.') and name not in resident_names else self._execution_device)
         if any(p.dtype != torch.bfloat16 or p.device != expected_device(name) for name, p in actual.items()):
             raise ValueError("candidate requires BF16 parameters on its declared device")
         if sum(p.numel() for p in actual.values()) != census(self.config).total_unique:
             raise ValueError("candidate census mismatch")
         if self._parameter_device != "meta":
-            if any(not p.is_contiguous() or p.storage_offset() != 0 or p.untyped_storage().nbytes() != p.numel() * p.element_size() for p in actual.values()):
+            if any(not p.is_contiguous() or (name not in resident_names and
+                   (p.storage_offset() != 0 or p.untyped_storage().nbytes() != p.numel() * p.element_size()))
+                   for name, p in actual.items()):
                 raise ValueError("physical parameter storage does not match declared elements")
             for device in {p.device for p in actual.values()}:
-                ranges = sorted((p.data_ptr(), p.data_ptr() + p.untyped_storage().nbytes()) for p in actual.values() if p.device == device)
+                ranges = sorted((p.data_ptr(), p.data_ptr() + p.numel() * p.element_size()) for p in actual.values() if p.device == device)
                 if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
                     raise ValueError("physical parameter storage alias")
         return actual
@@ -144,7 +183,9 @@ class CIADecoder(nn.Module):
             else:
                 fields = repr(value)
             return (type(value).__module__, type(value).__qualname__, fields)
-        return (typed(self.config), typed(self._parameter_device), typed(self._execution_device))
+        from .ember_v0_residency import resident_layout_declaration
+        return (typed(self.config), typed(self._parameter_device), typed(self._execution_device),
+                typed(self._resident_experts), typed(self._resident_capacity), resident_layout_declaration(self))
 
     def _apply(self, fn, recurse=True):
         raise ValueError('generic module migration cannot bypass explicit CIA placement')
@@ -183,8 +224,8 @@ class CIADecoder(nn.Module):
         self.parameter_inventory()
         return self
 
-    def activate_cuda(self, device, *, resident_capacity=2):
-        """Activate bounded execution before constructing the candidate optimizer.
+    def activate_cuda(self, device, *, resident_capacity=2, resident_experts=(), optimizer=None):
+        """Activate bounded execution, optionally retaining an existing candidate optimizer.
 
         Caller must reserve the complete host/device envelope. This neither admits
         a generation nor grants launch, checkpoint, learning or throughput credit.
@@ -197,32 +238,142 @@ class CIADecoder(nn.Module):
         if target.type != 'cuda' or target.index is None:
             raise ValueError('explicit indexed CUDA device required')
         parameters = self.parameter_inventory()
+        if type(resident_experts) is not tuple:
+            raise ValueError('resident expert identities must be a tuple')
+        if resident_experts:
+            if (type(resident_capacity) is not int or resident_capacity != 4 or len(resident_experts) != 4
+                    or any(type(expert) is not int or not 0 <= expert < 25 for expert in resident_experts)
+                    or tuple(sorted(set(resident_experts))) != resident_experts):
+                raise ValueError('resident treatment requires capacity four and four ascending expert IDs')
+            if any(parameter.requires_grad and spec.expert is not None and spec.expert not in resident_experts
+                   for spec in equation_inventory() for parameter in (parameters[spec.name],)):
+                raise ValueError('declare frozen non-resident expert support before CUDA activation')
         if any(value.grad is not None for value in parameters.values()):
             raise ValueError('CUDA activation requires a quiescent population without gradients')
-        from .ember_v0_residency import CUDAExecution
+        from .ember_v0_residency import CUDAExecution, ResidentExecution, _pack_resident_group
         shared = {name: value for name, value in parameters.items() if not name.startswith('experts.')}
         original = {name: value.data for name, value in shared.items()}
-        moved = {}
+        moved, resident_groups = {}, {}
+        old_states = ({parameter: dict(state) for parameter, state in optimizer.state.items()}
+                      if optimizer is not None else None)
+        staged_states = None
+        if optimizer is not None:
+            from .ember_v0_residency import _stage_optimizer_placement
+            destinations = {id(parameter): (target if not name.startswith('experts.') or
+                            int(name.split('.')[1]) in resident_experts else torch.device('cpu'))
+                            for name, parameter in parameters.items()}
+            staged_states = _stage_optimizer_placement(optimizer, parameters, destinations)
+        if resident_experts:
+            original.update({name: value.data for name, value in parameters.items()
+                             if name.startswith('experts.') and int(name.split('.')[1]) in resident_experts})
         try:
             for name, value in shared.items():
                 moved[name] = value.detach().to(target, copy=True)
+            if resident_experts:
+                for layer in range(1, 24, 2):
+                    for projection in ('up', 'gate', 'down'):
+                        names = tuple(f'experts.{expert}.layers.{layer}.{projection}.weight' for expert in resident_experts)
+                        storage = _pack_resident_group(tuple(parameters[name] for name in names), target)
+                        resident_groups[(layer, projection)] = storage
+                        moved.update({name: storage[index] for index, name in enumerate(names)})
             torch.cuda.synchronize(target)
-            for name, value in shared.items():
-                value.data = moved[name]
+            for name, data in moved.items():
+                parameters[name].data = data
             self._execution_device = target
             self._parameter_device = 'cuda'
-            self._cuda_execution = CUDAExecution(self, target, resident_capacity=resident_capacity)
+            self._resident_experts = resident_experts
+            self._resident_capacity = resident_capacity
+            self._resident_groups = resident_groups
+            self._cuda_execution = (ResidentExecution(self, target) if resident_experts else
+                                    CUDAExecution(self, target, resident_capacity=resident_capacity))
             self.parameter_inventory()
+            if optimizer is not None:
+                for parameter, state in staged_states.items():
+                    optimizer.state[parameter].clear()
+                    optimizer.state[parameter].update(state)
         except BaseException:
-            for name, value in shared.items():
-                value.data = original[name]
+            for name, data in original.items():
+                parameters[name].data = data
             self._execution_device = torch.device('cpu')
             self._parameter_device = 'cpu'
             self._cuda_execution = None
+            self._resident_experts, self._resident_capacity, self._resident_groups = (), 2, {}
+            if optimizer is not None:
+                for parameter, state in old_states.items():
+                    optimizer.state[parameter].clear()
+                    optimizer.state[parameter].update(state)
             raise
         finally:
             moved.clear()
             original.clear()
+        return self
+
+    def deactivate_cuda(self, optimizer=None):
+        """Return actual owners and their one optimizer's tensors to CPU custody.
+
+        The caller must clear gradients after the last completed update. This is
+        a quiescent transition, not an automatic fallback from a refused step.
+        """
+        execution = self._cuda_execution
+        if self._parameter_device != 'cuda' or execution is None or execution.cache.active:
+            raise ValueError('CUDA deactivation requires a quiescent active placement')
+        parameters = self.parameter_inventory()
+        if any(parameter.grad is not None for parameter in parameters.values()):
+            raise ValueError('clear gradients before returning owners to CPU custody')
+        if optimizer is None and execution.cache.step_id:
+            raise ValueError('completed-step deactivation requires the retained optimizer authority')
+        if optimizer is not None:
+            if type(optimizer) is not torch.optim.AdamW:
+                raise ValueError('deactivation requires the declared AdamW optimizer')
+            membership = [parameter for group in optimizer.param_groups for parameter in group['params']]
+            if len(membership) != len(parameters) or {id(parameter) for parameter in membership} != {id(parameter) for parameter in parameters.values()}:
+                raise ValueError('optimizer membership differs from the complete owner inventory')
+            if any(id(parameter) not in {id(owner) for owner in membership} for parameter in optimizer.state):
+                raise ValueError('optimizer moment state belongs to an unbound parameter')
+            if any(not isinstance(value, (torch.Tensor, float, int))
+                   for state in optimizer.state.values() for value in state.values()):
+                raise ValueError('optimizer state contains an undeclared value type')
+        torch.cuda.synchronize(self._execution_device)
+        original = {name: parameter.data for name, parameter in parameters.items()}
+        moved = {name: parameter.detach().to('cpu', copy=True)
+                 for name, parameter in parameters.items() if parameter.device.type == 'cuda'}
+        states = ({parameter: {key: value.to('cpu', copy=True) if isinstance(value, torch.Tensor) else value
+                               for key, value in state.items()} for parameter, state in optimizer.state.items()}
+                  if optimizer is not None else None)
+        previous = (self._parameter_device, self._execution_device, self._resident_experts,
+                    self._resident_capacity, self._resident_groups)
+        old_states = ({parameter: dict(state) for parameter, state in optimizer.state.items()}
+                      if optimizer is not None else None)
+        old_options = ([{key: group.get(key) for key in ('capturable', 'foreach')} for group in optimizer.param_groups]
+                       if optimizer is not None else None)
+        try:
+            for name, data in moved.items():
+                parameters[name].data = data
+            self._parameter_device, self._execution_device = 'cpu', torch.device('cpu')
+            self._resident_experts, self._resident_capacity, self._resident_groups = (), 2, {}
+            self._cuda_execution = None
+            self.parameter_inventory()
+            if optimizer is not None:
+                for parameter, state in states.items():
+                    optimizer.state[parameter].clear()
+                    optimizer.state[parameter].update(state)
+                for group in optimizer.param_groups:
+                    group['capturable'], group['foreach'] = False, False
+            if hasattr(execution, 'retired'):
+                execution.retired = True
+        except BaseException:
+            for name, data in original.items():
+                parameters[name].data = data
+            (self._parameter_device, self._execution_device, self._resident_experts,
+             self._resident_capacity, self._resident_groups) = previous
+            self._cuda_execution = execution
+            if optimizer is not None:
+                for parameter, state in old_states.items():
+                    optimizer.state[parameter].clear()
+                    optimizer.state[parameter].update(state)
+                for group, options in zip(optimizer.param_groups, old_options):
+                    group.update(options)
+            raise
         return self
 
     def candidate_step(self):
@@ -239,6 +390,9 @@ class CIADecoder(nn.Module):
         if self._cuda_execution is not None and self._cuda_execution.cache.active:
             raise RuntimeError('update support cannot change during a candidate step')
         names = update_support(locus, experts=experts)
+        if self._resident_experts and any(spec.name in names and spec.expert is not None
+                                         and spec.expert not in self._resident_experts for spec in equation_inventory()):
+            raise ValueError('resident mode cannot enable non-resident expert gradients')
         parameters = self.parameter_inventory()
         for name, parameter in parameters.items():
             parameter.grad = None
@@ -336,6 +490,9 @@ class CIADecoder(nn.Module):
         k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
         k = k.repeat_interleave(4, dim=1)
         v = v.repeat_interleave(4, dim=1)
+        if self._resident_experts:
+            out = _document_sdpa(q, k, v, (length,))
+            return self._linear(out.reshape(length, 1024), prefix + ".o.weight")
         out = F.scaled_dot_product_attention(q.transpose(0, 1), k.transpose(0, 1),
                                              v.transpose(0, 1), is_causal=True)
         return self._linear(out.transpose(0, 1).reshape(length, 1024), prefix + ".o.weight")
@@ -432,11 +589,21 @@ class CIADecoder(nn.Module):
 
         Norms and the three-axis rotation are per-position, so they run once on the concatenated
         [total,1024] tensor; the projections run per document (_per_document: cuBLAS bytes depend on M).
-        The attention product itself runs one 3-D call per document,
-        exactly as _attention does: a 4-D equal-length stack would select the fused bf16 kernels instead
-        of the 3-D math path, and on CUDA that changed regime flipped routes (rel-L2 0.09 on logits at
-        4x1024). Fusing attention is a named successor with its own equivalence proof, not this unit.
+        The CPU reference retains per-document projection and attention arithmetic.
+        The CUDA candidate projects the complete batch and runs one 4-D causal
+        attention call. Ragged documents use trailing padding; valid queries cannot
+        attend to padded keys. Full-model numerical qualification remains required.
         """
+        if self._resident_experts:
+            total = len(values)
+            q = self._linear(values, prefix + ".q.weight").view(total, 16, 64)
+            k = self._linear(values, prefix + ".k.weight").view(total, 4, 64)
+            v = self._linear(values, prefix + ".v.weight").view(total, 4, 64)
+            q = rotate_three_axis(self._norm(q, prefix + ".q_norm.weight"), positions)
+            k = rotate_three_axis(self._norm(k, prefix + ".k_norm.weight"), positions)
+            out = _document_sdpa(q, k.repeat_interleave(4, dim=1),
+                                 v.repeat_interleave(4, dim=1), lengths)
+            return self._linear(out.reshape(total, 1024), prefix + ".o.weight")
         total = len(values)
         q = self._per_document(lambda piece: self._linear(piece, prefix + ".q.weight"), values, lengths).view(total, 16, 64)
         k = self._per_document(lambda piece: self._linear(piece, prefix + ".k.weight"), values, lengths).view(total, 4, 64)
@@ -466,6 +633,57 @@ class CIADecoder(nn.Module):
         batch = routing.select_local_batch(hidden, [chunk['spec'] for chunk in chunks],
                                            sparse_depth=sparse_depth, capture=capture)
         return batch.experts, batch.logits, batch.gates, (batch.locals() if capture else None)
+
+    def _resident_documents_forward(self, documents, *, collector=None, plan=None):
+        from .ember_v0_residency import resident_global_routes, resident_local_routes, ResidentRouteTrace
+        execution = self._cuda_execution
+        execution.check()
+        execution.check_route_plan(plan)
+        lengths = tuple(len(embedded) for embedded, _, _ in documents)
+        embedded = torch.cat([item[0] for item in documents])
+        positions = torch.cat([item[1] for item in documents])
+        keys = torch.stack([self._weight(f'router.layers.{layer}.keys') for layer in range(1, 24, 2)])
+        geometry, priors, ranked, candidates, valid = resident_global_routes(
+            embedded, lengths, self._weight('router.global_query.weight'), keys)
+        execution.require_valid(valid, 'routing')
+        if collector is not None:
+            collector('global', dict(geometry=geometry, priors=priors.detach().clone(),
+                                    ranked=ranked.detach().clone(), candidates=candidates.detach().clone()))
+        sizes = tuple(row[3] for row in geometry.chunks)
+        equal = len(set(sizes)) == 1
+        # Ragged geometry is fixed for a capture. Prepare its row mapping once outside
+        # the captured forward through ResidentExecution.bind_geometry.
+        repeats = execution.geometry_repeats(lengths, sizes)
+        values, winners_by_layer = embedded, []
+        for layer in range(24):
+            prefix = f'layers.{layer}'
+            values = values + self._batched_attention(
+                self._norm(values, prefix + '.attention_norm.weight'), positions, lengths, prefix + '.attention')
+            shared = values + self._swiglu(self._norm(values, prefix + '.shared_norm.weight'), prefix + '.shared')
+            if layer % 2 == 0:
+                values = shared
+                continue
+            winners, logits, gates, valid = resident_local_routes(
+                shared, self._weight('router.local_query.weight'), keys, layer // 2,
+                geometry, priors, candidates)
+            execution.require_valid(valid, 'routing')
+            native_winners = winners
+            winners, gates = execution.planned_routes(layer//2, geometry, candidates, winners, logits, gates)
+            if equal:
+                row_experts = winners.repeat_interleave(sizes[0])
+                row_gates = gates.repeat_interleave(sizes[0])
+            else:
+                row_experts = torch.repeat_interleave(winners, repeats, output_size=len(embedded))
+                row_gates = torch.repeat_interleave(gates, repeats, output_size=len(embedded))
+            residual = execution.grouped_block(self._norm(shared, prefix + '.expert_norm.weight'), row_experts, layer)
+            values = shared + residual * row_gates[:, None].to(residual.dtype)
+            winners_by_layer.append(winners.detach())
+            if collector is not None:
+                collector('local', dict(layer=layer, winners=winners.detach().clone(), logits=logits.detach().clone(),
+                                       gates=gates.detach().clone(), valid=valid.detach().clone(), native_winners=native_winners.detach().clone()))
+        outputs = self._linear(self._norm(values, 'final_norm.weight'), 'embedding.weight').split(lengths)
+        trace = ResidentRouteTrace(execution, execution.step_id, geometry, ranked.detach(), tuple(winners_by_layer))
+        return outputs, trace
 
     def _batched_documents_forward(self, documents, *, observer=None, plan=None):
         """Document-batched core path with one expert call per expert per sparse layer.
@@ -608,7 +826,8 @@ class CIADecoder(nn.Module):
         return planned_expert
 
     def forward(self, embedded, positions, *, document_starts=(0,), return_routes=False,
-                route_observer=None, route_plan=None, batch_documents=False):
+                route_observer=None, route_plan=None, batch_documents=False,
+                return_device_routes=False, device_route_collector=None):
         """Numerical execution over explicitly packed, unpadded documents.
 
         Every document is evaluated independently. There is no co-batch pooling,
@@ -629,7 +848,9 @@ class CIADecoder(nn.Module):
             raise ValueError("1..4096 unpadded BF16 positions required")
         if positions.dtype != torch.long or tuple(positions.shape) != (len(embedded), 3):
             raise ValueError("three integer axes required at every position")
-        if not torch.isfinite(embedded).all() or (positions < 0).any():
+        if self._resident_experts:
+            self._cuda_execution.require_valid(torch.isfinite(embedded).all() & (positions >= 0).all(), 'input')
+        elif not torch.isfinite(embedded).all() or (positions < 0).any():
             raise ValueError("finite embeddings and nonnegative positions required")
         if (type(document_starts) is not tuple or not document_starts or document_starts[0] != 0
             or any(type(i) is not int or not 0 <= i < len(embedded) for i in document_starts)
@@ -639,6 +860,22 @@ class CIADecoder(nn.Module):
             raise ValueError("batch_documents must be a bool")
         self.parameter_inventory()
         spans = list(zip(document_starts, document_starts[1:] + (len(embedded),)))
+        if type(return_device_routes) is not bool:
+            raise ValueError('return_device_routes must be a bool')
+        if self._resident_experts:
+            if not batch_documents or (return_routes and not return_device_routes):
+                raise ValueError('resident execution requires batching and explicit device route returns')
+            if route_observer is not None:
+                raise ValueError('resident routing requires the device collector and boundary observer adapter')
+            if device_route_collector is not None and not callable(device_route_collector):
+                raise ValueError('device route collector must be callable')
+            outputs, routes = self._resident_documents_forward(
+                [(embedded[start:end], positions[start:end], index) for index, (start,end) in enumerate(spans)],
+                collector=device_route_collector, plan=route_plan)
+            logits = torch.cat(outputs)
+            return (logits, routes) if return_routes else logits
+        if return_device_routes or device_route_collector is not None:
+            raise ValueError('device routing options require explicit resident execution')
         if batch_documents:
             outputs, routes = self._batched_documents_forward(
                 [(embedded[start:end], positions[start:end], index) for index, (start, end) in enumerate(spans)],
