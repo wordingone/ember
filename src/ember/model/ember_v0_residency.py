@@ -27,7 +27,8 @@ class ExpertCache:
         if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
             raise ValueError('expert source storage alias')
 
-    def __init__(self, bank, *, device, owner_parameters=None, resident_capacity=2):
+    def __init__(self, bank, *, device, owner_parameters=None, resident_capacity=2, owner_validate=None,
+                 owner_declaration=None):
         self.validate_sources(bank)
         # Device-resident bundle slots: an execution bound, not a routing quantity. Per-document routing
         # still selects two of the global experts per epoch regardless of how many bundles may stay resident.
@@ -49,6 +50,12 @@ class ExpertCache:
         self.transfer_seconds = 0.0
         self.step_id = 0
         self.owner_parameters = owner_parameters
+        # Full owner validation (schema, census, alias) runs at step bind and step end; per-lease identity reads
+        # the live owner registry through owner_parameters and compares the per-tensor signature below.
+        self.owner_validate = owner_validate
+        # Snapshot of the owner's non-tensor validation inputs (declared config and placement); compared at
+        # every check like the tensor signature, because those declarations are inputs to owner_validate.
+        self.owner_declaration = owner_declaration
         self.poisoned = False
 
     @property
@@ -63,17 +70,24 @@ class ExpertCache:
                 self.poisoned = True
                 raise
 
+    @staticmethod
+    def _signature(value):
+        # Every field a between-lease mutation can move: object, in-place version, storage address/offset/size,
+        # shape, layout (stride), dtype, device, grad requirement. Read from the live object at every check.
+        return (id(value), value._version, value.data_ptr(), value.storage_offset(), value.untyped_storage().nbytes(),
+                tuple(value.shape), tuple(value.stride()), value.dtype, value.device, value.requires_grad)
+
     def identity(self):
-        signature = {(expert, name): (id(value), value._version, value.data_ptr(), tuple(value.shape), value.dtype,
-                                     value.device, value.requires_grad)
+        signature = {(expert, name): self._signature(value)
                      for expert, row in self.bank.items() for name, value in row.items()}
         if self.owner_parameters is not None:
             owned = self.owner_parameters()
             owner_ids = {id(value) for value in owned.values()}
             if any(id(value) not in owner_ids for row in self.bank.values() for value in row.values()):
                 raise RuntimeError('cache bank ownership changed')
-            signature.update({('owner', name): (id(value), value._version, value.data_ptr(), tuple(value.shape),
-                              value.dtype, value.device, value.requires_grad) for name, value in owned.items()})
+            signature.update({('owner', name): self._signature(value) for name, value in owned.items()})
+        if self.owner_declaration is not None:
+            signature[('declaration', 'owner')] = self.owner_declaration()
         return signature
 
     def check(self):
@@ -89,6 +103,8 @@ class ExpertCache:
         if self.active:
             raise RuntimeError('candidate step is already active')
         self.validate_sources(self.bank)
+        if self.owner_validate is not None:
+            self.owner_validate()
         bound = self.identity()
         self.active = True
         self.step_id += 1
@@ -97,6 +113,9 @@ class ExpertCache:
         try:
             yield
             self.check()
+            if self.owner_validate is not None:
+                self.owner_validate()
+                self.check()
             if self.pending:
                 raise RuntimeError('incomplete expert backward')
         finally:
@@ -331,7 +350,8 @@ class CUDAExecution:
         self.model = model
         self.device = device
         self.cache = ExpertCache(expert_bundles(model.parameter_inventory()), device=device,
-                                 owner_parameters=model.parameter_inventory, resident_capacity=resident_capacity)
+                                 owner_parameters=model.live_parameters, owner_validate=model.parameter_inventory,
+                                 owner_declaration=model.owner_declaration, resident_capacity=resident_capacity)
 
     @contextmanager
     def step(self):
